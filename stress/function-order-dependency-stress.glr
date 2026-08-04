@@ -16,23 +16,23 @@ glEnable(GL_DEPTH_TEST);
 func2(phase) {
   glPushMatrix();
   glRotatef(phase * 40.0f, 0.0f, 1.0f, 0.0f);
-  
+
   // Call func1 (defined below)
   func1(phase, 1.0f);
-  
+
   // Call func0 directly (defined below)
   func0(phase * 0.5f, 0.7f);
-  
+
   glPopMatrix();
 }
 
 func1(phase, scale) {
   glPushMatrix();
   glTranslatef(sin(phase) * 2.0f, 0.0f, cos(phase) * 2.0f);
-  
+
   // Call func0 from within func1
   func0(phase * 2.0f, scale * 0.8f);
-  
+
   glColor3f(0.3f, 0.7f, 1.0f);
   glutWireCube(scale * 1.2f);
   glPopMatrix();

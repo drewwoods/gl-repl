@@ -70,6 +70,11 @@ def parse_tags(section: str, value: str) -> list[str]:
     for tag in tags:
         if tag == "All":
             raise ExampleError(f"[{section}] must not list synthetic tag All")
+        if tag not in TAG_MACROS:
+            known = ", ".join(TAG_MACROS)
+            raise ExampleError(
+                f"[{section}] unknown tag {tag!r}; expected one of: {known}"
+            )
     return tags
 
 

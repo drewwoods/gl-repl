@@ -29,12 +29,21 @@ static int g_example_tag_count = 0;
 
 static void ensure_default_tags_initialized(void);
 
-const ReplTagNode *repl_example_find_or_register_tag(const char *name) {
-    if (!name || !*name)
-        return NULL;
-    ensure_default_tags_initialized();
+static void free_tag_list(ReplTagNode *head) {
+    ReplTagNode *curr = head;
+    while (curr) {
+        ReplTagNode *next = curr->next;
+        free(curr);
+        curr = next;
+    }
+}
 
-    for (ReplTagNode *curr = g_example_tags_head; curr; curr = curr->next) {
+static const ReplTagNode *find_or_register_tag_in_registry(
+    ReplTagNode **head, int *count, const char *name) {
+    if (!head || !count || !name || !*name)
+        return NULL;
+
+    for (ReplTagNode *curr = *head; curr; curr = curr->next) {
         if (strcmp(curr->name, name) == 0)
             return curr;
     }
@@ -43,13 +52,13 @@ const ReplTagNode *repl_example_find_or_register_tag(const char *name) {
     if (!node)
         return NULL;
     snprintf(node->name, sizeof(node->name), "%s", name);
-    node->id = g_example_tag_count++;
+    node->id = (*count)++;
     node->next = NULL;
 
-    if (!g_example_tags_head) {
-        g_example_tags_head = node;
+    if (!*head) {
+        *head = node;
     } else {
-        ReplTagNode *tail = g_example_tags_head;
+        ReplTagNode *tail = *head;
         while (tail->next)
             tail = tail->next;
         tail->next = node;
@@ -57,28 +66,47 @@ const ReplTagNode *repl_example_find_or_register_tag(const char *name) {
     return node;
 }
 
+static const char *const k_default_example_tag_names[] = {
+    "All", "2D", "3D", "Polygons", "Lines"
+};
+
+static int init_default_tag_registry(ReplTagNode **head, int *count) {
+    int n = (int)(sizeof(k_default_example_tag_names) /
+                  sizeof(k_default_example_tag_names[0]));
+
+    for (int i = 0; i < n; i++) {
+        if (!find_or_register_tag_in_registry(
+                head, count, k_default_example_tag_names[i])) {
+            free_tag_list(*head);
+            *head = NULL;
+            *count = 0;
+            return 0;
+        }
+    }
+    return 1;
+}
+
+const ReplTagNode *repl_example_find_or_register_tag(const char *name) {
+    if (!name || !*name)
+        return NULL;
+    ensure_default_tags_initialized();
+    return find_or_register_tag_in_registry(
+        &g_example_tags_head, &g_example_tag_count, name);
+}
+
 static int g_default_tags_initializing = 0;
 
 static void ensure_default_tags_initialized(void) {
     if (g_example_tags_head != NULL || g_default_tags_initializing)
         return;
-
     g_default_tags_initializing = 1;
-    repl_example_find_or_register_tag("All");      /* id 0 */
-    repl_example_find_or_register_tag("2D");       /* id 1 */
-    repl_example_find_or_register_tag("3D");       /* id 2 */
-    repl_example_find_or_register_tag("Polygons"); /* id 3 */
-    repl_example_find_or_register_tag("Lines");    /* id 4 */
+    (void)init_default_tag_registry(&g_example_tags_head,
+                                    &g_example_tag_count);
     g_default_tags_initializing = 0;
 }
 
 static void clear_dynamic_tags_list(void) {
-    ReplTagNode *curr = g_example_tags_head;
-    while (curr) {
-        ReplTagNode *next = curr->next;
-        free(curr);
-        curr = next;
-    }
+    free_tag_list(g_example_tags_head);
     g_example_tags_head = NULL;
     g_example_tag_count = 0;
 }
@@ -205,6 +233,8 @@ typedef struct {
     ReplExampleEntry *entries;
     int count;
     int cap;
+    ReplTagNode *tags_head;
+    int tag_count;
     char **sections;
     int section_count;
     int section_cap;
@@ -244,6 +274,7 @@ static void catalog_build_clear(RuntimeCatalogBuild *build) {
     if (!build)
         return;
     examples_free_entries(build->entries, build->count);
+    free_tag_list(build->tags_head);
     string_list_clear(build->sections, build->section_count);
     string_list_clear(build->files, build->file_count);
     memset(build, 0, sizeof(*build));
@@ -303,6 +334,8 @@ static int catalog_file_seen(const RuntimeCatalogBuild *build,
 
 static int examples_parse_tags(const char *section,
                                const char *tags_str,
+                               ReplTagNode **tags_head,
+                               int *tag_registry_count,
                                ReplItemTagNode **item_tags_out,
                                char *err_buf,
                                int err_sz) {
@@ -335,7 +368,8 @@ static int examples_parse_tags(const char *section,
                 free(scratch);
                 return 0;
             }
-            const ReplTagNode *tag = repl_example_find_or_register_tag(tag_name);
+            const ReplTagNode *tag = find_or_register_tag_in_registry(
+                tags_head, tag_registry_count, tag_name);
             if (!tag) {
                 examples_set_error(err_buf, err_sz, "out of memory");
                 repl_example_free_item_tags(item_tags);
@@ -529,7 +563,9 @@ static int catalog_finalize_draft(RuntimeCatalogBuild *build,
     }
 
     ReplItemTagNode *item_tags = NULL;
-    if (!examples_parse_tags(draft->section, tags, &item_tags, err_buf, err_sz))
+    if (!examples_parse_tags(draft->section, tags,
+                             &build->tags_head, &build->tag_count,
+                             &item_tags, err_buf, err_sz))
         return 0;
 
     char **lines = examples_read_source_lines(file_real, err_buf, err_sz);
@@ -622,9 +658,12 @@ int repl_examples_load_dir(const char *dir, char *err_buf, int err_sz) {
     memset(&build, 0, sizeof(build));
     memset(&draft, 0, sizeof(draft));
 
-    /* Reset dynamic tags before loading new catalog */
-    clear_dynamic_tags_list();
-    ensure_default_tags_initialized();
+    if (!init_default_tag_registry(&build.tags_head, &build.tag_count)) {
+        examples_set_error(err_buf, err_sz, "out of memory");
+        fclose(f);
+        catalog_build_clear(&build);
+        return 0;
+    }
 
     char line[MAX_LINE_LEN];
     int line_no = 0;
@@ -756,10 +795,15 @@ int repl_examples_load_dir(const char *dir, char *err_buf, int err_sz) {
     }
 
     examples_free_entries(g_runtime_example_entries, g_runtime_example_count);
+    clear_dynamic_tags_list();
     g_runtime_example_entries = build.entries;
     g_runtime_example_count = build.count;
+    g_example_tags_head = build.tags_head;
+    g_example_tag_count = build.tag_count;
     build.entries = NULL;
     build.count = 0;
+    build.tags_head = NULL;
+    build.tag_count = 0;
     catalog_build_clear(&build);
     return 1;
 }

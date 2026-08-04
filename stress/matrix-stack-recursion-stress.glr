@@ -16,38 +16,38 @@ func0(depth, len, phase) {
     // Draw current branch cylinder/segment
     glPushMatrix();
     glColor3f(0.2f + depth * 0.15f, 0.8f - depth * 0.1f, 0.4f);
-    
+
     // Position branch
     glTranslatef(0.0f, len * 0.5f, 0.0f);
     glPushMatrix();
     glScalef(0.15f * depth, len, 0.15f * depth);
     glutSolidCube(1.0f);
     glPopMatrix();
-    
+
     // Move to end of branch for children
     glTranslatef(0.0f, len * 0.5f, 0.0f);
-    
+
     // Child branch 1: Positive X tilt
     glPushMatrix();
     glRotatef(25.0f + sin(t + depth) * 10.0f, 0.0f, 0.0f, 1.0f);
     glRotatef(40.0f, 0.0f, 1.0f, 0.0f);
     func0(depth - 1, len * 0.72f, phase + 1.0f);
     glPopMatrix();
-    
+
     // Child branch 2: Negative X tilt
     glPushMatrix();
     glRotatef(-25.0f - cos(t + depth) * 10.0f, 0.0f, 0.0f, 1.0f);
     glRotatef(-40.0f, 0.0f, 1.0f, 0.0f);
     func0(depth - 1, len * 0.72f, phase + 2.0f);
     glPopMatrix();
-    
+
     // Child branch 3: Z tilt
     glPushMatrix();
     glRotatef(30.0f, 1.0f, 0.0f, 0.0f);
     glRotatef(120.0f, 0.0f, 1.0f, 0.0f);
     func0(depth - 1, len * 0.68f, phase + 3.0f);
     glPopMatrix();
-    
+
     glPopMatrix();
   }
 }

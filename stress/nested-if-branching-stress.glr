@@ -23,7 +23,7 @@ for(i, -3, 7) {
           if((i + j) % 2 == 0) {
             glPushMatrix();
             glTranslatef(i * 1.6f, sin(t * 1.5f + i + j) * 0.6f, j * 1.6f);
-            
+
             // Level 5: Quadrant branching
             if(i > 0) {
               if(j > 0) {

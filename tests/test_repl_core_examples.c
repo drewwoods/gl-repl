@@ -959,7 +959,7 @@ static void test_runtime_examples_dir_catalog(const char *temp_dir) {
                                 "[raw-points]\n"
                                 "file = scenes/raw-points.glr\n"
                                 "name = Runtime raw points\n"
-                                "tags = 2D, Lines\n"
+                                "tags = 2D, Lines, RuntimePersist\n"
                                 "group = Runtime\n"
                                 "\n"
                                 "[exported-lines]\n"
@@ -985,6 +985,20 @@ static void test_runtime_examples_dir_catalog(const char *temp_dir) {
                 repl_example_has_tag(0, REPL_EXAMPLE_TAG_2D));
     ASSERT_TRUE("runtime c tags include 3D",
                 repl_example_has_tag(1, REPL_EXAMPLE_TAG_3D));
+
+    int persistent_tag = -1;
+    for (int tag_idx = 0; tag_idx < repl_example_tag_count(); tag_idx++) {
+        const char *label = repl_example_tag_label(tag_idx);
+        if (label && strcmp(label, "RuntimePersist") == 0) {
+            persistent_tag = tag_idx;
+            break;
+        }
+    }
+    ASSERT_TRUE("runtime persistent tag registered", persistent_tag >= 0);
+    if (persistent_tag >= 0) {
+        ASSERT_TRUE("runtime persistent tag membership",
+                    repl_example_has_tag(0, persistent_tag));
+    }
 
     load_example_for_test(0);
     ASSERT_TRUE("runtime .glr example loads",
@@ -1023,6 +1037,16 @@ static void test_runtime_examples_dir_catalog(const char *temp_dir) {
     ASSERT_TRUE("failed runtime load leaves previous catalog active",
                 repl_example_count() == 2 &&
                 strcmp(repl_example_name(0), "Runtime raw points") == 0);
+    ASSERT_TRUE("failed runtime load preserves standard tag membership",
+                repl_example_has_tag(0, REPL_EXAMPLE_TAG_2D));
+    if (persistent_tag >= 0) {
+        const char *persistent_label = repl_example_tag_label(persistent_tag);
+        ASSERT_TRUE("failed runtime load preserves tag registry",
+                    persistent_label &&
+                    strcmp(persistent_label, "RuntimePersist") == 0);
+        ASSERT_TRUE("failed runtime load preserves tag membership",
+                    repl_example_has_tag(0, persistent_tag));
+    }
 
     /* Additional catalog parsing/validation error test cases to cover examples.c paths */
 

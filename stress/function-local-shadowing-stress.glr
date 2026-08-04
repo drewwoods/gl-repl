@@ -24,7 +24,7 @@ func0(r) {
   float i;
   x = r * 0.5f;
   y = sin(t + r) * 0.8f;
-  
+
   for(i, 0, 3) {
     glPushMatrix();
     glTranslatef(x + i * 0.6f, y, 0.0f);
@@ -39,10 +39,10 @@ func1(scale) {
   float x;
   float y;
   float i;
-  
+
   x = scale * 1.5f;
   y = -1.5f;
-  
+
   for(i, 0, 4) {
     glPushMatrix();
     glTranslatef(-x, y + i * 0.8f, 0.0f);
