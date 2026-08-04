@@ -43,21 +43,48 @@
 
 #include "repl/state_views.h"  /* ReplRenderState (attrib bookkeeping snapshot) */
 
-/* One saved attribute-stack frame: the push mask plus the REPL render-state
- * bookkeeping mirror (light-enable mask + clear color) captured at push time.
- * glPopAttrib restores GL's own state; this mirror is restored alongside so
- * the light-indicator overlay tracks user pops.
- *
- * The clear-color half is *not* what the host renders against - the frame's
- * background is resolved statically, before the walk, by
- * repl_flat_resolve_clear_color(). This mirror is the executor's own scope
- * bookkeeping: it is what makes a scoped glClearColor observably revert at
- * the matching pop (and at cursor-end unwind of an unmatched push) in passes
- * that suppress GL emission, which real glPopAttrib does inside GL where the
- * REPL cannot see it. */
+/* Colour-channel bits, used for both "which channels does glColorMask let a
+ * clear write" and "which channels of the observed background are known". */
+#define REPL_RGBA_R   0x1u
+#define REPL_RGBA_G   0x2u
+#define REPL_RGBA_B   0x4u
+#define REPL_RGBA_A   0x8u
+#define REPL_RGBA_ALL (REPL_RGBA_R | REPL_RGBA_G | REPL_RGBA_B | REPL_RGBA_A)
+
+/* The background the program's own clears established, as observed by the
+ * walk that emitted them. `rgba` is meaningful only when `known` is set -
+ * a program that issued no colour clear, or whose clear ran under a
+ * glColorMask that left a channel disabled with no earlier clear behind it,
+ * established no background at all. Callers must not substitute an invented
+ * RGBA for an unknown one; see the retained presentation in glr_ctrl.c. */
+typedef struct ReplBackgroundObservation {
+    float rgba[4];
+    int   known;    /* the program established all four channels */
+} ReplBackgroundObservation;
+
+/* The clear-affecting GL state that glPushAttrib(GL_COLOR_BUFFER_BIT) saves
+ * and the matching pop restores. Deliberately its own struct, separate from
+ * the cursor's running observation: the observation describes pixels already
+ * written and must survive every pop, so keeping the two apart is what stops
+ * a future wholesale save/restore from reverting a result. */
+typedef struct ReplClearScopedState {
+    float    clear_rgba[4];
+    unsigned color_write_mask;   /* REPL_RGBA_* bits */
+} ReplClearScopedState;
+
+/* One saved attribute-stack frame: the push mask, the clear-affecting GL
+ * state (clear colour + colour write mask), and the REPL render-state
+ * bookkeeping mirror captured at push time. glPopAttrib restores GL's own
+ * state; these are restored alongside under the same per-group gate, so a
+ * scoped glClearColor / glColorMask observably reverts at the matching pop
+ * (and at cursor-end unwind of an unmatched push) even in passes that
+ * suppress GL emission - which real glPopAttrib does inside GL where the
+ * REPL cannot see it. CMD_CLEAR_COLOR and CMD_COLOR_MASK both map to
+ * GL_COLOR_BUFFER_BIT, so one saved frame covers both. */
 typedef struct {
-    unsigned        mask;
-    ReplRenderState render;
+    unsigned             mask;
+    ReplRenderState      render;
+    ReplClearScopedState clear;
 } ReplAttribSave;
 
 /* Reference distance (world units) at which a point renders at its literal
@@ -83,6 +110,12 @@ typedef struct TessVertex {
  * and a source-text view used to resolve display text for status
  * messages (goto-label resolution etc.). The view is non-owning and
  * stays valid for the duration of the execute call.
+ *
+ * **Zero-initialize this struct** (`= {0}`, a designated initializer, or
+ * memset) and then set only what you mean. The executor reads every field,
+ * including three it calls or writes through - `state_filter`, `status_out`,
+ * `observation_out` - so a field left holding stack garbage is a wild call or
+ * a wild store, not a harmless unused input.
  *
  * `suppress_tess_finalize` skips the trailing gluTessEndContour /
  * gluTessEndPolygon cleanup at the end of repl_execute_program.
@@ -140,6 +173,18 @@ typedef struct {
      * it sets this so push/pop bookkeeping stays coherent without touching the
      * pass's live GL state. Default 0 = normal GL semantics. */
     int             suppress_attrib_gl;
+    /* Where to publish the background this walk observed itself clearing, at
+     * repl_exec_cursor_end(). NULL publishes nothing, and every pass that
+     * must not speak for the frame's background sets it to NULL *explicitly*
+     * rather than relying on zero-init: depth probes, hidden/visible line
+     * redraws, replay fade overlays (which suppress CMD_CLEAR outright), the
+     * .ply feedback export, and the legacy repl_execute_commands() entry
+     * point all publish nothing. */
+    ReplBackgroundObservation *observation_out;
+    /* The GL clear-colour state this walk starts in - what a glClear with no
+     * preceding glClearColor would use. A caller that publishes must set it;
+     * a caller passing observation_out = NULL need not. */
+    float           baseline_clear_rgba[4];
     char           *status_out;
     int             status_out_sz;
 } ReplExecutionOptions;
@@ -166,6 +211,16 @@ typedef struct ReplExecCursor {
      * within the cap (LIFO). */
     int                  attrib_depth;
     ReplAttribSave       attrib_save[REPL_ATTRIB_STACK_CAP];
+    /* Clear-affecting GL state, scoped by GL_COLOR_BUFFER_BIT pushes. */
+    ReplClearScopedState clear_state;
+    /* The running background observation. NOT scoped: a glPopAttrib rewinds
+     * GL state, never pixels that were already written, so these two fields
+     * are the ones no attrib frame may restore. `observed_known_mask` is
+     * per-channel so that a partial glColorMask over an earlier full clear
+     * still yields a fully-known result; consumers only ever see the
+     * collapsed boolean in ReplBackgroundObservation. */
+    float                observed_rgba[4];
+    unsigned             observed_known_mask;
     GLdouble             tess_current_normal[3];
     GLdouble             tess_current_color[4];
     int                  goto_count;
@@ -243,6 +298,29 @@ int repl_exec_cursor_step(ReplExecCursor *cursor);
 void repl_exec_cursor_end(ReplExecCursor *cursor);
 int repl_exec_cursor_done(const ReplExecCursor *cursor);
 const GLCmd *repl_exec_cursor_peek(const ReplExecCursor *cursor);
+
+/* Emit a clear-affecting command AND record what it did to the background,
+ * as one operation. These exist because the two must not be separable: a
+ * specialized pass that drives the cursor itself (the hidden-line wireframe
+ * subsystem) emits CMD_CLEAR_COLOR / CMD_CLEAR outside repl_apply_state_cmd(),
+ * and a forgotten observation there would be invisible - so it is made
+ * impossible by also losing the GL emission.
+ *
+ * repl_exec_cursor_emit_clear() issues the *full* mask CMD_CLEAR carries
+ * (depth and stencil bits included) and observes only its colour effect.
+ * `write_mask_override` is an override, not the mask: pass
+ * REPL_OBSERVE_TRACKED_MASK to use the glColorMask state the cursor already
+ * tracks - the normal executor always does, because handing the cursor back
+ * state it is already holding is exactly the two-copies-of-one-mask seam this
+ * design closes. Only a pass that forces its own glColorMask over the
+ * program's (the hidden-line depth fill, which lifts the mask for its one
+ * synthetic clear) passes an explicit REPL_RGBA_* value. */
+#define REPL_OBSERVE_TRACKED_MASK 0xFFFFFFFFu
+void repl_exec_cursor_emit_clear_color(ReplExecCursor *cursor,
+                                       const GLCmd *cmd);
+void repl_exec_cursor_emit_clear(ReplExecCursor *cursor,
+                                 const GLCmd *cmd,
+                                 unsigned write_mask_override);
 void repl_exec_cursor_advance(ReplExecCursor *cursor);
 int repl_exec_cursor_in_begin(const ReplExecCursor *cursor);
 

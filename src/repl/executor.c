@@ -307,19 +307,80 @@ void repl_apply_state_bookkeeping(const GLCmd *cmd) {
     }
 }
 
-/* Restore the REPL render-state bookkeeping mirror a matching glPushAttrib
- * saved, gated on that push's mask. Bit membership comes from attrib_bits
- * (the light-enable mask is glEnable(GL_LIGHTn) state -> ENABLE|LIGHTING; the
- * clear color is glClearColor state -> COLOR_BUFFER), so the executor cannot
- * drift from the analyzer/inspector. Groups the mask did not save are left
- * exactly as the program set them, matching glPopAttrib. */
-static void repl_exec_restore_attrib_bookkeeping(const ReplAttribSave *save) {
+/* Restore the executor-side state a matching glPushAttrib saved, gated on
+ * that push's mask. Bit membership comes from attrib_bits (the light-enable
+ * mask is glEnable(GL_LIGHTn) state -> ENABLE|LIGHTING; clear color and color
+ * mask are both COLOR_BUFFER), so the executor cannot drift from the
+ * analyzer/inspector. Groups the mask did not save are left exactly as the
+ * program set them, matching glPopAttrib.
+ *
+ * The cursor's running background observation is deliberately NOT restored
+ * here: a pop rewinds GL state, not pixels that were already written. */
+static void repl_exec_restore_attrib_bookkeeping(ReplExecCursor *cursor,
+                                                 const ReplAttribSave *save) {
     if (!save)
         return;
     if (save->mask & repl_attrib_bits_for_type(CMD_ENABLE, GL_LIGHT0))
         repl_state_render_set_light_enabled_mask(save->render.light_enabled_mask);
-    if (save->mask & repl_attrib_bits_for_type(CMD_CLEAR_COLOR, 0))
+    if (save->mask & repl_attrib_bits_for_type(CMD_CLEAR_COLOR, 0)) {
         repl_state_render_set_clear_color(save->render.clear_color);
+        if (cursor)
+            cursor->clear_state = save->clear;
+    }
+}
+
+/* The channel mask a CMD_COLOR_MASK establishes, derived exactly as the
+ * emitted glColorMask reads its own arguments so the tracker and GL cannot
+ * disagree about a borderline value. */
+static unsigned repl_color_write_mask_from_cmd(const GLCmd *cmd) {
+    unsigned mask = 0u;
+    int k;
+
+    if (!cmd)
+        return REPL_RGBA_ALL;
+    for (k = 0; k < 4; k++)
+        if ((GLboolean)cmd->args[k])
+            mask |= (1u << k);
+    return mask;
+}
+
+void repl_exec_cursor_emit_clear_color(ReplExecCursor *cursor,
+                                       const GLCmd *cmd) {
+    int k;
+
+    if (!cursor || !cmd || cmd->type != CMD_CLEAR_COLOR)
+        return;
+    for (k = 0; k < 4; k++)
+        cursor->clear_state.clear_rgba[k] = cmd->args[k];
+    repl_apply_state_cmd(cmd, cursor->alpha_scale);
+}
+
+void repl_exec_cursor_emit_clear(ReplExecCursor *cursor, const GLCmd *cmd,
+                                 unsigned write_mask_override) {
+    unsigned write_mask;
+    int k;
+
+    if (!cursor || !cmd || cmd->type != CMD_CLEAR)
+        return;
+    write_mask = (write_mask_override == REPL_OBSERVE_TRACKED_MASK)
+                     ? cursor->clear_state.color_write_mask
+                     : write_mask_override;
+
+    repl_apply_state_cmd(cmd, cursor->alpha_scale);
+
+    if (((GLbitfield)cmd->args[0] & GL_COLOR_BUFFER_BIT) == 0)
+        return;
+    /* Each channel the mask lets through takes the current clear color and
+     * becomes known; a masked-off channel keeps whatever the framebuffer
+     * already held, which is exactly its previous observed value and
+     * knownness (unknown, unless an earlier clear established it). */
+    for (k = 0; k < 4; k++) {
+        unsigned bit = 1u << k;
+        if (!(write_mask & bit))
+            continue;
+        cursor->observed_rgba[k] = cursor->clear_state.clear_rgba[k];
+        cursor->observed_known_mask |= bit;
+    }
 }
 
 int repl_apply_state_cmd(const GLCmd *cmd, float alpha_scale) {
@@ -684,6 +745,15 @@ ReplExecCursor repl_exec_cursor_begin(const ReplExecutionOptions *options) {
     cursor.tess_current_color[1] = 1.0;
     cursor.tess_current_color[2] = 1.0;
     cursor.alpha_scale = 1.0f;
+    /* Clear-affecting GL state starts where the caller says the context does:
+     * baseline_clear_rgba is what a glClear with no preceding glClearColor
+     * would use, and all four channels are writable until a glColorMask says
+     * otherwise. The running observation stays zeroed - nothing is known
+     * until a clear actually writes a channel. */
+    if (options)
+        memcpy(cursor.clear_state.clear_rgba, options->baseline_clear_rgba,
+               sizeof(cursor.clear_state.clear_rgba));
+    cursor.clear_state.color_write_mask = REPL_RGBA_ALL;
     if (options && options->has_fade_context) {
         cursor.alpha_scale = options->fade_alpha_scale;
         cursor.skip_geom_before_pc = options->skip_geom_before_pc;
@@ -1043,6 +1113,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
                 &cursor->attrib_save[cursor->attrib_depth - 1];
             save->mask = mask;
             save->render = repl_state_render();
+            save->clear = cursor->clear_state;
             if (!cursor->options.suppress_attrib_gl)
                 glPushAttrib((GLbitfield)mask);
         }
@@ -1055,7 +1126,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
                     &cursor->attrib_save[cursor->attrib_depth - 1];
                 if (!cursor->options.suppress_attrib_gl)
                     glPopAttrib();
-                repl_exec_restore_attrib_bookkeeping(save);
+                repl_exec_restore_attrib_bookkeeping(cursor, save);
             }
             cursor->attrib_depth--;
         }
@@ -1117,13 +1188,37 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
             ((GLenum)cmd->args[0] == GL_LIGHTING ||
              (GLenum)cmd->args[0] == GL_CULL_FACE))
             break;
-        /* repl_apply_state_cmd returns 0 if the cmd isn't in its own
-         * switch - which would mean the executor enumerated it here but the
-         * apply helper hasn't caught up yet. Log loudly once per type so the
-         * asymmetry surfaces in dev builds instead of as a silent visual
-         * regression. */
-        if (!repl_apply_state_cmd(cmd, cursor->alpha_scale))
-            repl_exec_cursor_warn_unhandled_state(cmd);
+        /* Past every suppression gate: this command's GL is going out, so the
+         * three that decide what the frame's background is emit through the
+         * cursor, which pairs each one with the matching observation update.
+         * Reaching this point IS the emission decision - a command a filter
+         * or the fade gate turned away broke out above and updated neither
+         * GL nor the observation. */
+        switch (cmd->type) {
+        case CMD_CLEAR_COLOR:
+            repl_exec_cursor_emit_clear_color(cursor, cmd);
+            break;
+        case CMD_CLEAR:
+            repl_exec_cursor_emit_clear(cursor, cmd,
+                                        REPL_OBSERVE_TRACKED_MASK);
+            break;
+        case CMD_COLOR_MASK:
+            /* No public entry point: the glColorMask emission and the
+             * tracker update are one case, and no pass overrides it. */
+            cursor->clear_state.color_write_mask =
+                repl_color_write_mask_from_cmd(cmd);
+            repl_apply_state_cmd(cmd, cursor->alpha_scale);
+            break;
+        default:
+            /* repl_apply_state_cmd returns 0 if the cmd isn't in its own
+             * switch - which would mean the executor enumerated it here but
+             * the apply helper hasn't caught up yet. Log loudly once per type
+             * so the asymmetry surfaces in dev builds instead of as a silent
+             * visual regression. */
+            if (!repl_apply_state_cmd(cmd, cursor->alpha_scale))
+                repl_exec_cursor_warn_unhandled_state(cmd);
+            break;
+        }
         break;
     }
     cursor->pc++;
@@ -1157,11 +1252,21 @@ void repl_exec_cursor_end(ReplExecCursor *cursor) {
                 &cursor->attrib_save[cursor->attrib_depth - 1];
             if (!cursor->options.suppress_attrib_gl)
                 glPopAttrib();
-            repl_exec_restore_attrib_bookkeeping(save);
+            repl_exec_restore_attrib_bookkeeping(cursor, save);
         }
         cursor->attrib_depth--;
     }
     cursor->pc = cursor->flat_cmd_count;
+
+    /* Publish what this walk observed itself clearing. Deliberately after the
+     * unwind above: an unmatched push must not leave the *scoped* clear state
+     * dangling, while the observation it produced stands regardless. */
+    if (cursor->options.observation_out) {
+        ReplBackgroundObservation obs;
+        memcpy(obs.rgba, cursor->observed_rgba, sizeof(obs.rgba));
+        obs.known = (cursor->observed_known_mask == REPL_RGBA_ALL);
+        *cursor->options.observation_out = obs;
+    }
 }
 
 /* Walk flat_cmds[0..flat_cmd_count) and issue the corresponding GL
@@ -1187,6 +1292,9 @@ void repl_execute_commands(void) {
         .flat_cmd_count = repl_state_flat_program_count(),
         .program        = repl_state_flat_program_view(),
         .text           = source_document_view(),
+        /* Explicit, not zero-init by omission: this entry point has no frame
+         * to speak for, so it must not publish a presentation background. */
+        .observation_out = NULL,
     };
     repl_execute_program(&options);
 }

@@ -1,5 +1,7 @@
 #include "subsystems/hidden_lines/hidden_lines.h"
 
+#include <string.h>
+
 #include "gl_includes.h"
 #include "config.h"
 #include "repl/executor.h"
@@ -192,11 +194,17 @@ static void hidden_lines_finish_tess(int *tess_depth) {
  * seed depth only, so lift the mask for the clear alone under its own attrib
  * push (the pass's own colour state is restored by the pop). Depth writes are
  * already enabled there, and the host scissor keeps the clear inside the
- * scene rect. */
-static void hidden_lines_emit_clear(const GLCmd *cmd) {
+ * scene rect.
+ *
+ * The clear itself goes through the cursor, with an all-channel override
+ * rather than the mask the cursor tracks: this is a synthetic pass that
+ * deliberately forces colour writes on for its one clear, and the observation
+ * must describe what the pass actually painted. Delegating means a forgotten
+ * observation would also lose the visible glClear. */
+static void hidden_lines_emit_clear(ReplExecCursor *cursor, const GLCmd *cmd) {
     glPushAttrib(GL_COLOR_BUFFER_BIT);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glClear((GLbitfield)cmd->args[0]);
+    repl_exec_cursor_emit_clear(cursor, cmd, REPL_RGBA_ALL);
     glPopAttrib();
 }
 
@@ -259,6 +267,12 @@ void hidden_lines_execute(const HiddenLinesRenderContext *ctx,
     options.text = ctx->text;
     options.status_out = ctx->status_out;
     options.status_out_sz = ctx->status_out_sz;
+    /* Only the depth-fill pass emits a clear at all (see
+     * hidden_lines_emit_clear), so the hidden- and visible-line redraws
+     * cannot publish a background even if a caller handed them a sink. */
+    options.observation_out = depth_fill ? ctx->observation_out : NULL;
+    memcpy(options.baseline_clear_rgba, ctx->baseline_clear_rgba,
+           sizeof(options.baseline_clear_rgba));
     /* Scope the bookkeeping mirror on push/pop without emitting glPushAttrib/
      * glPopAttrib - this pass owns its own depth/colour/polygon GL state. */
     options.suppress_attrib_gl = 1;
@@ -311,15 +325,18 @@ void hidden_lines_execute(const HiddenLinesRenderContext *ctx,
         /* The clear colour is the one piece of colour state this pass does
          * not own - it only feeds the clear above, and the caller's
          * glPushAttrib(GL_ALL_ATTRIB_BITS) bracket contains it - so emit it
-         * for real rather than mirroring it into bookkeeping alone. */
+         * for real rather than mirroring it into bookkeeping alone. Both
+         * clear commands go through the cursor's emit-and-observe entry
+         * points, which fold in the bookkeeping the trailing call below runs
+         * for everything else. */
         if (cmd->type == CMD_CLEAR_COLOR) {
-            glClearColor(cmd->args[0], cmd->args[1],
-                         cmd->args[2], cmd->args[3]);
+            repl_exec_cursor_emit_clear_color(&cursor, cmd);
         } else if (cmd->type == CMD_CLEAR && depth_fill) {
-            hidden_lines_emit_clear(cmd);
+            hidden_lines_emit_clear(&cursor, cmd);
+        } else {
+            repl_apply_state_bookkeeping(cmd);
         }
 
-        repl_apply_state_bookkeeping(cmd);
         repl_exec_cursor_advance(&cursor);
     }
 

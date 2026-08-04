@@ -400,7 +400,11 @@ static void test_enum_arg_end_to_end_trace(void) {
 static void test_execute_edge_cases(void) {
     repl_execute_program(NULL);
 
-    ReplExecutionOptions opts;
+    /* Zero-initialized, per the ReplExecutionOptions contract: the executor
+     * reads every field, including pointers it calls or writes through
+     * (state_filter, status_out, observation_out). What this case is actually
+     * about is the negative counts below. */
+    ReplExecutionOptions opts = {0};
     opts.flat_cmd_count = -1;
     opts.program.cmds = NULL;
     opts.program.cmd_count = -1;
@@ -1281,6 +1285,341 @@ static void test_goto_uses_caller_text_view(void) {
     repl_state_document_count_set(saved_doc_count);
 }
 
+/* --- Background observation ---------------------------------------------
+ *
+ * The background the host presents against is what the *executor* observed
+ * itself clearing, not a prediction made by a second walk. These are
+ * differential tests around the real cursor: feed one flat program to
+ * repl_execute_program() and assert the observation produced by the commands
+ * it actually visits. */
+
+static GLCmd *obs_cmd(GLCmd *cmds, int idx, CmdType type, int src_line) {
+    cmds[idx].type = type;
+    cmds[idx].valid = 1;
+    cmds[idx].src_cmd_idx = src_line;
+    return &cmds[idx];
+}
+
+static void obs_clear_color(GLCmd *cmds, int idx, float r, float g,
+                            float b, float a) {
+    GLCmd *c = obs_cmd(cmds, idx, CMD_CLEAR_COLOR, -1);
+    c->num_args = 4;
+    c->args[0] = r; c->args[1] = g; c->args[2] = b; c->args[3] = a;
+}
+
+static void obs_color_mask(GLCmd *cmds, int idx, int r, int g, int b, int a) {
+    GLCmd *c = obs_cmd(cmds, idx, CMD_COLOR_MASK, -1);
+    c->num_args = 4;
+    c->args[0] = (float)r; c->args[1] = (float)g;
+    c->args[2] = (float)b; c->args[3] = (float)a;
+}
+
+static void obs_clear(GLCmd *cmds, int idx, GLbitfield mask) {
+    GLCmd *c = obs_cmd(cmds, idx, CMD_CLEAR, -1);
+    c->num_args = 1;
+    c->args[0] = (float)mask;
+}
+
+/* Run a program under a poisoned sink, so a missing publication is a failure
+ * rather than a lucky zero. */
+static ReplBackgroundObservation run_observed(GLCmd *cmds, int n,
+                                              ReplExecutionOptions *opts) {
+    static const float k_baseline[4] = {0.10f, 0.10f, 0.10f, 1.0f};
+    ReplBackgroundObservation obs;
+
+    memset(&obs, 0x5A, sizeof(obs));
+    opts->flat_cmd_count = n;
+    opts->program.cmds = cmds;
+    opts->program.cmd_count = n;
+    opts->observation_out = &obs;
+    memcpy(opts->baseline_clear_rgba, k_baseline,
+           sizeof(opts->baseline_clear_rgba));
+    repl_execute_program(opts);
+    return obs;
+}
+
+static ReplBackgroundObservation run_observed_plain(GLCmd *cmds, int n) {
+    ReplExecutionOptions opts = {0};
+    return run_observed(cmds, n, &opts);
+}
+
+static int obs_rgba_is(const ReplBackgroundObservation *obs,
+                       float r, float g, float b, float a) {
+    return obs->rgba[0] == r && obs->rgba[1] == g &&
+           obs->rgba[2] == b && obs->rgba[3] == a;
+}
+
+/* Suppresses exactly the two clear-affecting commands, standing in for a
+ * render pass that owns its own colour state. */
+static int obs_suppress_clears(CmdType type, const GLCmd *cmd, void *ud) {
+    (void)cmd; (void)ud;
+    return !(type == CMD_CLEAR_COLOR || type == CMD_CLEAR);
+}
+
+static void test_background_observation(void) {
+    printf("--- executor: background observation ---\n");
+
+    /* A clear with every colour channel masked off writes no colour pixels.
+     * Reporting the clear colour here is exactly the defect a source-only
+     * resolver could not see. */
+    {
+        GLCmd cmds[3];
+        memset(cmds, 0, sizeof(cmds));
+        obs_color_mask(cmds, 0, 0, 0, 0, 0);
+        obs_clear_color(cmds, 1, 0.05f, 0.0f, 0.0f, 1.0f);
+        obs_clear(cmds, 2, GL_COLOR_BUFFER_BIT);
+        ReplBackgroundObservation obs = run_observed_plain(cmds, 3);
+        ASSERT_TRUE("fully masked clear establishes no background",
+                    obs.known == 0);
+    }
+
+    /* A partial mask over an earlier full clear: the enabled channels take
+     * the new colour, the masked ones keep the value AND the knownness the
+     * first clear gave them, so the result is still fully known. */
+    {
+        GLCmd cmds[5];
+        memset(cmds, 0, sizeof(cmds));
+        obs_clear_color(cmds, 0, 0.1f, 0.2f, 0.3f, 1.0f);
+        obs_clear(cmds, 1, GL_COLOR_BUFFER_BIT);
+        obs_color_mask(cmds, 2, 1, 0, 0, 1);
+        obs_clear_color(cmds, 3, 0.9f, 0.9f, 0.9f, 0.5f);
+        obs_clear(cmds, 4, GL_COLOR_BUFFER_BIT);
+        ReplBackgroundObservation obs = run_observed_plain(cmds, 5);
+        ASSERT_TRUE("partial mask over a full clear stays known",
+                    obs.known == 1);
+        ASSERT_TRUE("partial mask writes only the enabled channels",
+                    obs_rgba_is(&obs, 0.9f, 0.2f, 0.3f, 0.5f));
+    }
+
+    /* The same partial mask with nothing behind it: the disabled channel
+     * holds framebuffer history this design refuses to read, so the whole
+     * background is unknown rather than three-quarters invented. */
+    {
+        GLCmd cmds[3];
+        memset(cmds, 0, sizeof(cmds));
+        obs_color_mask(cmds, 0, 1, 1, 1, 0);
+        obs_clear_color(cmds, 1, 0.1f, 0.2f, 0.3f, 1.0f);
+        obs_clear(cmds, 2, GL_COLOR_BUFFER_BIT);
+        ReplBackgroundObservation obs = run_observed_plain(cmds, 3);
+        ASSERT_TRUE("partial mask with no earlier clear stays unknown",
+                    obs.known == 0);
+    }
+
+    /* GL_COLOR_BUFFER_BIT scopes the clear colour AND the colour mask: the
+     * clear inside the push writes nothing, and after the pop both are back
+     * to the pre-push values, so the trailing clear takes them. */
+    {
+        GLCmd cmds[7];
+        memset(cmds, 0, sizeof(cmds));
+        obs_clear_color(cmds, 0, 0.2f, 0.2f, 0.2f, 1.0f);
+        GLCmd *push = obs_cmd(cmds, 1, CMD_PUSH_ATTRIB, -1);
+        push->num_args = 1; push->args[0] = GL_COLOR_BUFFER_BIT;
+        obs_clear_color(cmds, 2, 0.7f, 0.0f, 0.0f, 1.0f);
+        obs_color_mask(cmds, 3, 0, 0, 0, 0);
+        obs_clear(cmds, 4, GL_COLOR_BUFFER_BIT);
+        obs_cmd(cmds, 5, CMD_POP_ATTRIB, -1);
+        obs_clear(cmds, 6, GL_COLOR_BUFFER_BIT);
+        ReplBackgroundObservation obs = run_observed_plain(cmds, 7);
+        ASSERT_TRUE("pop restores both the clear color and the color mask",
+                    obs.known == 1 && obs_rgba_is(&obs, 0.2f, 0.2f, 0.2f, 1.0f));
+    }
+
+    /* The running observation is not attribute-scoped: a pop rewinds GL
+     * state, never pixels already written. */
+    {
+        GLCmd cmds[4];
+        memset(cmds, 0, sizeof(cmds));
+        GLCmd *push = obs_cmd(cmds, 0, CMD_PUSH_ATTRIB, -1);
+        push->num_args = 1; push->args[0] = GL_COLOR_BUFFER_BIT;
+        obs_clear_color(cmds, 1, 0.7f, 0.1f, 0.1f, 1.0f);
+        obs_clear(cmds, 2, GL_COLOR_BUFFER_BIT);
+        obs_cmd(cmds, 3, CMD_POP_ATTRIB, -1);
+        ReplBackgroundObservation obs = run_observed_plain(cmds, 4);
+        ASSERT_TRUE("the observation survives the pop unchanged",
+                    obs.known == 1 && obs_rgba_is(&obs, 0.7f, 0.1f, 0.1f, 1.0f));
+    }
+
+    /* Same rule on the other restore path: the end-of-cursor unwind of an
+     * unmatched push. */
+    {
+        GLCmd cmds[4];
+        memset(cmds, 0, sizeof(cmds));
+        obs_clear_color(cmds, 0, 0.7f, 0.1f, 0.1f, 1.0f);
+        obs_clear(cmds, 1, GL_COLOR_BUFFER_BIT);
+        GLCmd *push = obs_cmd(cmds, 2, CMD_PUSH_ATTRIB, -1);
+        push->num_args = 1; push->args[0] = GL_COLOR_BUFFER_BIT;
+        obs_clear_color(cmds, 3, 0.9f, 0.9f, 0.9f, 1.0f);   /* never popped */
+        ReplBackgroundObservation obs = run_observed_plain(cmds, 4);
+        ASSERT_TRUE("the cursor-end unwind does not revert the observation",
+                    obs.known == 1 && obs_rgba_is(&obs, 0.7f, 0.1f, 0.1f, 1.0f));
+    }
+
+    /* Several clears: the last effective write per channel decides, and a
+     * clear colour set after the final clear reaches nothing. */
+    {
+        GLCmd cmds[6];
+        memset(cmds, 0, sizeof(cmds));
+        obs_clear_color(cmds, 0, 0.2f, 0.2f, 0.2f, 1.0f);
+        obs_clear(cmds, 1, GL_COLOR_BUFFER_BIT);
+        obs_color_mask(cmds, 2, 0, 1, 0, 0);
+        obs_clear_color(cmds, 3, 0.8f, 0.8f, 0.8f, 1.0f);
+        obs_clear(cmds, 4, GL_COLOR_BUFFER_BIT);
+        obs_clear_color(cmds, 5, 0.95f, 0.95f, 0.95f, 1.0f);
+        ReplBackgroundObservation obs = run_observed_plain(cmds, 6);
+        ASSERT_TRUE("the final effective write per channel decides",
+                    obs.known == 1 && obs_rgba_is(&obs, 0.2f, 0.8f, 0.2f, 1.0f));
+    }
+
+    /* A depth-only clear touches no colour channel. */
+    {
+        GLCmd cmds[2];
+        memset(cmds, 0, sizeof(cmds));
+        obs_clear_color(cmds, 0, 0.5f, 0.0f, 0.0f, 1.0f);
+        obs_clear(cmds, 1, GL_DEPTH_BUFFER_BIT);
+        ReplBackgroundObservation obs = run_observed_plain(cmds, 2);
+        ASSERT_TRUE("a depth-only clear establishes no background",
+                    obs.known == 0);
+    }
+
+    /* goto needs no observation code of its own: the cursor moves the PC, so
+     * only the commands actually reached can affect the result. Forward - the
+     * jump skips the clear a linear walk would call the last one. */
+    {
+        static char lines[6][MAX_LINE_LEN];
+        GLCmd cmds[6];
+        SourceTextView text;
+        ReplExecutionOptions opts = {0};
+
+        snprintf(lines[1], sizeof(lines[1]), "goto skip;");
+        snprintf(lines[4], sizeof(lines[4]), ":skip");
+        text.lines = (const char (*)[MAX_LINE_LEN])lines;
+        text.line_count = 6;
+
+        memset(cmds, 0, sizeof(cmds));
+        obs_clear_color(cmds, 0, 0.2f, 0.0f, 0.0f, 1.0f);
+        obs_cmd(cmds, 1, CMD_GOTO, 1);
+        obs_clear_color(cmds, 2, 0.6f, 0.0f, 0.0f, 1.0f);
+        obs_clear(cmds, 3, GL_COLOR_BUFFER_BIT);
+        obs_cmd(cmds, 4, CMD_GOTO_LABEL, 4);
+        obs_clear(cmds, 5, GL_COLOR_BUFFER_BIT);
+
+        opts.text = text;
+        ReplBackgroundObservation obs = run_observed(cmds, 6, &opts);
+        ASSERT_TRUE("a forward goto takes the cursor's path, not a linear one",
+                    obs.known == 1 && obs.rgba[0] == 0.2f);
+    }
+
+    /* Backward - an unbounded loop, terminated by the cursor's own budget,
+     * with the observation its last effective clear produced. */
+    {
+        static char lines[4][MAX_LINE_LEN];
+        GLCmd cmds[4];
+        SourceTextView text;
+        ReplExecutionOptions opts = {0};
+        char status[REPL_DIAG_TEXT_MAX] = "";
+
+        snprintf(lines[1], sizeof(lines[1]), ":again");
+        snprintf(lines[3], sizeof(lines[3]), "goto again;");
+        text.lines = (const char (*)[MAX_LINE_LEN])lines;
+        text.line_count = 4;
+
+        memset(cmds, 0, sizeof(cmds));
+        obs_clear_color(cmds, 0, 0.3f, 0.0f, 0.0f, 1.0f);
+        obs_cmd(cmds, 1, CMD_GOTO_LABEL, 1);
+        obs_clear(cmds, 2, GL_COLOR_BUFFER_BIT);
+        obs_cmd(cmds, 3, CMD_GOTO, 3);
+
+        opts.text = text;
+        opts.status_out = status;
+        opts.status_out_sz = (int)sizeof(status);
+        ReplBackgroundObservation obs = run_observed(cmds, 4, &opts);
+        ASSERT_TRUE("a backward goto terminates under the cursor's budget",
+                    status[0] != '\0');
+        ASSERT_TRUE("a terminated goto loop still publishes what it cleared",
+                    obs.known == 1 && obs.rgba[0] == 0.3f);
+    }
+
+    /* A state filter suppresses GL emission, and the observation must follow
+     * the emission exactly: both or neither. */
+    {
+        GLCmd cmds[2];
+        memset(cmds, 0, sizeof(cmds));
+        obs_clear_color(cmds, 0, 0.4f, 0.4f, 0.4f, 1.0f);
+        obs_clear(cmds, 1, GL_COLOR_BUFFER_BIT);
+
+        gl_stub_counts_reset();
+        ReplBackgroundObservation emitted = run_observed_plain(cmds, 2);
+        ASSERT_TRUE("unsuppressed: GL is emitted",
+                    gl_stub_counts[GL_STUB_glClearColor] == 1 &&
+                    gl_stub_counts[GL_STUB_glClear] == 1);
+        ASSERT_TRUE("unsuppressed: the background is observed",
+                    emitted.known == 1 &&
+                    obs_rgba_is(&emitted, 0.4f, 0.4f, 0.4f, 1.0f));
+
+        ReplExecutionOptions opts = {0};
+        opts.state_filter = obs_suppress_clears;
+        gl_stub_counts_reset();
+        ReplBackgroundObservation suppressed = run_observed(cmds, 2, &opts);
+        ASSERT_TRUE("suppressed: no GL is emitted",
+                    gl_stub_counts[GL_STUB_glClearColor] == 0 &&
+                    gl_stub_counts[GL_STUB_glClear] == 0);
+        ASSERT_TRUE("suppressed: nothing is observed either",
+                    suppressed.known == 0);
+    }
+
+    /* Replay fade batches suppress CMD_CLEAR outright (has_fade_context), so
+     * they neither wipe the frame nor speak for its background. */
+    {
+        GLCmd cmds[2];
+        ReplExecutionOptions opts = {0};
+        memset(cmds, 0, sizeof(cmds));
+        obs_clear_color(cmds, 0, 0.4f, 0.4f, 0.4f, 1.0f);
+        obs_clear(cmds, 1, GL_COLOR_BUFFER_BIT);
+
+        opts.has_fade_context = 1;
+        opts.fade_alpha_scale = 0.5f;
+        gl_stub_counts_reset();
+        ReplBackgroundObservation obs = run_observed(cmds, 2, &opts);
+        ASSERT_TRUE("a fade batch emits no clear",
+                    gl_stub_counts[GL_STUB_glClear] == 0);
+        ASSERT_TRUE("a fade batch publishes no background", obs.known == 0);
+    }
+
+    /* observation_out == NULL publishes nothing at all. */
+    {
+        GLCmd cmds[2];
+        ReplExecutionOptions opts = {0};
+        ReplBackgroundObservation sink;
+        memset(cmds, 0, sizeof(cmds));
+        obs_clear_color(cmds, 0, 0.4f, 0.4f, 0.4f, 1.0f);
+        obs_clear(cmds, 1, GL_COLOR_BUFFER_BIT);
+
+        memset(&sink, 0x5A, sizeof(sink));
+        opts.flat_cmd_count = 2;
+        opts.program.cmds = cmds;
+        opts.program.cmd_count = 2;
+        opts.observation_out = NULL;
+        gl_stub_counts_reset();
+        repl_execute_program(&opts);
+        ASSERT_TRUE("a NULL sink still emits the clear",
+                    gl_stub_counts[GL_STUB_glClear] == 1);
+        ASSERT_TRUE("a NULL sink is not written through",
+                    sink.rgba[0] != 0.4f);
+    }
+
+    /* baseline_clear_rgba is the state the walk starts in: a clear with no
+     * preceding glClearColor takes it, and is a fully-known background. */
+    {
+        GLCmd cmds[1];
+        memset(cmds, 0, sizeof(cmds));
+        obs_clear(cmds, 0, GL_COLOR_BUFFER_BIT);
+        ReplBackgroundObservation obs = run_observed_plain(cmds, 1);
+        ASSERT_TRUE("a bare clear observes the caller's baseline",
+                    obs.known == 1 &&
+                    obs_rgba_is(&obs, 0.10f, 0.10f, 0.10f, 1.0f));
+    }
+}
+
 /* repl_flat_resolve_clear_color: the frame background the host clears, fogs
  * and lights overlays against. Resolution is source-ordered and stops at the
  * program's first color clear, so it answers "what color does this program's
@@ -1648,6 +1987,7 @@ int main(void) {
     test_exec_cursor_advance_skips_without_state();
     test_attrib_stack();
     test_goto_uses_caller_text_view();
+    test_background_observation();
     test_resolve_frame_clear_color();
     test_execute_all_commands();
     test_glut_bitmap_string();
