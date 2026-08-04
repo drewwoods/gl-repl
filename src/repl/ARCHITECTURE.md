@@ -172,7 +172,6 @@ flowchart LR
     flatten e6@==> flat_state
     flatten_query -.-> flat_state
     executor -.-> flat_state
-    executor -.-> source_port
 
     import i14@--> load
     export -.-> source_port
