@@ -1419,19 +1419,33 @@ static int handle_comment_toggle_key_route(unsigned char key) {
     if (!tutorial_guard_source_change_or_status(plan.first, rows, rows))
         return 1;
 
-    editor_undo_ring_state_capture(&undo_before);
-    editor_undo_push_snapshot();
-
-    if (!repl_comment_toggle_apply(&plan, prefix, &res)) {
-        /* The REPL restored the document; drop the snapshot too so a
-         * refused toggle leaves no undo entry behind. */
-        editor_undo_ring_state_restore(&undo_before);
+    /* Rehearse before pushing. editor_undo_push_snapshot is also the
+     * transient-scene promotion hook, and promotion is not reversible -
+     * it consumes a scene slot and, for a tutorial origin, runs
+     * teardown - so a refused toggle must never reach it. The undo
+     * snapshot itself still has to be taken before the mutation, hence
+     * the order: rehearse, push, apply. */
+    if (!repl_comment_toggle_run(&plan, prefix,
+                                 REPL_COMMENT_TOGGLE_REHEARSE, &res)) {
         if (res.failed_row >= 0)
             snprintf(msg, sizeof(msg), "Toggle failed at line %d: %s",
                      res.failed_row + 1, res.err);
         else
             snprintf(msg, sizeof(msg), "Toggle failed: %s", res.err);
         repl_set_status_error(msg);
+        return 1;
+    }
+
+    editor_undo_ring_state_capture(&undo_before);
+    editor_undo_push_snapshot();
+
+    if (!repl_comment_toggle_run(&plan, prefix,
+                                 REPL_COMMENT_TOGGLE_COMMIT, &res)) {
+        /* The rehearsal said yes, so reaching here means live state moved
+         * under us. The REPL restored the document; drop the snapshot
+         * too so the refusal still leaves no undo entry. */
+        editor_undo_ring_state_restore(&undo_before);
+        repl_set_status_error("Toggle failed: the document changed underneath");
         return 1;
     }
 

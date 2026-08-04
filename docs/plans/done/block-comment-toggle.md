@@ -3,7 +3,7 @@
 ## Status - LANDED (2026-08-04)
 
 Every acceptance criterion holds. Verified with `make test-stubs` (76/76
-binaries, 25997 tests), `make test-web` (74/74), `make check-c99`,
+binaries, 26019 tests), `make test-web` (74/74), `make check-c99`,
 `make check-state-ownership`, `make fix-doc-links`, and native + stub builds.
 
 Formerly listed as a **prerequisite for** `goto-removal.md`. That plan landed
@@ -91,12 +91,31 @@ entries above; range resolution moved to `repl_comment_toggle_plan()`.
    worry that motivated the question), and a nested commented block restores
    on its own. Both pinned.
 
-### One behavior the plan did not name
+### Three behaviors the plan did not name
 
-Blank lines. `compile_prepend_prefix` turns an empty row into a bare `// `, and
-nothing in the dispatch chain claims empty input - so before this, a single
+**Blank lines.** `compile_prepend_prefix` turns an empty row into a bare `// `,
+and nothing in the dispatch chain claims empty input - so before this, a single
 blank line inside a block made the whole block's uncomment fail.
 `repl_compile_uncomment_line` now names that case and restores `CMD_EMPTY`.
+
+**Braces in prose.** §2's "re-derive the structure from the text" has to mean
+the *code* half of the text. A `{` past a `//` - a standalone `// note {`, or a
+trailing `glVertex2f(i, 0);   // and here {` - is not structure, and a row that
+is still a comment after one strip can never uncomment into a block head or
+end. Counting them made an ordinary comment refuse its own reverse toggle with
+"unmatched {". `row_brace_shape` measures only up to
+`repl_line_trailing_comment()`, which also skips string literals so
+`label("a { b")` stays code all the way.
+
+**Promotion is not undo-able.** `editor_undo_push_snapshot()` is also the
+transient-scene auto-promotion hook, and promotion is one-way: it consumes a
+scene slot and, for a tutorial origin, runs teardown. Pushing before a fallible
+operation therefore leaks a promoted scene when that operation refuses -
+rewinding the undo ring does not take it back. (The old toggle never hit this
+because it pushed only after a pure compile succeeded.) So the route rehearses
+before it pushes: `repl_comment_toggle_run(..., REHEARSE)` answers "would this land?"
+without a trace - free on the comment side, and on the uncomment side the
+transaction itself, rolled back on the way out.
 
 ## The problem
 

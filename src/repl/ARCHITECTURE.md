@@ -529,6 +529,16 @@ what is genuinely the editor's: one undo snapshot per operation, rewound
 via [`editor_undo_ring_state_restore()`](../editor/undo.h#L119) when the REPL refuses, plus the
 status line and the input row.
 
+Rewinding the ring is not by itself enough, because
+[`editor_undo_push_snapshot()`](../editor/undo.h#L126) is *also* the transient-scene promotion
+hook, and promotion is one-way - it consumes a scene slot and, for a
+tutorial origin, runs teardown. So the toggle rehearses first:
+`repl_comment_toggle_run()` in `REPL_COMMENT_TOGGLE_REHEARSE` mode answers
+"would this land?" without a trace, and only then does the route push and
+run it again to `_COMMIT`. Commenting needs no rehearsal (the compile is
+pure); uncommenting has no pure form, so the rehearsal is the transaction
+itself, rolled back on the way out.
+
 The toggle is picky about what it will comment for the same reason a
 rename is atomic: commented code still has to be legal code, or it cannot
 come back. A range that opens a block it does not close, or that takes a

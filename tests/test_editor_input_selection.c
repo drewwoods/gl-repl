@@ -1167,7 +1167,9 @@ int main(void) {
         editor_input_set_modifier_provider_for_test(test_modifiers_provider);
         editor_set_line_comment_prefix("// ");
         editor_feed_line("glVertex3f(1, 2, 3);");
-        editor_feed_line("// a note");
+        /* The brace is prose. Counted as structure it made this very
+         * round trip refuse with "unmatched {". */
+        editor_feed_line("// a note {");
         editor_feed_line("glVertex3f(7, 8, 9);");
         editor_insert_mode_set(0);
 
@@ -1179,7 +1181,7 @@ int main(void) {
         ASSERT_INT("the code row commented",
                    repl_state_document_cmds()[0].type, CMD_COMMENT);
         ASSERT_STR("and the comment row gained a second prefix",
-                   editor_buffer_line(1), "  // // a note");
+                   editor_buffer_line(1), "  // // a note {");
 
         editor_handle_key('/', 0, 0);
         ASSERT_INT("the code row came back",
@@ -1187,7 +1189,7 @@ int main(void) {
         ASSERT_INT("the note stayed a comment",
                    repl_state_document_cmds()[1].type, CMD_COMMENT);
         ASSERT_STR("with exactly its original text",
-                   editor_buffer_line(1), "  // a note");
+                   editor_buffer_line(1), "  // a note {");
 
         g_test_modifiers = 0;
         editor_selection_clear_line_range();

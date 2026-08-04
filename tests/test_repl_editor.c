@@ -4392,6 +4392,17 @@ int main() {
                 "",
                 "glVertex2f(i, 0);",
                 "}" }, 5, 0 },
+            /* Braces in prose are not structure. Read as structure, the
+             * `{` in either row below made the block's own reverse
+             * toggle report an unmatched brace and refuse. */
+            { "block holding comments that mention braces",
+              { "for(i, 0, 2) {",
+                "// open with {",
+                "// close with }",
+                "glVertex2f(i, 0);   // and here {",
+                "}" }, 5, 0 },
+            { "a string argument holding a brace",
+              { "label(\"a { b\");" }, 1, 0 },
             { "function-scoped local",
               { "func0(a) {", "float u;", "u = a;",
                 "glVertex3f(u, 0, 0);", "}" }, 5, 0 },
@@ -4541,6 +4552,56 @@ int main() {
                    after, before);
         assert_status_contains("and the failure names the body row",
                                "Toggle failed at line 3");
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* A refused toggle must not promote the transient document either.
+     * editor_undo_push_snapshot is also the auto-promotion hook, and
+     * promotion is one-way - it consumes a scene slot and swaps the
+     * example tab for a user scene. So the toggle rehearses before it
+     * pushes, and a refusal never gets that far. */
+    {
+        int saved_mods = g_mock_modifiers;
+        int scenes_before;
+        char before[MAX_EDITOR_COMMANDS * 8];
+        char after[sizeof(before)];
+
+        glr_ctrl_reset_all();
+        editor_feed_line("for(i, 0, 3) {");
+        editor_feed_line("for(j, 0, 2) {");
+        editor_feed_line("glVertex2f(i, j);");
+        editor_feed_line("}");
+        editor_feed_line("}");
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_insert_mode_set(0);
+        editor_state_edit_line_set(0);
+        editor_handle_key('/', 0, 0);
+
+        /* Only now make the document promotable, so the setup comment
+         * above isn't the edit that promotes it. */
+        repl_state_scenes_set_active_example_idx(0);
+        scenes_before = repl_user_scene_count();
+        capture_document_text(before, sizeof(before));
+
+        /* The inner block reads the outer loop's variable, so its
+         * uncomment cannot land. */
+        editor_state_edit_line_set(1);
+        editor_handle_key('/', 0, 0);
+        capture_document_text(after, sizeof(after));
+        ASSERT_STR("the refused toggle left the document alone",
+                   after, before);
+        ASSERT_INT("and promoted no scene",
+                   repl_user_scene_count(), scenes_before);
+        ASSERT_INT("leaving the example still the active scene",
+                   repl_active_user_scene(), -1);
+
+        /* A toggle that does land still promotes, as any edit would. */
+        editor_state_edit_line_set(0);
+        editor_handle_key('/', 0, 0);
+        ASSERT_INT("a toggle that lands promotes like any other edit",
+                   repl_user_scene_count(), scenes_before + 1);
 
         g_mock_modifiers = saved_mods;
     }

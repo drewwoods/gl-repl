@@ -15,8 +15,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "repl/apply.h"          /* repl_apply_can_apply_compiled_change */
 #include "repl/command.h"
 #include "repl/compile.h"
+#include "repl/eval.h"          /* repl_line_trailing_comment */
 #include "repl/load.h"
 #include "repl/scene_snapshot.h"
 #include "repl/state_notify.h"
@@ -52,10 +54,19 @@ static int row_is_strippable_comment(const ReplCompileContext *ctx,
 /* Brace shape of a commented row, read back out of its text. The
  * command model says CMD_COMMENT and nothing more, so the only surviving
  * record of the structure is the text the prefix was prepended to.
- * `} else {` legitimately both closes and opens. */
+ * `} else {` legitimately both closes and opens.
+ *
+ * Only the *code* half of the stripped line counts. Braces past a `//`
+ * are prose, not structure, and a row that is still a comment after one
+ * strip (`// // note {`) uncomments back to a comment - it can never
+ * produce a block head or end, so it has no shape at all. Reading them
+ * as structure made an ordinary `// note {` refuse its own reverse
+ * toggle. repl_line_trailing_comment skips string literals, so
+ * `label("a {")` is code the whole way. */
 static void row_brace_shape(const ReplCompileContext *ctx, int idx,
                             const char *prefix, int *closes, int *opens) {
     char stripped[MAX_LINE_LEN];
+    const char *comment;
     const char *p;
     int len;
 
@@ -66,12 +77,14 @@ static void row_brace_shape(const ReplCompileContext *ctx, int idx,
                                            (int)sizeof(stripped)))
         return;
 
+    comment = repl_line_trailing_comment(stripped);
+    len = comment ? (int)(comment - stripped) : (int)strlen(stripped);
+
     p = stripped;
-    while (*p == ' ' || *p == '\t') p++;
-    if (*p == '}')
+    while (len > 0 && (*p == ' ' || *p == '\t')) { p++; len--; }
+    if (len > 0 && *p == '}')
         *closes = 1;
 
-    len = (int)strlen(p);
     while (len > 0 && (p[len - 1] == ' ' || p[len - 1] == '\t'))
         len--;
     if (len > 0 && p[len - 1] == '{')
@@ -248,23 +261,45 @@ static int result_fail(ReplCommentToggleResult *out, int row, const char *err) {
     return 0;
 }
 
-static int apply_comment(const ReplCommentTogglePlan *plan, const char *prefix,
-                         ReplCommentToggleResult *out) {
+/* Compile the comment direction. `out_change` receives the one change
+ * that describes the whole range; every way a comment can be refused is
+ * a property of the range (unbalanced, over capacity, a declaration
+ * still read from outside), so no row is named - those diagnostics
+ * already spell out the line they mean. */
+static int compile_comment(const ReplCommentTogglePlan *plan,
+                           const char *prefix,
+                           ReplCompiledChange *out_change,
+                           ReplCommentToggleResult *out) {
     ReplCompileContext ctx = repl_compile_context_from_live(plan->first);
-    ReplCompiledChange change;
-    ReplLoadTransactionResult tx;
     char err[REPL_DIAG_TEXT_MAX] = "";
 
-    /* No row is named on this side: every way a comment can be refused
-     * is a property of the range as a whole (unbalanced, over capacity,
-     * a declaration still read from outside), and those diagnostics
-     * already spell out the line they mean. */
     if (repl_compile_comment_range(plan->first, plan->last, prefix, &ctx,
-                                   &change, err, sizeof(err))
+                                   out_change, err, sizeof(err))
             != REPL_COMPILE_OK)
         return result_fail(out, -1, err);
-    if (change.kind == REPL_COMPILED_NO_CHANGE)
+    if (out_change->kind == REPL_COMPILED_NO_CHANGE)
         return result_fail(out, -1, "Nothing to comment");
+    if (!repl_apply_can_apply_compiled_change(out_change))
+        return result_fail(out, -1, "command store at capacity");
+    return 1;
+}
+
+/* The comment direction needs no rehearsal: the compile is pure and the
+ * store preflight answers the only remaining question. */
+static int rehearse_comment(const ReplCommentTogglePlan *plan,
+                            const char *prefix,
+                            ReplCommentToggleResult *out) {
+    ReplCompiledChange change;
+    return compile_comment(plan, prefix, &change, out);
+}
+
+static int apply_comment(const ReplCommentTogglePlan *plan, const char *prefix,
+                         ReplCommentToggleResult *out) {
+    ReplCompiledChange change;
+    ReplLoadTransactionResult tx;
+
+    if (!compile_comment(plan, prefix, &change, out))
+        return 0;
 
     /* One compiled change, so the transaction's own preflight is the
      * all-or-nothing gate - no snapshot needed on this side. */
@@ -279,8 +314,13 @@ static int apply_comment(const ReplCommentTogglePlan *plan, const char *prefix,
     return 1;
 }
 
+/* `rehearse` uncomments the range for real - the only way to find out
+ * whether it can be, since each row needs the rows above it already
+ * restored - and then puts the snapshot back, so the caller learns the
+ * answer without the document keeping it. */
 static int apply_uncomment(const ReplCommentTogglePlan *plan,
                            const char *prefix,
+                           int rehearse,
                            ReplCommentToggleResult *out) {
     SceneSnapshot *before;
     int n = plan->last - plan->first + 1;
@@ -318,15 +358,16 @@ static int apply_uncomment(const ReplCommentTogglePlan *plan,
         touched_declarations |= (change.predef_op_count > 0);
     }
 
-    if (failed_row >= 0) {
+    if (failed_row >= 0 || rehearse) {
         scene_snapshot_apply_live(before, SCENE_SNAPSHOT_CAMERA_SNAP);
         repl_state_mark_flat_dirty();
         repl_mark_source_dirty();
-        free(before);
-        return result_fail(out, failed_row,
-                           err[0] ? err : "Cannot uncomment: not a valid command");
     }
     free(before);
+
+    if (failed_row >= 0)
+        return result_fail(out, failed_row,
+                           err[0] ? err : "Cannot uncomment: not a valid command");
 
     if (out) {
         out->touched_declarations = touched_declarations;
@@ -336,9 +377,11 @@ static int apply_uncomment(const ReplCommentTogglePlan *plan,
     return 1;
 }
 
-int repl_comment_toggle_apply(const ReplCommentTogglePlan *plan,
-                              const char *prefix,
-                              ReplCommentToggleResult *out) {
+int repl_comment_toggle_run(const ReplCommentTogglePlan *plan,
+                            const char *prefix,
+                            ReplCommentToggleMode mode,
+                            ReplCommentToggleResult *out) {
+    int rehearse = (mode == REPL_COMMENT_TOGGLE_REHEARSE);
     int n;
     int ok;
 
@@ -350,8 +393,12 @@ int repl_comment_toggle_apply(const ReplCommentTogglePlan *plan,
     if (plan->first < 0 || n <= 0 || plan->last >= repl_state_document_count())
         return result_fail(out, -1, "No line to toggle");
 
-    ok = plan->uncomment ? apply_uncomment(plan, prefix, out)
-                         : apply_comment(plan, prefix, out);
+    if (plan->uncomment)
+        ok = apply_uncomment(plan, prefix, rehearse, out);
+    else if (rehearse)
+        ok = rehearse_comment(plan, prefix, out);
+    else
+        ok = apply_comment(plan, prefix, out);
     if (!ok)
         return 0;
 
@@ -359,7 +406,9 @@ int repl_comment_toggle_apply(const ReplCommentTogglePlan *plan,
         out->line_count = n;
         out->uncommented = plan->uncomment;
     }
-    repl_state_mark_flat_dirty();
-    repl_mark_source_dirty();
+    if (!rehearse) {
+        repl_state_mark_flat_dirty();
+        repl_mark_source_dirty();
+    }
     return 1;
 }

@@ -64,15 +64,32 @@ int repl_comment_toggle_plan(const ReplCompileContext *ctx,
                              ReplCommentTogglePlan *out,
                              char *err, int err_size);
 
-/* Execute a resolved plan against live REPL state: source document,
- * command store, predefined variables, function aliases.
+typedef enum {
+    /* Answer "would this land?" and leave no trace. For a caller whose
+     * own pre-mutation bookkeeping is not reversible - the editor's undo
+     * push, which is also the transient-scene promotion hook - so that
+     * bookkeeping can wait until the answer is yes.
+     *
+     * Commenting needs no rehearsal: the compile is pure and the
+     * command-store preflight settles the rest, so nothing is touched.
+     * Uncommenting has no pure form - each row only parses once the rows
+     * above it are restored - so the rehearsal *is* the transaction,
+     * rolled back on the way out instead of only on failure. */
+    REPL_COMMENT_TOGGLE_REHEARSE = 0,
+    /* Execute for real, keeping the result. */
+    REPL_COMMENT_TOGGLE_COMMIT,
+} ReplCommentToggleMode;
+
+/* Run a resolved plan against live REPL state: source document, command
+ * store, predefined variables, function aliases.
  *
- * Atomic. Returns 1 on success with `out->message` set, or 0 having
- * restored the pre-call scene, with `out->err` set and `out->failed_row`
- * naming the offending document row when there is one. Never touches
- * undo or status - those belong to the caller. */
-int repl_comment_toggle_apply(const ReplCommentTogglePlan *plan,
-                              const char *prefix,
-                              ReplCommentToggleResult *out);
+ * Atomic in both modes. Returns 1 on success with `out->message` set, or
+ * 0 having restored the pre-call scene, with `out->err` set and
+ * `out->failed_row` naming the offending document row when there is one.
+ * Never touches undo or status - those belong to the caller. */
+int repl_comment_toggle_run(const ReplCommentTogglePlan *plan,
+                            const char *prefix,
+                            ReplCommentToggleMode mode,
+                            ReplCommentToggleResult *out);
 
 #endif /* REPL_COMMENT_TOGGLE_H */
