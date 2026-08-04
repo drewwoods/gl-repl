@@ -38,9 +38,10 @@ impossible.
 - Give grid/axes fog, backdrop/helpers, and their overlay contrast the
   observation from their render pass, and give chrome one explicitly selected
   frame presentation color.
-- Leave the render3d callback contract alone. Cursor edit guides take the
-  previous frame's presentation color rather than forcing presentation data
-  through the app-facing hooks for one float.
+- Leave the render3d post-fill, post-overlays, and post-resolve-overlays
+  callback signatures alone. Cursor edit guides take the previous frame's
+  derived contrast scale rather than forcing presentation data through those
+  app-facing hooks for one float.
 - Handle multiple and partially masked color clears without inventing a fully
   known RGBA value when framebuffer history is required.
 - Resolve time-blur backgrounds from the flat program actually baked for each
@@ -339,9 +340,10 @@ float    alpha_scale;
 Use one fallback rule for every presentation consumer. An observed background
 is usable only when all four channels are known. Otherwise chrome, grid/axes
 recede fog, and overlay luminance/`alpha_scale` all use
-`fallback_presentation_rgba` and neutral `alpha_scale = 1.0` - including the
-guide snapshot, which applies the rule to the previous frame's result. The full
-app populates those inputs from `CFG_DEFAULT_CLEAR_*` /
+`fallback_presentation_rgba` and neutral `alpha_scale = 1.0`. The guide
+snapshot applies the same rule indirectly by using the derived scale retained
+from the previous completed frame. The full app populates those inputs from
+`CFG_DEFAULT_CLEAR_*` /
 `CFG_DEFAULT_CLEAR_LUMA`; render3d does not include app defaults. When the
 background is known, `overlay_design_luma` supplies the reference for the
 existing contrast formula. The fallback is explicitly presentation policy and
@@ -374,24 +376,27 @@ The only overlay-side consumer of a background is the cursor edit guides'
 `alpha_scale` - the dark-background boost for transform guides and geometry
 guides. `glr_ctrl_build_guide_snapshot()` captures it as one float
 (`snapshot.alpha_scale`), pre-frame. Instead of delivering a current-frame
-value to it, the controller keeps the previous frame's `Render3dFrameResult`
-and fills the snapshot from that, exactly where it fills it today.
+value to it, the controller retains only the previous completed frame's
+already-derived `alpha_scale` and fills the snapshot from that scalar, exactly
+where it fills it today. It does not retain the background or recompute the
+contrast formula.
 
 `post_fill_fn` needs nothing at all: its only user is the replay fade plan,
 which carries its own `fade_alpha_scale`.
 
 This is a deliberate one-frame approximation on a decoration, and it is the
-reason the render callback contract stays unchanged. Its whole observable
-effect is that on the frame a scene's background changes, guides - visible
-only while the cursor sits on a transform/vertex/normal/clip-plane line - are
-boosted by the previous frame's factor for one frame at 60 Hz. The value is
-identical to the current-frame observation in every case except an unknown
-background or an animated clear color under time blur, and it is the same
-class of tradeoff as the single `t_end` chrome color in section 4.
+reason the post-fill and post-overlay callback signatures stay unchanged. Its
+whole observable effect is that whenever the presentation background changes
+- through an edit, scene switch, replay progress, animation, or any other path
+- guides visible on a transform/vertex/normal/clip-plane line use the previous
+rendered frame's factor for one rendered frame. It is the same class of
+tradeoff as the single `t_end` chrome color in section 4.
 
-The first frame of a session, and the first frame after any reset, has no
-previous result: use the all-or-default fallback, which is what the guides
-already get on a default background.
+Initialize the retained guide scale to the all-or-default fallback of `1.0f`.
+After a successful `render3d_draw_scene()`, replace it with the returned
+frame's `alpha_scale`; if rendering rejects the config, leave the last
+completed value intact. Do not add reset or scene-load invalidation hooks:
+one-frame lag is already the accepted policy for every background change.
 
 ### 4. One frame presentation color under accumulation
 
@@ -414,6 +419,23 @@ accumulate different scene colors while chrome uses the single `t_end`
 presentation color. That is an accepted v1 approximation. Add weighted
 background averaging only if a real time-blur scene demonstrates a visible
 need; it is not part of this plan.
+
+Make the selected presentation color and its already-derived contrast scale
+explicit in the frame result:
+
+```c
+typedef struct Render3dFrameResult {
+    float presentation_rgba[4];
+    float alpha_scale;
+    int   background_fully_known;
+} Render3dFrameResult;
+```
+
+`presentation_rgba` is the final pass's background when every pass was fully
+known, otherwise the all-or-default fallback. `background_fully_known` keeps
+that distinction observable without requiring the controller to select the
+fallback again. Because render3d owns the contrast formula, it also returns
+the derived `alpha_scale`; the controller must not recompute it from RGBA.
 
 Return the frame result through an explicit output parameter:
 
@@ -443,8 +465,8 @@ rectangle, and the whole-window compositor postprocess runs after the 2D
 overlays. The load-bearing ordering rule is simply that chrome clears before
 those overlays paint it.
 
-Use the frame background when fully known; otherwise use
-`CFG_DEFAULT_CLEAR_*`. Continue to set `glClearDepth(1.0)` before clearing the
+Use `Render3dFrameResult.presentation_rgba`, which has already applied the
+all-or-default policy. Continue to set `glClearDepth(1.0)` before clearing the
 chrome depth strips.
 
 Check profiler attribution after moving the work. It remains inside
@@ -467,11 +489,12 @@ background:
 | Replay fade overlays | none; they deliberately suppress clear |
 | `execute_fn == NULL` | none; no walk runs at all |
 
-`execute_fn` is documented as optional - with no callback the scene still
-draws its background, grid, axes and lights. There is then no observation of
-any kind, so every consumer takes the all-or-default fallback, the same as an
-unknown background. `render3d_demo` is exactly such a caller, so this is the
-path the REPL-free proof exercises.
+`execute_fn` is documented as optional. With no callback, no program walk and
+no program-owned clear occurs; render3d still draws its grid, axes, lights, and
+any configured backdrop using the all-or-default presentation inputs. This
+preserves framebuffer history when there is no backdrop instead of pretending
+the fallback color was painted. `render3d_demo` is exactly such a caller, so
+this is the path the REPL-free proof exercises.
 
 Replay uses the observation from the actually executed main-fill prefix. Do
 not freeze a complete-program background at replay start. The existing
@@ -590,8 +613,9 @@ releasable compatibility state. No bridge or dual-answer contract is required.
   known before publishing it as the frame color.
 - Return `Render3dFrameResult` from `render3d_draw_scene()`.
 - Move the chrome-strip clear after scene rendering.
-- Retain the frame result on the controller and feed it to the next frame's
-  guide snapshot; fall back on the first frame and after a reset.
+- Retain only the successful frame result's derived `alpha_scale` on the
+  controller and feed it to the next frame's guide snapshot; initialize it to
+  the fallback and do not add reset-specific invalidation.
 - Apply the one explicit chrome/fog/alpha fallback when the frame is incomplete.
 - Add per-pass time-blur and unknown-channel controller tests.
 - Verify profile coverage after reordering.
@@ -620,9 +644,10 @@ releasable compatibility state. No bridge or dual-answer contract is required.
 - `test_glr_ctrl`
   - chrome clear happens after the scene result;
   - known/unknown fallback policy;
-  - the guide snapshot's `alpha_scale` comes from the previous frame's result,
-    and takes the fallback on the first frame and after a reset;
-  - the render callbacks' signatures are unchanged;
+  - the guide snapshot's `alpha_scale` comes from the previous successful
+    frame, starts at the fallback, and survives a rejected render unchanged;
+  - the post-fill, post-overlays, and post-resolve-overlays callback signatures
+    are unchanged;
   - replay policy remains stable and explicit;
   - time-blur per-pass helpers and final-pass frame color.
 - render3d tests/demo
@@ -693,7 +718,7 @@ lane on `gracemont` after the branch is pushed to a reviewable ref.
   - render3d owns generic per-pass/result plumbing **and the overlay contrast
     formula**, which moves out of the controller;
   - controller owns chrome layout, the design-point/fallback policy inputs,
-    and the retained previous-frame result the guide snapshot reads.
+    and the retained previous-frame guide `alpha_scale` scalar.
 - `docs/CONTRIBUTING.md`
   - a new state command that affects clearing updates cursor execution once;
     it must not create an analyzer-side execution path.
@@ -732,10 +757,11 @@ lane on `gracemont` after the branch is pushed to a reviewable ref.
 
 1. **Unknown background:** all-or-default for chrome, grid/axes fog, and
    overlay contrast. No per-channel chrome composition or readback.
-2. **Cursor edit guides:** take the previous frame's presentation color from
-   the controller rather than pushing presentation data through the render
-   callbacks. One float, one frame late, on a decoration - not worth changing
-   a module boundary for.
+2. **Cursor edit guides:** take the previous successful frame's derived
+   `alpha_scale` from the controller rather than pushing presentation data
+   through the post-fill, post-overlays, or post-resolve-overlays callbacks.
+   The scalar starts at `1.0f`, is deliberately one rendered frame late after
+   any background change, and has no reset-specific invalidation.
 3. **Replay:** follow the executed prefix. A later clear changes the background
    when the replay PC reaches it; fade batches publish nothing.
 4. **Callback shape:** return through the non-const `result_out` referenced by
