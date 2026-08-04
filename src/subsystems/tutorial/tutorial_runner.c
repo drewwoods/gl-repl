@@ -14,8 +14,7 @@
 #include "repl/scenes.h"
 #include "repl/state_owners.h"  /* repl_state_scenes_set_tutorial_origin_idx */
 #include "repl/state_views.h"
-#include "repl/text_helpers.h"  /* repl_extract_label_name (setup goto-label anchors) */
-#include "source_document.h"    /* live line text for setup goto-label resolution */
+#include "source_document.h"    /* live line text for setup anchor resolution */
 #include "repl/state_notify.h" /* For repl_state_mark_flat_dirty, repl_state_mark_source_dirty, and repl_state_parse_workspace_header_line */
 #include "repl/tutorials.h"
 #include "repl/export.h"
@@ -466,22 +465,22 @@ static int tutorial_step_instruction_line(int tutorial_idx, int step,
         }
     }
     if (target_step < 0) {
-        /* Not a step label - try the setup scaffold's `name:` goto
-         * labels. Resolved against the LIVE document at step-entry
+        /* Not a step label - try the setup scaffold's `// @anchor`
+         * rows. Resolved against the LIVE document at step-entry
          * time (not a row recorded at load), so rows shifted by
          * earlier splices are handled by construction. The validator
-         * guarantees the label exists in setup and doesn't collide
+         * guarantees the anchor exists in setup and doesn't collide
          * with any step label. */
         SourceTextView text = source_document_view();
         int n = repl_state_document_count();
         const GLCmd *cmds = repl_state_document_cmds();
         for (int row = 0; row < n; row++) {
-            char row_label[REPL_GOTO_LABEL_MAX];
-            if (cmds[row].type != CMD_GOTO_LABEL)
+            char row_anchor[TUTORIAL_ANCHOR_NAME_MAX];
+            if (cmds[row].type != CMD_COMMENT)
                 continue;
-            if (repl_extract_label_name(source_text_line(text, row),
-                                        row_label, sizeof(row_label)) &&
-                strcmp(row_label, target) == 0) {
+            if (repl_tutorial_anchor_name(source_text_line(text, row),
+                                          row_anchor, sizeof(row_anchor)) &&
+                strcmp(row_anchor, target) == 0) {
                 *out_line = row;
                 return 1;
             }

@@ -93,6 +93,24 @@ STATIC_ASSERT(TUTORIAL_LOCKED_LINE_MAX >= TUTORIAL_MAX_STEPS,
  * loads the rows) and the validator (which budgets for them) can't drift. */
 #define TUTORIAL_SCENE_PRELUDE_ROWS 2
 
+/* Maximum length of a setup-scaffold anchor name, including the NUL. */
+#define TUTORIAL_ANCHOR_NAME_MAX   64
+
+/* Match the setup-scaffold anchor directive: a line whose entire text is
+ * `// @anchor <name>`. On a match `name` receives the anchor name and 1 is
+ * returned; otherwise `name` is emptied and 0 is returned.
+ *
+ * The directive is an ordinary CMD_COMMENT row - flatten drops it, export
+ * writes it back verbatim, and it needs no CmdType, parser grammar, or spec
+ * entry of its own. It marks a position in a tutorial's preloaded scaffold
+ * that TUTORIAL_STEP_LABEL steps can splice above (see target_label).
+ *
+ * Both consumers share this one matcher: the catalog validator applies it to
+ * TutorialEntry.setup strings, and the runner applies it to the live
+ * document's comment rows at step-entry time. Tutorial-private - anchors are
+ * not a user-facing document feature. */
+int repl_tutorial_anchor_name(const char *line, char *name, int name_sz);
+
 typedef enum {
     TUTORIAL_STEP_APPEND = 0,
     TUTORIAL_STEP_LABEL,
@@ -219,8 +237,9 @@ typedef struct {
      * (setup @cfg slugs join the teardown-restore baseline); the
      * remaining body lines are REPL source fed through the non-editor
      * loader. Every loaded row is LOCKED (read-only for the duration
-     * of the tutorial). Body lines may define `name:` goto labels;
-     * label-placement steps can target those (see target_label).
+     * of the tutorial). Body lines may carry `// @anchor <name>`
+     * directives; label-placement steps can target those (see
+     * target_label).
      * NULL = start from an empty scene (the default). */
     const char *const  *setup;
     /* Tag bitmask for menu grouping (REPL_TUTORIAL_TAG_* bits OR-ed
@@ -403,11 +422,11 @@ int repl_tutorial_expected_is_func_open(const char *expected);
  *     mistake, not a harmless extra). Slug validity is checked at
  *     tutorial_start alongside SET / REQUIRE.
  *   - Every non-empty label is unique within the tutorial AND does not
- *     collide with a `name:` goto label defined in the setup scaffold.
+ *     collide with a `// @anchor` defined in the setup scaffold.
  *   - TUTORIAL_STEP_APPEND has no non-empty target_label.
  *   - TUTORIAL_STEP_LABEL has a non-null non-empty target_label that
  *     names an earlier non-empty step label in the same tutorial
- *     (forward references rejected) OR a `name:` goto label defined in
+ *     (forward references rejected) OR a `// @anchor` defined in
  *     the setup scaffold.
  *   - Step count stays within TUTORIAL_MAX_STEPS, and setup lines +
  *     steps together fit the locked-line table

@@ -3257,7 +3257,7 @@ static void test_catalog_color_interp_uses_setup_scaffold(void) {
     int total = repl_tutorial_step_count(idx);
     for (int s = 0; s < total; s++) {
         if (repl_tutorial_step_placement(idx, s) == TUTORIAL_STEP_LABEL) {
-            /* The targets anchor on setup goto labels, not step labels. */
+            /* The targets name setup `// @anchor` rows, not step labels. */
             const char *target = repl_tutorial_step_target_label(idx, s);
             ASSERT_TRUE("label-targeted step has a target",
                         target && target[0]);
@@ -3290,8 +3290,9 @@ static void test_setup_scaffold_preloads_locked_rows_and_cfg(void) {
     ASSERT_TRUE("tutorial active", tutorial_active());
 
     /* The 2-row scene-clear prelude loads ahead of the scaffold body
-     * (9 rows: comment, glBegin, glColor3f, vertex, left:, vertex,
-     * right:, vertex, glEnd); the step-0 NOTE comment appends one more. */
+     * (9 rows: comment, glBegin, glColor3f, vertex, @anchor left, vertex,
+     * @anchor right, vertex, glEnd); the step-0 NOTE comment appends one
+     * more. */
     int scaffold_rows = 9;
     int prelude_rows = TUTORIAL_SCENE_PRELUDE_ROWS;
     ASSERT_INT("clear prelude + scaffold + NOTE instruction rows loaded",
@@ -3336,37 +3337,79 @@ static void test_setup_label_targeted_steps_splice_into_scaffold(void) {
                 !tutorial_active());
 
     /* Final document order: each color lands immediately above its
-     * anchor label, so it executes before that corner's vertex. */
+     * anchor row, so it executes before that corner's vertex. */
     SourceTextView doc = source_document_view();
     int green = -1, blue = -1, left = -1, right = -1;
     int n = repl_state_document_count();
     for (int r = 0; r < n; r++) {
         const char *line = source_text_line(doc, r);
+        char anchor[TUTORIAL_ANCHOR_NAME_MAX];
         if (!line) continue;
         if (strstr(line, "glColor3f(0.2, 1, 0.3)"))  green = r;
         if (strstr(line, "glColor3f(0.2, 0.3, 1)"))  blue  = r;
-        if (strcmp(trim_leading_ws(line), "left:") == 0)  left  = r;
-        if (strcmp(trim_leading_ws(line), "right:") == 0) right = r;
+        if (repl_tutorial_anchor_name(line, anchor, sizeof(anchor))) {
+            if (strcmp(anchor, "left") == 0)  left  = r;
+            if (strcmp(anchor, "right") == 0) right = r;
+        }
     }
     ASSERT_TRUE("green color row committed", green >= 0);
     ASSERT_TRUE("blue color row committed", blue >= 0);
-    ASSERT_TRUE("left anchor label present", left >= 0);
-    ASSERT_TRUE("right anchor label present", right >= 0);
+    ASSERT_TRUE("left anchor row present", left >= 0);
+    ASSERT_TRUE("right anchor row present", right >= 0);
     ASSERT_TRUE("green splice sits above the left anchor",
                 green >= 0 && left >= 0 && green < left);
     ASSERT_TRUE("blue splice sits between the anchors",
                 blue >= 0 && right >= 0 && left < blue && blue < right);
 }
 
+/* The `// @anchor <name>` matcher is shared by the catalog validator and
+ * the runner's live-document scan, so its syntax is pinned directly.
+ * Deliberately strict: the whole line must be the directive. */
+static void test_anchor_directive_syntax(void) {
+    char name[TUTORIAL_ANCHOR_NAME_MAX];
+
+    ASSERT_TRUE("plain directive matches",
+                repl_tutorial_anchor_name("// @anchor left", name, sizeof(name)));
+    ASSERT_STR("name extracted", name, "left");
+
+    ASSERT_TRUE("leading and inner whitespace tolerated",
+                repl_tutorial_anchor_name("   //   @anchor   draw_2  ",
+                                          name, sizeof(name)));
+    ASSERT_STR("underscored name extracted", name, "draw_2");
+
+    /* Non-directives. Each must leave `name` empty so a caller that
+     * ignores the return value cannot match a stale anchor. */
+    static const char *const rejected[] = {
+        "// @anchorleft",        /* no separating space */
+        "// @anchor",            /* no name */
+        "// @anchor ",           /* whitespace-only name */
+        "// @anchor a b",        /* trailing junk */
+        "// @anchor left;",      /* not a statement - no terminator */
+        "@anchor left",          /* not a comment row */
+        "glVertex3f(0, 0, 0)",
+        "// an ordinary comment",
+        "",
+        NULL,
+    };
+    for (int i = 0; rejected[i]; i++) {
+        name[0] = 'x'; name[1] = '\0';
+        ASSERT_TRUE("non-directive rejected",
+                    !repl_tutorial_anchor_name(rejected[i], name, sizeof(name)));
+        ASSERT_STR("rejected line leaves the name empty", name, "");
+    }
+    ASSERT_TRUE("NULL line rejected",
+                !repl_tutorial_anchor_name(NULL, name, sizeof(name)));
+}
+
 static void test_validate_setup_label_rules(void) {
     static const char *const setup_lines[] = {
         "glBegin(GL_TRIANGLES)",
-        "anchor:",
+        "// @anchor anchor",
         "glEnd()",
         NULL,
     };
 
-    /* A target_label resolving to a setup goto label validates. */
+    /* A target_label resolving to a setup anchor validates. */
     static const TutorialStep at_setup_steps[] = {
         { NULL, "// splice above the anchor", "glPointSize(2)",
           TUTORIAL_STEP_LABEL, "anchor",
@@ -3378,12 +3421,12 @@ static void test_validate_setup_label_rules(void) {
                          .steps = at_setup_steps,
                          .setup = setup_lines };
     char err[160] = "";
-    ASSERT_TRUE("target_label may name a setup goto label",
+    ASSERT_TRUE("target_label may name a setup anchor",
                 repl_tutorial_validate_entry(&ok, err, sizeof(err)));
 
-    /* A step label shadowing a setup goto label is ambiguous. */
+    /* A step label shadowing a setup anchor is ambiguous. */
     static const TutorialStep collide_steps[] = {
-        { "anchor", "// shadows the setup label", "glPointSize(2)",
+        { "anchor", "// shadows the setup anchor", "glPointSize(2)",
           TUTORIAL_STEP_APPEND, NULL,
           TUTORIAL_STEP_KIND_COMMAND, NULL, 0 },
         { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL,
@@ -3393,7 +3436,7 @@ static void test_validate_setup_label_rules(void) {
                               .steps = collide_steps,
                               .setup = setup_lines };
     err[0] = '\0';
-    ASSERT_TRUE("step label colliding with setup goto label rejected",
+    ASSERT_TRUE("step label colliding with setup anchor rejected",
                 !repl_tutorial_validate_entry(&collide, err, sizeof(err)));
     ASSERT_TRUE("collision diagnostic mentions 'collides'",
                 err[0] != '\0' && strstr(err, "collides") != NULL);
@@ -4853,6 +4896,7 @@ int main(void) {
     test_catalog_color_interp_uses_setup_scaffold();
     test_setup_scaffold_preloads_locked_rows_and_cfg();
     test_setup_label_targeted_steps_splice_into_scaffold();
+    test_anchor_directive_syntax();
     test_validate_setup_label_rules();
     test_validate_setup_capacity();
     test_commit_blocked_with_hint_during_set_step();

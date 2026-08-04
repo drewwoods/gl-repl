@@ -467,8 +467,8 @@ static const char *const g_tutorial_first_animation_cfg[] = {
  * it. The scaffold
  * is the flat triangle from "First Triangle" drawn in one solid color,
  * loaded locked before step 0; its leading `// @cfg` header uses the
- * example metadata vocabulary. The `:left` / `:right` goto-label rows
- * are the anchors: the two label-targeted steps splice per-vertex
+ * example metadata vocabulary. The `// @anchor left` / `// @anchor right`
+ * rows are the anchors: the two label-targeted steps splice per-vertex
  * glColor3f calls above them, so the user only types what's new and
  * watches the gradient appear. */
 static const char *const g_tutorial_color_interp_setup[] = {
@@ -477,9 +477,9 @@ static const char *const g_tutorial_color_interp_setup[] = {
     "glBegin(GL_TRIANGLES)",
     "glColor3f(1, 0.3, 0.2)",
     "glVertex3f(0, 2, 0)",
-    "left:",
+    "// @anchor left",
     "glVertex3f(-2, -2, 0)",
-    "right:",
+    "// @anchor right",
     "glVertex3f(2, -2, 0)",
     "glEnd()",
     NULL,
@@ -745,7 +745,7 @@ static const char *const g_tutorial_fog_setup[] = {
     "// Depth testing so the near rings occlude the ones behind them.",
     "glEnable(GL_DEPTH_TEST)",
     "// A locked row of toruses receding away from the camera.",
-    "draw:",
+    "// @anchor draw",
     "for(i, 0, 8) {",
     "  glPushMatrix()",
     "  glTranslatef(0, 0, -i * 3)",
@@ -1548,50 +1548,59 @@ int repl_tutorial_expected_is_func_open(const char *expected) {
            !expected_starts_with_keyword(expected, "if");
 }
 
-/* Syntactic mirror of the parser's goto-label rule (src/repl/parser.c):
- * a setup line whose trimmed text is `name:` (optionally followed by a `;`)
- * defines the goto label `name`. Used to validate step target_labels against
- * the setup scaffold without running the live parser; the runtime resolves
- * the actual row by walking the loaded document's CMD_GOTO_LABEL commands. */
-static int setup_line_goto_label(const char *line,
-                                 char *name, int name_sz) {
+/* `// @anchor <name>` - see the contract in tutorials.h. Deliberately
+ * strict: the whole line must be the directive, so an anchor cannot hide
+ * in a trailing comment or carry a payload the runner would ignore. */
+int repl_tutorial_anchor_name(const char *line, char *name, int name_sz) {
+    static const char k_directive[] = "@anchor";
     const char *p = line;
     int n = 0;
 
-    if (!line || name_sz <= 1)
+    if (!line || !name || name_sz <= 1)
+        return 0;
+    name[0] = '\0';
+
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (p[0] != '/' || p[1] != '/')
+        return 0;
+    p += 2;
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (strncmp(p, k_directive, sizeof(k_directive) - 1) != 0)
+        return 0;
+    p += sizeof(k_directive) - 1;
+    if (!isspace((unsigned char)*p))
         return 0;
     while (*p && isspace((unsigned char)*p))
         p++;
+
     while ((isalnum((unsigned char)*p) || *p == '_') && n < name_sz - 1)
         name[n++] = *p++;
-    if (*p != ':') {
-        name[0] = '\0';
-        return 0;
-    }
-    p++;
     name[n] = '\0';
     if (n == 0)
         return 0;
+
     while (*p && isspace((unsigned char)*p))
         p++;
-    if (*p == ';')
-        p++;
-    while (*p && isspace((unsigned char)*p))
-        p++;
-    return *p == '\0';
+    if (*p != '\0') {
+        name[0] = '\0';
+        return 0;
+    }
+    return 1;
 }
 
-/* Does the entry's setup scaffold define goto label `name`? */
-static int setup_defines_goto_label(const TutorialEntry *entry,
-                                    const char *name) {
-    char setup_label[REPL_GOTO_LABEL_MAX];
+/* Does the entry's setup scaffold define anchor `name`? */
+static int setup_defines_anchor(const TutorialEntry *entry,
+                                const char *name) {
+    char setup_anchor[TUTORIAL_ANCHOR_NAME_MAX];
 
     if (!entry || !entry->setup || label_is_empty(name))
         return 0;
     for (int i = 0; entry->setup[i]; i++) {
-        if (setup_line_goto_label(entry->setup[i], setup_label,
-                                  (int)sizeof(setup_label)) &&
-            strcmp(setup_label, name) == 0)
+        if (repl_tutorial_anchor_name(entry->setup[i], setup_anchor,
+                                      (int)sizeof(setup_anchor)) &&
+            strcmp(setup_anchor, name) == 0)
             return 1;
     }
     return 0;
@@ -2007,8 +2016,8 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
             return 0;
         }
 
-        /* Unique non-empty labels - and no shadowing of a `name:` goto
-         * label the setup scaffold defines, so a target_label always
+        /* Unique non-empty labels - and no shadowing of a `// @anchor`
+         * the setup scaffold defines, so a target_label always
          * resolves unambiguously to one anchor. */
         if (!label_is_empty(step->label)) {
             for (int j = 0; j < i; j++) {
@@ -2022,11 +2031,11 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
                     return 0;
                 }
             }
-            if (setup_defines_goto_label(entry, step->label)) {
+            if (setup_defines_anchor(entry, step->label)) {
                 if (err_size > 0)
                     snprintf(err, (size_t)err_size,
                              "tutorial '%s' step %d label '%s' collides "
-                             "with a setup goto label",
+                             "with a setup anchor",
                              entry->name ? entry->name : "?", i,
                              step->label);
                 return 0;
@@ -2059,11 +2068,11 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
                     break;
                 }
             }
-            /* A target can also anchor on a `name:` goto label the
-             * setup scaffold defines - that's how steps splice new
-             * commands INTO preloaded code (resolved at step entry by
-             * walking the live document's CMD_GOTO_LABEL rows). */
-            if (!found && setup_defines_goto_label(entry, step->target_label))
+            /* A target can also name a `// @anchor` the setup scaffold
+             * defines - that's how steps splice new commands INTO
+             * preloaded code (resolved at step entry by walking the live
+             * document's comment rows). */
+            if (!found && setup_defines_anchor(entry, step->target_label))
                 found = 1;
             if (!found) {
                 if (err_size > 0)

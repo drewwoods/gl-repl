@@ -1003,9 +1003,9 @@ before code-panel/camera wheel handlers so scroll does not leak behind menus.
 
 **Tutorial menu.** Tutorials use the same flyout engine, but the catalog owner
 is `src/repl/tutorials.{c,h}`. Each tutorial entry declares a
-[`ReplTutorialTagMask`](../src/repl/tutorials.h#L202); the synthetic `ALL` tag is folded into every entry's
+[`ReplTutorialTagMask`](../src/repl/tutorials.h#L220); the synthetic `ALL` tag is folded into every entry's
 mask by `repl_tutorial_tag_mask`, so catalog literals only name real domain
-tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L328)
+tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L347)
 hides unused tags), followed by `Restart Tutorial` / `Exit Tutorial` rows while
 a tutorial is active. Tag rows are inert hover-only parents; selecting a flyout
 tutorial routes through the controller to `tutorial_start(index)` and dismisses
@@ -2747,7 +2747,7 @@ checklist above (its steps 1-2), a structured command touches:
 
 ### Adding A New Tutorial Step Kind
 
-Tutorial step kinds ([`TutorialStepKind`](../src/repl/tutorials.h#L101) in [`src/repl/tutorials.h`](../src/repl/tutorials.h)) name the
+Tutorial step kinds ([`TutorialStepKind`](../src/repl/tutorials.h#L119) in [`src/repl/tutorials.h`](../src/repl/tutorials.h)) name the
 contract between a catalog entry and the runtime: what extra fields the
 step carries, what UI it shows, what user action advances it, and which
 guard rails apply. Current kinds are:
@@ -2771,9 +2771,12 @@ transient scene before step 0, so a tutorial builds on what an earlier
 tutorial taught without the learner re-typing it. Setup honors the
 example header vocabulary (leading `// @cfg` run, optional 5-line
 `// camera` block), its `@cfg` slugs join the teardown-restore
-baseline, and its body may define `name:` goto labels that
+baseline, and its body may carry `// @anchor <name>` directives that
 label-placement steps target to splice commands into the scaffold
-(resolved against the live document at step entry). See
+(resolved against the live document's comment rows at step entry, by the
+one matcher `repl_tutorial_anchor_name()` the catalog validator also
+uses). Anchors are tutorial-private: an ordinary comment row, so flatten
+drops them and no `CmdType` or parser grammar is involved. See
 [`docs/plans/done/tutorial-setup-scaffold.md`](plans/done/tutorial-setup-scaffold.md).
 
 **Start-of-tutorial view reset.** `tutorial_start` opens a fresh
@@ -2867,8 +2870,8 @@ land in roughly the order below.
 
 #### 1. Catalog layer (`src/repl/tutorials.{h,c}`)
 
-- Add the new enum value to [`TutorialStepKind`](../src/repl/tutorials.h#L101).
-- Add any extra fields to [`TutorialStep`](../src/repl/tutorials.h#L129). **Place new fields AFTER all
+- Add the new enum value to [`TutorialStepKind`](../src/repl/tutorials.h#L119).
+- Add any extra fields to [`TutorialStep`](../src/repl/tutorials.h#L149). **Place new fields AFTER all
   existing ones** so positional initializers in `STEP_APPEND` / `STEP_AT`
   / `STEP_SET` / `STEP_REQUIRE` / `STEP_SENTINEL` keep zero-initializing
   to the new defaults - adding fields mid-struct silently shifts other
