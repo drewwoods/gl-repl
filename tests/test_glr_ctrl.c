@@ -726,11 +726,14 @@ static void test_display_frame_background_retention(void) {
 
 /* Retention is written per walk, not folded per frame, so a frame with more
  * than one authoritative pass - accumulation, where every sample runs the fill
- * - resolves by "the last sample that knew a background wins". That is what
- * the frame ends up showing: the final sample is the one on screen, and time
- * blur bakes it at the true frame time. A sample that established nothing is
- * dropped rather than stored, so it can neither clobber an earlier known
- * sample nor reset the retained value.
+ * - resolves by "the last sample that knew a background wins". That is an
+ * endpoint approximation, not the resolved background: glAccum presents the
+ * weighted average of the samples, so a clear colour that moves within a frame
+ * shows as the mean while this retains the final sample (they coincide unless
+ * time blur animates glClearColor). The endpoint is taken deliberately - it is
+ * the sample baked at the true frame time - and this test pins that rule. A
+ * sample that established nothing is dropped rather than stored, so it can
+ * neither clobber an earlier known sample nor reset the retained value.
  *
  * Drives scene_execute_adapter directly: the same entry render3d calls once
  * per accumulation sample, without needing an accumulation-capable context. */

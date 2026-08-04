@@ -2,16 +2,16 @@
 
 ## Status - LANDED (2026-08-04)
 
-All four phases shipped, on branch `background-observation`:
+All four phases shipped; the commits below are on `main`:
 
 | Phase | Commit |
 |---|---|
-| 0 - source-view bound + single goto lookup | `1a390d2f` |
-| 1 - cursor observation | `165c7540` |
-| 2 - controller retention, config split, chrome ordering | `5bada25c` |
-| 3 - delete the resolver and `ReplRenderState.clear_color` | `88911171` |
-| follow-up - render3d two-color coverage | `15f8950a` |
-| follow-up - collapse the frame fold | `100afd72` |
+| 0 - source-view bound + single goto lookup | `74738f77` |
+| 1 - cursor observation | `55aef955` |
+| 2 - controller retention, config split, chrome ordering | `2f6cc110` |
+| 3 - delete the resolver and `ReplRenderState.clear_color` | `32475832` |
+| follow-up - render3d two-color coverage | `dc16bdb3` |
+| follow-up - collapse the frame fold | `971b72bd` |
 
 Every acceptance criterion below holds. Verified with `make test-stubs` (76/76
 binaries), `make test-web` (74/74), `check-c99`, `check-state-ownership`, native
@@ -26,7 +26,7 @@ against this note:**
    selection](#3-controller-retention-and-selection)" describes
    `scene_execute_adapter()` folding each pass's observation into frame-scoped
    values that the controller then resolves after `render3d_draw_scene()`
-   returns. That machinery was removed in `100afd72`: the adapter writes the
+   returns. That machinery was removed in `971b72bd`: the adapter writes the
    retained `g_presentation_rgba` directly as each walk ends, and the two
    vintages fall out of *when* each consumer reads that one variable -
    `glr_ctrl_build_scene_config()` before the walk, the chrome clear after it.

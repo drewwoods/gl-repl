@@ -1047,10 +1047,18 @@ static float g_presentation_rgba[4] = {
  * observation is dropped rather than stored - retention IS the fallback, so
  * there is nothing else to decide.
  *
- * Under accumulation every sample calls this and the last known one wins,
- * which is what the frame ends up showing: time blur bakes its final sub-step
- * at the true frame time, so an animated glClearColor's last value is the
- * honest frame-end background. */
+ * Under accumulation every sample calls this and the last known one wins.
+ * That is an **endpoint approximation, not the resolved background**: the
+ * passes are summed at 1/N and glAccum(GL_RETURN) presents their weighted
+ * average, so with an animated glClearColor the pixels show the mean of the
+ * samples while this retains the final one. They coincide for AA and camera
+ * blur, where every sample re-bakes the same clear colour, and diverge only
+ * for time blur over a clear colour that moves within the frame - bounded by
+ * the parser's cap on clear-colour components, so the error is small. Taking
+ * the endpoint is deliberate: it is the sample baked at the true frame time,
+ * and weighted background averaging was scoped out of v1 (see
+ * docs/plans/done/clear-background-execution-observation.md). Add it only if a
+ * real scene demonstrates a visible need. */
 static void glr_ctrl_retain_background(const ReplBackgroundObservation *obs) {
     if (obs && obs->known)
         memcpy(g_presentation_rgba, obs->rgba, sizeof(g_presentation_rgba));
