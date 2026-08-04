@@ -506,41 +506,43 @@ static int execution_flat_count_from_options(const ReplExecutionOptions *options
     return flat_cmd_count;
 }
 
+/* Source line a flat command came from, out of the CALLER's text view.
+ *
+ * The bound is the view's own line_count - source_text_line() applies it and
+ * returns "" past the end. Deliberately NOT the live repl_state_document_count():
+ * a caller executing a temporary program over a temporary text view (tests,
+ * tools, any off-document walk) must resolve its own goto labels whether or
+ * not unrelated live document state happens to agree. */
 static const char *execution_flat_text(SourceTextView text,
                                        const GLCmd *flat_cmd) {
-    int src_cmd_idx;
+    const char *line;
 
     if (!flat_cmd)
         return "";
 
-    src_cmd_idx = flat_cmd->src_cmd_idx;
-    if (src_cmd_idx < 0 || src_cmd_idx >= repl_state_document_count())
-        return "";
-
-    {
-        const char *line = source_text_line(text, src_cmd_idx);
-        return (line && line[0]) ? line : "";
-    }
+    line = source_text_line(text, flat_cmd->src_cmd_idx);
+    return (line && line[0]) ? line : "";
 }
 
-/* Flat index of the CMD_GOTO_LABEL matching `cmd`'s target label, or -1.
- * Deliberately the same lookup the CMD_GOTO arm below performs (label name
- * out of the source text, first matching marker wins), so a resolve walk and
- * the execution walk take the same jump. */
-static int flat_goto_target(FlatProgramView program, SourceTextView text,
+/* Flat index within cmds[0..count) of the CMD_GOTO_LABEL matching `cmd`'s
+ * target label, or -1. The single implementation of "where does this goto
+ * land": the executor's own CMD_GOTO arm calls it, so nothing can take a
+ * different jump than execution does. Label name comes out of the source
+ * text; the first matching marker wins. */
+static int flat_goto_target(const GLCmd *cmds, int count, SourceTextView text,
                             const GLCmd *cmd) {
     char label_name[REPL_GOTO_LABEL_MAX];
     char target_label[REPL_GOTO_LABEL_MAX];
     int i;
 
-    if (!repl_extract_goto_label(execution_flat_text(text, cmd),
+    if (!cmds ||
+        !repl_extract_goto_label(execution_flat_text(text, cmd),
                                  label_name, sizeof(label_name)))
         return -1;
-    for (i = 0; i < program.cmd_count; i++) {
-        if (!program.cmds[i].valid ||
-            program.cmds[i].type != CMD_GOTO_LABEL)
+    for (i = 0; i < count; i++) {
+        if (!cmds[i].valid || cmds[i].type != CMD_GOTO_LABEL)
             continue;
-        if (repl_extract_label_name(execution_flat_text(text, &program.cmds[i]),
+        if (repl_extract_label_name(execution_flat_text(text, &cmds[i]),
                                     target_label, sizeof(target_label)) &&
             strcmp(target_label, label_name) == 0)
             return i;
@@ -618,7 +620,8 @@ int repl_flat_resolve_clear_color(FlatProgramView program, SourceTextView text,
                 i = program.cmd_count;
                 break;
             }
-            target = flat_goto_target(program, text, cmd);
+            target = flat_goto_target(program.cmds, program.cmd_count,
+                                      text, cmd);
             if (target >= 0)
                 i = target;  /* the loop's own advance steps past the label */
             break;
@@ -964,10 +967,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
          * reliable for control flow and assignments. Variable-driven GL
          * commands still use the args baked into flat_cmds[]. Replay also
          * cannot follow the dynamic jump trace. */
-        char label_name[REPL_GOTO_LABEL_MAX];
-        if (!repl_extract_goto_label(execution_flat_text(cursor->text, cmd),
-                                     label_name, sizeof(label_name)))
-            break;
+        int target;
         if (cursor->goto_count++ > REPL_GOTO_LOOP_LIMIT) {
             if (cursor->options.status_out &&
                 cursor->options.status_out_sz > 0)
@@ -977,21 +977,10 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
             cursor->pc = cursor->flat_cmd_count;
             return 0;
         }
-        for (int label_idx = 0; label_idx < cursor->flat_cmd_count; label_idx++) {
-            if (flat_cmds[label_idx].valid &&
-                flat_cmds[label_idx].type == CMD_GOTO_LABEL) {
-                char target_label[REPL_GOTO_LABEL_MAX];
-                if (repl_extract_label_name(execution_flat_text(cursor->text,
-                                                                &flat_cmds[label_idx]),
-                                            target_label,
-                                            sizeof(target_label)) &&
-                    strcmp(target_label, label_name) == 0) {
-                    cursor->pc = label_idx; /* final advance steps past label */
-                    goto goto_done;
-                }
-            }
-        }
-        goto_done:;
+        target = flat_goto_target(flat_cmds, cursor->flat_cmd_count,
+                                  cursor->text, cmd);
+        if (target >= 0)
+            cursor->pc = target;  /* final advance steps past the label */
         break;
     }
     case CMD_VAR_ASSIGN: {

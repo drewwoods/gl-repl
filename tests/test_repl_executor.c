@@ -1227,6 +1227,60 @@ static void run_attrib_cursor(GLCmd *cmds, int n, int suppress) {
     repl_exec_cursor_end(&cursor);
 }
 
+/* goto labels are read out of the SourceTextView the caller handed in, bounded
+ * by that view's own line_count. The executor used to bound it through the
+ * live repl_state_document_count() instead, so a temporary program over a
+ * temporary text view resolved its jumps only when unrelated global document
+ * state happened to agree - tests had to synchronize both counts by hand. */
+static void test_goto_uses_caller_text_view(void) {
+    static char lines[3][MAX_LINE_LEN];
+    GLCmd cmds[3];
+    SourceTextView text;
+    ReplExecutionOptions opts = {0};
+    ReplExecCursor cursor;
+    int saved_doc_count = repl_state_document_count();
+
+    printf("--- executor: goto resolves against the caller's text view ---\n");
+
+    snprintf(lines[0], sizeof(lines[0]), "goto skip;");
+    snprintf(lines[1], sizeof(lines[1]), "glColor3f(1, 0, 0);");
+    snprintf(lines[2], sizeof(lines[2]), ":skip");
+    text.lines = (const char (*)[MAX_LINE_LEN])lines;
+    text.line_count = 3;
+
+    memset(cmds, 0, sizeof(cmds));
+    cmds[0].type = CMD_GOTO;       cmds[0].valid = 1; cmds[0].src_cmd_idx = 0;
+    cmds[1].type = CMD_COLOR3F;    cmds[1].valid = 1; cmds[1].src_cmd_idx = 1;
+    cmds[1].num_args = 3;
+    cmds[2].type = CMD_GOTO_LABEL; cmds[2].valid = 1; cmds[2].src_cmd_idx = 2;
+
+    /* Deliberately left describing a different (here: empty) document. */
+    repl_state_document_count_set(0);
+
+    opts.flat_cmd_count = 3;
+    opts.program.cmds = cmds;
+    opts.program.cmd_count = 3;
+    opts.text = text;
+    cursor = repl_exec_cursor_begin(&opts);
+    repl_exec_cursor_step(&cursor);
+    /* The jump lands on the label and the step's own advance moves past it. */
+    ASSERT_TRUE("goto lands on its label with a caller-owned text view",
+                cursor.pc == 3);
+    repl_exec_cursor_end(&cursor);
+
+    /* The view's own count is still the bound: a command pointing past it
+     * reads no text, so the jump is simply not taken. */
+    text.line_count = 1;
+    opts.text = text;
+    cursor = repl_exec_cursor_begin(&opts);
+    repl_exec_cursor_step(&cursor);
+    ASSERT_TRUE("a label past the view's line_count is not found",
+                cursor.pc == 1);
+    repl_exec_cursor_end(&cursor);
+
+    repl_state_document_count_set(saved_doc_count);
+}
+
 /* repl_flat_resolve_clear_color: the frame background the host clears, fogs
  * and lights overlays against. Resolution is source-ordered and stops at the
  * program's first color clear, so it answers "what color does this program's
@@ -1367,7 +1421,6 @@ static void test_resolve_frame_clear_color(void) {
         editor_buffer_set_line(4, "skip:");
         editor_buffer_set_line(5, "glClear(GL_COLOR_BUFFER_BIT);");
         editor_buffer_set_count(6);
-        repl_state_document_count_set(6);
         doc = source_document_view();
 
         memset(cmds, 0, sizeof(cmds));
@@ -1594,6 +1647,7 @@ int main(void) {
     test_exec_cursor_step_tracks_state();
     test_exec_cursor_advance_skips_without_state();
     test_attrib_stack();
+    test_goto_uses_caller_text_view();
     test_resolve_frame_clear_color();
     test_execute_all_commands();
     test_glut_bitmap_string();
