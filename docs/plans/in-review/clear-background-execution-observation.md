@@ -24,12 +24,20 @@ The target design keeps immediate-mode execution authoritative and makes the
 background an observation produced by that execution. No controller or
 renderer walks the flat program to predict what the executor will do.
 
+The primary justification is architectural, not the frequency of any one
+pixel mismatch: the parallel resolver needed two semantic corrections within
+one day of landing (multiple clears, then `goto`), and neither omission was
+caught by its original tests. Color masks and time blur are further examples
+of the same failure mode. One semantic walk makes that class of drift
+impossible.
+
 ## Goals
 
 - Preserve real immediate-mode ordering for `glClearColor`, `glColorMask`,
   `glClear`, `glPushAttrib`, `glPopAttrib`, and `goto`.
-- Give chrome, grid/axes fog, backdrop/helpers, and overlay contrast one honest
-  per-pass background observation.
+- Give grid/axes fog, backdrop/helpers, and overlay contrast the observation
+  from their render pass, and give chrome one explicitly selected frame
+  presentation color.
 - Handle multiple and partially masked color clears without inventing a fully
   known RGBA value when framebuffer history is required.
 - Resolve time-blur backgrounds from the flat program actually baked for each
@@ -55,12 +63,37 @@ renderer walks the flat program to predict what the executor will do.
 - Making hidden-line rendering identical to normal fill rendering. It is a
   synthetic visualization pass and already deliberately forces color writes
   on for its one clear. Its observed result must describe that synthetic pass.
+- Making recede fog backdrop-aware. Existing architecture notes already record
+  that fading toward the clear color is wrong when a backdrop paints a
+  different background. This plan rewires how the clear background reaches
+  fog; it does not solve backdrop/color selection.
 - Changing export source order or reintroducing an export-time clear-color
   hoist.
+- Preserving source or binary compatibility for the internal executor and
+  render callback APIs. This is an unreleased internal refactor; change call
+  signatures directly and do not add compatibility shims or parallel APIs.
+- Keeping every implementation phase releasable on its own. The phases are an
+  implementation sequence and may be completed on one branch before landing.
 
 ## Problems in the current implementation
 
-### 1. A clear color is not always a background color
+### 1. The resolver duplicates executor semantics
+
+The resolver has its own program counter, `goto` target search, loop budget,
+attribute depth, and selected state machine. Any new command that affects a
+clear requires coordinated changes in both the resolver and the executor.
+
+That risk is demonstrated, not hypothetical: multiple-clear behavior and
+`goto` traversal each required a follow-up immediately after the resolver was
+introduced, and review rather than the shipped tests found both gaps. A second
+partial interpreter beside `ReplExecCursor` is the coupling this plan removes.
+
+The shared label-text helper also bounds the supplied `SourceTextView` through
+the global `repl_state_document_count()`. That makes temporary program/text
+views depend on unrelated live document state. Tests currently hide the issue
+by synchronizing both counts manually.
+
+### 2. A clear color is not always a background color
 
 `repl_flat_resolve_clear_color()` tracks clear color, attribute scopes, color
 clears, and `goto`, but it does not track `CMD_COLOR_MASK`:
@@ -80,7 +113,7 @@ come from the current clear color; disabled channels retain their previous
 framebuffer values unless an earlier clear in this frame made them known. The
 result therefore needs a known-channel mask, not just `float rgba[4]`.
 
-### 2. Time blur changes the program after resolution
+### 3. Time blur changes the program after resolution
 
 `glr_ctrl_build_scene_config()` resolves `config->clear_color` once. Later,
 `glr_ctrl_setup_subframe()` rebakes or fully re-flattens the program at each
@@ -92,18 +125,10 @@ clear can therefore execute a different background in every sample while:
 - chrome is cleared once to that value rather than to the accumulated result.
 
 The renderer already has a per-sample configuration and frame context. The
-background must become per-sample data alongside them.
-
-### 3. The resolver duplicates executor semantics
-
-The resolver has its own program counter, `goto` target search, loop budget,
-attribute depth, and selected state machine. Any new command that affects a
-clear requires coordinated changes in both the resolver and the executor.
-
-The shared label-text helper also bounds the supplied `SourceTextView` through
-the global `repl_state_document_count()`. That makes temporary program/text
-views depend on unrelated live document state. Tests currently hide the issue
-by synchronizing both counts manually.
+background must become per-sample data alongside them. The first version does
+not need to average those colors for chrome; it needs the observation to match
+the program each helper pass actually executes and one defined final-frame
+presentation color.
 
 ### 4. Clear-color runtime bookkeeping has no rendering consumer
 
@@ -145,6 +170,17 @@ typedef struct Render3dExecuteResult {
 type describes pixels and contains no REPL vocabulary. A caller that emits a
 procedural scene can populate it without linking the REPL.
 
+```c
+typedef struct Render3dExecuteContext {
+    Render3dExecutePurpose purpose;
+    Render3dExecuteResult *result_out;
+} Render3dExecuteContext;
+```
+
+The callback still receives `const Render3dExecuteContext *`: the context and
+pointer binding are immutable, while the object referenced by `result_out` is
+the explicit output. Do not add a separate observation callback.
+
 `background_known_mask == RENDER3D_RGBA_ALL` means the program established a
 uniform conceptual clear background for every channel. A partial mask is
 valid data, not an error. `color_clear_seen` distinguishes no color clear from
@@ -159,13 +195,13 @@ This preserves the current smear behavior when source contains no color clear.
 Extend `ReplExecutionOptions` with:
 
 ```c
-Render3dExecuteResult *result_out; /* or a REPL-neutral equivalent */
-const float            baseline_clear_rgba[4];
+ReplExecutionObservation *observation_out;
+float                     baseline_clear_rgba[4];
 ```
 
 Do not literally make `src/repl/executor.h` depend on a render3d header if that
-would invert the module boundary. Prefer a neutral `ReplExecutionObservation`
-with the same fields and copy it into `Render3dExecuteResult` in
+would invert the module boundary. `ReplExecutionObservation` is the neutral
+executor-owned type; copy its fields into `Render3dExecuteResult` in
 `scene_execute_adapter`. The important constraint is one semantic walk, not
 one shared typedef.
 
@@ -202,6 +238,44 @@ Rules:
 This is an observation of the executor, not a second executor. It must live in
 the same cases that emit or deliberately suppress the relevant GL calls.
 
+#### Emission-decision contract
+
+Update the observation at the point where a pass has decided that a state
+change or clear will actually be emitted. Neither of the existing broad helper
+sites is sufficient:
+
+- do not put clear observation in `repl_apply_state_bookkeeping()`, because
+  hidden-line rendering calls that helper even for clears it deliberately
+  skips;
+- do not put it only in `repl_apply_state_cmd()`, because the hidden-line
+  subsystem drives a cursor itself and emits `CMD_CLEAR_COLOR` / `CMD_CLEAR`
+  outside that helper.
+
+Expose narrow cursor operations for specialized emitters, for example:
+
+```c
+void repl_exec_cursor_observe_clear_color(ReplExecCursor *cursor,
+                                          const GLCmd *cmd);
+void repl_exec_cursor_observe_color_mask(ReplExecCursor *cursor,
+                                         const GLCmd *cmd);
+void repl_exec_cursor_observe_color_clear(ReplExecCursor *cursor,
+                                          const GLCmd *cmd,
+                                          unsigned effective_write_mask);
+```
+
+The normal executor calls these immediately beside the corresponding GL
+emission, after state filters and other suppression decisions. Hidden-line
+rendering calls the clear-color operation when it really emits
+`CMD_CLEAR_COLOR`, and `hidden_lines_emit_clear()` gets the paired explicit
+color-clear operation with all four channel bits because that pass forces
+`glColorMask(TRUE, TRUE, TRUE, TRUE)`. Its hidden/visible redraws skip both the
+GL clear and the observation. Winding rendering uses the normal cursor path
+after its filter, so it needs no special observation branch.
+
+`repl_apply_state_bookkeeping()` is narrowed back to independently consumed
+bookkeeping such as the light-enable mask. It must not become an implicit
+execute-result hook.
+
 Fix `execution_flat_text()` in the same stage: use
 `SourceTextView.line_count` through `source_text_line()` and remove the global
 document-count gate. Factor goto target lookup so the cursor has one target
@@ -224,6 +298,7 @@ were the final frame background:
 
 ```c
 float baseline_clear_color[4];
+float overlay_design_luma;
 ```
 
 The pass context carries the observed presentation background separately:
@@ -234,45 +309,52 @@ unsigned background_known_mask;
 float    alpha_scale;
 ```
 
-If all RGB channels are known, derive luminance and `alpha_scale` from the
-observed pass background. If RGB is incomplete, use the bootstrap/default
-presentation color and its neutral contrast scale. The fallback is explicitly
-presentation policy; it must never be described as the color the source
-actually cleared.
+Use one fallback rule for every presentation consumer. An observed background
+is usable only when all four channels are known. Otherwise chrome, grid/axes
+recede fog, and overlay luminance/`alpha_scale` all use the caller-supplied
+bootstrap presentation color and neutral `alpha_scale = 1.0`. The full app
+populates those inputs from `CFG_DEFAULT_CLEAR_*` /
+`CFG_DEFAULT_CLEAR_LUMA`; render3d does not include app defaults. When the
+background is known, `overlay_design_luma` supplies the reference for the
+existing contrast formula. The fallback is explicitly presentation policy and
+must never be described as the color the source actually cleared.
+All-or-default is deliberate: per-channel chrome composition would require
+the previous chrome contents and a readback this plan rules out.
 
-Grid and axes fog read the pass context's background. Post-fill and overlay
-callbacks must receive the pass presentation/result, or an equivalent immutable
-view, so the app does not have to build `g_overlay_pack` before execution. Build
-or refresh the guide/overlay snapshot after the main fill observation is known.
+Grid and axes read the pass context's selected presentation background and
+`alpha_scale` at draw time. Post-fill and overlay callbacks receive the same
+small pass presentation/result view.
 
-This removes the existing timing dependency where `g_overlay_pack` must be
-built at the very end of `glr_ctrl_build_scene_config()` because
-`alpha_scale` was computed there.
+Do not rebuild `g_overlay_pack` or rerun guide computation after user fill.
+`glr_ctrl_build_guide_snapshot()` captures only one background-dependent value:
+`snapshot.alpha_scale`. Keep the existing snapshot build, pass the current
+pass presentation to the overlay hook, copy the snapshot locally at draw time,
+and override that one field before rendering. This avoids repeating
+`repl_flatten_cursor_polygon()` and the rest of guide preparation every frame.
 
-### 4. Accumulation result
+### 4. One frame presentation color under accumulation
 
 Each accumulation pass reports its own background after its subframe callback
-has rebaked the program.
+has rebaked the program. That pass's helpers use that pass's selected
+background, so time-blurred fog and overlays follow the commands actually
+executed for the sample.
 
-For the frame result:
+Do not average pass background colors in the first implementation. The frame
+publishes one presentation color:
 
-- A channel is known only if it is known in every accumulated pass.
-- For a known channel, accumulate `pass.background_rgba[channel] * weight`
-  with the same weights passed to `glAccum`.
-- AA and camera blur normally collapse to the same value across passes.
-- Time blur naturally produces the weighted background of the sampled shutter
-  interval.
-- If any pass leaves a channel unknown, the final frame leaves it unknown and
-  chrome uses the explicit fallback for that channel or for the full color,
-  according to the policy chosen below.
+- retain the final pass's RGBA (time blur deliberately bakes that pass at
+  exactly `t_end`);
+- mark the frame result usable only if every accumulation pass produced a
+  fully known background;
+- otherwise publish the all-or-default fallback.
 
-Prefer an all-or-fallback chrome policy in the first implementation: use the
-observed RGBA only when all four channels are known; otherwise clear chrome to
-the bootstrap default. Per-channel chrome composition would still require the
-previous chrome framebuffer contents and adds no corresponding benefit to fog
-or luminance consumers.
+AA and camera blur normally observe the same color in every pass. Time blur may
+accumulate different scene colors while chrome uses the single `t_end`
+presentation color. That is an accepted v1 approximation. Add weighted
+background averaging only if a real time-blur scene demonstrates a visible
+need; it is not part of this plan.
 
-Return the aggregate through an explicit output parameter:
+Return the frame result through an explicit output parameter:
 
 ```c
 int render3d_draw_scene(Render3dState *state,
@@ -280,9 +362,11 @@ int render3d_draw_scene(Render3dState *state,
                         Render3dFrameResult *out);
 ```
 
-Allow `out == NULL` so `render3d_demo` and callers uninterested in presentation
-metadata stay simple. Do not store the result in a file-static or require a
-post-call getter.
+Allow `out == NULL` for callers uninterested in presentation metadata. Update
+both standalone proof paths: the ordinary `render3d_demo` call and the
+hot-reload shim's two-argument function-like macro plus its `dlsym` function
+pointer. Do not store the result in a file-static or require a post-call
+getter.
 
 ### 5. Clear chrome after the scene
 
@@ -291,10 +375,14 @@ controller pops the scene-rect scissor, but before 2D overlays render.
 
 The four-strip clear still excludes the scene rectangle, so it cannot repair,
 erase, or otherwise change user pixels. Moving it later lets it consume the
-actual aggregate frame result rather than a prediction. It also remains
+actual frame presentation result rather than a prediction. It also remains
 controller-owned because only the controller knows the window/chrome layout.
+The intervening consumers are safe: buffer visualization reads only the scene
+rectangle, and the whole-window compositor postprocess runs after the 2D
+overlays. The load-bearing ordering rule is simply that chrome clears before
+those overlays paint it.
 
-Use the aggregate background when fully known; otherwise use
+Use the frame background when fully known; otherwise use
 `CFG_DEFAULT_CLEAR_*`. Continue to set `glClearDepth(1.0)` before clearing the
 chrome depth strips.
 
@@ -316,6 +404,14 @@ background:
 | Depth probe | none |
 | Hidden/visible line redraws | none |
 | Replay fade overlays | none; they deliberately suppress clear |
+
+Replay uses the observation from the actually executed main-fill prefix. Do
+not freeze a complete-program background at replay start. The existing
+`replay_frame_setup_limit()` keeps the leading clear in the executable prefix,
+so every shipped single-clear example remains stable. In a multi-clear program
+the presentation background changes when the PC crosses a later clear, which
+honestly represents partial execution and needs no snapshot invalidation
+protocol. Fade batches publish no observation.
 
 `hidden_lines_emit_clear()` forces all color channels writable for the clear,
 irrespective of the user's `glColorMask`, because that visualization owns its
@@ -346,6 +442,13 @@ The GL state inspector keeps its own source/attribute analysis and is not a
 consumer of `ReplRenderState.clear_color`; verify that boundary rather than
 folding inspector concerns into the frame result.
 
+The deletion does not drop the GL-stub-observable attrib restoration coverage
+that originally justified keeping the mirror. The cursor's scoped clear
+observation becomes the observable: tests assert that a clear color and color
+mask changed inside `glPushAttrib(GL_COLOR_BUFFER_BIT)` are restored in the
+cursor state at the matching pop. Move the coverage there before deleting the
+runtime mirror so a future audit does not need to re-litigate the decision.
+
 ## Implementation sequence
 
 ### Phase 0 - Lock in the failures
@@ -364,7 +467,8 @@ Add regressions before changing architecture:
 7. A temporary `SourceTextView` resolves goto without synchronizing global
    document count.
 8. Time-blur subframes with an animated clear color produce distinct pass
-   observations and the expected weighted frame result.
+   observations; helpers use the per-pass value and the frame publishes the
+   final `t_end` value when every pass is fully known.
 9. A source file with no color clear leaves the scene result unknown and does
    not cause a host-side scene clear.
 
@@ -383,9 +487,11 @@ test suite.
 - Fix `execution_flat_text()` to honor only the supplied view.
 - Consolidate goto target lookup for cursor use.
 - Cover filtered and suppressed state-command behavior.
+- Add the explicit emission-decision operations used by the normal executor
+  and hidden-line renderer.
 
-This phase may coexist temporarily with the static resolver, but no new
-consumer should be added to the resolver.
+This phase is sequencing inside the implementation branch, not a separately
+releasable compatibility state. No bridge or dual-answer contract is required.
 
 ### Phase 2 - Per-pass render result
 
@@ -395,16 +501,19 @@ consumer should be added to the resolver.
   fill.
 - Derive per-pass background-dependent fog and alpha there.
 - Pass presentation data to post-fill/post-overlay hooks.
-- Rebuild the overlay snapshot after the result is known.
-- Keep `render3d_demo` compiling with `out == NULL` and no REPL dependency.
+- Override only the copied guide snapshot's `alpha_scale` at overlay draw time;
+  do not rebuild the guide/overlay pack.
+- Update the ordinary and hot-reload `render3d_demo` call surfaces while
+  preserving the REPL-free link proof.
 
-### Phase 3 - Accumulation and chrome ordering
+### Phase 3 - Accumulation validity and chrome ordering
 
-- Aggregate per-pass known backgrounds with accumulation weights.
+- Retain the final pass's presentation color and require every pass to be fully
+  known before publishing it as the frame color.
 - Return `Render3dFrameResult` from `render3d_draw_scene()`.
 - Move the chrome-strip clear after scene rendering.
-- Apply the explicit default fallback when the aggregate is incomplete.
-- Add time-blur and unknown-channel controller tests.
+- Apply the one explicit chrome/fog/alpha fallback when the frame is incomplete.
+- Add per-pass time-blur and unknown-channel controller tests.
 - Verify profile coverage after reordering.
 
 ### Phase 4 - Delete the parallel model
@@ -433,11 +542,12 @@ consumer should be added to the resolver.
   - known/unknown fallback policy;
   - overlay `alpha_scale` comes from the pass result;
   - replay policy remains stable and explicit;
-  - time-blur aggregation.
+  - time-blur per-pass helpers and final-pass frame color.
 - render3d tests/demo
   - callback result is generic;
   - `out == NULL` is supported;
-  - accumulation aggregation;
+  - all-passes-known validity and final-pass color selection;
+  - ordinary and hot-reload call signatures;
   - no REPL link dependency.
 - `test_hidden_lines`
   - the synthetic depth-fill clear reports its forced full-mask background;
@@ -446,6 +556,10 @@ consumer should be added to the resolver.
   - source order remains unchanged;
   - bootstrap default remains in `init()`;
   - no clear-color hoist returns.
+- `test_export_trace_parity`
+  - the actual REPL execution trace remains aligned with exported C; this is
+    the behavioral symmetry established by `71eae8f6`, beyond merely checking
+    emitted source text.
 - `test_repl_core_examples`
   - authored examples keep `glClearColor` before their intended clear.
 
@@ -461,7 +575,9 @@ Use a real OSMesa build for cases the no-op GL stubs cannot prove:
 - hidden-line view's synthetic clear.
 
 Compare a scene-background pixel, a chrome-strip pixel, and a fogged helper
-pixel where applicable. Keep these fixtures minimal and deterministic.
+pixel where applicable. For animated time blur, assert the documented final
+`t_end` chrome policy rather than equality with the accumulated scene pixel.
+Keep these fixtures minimal and deterministic.
 
 ### Full verification
 
@@ -483,7 +599,7 @@ lane on `gracemont` after the branch is pushed to a reviewable ref.
 - `docs/ARCHITECTURE.md`
   - frame order: user execution produces a pass result; helpers consume it;
     chrome clears afterward;
-  - accumulation result aggregation;
+  - per-pass results plus final-pass frame presentation selection;
   - explicit unknown-background fallback;
   - specialized-pass ownership table.
 - `src/repl/ARCHITECTURE.md`
@@ -498,6 +614,10 @@ lane on `gracemont` after the branch is pushed to a reviewable ref.
     it must not create an analyzer-side execution path.
 - `src/render3d/README.md`
   - execute-result contract for standalone callers.
+- `src/render3d/render.c`
+  - update the accumulation comment near the per-pass loop that currently
+    says chrome was cleared before the passes and is accumulated at the same
+    weight; chrome will instead be cleared after scene rendering.
 
 ## Acceptance criteria
 
@@ -507,29 +627,31 @@ lane on `gracemont` after the branch is pushed to a reviewable ref.
   render3d, or executor support code.
 - `CMD_COLOR_MASK`, attrib scopes, multiple clears, and gotos affect the
   presentation observation through the same cursor that emits GL.
-- Time-blur helpers use each rebaked subframe's result, and chrome uses the
-  accumulated frame result.
+- Time-blur helpers use each rebaked subframe's result; the frame uses the
+  final `t_end` pass's single presentation color only when every pass was
+  fully known.
 - Unknown or partially known backgrounds are represented explicitly; no API
   silently turns them into a supposedly exact RGBA value.
 - The host never clears the scene rectangle when the source did not do so.
-- `src/render3d/` remains REPL-free and `render3d_demo` links.
+- `src/render3d/` remains REPL-free; ordinary and hot-reload `render3d_demo`
+  variants link with the new callback signature.
 - No production consumer remains for `ReplRenderState.clear_color`; the field
   is removed, or the discovered consumer and retained invariant are documented
   before implementation proceeds.
 - Focused tests, stubbed full tests, C99/ownership guards, native build, and
   OSMesa pixel checks pass.
 
-## Review questions
+## Settled review decisions
 
-1. Is all-or-default the right chrome fallback for an incomplete known-channel
-   mask, or should chrome expose a separate fixed theme color whenever the
-   source does not establish all four channels?
-2. Should replay always use the complete program's most recent known
-   background as presentation policy, or should it use only the executed
-   prefix and accept background changes as the replay PC advances? This is a
-   replay product decision, not executor semantics, and should be named in the
-   replay layer.
-3. Should the generic render callback return its result through
-   `Render3dExecuteContext`, or should `Render3dRenderConfig` carry a separate
-   result-producing callback? Prefer the former unless a standalone caller
-   demonstrates that execution and observation must be supplied separately.
+1. **Unknown background:** all-or-default for chrome, grid/axes fog, and
+   overlay contrast. No per-channel chrome composition or readback.
+2. **Replay:** follow the executed prefix. A later clear changes the background
+   when the replay PC reaches it; fade batches publish nothing.
+3. **Callback shape:** return through the non-const `result_out` referenced by
+   the otherwise-const `Render3dExecuteContext`. A separate result-producing
+   callback is rejected because it would allow execution and observation to
+   diverge into two walks again.
+4. **Accumulation:** one final-pass frame presentation color, gated on every
+   pass being fully known. No weighted background averaging in v1.
+5. **Compatibility:** no internal API backward-compatibility shims and no
+   requirement that intermediate implementation phases be releasable.
