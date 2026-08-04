@@ -49,13 +49,17 @@ typedef struct {
      * `presentation` slice lives on glr_state, out of the REPL
      * pipeline's reach.
      *
-     * `tag_mask` is the bitmask of REPL_EXAMPLE_TAG_* bits for the
-     * example being loaded (0 for non-example loads such as the test
-     * line-feed entrypoint). The controller applies the global
-     * defaults first, then layers tag-specific `@cfg` overrides on
-     * top before the example's own leading `@cfg` metadata runs.
-     * Order of precedence: example `@cfg` > tag default > global
-     * default. */
+     * `example_idx` is the catalog index of the example being loaded.
+     * The controller resolves its tags itself (repl_example_has_tag),
+     * applies the global defaults first, then layers tag-specific
+     * `@cfg` overrides on top before the example's own leading `@cfg`
+     * metadata runs. Order of precedence: example `@cfg` > tag default
+     * > global default.
+     *
+     * **-1, not 0, is the "no example" sentinel** - passed by callers
+     * that hold only scene text (repl_load_example_lines: tests, bench,
+     * repl_live_demo) and by the tutorial reset. 0 is a valid catalog
+     * index, so passing it means "apply example 0's tag defaults". */
     void (*example_presentation_reset)(int example_idx);
     /* Same reset for a tutorial start, plus the two things an example
      * load deliberately inherits: the camera pose (eased back to the

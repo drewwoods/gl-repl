@@ -1179,6 +1179,42 @@ static void test_runtime_examples_dir_catalog(const char *temp_dir) {
     err[0] = '\0';
     ASSERT_TRUE("accept custom dynamic tag", repl_examples_load_dir(root, err, sizeof(err)));
 
+    /* A tag listed twice is a catalog typo, not a no-op. The item-tag
+     * attach helper is idempotent, so this has to be diagnosed by the
+     * parser or it vanishes silently. */
+    write_text_path(catalog_path, "[sec]\nfile = scenes/raw-points.glr\nname = Raw\ntags = 2D, 2D\ngroup = G\n");
+    err[0] = '\0';
+    ASSERT_TRUE("reject duplicate tag",
+                !repl_examples_load_dir(root, err, sizeof(err)) &&
+                strstr(err, "duplicate tag") != NULL);
+
+    /* Custom tags are arbitrary strings, but not unbounded: a name that
+     * would not fit ReplTagNode.name is rejected rather than truncated,
+     * so two long names sharing a prefix can never alias onto one tag. */
+    {
+        char long_tag_cat[512];
+        char long_tag[REPL_TAG_NAME_MAX + 8];
+        memset(long_tag, 'T', sizeof(long_tag) - 1);
+        long_tag[sizeof(long_tag) - 1] = '\0';
+        snprintf(long_tag_cat, sizeof(long_tag_cat),
+                 "[sec]\nfile = scenes/raw-points.glr\nname = Raw\n"
+                 "tags = %s\ngroup = G\n", long_tag);
+        write_text_path(catalog_path, long_tag_cat);
+        err[0] = '\0';
+        ASSERT_TRUE("reject over-long tag name",
+                    !repl_examples_load_dir(root, err, sizeof(err)) &&
+                    strstr(err, "too long") != NULL);
+
+        /* The boundary itself must still be accepted. */
+        long_tag[REPL_TAG_NAME_MAX - 1] = '\0';
+        snprintf(long_tag_cat, sizeof(long_tag_cat),
+                 "[sec]\nfile = scenes/raw-points.glr\nname = Raw\n"
+                 "tags = %s\ngroup = G\n", long_tag);
+        write_text_path(catalog_path, long_tag_cat);
+        err[0] = '\0';
+        ASSERT_TRUE(err, repl_examples_load_dir(root, err, sizeof(err)));
+    }
+
     /* Empty scene file */
     char empty_scene[512];
     snprintf(empty_scene, sizeof(empty_scene), "%s/empty.glr", scenes_dir);

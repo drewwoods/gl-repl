@@ -3,9 +3,15 @@
 
 #include <stddef.h>
 
+/* Capacity of ReplTagNode.name, including the terminator. A catalog tag
+ * that does not fit is rejected outright rather than truncated: two long
+ * names sharing a 63-char prefix would otherwise collapse into a single
+ * tag and silently merge two menu groups. */
+#define REPL_TAG_NAME_MAX 64
+
 /* Dynamic Tag Linked List Node for registered tags in a catalog */
 typedef struct ReplTagNode {
-    char name[64];
+    char name[REPL_TAG_NAME_MAX];
     int id;                        /* 0-based tag index in catalog */
     struct ReplTagNode *next;
 } ReplTagNode;

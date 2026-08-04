@@ -50,6 +50,12 @@ echo "    fix-doc-links: stripping links that could not be repointed..."
 # Collect the exact file:line pairs still failing, so the identifier relink
 # stays scoped to just those lines. Errors are reported as
 # `<path>:<line>: <message>`.
+#
+# These line numbers are captured BEFORE --strip runs and used AFTER it, so
+# they are only valid because --strip rewrites `[label](dest)` to `label`
+# in place: it never adds or removes a line. If stripping ever grows the
+# ability to delete or reflow lines, this must re-run check-doc-links.py
+# after the strip and use those line numbers instead.
 stripped_locations="$(python3 scripts/check/check-doc-links.py "$@" 2>&1 >/dev/null \
     | sed -n 's/^[[:space:]]*\([^[:space:]:]*\.md\):\([0-9][0-9]*\):.*/\1:\2/p' | sort -u || true)"
 

@@ -1212,9 +1212,9 @@ static void test_catalog_cfg_lines(void) {
 
 /* Mirror of test_example_tag_metadata in tests/test_repl_core_examples.c.
  * Sanity-checks the tutorial tag system end-to-end: tag count, label table,
- * mask/has_tag/count_for_tag/index_for_tag mutual agreement, bounds, the
- * visible-tag count, and that every shipped catalog entry carries a
- * non-zero mask whose bits all map to known tags. Also asserts that the
+ * has_tag/count_for_tag/index_for_tag mutual agreement, bounds, the
+ * visible-tag count, and that every shipped catalog entry names at least
+ * one tag, all of whose names resolve to known labels. Also asserts that the
  * known multi-tag entry ("Depth Test Triangle" -> GEOMETRY|DEPTH_LIGHTING)
  * is reachable under each of its tags via index_for_tag - the equivalent
  * of examples' Stress-test multi-tag assertion. */
@@ -1258,8 +1258,60 @@ static void test_catalog_tag_metadata(void) {
         ASSERT_TRUE(label, repl_tutorial_count_for_tag(tag_idx) > 0);
     }
 
+    /* `.tag_names` is a list of free-form strings matched against
+     * g_tutorial_tag_labels[] by strcmp, so neither the compiler nor the
+     * query API can catch a typo or a forgotten list - a bad entry just
+     * silently sinks to "All"-only. has_tag(idx, 0) is true by
+     * construction and proves nothing, so walk the raw entry instead:
+     * every tutorial must name at least one tag, and every name it does
+     * give must resolve to a real label. This is the tutorial-side twin
+     * of gen_examples.py's unknown-tag rejection for examples. */
     for (int idx = 0; idx < tutorial_count; idx++) {
-        char label[160];
+        char label[224];
+        const TutorialEntry *entry = repl_tutorial_entry(idx);
+        int named = 0;
+
+        snprintf(label, sizeof(label), "tutorial %d entry resolves", idx);
+        ASSERT_TRUE(label, entry != NULL);
+        if (!entry)
+            continue;
+
+        snprintf(label, sizeof(label),
+                 "tutorial %d ('%s') declares tag_names",
+                 idx, entry->name ? entry->name : "?");
+        ASSERT_TRUE(label, entry->tag_names != NULL);
+        if (!entry->tag_names)
+            continue;
+
+        for (int i = 0; entry->tag_names[i]; i++) {
+            int resolved = -1;
+            for (int tag_idx = 0; tag_idx < tag_count; tag_idx++) {
+                const char *tag_label = repl_tutorial_tag_label(tag_idx);
+                if (tag_label && strcmp(tag_label, entry->tag_names[i]) == 0) {
+                    resolved = tag_idx;
+                    break;
+                }
+            }
+            snprintf(label, sizeof(label),
+                     "tutorial %d ('%s') tag '%s' is a known label",
+                     idx, entry->name ? entry->name : "?", entry->tag_names[i]);
+            ASSERT_TRUE(label, resolved > 0);
+
+            /* A resolvable name must also be reachable through the query
+             * API, or the menu and the entry disagree. */
+            snprintf(label, sizeof(label),
+                     "tutorial %d ('%s') tag '%s' visible via has_tag",
+                     idx, entry->name ? entry->name : "?", entry->tag_names[i]);
+            ASSERT_TRUE(label,
+                        resolved > 0 && repl_tutorial_has_tag(idx, resolved));
+            named++;
+        }
+
+        snprintf(label, sizeof(label),
+                 "tutorial %d ('%s') has at least one real tag",
+                 idx, entry->name ? entry->name : "?");
+        ASSERT_TRUE(label, named > 0);
+
         snprintf(label, sizeof(label), "tutorial %d has tag 0 (All)", idx);
         ASSERT_TRUE(label, repl_tutorial_has_tag(idx, 0));
     }

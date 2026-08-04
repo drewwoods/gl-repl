@@ -2783,7 +2783,7 @@ drops them and no `CmdType` or parser grammar is involved. See
 
 **Start-of-tutorial view reset.** `tutorial_start` opens a fresh
 transient scene, so it must not inherit the previous scene's view.
-`tutorial_baseline_apply` calls [`repl_dispatch_tutorial_presentation_reset()`](../src/repl/host_effects.h#L106)
+`tutorial_baseline_apply` calls [`repl_dispatch_tutorial_presentation_reset()`](../src/repl/host_effects.h#L110)
 (host effect, implemented by `glr_ctrl_reset_tutorial_chrome`), which runs
 the example chrome reset with no tag mask and then overrides what an
 example load deliberately inherits: the camera eases back to the built-in
@@ -3073,7 +3073,8 @@ Add at least:
 
 Update this architecture section, the tutorial catalog comments, and any
 agent-facing file-layout notes that describe the tutorial entries. The validator
-drift test already requires non-zero `.tags`, but any new step-shape invariant
+drift test already requires a `.tag_names` list whose every entry resolves to
+a known label, but any new step-shape invariant
 (e.g. "REQUIRE_VAR var_name must be non-reserved") needs a one-line mention so
 future catalog authors don't rediscover it from a test failure.
 
