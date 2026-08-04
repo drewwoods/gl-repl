@@ -1046,7 +1046,10 @@ static void glr_ctrl_clear_chrome(const Render3dRenderConfig *config) {
     /* render3d applies the clear color itself, but not until inside
      * render3d_draw_scene - after this runs. Set it here so the chrome
      * clears to the scene's color on the frame it changes, not the frame
-     * after (which is what reusing the stale GL clear color would give). */
+     * after (which is what reusing the stale GL clear color would give).
+     * config->clear_color is the color the program's own glClear will use,
+     * resolved in execution order by glr_ctrl_build_scene_config, so the
+     * strips and the scene rect land on the same background. */
     glClearColor(config->clear_color[0], config->clear_color[1],
                  config->clear_color[2], config->clear_color[3]);
     /* The chrome strips clear depth too, and a program glClearDepth leaves
@@ -1376,16 +1379,30 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
     config->post_resolve_overlays_user_data = &g_overlay_pack;
 
     /* --- Background clear color ---
-     * The host starts every scoped frame from the bootstrap default. Do not
-     * scan ahead through the flat program or carry REPL bookkeeping across
-     * frame scopes: a glClearColor written after glClear cannot affect that
-     * clear (or a later frame's clear) unless the source itself puts it before
-     * glClear. This matches the exported glPushAttrib/glPopAttrib frame
-     * bracket. */
-    config->clear_color[0] = CFG_DEFAULT_CLEAR_R;
-    config->clear_color[1] = CFG_DEFAULT_CLEAR_G;
-    config->clear_color[2] = CFG_DEFAULT_CLEAR_B;
-    config->clear_color[3] = CFG_DEFAULT_CLEAR_A;
+     * Every scoped frame starts from the bootstrap default; the program's own
+     * glClearColor moves it from there, in execution order. Resolving stops at
+     * the program's first color glClear, so a glClearColor written *after* the
+     * clear cannot drive it (nor leak into the next frame), matching the
+     * exported glPushAttrib/glPopAttrib bracket. Carrying REPL bookkeeping
+     * across frames, or taking the last glClearColor anywhere in the document,
+     * would both break that - see repl_flat_resolve_clear_color().
+     *
+     * The value is the frame's *background*, not just an argument to the
+     * clear: the chrome strips outside the scene rect clear to it, the grid /
+     * axes recede fog fades to it, and alpha_scale below lights overlays
+     * against it. All four have to agree, so they all read it here.
+     *
+     * Deliberately the full flat program, not the (replay-clamped)
+     * flat_program parameter: replay narrows how much geometry executes, and
+     * the background must not flicker as the PC walks past the clear. */
+    {
+        static const float baseline[4] = {
+            CFG_DEFAULT_CLEAR_R, CFG_DEFAULT_CLEAR_G,
+            CFG_DEFAULT_CLEAR_B, CFG_DEFAULT_CLEAR_A
+        };
+        repl_flat_resolve_clear_color(repl_state_flat_program_view(),
+                                      baseline, config->clear_color);
+    }
 
     /* --- Animation --- */
     config->anim_time = repl_state_variables().anim_time;

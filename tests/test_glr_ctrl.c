@@ -472,40 +472,44 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
     ASSERT_INT("flat count restored after frame", repl_state_flat_program_count(), saved_flat_count);
 }
 
-/* The render configuration supplies the GL clear color before the user
- * program executes. Its scoped-frame baseline must ignore both a later
- * glClearColor in the flat program and bookkeeping from an earlier frame. */
-static void test_display_frame_does_not_prescan_clear_color(void) {
-    GLCmd *flat_cmds;
+/* Plant a bare flat command at `idx` over the display fixture's program. */
+static GLCmd *plant_flat_cmd(int idx, CmdType type, const char *text) {
+    GLCmd *cmds = repl_state_flat_program_writable()->cmds;
+    memset(&cmds[idx], 0, sizeof(cmds[idx]));
+    cmds[idx].type = type;
+    cmds[idx].valid = 1;
+    cmds[idx].src_cmd_idx = idx;
+    cmds[idx].call_src_cmd_idx = -1;
+    cmds[idx].root_call_src_cmd_idx = -1;
+    editor_buffer_set_line(idx, text);
+    return &cmds[idx];
+}
 
-    printf("--- imrepl_ctrl clear color source order ---\n");
+static void plant_flat_clear(int idx) {
+    GLCmd *c = plant_flat_cmd(idx, CMD_CLEAR, "glClear(GL_COLOR_BUFFER_BIT);");
+    c->num_args = 1;
+    c->args[0] = GL_COLOR_BUFFER_BIT;
+}
+
+static void plant_flat_clear_color(int idx, float r, float g, float b) {
+    GLCmd *c = plant_flat_cmd(idx, CMD_CLEAR_COLOR, "glClearColor(0.05, 0.06, 0.08, 1);");
+    c->num_args = 4;
+    c->args[0] = r; c->args[1] = g; c->args[2] = b; c->args[3] = 1.0f;
+}
+
+/* The render configuration supplies the GL clear color before the user
+ * program executes, and it is the frame's background for the chrome strips,
+ * the recede fog and alpha_scale as well as for the clear itself. It must
+ * ignore a glClearColor that lands after the clear, and bookkeeping left over
+ * from an earlier frame - neither can reach the pixels this frame. */
+static void test_display_frame_clear_color_after_clear_is_ignored(void) {
+    printf("--- imrepl_ctrl clear color source order (late) ---\n");
     prepare_display_fixture();
     replay_state_mut()->active = 0;
     replay_state_mut()->state = REPLAY_OFF;
 
-    flat_cmds = repl_state_flat_program_writable()->cmds;
-    memset(&flat_cmds[2], 0, sizeof(flat_cmds[2]));
-    flat_cmds[2].type = CMD_CLEAR;
-    flat_cmds[2].valid = 1;
-    flat_cmds[2].src_cmd_idx = 2;
-    flat_cmds[2].call_src_cmd_idx = -1;
-    flat_cmds[2].root_call_src_cmd_idx = -1;
-    flat_cmds[2].num_args = 1;
-    flat_cmds[2].args[0] = GL_COLOR_BUFFER_BIT;
-    editor_buffer_set_line(2, "glClear(GL_COLOR_BUFFER_BIT);");
-
-    memset(&flat_cmds[3], 0, sizeof(flat_cmds[3]));
-    flat_cmds[3].type = CMD_CLEAR_COLOR;
-    flat_cmds[3].valid = 1;
-    flat_cmds[3].src_cmd_idx = 3;
-    flat_cmds[3].call_src_cmd_idx = -1;
-    flat_cmds[3].root_call_src_cmd_idx = -1;
-    flat_cmds[3].num_args = 4;
-    flat_cmds[3].args[0] = 0.05f;
-    flat_cmds[3].args[1] = 0.06f;
-    flat_cmds[3].args[2] = 0.08f;
-    flat_cmds[3].args[3] = 1.0f;
-    editor_buffer_set_line(3, "glClearColor(0.05, 0.06, 0.08, 1);");
+    plant_flat_clear(2);
+    plant_flat_clear_color(3, 0.05f, 0.06f, 0.08f);
     repl_state_document_count_set(4);
     repl_state_flat_program_set_count(4);
     repl_state_render_mut()->clear_color[0] = 0.05f;
@@ -523,6 +527,37 @@ static void test_display_frame_does_not_prescan_clear_color(void) {
                  g_last_scene_config.clear_color[2], CFG_DEFAULT_CLEAR_B);
     ASSERT_FLOAT("late or prior-frame clear color does not affect this frame a",
                  g_last_scene_config.clear_color[3], CFG_DEFAULT_CLEAR_A);
+}
+
+/* The other half of the same rule, and the one a user actually authors: a
+ * glClearColor *before* the clear is the frame's background, so it has to
+ * reach the config the chrome / fog / overlay-contrast all read. */
+static void test_display_frame_clear_color_before_clear_applies(void) {
+    printf("--- imrepl_ctrl clear color source order (early) ---\n");
+    prepare_display_fixture();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+
+    plant_flat_clear_color(2, 0.05f, 0.06f, 0.08f);
+    plant_flat_clear(3);
+    repl_state_document_count_set(4);
+    repl_state_flat_program_set_count(4);
+    repl_state_render_reset_defaults();
+
+    glr_ctrl_display_frame();
+
+    ASSERT_FLOAT("clear color before the clear drives the frame r",
+                 g_last_scene_config.clear_color[0], 0.05f);
+    ASSERT_FLOAT("clear color before the clear drives the frame g",
+                 g_last_scene_config.clear_color[1], 0.06f);
+    ASSERT_FLOAT("clear color before the clear drives the frame b",
+                 g_last_scene_config.clear_color[2], 0.08f);
+    ASSERT_FLOAT("clear color before the clear drives the frame a",
+                 g_last_scene_config.clear_color[3], 1.0f);
+    /* alpha_scale is derived from that background, not from a constant: a
+     * background darker than the design point boosts overlay alpha. */
+    ASSERT_TRUE("darker background boosts overlay alpha_scale",
+                g_last_scene_config.alpha_scale > 1.0f);
 }
 
 static void test_reshape_clamps_height(void) {
@@ -5528,7 +5563,8 @@ int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
     test_display_frame_builds_config_and_restores_live_state();
-    test_display_frame_does_not_prescan_clear_color();
+    test_display_frame_clear_color_after_clear_is_ignored();
+    test_display_frame_clear_color_before_clear_applies();
     test_reshape_clamps_height();
     test_display_frame_profile_coverage();
     test_frame_spans_host_stages();

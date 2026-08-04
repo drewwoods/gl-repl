@@ -159,10 +159,15 @@ static Render3dRgba rgba(float r, float g, float b, float a) {
     return c;
 }
 
-static void set_fog_to_clear_color() {
-    float clear_col[4];
-    glGetFloatv(GL_COLOR_CLEAR_VALUE, clear_col);
-    glFogfv(GL_FOG_COLOR, clear_col);
+/* Fade into the frame's background color. That is config->clear_color, not a
+ * glGetFloatv(GL_COLOR_CLEAR_VALUE) read-back: the helpers run after the user
+ * geometry, inside the same glPushAttrib bracket, so live GL holds whatever
+ * the program last set - which is the background only when nothing follows
+ * the program's glClear. The config value is the color the scene rect was
+ * actually cleared with, and the same one the axes recede fog and the chrome
+ * strips use, so the three cannot disagree. */
+static void set_fog_to_clear_color(const float clear_color[4]) {
+    glFogfv(GL_FOG_COLOR, clear_color);
 }
 
 /* Grid in-out transition. Resolved once at render3d_grid_render entry from
@@ -182,9 +187,10 @@ static void set_fog_to_clear_color() {
 /* Synthetic recede fog for fog-less themes: a clear-color linear wall
  * pulled in from beyond the grid as the overlay hides (tf = 1 -
  * opacity). tf<=0 -> no fog, continuous with the fogless steady look. */
-static void grid_xn_apply_transition_fog(float tf, float extent) {
+static void grid_xn_apply_transition_fog(float tf, float extent,
+                                         const float clear_color[4]) {
     if (tf <= 0.0f) return;
-    set_fog_to_clear_color();
+    set_fog_to_clear_color(clear_color);
     glEnable(GL_FOG);
     glFogi(GL_FOG_MODE, GL_LINEAR);
     float far_end  = extent * 1.25f;   /* tf~0: fog past the grid edge */
@@ -2308,7 +2314,8 @@ static void grid_apply_far_fog(const Render3dRenderConfig *config,
      * overwritten. Fog-owning configs took the FADE fallback above. */
     int uses_fog = render3d_grid_theme_uses_fog(grid_theme);
     if (!uses_fog && !is_far)
-        grid_xn_apply_transition_fog(xn->fog_tf, extent);
+        grid_xn_apply_transition_fog(xn->fog_tf, extent,
+                                     config->clear_color);
 #else
     (void)grid_theme;
 #endif
@@ -2328,7 +2335,7 @@ static void grid_apply_far_fog(const Render3dRenderConfig *config,
 #else
     (void)xn;
 #endif
-    set_fog_to_clear_color();
+    set_fog_to_clear_color(config->clear_color);
     glEnable(GL_FOG);
     glFogi(GL_FOG_MODE, GL_LINEAR);
     glFogf(GL_FOG_START, fog_start);

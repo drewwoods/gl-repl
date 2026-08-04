@@ -482,6 +482,66 @@ FlatProgramView repl_flat_program_view_live(void) {
     return repl_state_flat_program_view();
 }
 
+int repl_flat_resolve_clear_color(FlatProgramView program,
+                                  const float baseline[4],
+                                  float out[4]) {
+    /* Attribute-stack mirror for the clear color alone: a glPushAttrib whose
+     * mask covers the clear-color group saves it, the matching pop restores
+     * it. Same over-depth policy as the executor (frames past the cap are
+     * counted but not tracked) so this walk and the real GL walk agree. */
+    unsigned cc_bit = repl_attrib_bits_for_type(CMD_CLEAR_COLOR, 0);
+    float saved[REPL_ATTRIB_STACK_CAP][4];
+    int   saved_valid[REPL_ATTRIB_STACK_CAP];
+    int   depth = 0;
+    float cur[4];
+    int   i, k;
+
+    for (k = 0; k < 4; k++)
+        cur[k] = baseline ? baseline[k] : 0.0f;
+
+    for (i = 0; i < program.cmd_count; i++) {
+        const GLCmd *cmd = &program.cmds[i];
+        if (!cmd->valid)
+            continue;
+        switch (cmd->type) {
+        case CMD_CLEAR_COLOR:
+            for (k = 0; k < 4; k++)
+                cur[k] = cmd->args[k];
+            break;
+        case CMD_PUSH_ATTRIB:
+            depth++;
+            if (depth <= REPL_ATTRIB_STACK_CAP) {
+                saved_valid[depth - 1] =
+                    (((unsigned)cmd->args[0] & cc_bit) != 0u);
+                for (k = 0; k < 4; k++)
+                    saved[depth - 1][k] = cur[k];
+            }
+            break;
+        case CMD_POP_ATTRIB:
+            if (depth > 0) {
+                if (depth <= REPL_ATTRIB_STACK_CAP && saved_valid[depth - 1]) {
+                    for (k = 0; k < 4; k++)
+                        cur[k] = saved[depth - 1][k];
+                }
+                depth--;
+            }
+            break;
+        case CMD_CLEAR:
+            if (((GLbitfield)cmd->args[0] & GL_COLOR_BUFFER_BIT) == 0)
+                break;
+            for (k = 0; k < 4; k++)
+                out[k] = cur[k];
+            return 1;
+        default:
+            break;
+        }
+    }
+
+    for (k = 0; k < 4; k++)
+        out[k] = baseline ? baseline[k] : 0.0f;
+    return 0;
+}
+
 static FlatProgramView execution_program_from_options(const ReplExecutionOptions *options) {
     FlatProgramView program = repl_flat_program_view_live();
 

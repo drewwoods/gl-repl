@@ -289,7 +289,7 @@ surfaces it on the CLI.
 Loop counters, function parameters and function-scoped locals don't exist in
 the source command's own scope. When [`flatten.c`](flatten.c) emits a flat command, it snapshots
 the live lexical bindings into a parallel [`FlatCmdLocalVars`](flatten.h#L43) array
-([`repl_state_flat_program_local_vars()`](state_views.h#L179)):
+([`repl_state_flat_program_local_vars()`](state_views.h#L184)):
 
 ```c
 typedef struct {
@@ -704,7 +704,7 @@ the live arrays.
 
 ### 5.3 Execute - flat program to GL
 
-[`repl_execute_program()`](executor.h#L199) ([`executor.c`](executor.c)) walks `flat_cmds[0..count)`
+[`repl_execute_program()`](executor.h#L225) ([`executor.c`](executor.c)) walks `flat_cmds[0..count)`
 emitting GL. Key behaviors:
 
 - **Baked args only.** Every command renders from its flatten-baked
@@ -750,9 +750,9 @@ typed slices ([`state_views.h`](state_views.h)):
 | [`ReplDocumentState`](state_views.h#L42) | source `GLCmd[]`, count, capacity, `normals_dirty`, cached source-uses-`t` metadata |
 | [`ReplFlatProgramState`](state_views.h#L52) | flat `GLCmd[]`, `FlatCmdLocalVars[]`, dirty flag, cursor-block range, user-lighting flag |
 | [`ReplVariableState`](state_views.h#L84) | predef var table, scratch arrays `A/B/C`, `funcN` aliases, the `t` clock (`anim_time`, `time_playing`) |
-| [`ReplRenderState`](state_views.h#L118) | the runtime-mutated render *tail*: `light_enabled_mask`, `clear_color[]` |
-| [`ReplSceneRuntimeState`](state_views.h#L140) | active example index, bound workspace dir |
-| [`ReplImportExportState`](state_views.h#L149) | cached header/render/camera text + pending import metadata |
+| [`ReplRenderState`](state_views.h#L123) | the runtime-mutated render *tail*: `light_enabled_mask`, plus `clear_color[]` as executor attrib-scope bookkeeping (no renderer reads it - the frame background comes from `repl_flat_resolve_clear_color()`) |
+| [`ReplSceneRuntimeState`](state_views.h#L145) | active example index, bound workspace dir |
+| [`ReplImportExportState`](state_views.h#L154) | cached header/render/camera text + pending import metadata |
 
 [`repl_state_capture()`](state.h#L29) / [`repl_state_restore()`](state.h#L30) snapshot exactly these
 slices - and nothing else (no editor, UI, replay, or app presentation

@@ -83,7 +83,7 @@ The most common contributions, recipe-style:
    command, you only need a new row in `k_enum_command_specs[]` /
    `k_std_command_specs[]` in [`src/repl/command_spec.c`](../src/repl/command_spec.c) (keep the tables
    alphabetically sorted by GL name).
-3. Execute it in [`repl_execute_program()`](../src/repl/executor.h#L199) ([`src/repl/executor.c`](../src/repl/executor.c)) and
+3. Execute it in [`repl_execute_program()`](../src/repl/executor.h#L225) ([`src/repl/executor.c`](../src/repl/executor.c)) and
    handle it in `flatten_range()` ([`src/repl/flatten.c`](../src/repl/flatten.c)).
 4. Add a `g_command_type_specs[]` entry in [`src/repl/command_spec.c`](../src/repl/command_spec.c) with
    the right [`CmdSyntaxCategory`](../src/repl/command_spec.h#L152) for syntax highlighting.

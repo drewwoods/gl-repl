@@ -653,7 +653,11 @@ Two policies that bite from a distance, so they stay here:
 - **`glClear` is load-bearing** - nothing clears the scene rect on the
   program's behalf (identical to the exported C); deleting the line smears the
   frame. Replay fade batches skip `CMD_CLEAR`, and replay clamps never cut
-  below the leading clear.
+  below the leading clear. **`glClearColor` must precede it** - execution is
+  source-ordered, so a clear color set after the clear affects nothing this
+  frame and is reverted by the frame's `glPopAttrib` before the next
+  (`repl_flat_resolve_clear_color()` resolves the frame background under the
+  same rule; `test_example_clear_color_precedes_clear` guards the catalog).
 - **Overlay passes** replay clip/cull/`glFrontFace` state as they walk
   (`overlay_gl_track_cmd` in edit_overlays.c) so outlines/points match the
   frame; color-mask gates those walks instead of being replayed. The

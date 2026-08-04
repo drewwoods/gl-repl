@@ -46,7 +46,15 @@
 /* One saved attribute-stack frame: the push mask plus the REPL render-state
  * bookkeeping mirror (light-enable mask + clear color) captured at push time.
  * glPopAttrib restores GL's own state; this mirror is restored alongside so
- * the light-indicator overlay and next-frame clear color track user pops. */
+ * the light-indicator overlay tracks user pops.
+ *
+ * The clear-color half is *not* what the host renders against - the frame's
+ * background is resolved statically, before the walk, by
+ * repl_flat_resolve_clear_color(). This mirror is the executor's own scope
+ * bookkeeping: it is what makes a scoped glClearColor observably revert at
+ * the matching pop (and at cursor-end unwind of an unmatched push) in passes
+ * that suppress GL emission, which real glPopAttrib does inside GL where the
+ * REPL cannot see it. */
 typedef struct {
     unsigned        mask;
     ReplRenderState render;
@@ -169,6 +177,24 @@ typedef struct ReplExecCursor {
  * The pointers are valid until the next call to repl_flatten_program()
  * on the live buffers. */
 FlatProgramView repl_flat_program_view_live(void);
+
+/* Resolve the clear color the program's own frame clear will use: walk the
+ * flat program in execution order from `baseline` (the frame-scoped
+ * bootstrap default) and stop at the first glClear carrying
+ * GL_COLOR_BUFFER_BIT, honoring glPushAttrib/glPopAttrib scopes on the way.
+ * Writes that color to out[4] and returns 1; with no color clear in the
+ * program, writes `baseline` and returns 0.
+ *
+ * This is *source-order* resolution, not the "last glClearColor anywhere
+ * wins" look-ahead that used to live in the controller: a glClearColor
+ * written after the clear cannot reach out[], exactly as in the exported C.
+ * The host needs the answer before the program runs - to clear the chrome
+ * strips to the same color and to light overlays against the right
+ * background - which is why it is resolved statically here rather than read
+ * back from GL after the fact. */
+int repl_flat_resolve_clear_color(FlatProgramView program,
+                                  const float baseline[4],
+                                  float out[4]);
 
 /* Apply a transform command while tracking matrix stack depth. Used during
  * normal execution and replay to maintain an accurate depth counter for

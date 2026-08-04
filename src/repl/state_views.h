@@ -111,7 +111,12 @@ typedef struct {
 /* REPL-owned render tail: the light-enable bitmask and clear color written by
  * user GL commands. `light_enabled_mask` bit i is set while the program's
  * glEnable(GL_LIGHT0+i) is in effect (recomputed each executor walk); the
- * light-indicator overlay reads it. Positions/colors/eye-space for each slot
+ * light-indicator overlay reads it. `clear_color[]` is executor scope
+ * bookkeeping only - it tracks the program's glClearColor through
+ * glPushAttrib/glPopAttrib so a scoped change reverts, and no renderer reads
+ * it: the frame background the host clears, fogs and lights overlays against
+ * comes from repl_flat_resolve_clear_color() instead, which resolves it
+ * before the walk. Positions/colors/eye-space for each slot
  * are presentation state on the app shell (GlrRenderState.lights). Policy
  * toggles such as msaa, line smoothing, point attenuation enablement, and
  * grid/axes visibility are app-owned in glr_state. */

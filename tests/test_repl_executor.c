@@ -1227,6 +1227,128 @@ static void run_attrib_cursor(GLCmd *cmds, int n, int suppress) {
     repl_exec_cursor_end(&cursor);
 }
 
+/* repl_flat_resolve_clear_color: the frame background the host clears, fogs
+ * and lights overlays against. Resolution is source-ordered and stops at the
+ * program's first color clear, so it answers "what color does this program's
+ * own glClear use" - not "what is the last glClearColor in the document". */
+static void test_resolve_frame_clear_color(void) {
+    static const float base[4] = {0.10f, 0.10f, 0.10f, 1.0f};
+    float out[4];
+
+    printf("--- executor: frame clear color resolution ---\n");
+
+    /* No clear at all: the program never repaints the rect, so the baseline
+     * stands and the caller can tell (return 0). */
+    {
+        GLCmd cmds[1];
+        FlatProgramView v = {0};
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].type = CMD_CLEAR_COLOR; cmds[0].valid = 1; cmds[0].num_args = 4;
+        cmds[0].args[0] = 0.9f; cmds[0].args[3] = 1.0f;
+        v.cmds = cmds; v.cmd_count = 1;
+        ASSERT_TRUE("no glClear: reports not-found",
+                    repl_flat_resolve_clear_color(v, base, out) == 0);
+        ASSERT_TRUE("no glClear: baseline out", out[0] == base[0]);
+    }
+
+    /* Before the clear: drives the frame. After it: cannot. */
+    {
+        GLCmd cmds[3];
+        FlatProgramView v = {0};
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].type = CMD_CLEAR_COLOR; cmds[0].valid = 1; cmds[0].num_args = 4;
+        cmds[0].args[0] = 0.2f; cmds[0].args[1] = 0.3f;
+        cmds[0].args[2] = 0.4f; cmds[0].args[3] = 1.0f;
+        cmds[1].type = CMD_CLEAR; cmds[1].valid = 1; cmds[1].num_args = 1;
+        cmds[1].args[0] = GL_COLOR_BUFFER_BIT;
+        cmds[2].type = CMD_CLEAR_COLOR; cmds[2].valid = 1; cmds[2].num_args = 4;
+        cmds[2].args[0] = 0.9f; cmds[2].args[3] = 1.0f;
+        v.cmds = cmds; v.cmd_count = 3;
+        ASSERT_TRUE("prior glClearColor found", repl_flat_resolve_clear_color(v, base, out) == 1);
+        ASSERT_TRUE("prior glClearColor wins",
+                    out[0] == 0.2f && out[1] == 0.3f && out[2] == 0.4f && out[3] == 1.0f);
+    }
+
+    /* A depth-only clear is not a color clear: keep scanning past it. */
+    {
+        GLCmd cmds[3];
+        FlatProgramView v = {0};
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].type = CMD_CLEAR; cmds[0].valid = 1; cmds[0].num_args = 1;
+        cmds[0].args[0] = GL_DEPTH_BUFFER_BIT;
+        cmds[1].type = CMD_CLEAR_COLOR; cmds[1].valid = 1; cmds[1].num_args = 4;
+        cmds[1].args[0] = 0.5f; cmds[1].args[3] = 1.0f;
+        cmds[2].type = CMD_CLEAR; cmds[2].valid = 1; cmds[2].num_args = 1;
+        cmds[2].args[0] = GL_COLOR_BUFFER_BIT;
+        v.cmds = cmds; v.cmd_count = 3;
+        ASSERT_TRUE("depth-only clear does not stop the scan",
+                    repl_flat_resolve_clear_color(v, base, out) == 1 && out[0] == 0.5f);
+    }
+
+    /* Attribute scopes: a clear color set inside a GL_COLOR_BUFFER_BIT push
+     * is reverted by the pop, exactly as GL would, so the later clear uses
+     * the pre-push value. A push whose mask does not cover the clear color
+     * saves nothing, so the change survives its pop. */
+    {
+        GLCmd cmds[6];
+        FlatProgramView v = {0};
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].type = CMD_CLEAR_COLOR; cmds[0].valid = 1; cmds[0].num_args = 4;
+        cmds[0].args[0] = 0.2f; cmds[0].args[3] = 1.0f;
+        cmds[1].type = CMD_PUSH_ATTRIB; cmds[1].valid = 1; cmds[1].num_args = 1;
+        cmds[1].args[0] = GL_COLOR_BUFFER_BIT;
+        cmds[2].type = CMD_CLEAR_COLOR; cmds[2].valid = 1; cmds[2].num_args = 4;
+        cmds[2].args[0] = 0.7f; cmds[2].args[3] = 1.0f;
+        cmds[3].type = CMD_POP_ATTRIB; cmds[3].valid = 1;
+        cmds[4].type = CMD_CLEAR; cmds[4].valid = 1; cmds[4].num_args = 1;
+        cmds[4].args[0] = GL_COLOR_BUFFER_BIT;
+        v.cmds = cmds; v.cmd_count = 5;
+        repl_flat_resolve_clear_color(v, base, out);
+        ASSERT_TRUE("scoped clear color reverted by its pop", out[0] == 0.2f);
+
+        cmds[1].args[0] = GL_CURRENT_BIT;   /* does not cover the clear color */
+        repl_flat_resolve_clear_color(v, base, out);
+        ASSERT_TRUE("unrelated push mask saves nothing", out[0] == 0.7f);
+    }
+
+    /* A clear inside the scope sees the scoped value. */
+    {
+        GLCmd cmds[4];
+        FlatProgramView v = {0};
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].type = CMD_PUSH_ATTRIB; cmds[0].valid = 1; cmds[0].num_args = 1;
+        cmds[0].args[0] = GL_COLOR_BUFFER_BIT;
+        cmds[1].type = CMD_CLEAR_COLOR; cmds[1].valid = 1; cmds[1].num_args = 4;
+        cmds[1].args[0] = 0.7f; cmds[1].args[3] = 1.0f;
+        cmds[2].type = CMD_CLEAR; cmds[2].valid = 1; cmds[2].num_args = 1;
+        cmds[2].args[0] = GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT;
+        cmds[3].type = CMD_POP_ATTRIB; cmds[3].valid = 1;
+        v.cmds = cmds; v.cmd_count = 4;
+        repl_flat_resolve_clear_color(v, base, out);
+        ASSERT_TRUE("clear inside the scope uses the scoped color", out[0] == 0.7f);
+    }
+
+    /* Past-cap nesting must not run off the saved-frame array. */
+    {
+        GLCmd cmds[2 * (REPL_ATTRIB_STACK_CAP + 4) + 2];
+        FlatProgramView v = {0};
+        int n = 0, i;
+        memset(cmds, 0, sizeof(cmds));
+        for (i = 0; i < REPL_ATTRIB_STACK_CAP + 4; i++, n++) {
+            cmds[n].type = CMD_PUSH_ATTRIB; cmds[n].valid = 1;
+            cmds[n].num_args = 1; cmds[n].args[0] = GL_COLOR_BUFFER_BIT;
+        }
+        for (i = 0; i < REPL_ATTRIB_STACK_CAP + 4; i++, n++)
+            { cmds[n].type = CMD_POP_ATTRIB; cmds[n].valid = 1; }
+        cmds[n].type = CMD_CLEAR; cmds[n].valid = 1;
+        cmds[n].num_args = 1; cmds[n].args[0] = GL_COLOR_BUFFER_BIT; n++;
+        v.cmds = cmds; v.cmd_count = n;
+        ASSERT_TRUE("past-cap nesting resolves to the baseline",
+                    repl_flat_resolve_clear_color(v, base, out) == 1 &&
+                    out[0] == base[0]);
+    }
+}
+
 static void test_attrib_stack(void) {
     repl_executor_init_resources();
 
@@ -1397,6 +1519,7 @@ int main(void) {
     test_exec_cursor_step_tracks_state();
     test_exec_cursor_advance_skips_without_state();
     test_attrib_stack();
+    test_resolve_frame_clear_color();
     test_execute_all_commands();
     test_glut_bitmap_string();
     test_executor_camera_distance_source();

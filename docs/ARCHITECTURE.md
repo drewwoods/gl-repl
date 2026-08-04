@@ -214,7 +214,7 @@ The render3d frame consumes the explicit config:
 ```mermaid
 flowchart TD
     entry["render3d_draw_scene(&render3d_cfg)"] --> vp["set viewport"]
-    vp --> clear["resolve & apply clear color<br/>from render3d_cfg.flat_program"]
+    vp --> clear["apply clear color<br/>from render3d_cfg.clear_color"]
     clear --> p1
 
     subgraph loop["for each accumulation sample"]
@@ -734,7 +734,7 @@ vertices** - the geometry is generated inside GLU/freeglut, so the first
 two passes have nothing to trace. Instead, each shape is *re-drawn* under
 the already-active `glPolygonMode(GL_LINE)` + polygon offset, letting the
 GL pipeline rasterize the wireframe itself. The actual `glutSolid*` call
-goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L223) (shared with the live
+goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L249) (shared with the live
 render loop in [`src/repl/executor.c`](../src/repl/executor.c), so the dispatch stays in one place
 and the GLUT-symbol call site stays inside the executor TU). The
 membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L284) in [`src/repl/command.h`](../src/repl/command.h)
@@ -856,10 +856,10 @@ signature for audited renderers.
   and most render config live **app-side**
   on `glr_state` ([`src/app/glr_state.c`](../src/app/glr_state.c)), not on [`ReplRuntimeState`](../src/repl/state.h#L18); the
   controller reads them from there when filling the snapshot. Only the
-  REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L118): per-light state + clear
+  REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L123): per-light state + clear
   color) remains a REPL slice.
 * pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L100), [`EditorInputView`](../src/editor/state.h#L68),
-  [`ReplImportExportView`](../src/repl/state_views.h#L162), [`FlatProgramView`](../src/repl/flatten.h#L58), [`ReplPredefView`](../src/repl/eval.h#L179))
+  [`ReplImportExportView`](../src/repl/state_views.h#L167), [`FlatProgramView`](../src/repl/flatten.h#L58), [`ReplPredefView`](../src/repl/eval.h#L179))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
   - sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L390),
   `flat_program_count`, …)
@@ -1623,7 +1623,7 @@ Scene-presentation policy and most render config live in the app-side owner
 [`src/app/glr_state.c`](../src/app/glr_state.c). REPL-pipeline translation units do not include
 [`glr_state.h`](../src/app/glr_state.h); `check-repl-state-no-glr-state` enforces that boundary.
 App, editor, UI, and render3d code may consume it. Only the REPL-owned render
-tail-[`ReplRenderState`](../src/repl/state_views.h#L121), containing per-light state and clear
+tail-[`ReplRenderState`](../src/repl/state_views.h#L123), containing per-light state and clear
 color-remains a REPL slice.
 
 ## Core Subsystem Features & Integrations
@@ -1657,7 +1657,7 @@ supported = GL_VERSION >= 1.4
 
 The version check comes first on purpose: an ARB/EXT-only test
 false-negatives on a 1.4+ core context that doesn't advertise the extension
-string. The result is stored via [`repl_executor_set_point_parameter_supported()`](../src/repl/executor.h#L279)
+string. The result is stored via [`repl_executor_set_point_parameter_supported()`](../src/repl/executor.h#L305)
 (the executor no-ops `CMD_POINT_PARAMETER_FV` and falls back to a
 camera-distance `glPointSize` approximation when unsupported) and mirrored
 into `Render3dRenderConfig.point_parameter_supported` so the star backdrop's
@@ -1911,8 +1911,8 @@ re-eval - but at each state/color-emitting command it asks the filter:
 return nonzero to emit the GL normally, zero to **suppress the GL emission**.
 A suppressed command still runs [`repl_apply_state_bookkeeping()`](../src/repl/executor.h)
 so the REPL render bookkeeping a state command carries (the `GL_LIGHTn`
-enable mask read by the light-indicator overlay, the `glClearColor`) stays
-coherent. `NULL` emits everything - the default live-frame path. This is the
+enable mask read by the light-indicator overlay, and the `glClearColor`
+attrib-scope mirror) stays coherent. `NULL` emits everything - the default live-frame path. This is the
 light-touch option: the pass installs its own GL state once, then lets the
 geometry/transforms/normals execute untouched while the filter strips only
 the commands that would fight it.
@@ -1962,7 +1962,7 @@ passes + stripped tess are the load-bearing reason here); reach for
 **Side effects across auxiliary passes.** Both mechanisms can run the program
 more than once per frame (the wireframe's three passes; a depth probe).
 `scene_execute_adapter` in [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c)
-snapshots and restores predef vars / scratch arrays / [`ReplRenderState`](../src/repl/state_views.h#L118)
+snapshots and restores predef vars / scratch arrays / [`ReplRenderState`](../src/repl/state_views.h#L123)
 around any pass whose [`Render3dExecutePurpose`](../src/render3d/render_types.h#L75) is *not* the one
 side-effecting fill - so `t = t + 1` style assignment animation advances
 exactly once per frame. `RENDER3D_EXEC_MAIN_FILL`, the wireframe's visible-
