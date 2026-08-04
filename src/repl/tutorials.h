@@ -196,16 +196,16 @@ static inline int repl_tutorial_step_is_sentinel(const TutorialStep *step) {
 
 /* Curated metadata tags used by the Tutorials menu. Tutorials keep their
  * flat identity; tags are only a secondary discovery index. Tag index 0
- * is the synthetic "All" group - every tutorial is a member (folded into
- * the mask by repl_tutorial_tag_mask), so the menu's first flyout lists
- * every tutorial once.
+ * is the synthetic "All" group - every tutorial is a member (returned
+ * unconditionally by tutorial_catalog_entry_has_tag), so the menu's first
+ * flyout lists every tutorial once.
  *
- * The enum is in the header so app-layer code can name tags symbolically.
- * The bit-shifted
- * TUTORIAL_TAG_* macros used inside g_tutorials[] stay private to
- * tutorials.c. Taxonomy is topic-based: GEOMETRY / COLOR_TRANSFORMS /
- * DEPTH_LIGHTING / ANIMATION / REPL_LANGUAGE / EFFECTS. Tags without a
- * catalog entry stay filtered out by repl_tutorial_visible_tag_count(). */
+ * The enum is in the header so app-layer code can name tags symbolically;
+ * g_tutorials[] entries name tags by string in their `tag_names` list
+ * (tutorials.c), matched against this enum's order via g_tutorial_tag_labels.
+ * Taxonomy is topic-based: GEOMETRY / COLOR_TRANSFORMS / DEPTH_LIGHTING /
+ * ANIMATION / REPL_LANGUAGE / EFFECTS. Tags without a catalog entry stay
+ * filtered out by repl_tutorial_visible_tag_count(). */
 enum {
     REPL_TUTORIAL_TAG_ALL = 0,
     REPL_TUTORIAL_TAG_GEOMETRY,
@@ -216,8 +216,6 @@ enum {
     REPL_TUTORIAL_TAG_EFFECTS,
     REPL_TUTORIAL_TAG_COUNT
 };
-
-typedef unsigned int ReplTutorialTagMask;
 
 typedef struct {
     const char         *name;

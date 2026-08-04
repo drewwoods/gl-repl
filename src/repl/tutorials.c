@@ -1146,12 +1146,21 @@ static const TutorialEntry g_tutorials[] = {
         .subheading = "Beginner",
     },
     {
+        /* Placed before "Depth Test Triangle" (Intermediate) so the ALL
+         * flyout walks Beginner-only entries first, then transitions
+         * once to Intermediate at the tail - the subheading contiguity
+         * test (test_catalog_subheading_metadata) requires a single
+         * Beginner->Intermediate transition across the whole catalog. */
         .name       = "Variable Slider",
         .steps      = g_tutorial_variable_slider_steps,
         .tag_names  = (const char *const []){ "Color & Transforms", NULL },
         .subheading = "Beginner",
     },
     {
+        /* Keep this Beginner entry before the first Intermediate entry so
+         * the All flyout's section headers remain a single contiguous
+         * Beginner run followed by Intermediate. This is the first entry
+         * carrying ANIMATION, so that tag becomes visible in the menu. */
         .name       = "First Animation",
         .steps      = g_tutorial_first_animation_steps,
         .cfg        = g_tutorial_first_animation_cfg,
@@ -1180,12 +1189,19 @@ static const TutorialEntry g_tutorials[] = {
         .subheading = "Beginner",
     },
     {
+        /* Intermediate: introduces depth-testing as a new GL concept
+         * (the previous tutorials were pure geometry/color/transform). */
         .name       = "Depth Test Triangle",
         .steps      = g_tutorial_depth_triangle_steps,
         .tag_names  = (const char *const []){ "Geometry", "Depth & Lighting", NULL },
         .subheading = "Intermediate",
     },
     {
+        /* Appended after Depth Test Triangle so both Intermediate entries
+         * stay contiguous (Beginner run, then Intermediate run) in the ALL
+         * flyout, and the two DEPTH_LIGHTING entries (Depth Test Triangle,
+         * Lighting Basics) form a single Intermediate run in that flyout -
+         * test_catalog_subheading_metadata enforces both. */
         .name       = "Lighting Basics",
         .steps      = g_tutorial_lighting_basics_steps,
         .cfg        = g_tutorial_dense_solid_cfg,
@@ -1193,6 +1209,10 @@ static const TutorialEntry g_tutorials[] = {
         .subheading = "Intermediate",
     },
     {
+        /* Builds on First Triangle via a preloaded setup scaffold -
+         * the learner colors the corners without re-drawing the
+         * triangle. It closes the original Intermediate trio; the catalog
+         * continues with more Intermediate entries. */
         .name       = "Color Interpolation",
         .steps      = g_tutorial_color_interp_steps,
         .setup      = g_tutorial_color_interp_setup,

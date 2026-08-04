@@ -3028,6 +3028,13 @@ static const GlrExampleTagDefault k_example_tag_defaults[] =
 int glr_ctrl_apply_tag_defaults(int example_idx,
                                  const GlrExampleTagDefault *table,
                                  int n) {
+    /* Track GlrConfigKey values already set during this call so we can
+     * surface policy collisions. The shipped table has one entry; the
+     * cap covers an order-of-magnitude expansion plus any synthetic
+     * test policies. Iteration order is the table's declaration order;
+     * later entries that target the same key overwrite earlier ones
+     * (matches glr_config_set's last-write-wins semantics) and bump
+     * the returned collision count. */
     enum { SEEN_CAP = 32 };
     GlrConfigKey seen[SEEN_CAP];
     int seen_count = 0;

@@ -200,6 +200,16 @@ int repl_example_consume_camera_header(const char *const *lines) {
 }
 
 static void reset_example_presentation_defaults(int example_idx) {
+    /* Presentation state lives in glr_state.c; the
+     * controller-installed sink does the actual reset. The demo
+     * leaves the sink unset and ships without example presentation
+     * resets, which is fine because the demo doesn't load examples
+     * via this loader.
+     *
+     * `example_idx` is forwarded opaquely to the host; the loader does
+     * not interpret tags itself. The controller layers tag-specific
+     * `@cfg` defaults (looked up by example index) on top of the global
+     * reset before the example's own `@cfg` metadata is consumed below. */
     repl_dispatch_example_presentation_reset(example_idx);
 }
 

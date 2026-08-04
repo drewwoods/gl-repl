@@ -1004,10 +1004,10 @@ page on mouse wheel through `ui_menu_bar_handle_wheel_scroll`, which is called
 before code-panel/camera wheel handlers so scroll does not leak behind menus.
 
 **Tutorial menu.** Tutorials use the same flyout engine, but the catalog owner
-is `src/repl/tutorials.{c,h}`. Each tutorial entry declares a
-[`ReplTutorialTagMask`](../src/repl/tutorials.h#L220); the synthetic `ALL` tag is folded into every entry's
-mask by `repl_tutorial_tag_mask`, so catalog literals only name real domain
-tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L339)
+is `src/repl/tutorials.{c,h}`. Each tutorial entry declares a null-terminated
+`tag_names` string list; the synthetic `ALL` tag (index 0) is returned as a
+member of every entry unconditionally, so catalog literals only name real
+domain tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L337)
 hides unused tags), followed by `Restart Tutorial` / `Exit Tutorial` rows while
 a tutorial is active. Tag rows are inert hover-only parents; selecting a flyout
 tutorial routes through the controller to `tutorial_start(index)` and dismisses

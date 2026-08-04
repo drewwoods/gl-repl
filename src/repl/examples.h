@@ -6,6 +6,38 @@
  * generated string arrays and can be loaded by the user via F12 cycling or the
  * Example dropdown menu. A runtime examples directory may replace the generated
  * catalog for authoring.
+ *
+ * Example structure: Each example is an array of source lines plus a display
+ * name and source format. `.glr` examples are REPL source lines formatted and
+ * ready to feed through the commit pipeline without modification. `.c`
+ * examples are full exported/importable C sources and load through the import
+ * path. `.glr` examples may include leading metadata:
+ *   - @cfg directives to customize scene presentation (grid theme, axes,
+ *     overlays, backdrop, etc.). Metadata is stripped before the code-panel
+ *     renders the example.
+ *   - An optional // camera block specifying initial camera position/rotation.
+ *
+ * Example lifecycle: F12 cycles through examples and user scenes. Loading an
+ * example resets non-camera scene-presentation settings to defaults, applies
+ * the example's @cfg metadata, and feeds the example lines through the commit
+ * pipeline. Camera is inherited (not reset) unless the example supplies an
+ * explicit // camera block. Built-in defaults (CFG_DEFAULT_* macros in
+ * src/app/glr_defaults.h) define the reset baseline, ensuring consistent
+ * starting state across example transitions.
+ *
+ * User scene system integration: When a user edits an example, the first mutation
+ * triggers repl_promote_transient_if_needed(), which allocates a fresh user scene,
+ * copies the current state into it (inheriting the example's name with
+ * de-duplication), and marks that slot as active. Subsequent mutations accumulate
+ * into the user scene; the example remains unchanged. Switching away from the
+ * user scene via F12 does not restore the example state - user edits are
+ * independent once promoted.
+ *
+ * Query API: repl_example_count() returns the total number of examples;
+ * repl_example_name() retrieves an example's display name; repl_example_lines()
+ * retrieves the source line array, and repl_example_source_format() selects the
+ * loader. Used by the UI to populate the Example dropdown and by
+ * src/repl/example_loader.c to load examples.
  */
 #ifndef REPL_EXAMPLES_H
 #define REPL_EXAMPLES_H
@@ -39,8 +71,19 @@ const char *repl_example_name(int idx);
  * F12 cycling to determine the range of valid example indices. */
 int repl_example_count(void);
 
-/* Curated metadata tags used by the Scene menu. Dynamic linked list tag query API.
- * Tag index 0 is the synthetic "All" group - every example is a member. */
+/* Curated metadata tags used by the Scene menu. Examples keep their flat
+ * identity; tags are only a secondary discovery index. Tag index 0 is the
+ * synthetic "All" group - every example is a member (example_catalog_entry_has_tag
+ * returns true for it unconditionally), so the Scene menu's first example
+ * group lists every example once, matching the flat order the F12 cycle walks.
+ *
+ * The enum is in the header so app-layer code (the example-presentation
+ * reset bridge in src/app/glr_ctrl.c) can name tags symbolically when
+ * deciding which tag-default cfg overrides to apply. Built-in
+ * g_example_entries[] name tags by string in a `tag_names` list
+ * (examples.c); a runtime `--examples-dir` catalog registers arbitrary tag
+ * names at load time into the dynamic ReplTagNode/ReplItemTagNode lists
+ * declared in catalog_tags.h - it is not limited to this enum's set. */
 enum {
     REPL_EXAMPLE_TAG_ALL = 0,
     REPL_EXAMPLE_TAG_2D,
@@ -63,12 +106,19 @@ int repl_example_attach_tag(ReplItemTagNode **item_tags_head, const ReplTagNode 
 void repl_example_free_item_tags(ReplItemTagNode *item_tags_head);
 
 /* Subheading API - mirrors repl_tutorial_subheading. Returns the example's
- * free-form section label or NULL (no subheading / out-of-range idx). */
+ * free-form section label or NULL (no subheading / out-of-range idx). The
+ * Scene menu uses this to group entries within a tag flyout: consecutive
+ * examples sharing a non-NULL subheading render under one `### subheading`
+ * chrome row. Catalog authors must keep same-subheading entries contiguous
+ * per tag (enforced by test_example_subheading_metadata). */
 const char *repl_example_subheading(int example_idx);
 
 /* Optional runtime override for development/live iteration. `dir` must contain
  * a catalog.ini with file paths relative to `dir`. On success, the query API
- * serves that catalog instead of the compiled-in generated data. */
+ * serves that catalog instead of the compiled-in generated data. Passing a bad
+ * directory leaves the current catalog (entries and tag registry alike)
+ * unchanged and writes a diagnostic to err_buf when provided - the load is
+ * staged into a scratch draft/registry and only swapped in on success. */
 int  repl_examples_load_dir(const char *dir, char *err_buf, int err_sz);
 void repl_examples_clear_runtime_catalog(void);
 
