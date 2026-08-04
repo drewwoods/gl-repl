@@ -1445,6 +1445,38 @@ static void test_example_cfg_uses_symbolic_names(void) {
     }
 }
 
+/* Every glClearColor an example sets must be followed by a glClear, or it
+ * paints nothing. Execution is source-ordered (see repl_flat_resolve_clear_
+ * color) and the frame's glPushAttrib/glPopAttrib bracket reverts it before
+ * the next frame, so a trailing clear color is silently dead: the scene just
+ * renders on the bootstrap background instead of the authored one. This is
+ * easy to reintroduce - the author sees the color in the source, so nothing
+ * looks wrong - and it once shipped in ten catalog scenes at once. */
+static void test_example_clear_color_precedes_clear(void) {
+    int n = repl_example_count();
+    for (int i = 0; i < n; i++) {
+        const char *const *lines = repl_example_lines(i);
+        int last_clear_color = -1;
+        int last_clear = -1;
+        if (!lines) continue;
+        for (int li = 0; lines[li]; li++) {
+            const char *p = lines[li];
+            while (*p == ' ' || *p == '\t') p++;
+            if (strncmp(p, "glClearColor(", 13) == 0)
+                last_clear_color = li;
+            else if (strncmp(p, "glClear(", 8) == 0)
+                last_clear = li;
+        }
+        if (last_clear_color >= 0) {
+            char buf[192];
+            snprintf(buf, sizeof(buf),
+                     "example '%s': glClearColor (line %d) precedes a glClear",
+                     repl_example_name(i), last_clear_color + 1);
+            ASSERT_TRUE(buf, last_clear > last_clear_color);
+        }
+    }
+}
+
 /* Switching examples replaces the measured workload, so the cumulative timing
  * histograms must not carry the previous example's distribution (or its
  * startup outliers) into the new one. repl_load_example is the chokepoint
@@ -1815,6 +1847,7 @@ int main(int argc, char **argv) {
     test_example_tag_default_cfg();
     test_example_tag_default_dispatch();
     test_example_cfg_uses_symbolic_names();
+    test_example_clear_color_precedes_clear();
 
     {
         static const char *const no_cfg_reset_example[] = {

@@ -10,12 +10,12 @@ glRotatef(92.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(0.0f, 0.0f, 0.0f);
 
 // --- Render State -------------------
+glClearColor(0.05, 0.06, 0.08, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){1, 1, 1, 1});
 glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
 glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 glEnable(GL_DEPTH_TEST);
-glClearColor(0.05, 0.06, 0.08, 1);
 
 // --- Lighting -----------------------
 glEnable(GL_LIGHTING);

@@ -104,6 +104,7 @@ void display(void) {
 --- source ---
   static float n, p, q, ang, rr, x, y, z; // samples, winds, angle, ring radius, coords
   static float s; // palette mix in [0,1]
+  glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glEnable(GL_COLOR_MATERIAL);
   glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
@@ -111,7 +112,6 @@ void display(void) {
   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
-  glClearColor(0.05, 0.06, 0.08, 1);
   glLineWidth(2);
   n = 400; // samples around the closed curve
   p = 2; // turns around the torus axis

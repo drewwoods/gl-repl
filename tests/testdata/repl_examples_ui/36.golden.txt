@@ -120,8 +120,8 @@ void display(void) {
   // face along the curve's tangent, so rings sweep around the bends as
   // they approach. Drag `twist` to straighten or sharpen the curve.
 
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_FOG);
   glFogi(GL_FOG_MODE, GL_EXP2);

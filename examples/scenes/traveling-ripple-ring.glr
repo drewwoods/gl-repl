@@ -7,6 +7,7 @@ glTranslatef(0.0f, 0.0f, -3.50f);
 glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
 glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
 glTranslatef(0.0f, 0.0f, 0.0f);
+glClearColor(0.05, 0.06, 0.08, 1.0);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_COLOR_MATERIAL);
 glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
@@ -20,7 +21,6 @@ glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 // applied to x and y alike so the ring bulges outward, not sideways.
 static float phase, width, delta, amp, ang, bump, x, y;
 static float n = 400; // ring segment count
-glClearColor(0.05, 0.06, 0.08, 1.0);
 amp = 0.1 * sin(t * TAU);
 phase = fmod(t / 3, TAU);
 width = PI / 8;

@@ -118,6 +118,12 @@ void display(void) {
   static float decYr, yr, leap, doy, mon, day; // calendar readout scratch
 
 
+  // The two orbit funcs below only POSITION a body: each leaves the result in
+  // px/py/pz and draws nothing. drawBody() then puts a lit sphere there and the
+  // caller hangs the label off the same px/py/pz. Keeping the orbital elements
+  // and the body's appearance in separate argument lists is what buys
+  // planetKepler() the scope room to name every intermediate below.
+
   orbitRings(Drel, node, incl) {
     float th, u, cNode, sNode, cIncl, sIncl, cu, su;
     // cNode/sNode/cIncl/sIncl are constant for the whole ring (node and incl
@@ -139,11 +145,6 @@ void display(void) {
       }
     glEnd();
   }
-  // The two orbit funcs below only POSITION a body: each leaves the result in
-  // px/py/pz and draws nothing. drawBody() then puts a lit sphere there and the
-  // caller hangs the label off the same px/py/pz. Keeping the orbital elements
-  // and the body's appearance in separate argument lists is what buys
-  // planetKepler() the scope room to name every intermediate below.
   // One lit sphere at the last position computed. Rrel is the body's true
   // radius relative to Earth; the cube root squashes the 0.38..11x span into
   // something legible.
@@ -268,13 +269,9 @@ void display(void) {
       }
     glEnd();
   }
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glEnable(GL_COLOR_MATERIAL);
-  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
+
   glClearColor(0.02, 0.02, 0.05, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glEnable(GL_NORMALIZE);
   glEnable(GL_CULL_FACE);
   glEnable(GL_DEPTH_TEST);
@@ -285,6 +282,8 @@ void display(void) {
   // rides GL_COLOR_MATERIAL and one shared specular material gives every body
   // a sun-glint.
   glEnable(GL_LIGHT0);
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.35, 0.33, 0.3, 1});
   glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, (GLfloat[]){18});
   // Body sizes: R/E is the true radius relative to Earth; "display" is what

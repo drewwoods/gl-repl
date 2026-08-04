@@ -104,6 +104,10 @@ void display(void) {
 --- source ---
   static float c, a; // color/brightness mix in [0,1] (planet + ring bands); comet orbit angle
 
+  // ===== Ringed gas giant under nebula skies =====
+  // NOTE: stays well under the 8192 flattened-command budget --
+  // the sphere loop costs stacks*(slices + 1)*10 flat commands.
+
   // banded gas giant: quad strips over latitude, bands swirled by t
   planet(rad, stacks, slices) {
     float latA, latB, cA, cB, lon, cLon, sLon;
@@ -158,17 +162,14 @@ void display(void) {
       }
     glEnd();
   }
+
+  glClearColor(0.04, 0.04, 0.1, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
   glEnable(GL_COLOR_MATERIAL);
   glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
-
-  // ===== Ringed gas giant under nebula skies =====
-  // NOTE: stays well under the 8192 flattened-command budget --
-  // the sphere loop costs stacks*(slices + 1)*10 flat commands.
-  glClearColor(0.04, 0.04, 0.1, 1);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_LIGHTING);
   glEnable(GL_LIGHT0);
