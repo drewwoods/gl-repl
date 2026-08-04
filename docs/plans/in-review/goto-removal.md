@@ -42,6 +42,23 @@ simpler](#3-the-cursor-contract-gets-simpler)"); `import.c` and
 find the first of them; and export's handling of a `goto` row is unknown and
 needs answering before step 2.
 
+### Response to the design read (2026-08-04)
+
+Both §3a counts re-verified against the tree: `cursor->text` has exactly one
+reader (the `flat_goto_target()` call in the `CMD_GOTO` arm) and
+`options.status_out` exactly one writer (the loop-limit message). All four
+`import.c` line references are exact. §3a is accepted in full and is now the
+plan's step 3.
+
+The open export question is **answered by measurement** (§2), which unblocks
+step 2 - and the measurement turned up a divergence between the live REPL and
+exported C that is now §5, the strongest argument in the plan.
+
+One review call is **reversed**: `is_stmt_terminator()`'s `:` case must stay.
+See §2 - after the removal its job changes from labels to error containment,
+and dropping it would let a legacy `loop:` swallow the row beneath it on
+import.
+
 **No backward compatibility is owed, and the removal is total.** `goto` can
 disappear leaving the codebase with no memory of it: no compatibility shim, no
 retained-but-unused `CmdType`, no deprecation period, no migration for user
@@ -127,6 +144,42 @@ No built-in example, scene, or tour contains a `goto`. The only shipped users
 of `CMD_GOTO_LABEL` are two tutorials, and they use labels as **positional
 anchors, never as jump targets** - see "Tutorial anchors" below, which is the
 one real dependency this plan has to replace.
+
+### 5. Live REPL and exported C disagree
+
+Established while answering the export question, and it is the strongest
+argument here because it breaks a project invariant rather than a feature.
+
+Export writes from **document rows**, not from the flat program. So the `if`
+guard that flatten constant-folds away is still in the exported C. Feeding the
+`USER_GUIDE` example through `repl_export_save_output()` emits:
+
+```c
+  n = 0;
+loop:
+  n = n + 1;
+  if(n < 5) {
+    goto loop;
+  }
+  glutSolidCube(0.5);
+```
+
+That is a *working* counting loop. Real C control flow, real per-iteration
+re-evaluation: it loops five times and draws the cube at the intended size.
+The live REPL running the same document does not - the guard is gone, the jump
+is unconditional, and the geometry is never reached (§1).
+
+**The same source produces two different programs.** Every other construct in
+the language is resolved once, at flatten time, and the executor and the
+exporter agree by construction - which is what `test_export_trace_parity`
+exists to pin. `goto` is the sole construct whose meaning lives in its source
+line rather than its baked args, and it is correspondingly the sole construct
+where the live session and the file you save disagree about what the program
+does.
+
+No amount of fixing the REPL side closes this without the flatten rewrite in
+§2, because the divergence *is* the flatten/execute split. Removing `goto`
+removes the only case where the invariant does not hold.
 
 ## Goals
 
@@ -232,15 +285,30 @@ which is most of the table above, but the label handling in `import.c` is
 | Site | Change |
 |---|---|
 | `import.c:1167` `import_make_repl_label()` | delete; it exists only to claim a `name:` line before the C-expression converter rewrites it. Drop it from the converter chain at `:1767` too |
-| `import.c:2575`, `:2733` | the statement accumulator's label case. Every REPL statement ends in a terminator *except* a label, which is the whole reason the accumulator carries a `:` special case (see `87c26f4c`). Removing labels deletes it - unclaimed simplification |
+| `import.c:2575` `is_stmt_terminator()` | **keep the `:` case** - see below |
 
-**Unanswered, and it gates step 2: what does export emit for a `goto` row
-today?** `export_cmd_writer.c` has no `CMD_GOTO` / `CMD_GOTO_LABEL` handling at
-all - its `label` matches are the unrelated `label()` bitmap-text primitive. So
-either those rows are silently dropped on export, which is a pre-existing bug
-this removal makes moot, or a verbatim path emits them and needs auditing.
-Answer it before deleting the types, because it decides whether an existing
-saved file round-trips or quietly loses rows on the way out as well as in.
+**Correction to the design read: do not drop `:` from `is_stmt_terminator()`.**
+The read is right that the case exists because of labels, but after the removal
+its remaining job is error containment, and that job is load-bearing. No valid
+statement ends in `:` once labels are gone, so the case can only ever fire on
+invalid input - and there its effect is to keep a stray `loop:` line
+self-contained. Drop it and the accumulator treats `loop:` as an unfinished
+statement, glues the next physical line onto it, and reports one joined parse
+error - which loses the following row from the document. That is precisely the
+bug class `738f3c1c` fixed, re-entering through the back door on legacy files.
+Keeping one character in a predicate is the cost of the plan's own acceptance
+criterion that no row is silently dropped on import. Re-comment it to say it
+now exists for stray-colon containment rather than for labels.
+
+**Export: answered.** Measured, not read - a document with `loop:` /
+`goto loop;` exported through `repl_export_save_output()` emits both rows
+**verbatim**, via the `default:` arm at `export_cmd_writer.c:554` →
+`write_cmd_source_as_c()`. Nothing is dropped. The read's first hypothesis
+(silent drop) is false; it is the second, and the verbatim path needs no audit
+because `loop:` and `goto loop;` are already valid C.
+
+That answer is clean, but the measurement turned up something that is not -
+see "[5. Live REPL and exported C disagree](#5-live-repl-and-exported-c-disagree)".
 
 Check `CMD_CAT_LABEL` before deleting it - `command_spec.h:164` is a
 `CmdSyntaxCategory` member, and the drift test in
@@ -421,3 +489,22 @@ Full verification: `make test-stubs`, `make gl-repl USE_GL_STUBS=1`,
    by calling it general-purpose.
 3. **Export behavior for a `goto` row** (raised by the design read, §2). Not a
    preference question - a fact to establish before step 2.
+
+   *Answered (2026-08-04), by measurement:* both rows export **verbatim**
+   through the `default:` arm, and nothing is dropped. Step 2 is unblocked.
+
+   The probe also settled a question nobody had asked, and it is the one thing
+   in this plan that changed a conclusion rather than confirming one: because
+   export writes document rows while the executor runs the flat program, the
+   exported C keeps the `if` guard the REPL folds away, and therefore *works*
+   where the live session does not. `goto` is the only construct in the
+   language where the live REPL and the file you save disagree about what the
+   program does. See §5 - it is now the strongest single argument for removal,
+   and it is an invariant break rather than a missing feature.
+4. **`is_stmt_terminator()`'s `:` case** (raised here, against the design
+   read). The read lists it as unclaimed simplification; §2 argues it must
+   stay, because after the removal its job is keeping a stray `loop:` from
+   swallowing the row beneath it on a legacy file. Cheap to keep, and the
+   plan's own "no row silently dropped" criterion depends on it. Flagged for
+   the next reader rather than settled unilaterally, since it reverses a
+   review call.
