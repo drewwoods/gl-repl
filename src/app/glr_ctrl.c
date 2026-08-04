@@ -1380,12 +1380,13 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
 
     /* --- Background clear color ---
      * Every scoped frame starts from the bootstrap default; the program's own
-     * glClearColor moves it from there, in execution order. Resolving stops at
-     * the program's first color glClear, so a glClearColor written *after* the
-     * clear cannot drive it (nor leak into the next frame), matching the
-     * exported glPushAttrib/glPopAttrib bracket. Carrying REPL bookkeeping
-     * across frames, or taking the last glClearColor anywhere in the document,
-     * would both break that - see repl_flat_resolve_clear_color().
+     * glClearColor moves it from there, in execution order. What the frame
+     * ends up showing is the color in effect at the program's *last* color
+     * glClear, so a glClearColor written after it cannot drive the background
+     * (nor leak into the next frame), matching the exported
+     * glPushAttrib/glPopAttrib bracket. Carrying REPL bookkeeping across
+     * frames, or taking the last glClearColor anywhere in the document, would
+     * both break that - see repl_flat_resolve_clear_color().
      *
      * The value is the frame's *background*, not just an argument to the
      * clear: the chrome strips outside the scene rect clear to it, the grid /
@@ -1401,7 +1402,8 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
             CFG_DEFAULT_CLEAR_B, CFG_DEFAULT_CLEAR_A
         };
         repl_flat_resolve_clear_color(repl_state_flat_program_view(),
-                                      baseline, config->clear_color);
+                                      source_document_view(), baseline,
+                                      config->clear_color);
     }
 
     /* --- Animation --- */

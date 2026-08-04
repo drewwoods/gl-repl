@@ -1233,6 +1233,7 @@ static void run_attrib_cursor(GLCmd *cmds, int n, int suppress) {
  * own glClear use" - not "what is the last glClearColor in the document". */
 static void test_resolve_frame_clear_color(void) {
     static const float base[4] = {0.10f, 0.10f, 0.10f, 1.0f};
+    SourceTextView text = {0};
     float out[4];
 
     printf("--- executor: frame clear color resolution ---\n");
@@ -1247,7 +1248,7 @@ static void test_resolve_frame_clear_color(void) {
         cmds[0].args[0] = 0.9f; cmds[0].args[3] = 1.0f;
         v.cmds = cmds; v.cmd_count = 1;
         ASSERT_TRUE("no glClear: reports not-found",
-                    repl_flat_resolve_clear_color(v, base, out) == 0);
+                    repl_flat_resolve_clear_color(v, text, base, out) == 0);
         ASSERT_TRUE("no glClear: baseline out", out[0] == base[0]);
     }
 
@@ -1264,7 +1265,7 @@ static void test_resolve_frame_clear_color(void) {
         cmds[2].type = CMD_CLEAR_COLOR; cmds[2].valid = 1; cmds[2].num_args = 4;
         cmds[2].args[0] = 0.9f; cmds[2].args[3] = 1.0f;
         v.cmds = cmds; v.cmd_count = 3;
-        ASSERT_TRUE("prior glClearColor found", repl_flat_resolve_clear_color(v, base, out) == 1);
+        ASSERT_TRUE("prior glClearColor found", repl_flat_resolve_clear_color(v, text, base, out) == 1);
         ASSERT_TRUE("prior glClearColor wins",
                     out[0] == 0.2f && out[1] == 0.3f && out[2] == 0.4f && out[3] == 1.0f);
     }
@@ -1282,7 +1283,7 @@ static void test_resolve_frame_clear_color(void) {
         cmds[2].args[0] = GL_COLOR_BUFFER_BIT;
         v.cmds = cmds; v.cmd_count = 3;
         ASSERT_TRUE("depth-only clear does not stop the scan",
-                    repl_flat_resolve_clear_color(v, base, out) == 1 && out[0] == 0.5f);
+                    repl_flat_resolve_clear_color(v, text, base, out) == 1 && out[0] == 0.5f);
     }
 
     /* Attribute scopes: a clear color set inside a GL_COLOR_BUFFER_BIT push
@@ -1303,11 +1304,11 @@ static void test_resolve_frame_clear_color(void) {
         cmds[4].type = CMD_CLEAR; cmds[4].valid = 1; cmds[4].num_args = 1;
         cmds[4].args[0] = GL_COLOR_BUFFER_BIT;
         v.cmds = cmds; v.cmd_count = 5;
-        repl_flat_resolve_clear_color(v, base, out);
+        repl_flat_resolve_clear_color(v, text, base, out);
         ASSERT_TRUE("scoped clear color reverted by its pop", out[0] == 0.2f);
 
         cmds[1].args[0] = GL_CURRENT_BIT;   /* does not cover the clear color */
-        repl_flat_resolve_clear_color(v, base, out);
+        repl_flat_resolve_clear_color(v, text, base, out);
         ASSERT_TRUE("unrelated push mask saves nothing", out[0] == 0.7f);
     }
 
@@ -1324,8 +1325,82 @@ static void test_resolve_frame_clear_color(void) {
         cmds[2].args[0] = GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT;
         cmds[3].type = CMD_POP_ATTRIB; cmds[3].valid = 1;
         v.cmds = cmds; v.cmd_count = 4;
-        repl_flat_resolve_clear_color(v, base, out);
+        repl_flat_resolve_clear_color(v, text, base, out);
         ASSERT_TRUE("clear inside the scope uses the scoped color", out[0] == 0.7f);
+    }
+
+    /* More than one color clear: the last one decides what the rect shows,
+     * so it is that clear's color the chrome / fog / alpha_scale must use -
+     * the first clear's pixels are wiped by it, and a clear color set after
+     * the last clear still reaches nothing. */
+    {
+        GLCmd cmds[5];
+        FlatProgramView v = {0};
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].type = CMD_CLEAR_COLOR; cmds[0].valid = 1; cmds[0].num_args = 4;
+        cmds[0].args[0] = 0.2f; cmds[0].args[3] = 1.0f;
+        cmds[1].type = CMD_CLEAR; cmds[1].valid = 1; cmds[1].num_args = 1;
+        cmds[1].args[0] = GL_COLOR_BUFFER_BIT;
+        cmds[2].type = CMD_CLEAR_COLOR; cmds[2].valid = 1; cmds[2].num_args = 4;
+        cmds[2].args[0] = 0.6f; cmds[2].args[3] = 1.0f;
+        cmds[3].type = CMD_CLEAR; cmds[3].valid = 1; cmds[3].num_args = 1;
+        cmds[3].args[0] = GL_COLOR_BUFFER_BIT;
+        cmds[4].type = CMD_CLEAR_COLOR; cmds[4].valid = 1; cmds[4].num_args = 4;
+        cmds[4].args[0] = 0.9f; cmds[4].args[3] = 1.0f;
+        v.cmds = cmds; v.cmd_count = 5;
+        repl_flat_resolve_clear_color(v, text, base, out);
+        ASSERT_TRUE("two color clears: the last one decides", out[0] == 0.6f);
+    }
+
+    /* goto moves the flat PC at execution time, so a linear walk is not
+     * execution order. Here the jump skips the clear a linear walk would
+     * report as the last one, and lands on a clear that runs with the
+     * pre-jump color. */
+    {
+        GLCmd cmds[6];
+        FlatProgramView v = {0};
+        SourceTextView doc;
+        editor_buffer_set_line(0, "glClearColor(0.2, 0, 0, 1);");
+        editor_buffer_set_line(1, "goto skip;");
+        editor_buffer_set_line(2, "glClearColor(0.6, 0, 0, 1);");
+        editor_buffer_set_line(3, "glClear(GL_COLOR_BUFFER_BIT);");
+        editor_buffer_set_line(4, ":skip");
+        editor_buffer_set_line(5, "glClear(GL_COLOR_BUFFER_BIT);");
+        editor_buffer_set_count(6);
+        repl_state_document_count_set(6);
+        doc = source_document_view();
+
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].type = CMD_CLEAR_COLOR; cmds[0].valid = 1; cmds[0].num_args = 4;
+        cmds[0].args[0] = 0.2f; cmds[0].args[3] = 1.0f; cmds[0].src_cmd_idx = 0;
+        cmds[1].type = CMD_GOTO; cmds[1].valid = 1; cmds[1].src_cmd_idx = 1;
+        cmds[2].type = CMD_CLEAR_COLOR; cmds[2].valid = 1; cmds[2].num_args = 4;
+        cmds[2].args[0] = 0.6f; cmds[2].args[3] = 1.0f; cmds[2].src_cmd_idx = 2;
+        cmds[3].type = CMD_CLEAR; cmds[3].valid = 1; cmds[3].num_args = 1;
+        cmds[3].args[0] = GL_COLOR_BUFFER_BIT; cmds[3].src_cmd_idx = 3;
+        cmds[4].type = CMD_GOTO_LABEL; cmds[4].valid = 1; cmds[4].src_cmd_idx = 4;
+        cmds[5].type = CMD_CLEAR; cmds[5].valid = 1; cmds[5].num_args = 1;
+        cmds[5].args[0] = GL_COLOR_BUFFER_BIT; cmds[5].src_cmd_idx = 5;
+        v.cmds = cmds; v.cmd_count = 6;
+
+        repl_flat_resolve_clear_color(v, doc, base, out);
+        ASSERT_TRUE("goto is followed: jumped-over clear color does not win",
+                    out[0] == 0.2f);
+
+        /* With no source text the label cannot be read, so the jump is not
+         * taken - the documented empty-view behavior, not a crash. */
+        repl_flat_resolve_clear_color(v, text, base, out);
+        ASSERT_TRUE("empty text view leaves gotos unfollowed", out[0] == 0.6f);
+
+        /* A backward goto is an infinite loop; the executor's own budget
+         * bounds it, so resolution must terminate rather than hang. */
+        editor_buffer_set_line(4, "goto again;");
+        editor_buffer_set_line(1, ":again");
+        cmds[1].type = CMD_GOTO_LABEL;
+        cmds[4].type = CMD_GOTO;
+        repl_flat_resolve_clear_color(v, source_document_view(), base, out);
+        ASSERT_TRUE("backward goto terminates under the loop budget",
+                    out[0] == 0.6f);
     }
 
     /* Past-cap nesting must not run off the saved-frame array. */
@@ -1344,7 +1419,7 @@ static void test_resolve_frame_clear_color(void) {
         cmds[n].num_args = 1; cmds[n].args[0] = GL_COLOR_BUFFER_BIT; n++;
         v.cmds = cmds; v.cmd_count = n;
         ASSERT_TRUE("past-cap nesting resolves to the baseline",
-                    repl_flat_resolve_clear_color(v, base, out) == 1 &&
+                    repl_flat_resolve_clear_color(v, text, base, out) == 1 &&
                     out[0] == base[0]);
     }
 }

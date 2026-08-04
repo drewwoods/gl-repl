@@ -482,66 +482,6 @@ FlatProgramView repl_flat_program_view_live(void) {
     return repl_state_flat_program_view();
 }
 
-int repl_flat_resolve_clear_color(FlatProgramView program,
-                                  const float baseline[4],
-                                  float out[4]) {
-    /* Attribute-stack mirror for the clear color alone: a glPushAttrib whose
-     * mask covers the clear-color group saves it, the matching pop restores
-     * it. Same over-depth policy as the executor (frames past the cap are
-     * counted but not tracked) so this walk and the real GL walk agree. */
-    unsigned cc_bit = repl_attrib_bits_for_type(CMD_CLEAR_COLOR, 0);
-    float saved[REPL_ATTRIB_STACK_CAP][4];
-    int   saved_valid[REPL_ATTRIB_STACK_CAP];
-    int   depth = 0;
-    float cur[4];
-    int   i, k;
-
-    for (k = 0; k < 4; k++)
-        cur[k] = baseline ? baseline[k] : 0.0f;
-
-    for (i = 0; i < program.cmd_count; i++) {
-        const GLCmd *cmd = &program.cmds[i];
-        if (!cmd->valid)
-            continue;
-        switch (cmd->type) {
-        case CMD_CLEAR_COLOR:
-            for (k = 0; k < 4; k++)
-                cur[k] = cmd->args[k];
-            break;
-        case CMD_PUSH_ATTRIB:
-            depth++;
-            if (depth <= REPL_ATTRIB_STACK_CAP) {
-                saved_valid[depth - 1] =
-                    (((unsigned)cmd->args[0] & cc_bit) != 0u);
-                for (k = 0; k < 4; k++)
-                    saved[depth - 1][k] = cur[k];
-            }
-            break;
-        case CMD_POP_ATTRIB:
-            if (depth > 0) {
-                if (depth <= REPL_ATTRIB_STACK_CAP && saved_valid[depth - 1]) {
-                    for (k = 0; k < 4; k++)
-                        cur[k] = saved[depth - 1][k];
-                }
-                depth--;
-            }
-            break;
-        case CMD_CLEAR:
-            if (((GLbitfield)cmd->args[0] & GL_COLOR_BUFFER_BIT) == 0)
-                break;
-            for (k = 0; k < 4; k++)
-                out[k] = cur[k];
-            return 1;
-        default:
-            break;
-        }
-    }
-
-    for (k = 0; k < 4; k++)
-        out[k] = baseline ? baseline[k] : 0.0f;
-    return 0;
-}
-
 static FlatProgramView execution_program_from_options(const ReplExecutionOptions *options) {
     FlatProgramView program = repl_flat_program_view_live();
 
@@ -581,6 +521,116 @@ static const char *execution_flat_text(SourceTextView text,
         const char *line = source_text_line(text, src_cmd_idx);
         return (line && line[0]) ? line : "";
     }
+}
+
+/* Flat index of the CMD_GOTO_LABEL matching `cmd`'s target label, or -1.
+ * Deliberately the same lookup the CMD_GOTO arm below performs (label name
+ * out of the source text, first matching marker wins), so a resolve walk and
+ * the execution walk take the same jump. */
+static int flat_goto_target(FlatProgramView program, SourceTextView text,
+                            const GLCmd *cmd) {
+    char label_name[REPL_GOTO_LABEL_MAX];
+    char target_label[REPL_GOTO_LABEL_MAX];
+    int i;
+
+    if (!repl_extract_goto_label(execution_flat_text(text, cmd),
+                                 label_name, sizeof(label_name)))
+        return -1;
+    for (i = 0; i < program.cmd_count; i++) {
+        if (!program.cmds[i].valid ||
+            program.cmds[i].type != CMD_GOTO_LABEL)
+            continue;
+        if (repl_extract_label_name(execution_flat_text(text, &program.cmds[i]),
+                                    target_label, sizeof(target_label)) &&
+            strcmp(target_label, label_name) == 0)
+            return i;
+    }
+    return -1;
+}
+
+int repl_flat_resolve_clear_color(FlatProgramView program, SourceTextView text,
+                                  const float baseline[4], float out[4]) {
+    /* Attribute-stack mirror for the clear color alone: a glPushAttrib whose
+     * mask covers the clear-color group saves it, the matching pop restores
+     * it. Same over-depth policy as the executor (frames past the cap are
+     * counted but not tracked) so this walk and the real GL walk agree. */
+    unsigned cc_bit = repl_attrib_bits_for_type(CMD_CLEAR_COLOR, 0);
+    float saved[REPL_ATTRIB_STACK_CAP][4];
+    int   saved_valid[REPL_ATTRIB_STACK_CAP];
+    int   depth = 0;
+    float cur[4];
+    float at_clear[4];
+    int   found = 0;
+    long  goto_count = 0;
+    int   i, k;
+
+    for (k = 0; k < 4; k++)
+        cur[k] = at_clear[k] = baseline ? baseline[k] : 0.0f;
+
+    for (i = 0; i < program.cmd_count; i++) {
+        const GLCmd *cmd = &program.cmds[i];
+        if (!cmd->valid)
+            continue;
+        switch (cmd->type) {
+        case CMD_CLEAR_COLOR:
+            for (k = 0; k < 4; k++)
+                cur[k] = cmd->args[k];
+            break;
+        case CMD_PUSH_ATTRIB:
+            depth++;
+            if (depth <= REPL_ATTRIB_STACK_CAP) {
+                saved_valid[depth - 1] =
+                    (((unsigned)cmd->args[0] & cc_bit) != 0u);
+                for (k = 0; k < 4; k++)
+                    saved[depth - 1][k] = cur[k];
+            }
+            break;
+        case CMD_POP_ATTRIB:
+            if (depth > 0) {
+                if (depth <= REPL_ATTRIB_STACK_CAP && saved_valid[depth - 1]) {
+                    for (k = 0; k < 4; k++)
+                        cur[k] = saved[depth - 1][k];
+                }
+                depth--;
+            }
+            break;
+        case CMD_CLEAR:
+            /* Keep walking rather than returning here: a program may clear
+             * more than once, and it is the LAST color clear that decides
+             * what the rect ends up showing - everything the earlier ones
+             * painted is wiped by it. (A clear under a zeroed glColorMask
+             * writes nothing; that is not modeled, and would report a
+             * background the rect never took.) */
+            if (((GLbitfield)cmd->args[0] & GL_COLOR_BUFFER_BIT) == 0)
+                break;
+            for (k = 0; k < 4; k++)
+                at_clear[k] = cur[k];
+            found = 1;
+            break;
+        case CMD_GOTO: {
+            /* goto moves the flat PC at execution time, so a linear walk is
+             * not execution order for a program that uses one: the jump can
+             * skip a clear entirely or land on another. Follow it under the
+             * executor's own loop budget - on exhaustion the executor stops
+             * the frame, so stop the walk with what we have. */
+            int target;
+            if (goto_count++ > REPL_GOTO_LOOP_LIMIT) {
+                i = program.cmd_count;
+                break;
+            }
+            target = flat_goto_target(program, text, cmd);
+            if (target >= 0)
+                i = target;  /* the loop's own advance steps past the label */
+            break;
+        }
+        default:
+            break;
+        }
+    }
+
+    for (k = 0; k < 4; k++)
+        out[k] = at_clear[k];
+    return found;
 }
 
 /* Transform an object-space normal `n` to world space by the current

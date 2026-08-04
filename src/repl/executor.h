@@ -178,23 +178,29 @@ typedef struct ReplExecCursor {
  * on the live buffers. */
 FlatProgramView repl_flat_program_view_live(void);
 
-/* Resolve the clear color the program's own frame clear will use: walk the
- * flat program in execution order from `baseline` (the frame-scoped
- * bootstrap default) and stop at the first glClear carrying
- * GL_COLOR_BUFFER_BIT, honoring glPushAttrib/glPopAttrib scopes on the way.
- * Writes that color to out[4] and returns 1; with no color clear in the
- * program, writes `baseline` and returns 0.
+/* Resolve the background the program's own frame clear leaves behind: walk
+ * the flat program in execution order from `baseline` (the frame-scoped
+ * bootstrap default), tracking glClearColor through glPushAttrib/glPopAttrib
+ * scopes and following CMD_GOTO exactly as execution does, and report the
+ * color in effect at the *last* glClear carrying GL_COLOR_BUFFER_BIT.
+ * Writes that color to out[4] and returns 1; with no color clear reached,
+ * writes `baseline` and returns 0.
  *
- * This is *source-order* resolution, not the "last glClearColor anywhere
+ * The last clear, not the first: an earlier clear's pixels are wiped by it.
+ * (A clear made a no-op by a zeroed glColorMask is not modeled.)
+ *
+ * This is *execution-order* resolution, not the "last glClearColor anywhere
  * wins" look-ahead that used to live in the controller: a glClearColor
- * written after the clear cannot reach out[], exactly as in the exported C.
- * The host needs the answer before the program runs - to clear the chrome
- * strips to the same color and to light overlays against the right
- * background - which is why it is resolved statically here rather than read
- * back from GL after the fact. */
-int repl_flat_resolve_clear_color(FlatProgramView program,
-                                  const float baseline[4],
-                                  float out[4]);
+ * written after the final clear cannot reach out[], exactly as in the
+ * exported C. The host needs the answer before the program runs - to clear
+ * the chrome strips to the same color and to light overlays against the
+ * right background - which is why it is resolved here rather than read back
+ * from GL after the fact.
+ *
+ * `text` supplies the source lines goto labels are matched from, same as the
+ * executor's own jump; an empty view simply leaves gotos unfollowed. */
+int repl_flat_resolve_clear_color(FlatProgramView program, SourceTextView text,
+                                  const float baseline[4], float out[4]);
 
 /* Apply a transform command while tracking matrix stack depth. Used during
  * normal execution and replay to maintain an accurate depth counter for
