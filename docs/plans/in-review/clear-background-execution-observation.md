@@ -338,13 +338,23 @@ float    alpha_scale;
 ```
 
 **Delete `Render3dRenderConfig.alpha_scale`.** It is an input field today, and
-every one of its three readers moves somewhere else: the guide snapshot
-(`glr_ctrl_build_guide_snapshot()`) reads the controller-retained scalar, and
-grid and axes read the pass context above. Leaving it in place would recreate
-the duplicate source of truth this design exists to remove - and a live one,
-since `glr_ctrl_build_scene_config()` would happily keep computing it. The
-config's input side becomes `overlay_design_luma`; the output side is the pass
-context and the frame result.
+every one of its four readers moves somewhere else:
+
+| Reader | New source |
+|---|---|
+| Guide snapshot (`glr_ctrl_build_guide_snapshot()`) | retained scalar |
+| Grid (`grid.c`, via `GridDrawContext`) | pass context |
+| Axes (`axes.c`) | pass context |
+| Aurora backdrop (`backdrop.c`, `draw_aurora()`) | pass context |
+
+Leaving the field in place would recreate the duplicate source of truth this
+design exists to remove - and a live one, since
+`glr_ctrl_build_scene_config()` would happily keep computing it. The config's
+input side becomes `overlay_design_luma`; the output side is the pass context
+and the frame result.
+
+The field is also *written* by `render3d_demo` and by render3d tests that build
+a config by hand, so the deletion touches those too.
 
 Use one fallback rule for every presentation consumer. An observed background
 is usable only when all four channels are known. Otherwise chrome, grid/axes
@@ -419,8 +429,9 @@ publishes one presentation color:
 
 - retain the final pass's RGBA (time blur deliberately bakes that pass at
   exactly `t_end`);
-- mark the frame result usable only if every accumulation pass produced a
-  fully known background;
+- publish it only if every accumulation pass produced a fully known
+  background - that aggregation is a local in render3d, not a published
+  field;
 - otherwise publish the all-or-default fallback.
 
 AA and camera blur normally observe the same color in every pass. Time blur may
@@ -436,8 +447,6 @@ explicit in the frame result:
 typedef struct Render3dFrameResult {
     float presentation_rgba[4];
     float alpha_scale;
-    /* RESERVED - forwarded for tests/diagnostics; see below. */
-    int   background_fully_known;
 } Render3dFrameResult;
 ```
 
@@ -446,16 +455,19 @@ known, otherwise the all-or-default fallback. Because render3d owns the
 contrast formula, it also returns the derived `alpha_scale`; the controller
 must not recompute it from RGBA.
 
-`background_fully_known` keeps that distinction observable, but note that no
-production consumer needs it: the fallback is already applied inside
-`presentation_rgba`, chrome consumes that, and the guides consume
-`alpha_scale`. Label it in the header the way this struct's neighbors already
-label the same situation - `Render3dRenderConfig.focus` ("no renderer reads it
-yet - tests only") and the `*_xn_phase` fields ("the render3d renderer does not
-read these values at runtime; keep them populated so tests can verify the
-forwarded contract"). Settling it at the point of introduction is the whole
-point: an unlabelled consumer-free field is what section 4 of this document is
-about.
+Two fields, and no known/unknown flag. The frame result is deliberately a
+*policy-selected presentation value*, not a report about the program: the
+fallback is already applied inside `presentation_rgba`, chrome consumes that,
+and the guides consume `alpha_scale`, so nothing in production would read a
+flag. Keep the all-passes-known aggregation as a local variable inside
+render3d. Unknownness stays explicit where it is actually consumed -
+`Render3dExecuteResult.background_known_mask` and the pass context. Tests
+distinguish the observed path from the fallback path by choosing a scene
+background that differs from the fallback color, not by reading a flag.
+
+This is the same rule section 4 of "Problems" applies to
+`ReplRenderState.clear_color`: a consumer-free field is not made acceptable by
+labelling it reserved. A plan that deletes one must not introduce another.
 
 Return the frame result through an explicit output parameter:
 
@@ -624,8 +636,9 @@ releasable compatibility state. No bridge or dual-answer contract is required.
 - Derive per-pass background-dependent fog and alpha there.
 - Leave `post_fill_fn` / `post_overlays_fn` / `post_resolve_overlays_fn`
   unchanged, and leave the `g_overlay_pack` build where it is.
-- Delete `Render3dRenderConfig.alpha_scale` and move its three readers to the
-  pass context (grid, axes) and the retained scalar (guide snapshot).
+- Delete `Render3dRenderConfig.alpha_scale` and move its four readers to the
+  pass context (grid, axes, aurora backdrop) and the retained scalar (guide
+  snapshot); update the demo and render3d tests that populate the field.
 - Update the ordinary and hot-reload `render3d_demo` call surfaces while
   preserving the REPL-free link proof.
 
@@ -675,8 +688,11 @@ releasable compatibility state. No bridge or dual-answer contract is required.
 - render3d tests/demo
   - callback result is generic;
   - `out == NULL` is supported;
-  - `execute_fn == NULL` renders helpers on the fallback background;
-  - all-passes-known validity and final-pass color selection;
+  - `execute_fn == NULL` uses fallback presentation inputs for helpers
+    without clearing the scene;
+  - the aurora backdrop uses the current pass's contrast scale;
+  - all-passes-known validity and final-pass color selection, distinguished
+    by a scene background that differs from the fallback color;
   - ordinary and hot-reload call signatures;
   - no REPL link dependency.
 - `test_hidden_lines`
