@@ -98,9 +98,6 @@ void display(void) {
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
---- render_state ---
-  glEnable(GL_MULTISAMPLE);
-  glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
   // Stencil masking, minimum viable. Three passes over one shape:
@@ -186,3 +183,6 @@ void display(void) {
   //     angles; then GL_EQUAL, 2 in pass 2 keeps only the overlap.
   //   - drop glStencilMask(0) from pass 2 and watch the teapot chew
   //     through its own mask on the next frame.
+--- render_state ---
+  glEnable(GL_MULTISAMPLE);
+  glDisable(GL_LINE_SMOOTH);

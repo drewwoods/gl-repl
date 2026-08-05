@@ -92,7 +92,6 @@ static void vp_rect(int count, int *px, int *py, int *pw, int *ph) {
 
 #define g_workspace_header_lines (repl_state_import_export().workspace_header_lines)
 #define g_workspace_header_line_count (repl_state_import_export().workspace_header_line_count)
-#define g_render_state_lines (repl_state_import_export().render_state_lines)
 #define g_cam_lines (repl_state_import_export().cam_lines)
 
 #define replay_active        (replay_state_mut()->active)
@@ -296,9 +295,6 @@ static int code_panel_header_row_count(void) {
     }
     for (int i = 0; g_display_header[i]; i++)
         rows += test_code_panel_row_count_for_text(g_display_header[i], text_x, panel_w);
-    for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++)
-        rows += test_code_panel_row_count_for_text(g_render_state_lines[i],
-                                                   text_x, panel_w);
     {
         char line[MAX_LINE_LEN];
         int n = repl_export_lights_pre_camera_line_count();

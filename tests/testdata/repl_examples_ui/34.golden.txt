@@ -96,9 +96,6 @@ void display(void) {
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
---- render_state ---
-  glEnable(GL_MULTISAMPLE);
-  glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
   static float rate = 45; // compare steps per second @tune
@@ -167,3 +164,6 @@ void display(void) {
     glRasterPos3f(-3.4, 1.7, 0);
     label("sorted");
   }
+--- render_state ---
+  glEnable(GL_MULTISAMPLE);
+  glDisable(GL_LINE_SMOOTH);

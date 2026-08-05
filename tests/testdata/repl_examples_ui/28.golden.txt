@@ -102,9 +102,6 @@ void display(void) {
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
---- render_state ---
-  glEnable(GL_MULTISAMPLE);
-  glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
   static float px, py, pz; // planet position - the caller hangs the body and its label off it
@@ -554,3 +551,6 @@ void display(void) {
   glColor3f(1, 0.72, 0);
   glRasterPos3f(0.62, 0.58, 0);
   label("Sun");
+--- render_state ---
+  glEnable(GL_MULTISAMPLE);
+  glDisable(GL_LINE_SMOOTH);

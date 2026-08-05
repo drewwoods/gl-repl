@@ -96,9 +96,6 @@ void display(void) {
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
---- render_state ---
-  glEnable(GL_MULTISAMPLE);
-  glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
   triangle() {
@@ -122,3 +119,6 @@ void display(void) {
   glTranslatef(-4, 0, 0);
   glColor3f(0.55, 0.3, 1);
   triangle();
+--- render_state ---
+  glEnable(GL_MULTISAMPLE);
+  glDisable(GL_LINE_SMOOTH);

@@ -96,9 +96,6 @@ void display(void) {
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
---- render_state ---
-  glEnable(GL_MULTISAMPLE);
-  glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
   // Sierpinski carpet: cut the middle cell out of a 3x3 grid, then do the
@@ -139,3 +136,6 @@ void display(void) {
   glEnable(GL_NORMALIZE);
   glRotatef(sin(t*0.35)*10, 0, 0, 1);
   carpet(2, 3.6, 0.5);
+--- render_state ---
+  glEnable(GL_MULTISAMPLE);
+  glDisable(GL_LINE_SMOOTH);

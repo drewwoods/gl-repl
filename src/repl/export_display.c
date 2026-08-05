@@ -389,12 +389,13 @@ static void emit_export_display_begin(FILE *f) {
      * lights stay anchored in world space as the camera orbits. The
      * Eye-space positions were emitted above, before the camera. The
      * non-positional light state (colors + baseline glDisable) is emitted
-     * into init(). User render state remains in source order inside the
-     * geometry pass, matching immediate-mode execution.
+     * into init(). The render-config state is emitted there as well; user
+     * render state remains in source order inside the geometry pass,
+     * matching immediate-mode execution.
      *
      * Lights are emitted before g_header_post to match the panel's
      * rendering order; both consumers walk: display_header -> cam ->
-     * lights -> header_post -> render_state -> user code. */
+     * lights -> header_post -> user code. */
     {
         int n_pos = repl_export_lights_display_line_count();
         for (int pos_idx = 0; pos_idx < n_pos; pos_idx++) {
@@ -403,13 +404,9 @@ static void emit_export_display_begin(FILE *f) {
             export_write_c89_line(f, line);
         }
     }
-    /* g_header_post: additional setup after the dynamic state lines. */
+    /* g_header_post: additional setup after the camera/light lines. */
     for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
         export_write_c89_line(f, g_header_post[line_idx]);
-    /* Emit render state configuration lines (lighting, depth, etc) last, so
-     * they sit directly above the user's own commands. */
-    for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT; state_line_idx++)
-        export_write_c89_line(f, g_render_state_lines[state_line_idx]);
 }
 
 static void emit_export_display_geometry(FILE *f,

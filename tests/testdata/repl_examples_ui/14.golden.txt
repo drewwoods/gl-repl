@@ -96,9 +96,6 @@ void display(void) {
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-1.0000f, -0.5000f, -0.0000f);   // @camera pan
 --- header_post ---
---- render_state ---
-  glEnable(GL_MULTISAMPLE);
-  glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
   // Quadratic Bezier control points A=(ax,ay), B=(bx,by), C=(cx,cy).
@@ -165,3 +162,6 @@ void display(void) {
     glVertex2f(x_a, y_a);
     glVertex2f(x_b, y_b);
   glEnd();
+--- render_state ---
+  glEnable(GL_MULTISAMPLE);
+  glDisable(GL_LINE_SMOOTH);

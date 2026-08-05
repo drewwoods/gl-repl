@@ -107,9 +107,6 @@ void display(void) {
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.5000f, -0.0000f);   // @camera pan
 --- header_post ---
---- render_state ---
-  glEnable(GL_MULTISAMPLE);
-  glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
   // Clip planes carve new shapes out of stock solids. glClipPlane sets a
@@ -191,3 +188,6 @@ void display(void) {
   label("2 planes: wedge");
   glRasterPos3f(2, -0.85, 0);
   label("3 animated: cutaway");
+--- render_state ---
+  glEnable(GL_MULTISAMPLE);
+  glDisable(GL_LINE_SMOOTH);

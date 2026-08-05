@@ -603,7 +603,8 @@ void repl_apply_init_bootstrap(void) {
 }
 
 int repl_export_init_section_line_count(void) {
-    int count = init_host_only_line_count() + repl_export_lights_init_line_count();
+    int count = RENDER_STATE_LINE_COUNT + init_host_only_line_count() +
+                repl_export_lights_init_line_count();
 
     repl_ensure_init_bootstrap_ready();
     for (int bootstrap_idx = 0; bootstrap_idx < NUM_INIT_BOOTSTRAP; bootstrap_idx++) {
@@ -632,11 +633,16 @@ void repl_export_init_section_line(int i, char *buf, size_t n) {
         return;
     }
 
+    if (i < RENDER_STATE_LINE_COUNT) {
+        snprintf(buf, n, "%s", g_render_state_lines[i]);
+        return;
+    }
+
+    i -= RENDER_STATE_LINE_COUNT;
     if (i < host_count) {
         snprintf(buf, n, "%s", g_init_host_only_visible_c[i]);
         return;
     }
-
     i -= host_count;
     if (i < lights_count) {
         repl_export_lights_init_line(i, buf, n);
@@ -664,6 +670,10 @@ void repl_export_init_section_line(int i, char *buf, size_t n) {
 
 void emit_export_init_section_to_file(FILE *f, int include_tess) {
     char line[MAX_LINE_LEN];
+
+    for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT;
+         state_line_idx++)
+        export_write_c89_line(f, g_render_state_lines[state_line_idx]);
 
     for (int line_idx = 0; g_init_host_only_visible_c[line_idx]; line_idx++)
         export_write_c89_line(f, g_init_host_only_visible_c[line_idx]);
@@ -957,10 +967,11 @@ void repl_export_lights_display_line(int i, char *buf, size_t n) {
 /* Read-only generated GL-state program                                      */
 
 #define GENERATED_INIT_STATE_MAX \
-    (2 + REPL_LIGHT_SLOT_COUNT * LIGHT_INIT_LINES_PER_LIGHT + \
+    (2 + RENDER_STATE_LINE_COUNT + \
+     REPL_LIGHT_SLOT_COUNT * LIGHT_INIT_LINES_PER_LIGHT + \
      NUM_INIT_BOOTSTRAP)
 #define GENERATED_DISPLAY_STATE_MAX \
-    (2 + RENDER_STATE_LINE_COUNT + REPL_LIGHT_SLOT_COUNT + \
+    (2 + REPL_LIGHT_SLOT_COUNT + \
      REPL_EXPORT_CAMERA_LINES)
 
 static ReplGeneratedStateWrite generated_command_write(CmdType type) {
@@ -1030,6 +1041,24 @@ static int generated_init_state_writes(
     out[count].command.num_args = 1;
     count++;
 
+    {
+        ReplGeneratedStateWrite write;
+
+        write = generated_command_write(
+            repl_cfg_get_int(REPL_EXPORT_CFG_SLUG_MSAA, 1)
+                ? CMD_ENABLE : CMD_DISABLE);
+        write.command.args[0] = (float)GL_MULTISAMPLE;
+        write.command.num_args = 1;
+        out[count++] = write;
+
+        write = generated_command_write(
+            repl_cfg_get_int(REPL_EXPORT_CFG_SLUG_LINE_SMOOTH, 0)
+                ? CMD_ENABLE : CMD_DISABLE);
+        write.command.args[0] = (float)GL_LINE_SMOOTH;
+        write.command.num_args = 1;
+        out[count++] = write;
+    }
+
     out[count++] = generated_vector_write(
         REPL_GENERATED_STATE_LIGHT_MODEL_FV, 0,
         GL_LIGHT_MODEL_AMBIENT, model_ambient, 4);
@@ -1093,20 +1122,6 @@ static int generated_display_state_writes(
     out[count++] = generated_command_write(CMD_LOAD_IDENTITY);
     memset(&out[count], 0, sizeof(out[count]));
     out[count++].kind = REPL_GENERATED_STATE_PUSH_ATTRIB;
-
-    write = generated_command_write(
-        repl_cfg_get_int(REPL_EXPORT_CFG_SLUG_MSAA, 1)
-            ? CMD_ENABLE : CMD_DISABLE);
-    write.command.args[0] = (float)GL_MULTISAMPLE;
-    write.command.num_args = 1;
-    out[count++] = write;
-
-    write = generated_command_write(
-        repl_cfg_get_int(REPL_EXPORT_CFG_SLUG_LINE_SMOOTH, 0)
-            ? CMD_ENABLE : CMD_DISABLE);
-    write.command.args[0] = (float)GL_LINE_SMOOTH;
-    write.command.num_args = 1;
-    out[count++] = write;
 
     count = generated_append_light_positions(out, count, 1);
 

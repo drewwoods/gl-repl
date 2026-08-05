@@ -96,9 +96,6 @@ void display(void) {
   glRotatef(-20.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
---- render_state ---
-  glEnable(GL_MULTISAMPLE);
-  glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
   // Top-level scratch for the firefly loop at the bottom of the scene: x/y/z
@@ -390,3 +387,6 @@ void display(void) {
   glRasterPos3f(-3.2, 2.2, 0);
   label("dusk atoll");
   glEnable(GL_LIGHTING);
+--- render_state ---
+  glEnable(GL_MULTISAMPLE);
+  glDisable(GL_LINE_SMOOTH);

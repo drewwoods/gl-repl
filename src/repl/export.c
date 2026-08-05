@@ -545,10 +545,6 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
     for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
         fprintf(dst, "%s\n", g_header_post[line_idx]);
 
-    fprintf(dst, "--- render_state ---\n");
-    /* Dump render state configuration. */
-    for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT; state_line_idx++)
-        fprintf(dst, "%s\n", g_render_state_lines[state_line_idx]);
     /* Panel-only scratch declaration, adjacent to the source that uses it. */
     fprintf(dst, "%s\n", REPL_CODE_PANEL_SCRATCH_DECL_LINE);
 
@@ -558,6 +554,13 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
         if (!repl_state_document_cmds()[cmd_idx].valid) continue;
         fprintf(dst, "%s\n", export_document_text(cmd_idx));
     }
+
+    fprintf(dst, "--- render_state ---\n");
+    /* Render-config state is part of the generated init() section, which
+     * follows the authored source in the code panel. */
+    for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT;
+         state_line_idx++)
+        fprintf(dst, "%s\n", g_render_state_lines[state_line_idx]);
 
     fflush(dst);
 }

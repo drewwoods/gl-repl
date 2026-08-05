@@ -120,6 +120,16 @@ static int appears_before(const char *haystack, const char *first,
     return a && b && a < b;
 }
 
+static int substring_in_window(const char *text, const char *window_start,
+                               const char *window_end, const char *needle) {
+    const char *start = text ? strstr(text, window_start) : NULL;
+    const char *end = start ? strstr(start + strlen(window_start), window_end)
+                            : NULL;
+    const char *found = start ? strstr(start + strlen(window_start), needle)
+                              : NULL;
+    return start && end && found && found < end;
+}
+
 static int find_init_line(const char *needle) {
     char line[256];
 
@@ -224,6 +234,20 @@ int main(void) {
                 find_init_line_substr("glEnable(GL_BLEND);") >= 0);
     ASSERT_TRUE("init has blend func bootstrap",
                 find_init_line_substr("glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);") >= 0);
+    ASSERT_TRUE("init has multisample render state",
+                find_init_line_substr("GL_MULTISAMPLE") >= 0);
+    ASSERT_TRUE("init has line smooth render state",
+                find_init_line_substr("GL_LINE_SMOOTH") >= 0);
+    {
+        int multisample_line = find_init_line(g_render_state_lines[0]);
+        int line_smooth_line = find_init_line(g_render_state_lines[1]);
+        int ambient_line = find_init_line(
+            "  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, repl_glfloat4(0.15f, 0.15f, 0.20f, 1.0f));");
+        ASSERT_TRUE("init render state precedes ambient light setup",
+                    multisample_line >= 0 && line_smooth_line >= 0 &&
+                    ambient_line >= 0 && multisample_line < ambient_line &&
+                    line_smooth_line < ambient_line);
+    }
     /* Default: point parameters supported, so the attenuation
      * bootstrap is present. */
     ASSERT_TRUE("init has point attenuation bootstrap",
@@ -260,10 +284,29 @@ int main(void) {
                     strstr(buf, "t = (float)glutGet(GLUT_ELAPSED_TIME)") == NULL);
         ASSERT_TRUE("saved no longer uses glutIdleFunc",
                     strstr(buf, "glutIdleFunc") == NULL);
-        ASSERT_TRUE("saved multisample header state",
+        ASSERT_TRUE("saved multisample init state",
                     strstr(buf, "glDisable(GL_MULTISAMPLE);") != NULL);
-        ASSERT_TRUE("saved line smooth header state",
+        ASSERT_TRUE("saved line smooth init state",
                     strstr(buf, "glEnable(GL_LINE_SMOOTH);") != NULL);
+        ASSERT_TRUE("saved render state precedes ambient light setup",
+                    appears_before(buf, g_render_state_lines[0],
+                                   "  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, repl_glfloat4(0.15f, 0.15f, 0.20f, 1.0f));"));
+        for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT;
+             state_line_idx++) {
+            char label[96];
+            snprintf(label, sizeof(label),
+                     "render state[%d] is emitted in init()", state_line_idx);
+            ASSERT_TRUE(label,
+                        substring_in_window(buf, "void init(void) {",
+                                            "}\n\nint main",
+                                            g_render_state_lines[state_line_idx]));
+            snprintf(label, sizeof(label),
+                     "render state[%d] is absent from display()", state_line_idx);
+            ASSERT_TRUE(label,
+                        !substring_in_window(buf, "void display(void) {",
+                                             "}\n\n/* Keep the projection",
+                                             g_render_state_lines[state_line_idx]));
+        }
         ASSERT_TRUE("saved geometry helper",
                     strstr(buf, "static void draw_scene(void)") != NULL);
         ASSERT_TRUE("generated banner before metadata",
@@ -1603,12 +1646,12 @@ int main(void) {
                     g_display_header[0] != NULL &&
                     strcmp(g_display_header[0], "void display(void) {") == 0);
 
-        /* (3) Each render_state / cam line the panel would render must
-         *     appear in the exported display() body - same buffers. */
+        /* (3) Each render_state line the panel would render must appear in
+         *     the exported init() body - same buffers. */
         for (int i = 0; i < RENDER_STATE_LINE_COUNT; i++) {
             char label[64];
             snprintf(label, sizeof(label),
-                     "render_state[%d] appears in export", i);
+                     "render_state[%d] appears in exported init()", i);
             ASSERT_TRUE(label, strstr(buf, g_render_state_lines[i]) != NULL);
         }
 
