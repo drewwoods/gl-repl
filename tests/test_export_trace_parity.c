@@ -292,6 +292,29 @@ static const struct {
       "carry for one scene's 101st point. Revisit if a scene ever depends "
       "on the exact iteration count, or if the exported header gains a "
       "helper macro that can hide the guard." },
+    { "Interactive status bar matrix",
+      "floating-point contraction: the exported text is faithful, but the "
+      "compiler is allowed to fuse `a + b * c` into one FMA with a single "
+      "rounding, and the evaluator cannot - eval_term / eval_additive "
+      "round to float after every operation. `start_z + iz * spacing` "
+      "lands on 0 in the REPL and on -6e-8 in the child. That is three "
+      "orders inside TRACE_ABS_EPS and invisible until a program branches "
+      "on it, which this scene does at its worst possible point: the "
+      "center cube has dist == 0 exactly, so `h = 0.6 + 0.5 * sin(0)` "
+      "sits exactly on its own `h > 0.6` boundary and the two legs take "
+      "different arms of the if-chain (glMaterialfv 0.2 0.6 0.9 vs "
+      "0.9 0.7 0.2). Unlike the Bezier entry this divergence is not in "
+      "the exported text at all - it is below it, and moves with the "
+      "compiler and its flags. -ffp-contract=off on the child compile "
+      "fixes this scene and breaks all 8 rand() examples, because "
+      "repl_randf exists twice (expr_rand01 in eval.c, the string in "
+      "export_prologue.c write_rand_helper) and agrees only while both "
+      "sides carry the same contraction licence. A real fix has to "
+      "contraction-proof every shared helper body - split `a + b * c` "
+      "across statements so no licence applies - and even then a user "
+      "running plain `cc` on the exported file is outside anything this "
+      "test pins. Revisit if the helper bodies get that treatment, or if "
+      "export starts emitting `#pragma STDC FP_CONTRACT OFF`." },
 };
 static const int g_example_xfail_count =
     (int)(sizeof(g_example_xfail)/sizeof(g_example_xfail[0]));
@@ -351,7 +374,15 @@ static int read_child_counts(const char *path, unsigned long long *out) {
  * -DEXPORTED_C so render_repl_geometry / reset_repl_vars (both static
  * in the exported TU) are visible. -Dmain=app_main renames the
  * exported file's GLUT main() out of the way; the driver's main()
- * is the real one. */
+ * is the real one.
+ *
+ * Deliberately no -ffp-contract flag: the child inherits the same default
+ * contraction licence the REPL's own TUs were built with, which is what
+ * keeps the shared helper bodies (repl_randf and friends, written once in
+ * eval.c and again in export_prologue.c) evaluating identically. Turning
+ * contraction off here fixes one boundary-branch scene and breaks every
+ * rand() scene - see the "Interactive status bar matrix" g_example_xfail
+ * entry. */
 static int g_keep_traces = 0;  /* set by --keep-traces */
 
 static void compose_compile_cmd(char *buf, size_t n,
@@ -581,14 +612,18 @@ static const float g_time_samples[] = { 0.0f, 0.75f, 2.5f };
 static const int g_time_sample_count =
     (int)(sizeof(g_time_samples)/sizeof(g_time_samples[0]));
 
-/* Feed the program into a freshly-reset REPL. `z` and `i` are declared for
- * the curated programs that use them as plain scene variables. */
+/* Feed the program into a freshly-reset REPL.
+ *
+ * Nothing is pre-declared here: a predef the harness injects is a global
+ * the program never asked for, and the scene that then declares the same
+ * name has its whole `static float ...;` row rejected as a duplicate. That
+ * takes every row referencing those names down with it, and what reaches
+ * the exporter is a document neither the scene nor the executor agrees
+ * with - a corrupted case reported as an export bug. `z` and `i` used to
+ * be declared for the curated programs; both are bound as a parameter or a
+ * loop variable there and need no global. */
 static void feed_program(const TraceProgram *prog) {
-    char err[128];
-
     glr_ctrl_reset_all();
-    repl_eval_declare_predef_var("z", err, sizeof err);
-    repl_eval_declare_predef_var("i", err, sizeof err);
     g_status[0] = '\0';
 
     for (int li = 0; prog->lines[li]; li++)
