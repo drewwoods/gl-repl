@@ -1,0 +1,377 @@
+# One scene loader
+
+## Goal
+
+Delete `load_example_lines()` from `src/repl/example_loader.c` and make
+`src/repl/import.c` the single reader for both scene formats. After this, which
+loader runs is decided by the *format* of the content, never by the route it
+arrived on, and the catalog path and the file path cannot drift because there is
+only one path.
+
+The finished behavior is:
+
+- one reader walks the lines, for `.glr` and exported `.c` alike;
+- format is chosen from an explicit `ReplExampleSourceFormat`, never inferred
+  from a filename suffix;
+- atomicity (all-or-nothing vs. warn-and-continue) is an explicit caller
+  choice, not an accident of which TU the caller reached;
+- the presentation reset and the `@cfg` scene-subset filter apply on both
+  routes, or on neither, by decision rather than by omission;
+- `example_loader.c` keeps only the catalog choreography that is genuinely
+  about *examples* - scene stashing, index bookkeeping, histogram reset - and
+  owns no line-walking of its own.
+
+## The bug this comes from
+
+`shade-model-flat-smooth.glr` carries 24 lines with two statements on one row:
+
+```c
+glColor3f(1.00f, 0.35f, 0.20f); glVertex3f( 0.0f,  1.2f,  0.0f);
+```
+
+The REPL is one command per line, so `repl_parse_and_normalize_strict()` rejects
+the tail of each. That is a scene bug and is not what this plan is about. What
+this plan is about is that the *same bytes* produce two unrelated outcomes:
+
+| Route | Result |
+|---|---|
+| `./gl-repl scene.glr` | 24 warnings, 33 commands loaded, scene renders (wrong) |
+| `--examples-dir` then select | one error at body line 22, document wiped, nothing renders |
+
+Same parse verdict, two error policies, because the route picked the loader.
+
+## Where the split actually is today
+
+It is **by format, not by source**, and it is already half-collapsed.
+`load_example()` (`example_loader.c:288`) branches on
+`repl_example_source_format()`:
+
+- `REPL_EXAMPLE_SOURCE_C` → `load_example_c_source()` →
+  `repl_export_load_from_lines()` - the catalog delegates to the importer;
+- otherwise → `load_example_lines()` - the catalog's own `.glr` walk.
+
+So the importer is *already* a catalog loader for one of the two formats, and
+`repl_export_load_from_lines()` (`import.c:2891`) already takes exactly the
+`const char *const *` the catalog stores. **Compiled-in example arrays are not
+an obstacle to this change** - they are already fed to the importer today.
+
+What each side does with a `.glr`:
+
+| Concern | `example_loader.c` | `import.c` |
+|---|---|---|
+| per-line parse + apply | `repl_load_apply_line` | `repl_load_apply_line` (shared) |
+| camera header | `camera_header.c` | `camera_header.c` (shared) |
+| canonical doc order | always, via `repl_doc_order_offer` | same call, gated on `check_order` |
+| `check_order` decided by | it is a `.glr` loader by construction | `.glr` filename-suffix sniff (`import.c:2581`) |
+| `@cfg` header | filtered to the scene subset (`example_loader.c:102`) | whole pending bag applied |
+| presentation reset | `repl_dispatch_example_presentation_reset(idx)` | none |
+| tag-keyed cfg defaults | layered by example index | none |
+| body-line cap | `EXAMPLE_BODY_LINES_MAX` = 512 | none (store capacity only) |
+| parse failure | abort, `reset_example_load_state()` wipes | warn, skip line, continue |
+| order failure | abort | abort (`import.c:2811`), caller cleans up |
+
+The shared column is the work `done/camera-header-tags.md` already did. The
+divergent column is what remains.
+
+## The second bug: a failed load is a hard block in the F12 cycle
+
+Independent of which loader runs, and worth fixing on its own.
+
+`load_example()` (`example_loader.c:288`) stamps the catalog index *only on
+success*:
+
+```c
+new_edit_line = load_example_lines(lines, idx);
+if (new_edit_line <= 0)
+    return 0;                                   /* early out */
+repl_state_scenes_set_active_example_idx(idx);  /* not reached */
+repl_scenes_mark_example_active();              /* not reached */
+```
+
+`reset_example_load_state()` has already wiped the document by then. So a failed
+load leaves `active_example_idx` pointing at the **last scene that loaded**,
+while the live document is **empty** - the index and the document disagree.
+
+`cycle_example_or_user_scene_dir()` (`glr_ctrl_router.c:559`) computes
+`next = active_example_idx + direction`, so from a good scene N with a broken
+scene N+1:
+
+| Key | Computes | Result |
+|---|---|---|
+| F12 | N+1 | fails, index stays N, document wiped |
+| F12 again | N+1 | fails again - **hard block, cannot advance** |
+| Shift+F12 | N-1 | loads, i.e. two scenes back from where you appeared to be |
+
+Which is exactly the reported symptom. The empty document also means no
+`glClear`, so the previous frame smears - a cosmetic consequence of the same
+disagreement, and acceptable as-is.
+
+**Fix: stamp the index on failure too.** `active_example_idx` should mean "where
+you are in the catalog", not "the last thing that loaded successfully". Then
+F12 advances to N+2 and Shift+F12 returns to N, both one step from the errored
+scene, and a broken scene is a scene you can page over instead of a wall.
+
+Two things move with it:
+
+- `repl_scenes_mark_example_active()` must also run on the failure path. It
+  clears `g_active_user_scene`, and without it a failed load *entered from a
+  user scene* leaves that scene marked active over an empty document, so the
+  cycler takes its user-scene branch (`glr_ctrl_router.c:545`) instead of the
+  example branch. Different symptom, same root cause.
+- **Promotion needs a decision.** `repl_promote_transient_if_needed()`
+  (`scenes.c:1141`) names the new slot from `repl_example_name(g_example_idx)`,
+  so the first keystroke into the wiped document promotes it. Today that
+  produces an empty slot named after scene **N** - the innocent one; after the
+  fix it would be named after the scene that failed. Neither is right. Either
+  suppress promotion when the document is empty, or let the failed scene's name
+  through on the grounds that it is where the user actually is. I lean toward
+  suppressing, but it is a judgment call, not a derivation.
+
+**The coverage gap is failure, not cycling.** Cycling itself is tested -
+`tests/test_repl_editor.c:895` asserts F12 advances `active_example_idx` 0 → 1,
+and `:3847` covers the example ↔ user-scene transitions in both directions.
+(`test_glr_actions.c`'s `GLR_NEXT_EXAMPLE` hits are keymap string formatting,
+not cycling.) What no test does is cycle **into a catalog entry that fails to
+load**, so nothing observes that `active_example_idx` and the live document
+disagree afterwards. Every existing assertion is on the success path, where the
+stamp always happens.
+
+That shape is why this survived: the tests confirm the index advances when a
+load works, and the bug is entirely in what the index does when one doesn't.
+
+So the test to write first is a cycle across a deliberately-broken entry,
+asserting three things the current suite cannot see:
+
+- `active_example_idx` equals the failed scene's index, not the previous one;
+- a second F12 reaches index+1 rather than retrying the same entry;
+- Shift+F12 from there returns to the failed scene, not two back.
+
+It needs a catalog with a known-bad entry. `--examples-dir` + a fixture
+directory under `tests/scenes/` is the cheapest route, and it doubles as
+coverage for the runtime catalog path.
+
+This is independent of the loader merge and can land first. It interacts with
+one step: §2's `REPL_SCENE_LOAD_ATOMIC` is exactly this wipe-on-failure
+behavior, so whichever lands second must keep the index stamp.
+
+## Design
+
+### 1. Format becomes a parameter
+
+`import_set_source()` sniffs `.glr` off the end of the source label to set
+`check_order`. That works for a filesystem path and silently fails for anything
+else: a catalog entry named `"Torus Knot"` gets `check_order = 0` and loses
+canonical-order validation with no diagnostic. The catalog already stores the
+answer explicitly as `entry->format` (`ReplExampleSourceFormat`,
+`examples.c:933`).
+
+Split the label from the format:
+
+```c
+void import_set_source(ImportState *s, const char *label,
+                       ReplExampleSourceFormat format);
+```
+
+`check_order` becomes `format == REPL_EXAMPLE_SOURCE_GLR`. The file entry
+points keep the suffix sniff, but *at the call site*, as the one place where a
+path is all the caller has:
+
+```c
+int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
+    return import_load_path(filename, repl_scene_format_from_path(filename), result);
+}
+```
+
+**This step is worth landing on its own**, independent of the rest: it removes a
+silent validation dropout that exists today.
+
+### 2. Load options replace the implicit policy
+
+One options struct carries what currently differs by TU:
+
+```c
+typedef enum {
+    REPL_SCENE_LOAD_TOLERANT,   /* warn per bad line, keep the rest */
+    REPL_SCENE_LOAD_ATOMIC,     /* first bad line aborts, document restored */
+} ReplSceneLoadPolicy;
+
+typedef struct {
+    ReplExampleSourceFormat format;
+    ReplSceneLoadPolicy     policy;
+    int  example_idx;      /* -1 = no catalog context */
+    int  body_line_max;    /* 0 = store capacity only */
+    int  cfg_scene_subset; /* filter @cfg to the scene subset */
+} ReplSceneLoadOpts;
+```
+
+Both policies are already implemented, just in different files. `ATOMIC` is
+`example_loader.c:247-251`'s abort-and-reset; `TOLERANT` is the importer's
+existing warn counter. Neither is universally right, which is why this is an
+option and not a merge:
+
+- a shipped catalog entry that half-loads is a bug the author must see;
+- a user's hand-edited file that loses 33 good rows to 24 bad ones is hostile.
+
+`--examples-dir` is the awkward middle - authored content arriving by the
+catalog route. It takes `ATOMIC`, matching today's behavior for that route.
+
+Restoring the document on an `ATOMIC` abort is the one piece with no existing
+implementation on the import side. The importer inserts rows as it walks, and
+on `order_failed` it returns 0 leaving them in place for
+`activate_new_scene_after_failed_import()` to clear. `example_loader.c` instead
+calls `reset_example_load_state()` itself. Unify on the loader restoring, using
+`SceneSnapshot` (`src/repl/scene_snapshot.h`) - the mechanism
+`repl_document_rebuild()` already uses to make a failed find/replace leave no
+trace.
+
+### 3. Presentation reset and `@cfg` filtering move to the option
+
+Both are currently `example_loader`-only, and both are load-bearing:
+
+- CLAUDE.md's rule that *every* example load resets non-camera presentation to
+  `CFG_DEFAULT_*` before applying the scene's own `@cfg`, plus tag-keyed
+  defaults layered by example index;
+- the scene-subset filter, which decides what a scene is *allowed* to change
+  (`slug_is_scene_subset`, `glr_actions.c:972`).
+
+The reset is straightforward: it is keyed on `example_idx`, so `-1` means no
+reset and the option carries it.
+
+**The `@cfg` filter needs a decision, not a mechanical move.** Today a catalog
+scene may only touch the scene subset while a file may set anything in the
+pending bag. One of those is wrong and I do not think it is settled which:
+the permissive file behavior may be deliberate (opening a `.c` you exported
+should restore what you exported) or may simply never have been considered.
+Resolve this before writing code - it is the only step here that changes
+user-visible semantics rather than relocating them.
+
+### 4. `example_loader.c` keeps only the choreography
+
+`load_example()` retains what is genuinely about examples and not about
+reading: `repl_scenes_save_active_scene_if_any()`,
+`repl_scenes_capture_pre_example_cfg_if_entering()`,
+`repl_state_scenes_set_active_example_idx()`, the status line, and
+`prof_histogram_reset()`. Its two format arms collapse into one call.
+
+Public API is unchanged:
+
+- `repl_load_example(int idx)` - 7 call sites in `src/`, ~30 in `tests/`;
+- `repl_load_example_lines(const char *const *)` - kept as a thin wrapper over
+  the new entry point with `example_idx = -1`, because
+  `tests/test_repl_core_examples.c`, `test_camera_apply_modes.c`,
+  `test_camera_header_parity.c`, `test_repl_flatten_differential.c`,
+  `test_repl_state.c` and `tools/repl_live_demo` all call it. Rewriting those
+  is churn that proves nothing.
+
+`EXAMPLE_BODY_LINES_MAX` stays in `example_loader.h` and travels in the options
+struct.
+
+### 5. `bootstrap.c` stops being the odd one out
+
+`repl_load_initial_commands()` (`bootstrap.c:60-86`) sends any non-directory
+file argument to `repl_export_load_from_file()` regardless of extension - which
+is how a `.glr` file gets the C importer's tolerant policy. With step 1 in
+place it passes the resolved format, and the tolerant policy becomes a stated
+choice for the CLI file route rather than a side effect.
+
+## Test impact
+
+`tests/test_camera_header_parity.c` is the casualty and it should be named
+plainly: with one loader there is no second implementation to compare against,
+so the test becomes tautological and is deleted at the end.
+
+It is a good test - `done/camera-header-tags.md` records that it caught the
+catalog loader eating the blank run between `@cfg` and the body on its first
+run. So:
+
+- **keep it green through every intermediate step.** It is the regression net
+  for exactly this migration, and any step that makes it fail is a step that
+  changed behavior on one route only;
+- delete it only in the final commit, together with `load_example_lines()`;
+- before deleting, port anything it asserts that no other test does. Its
+  document-shape comparison (row text, `CmdType` sequence, arg counts) has no
+  equivalent elsewhere; that becomes a single-load golden over the same corpus
+  rather than a two-load diff.
+
+### Coverage gaps this plan has to close
+
+Both are gaps in **failure** behavior. The suite tests these paths thoroughly
+when the load succeeds, which is why neither bug was caught.
+
+1. **No test cycles into a failed catalog entry.** F12 cycling is covered
+   (`test_repl_editor.c:895`, `:3847`) but only over scenes that load. Nothing
+   observes the index/document disagreement a failed load leaves behind. See
+   §"The second bug" for the three assertions needed and the fixture-catalog
+   approach; this is step 0's test and it must be written before the fix, not
+   with it.
+2. **No test compares the two loaders' error policies.** `test_camera_header_parity.c`
+   compares the loaders only on scenes that load cleanly - `parity_capture()`
+   records a successful document. The whole tolerant-vs-atomic divergence sits
+   outside it, which is how a scene could load one way and wipe the other with
+   no test failing. Step 3 needs a direct test of each policy against the same
+   deliberately-broken input.
+
+Also affected:
+
+- `tests/test_repl_core_examples.c` - the `bad_body` case (line 854) asserts the
+  atomic abort. It should keep asserting it, now via
+  `REPL_SCENE_LOAD_ATOMIC`, and gain a `TOLERANT` twin over the same input.
+- `tests/test_glr_cli.c` - covers the CLI file route's warning output.
+- `make test-scenes` (`REPL_SCENE_CORPUS=1`) - both corpora walk both loaders
+  today via the parity test; after the merge they walk one.
+
+## Steps
+
+Each step is independently landable and leaves the parity test green.
+
+0. **Index stamp on failed load** (§"The second bug"), preceded by the first
+   scene-cycle test. Independent of everything below; land it first because it
+   is the user-visible one.
+1. **Explicit format.** Add `ReplExampleSourceFormat` to `import_set_source()`;
+   the file entry points derive it from the path at the call site. No behavior
+   change for files; fixes the silent `check_order` dropout for non-path
+   labels. Ships alone.
+2. **Options struct.** Introduce `ReplSceneLoadOpts` with `TOLERANT` +
+   `example_idx = -1` + no body cap + no subset filter - i.e. today's importer
+   behavior spelled out. Thread it through `import_begin_load`. Pure
+   refactor.
+3. **Implement `ATOMIC`** in the importer over `SceneSnapshot`, and add the
+   body-line cap and the presentation reset. Cover each with a test against the
+   importer directly, before any caller uses them.
+4. **Resolve the `@cfg` subset question** (design decision, §3), then implement
+   `cfg_scene_subset` to match.
+5. **Reroute the catalog.** `load_example()` calls the importer for both
+   formats with `ATOMIC` + `example_idx` + cap + subset filter.
+   `load_example_lines()` becomes a wrapper. The parity test now compares the
+   importer to itself and must be green trivially - if it is not, step 3 or 4
+   is wrong.
+6. **Delete** `load_example_lines()` and its helpers, port the parity test's
+   document-shape assertions to a single-load golden, delete the parity test,
+   update `docs/MODULES.md` and this plan's status.
+
+## Risks
+
+- **Step 3 is where the behavior lives.** Atomic restore over `SceneSnapshot`
+  has to cover predefs, scratch arrays, func aliases and the source document,
+  not just the command store. `repl_document_rebuild()` in
+  `src/repl/replace.c` is the working reference for what a full restore needs.
+- **The `@cfg` decision (step 4) is user-visible.** It is the only step that
+  can change what an existing scene does. If it turns out both behaviors are
+  wanted, the option stays and the plan's "or neither, by decision" goal is met
+  by the option being explicit rather than by the behaviors converging.
+- **Import is already 3036 lines** against `example_loader.c`'s 341. This adds
+  to the larger file. The net is ~-250 lines and one fewer concept, but if
+  `import.c` needs splitting afterwards that is a separate plan, not a reason
+  to keep two loaders.
+- **`repl_live_demo`** calls both entry points (`repl_live_demo.c:355,372`) and
+  is the load-bearing proof that scene loading works without the controller.
+  It must keep building and running at every step.
+
+## Out of scope
+
+- Fixing the scenes in the new general corpus that motivated this. Those are
+  authoring bugs; they should be fixed and landed under
+  `tests/scenes/general` so the corpus tests cover them, but that is
+  independent work.
+- Splitting `import.c`.
+- Any change to the `.glr` or exported-`.c` formats themselves.
