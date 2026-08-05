@@ -828,10 +828,10 @@ int main(void) {
     {
         char buf[16384];
         read_text_file(path, buf, sizeof(buf));
-        ASSERT_TRUE("camera export seeds g_angle from camera ry",
-                    strstr(buf, "static float g_angle = 31.4799f;") != NULL);
-        ASSERT_TRUE("camera export omits literal y rotate",
-                    strstr(buf, "glRotatef(31.4799f, 0.0f, 1.0f, 0.0f);") == NULL);
+        ASSERT_TRUE("camera export leaves g_angle's initializer at zero",
+                    strstr(buf, "static float g_angle = 0.0f;") != NULL);
+        ASSERT_TRUE("camera export writes the yaw as a literal ry row",
+                    strstr(buf, "glRotatef(31.4799f, 0.0f, 1.0f, 0.0f);") != NULL);
         ASSERT_TRUE("camera export keeps one animated y rotate",
                     count_substr(buf, "glRotatef(g_angle, 0.0f, 1.0f, 0.0f);") == 1);
     }
@@ -1202,7 +1202,7 @@ int main(void) {
                 fprintf(f,
                     "// @scene-name P1 Scene A\n"
                     "// @cfg wireframe = 1\n"
-                    "static void render_repl_geometry(void) {\n"
+                    "void display(void) {\n"
                     "  // Snippet start\n"
                     "  glColor3f(1.0000f, 0.0000f, 0.0000f);\n"
                     "  glBegin(GL_TRIANGLES);\n"
@@ -1222,7 +1222,7 @@ int main(void) {
                 fprintf(f,
                     "// @scene-name P1 Scene B\n"
                     "// @cfg wireframe = 0\n"
-                    "static void render_repl_geometry(void) {\n"
+                    "void display(void) {\n"
                     "  // Snippet start\n"
                     "  glColor3f(0.0000f, 1.0000f, 0.0000f);\n"
                     "  glBegin(GL_TRIANGLES);\n"
@@ -1313,22 +1313,22 @@ int main(void) {
 
         /* Scene A has a "close, high pitch" camera; scene B has a
          * "far, low pitch" one. Format mirrors what the exporter
-         * writes (4-line block plus the static float g_angle preamble
-         * - both halves are part of the save format the bridge
-         * understands on import). */
+         * writes: tagged pose rows, plus the `spin` row whose g_angle is a
+         * pure animation offset carrying no pose. */
         {
             FILE *f = fopen("/tmp/repl_core_cam_workspace_in/scene_a.c", "w");
             ASSERT_TRUE("cam scene_a fopen", f != NULL);
             if (f) {
                 fprintf(f,
                     "// @scene-name Cam Scene A\n"
-                    "static float g_angle = 11.0000f;\n"
-                    "static void render_repl_geometry(void) {\n"
+                    "static float g_angle = 0.0f;\n"
+                    "void display(void) {\n"
                     "  // camera\n"
-                    "  glTranslatef(0.0000f, 0.0000f, -3.5000f);\n"
-                    "  glRotatef(45.0000f, 1.0f, 0.0f, 0.0f);\n"
-                    "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);\n"
-                    "  glTranslatef(-1.0000f, -2.0000f, -3.0000f);\n"
+                    "  glTranslatef(0.0000f, 0.0000f, -3.5000f);   /* @camera dist */\n"
+                    "  glRotatef(45.0000f, 1.0f, 0.0f, 0.0f);   /* @camera rx */\n"
+                    "  glRotatef(11.0000f, 0.0f, 1.0f, 0.0f);   /* @camera ry */\n"
+                    "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);   /* @camera spin */\n"
+                    "  glTranslatef(-1.0000f, -2.0000f, -3.0000f);   /* @camera pan */\n"
                     "  // Snippet start\n"
                     "  glColor3f(1.0000f, 0.0000f, 0.0000f);\n"
                     "  glBegin(GL_TRIANGLES);\n"
@@ -1347,13 +1347,14 @@ int main(void) {
             if (f) {
                 fprintf(f,
                     "// @scene-name Cam Scene B\n"
-                    "static float g_angle = 99.0000f;\n"
-                    "static void render_repl_geometry(void) {\n"
+                    "static float g_angle = 0.0f;\n"
+                    "void display(void) {\n"
                     "  // camera\n"
-                    "  glTranslatef(0.0000f, 0.0000f, -25.5000f);\n"
-                    "  glRotatef(5.0000f, 1.0f, 0.0f, 0.0f);\n"
-                    "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);\n"
-                    "  glTranslatef(-4.0000f, -5.0000f, -6.0000f);\n"
+                    "  glTranslatef(0.0000f, 0.0000f, -25.5000f);   /* @camera dist */\n"
+                    "  glRotatef(5.0000f, 1.0f, 0.0f, 0.0f);   /* @camera rx */\n"
+                    "  glRotatef(99.0000f, 0.0f, 1.0f, 0.0f);   /* @camera ry */\n"
+                    "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);   /* @camera spin */\n"
+                    "  glTranslatef(-4.0000f, -5.0000f, -6.0000f);   /* @camera pan */\n"
                     "  // Snippet start\n"
                     "  glColor3f(0.0000f, 1.0000f, 0.0000f);\n"
                     "  glBegin(GL_TRIANGLES);\n"
@@ -1396,13 +1397,13 @@ int main(void) {
 
         /* Each output file keeps ITS slot's camera. Two key markers
          * per scene: the dist line (line 0 of the block) and the
-         * static float g_angle preamble (which encodes ry). */
+         * numeric `@camera ry` row. g_angle carries no pose any more. */
         ASSERT_TRUE("cam scene_a keeps own dist=-3.5000",
                     strstr(buf_a, "glTranslatef(0.0000f, 0.0000f, -3.5000f);") != NULL);
         ASSERT_TRUE("cam scene_a keeps own rx=45.0000",
                     strstr(buf_a, "glRotatef(45.0000f, 1.0f, 0.0f, 0.0f);") != NULL);
-        ASSERT_TRUE("cam scene_a keeps own g_angle=11.0000 (ry)",
-                    strstr(buf_a, "static float g_angle = 11.0000f;") != NULL);
+        ASSERT_TRUE("cam scene_a keeps own ry=11.0000",
+                    strstr(buf_a, "glRotatef(11.0000f, 0.0f, 1.0f, 0.0f);") != NULL);
         /* Camera-block line 4 is `glTranslatef(-tx, -ty, -tz)`, so the
          * round-trip preserves the original "-1, -2, -3" text. */
         ASSERT_TRUE("cam scene_a keeps own pan -1,-2,-3",
@@ -1411,8 +1412,8 @@ int main(void) {
                     strstr(buf_b, "glTranslatef(0.0000f, 0.0000f, -25.5000f);") != NULL);
         ASSERT_TRUE("cam scene_b keeps own rx=5.0000",
                     strstr(buf_b, "glRotatef(5.0000f, 1.0f, 0.0f, 0.0f);") != NULL);
-        ASSERT_TRUE("cam scene_b keeps own g_angle=99.0000 (ry)",
-                    strstr(buf_b, "static float g_angle = 99.0000f;") != NULL);
+        ASSERT_TRUE("cam scene_b keeps own ry=99.0000",
+                    strstr(buf_b, "glRotatef(99.0000f, 0.0f, 1.0f, 0.0f);") != NULL);
         ASSERT_TRUE("cam scene_b keeps own pan -4,-5,-6",
                     strstr(buf_b, "glTranslatef(-4.0000f, -5.0000f, -6.0000f);") != NULL);
 
@@ -1459,13 +1460,14 @@ int main(void) {
             if (f) {
                 fprintf(f,
                     "// @scene-name SW Scene A\n"
-                    "static float g_angle = 17.0000f;\n"
-                    "static void render_repl_geometry(void) {\n"
+                    "static float g_angle = 0.0f;\n"
+                    "void display(void) {\n"
                     "  // camera\n"
-                    "  glTranslatef(0.0000f, 0.0000f, -4.5000f);\n"
-                    "  glRotatef(13.0000f, 1.0f, 0.0f, 0.0f);\n"
-                    "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);\n"
-                    "  glTranslatef(0.0000f, 0.0000f, 0.0000f);\n"
+                    "  glTranslatef(0.0000f, 0.0000f, -4.5000f);   /* @camera dist */\n"
+                    "  glRotatef(13.0000f, 1.0f, 0.0f, 0.0f);   /* @camera rx */\n"
+                    "  glRotatef(17.0000f, 0.0f, 1.0f, 0.0f);   /* @camera ry */\n"
+                    "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);   /* @camera spin */\n"
+                    "  glTranslatef(0.0000f, 0.0000f, 0.0000f);   /* @camera pan */\n"
                     "  // Snippet start\n"
                     "  glColor3f(1.0000f, 0.0000f, 0.0000f);\n"
                     "  // Snippet end\n"
@@ -1478,13 +1480,14 @@ int main(void) {
             if (f) {
                 fprintf(f,
                     "// @scene-name SW Scene B\n"
-                    "static float g_angle = 71.0000f;\n"
-                    "static void render_repl_geometry(void) {\n"
+                    "static float g_angle = 0.0f;\n"
+                    "void display(void) {\n"
                     "  // camera\n"
-                    "  glTranslatef(0.0000f, 0.0000f, -22.0000f);\n"
-                    "  glRotatef(33.0000f, 1.0f, 0.0f, 0.0f);\n"
-                    "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);\n"
-                    "  glTranslatef(0.0000f, 0.0000f, 0.0000f);\n"
+                    "  glTranslatef(0.0000f, 0.0000f, -22.0000f);   /* @camera dist */\n"
+                    "  glRotatef(33.0000f, 1.0f, 0.0f, 0.0f);   /* @camera rx */\n"
+                    "  glRotatef(71.0000f, 0.0f, 1.0f, 0.0f);   /* @camera ry */\n"
+                    "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);   /* @camera spin */\n"
+                    "  glTranslatef(0.0000f, 0.0000f, 0.0000f);   /* @camera pan */\n"
                     "  // Snippet start\n"
                     "  glColor3f(0.0000f, 1.0000f, 0.0000f);\n"
                     "  // Snippet end\n"
@@ -1828,7 +1831,7 @@ int main(void) {
         FILE *f = fopen(trunc_path, "w");
         ASSERT_TRUE("truncated-line fixture fopen", f != NULL);
         if (f) {
-            fprintf(f, "static void render_repl_geometry(void) {\n");
+            fprintf(f, "void display(void) {\n");
             fprintf(f, "  // Snippet start\n");
             for (int i = 0; i < 300; i++)
                 fputc(' ', f);
@@ -2326,7 +2329,7 @@ int main(void) {
         FILE *f = fopen(p83_path, "w");
         ASSERT_TRUE("p83 fixture fopen", f != NULL);
         if (f) {
-            fprintf(f, "static void render_repl_geometry(void) {\n");
+            fprintf(f, "void display(void) {\n");
             fprintf(f, "  // Snippet start\n");
             /* `PI` is in k_reserved_identifiers, so the underlying
              * _declare_predef_var_with_value returns -1 and the thin
