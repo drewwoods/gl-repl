@@ -103,9 +103,10 @@ int  repl_active_user_scene(void);        /* current slot index, -1 if none */
  * transient transition. Idempotent across consecutive example loads. */
 void repl_scenes_capture_pre_example_cfg_if_entering(void);
 
-/* Record that an example is currently the active scene (active_example_idx
- * already set by the loader; this updates derived state). */
-void repl_scenes_mark_example_active(void);
+/* Leave any active user scene when a replacement document takes ownership.
+ * The caller sets active_example_idx separately when the replacement is a
+ * successfully loaded example. */
+void repl_scenes_detach_active_user_scene(void);
 
 /* Activate slot 0 from the current live document. `scene_name_hint` is the
  * `@scene-name` directive value parsed from a freshly-loaded file; when empty,

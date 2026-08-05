@@ -5676,7 +5676,7 @@ static void test_scene_cycle_skips_failed_examples(void) {
                    repl_state_document_count(), expected_user_rows);
         ASSERT_INT("all-fail user-origin cycle remains an error",
                    ui_state_status().kind, UI_STATUS_ERROR);
-        repl_scenes_mark_example_active();
+        repl_scenes_detach_active_user_scene();
         ASSERT_TRUE("preserved user slot reloads after detaching",
                     repl_load_user_scene_idx(user_slot));
         ASSERT_INT("reloaded user slot still has expected rows",

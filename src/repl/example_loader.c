@@ -314,11 +314,11 @@ static int load_example(int idx) {
          * whose pre-load save would otherwise overwrite that slot with the
          * failed, empty document. The original slot remains intact because
          * the save at the top of this function ran before the wipe. */
-        repl_scenes_mark_example_active();
+        repl_scenes_detach_active_user_scene();
         return 0;
     }
     repl_state_scenes_set_active_example_idx(idx);
-    repl_scenes_mark_example_active();
+    repl_scenes_detach_active_user_scene();
     char msg[REPL_DIAG_TEXT_MAX];
     snprintf(msg, sizeof(msg), "Example %d/%d: %s (F12 for next)",
              idx + 1, count, name);

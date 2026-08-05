@@ -225,7 +225,7 @@ Clear `tutorial_origin_idx = -1` whenever a scene transition supersedes the post
 
 - `repl_scenes_enter_transient_scene()`;
 - `load_scene_from_slot()`;
-- `repl_scenes_mark_example_active()`;
+- `repl_scenes_detach_active_user_scene()`;
 - explicit loaded-document/user-scene activation;
 - `repl_scenes_reset()` / reset-all paths.
 

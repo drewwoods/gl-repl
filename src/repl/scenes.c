@@ -1289,7 +1289,7 @@ void repl_scenes_capture_pre_example_cfg_if_entering(void) {
     capture_pre_example_cfg();
 }
 
-void repl_scenes_mark_example_active(void) {
+void repl_scenes_detach_active_user_scene(void) {
     g_active_user_scene = -1;
     repl_state_scenes_set_tutorial_origin_idx(-1);
 }

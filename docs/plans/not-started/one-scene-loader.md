@@ -85,7 +85,7 @@ new_edit_line = load_example_lines(lines, idx);
 if (new_edit_line <= 0)
     return 0;                                   /* early out */
 repl_state_scenes_set_active_example_idx(idx);  /* not reached */
-repl_scenes_mark_example_active();              /* not reached */
+repl_scenes_detach_active_user_scene();         /* not reached */
 ```
 
 `reset_example_load_state()` has already wiped the document by then. So a failed
