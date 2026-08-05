@@ -20,8 +20,8 @@ The finished behavior is:
 - one canonical document order - declarations, then function definitions, then
   camera and body - **enforced by rejection**, matching the order the exported C
   already has to use;
-- the `// camera` marker is presentation only: the `@camera` tags identify a
-  camera line, and a file without a marker is fully canonical;
+- the `@camera` tags are the *only* camera syntax: `// camera` is an ordinary
+  comment the reader never inspects, and a file without one is fully canonical;
 - the camera bridge stops parsing text: it receives a resolved pose plus an
   explicit snap-or-ease intent;
 - direct file load and catalog load of the same `.glr` produce identical
@@ -132,9 +132,8 @@ handled only `//` would silently drop the camera from every exported file, which
 is this bug with new syntax.
 
 **The marker is optional; the tags are what identify a camera line.** `// camera`
-carries no meaning the tags do not already carry, so it is demoted to pure
-presentation: a section heading for the expanded code panel and nothing else. A
-file with tags and no marker is fully canonical. A file with a marker and no tags
+carries no meaning the tags do not already carry, so it is demoted to an
+ordinary comment. A file with tags and no marker is fully canonical. A file with a marker and no tags
 has no camera at all - the marker alone identifies nothing and the transforms
 below it are geometry.
 
@@ -142,21 +141,34 @@ This kills the last positional concept in the format. As long as the marker was
 required, "where does the camera start" remained a question about a comment, and
 every reader needed its own answer.
 
-The marker still needs **its own result**, because it must not reach the
-document: untagged, a three-value result returns `NOT_CAMERA` and every caller
-inserts it as an ordinary comment row. The enum therefore gains a fourth value,
-`REPL_CAMERA_LINE_MARKER`: consumed, not inserted, no role accumulated. The
-reader captures its verbatim text, which is what feeds `camera_comment_line`
-(below). The writer keeps emitting a plain marker for readability - optional to
-*read* is not an argument for dropping it from what we *write*.
+**And therefore the marker is not a reader concern at all.** An earlier draft gave
+it a `REPL_CAMERA_LINE_MARKER` result, stashed its verbatim text, published it
+through `finish()`, and taught the matcher the C89 `/* camera */` form - all so a
+comment could be re-rendered as a section heading. Once the tags are what
+identify a camera line, every bit of that is machinery in service of presentation.
+The marker becomes **an ordinary comment row in the document**, the same as any
+other comment the author wrote, and the reader returns `NOT_CAMERA` for it.
 
-This closes a live bug rather than only a hypothetical one.
-`repl_comment_alpha_payload_equals` (`text_helpers.c:18`) hard-requires
-`p[0] == '/' && p[1] == '/'`, and an exported `.c` writes its marker through the
-C89 rewrite as `/* camera */`. So **today an exported file already loses its
-camera marker on re-import** - the transforms still parse, the section heading
-does not. The marker matcher must learn the block-comment form along with the
-tags, and `test_camera_header` covers `/* camera */` as well as `// camera`.
+That deletes, rather than relocates, a surprising amount:
+
+- `REPL_CAMERA_LINE_MARKER` and the fourth result value;
+- `marker_text` on the finish struct and its publication step;
+- `ReplImportExportState::camera_comment_line` and *both* of its current writers
+  (`import_handle_camera_comment` at `import.c:2153`, and the stash inside
+  `repl_example_consume_camera_header` at `example_loader.c:437`) - which is the
+  "the marker loses its writer" problem solved by the mechanism ceasing to exist;
+- the `repl_comment_alpha_payload_equals` C89 gap (`text_helpers.c:18` requires
+  `//`, so an exported `.c` loses its `/* camera */` marker on re-import today).
+  That bug does not need fixing; a block comment is just a comment now.
+
+The writer still emits a plain `// camera` for readability - optional to *read* is
+no argument for dropping it from what we *write*.
+
+**One cosmetic consequence, stated so it is not a surprise.** The marker is a
+document row while the camera transforms are consumed metadata, so a marker
+authored *above* the camera block re-saves *below* it. It settles after one save
+and never drifts again. A custom banner (`// --- Camera --- `) survives as text,
+just not as a heading positioned above lines that are no longer document rows.
 
 A one-line summary directive (`// @camera dist=10 rx=15 ry=20 pan=…`) was
 considered and **rejected**: it makes the directive and the transforms two
@@ -194,6 +206,12 @@ glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);              // @camera rx
 glRotatef(20.0000f, 0.0f, 1.0f, 0.0f);              // @camera ry
 glTranslatef(-0.0000f, 2.5000f, -0.0000f);          // @camera pan
 ```
+
+**`spin` never appears in a `.glr`.** It is an exported-C projection detail: the
+`.glr` and code-panel form is `with_anim_hook = 0`, which emits four pose rows and
+no hook. A hand-written `.glr` has nothing to gain from it and the writer never
+produces one. The reader accepts it wherever it appears rather than carrying a
+per-format rule, but the canonical `.glr` form is four rows.
 
 **`spin` is write-only.** It carries no pose data: its sole argument must be the
 `g_angle` identifier, it is accepted and discarded, and `finish()` never counts
@@ -277,20 +295,13 @@ deleted:
   line to the reader inside their existing body loop and skipping it when
   consumed. That is already the importer's shape, so all three consumers run the
   same code path.
-- **`camera_comment_line` moves to the reader.** Today the marker text has two
-  independent writers: `import_handle_camera_comment` (`import.c:2153`) on the
-  file path, and `repl_example_consume_camera_header` itself
-  (`example_loader.c:437-444`) on the catalog and tutorial paths. Deleting the
-  region function without reassigning that write would silently drop the
-  author's section banner (`// --- Camera --- `) from the code panel and from
-  `glr_scene_write_camera`'s `.glr` round-trip (`export_glr.c:85-88`). The
-  reader returns `REPL_CAMERA_LINE_MARKER` and stashes the verbatim text, which
-  `finish()` hands back as `marker_text` for the caller to publish - one place
-  decides what the marker *is*, instead of two. One semantic
-  change falls out, worth stating rather than discovering: today the banner is
-  recorded only if the whole block validated, and it now records on sight. The
-  parity test compares `camera_comment_line`, so neither the move nor the
-  semantic change can regress unnoticed.
+- **`camera_comment_line` is deleted, not relocated.** Today the marker text has
+  two independent writers: `import_handle_camera_comment` (`import.c:2153`) and
+  the stash inside `repl_example_consume_camera_header`
+  (`example_loader.c:437-444`). With the marker demoted to an ordinary comment
+  row, both writers go and nothing replaces them; `glr_scene_write_camera`
+  (`export_glr.c:85-88`) stops consulting the field and the code panel renders
+  the comment where it sits, like any other.
 
 **Recognition order is free; the emitted format is still ordered.** Nothing
 scans for a run, so the reader accepts the roles in any order, and blank lines,
@@ -339,22 +350,58 @@ have its own opinion. It also matches the in-app document model, where camera
 lines are consumed and the document genuinely begins with its declaration
 prologue.
 
-**Rejected, with a diagnostic:**
+**It is a phase machine, not a list of forbidden pairs.** Enumerating violations
+invites arguing about each one; a monotonic phase counter decides them all by
+construction and is a dozen lines to implement. Every non-comment, non-blank line
+classifies into exactly one phase, and the phase index may never decrease:
 
-| Violation | Why |
+| Phase | Contents |
 |---|---|
-| a `@camera` line before the declaration block ends | camera is not file-scope; in C it lives inside `display()` |
-| a variable declaration after a function definition | globals precede functions in the emitted C |
-| a variable declaration after body code | same, and the REPL hoists it anyway - the file should say what it means |
-| a function definition after body code | functions precede `display()` in the emitted C |
-| a tagged line split from the block by an executable line | the compiled twin composes a different modelview |
-| roles out of `dist, rx, ry, spin, pan` order | same |
+| 1 `DECLS` | `static float …;` / `float …;` at top level |
+| 2 `FUNCS` | `funcN(...) { … }` and named function definitions |
+| 3 `CAMERA` | `@camera`-tagged transforms |
+| 4 `BODY` | everything else the user wrote |
 
-**Accepted:** the camera block sitting *between* the declarations and the
-function definitions. Canonically it comes after the functions, but the `@camera`
-tag makes the placement unambiguous, and some C layouts read better with the
-camera nearer the top. This is the one axis where the tag earns tolerance - and
-it is tolerance about a block whose lines never enter the document at all.
+Comments and blank lines carry **no phase** - they are skipped entirely, never
+advance the counter, and are legal anywhere, as in C89. That single rule is what
+lets an author document any block without fighting the format.
+
+**One tolerated edge**, and it is a deliberate exception rather than a hole:
+`CAMERA` may be entered from `DECLS` directly, and `FUNCS` may then follow it. So
+both of these are legal —
+
+```
+DECLS → FUNCS → CAMERA → BODY      (canonical, what the writer emits)
+DECLS → CAMERA → FUNCS → BODY      (accepted)
+```
+
+— because the `@camera` tag makes the placement unambiguous and some C layouts
+read better with the camera nearer the top. Everything else that would decrease
+the counter is rejected. The consequences worth naming explicitly, since they are
+the questions the phase table answers:
+
+- a declaration after *any* function definition, camera row, or body line →
+  **rejected** (`DECLS` cannot be re-entered);
+- a function definition after body code → **rejected**;
+- a camera row after body code has started → **rejected**, which is the same rule
+  as "a tagged line split from the block by an executable line"; user geometry
+  begins only once every camera row is behind it;
+- roles out of `dist, rx, ry, spin, pan` order *within* `CAMERA` → **rejected**,
+  since the exported C executes them in place and a different order composes a
+  different modelview.
+
+**The exported `.c` wrapper is exempt.** `void display(void) {` and its closing
+brace are generated scaffolding, not user code: the machine skips them and keeps
+enforcing the same phase order on the user code inside. Without that exemption
+every exported file fails at its own boilerplate. This is the ordering twin of
+the reader's baseline-depth rule, and the two share the notion of "generated
+wrapper".
+
+**Rejection, not a warning.** The whole point of a canonical form is that
+non-canonical files do not accumulate; a warning is a rule nobody enforces after
+the first week. The cost is real and is paid once: **43 of the 46 corpus files
+violate this order today** and every one must be migrated before the reader
+lands. See the corpus section.
 
 **Rejection, not a warning.** The whole point of a canonical form is that
 non-canonical files do not accumulate; a warning is a rule nobody enforces after
@@ -581,7 +628,6 @@ number, so the caller supplies them and receives a typed result:
 ```c
 typedef enum {
     REPL_CAMERA_LINE_NOT_CAMERA = 0,  /* untagged - caller handles as usual */
-    REPL_CAMERA_LINE_MARKER,          /* bare camera marker, either syntax */
     REPL_CAMERA_LINE_ACCEPTED,        /* consumed, role accumulated */
     REPL_CAMERA_LINE_REJECTED         /* consumed, do NOT insert; see diag */
 } ReplCameraLineResult;
@@ -598,8 +644,8 @@ to stamp the diagnostic accumulator - the reader never interprets it.
 
 The critical property is that `REJECTED` and `NOT_CAMERA` are distinct: rejected
 lines are consumed, which is what stops a malformed header becoming geometry.
-`MARKER` is the same property applied to the one camera line that carries no
-role - consumed, so no caller inserts it as a document row.
+There is deliberately no marker result: `// camera` is an ordinary comment and
+returns `NOT_CAMERA` like any other.
 
 **Diagnostics accumulate; they are not only routed.** A fire-and-forget sink
 cannot be asserted on, and the parity test compares an ordered diagnostic list.
@@ -698,7 +744,6 @@ typedef struct {
     int                  pose_applied;   /* did a bridge call happen */
     ReplCameraPose       pose;           /* the resolved pose, applied or not */
     unsigned             seen_mask;      /* which pose roles the file supplied */
-    const char          *marker_text;    /* verbatim marker, NULL if none seen */
     int                  diag_count;     /* stored diagnostics */
     int                  diag_overflow;  /* dropped past REPL_CAMERA_MAX_DIAGS */
 } ReplCameraFinish;
@@ -708,9 +753,7 @@ ReplCameraFinish       repl_camera_header_finish(ReplCameraHeader *hdr,
 const ReplCameraDiag  *repl_camera_header_diags(const ReplCameraHeader *hdr);
 ```
 
-`marker_text` is what the caller writes into `camera_comment_line` - the reader
-stashes, the caller publishes, so the reader still touches no state it does not
-own. `pose` is populated whether or not a bridge was installed, which is what
+`pose` is populated whether or not a bridge was installed, which is what
 lets a bridge-less test assert the resolved pose directly instead of inferring it
 from a call that never happened.
 
@@ -923,7 +966,28 @@ Each gets a before/after OSMesa capture and a pose check on both load paths:
    35 lines, so the diff is readable and every message in the catalog above fires
    at least once.
 
-Only after those three read cleanly does the remaining sweep start.
+**Each pilot's pre-migration form is frozen as a rejection fixture.** Copy the
+three files verbatim into `tests/testdata/camera-order/` *before* editing them.
+They are never migrated and never load cleanly again; their job is to assert that
+the new loader rejects the old shape with the exact diagnostic the migration
+guide promises. Without them the only record of what the old form looked like is
+git history, and a rejection message can silently degrade to "parse error"
+without a single test noticing.
+
+That gives two complementary comparisons, which are easy to conflate:
+
+- **A/B (does the new form still render the old scene?)** - old loader on the old
+  file versus new loader on the migrated file, compared by OSMesa capture and by
+  resolved pose on both load paths. This is the check that a migration was
+  faithful, and it is the one that matters for all 43.
+- **Rejection (does the old form fail loudly?)** - new loader on the frozen
+  pre-migration copy, compared against the expected `(rule, line, conflicting
+  line)` triple. This is the check that the format is actually enforced.
+
+A third fixture covers the shape no `.glr` can express: an **exported `.c`** with
+the `spin` row and the C89 `/* @camera … */` spelling, since `spin` is an
+exported-C projection detail and never appears in a `.glr` at all. Only after all
+of this reads cleanly does the remaining sweep start.
 
 **A hazard the pilot exists to catch.** Main's repair left six files with an
 animated `glRotatef(N * t, …)` immediately below the camera block. It is body
@@ -987,7 +1051,7 @@ does not parse, so it is not a fifth reader, but it must grow the tags in phase
      silently stops diverging. **The list empties at phase 4, not phase 6** -
      see the sequencing note below.
    - The diagnostic accumulator does not exist yet, so phase 1 compares
-     **documents, pose, `camera_comment_line`, and predefs only**; the
+     **documents, pose, and predefs only**; the
      diagnostic comparison arrives with phases 2-4.
 
    Observing a pose at all needs a bridge: a `src/repl`-only test binary has
@@ -1071,7 +1135,6 @@ churning at 4 and again at 7.
   - command structure - `CmdType` sequence and per-command arg values;
   - resolved camera pose (dist / rx / ry / pan) and the scene default, observed
     through the shared recording bridge stub;
-  - `camera_comment_line`, which the reader now owns on both paths;
   - predef variable names and values;
   - the diagnostic list as ordered `(role, rule, line_no)` triples plus the
     overflow count, per the accumulator section.
@@ -1097,8 +1160,8 @@ churning at 4 and again at 7.
   - **Both comment syntaxes for every role** (`// @camera dist` and the C89
     `/* @camera dist */`), and both marker syntaxes - `// camera` *and*
     `/* camera */`, the form `text_helpers.c:18` cannot read today.
-  - **The marker returns `MARKER`, not `NOT_CAMERA`**, and its text reaches
-    `camera_comment_line` from the catalog path as well as the file path.
+  - **The marker is an ordinary comment**: it returns `NOT_CAMERA`, lands as a
+    document row on both paths, and needs no C89 form handling.
   - **Both baselines**: raw depth 0 for a `.glr`, depth 1 inside a `display()`
     wrapper - including the split-brace form where `{` sits on its own line, and
     a tag in a *later* function at raw depth 1 after `display()` closed, which
