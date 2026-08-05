@@ -397,8 +397,7 @@ static void flatten_for_loop(FlattenContext *ctx,
 
     int max_iters = MAX_FLATTEN_LOOP_ITERS;
     for (float val = start_val;
-         (step_val > 0) ? (val < end_val - REPL_LOOP_BOUND_EPS)
-                        : (val > end_val + REPL_LOOP_BOUND_EPS);
+         (step_val > 0) ? (val < end_val - 1e-6f) : (val > end_val + 1e-6f);
          val += step_val) {
         int saved_active_loop_count;
         if (--max_iters < 0) break;

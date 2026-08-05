@@ -353,7 +353,7 @@ editor-overlay snapshot types in [`src/ui/app/editor.h`](../src/ui/app/editor.h)
 
 - **Legacy GL/eval domain types** in `src/repl/` (cross-domain,
   deliberately un-prefixed): [`GLCmd`](../src/repl/command.h#L121), [`CmdType`](../src/repl/command.h#L44), [`ExprVar`](../src/repl/eval.h#L136), [`ExprCtx`](../src/repl/eval.h#L143),
-  [`TessVertex`](../src/repl/executor.h#L106), [`FlatCmdLocalVars`](../src/repl/flatten.h#L56), [`FlatProgramView`](../src/repl/flatten.h#L71),
+  [`TessVertex`](../src/repl/executor.h#L106), [`FlatCmdLocalVars`](../src/repl/flatten.h#L43), [`FlatProgramView`](../src/repl/flatten.h#L58),
   [`CmdSyntaxCategory`](../src/repl/command_spec.h#L152), and the `cmd_type_name` thin alias.
 - **REPL formatting**: [`src/repl/format.h`](../src/repl/format.h) `ReplFmt*`/`repl_format_*`
 - **Root neutral helpers**: [`src/ui/core/gl_2d.h`](../src/ui/core/gl_2d.h) `gl2d_*` (2D primitives + the state/action mouse-chip grammar), [`src/repl/transform_utils.h`](../src/repl/transform_utils.h)
