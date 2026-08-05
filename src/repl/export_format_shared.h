@@ -48,6 +48,7 @@
 #define REPL_EXPORT_AUTO_NORMAL_MARKER       "@auto"
 #define REPL_EXPORT_C89_LOOP_SCOPE_MARKER    "repl-export-c89-loop-scope"
 #define REPL_EXPORT_C89_LOOP_VAR_MARKER      "repl-export-c89-loop-var"
+#define REPL_EXPORT_FORWARD_DECL_MARKER      "repl-export-forward-decl"
 #define REPL_EXPORT_GLFLOAT1_HELPER          "repl_glfloat1"
 #define REPL_EXPORT_GLFLOAT3_HELPER          "repl_glfloat3"
 #define REPL_EXPORT_GLFLOAT4_HELPER          "repl_glfloat4"

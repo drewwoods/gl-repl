@@ -2696,6 +2696,12 @@ static void import_process_physical_line(ImportState *state,
     if (import_offer_camera_line(state, line))
         return;
 
+    /* C-only scaffolding emitted before exported function bodies. The marker
+     * lets generated C declare forward and mutually recursive calls without
+     * adding prototype rows to the REPL document on re-import. */
+    if (strstr(line, REPL_EXPORT_FORWARD_DECL_MARKER) != NULL)
+        return;
+
     /* Multi-line comments are dropped before anything else looks at the
      * line, so they can never be mistaken for an in-progress statement. */
     if (!import_strip_block_comment_span(line, &acc->in_block_comment,

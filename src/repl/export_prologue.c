@@ -340,7 +340,62 @@ void write_render_helper_as_c(FILE *f, const char *name) {
     fprintf(f, "}\n");
 }
 
+static void export_func_c_signature(int cmd_idx,
+                                    char *fn_name, size_t fn_name_sz,
+                                    char param_names[][REPL_PREDEF_NAME_MAX],
+                                    int *param_count) {
+    const GLCmd *cmd = &repl_state_document_cmds()[cmd_idx];
+    int fn = (int)cmd->args[0];
+    int parsed_fn = fn;
+    int count = 0;
+
+    if (!parse_repl_func_signature(export_document_text(cmd_idx), &parsed_fn,
+                                   param_names, MAX_EXPR_VARS, &count)) {
+        parsed_fn = fn;
+        count = 0;
+    }
+
+    {
+        const char *alias = repl_func_alias_get(parsed_fn);
+        if (alias)
+            snprintf(fn_name, fn_name_sz, "%s", alias);
+        else
+            snprintf(fn_name, fn_name_sz, "func%d", parsed_fn);
+    }
+    *param_count = count;
+}
+
+static void write_func_signature(FILE *f, const char *fn_name,
+                                 char param_names[][REPL_PREDEF_NAME_MAX],
+                                 int param_count, int prototype) {
+    fprintf(f, "static void %s(", fn_name);
+    if (param_count <= 0) {
+        fputs("void", f);
+    } else {
+        for (int param_idx = 0; param_idx < param_count; param_idx++)
+            fprintf(f, "%sfloat %s", param_idx == 0 ? "" : ", ",
+                    param_names[param_idx]);
+    }
+    fprintf(f, ")%s\n", prototype ? "; /* " REPL_EXPORT_FORWARD_DECL_MARKER " */"
+                                    : " {");
+}
+
 void write_func_defs_as_c(FILE *f) {
+    /* Keep authored function order for the export/import round trip, but
+     * declare every function first so forward and mutual calls are valid C. */
+    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
+        if (!repl_state_document_cmds()[cmd_idx].valid ||
+            repl_state_document_cmds()[cmd_idx].type != CMD_FUNC_DEF)
+            continue;
+
+        char fn_name[REPL_FUNC_NAME_MAX + 8];
+        char param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
+        int param_count;
+        export_func_c_signature(cmd_idx, fn_name, sizeof(fn_name),
+                                param_names, &param_count);
+        write_func_signature(f, fn_name, param_names, param_count, 1);
+    }
+
     /* Iterate through all document commands looking for function definitions. */
     for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
         if (!repl_state_document_cmds()[cmd_idx].valid || repl_state_document_cmds()[cmd_idx].type != CMD_FUNC_DEF) continue;
@@ -377,9 +432,6 @@ void write_func_defs_as_c(FILE *f) {
             }
         }
 
-        int fn = (int)repl_state_document_cmds()[cmd_idx].args[0];
-        int parsed_fn = fn;
-        int param_count = 0;
         char param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
         int fe = find_export_block_end(cmd_idx);
         /* Emit the C function under the user's alias when one is
@@ -389,23 +441,11 @@ void write_func_defs_as_c(FILE *f) {
          * body under the same name is what keeps the standalone .c
          * self-consistent and compilable. */
         char fn_name[REPL_FUNC_NAME_MAX + 8];
-        if (parse_repl_func_signature(export_document_text(cmd_idx), &parsed_fn,
-                                      param_names, MAX_EXPR_VARS,
-                                      &param_count) && param_count > 0) {
-            const char *alias = repl_func_alias_get(parsed_fn);
-            if (alias) snprintf(fn_name, sizeof(fn_name), "%s", alias);
-            else       snprintf(fn_name, sizeof(fn_name), "func%d", parsed_fn);
-            fprintf(f, "\nstatic void %s(", fn_name);
-            /* Emit function parameters. */
-            for (int param_idx = 0; param_idx < param_count; param_idx++)
-                fprintf(f, "%sfloat %s", param_idx == 0 ? "" : ", ", param_names[param_idx]);
-            fprintf(f, ") {\n");
-        } else {
-            const char *alias = repl_func_alias_get(fn);
-            if (alias) snprintf(fn_name, sizeof(fn_name), "%s", alias);
-            else       snprintf(fn_name, sizeof(fn_name), "func%d", fn);
-            fprintf(f, "\nstatic void %s(void) {\n", fn_name);
-        }
+        int param_count;
+        export_func_c_signature(cmd_idx, fn_name, sizeof(fn_name),
+                                param_names, &param_count);
+        fputc('\n', f);
+        write_func_signature(f, fn_name, param_names, param_count, 0);
         write_render_body_range_as_c(f, cmd_idx + 1, fe, 0, 1);
         fprintf(f, "}\n");
     }

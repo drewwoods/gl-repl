@@ -1801,7 +1801,7 @@ int main(void) {
                     strstr(buf, "/* @var") == NULL);
 
         snprintf(expected_loop, sizeof(expected_loop),
-                 "for (i = %s; i < %s; i += %sf) {",
+                 "for (i = %s; i < %s; i += %s) {",
                  start_s, end_s, step_s);
         ASSERT_TRUE("generated loop hoists loop var decl",
                     strstr(buf, "float i; /* repl-export-c89-loop-var */") != NULL);

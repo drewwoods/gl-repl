@@ -106,7 +106,7 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
         } else {
             char step_s[EXPORT_FLOAT_TEXT_MAX];
             repl_format_source_float(step_s, sizeof(step_s), step_v);
-            fprintf(f, "%sfor (%s = %s; %s %s %s; %s += %sf) {\n",
+            fprintf(f, "%sfor (%s = %s; %s %s %s; %s += %s) {\n",
                     ind, var_name, start_s, var_name,
                     step_v > 0 ? "<" : ">", end_s, var_name, step_s);
         }
