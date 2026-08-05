@@ -253,17 +253,20 @@ int glprobe_extract_write_repl_c(FILE *out, const float *feedback,
     emit_line(&e, "// @cfg vertex_points = 0\n");
     emit_line(&e, "// @cfg vertex_outlines = 0\n");
 
-    /* The camera block is consumed by gl-repl's camera bridge rather than
-     * becoming document commands, so it costs nothing against the budget --
+    /* The camera rows are recognised by their `@camera` role tags and consumed
+     * as metadata rather than becoming document commands, so they cost nothing
+     * against the budget --
      * and without it an extracted scene opens at gl-repl's default pose, which
      * for anything not roughly 5 units from the origin looks like the geometry
      * failed to import. */
     if (o.camera.present) {
-        emit_line(&e, "// camera\n");
-        emit_line(&e, "glTranslatef(0.0f, 0.0f, %.4ff);\n", -o.camera.dist);
-        emit_line(&e, "glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);\n", o.camera.rx);
-        emit_line(&e, "glRotatef(%.4ff, 0.0f, 1.0f, 0.0f);\n", o.camera.ry);
-        emit_line(&e, "glTranslatef(%.4ff, %.4ff, %.4ff);\n",
+        emit_line(&e, "glTranslatef(0.0f, 0.0f, %.4ff);   // @camera dist\n",
+                  -o.camera.dist);
+        emit_line(&e, "glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);   // @camera rx\n",
+                  o.camera.rx);
+        emit_line(&e, "glRotatef(%.4ff, 0.0f, 1.0f, 0.0f);   // @camera ry\n",
+                  o.camera.ry);
+        emit_line(&e, "glTranslatef(%.4ff, %.4ff, %.4ff);   // @camera pan\n",
                   -o.camera.tx, -o.camera.ty, -o.camera.tz);
     }
 

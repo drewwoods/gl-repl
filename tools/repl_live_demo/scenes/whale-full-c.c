@@ -95,7 +95,7 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-static float g_angle = -114.3999f;
+static float g_angle = 0.0f;
 static int   g_rotating = 0;
 
 
@@ -431,10 +431,11 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
-  glTranslatef(0.0000f, 0.0000f, -6.5473f);
-  glRotatef(20.6076f, 1.0f, 0.0f, 0.0f);
-  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);
-  glTranslatef(0.2893f, -0.0000f, -0.0242f);
+  glTranslatef(0.0000f, 0.0000f, -6.5473f);   /* @camera dist */
+  glRotatef(20.6076f, 1.0f, 0.0f, 0.0f);   /* @camera rx */
+  glRotatef(-114.3999f, 0.0f, 1.0f, 0.0f);   /* @camera ry */
+  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);   /* @camera spin */
+  glTranslatef(0.2893f, -0.0000f, -0.0242f);   /* @camera pan */
   /* Light positions, set after the camera so they stay anchored in world space. */
   glLightfv(GL_LIGHT0, GL_POSITION, repl_glfloat4(2, 4, 5, 0));
   glLightfv(GL_LIGHT1, GL_POSITION, repl_glfloat4(-3, 2, -2, 1));

@@ -1,9 +1,8 @@
 // @scene-name Torus
-// camera
-  glTranslatef(0.0000f, 0.0000f, -5.0000f);
-  glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);
-  glTranslatef(0.0000f, 0.0000f, 0.0000f);
+  glTranslatef(0.0000f, 0.0000f, -5.0000f);   // @camera dist
+  glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
 // Snippet start
 float inner = 0.25;
 float outer = 0.70;
