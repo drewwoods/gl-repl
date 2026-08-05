@@ -1735,17 +1735,25 @@ void repl_eval_format_swatch_number(float v, char *out, int out_sz) {
  * sequential rewrite passes over the code (a trailing `// ...` comment
  * is split off first and re-attached untouched at the end):
  *   1. identifier mapping - REPL constants/builtins to their C names
- *      (PI -> M_PI, sin -> sinf, ...), other identifiers verbatim
+ *      (PI -> ((float)M_PI), sin -> sinf, ...), other identifiers verbatim
  *   2. `LHS % RHS` -> `fmodf(LHS, RHS)` (REPL `%` is float-modulo;
  *      C's operator is integer-only), with paren/call-aware operand
  *      scanning in both directions
  *   3. scratch-array subscripts to their exported C array names
- * Inverse of repl_eval_c_expr_to_repl below. */
+ * Inverse of repl_eval_c_expr_to_repl below.
+ *
+ * The named constants carry an explicit `(float)` cast because
+ * `M_PI`/`M_E` are *double* macros: without it every exported expression
+ * touching PI/TAU/e would evaluate in double and round once at the store,
+ * while repl_eval_named_constant_value() hands the evaluator a float and
+ * keeps the whole expression in float. That 1-ulp gap is invisible until
+ * a program compares against it - `if (delta < width)` sitting exactly on
+ * the boundary takes the branch on one side and not the other. */
 void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
     static const struct { const char *from; const char *to; } k_const_expr_to_c[] = {
-        { "TAU", "(2*M_PI)" },
-        { "PI",  "M_PI" },
-        { "e",   "M_E" },
+        { "TAU", "(2.0f*(float)M_PI)" },
+        { "PI",  "((float)M_PI)" },
+        { "e",   "((float)M_E)" },
         { "NAN", "NAN" },
         { "nan", "NAN" },
         { "INFINITY", "INFINITY" },
@@ -1912,16 +1920,30 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
 }
 
 /* Inverse of repl_eval_expr_to_c: translate a C expression from an
- * imported export file back to REPL spelling. `(2*M_PI)` collapses to
- * TAU by substring pass first (it isn't a single identifier), then an
+ * imported export file back to REPL spelling. The multi-token constant
+ * forms (`(2.0f*(float)M_PI)`, `((float)M_PI)`, ...) collapse by
+ * substring pass first - they are not single identifiers - then an
  * identifier-aware pass maps C names back (M_PI -> PI, sinf -> sin),
  * then scratch-array subscripts return to A/B/C[] form. fmodf is left
- * as-is - the REPL grammar accepts it as the fmod builtin. */
+ * as-is - the REPL grammar accepts it as the fmod builtin.
+ *
+ * The cast-free `(2*M_PI)` / bare `M_PI` spellings stay in the table
+ * because files exported before the constants became float-cast still
+ * import; they only ever appear on the way in. */
 void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
+    /* Longest-first: `(2.0f*(float)M_PI)` contains `((float)M_PI)`'s
+     * tail, so a shorter entry matching first would strand `2.0f*`. */
+    static const struct { const char *from; const char *to; } k_const_c_substr[] = {
+        { "(2.0f*(float)M_PI)", "TAU" },
+        { "((float)M_PI)",      "PI"  },
+        { "((float)M_E)",       "e"   },
+        { "(2*M_PI)",           "TAU" }   /* pre-float-cast exports */
+    };
+
     if (!in || !out || out_sz <= 0)
         return;
 
-    /* First pass: substring replacement for (2*M_PI) -> TAU */
+    /* First pass: substring replacement for the parenthesized constants. */
     char tmp[MAX_LINE_LEN];
     snprintf(tmp, sizeof(tmp), "%s", in);
 
@@ -1931,12 +1953,22 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
         char *bend = buf + sizeof(buf) - 1;
         const char *p = tmp;
         while (*p && dst < bend) {
-            if (strncmp(p, "(2*M_PI)", 8) == 0) {
-                if (dst + 3 < bend) { memcpy(dst, "TAU", 3); dst += 3; }
-                p += 8;
-            } else {
-                *dst++ = *p++;
+            int matched = 0;
+            for (size_t i = 0; i < sizeof(k_const_c_substr) / sizeof(k_const_c_substr[0]); i++) {
+                size_t flen = strlen(k_const_c_substr[i].from);
+                size_t tlen = strlen(k_const_c_substr[i].to);
+                if (strncmp(p, k_const_c_substr[i].from, flen) != 0)
+                    continue;
+                if (dst + tlen < bend) {
+                    memcpy(dst, k_const_c_substr[i].to, tlen);
+                    dst += tlen;
+                }
+                p += flen;
+                matched = 1;
+                break;
             }
+            if (!matched)
+                *dst++ = *p++;
         }
         *dst = '\0';
         snprintf(tmp, sizeof(tmp), "%s", buf);

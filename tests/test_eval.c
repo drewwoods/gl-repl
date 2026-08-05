@@ -707,8 +707,8 @@ static void run_tests(void) {
     /* ---- Expression translation ---- */
     printf("repl_expr_to_c:\n");
     ASSERT_TO_C("sin(x)", "sinf(x)");
-    ASSERT_TO_C("cos(PI/4)", "cosf(M_PI/4)");
-    ASSERT_TO_C("TAU/n", "(2*M_PI)/n");
+    ASSERT_TO_C("cos(PI/4)", "cosf(((float)M_PI)/4)");
+    ASSERT_TO_C("TAU/n", "(2.0f*(float)M_PI)/n");
     ASSERT_TO_C("sqrt(x*x+y*y)", "sqrtf(x*x+y*y)");
     ASSERT_TO_C("abs(-1)", "fabsf(-1)");
     ASSERT_TO_C("glVertex3f(1,2,3)", "glVertex3f(1,2,3)");  /* unchanged */
@@ -736,6 +736,9 @@ static void run_tests(void) {
 
     printf("c_expr_to_repl:\n");
     ASSERT_TO_REPL("sinf(x)", "sin(x)");
+    ASSERT_TO_REPL("cosf(((float)M_PI)/4)", "cos(PI/4)");
+    ASSERT_TO_REPL("(2.0f*(float)M_PI)/n", "TAU/n");
+    /* Pre-float-cast exports still import. */
     ASSERT_TO_REPL("cosf(M_PI/4)", "cos(PI/4)");
     ASSERT_TO_REPL("(2*M_PI)/n", "TAU/n");
     ASSERT_TO_REPL("sqrtf(x*x+y*y)", "sqrt(x*x+y*y)");
@@ -1149,14 +1152,14 @@ static void run_tests(void) {
     ASSERT_TO_C("floor(x/2)", "floorf(x/2)");
     ASSERT_TO_C("ceil(x+1)", "ceilf(x+1)");
     ASSERT_TO_C("round(x+1)", "roundf(x+1)");
-    ASSERT_TO_C("PI", "M_PI");
+    ASSERT_TO_C("PI", "((float)M_PI)");
     ASSERT_TO_C("", "");
     ASSERT_TO_C("x + y", "x + y");                    /* passthrough, no substitution */
     ASSERT_TO_C("fmod(x, 3)", "fmodf(x, 3)");   /* fmod keyword -> fmodf */
     ASSERT_TO_C("log(x)", "log10f(x)");
     ASSERT_TO_C("ln(x)", "logf(x)");
-    ASSERT_TO_C("e", "M_E");
-    ASSERT_TO_C("ln(e)", "logf(M_E)");
+    ASSERT_TO_C("e", "((float)M_E)");
+    ASSERT_TO_C("ln(e)", "logf(((float)M_E))");
 
     /* ---- c_expr_to_repl additional translations ---- */
     printf("c_expr_to_repl (additional):\n");
@@ -1164,10 +1167,13 @@ static void run_tests(void) {
     ASSERT_TO_REPL("floorf(x/2)", "floor(x/2)");
     ASSERT_TO_REPL("ceilf(x+1)", "ceil(x+1)");
     ASSERT_TO_REPL("roundf(x+1)", "round(x+1)");
+    ASSERT_TO_REPL("((float)M_PI)", "PI");
     ASSERT_TO_REPL("M_PI", "PI");
+    ASSERT_TO_REPL("((float)M_E)", "e");
     ASSERT_TO_REPL("M_E", "e");
     ASSERT_TO_REPL("log10f(x)", "log(x)");
     ASSERT_TO_REPL("logf(x)", "ln(x)");
+    ASSERT_TO_REPL("logf(((float)M_E))", "ln(e)");
     ASSERT_TO_REPL("logf(M_E)", "ln(e)");
     ASSERT_TO_REPL("", "");
     ASSERT_TO_REPL("x + y", "x + y");
