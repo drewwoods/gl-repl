@@ -1,5 +1,27 @@
 # Tagged camera header + one shared reader
 
+> **Landed.** Implemented across `src/repl/camera_header.{c,h}` (the reader),
+> `src/repl/doc_order.{c,h}` (the ordering phase machine),
+> `src/app/boot/glr_lint_scenes.c` (`--lint-scenes`), the collapsed
+> `ReplExportCameraBridge`, and a migrated 46-file corpus. Covered by
+> `test_camera_header`, `test_camera_apply_modes` and
+> `test_camera_header_parity`.
+>
+> Two deviations from the plan as written, both recorded in the commits:
+>
+> - Phase 1 did not land separately, so `k_known_divergent[]` never existed -
+>   the parity test arrived with the reader already in place and has been green
+>   from its first run.
+> - The corpus migration drops each block's `// camera` banner rather than
+>   letting it re-save below the rows it used to head. It is an ordinary
+>   comment either way; a banner floating above unrelated body code is worse
+>   than none.
+>
+> The parity test earned its keep immediately: the catalog loader ate the blank
+> run between the `@cfg` header and the body while the file loader kept it, so
+> the same scene had one more row when opened as a file. Both paths keep
+> authored blank lines now.
+
 ## Goal
 
 Make a scene's `// camera` header mean the same thing no matter which loader
