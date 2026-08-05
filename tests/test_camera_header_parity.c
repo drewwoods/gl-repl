@@ -44,6 +44,7 @@
 #include "repl/state.h"
 #include "source_document.h"
 #include "support/camera_bridge_stub.h"
+#include "support/scene_corpus.h"
 #include "support/test_harness.h"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
@@ -576,12 +577,30 @@ static void test_exported_c_fixture(void) {
     parity_free_lines(lines);
 }
 
+/* Walk `dir` and assert it contributed something. parity_walk_dir returns 0
+ * for a directory that isn't there, and a bare `total > 0` at the end is
+ * satisfied by any one corpus - so a mistyped or missing path would silently
+ * contribute no coverage while the test still passed. Bind the count to the
+ * directory that produced it instead. */
+static int parity_walk_dir_checked(const char *dir, const char *label) {
+    int n = parity_walk_dir(dir);
+    TEST_ASSERT_TRUE(&g_harness, label, n > 0);
+    return n;
+}
+
 int main(void) {
     int n = 0;
 
     printf("=== camera header loader parity ===\n");
-    n += parity_walk_dir("examples/scenes");
-    n += parity_walk_dir("tests/scenes/stress");
+    n += parity_walk_dir_checked("examples/scenes",
+                                 "examples/scenes corpus was found");
+    /* The tests/scenes corpora are opt-in; see support/scene_corpus.h. */
+    if (repl_test_scene_corpus_enabled()) {
+        n += parity_walk_dir_checked("tests/scenes/stress",
+                                     "stress corpus was found");
+        n += parity_walk_dir_checked("tests/scenes/general",
+                                     "general corpus was found");
+    }
     printf("--- compared %d scenes on both load paths ---\n", n);
     TEST_ASSERT_TRUE(&g_harness, "the corpus was actually found", n > 0);
     test_frozen_rejections();

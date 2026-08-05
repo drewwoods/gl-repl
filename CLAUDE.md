@@ -70,6 +70,7 @@ make glut             # Fallback: system GLUT (Apple framework)
 make test             # Build + run all tests (debug: ASan + UBSan)
 make test-stubs       # Tests against bundled no-op GL stubs (no GL libs needed)
 make test-web         # The same suite as wasm under node (needs emcc + node)
+make test-scenes      # Opt-in tests/scenes corpora (stress + general); in test-full
 make test-msan        # Stubbed tests under MemorySanitizer
 make debug-msan       # Everything under MSan (Clang/runtime permitting)
 make check-c99        # C99 ratchet (sample + demos + bench)
@@ -207,6 +208,26 @@ make test-repl-core-parse test-repl-core-format test-repl-core-commit test-repl-
 
 Test sources under `tests/`, shared helpers `tests/support/`; binaries land
 at the repo root (`./test_eval`, …).
+
+**Scene corpora**: `examples/scenes` (the shipped catalog) always runs.
+`tests/scenes/{stress,general}` is **opt-in** - each scene costs an export
+plus a `cc`, and those dirs exist to collect corner cases and grow freely.
+`make test-scenes` runs them (`test-full` includes it); the gate is
+`REPL_SCENE_CORPUS=1`, read only through
+[`tests/support/scene_corpus.h`](tests/support/scene_corpus.h). Adding a
+scene dir means a `parity_walk_dir_checked()` line **and** a
+`test_scene_dir_exports_compile()` line - a walk whose directory is missing
+returns 0 and would otherwise pass silently.
+
+**Export parity** ([`tests/test_export_trace_parity.c`](tests/test_export_trace_parity.c))
+compiles and *runs* the exported C against the GL stubs and compares it to
+`repl_execute_program()`. It compares **argument values, not just call
+counts** (counts cannot see a frozen vertex), over several `t` values run as
+successive frames of one session - which is what puts the value-only rebake
+path under test, since frame 1 never reaches it. Array payloads
+(`glMultMatrixf`'s 16 cells, `glMaterialfv`'s color) are in the trace too.
+A new fungible executor/exporter spelling needs a `g_fusion_pairs` entry;
+both the counter and the trace comparison read that one table.
 
 **Guards**: `make check-state-ownership` runs the full ownership/contract
 inventory (includes `check-c99`, `check-include-style`, `check-keymap-no-dup`,

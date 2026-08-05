@@ -26,6 +26,7 @@
 #define g_multisample_enabled (glr_state_render_mut()->multisample_enabled)
 #define g_line_smooth_enabled (glr_state_render_mut()->line_smooth_enabled)
 
+#include "support/scene_corpus.h"
 #include "support/test_harness.h"
 #include <ctype.h>
 #include <stdio.h>
@@ -1859,49 +1860,61 @@ static int update_all_golden_fixtures(void) {
     return 0;
 }
 
-static void test_stress_scene_exports_compile(const char *temp_dir) {
+/* Scene-corpus export gate, shared by every directory under tests/scenes.
+ * `tag` names the corpus in assertion labels and in the per-scene export
+ * filename, so two corpora can share one temp dir without colliding.
+ *
+ * This is thinner than the built-in example loop above: no golden text and
+ * no import round-trip, just "loads, exports, and the exported C compiles".
+ * Those corpora exist to be corner cases, not to be pinned byte-for-byte -
+ * a golden per stress scene would turn every deliberate edit into a
+ * fixture regen. */
+static void test_scene_dir_exports_compile(const char *dir, const char *tag,
+                                           const char *temp_dir) {
     char err[512];
+    char label[160];
     int loaded;
 
     err[0] = '\0';
-    loaded = repl_examples_load_dir("tests/scenes/stress", err, sizeof(err));
-    ASSERT_TRUE("stress scene catalog loads", loaded);
+    loaded = repl_examples_load_dir(dir, err, sizeof(err));
+    snprintf(label, sizeof(label), "%s scene catalog loads", tag);
+    ASSERT_TRUE(label, loaded);
     if (!loaded) {
-        printf("DETAIL [stress scene catalog load failed] %s\n",
-               err[0] ? err : "unknown error");
+        printf("DETAIL [%s scene catalog load failed] %s\n",
+               tag, err[0] ? err : "unknown error");
         return;
     }
 
-    ASSERT_TRUE("stress scene catalog is non-empty", repl_example_count() > 0);
+    snprintf(label, sizeof(label), "%s scene catalog is non-empty", tag);
+    ASSERT_TRUE(label, repl_example_count() > 0);
     for (int idx = 0; idx < repl_example_count(); idx++) {
         const char *name = repl_example_name(idx);
         char export_path[512];
         char detail[4096];
-        char label[160];
         int exported;
         int compiled = 0;
 
         load_example_for_test(idx);
-        snprintf(label, sizeof(label), "stress scene %02d loads", idx);
+        snprintf(label, sizeof(label), "%s scene %02d loads", tag, idx);
         ASSERT_TRUE(label, repl_state_document_count() > 0);
-        snprintf(label, sizeof(label), "stress scene %02d has no invalid cmds", idx);
+        snprintf(label, sizeof(label), "%s scene %02d has no invalid cmds", tag, idx);
         ASSERT_TRUE(label, examples_have_no_invalid_cmds());
 
-        snprintf(export_path, sizeof(export_path), "%s/stress_%02d.c",
-                 temp_dir, idx);
+        snprintf(export_path, sizeof(export_path), "%s/%s_%02d.c",
+                 temp_dir, tag, idx);
         exported = repl_export_save_output(export_path, source_document_view(), NULL);
-        snprintf(label, sizeof(label), "stress scene %02d exports", idx);
+        snprintf(label, sizeof(label), "%s scene %02d exports", tag, idx);
         ASSERT_TRUE(label, exported);
         detail[0] = '\0';
         if (exported && repl_state_document_count() > 0 &&
             examples_have_no_invalid_cmds())
             compiled = compile_exported_source(idx, name, export_path,
-                                                detail, sizeof(detail));
+                                               detail, sizeof(detail));
         if (!compiled) {
-            printf("DETAIL [stress scene export compile failed] name=%s file=%s\n%s\n",
-                   name ? name : "(unnamed)", export_path, detail);
+            printf("DETAIL [%s scene export compile failed] name=%s file=%s\n%s\n",
+                   tag, name ? name : "(unnamed)", export_path, detail);
         }
-        snprintf(label, sizeof(label), "stress scene %02d export compiles", idx);
+        snprintf(label, sizeof(label), "%s scene %02d export compiles", tag, idx);
         ASSERT_TRUE(label, compiled);
 
         if (!g_keep_temp)
@@ -2723,7 +2736,10 @@ int main(int argc, char **argv) {
         }
     }
 
-    test_stress_scene_exports_compile(temp_dir);
+    if (repl_test_scene_corpus_enabled()) {
+        test_scene_dir_exports_compile("tests/scenes/stress",  "stress",  temp_dir);
+        test_scene_dir_exports_compile("tests/scenes/general", "general", temp_dir);
+    }
 
     if (g_keep_temp)
         fprintf(stderr, "repl_core_examples: keeping temp dir %s\n", temp_dir);

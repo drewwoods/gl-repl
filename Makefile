@@ -261,7 +261,7 @@ ifeq ($(origin BUILD),command line)
 # explicit BUILD - honor it
 else ifeq ($(origin BUILD),environment)
 # explicit BUILD - honor it
-else ifneq ($(filter test test-detailed test-stubs test-no-checks test-only test-msan test-full,$(MAKECMDGOALS)),)
+else ifneq ($(filter test test-detailed test-stubs test-no-checks test-only test-msan test-full test-scenes,$(MAKECMDGOALS)),)
 BUILD := debug
 else
 BUILD := release
@@ -1760,6 +1760,7 @@ PACKAGE_TARGETS = \
 
 TEST_TARGETS = \
 	test test-detailed test-stubs test-asan-ubsan test-msan test-full \
+	test-scenes internal-test-scenes \
 	test-web internal-test-suite-web \
 	rebuild-golden internal-test-suite internal-test-case \
 	internal-rebuild-golden gl-tests $(TEST_TARGET_NAMES) $(RUN_TEST_TARGETS)
@@ -2188,6 +2189,25 @@ internal-test-case: $$(BINDIR)/$$(TEST_CASE)
 	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
 	$($(TEST_CASE)_RUN) $(TEST_ARGS)
 
+# The scene corpora under tests/scenes/ are opt-in: every scene costs an
+# export plus a cc invocation, and unlike examples/scenes (which ships to
+# users and always runs) they exist to collect corner cases and are meant to
+# grow freely. REPL_SCENE_CORPUS is read by tests/support/scene_corpus.h;
+# only these two binaries consult it, so only they need rebuilding+running.
+SCENE_CORPUS_TESTS = test_repl_core_examples test_camera_header_parity
+
+test-scenes: ## Run the opt-in tests/scenes corpora (stress + general) through export+compile.
+	+$(MAKE) --no-print-directory internal-test-scenes USE_GL_STUBS=1 BUILD=$(BUILD)
+
+internal-test-scenes: $(addprefix $(BINDIR)/,$(SCENE_CORPUS_TESTS))
+	@REPL_SCENE_CORPUS=1 \
+	REPL_EXPORT_VERBOSE=$(if $(filter 1,$(TEST_VERBOSE)),1,0) \
+	REPL_EXPORT_CC="$(CC)" \
+	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
+	TEST_JOBS="$(TEST_JOBS)" \
+	bash scripts/run-tests.sh \
+		$(foreach test,$(SCENE_CORPUS_TESTS),'$(test):::$($(test)_RUN)')
+
 rebuild-golden: ## Rebuild all golden examples from test_repl_core_examples.
 	+$(MAKE) --no-print-directory internal-rebuild-golden USE_GL_STUBS=1
 
@@ -2254,6 +2274,7 @@ test-full: ## Run the full build, test, sanitizer, benchmark, and real-GL gate.
 		$(MAKE) --no-print-directory $$target USE_GL_STUBS=1; \
 	done
 	+$(MAKE) --no-print-directory test-stubs NO_SAN=0
+	+$(MAKE) --no-print-directory test-scenes
 	+$(MAKE) --no-print-directory test-msan
 	+$(MAKE) --no-print-directory gl-repl
 	+$(MAKE) --no-print-directory gl-tests
