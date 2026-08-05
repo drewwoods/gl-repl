@@ -8,20 +8,27 @@
  * need the gl_stub_counts[] counters to be live.
  *
  * For each program in the curated table the test:
- *   1. resets the REPL, feeds each line through editor_feed_line(),
- *      flattens, calls repl_execute_program(), and snapshots
- *      gl_stub_counts into repl_counts[];
+ *   1. feeds each line through editor_feed_line();
  *   2. writes the program to a temp file via repl_export_save_output();
  *   3. shells out to cc, compiling that file + the stubs + the trace
  *      driver into a child binary (with -Dmain=app_main so the exported
  *      file's GLUT main() is renamed out of the way);
- *   4. runs the child, parses the per-symbol counts it dumps;
+ *   4. runs BOTH legs over g_time_samples as successive frames of one
+ *      session - the REPL leg through repl_refresh_flat_program() (so the
+ *      value-only rebake path is exercised, not just a full flatten), the
+ *      child by re-assigning `t` and calling draw_scene() again;
  *   5. subtracts the fixed display()-boilerplate counts that the REPL
  *      executor never emits (g_display_header glClear / glLoadIdentity /
  *      glPushAttrib and g_footer_pre_init glPopAttrib);
- *   6. compares - known fungible pairs like glColor3f vs glColor4f get
- *      summed before comparing because the executor folds 3f into 4f at
- *      execute time.
+ *   6. compares counters AND the per-call argument traces. Known fungible
+ *      pairs like glColor3f vs glColor4f are reconciled from one table
+ *      (g_fusion_pairs) on both sides, because the executor folds 3f into
+ *      4f at execute time while the exporter writes 3f literally.
+ *
+ * Comparing the traces is what makes this a semantic test rather than a
+ * structural one: counters agree whenever the same calls are made, so a
+ * scene whose numbers are all wrong - a frozen vertex, a stale matrix -
+ * used to pass here with every counter matching.
  *
  * Pass --full to walk every built-in example (slow: one cc invocation
  * per example). Default is the curated set, which covers the
@@ -38,11 +45,13 @@
 #include "repl/export.h"
 #include "repl/pipeline.h"
 #include "repl/state.h"
+#include "repl/state_owners.h"
 #include "source_document.h"
 #include "ui/app/state.h"
 
 #include <GL/gl_stub_counts.h>
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -157,9 +166,10 @@ static const char *prog_stencil_mask[] = {
     /* The two-pass masking shape, and the only place the exported C of a
      * stencil scene is compiled at all: it proves the export writer emits
      * every stencil call (and that the prologue still compiles with them
-     * present). Note this compares call *counts*, not argument values -
-     * the ref-truncation parity is pinned by value in
-     * test_repl_flatten_rebake.c and test_repl_export_all_commands.c. */
+     * present). Argument values are compared here too, so the masks and
+     * ref values are pinned on both legs; the ref-truncation semantics
+     * themselves live in test_repl_flatten_rebake.c and
+     * test_repl_export_all_commands.c. */
     "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);",
     "glEnable(GL_STENCIL_TEST);",
     "glStencilFunc(GL_ALWAYS, 1, 0xFF);",
@@ -197,6 +207,48 @@ static const char *prog_func_locals[] = {
     NULL
 };
 
+/* Everything the counters are structurally blind to, in one program:
+ * a scratch matrix (glMultMatrixf(A) reads the array rather than any
+ * expression slot, so its 16 cells only reach the flat command through a
+ * snapshot), a time-varying cell, and a per-iteration write inside a loop.
+ * Every t produces the same call sequence and the same counts here - only
+ * the numbers move - so this case passes trivially without the trace
+ * comparison and without the multi-t sampling. */
+static const char *prog_scratch_matrix[] = {
+    "A[0] = 1;",  "A[1] = 0;",         "A[2] = 0;",  "A[3] = 0;",
+    "A[4] = sin(t) * 0.5;",            "A[5] = 1;",
+    "A[6] = 0;",  "A[7] = 0;",
+    "A[8] = 0;",  "A[9] = 0;",         "A[10] = 1;", "A[11] = 0;",
+    "A[12] = 0;", "A[13] = 0;",        "A[14] = 0;", "A[15] = 1;",
+    "for(k, 0, 3) {",
+    "A[13] = cos(t + k);",
+    "glPushMatrix();",
+    "glMultMatrixf(A);",
+    "glBegin(GL_POINTS);",
+    "glVertex3f(k, 0, 0);",
+    "glEnd();",
+    "glPopMatrix();",
+    "}",
+    NULL
+};
+
+/* Material colors are an array arg too, and a scene that picks its
+ * material by a time-driven branch keeps every counter fixed while the
+ * values swing. */
+static const char *prog_material_branch[] = {
+    "float h;",
+    "h = abs(sin(t)) * 2;",
+    "if (h > 1.0) {",
+    "glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.9, 0.2, 0.3, 1.0});",
+    "} else {",
+    "glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.2, 0.7, 0.9, 1.0});",
+    "}",
+    "glBegin(GL_POINTS);",
+    "glVertex3f(h, 0, 0);",
+    "glEnd();",
+    NULL
+};
+
 static const TraceProgram g_curated[] = {
     { "triangle",            prog_triangle,        NULL },
     { "loop_in_begin",       prog_loop_in_begin,   NULL },
@@ -207,6 +259,8 @@ static const TraceProgram g_curated[] = {
     { "label_rasterpos",     prog_label_rasterpos, NULL },
     { "stencil_mask",        prog_stencil_mask,    NULL },
     { "func_locals",         prog_func_locals,     NULL },
+    { "scratch_matrix",      prog_scratch_matrix,  NULL },
+    { "material_branch",     prog_material_branch, NULL },
 };
 static const int g_curated_count = (int)(sizeof(g_curated)/sizeof(g_curated[0]));
 
@@ -243,6 +297,13 @@ static const char *expected_fail_for_example(const char *name) {
 typedef struct { int a; int b; } StubFusionPair;
 static const StubFusionPair g_fusion_pairs[] = {
     { GL_STUB_glColor3f, GL_STUB_glColor4f },
+    /* CMD_MATERIALFV always parses as the compound-literal form, and the
+     * executor then dispatches to whichever GL entry point matches the
+     * unpacked count - glMaterialf for the one-float pnames like
+     * GL_SHININESS (executor.c, CMD_MATERIALFV) - while the exporter
+     * always writes glMaterialfv. Same GL state, different spelling; the
+     * three arguments they do share must still agree. */
+    { GL_STUB_glMaterialf, GL_STUB_glMaterialfv },
 };
 static const int g_fusion_pair_count =
     (int)(sizeof(g_fusion_pairs)/sizeof(g_fusion_pairs[0]));
@@ -294,6 +355,166 @@ static void compose_compile_cmd(char *buf, size_t n,
         exported_c, bin_path, log_path);
 }
 
+/* ---- Trace (argument-value) comparison ---------------------------------
+ *
+ * Counters answer "were the same calls made"; they cannot answer "with the
+ * same numbers". A frozen vertex and a moving one are one glVertex3f each,
+ * so a scene can diverge completely from its exported C with every counter
+ * in agreement - which is exactly how a REPL-only `fabs` (evaluating to 0.0f
+ * while the exported C resolved libm's) and a stale glMultMatrixf payload
+ * both stayed invisible here. The per-call traces both legs already write
+ * carry the values; comparing them is the real assertion, with the counters
+ * kept as the coarse first pass because their failure message is far easier
+ * to read.
+ *
+ * Numeric fields compare with a tolerance instead of by text. The REPL bakes
+ * each argument through its own float evaluator at flatten time while the
+ * exported C recomputes the expression at runtime, so the two can legitimately
+ * disagree in the last digit or two that %g prints. The tolerance is tight
+ * enough that a genuinely different number cannot hide under it. */
+#define TRACE_ABS_EPS 1e-5
+#define TRACE_REL_EPS 1e-4
+#define TRACE_MAX_FIELDS 24      /* glMultMatrixf: symbol + 16 cells */
+#define TRACE_MAX_REPORTED 12    /* mismatch lines before truncating */
+
+/* Whole-token equality: identical text (symbol names, integer codes), or
+ * both parse as numbers that agree within tolerance. A token that is not
+ * numeric on both sides only matches textually. */
+static int trace_field_equal(const char *a, const char *b) {
+    char *end_a = NULL, *end_b = NULL;
+    double va, vb, diff, mag;
+
+    if (strcmp(a, b) == 0)
+        return 1;
+
+    va = strtod(a, &end_a);
+    vb = strtod(b, &end_b);
+    if (!end_a || *end_a || end_a == a || !end_b || *end_b || end_b == b)
+        return 0;   /* at least one side is not a bare number */
+
+    diff = fabs(va - vb);
+    if (diff <= TRACE_ABS_EPS)
+        return 1;
+    mag = fabs(va) > fabs(vb) ? fabs(va) : fabs(vb);
+    return diff <= mag * TRACE_REL_EPS;
+}
+
+static int trace_split(char *line, char *fields[], int max) {
+    int n = 0;
+    char *save = NULL;
+    for (char *tok = strtok_r(line, " \t\r\n", &save);
+         tok && n < max;
+         tok = strtok_r(NULL, " \t\r\n", &save))
+        fields[n++] = tok;
+    return n;
+}
+
+/* The counter fusion has a trace twin. The executor routes CMD_COLOR3F
+ * through glColor4f while the exporter writes glColor3f literally, so for
+ * one source line the two legs name different symbols - g_fusion_pairs is
+ * the same table compare_counts sums over. Treat such a pair as the same
+ * call and compare only the arguments they share: the alpha the executor
+ * appends has no counterpart in the C the exporter wrote, so demanding it
+ * match would fail every colored scene. */
+static int trace_symbols_fused(const char *a, const char *b) {
+    for (int i = 0; i < g_fusion_pair_count; i++) {
+        const char *na = gl_stub_count_name(g_fusion_pairs[i].a);
+        const char *nb = gl_stub_count_name(g_fusion_pairs[i].b);
+        if ((strcmp(a, na) == 0 && strcmp(b, nb) == 0) ||
+            (strcmp(a, nb) == 0 && strcmp(b, na) == 0))
+            return 1;
+    }
+    return 0;
+}
+
+static int trace_lines_equal(const char *a_line, const char *b_line) {
+    char a_buf[512], b_buf[512];
+    char *a_fields[TRACE_MAX_FIELDS], *b_fields[TRACE_MAX_FIELDS];
+    int a_n, b_n, shared;
+
+    snprintf(a_buf, sizeof a_buf, "%s", a_line);
+    snprintf(b_buf, sizeof b_buf, "%s", b_line);
+    a_n = trace_split(a_buf, a_fields, TRACE_MAX_FIELDS);
+    b_n = trace_split(b_buf, b_fields, TRACE_MAX_FIELDS);
+
+    if (a_n == 0 || b_n == 0)
+        return a_n == b_n;
+
+    if (strcmp(a_fields[0], b_fields[0]) != 0) {
+        if (!trace_symbols_fused(a_fields[0], b_fields[0]))
+            return 0;
+        /* Fused: argument lists may differ in length by the folded-in
+         * trailing arg. Everything they share must still agree. */
+        shared = a_n < b_n ? a_n : b_n;
+    } else {
+        if (a_n != b_n)
+            return 0;
+        shared = a_n;
+    }
+
+    for (int i = 1; i < shared; i++)
+        if (!trace_field_equal(a_fields[i], b_fields[i]))
+            return 0;
+    return 1;
+}
+
+/* Walk both trace files in lockstep. Returns 1 when every line agrees.
+ * `details` behaves like compare_counts': stderr to print, NULL to stay
+ * silent for XFAIL cases. Reports at most TRACE_MAX_REPORTED lines - past
+ * that the traces have desynchronized and the remaining diff is noise the
+ * FAIL branch's diff(1) hunk shows better. */
+static int compare_traces(const char *case_name,
+                          const char *repl_path, const char *child_path,
+                          FILE *details) {
+    FILE *fa = fopen(repl_path, "r");
+    FILE *fb = fopen(child_path, "r");
+    char la[512], lb[512];
+    int line_no = 0, mismatches = 0;
+
+    if (!fa || !fb) {
+        if (details)
+            fprintf(details, "  [%s] trace unreadable: %s\n", case_name,
+                    !fa ? repl_path : child_path);
+        if (fa) fclose(fa);
+        if (fb) fclose(fb);
+        return 0;
+    }
+
+    for (;;) {
+        char *ga = fgets(la, sizeof la, fa);
+        char *gb = fgets(lb, sizeof lb, fb);
+
+        if (!ga && !gb)
+            break;
+        line_no++;
+        if (!ga || !gb) {
+            if (details)
+                fprintf(details,
+                        "  [%s] trace length differs at line %d: %s ended first\n",
+                        case_name, line_no, !ga ? "repl" : "child");
+            mismatches++;
+            break;
+        }
+        if (!trace_lines_equal(la, lb)) {
+            if (mismatches < TRACE_MAX_REPORTED && details) {
+                la[strcspn(la, "\n")] = '\0';
+                lb[strcspn(lb, "\n")] = '\0';
+                fprintf(details,
+                        "  [%s] trace line %d: repl=\"%s\" child=\"%s\"\n",
+                        case_name, line_no, la, lb);
+            }
+            mismatches++;
+        }
+    }
+
+    fclose(fa);
+    fclose(fb);
+    if (mismatches > TRACE_MAX_REPORTED && details)
+        fprintf(details, "  [%s] ... %d more trace mismatches\n",
+                case_name, mismatches - TRACE_MAX_REPORTED);
+    return mismatches == 0;
+}
+
 /* Compare REPL-side and child counts. Returns 1 on full parity,
  * 0 on any mismatch. If `details` is non-NULL, one line per mismatched
  * counter is written to it; callers pass stderr to print, NULL to stay
@@ -336,6 +557,66 @@ static int compare_counts(const char *case_name,
     return mismatches == 0;
 }
 
+/* Time samples both legs run, in order. A single frame at t=0 cannot see
+ * anything that only goes wrong once time advances - the REPL's value-only
+ * rebake path, for one, is not even reached until the second frame, so a
+ * flat program that goes stale there looked perfect here. Extra samples
+ * cost one child process and one REPL execute each; the compile, which
+ * dominates the runtime, happens once for all of them. */
+static const float g_time_samples[] = { 0.0f, 0.75f, 2.5f };
+static const int g_time_sample_count =
+    (int)(sizeof(g_time_samples)/sizeof(g_time_samples[0]));
+
+/* Feed the program into a freshly-reset REPL. `z` and `i` are declared for
+ * the curated programs that use them as plain scene variables. */
+static void feed_program(const TraceProgram *prog) {
+    char err[128];
+
+    glr_ctrl_reset_all();
+    repl_eval_declare_predef_var("z", err, sizeof err);
+    repl_eval_declare_predef_var("i", err, sizeof err);
+    g_status[0] = '\0';
+
+    for (int li = 0; prog->lines[li]; li++)
+        editor_feed_line(prog->lines[li]);
+}
+
+/* The REPL leg: one session, one frame per time sample, into a single
+ * trace and a single set of cumulative counters - the shape the child
+ * binary runs too.
+ *
+ * The refresh goes through repl_refresh_flat_program(), not a direct
+ * repl_flatten_commands(), because that boundary is what the app calls and
+ * it is the thing under test. It full-flattens the first frame and then
+ * routes a value-only `t` change to the in-place rebake, so a rebake that
+ * fails to update some baked value diverges from the exported C on frame 2
+ * while frame 1 looks perfect. Calling flatten directly would rebuild the
+ * program every frame and never exercise that path at all. */
+static void run_repl_frames(const TraceProgram *prog,
+                            const char *trace_path,
+                            unsigned long long *counts_out) {
+    feed_program(prog);
+
+    /* Init+destroy bracket the executor's gluNewTess / gluTessCallback /
+     * gluDeleteTess setup - these are REPL-internal, not user-emitted GL,
+     * so reset counters AFTER init and snapshot BEFORE destroy to keep
+     * the trace user-code-only. The trace file opens between reset and
+     * execute for the same reason. */
+    repl_executor_init_resources();
+    gl_stub_counts_reset();
+    gl_stub_trace_open(trace_path);
+    for (int frame = 0; frame < g_time_sample_count; frame++) {
+        repl_state_time_set(g_time_samples[frame]);
+        repl_refresh_flat_program(editor_state_edit_line());
+        gl_stub_trace_mark(frame, (double)g_time_samples[frame]);
+        repl_execute_program(NULL);
+    }
+    gl_stub_trace_close();
+    memcpy(counts_out, gl_stub_counts,
+           sizeof(unsigned long long) * GL_STUB_COUNT_MAX);
+    repl_executor_destroy_resources();
+}
+
 /* Run one program through both legs and compare. Returns the four-
  * bucket ParityResult so the caller can tally PASS/FAIL/XFAIL/XPASS.
  *
@@ -371,31 +652,9 @@ static ParityResult run_one_case(const TraceProgram *prog) {
     snprintf(temp_repl_tr,  sizeof temp_repl_tr,  "/tmp/test_trace_%d_%s.repl.tr",   (int)pid, safe_name);
     snprintf(temp_child_tr, sizeof temp_child_tr, "/tmp/test_trace_%d_%s.child.tr",  (int)pid, safe_name);
 
-    /* REPL leg. */
-    glr_ctrl_reset_all();
-    char err[128];
-    repl_eval_declare_predef_var("z", err, sizeof err);
-    repl_eval_declare_predef_var("i", err, sizeof err);
-    g_status[0] = '\0';
-
-    for (int li = 0; prog->lines[li]; li++) {
-        editor_feed_line(prog->lines[li]);
-    }
-    repl_flatten_commands(editor_state_edit_line());
-
-    /* Init+destroy bracket the executor's gluNewTess / gluTessCallback /
-     * gluDeleteTess setup - these are REPL-internal, not user-emitted GL,
-     * so reset counters AFTER init and snapshot BEFORE destroy to keep
-     * the trace user-code-only. The trace file opens between reset and
-     * execute for the same reason. */
-    repl_executor_init_resources();
-    gl_stub_counts_reset();
-    gl_stub_trace_open(temp_repl_tr);
-    repl_execute_program(NULL);
-    gl_stub_trace_close();
-    unsigned long long repl_counts[GL_STUB_COUNT_MAX];
-    memcpy(repl_counts, gl_stub_counts, sizeof repl_counts);
-    repl_executor_destroy_resources();
+    /* Feed once so there is a document to export. Each t sample re-feeds
+     * from scratch below; this call only has to leave the document live. */
+    feed_program(prog);
 
     /* Export leg. */
     repl_export_save_output(temp_c, source_document_view(), NULL);
@@ -443,15 +702,28 @@ static ParityResult run_one_case(const TraceProgram *prog) {
         unlink(standalone_log);
     }
 
-    snprintf(cmd, sizeof cmd, "'%s' '%s' '%s'",
-             temp_bin, temp_out, temp_child_tr);
+    /* Both legs now run every time sample as successive frames of one
+     * session, so each produces a single multi-frame trace and one set of
+     * cumulative counters. */
+    unsigned long long repl_counts[GL_STUB_COUNT_MAX];
+    unsigned long long child_counts[GL_STUB_COUNT_MAX];
+
+    run_repl_frames(prog, temp_repl_tr, repl_counts);
+
+    {
+        int used = snprintf(cmd, sizeof cmd, "'%s' '%s' '%s'",
+                            temp_bin, temp_out, temp_child_tr);
+        for (int s = 0; s < g_time_sample_count && used > 0 &&
+                        used < (int)sizeof cmd; s++)
+            used += snprintf(cmd + used, sizeof cmd - (size_t)used, " %.9g",
+                             (double)g_time_samples[s]);
+    }
     rc = system(cmd);
     if (rc != 0) {
         fprintf(stderr, "  [%s] child rc=%d\n", prog->name, rc);
         return PARITY_FAIL;
     }
 
-    unsigned long long child_counts[GL_STUB_COUNT_MAX];
     if (!read_child_counts(temp_out, child_counts)) {
         fprintf(stderr, "  [%s] child output unreadable: %s\n",
                 prog->name, temp_out);
@@ -459,9 +731,13 @@ static ParityResult run_one_case(const TraceProgram *prog) {
     }
 
     /* Silent comparison first so XFAIL cases stay quiet. We'll re-call
-     * with stderr for FAIL cases below to print the per-counter
-     * mismatch lines. */
-    int match = compare_counts(prog->name, repl_counts, child_counts, NULL);
+     * with stderr for FAIL cases below to print the per-counter mismatch
+     * lines. Counts run first because "glVertex3f: repl=6 child=5"
+     * localizes a structural divergence far faster than the first
+     * differing trace line does; the traces then catch what the counters
+     * are blind to, which is every wrong *value*. */
+    int match = compare_counts(prog->name, repl_counts, child_counts, NULL) &&
+                compare_traces(prog->name, temp_repl_tr, temp_child_tr, NULL);
 
     ParityResult result;
     if (match) {
@@ -484,7 +760,12 @@ static ParityResult run_one_case(const TraceProgram *prog) {
                 prog->name, prog->expected_fail);
         break;
     case PARITY_FAIL: {
+        /* The `# frame N t V` marker lines locate the divergence in time;
+         * a mismatch that first appears after frame 0 is the signature of
+         * a stale value carried across frames rather than a wrong one
+         * computed from the start. */
         (void)compare_counts(prog->name, repl_counts, child_counts, stderr);
+        (void)compare_traces(prog->name, temp_repl_tr, temp_child_tr, stderr);
         char diff_cmd[1024];
         snprintf(diff_cmd, sizeof diff_cmd,
                  "diff --color=always -u '%s' '%s' | head -50 >&2",
@@ -544,26 +825,37 @@ static void print_help(const char *argv0) {
     printf(
 "Usage: %s [--full] [--help]\n"
 "\n"
-"Cross-checks REPL execution against the exported C trace by counting\n"
-"per-symbol stub GL calls on both sides and asserting parity.\n"
+"Cross-checks REPL execution against the exported C by running both and\n"
+"comparing the stub GL calls they make - the per-symbol counts AND the\n"
+"argument values of every call.\n"
 "\n"
 "For each program the test:\n"
-"  1. feeds source lines through editor_feed_line(), flattens, snapshots\n"
-"     gl_stub_counts[] around repl_execute_program();\n"
+"  1. feeds source lines through editor_feed_line();\n"
 "  2. calls repl_export_save_output() to a temp file, shells out to cc\n"
 "     to compile that file together with tests/export_trace_driver.c\n"
 "     (which #includes the exported file so its static helpers\n"
 "     render_repl_geometry / reset_repl_vars are visible);\n"
-"  3. runs the child, reads its dumped counts, compares.\n"
+"  3. runs both legs over several t values, as successive frames of one\n"
+"     session, and compares counts then traces.\n"
 "\n"
-"glColor3f and glColor4f are summed before comparing because the\n"
+"Values, not just counts: a frozen vertex and a moving one are one\n"
+"glVertex3f apiece, so counts alone pass a scene whose every number is\n"
+"wrong. Numeric fields compare within a tolerance because the REPL bakes\n"
+"values through its float evaluator while the exported C recomputes them.\n"
+"\n"
+"Several frames, not one: the REPL re-uses its flat program across frames\n"
+"and only re-bakes the values, so a bake that goes stale is invisible on\n"
+"frame 1 and shows up on frame 2. The traces carry `# frame N t V`\n"
+"markers so a divergence reports when in time it started.\n"
+"\n"
+"glColor3f and glColor4f are reconciled on both sides because the\n"
 "executor folds CMD_COLOR3F through glColor4f at execute time while\n"
-"the exporter emits glColor3f literally.\n"
+"the exporter emits glColor3f literally; the trace comparison matches\n"
+"them over their shared arguments and ignores the appended alpha.\n"
 "\n"
-"On count mismatch the test also runs diff(1) on the two per-call\n"
-"trace files the stubs emitted (gl_stub_trace_fp dumps one\n"
-"\"<symbol> <args>\" line per call) and pipes the first 50 lines of\n"
-"the unified diff to stderr to localize the divergence.\n"
+"On mismatch the test prints the differing counters and trace lines, then\n"
+"runs diff(1) on the two trace files and pipes the first 50 lines of the\n"
+"unified diff to stderr to localize the divergence.\n"
 "\n"
 "Cases listed in g_example_xfail (in the test source) are treated as\n"
 "expected-to-fail. Buckets:\n"
@@ -608,6 +900,14 @@ int main(int argc, char **argv) {
 
     repl_eval_init_predef_vars();
     ui_state_viewport_set_size(1200, 800);
+
+    /* The executor never calls glPointParameterfv directly - it goes through
+     * a proc the controller resolves once the GL context is current, and
+     * with none installed CMD_POINT_PARAMETER_FV is silently a no-op. The
+     * exported C calls the symbol literally, so without this the two legs
+     * disagree by construction on every point-attenuation scene. Installing
+     * the stub entry point is what the controller does for a real context. */
+    repl_executor_install_point_parameter_proc(glPointParameterfv);
 
     ParityTotals totals = {0};
     for (int i = 0; i < g_curated_count; i++) {

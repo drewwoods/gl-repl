@@ -395,24 +395,43 @@ static inline const GLubyte *glGetString(GLenum name) {
      * today's default build. Not counted/traced (no scalar args). */
     return (const GLubyte *)"2.1 stub";
 }
+/* Payload width for the pname-keyed pointer args. GL infers the element
+ * count from pname, so the trace has to as well - printing four floats for
+ * a GL_SHININESS call would read three values past the end of a one-float
+ * array. Only pnames this stub set actually defines are listed; the rest
+ * (spot/attenuation parameters) have no GL_* macro here because nothing in
+ * the tree calls them, and adding unused enums would bloat the stubs. */
+static inline int gl_stub_paramv_len(GLenum pname) {
+    switch (pname) {
+    case GL_SHININESS:
+    case GL_LIGHT_MODEL_LOCAL_VIEWER:
+    case GL_LIGHT_MODEL_TWO_SIDE:
+        return 1;
+    case GL_POINT_DISTANCE_ATTENUATION:
+        return 3;
+    default:
+        return 4;
+    }
+}
+
 static inline void glHint(GLenum target, GLenum mode) { GL_STUB_TRACE_LINE("glHint %u %u\n", (unsigned)target, (unsigned)mode); gl_stub_tick(GL_STUB_glHint); }
 static inline GLboolean glIsEnabled(GLenum cap) { GL_STUB_TRACE_LINE("glIsEnabled %u\n", (unsigned)cap); gl_stub_tick(GL_STUB_glIsEnabled); return GL_FALSE; }
-static inline void glLightfv(GLenum light, GLenum pname, const GLfloat *params) { GL_STUB_TRACE_LINE("glLightfv %u %u\n", (unsigned)light, (unsigned)pname); gl_stub_tick(GL_STUB_glLightfv); (void)params; }
-static inline void glLightModelfv(GLenum pname, const GLfloat *params) { GL_STUB_TRACE_LINE("glLightModelfv %u\n", (unsigned)pname); gl_stub_tick(GL_STUB_glLightModelfv); (void)params; }
+static inline void glLightfv(GLenum light, GLenum pname, const GLfloat *params) { GL_STUB_TRACE_LINE("glLightfv %u %u", (unsigned)light, (unsigned)pname); gl_stub_trace_floats(params, gl_stub_paramv_len(pname)); GL_STUB_TRACE_LINE("\n"); gl_stub_tick(GL_STUB_glLightfv); }
+static inline void glLightModelfv(GLenum pname, const GLfloat *params) { GL_STUB_TRACE_LINE("glLightModelfv %u", (unsigned)pname); gl_stub_trace_floats(params, gl_stub_paramv_len(pname)); GL_STUB_TRACE_LINE("\n"); gl_stub_tick(GL_STUB_glLightModelfv); }
 static inline void glLightModeli(GLenum pname, GLint param) { GL_STUB_TRACE_LINE("glLightModeli %u %d\n", (unsigned)pname, (int)param); gl_stub_tick(GL_STUB_glLightModeli); }
 static inline void glLineStipple(GLint factor, GLushort pattern) { GL_STUB_TRACE_LINE("glLineStipple %d %u\n", (int)factor, (unsigned)pattern); gl_stub_tick(GL_STUB_glLineStipple); }
 static inline void glLineWidth(GLfloat width) { GL_STUB_TRACE_LINE("glLineWidth %g\n", (double)width); gl_stub_tick(GL_STUB_glLineWidth); }
 static inline void glLoadIdentity(void) { GL_STUB_TRACE_LINE("glLoadIdentity\n"); gl_stub_tick(GL_STUB_glLoadIdentity); }
-static inline void glLoadMatrixf(const GLfloat *m) { GL_STUB_TRACE_LINE("glLoadMatrixf\n"); gl_stub_tick(GL_STUB_glLoadMatrixf); (void)m; }
-static inline void glMultMatrixf(const GLfloat *m) { GL_STUB_TRACE_LINE("glMultMatrixf\n"); gl_stub_tick(GL_STUB_glMultMatrixf); (void)m; }
+static inline void glLoadMatrixf(const GLfloat *m) { GL_STUB_TRACE_LINE("glLoadMatrixf"); gl_stub_trace_floats(m, 16); GL_STUB_TRACE_LINE("\n"); gl_stub_tick(GL_STUB_glLoadMatrixf); }
+static inline void glMultMatrixf(const GLfloat *m) { GL_STUB_TRACE_LINE("glMultMatrixf"); gl_stub_trace_floats(m, 16); GL_STUB_TRACE_LINE("\n"); gl_stub_tick(GL_STUB_glMultMatrixf); }
 static inline void glMaterialf(GLenum face, GLenum pname, GLfloat param) { GL_STUB_TRACE_LINE("glMaterialf %u %u %g\n", (unsigned)face, (unsigned)pname, (double)param); gl_stub_tick(GL_STUB_glMaterialf); }
-static inline void glMaterialfv(GLenum face, GLenum pname, const GLfloat *params) { GL_STUB_TRACE_LINE("glMaterialfv %u %u\n", (unsigned)face, (unsigned)pname); gl_stub_tick(GL_STUB_glMaterialfv); (void)params; }
+static inline void glMaterialfv(GLenum face, GLenum pname, const GLfloat *params) { GL_STUB_TRACE_LINE("glMaterialfv %u %u", (unsigned)face, (unsigned)pname); gl_stub_trace_floats(params, gl_stub_paramv_len(pname)); GL_STUB_TRACE_LINE("\n"); gl_stub_tick(GL_STUB_glMaterialfv); }
 static inline void glMatrixMode(GLenum mode) { GL_STUB_TRACE_LINE("glMatrixMode %u\n", (unsigned)mode); gl_stub_tick(GL_STUB_glMatrixMode); }
 static inline void glNormal3dv(const GLdouble *v) { GL_STUB_TRACE_LINE("glNormal3dv\n"); gl_stub_tick(GL_STUB_glNormal3dv); (void)v; }
 static inline void glNormal3f(GLfloat nx, GLfloat ny, GLfloat nz) { GL_STUB_TRACE_LINE("glNormal3f %g %g %g\n", (double)nx, (double)ny, (double)nz); gl_stub_tick(GL_STUB_glNormal3f); }
 static inline void glTexCoord3f(GLfloat s, GLfloat t, GLfloat r) { GL_STUB_TRACE_LINE("glTexCoord3f %g %g %g\n", (double)s, (double)t, (double)r); gl_stub_tick(GL_STUB_glTexCoord3f); }
 static inline void glPassThrough(GLfloat token) { GL_STUB_TRACE_LINE("glPassThrough %g\n", (double)token); gl_stub_tick(GL_STUB_glPassThrough); }
-static inline void glPointParameterfv(GLenum pname, const GLfloat *params) { GL_STUB_TRACE_LINE("glPointParameterfv %u\n", (unsigned)pname); gl_stub_tick(GL_STUB_glPointParameterfv); (void)params; }
+static inline void glPointParameterfv(GLenum pname, const GLfloat *params) { GL_STUB_TRACE_LINE("glPointParameterfv %u", (unsigned)pname); gl_stub_trace_floats(params, gl_stub_paramv_len(pname)); GL_STUB_TRACE_LINE("\n"); gl_stub_tick(GL_STUB_glPointParameterfv); }
 /* Timer-query entry points (GL 1.5 occlusion-query API + GL_EXT_timer_query's
  * 64-bit getter), consumed only through the runtime-loaded GPU-profiler path
  * (src/support/gpuprof.c via glutGetProcAddress) - never called directly by

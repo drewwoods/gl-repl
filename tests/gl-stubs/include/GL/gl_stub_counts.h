@@ -193,9 +193,21 @@ void gl_stub_counts_dump(FILE *out, const char *prefix, long long divisor);
  *                                      integer codes for enums and
  *                                      bytes (so newlines inside text
  *                                      labels can't corrupt the trace).
- *   pointer-array args are omitted    - parity tests compare scalar
- *                                      args only; array contents are not
- *                                      part of this counter trace.
+ *   pointer-array args are expanded   - each element as its own ` %g`
+ *                                      field, via gl_stub_trace_floats.
+ *                                      For the pname-keyed calls the
+ *                                      width comes from gl_stub_paramv_len,
+ *                                      so only the elements GL would read
+ *                                      are traced. Omitting them would
+ *                                      make a wrong glMultMatrixf payload
+ *                                      trace exactly like a right one -
+ *                                      that blind spot hid a real bug.
+ *                                      The `v`-suffixed vector entry
+ *                                      points the REPL never emits
+ *                                      (glColor3fv, glVertex3dv, ...)
+ *                                      still trace name-only; add the
+ *                                      payload when something starts
+ *                                      calling them.
  *   glutBitmapStringByte <byte>       - one supplemental line per string byte,
  *                                      used to verify display-only text
  *                                      transforms without recording a fake
@@ -208,6 +220,29 @@ void gl_stub_trace_close(void);
         if (gl_stub_trace_fp) fprintf(gl_stub_trace_fp, __VA_ARGS__); \
     } while (0)
 
+/* Appends ` %g` per element to the line currently being written, for the
+ * pointer-array args whose payload IS the call (a glMultMatrixf with the
+ * wrong 16 cells traces identically to a right one without this). Callers
+ * open the line with GL_STUB_TRACE_LINE, append, then close it with a
+ * newline - the trace is line-oriented, so the three steps must stay
+ * together in one stub body. */
+static inline void gl_stub_trace_floats(const float *v, int n) {
+    if (!gl_stub_trace_fp || !v)
+        return;
+    for (int i = 0; i < n; i++)
+        fprintf(gl_stub_trace_fp, " %g", (double)v[i]);
+}
+
+/* Caller-written separator, for traces that span more than one frame.
+ * Both legs of the export parity test emit the same marker before each
+ * frame, which keeps the two files aligned and makes a divergence report
+ * its frame instead of just a line number. Not a GL call: no counter. */
+static inline void gl_stub_trace_mark(int frame, double t_value) {
+    if (!gl_stub_trace_fp)
+        return;
+    fprintf(gl_stub_trace_fp, "# frame %d t %g\n", frame, t_value);
+}
+
 #else  /* !GL_STUBS */
 
 /* Non-stub builds: no storage, and gl_stub_tick() is a no-op so the
@@ -216,6 +251,12 @@ void gl_stub_trace_close(void);
 static inline void gl_stub_tick(int idx) { (void)idx; }
 
 #define GL_STUB_TRACE_LINE(...) ((void)0)
+static inline void gl_stub_trace_floats(const float *v, int n) {
+    (void)v; (void)n;
+}
+static inline void gl_stub_trace_mark(int frame, double t_value) {
+    (void)frame; (void)t_value;
+}
 
 #endif  /* GL_STUBS */
 
