@@ -1,15 +1,15 @@
 // @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
-// camera
-glTranslatef(0.0f, 0.0f, -8.00f);
-glRotatef(20.0f, 1.0f, 0.0f, 0.0f);
-glRotatef(35.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.0f, 0.0f);
 
 static float R = 2;  // major radius (ring center to tube center)
 static float r = 1;  // minor radius (tube thickness)
 static float n = 20; // @config segment count around both u and v
 static float u, v, s;  // current major/minor angles, color mix factor
 static float tr;       // tube-offset radius R + r*cos(v), read twice per vertex line
+
+glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
+glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(35.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
 glClearColor(0.05, 0.06, 0.08, 1.0);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

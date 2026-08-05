@@ -4,13 +4,14 @@
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
 // @cfg light_indicators = 0
-// camera
-glTranslatef(0.0f, 0.0f, -7.00f);
-glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.0f, 0.0f);
 
 static float n, r, x, y, phase, sample;
+
+glTranslatef(0.0f, 0.0f, -7.00f);   // @camera dist
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
 glClearColor(0.06, 0.07, 0.09, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 

@@ -1,17 +1,6 @@
 // @cfg view_mode = RENDER3D_VIEW_3D
 // @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_CLASSIC
-// --- Camera -------------------------
-glTranslatef(0.0f, 0.0f, -9.00f);
-glRotatef(18.0f, 1.0f, 0.0f, 0.0f);
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.0f, 0.0f);
-
-glRotatef(30.0f * t, 0.0f, 1.0f, 0.0f);
-
-glClearColor(0.05f, 0.05f, 0.09f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
 
 // Forward declaration / order dependency test:
 // func2 is defined first and calls func1 and func0 (defined later in file)
@@ -48,6 +37,17 @@ func0(angle, sz) {
   glutSolidCube(sz);
   glPopMatrix();
 }
+
+glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
+glRotatef(18.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+glRotatef(30.0f * t, 0.0f, 1.0f, 0.0f);
+
+glClearColor(0.05f, 0.05f, 0.09f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
 
 // Execute orchestrator function func2 across multiple animated passes
 for(k, 0, 4) {

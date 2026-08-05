@@ -1,10 +1,5 @@
 // @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
 // @cfg vertex_points = 0
-// camera
-glTranslatef(0.0f, 0.0f, -5.0f);
-glRotatef(20.0f, 1.0f, 0.0f, 0.0f);
-glRotatef(30.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.0f, 0.0f);
 
 static float grid = 15; // grid size @tune
 static float extent = 3; // grid extent @tune
@@ -13,6 +8,12 @@ static float cx, sx, cz, sz; // cached cos/sin(x*freq+t), cos/sin(z*freq+zPhase*
 static float amp = 0.4;    // wave amplitude (peak |y|)
 static float freq = 2.5;   // spatial frequency along x and z
 static float zPhase = 0.7; // z-axis time phase: z evolves slower than x (<1)
+
+glTranslatef(0.0f, 0.0f, -5.0f);   // @camera dist
+glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
 // Animated surface: y = sin(freq*x + t) * cos(freq*z + zPhase*t) * amp
 // Drawn as a triangle strip per row with analytic per-vertex normals.
 

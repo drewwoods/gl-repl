@@ -1,15 +1,6 @@
 // @cfg view_mode = RENDER3D_VIEW_2D
 // @cfg vertex_points = 0
-// camera
-glTranslatef(0.0f, 0.0f, -3.00f);
-glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.0f, 0.0f);
 
-glClearColor(0.05, 0.06, 0.08, 1.0);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-glEnable(GL_DEPTH_TEST);
 triangle() {
   glBegin(GL_TRIANGLES);
     glNormal3f(0, 0, 1);
@@ -18,6 +9,16 @@ triangle() {
     glVertex3f(0.7, -0.4, 0);
   glEnd();
 }
+
+glTranslatef(0.0f, 0.0f, -3.00f);   // @camera dist
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+glClearColor(0.05, 0.06, 0.08, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+glEnable(GL_DEPTH_TEST);
 glColor3f(1, 0.35, 0.2);
 triangle();
 glTranslatef(2, 0, 0);

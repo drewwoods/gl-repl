@@ -2,11 +2,21 @@
 // @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
 // @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED
 // @cfg vertex_points = 0
-// camera
-glTranslatef(0.0f, 0.0f, -5.00f);
-glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, -0.800f, 0.0f);
+
+tri() {
+  glBegin(GL_TRIANGLES);
+    glNormal3f(0, 0, 1);
+    glVertex3f(-0.3, -0.3, 0);
+    glVertex3f(0.3, -0.3, 0);
+    glVertex3f(0, 0.4, 0);
+  glEnd();
+}
+
+glTranslatef(0.0f, 0.0f, -5.00f);   // @camera dist
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, -0.800f, 0.0f);   // @camera pan
+
 glClearColor(0.05, 0.06, 0.08, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_COLOR_MATERIAL);
@@ -19,14 +29,6 @@ glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
 glEnable(GL_NORMALIZE);
-tri() {
-  glBegin(GL_TRIANGLES);
-    glNormal3f(0, 0, 1);
-    glVertex3f(-0.3, -0.3, 0);
-    glVertex3f(0.3, -0.3, 0);
-    glVertex3f(0, 0.4, 0);
-  glEnd();
-}
 // Pivot rotation: translate out to z=2, rotate, translate back -- the tri
 // swings about a point 2 units away instead of its own origin.
 glColor3f(1, 0.35, 0.2);

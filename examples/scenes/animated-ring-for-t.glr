@@ -1,12 +1,12 @@
 // @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
 // @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX
-// camera
-glTranslatef(0.0f, 0.0f, -6.00f);
-glRotatef(24.0f, 1.0f, 0.0f, 0.0f);
-glRotatef(43.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.0f, 0.0f);
 
 static float s; // color mix factor, 0..1
+
+glTranslatef(0.0f, 0.0f, -6.00f);   // @camera dist
+glRotatef(24.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(43.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
 glClearColor(0.05, 0.06, 0.08, 1.0);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

@@ -3,26 +3,7 @@
 // @cfg grid_brightness = GRID_BRIGHTNESS_DIM
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
-// camera
-glTranslatef(0.0f, 0.0f, -9.00f);
-glRotatef(18.0f, 1.0f, 0.0f, 0.0f);
-glRotatef(30.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.0f, 0.0f);
 
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){1, 1, 1, 1});
-glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.22, 0.12, 0.4, 1});
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
-glEnable(GL_DEPTH_TEST);
-
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_LIGHT1);
-glEnable(GL_LIGHT2);
-glEnable(GL_LIGHT3);
 // Sierpinski sponge: the carpet's rule lifted to 3D. Split the cube
 // into 3x3x3 cells, drop the 6 face centers and the core, and recurse
 // into the 20 cells that remain. Two levels deep -> 400 cubes.
@@ -48,5 +29,25 @@ sponge(depth, size) {
     }
   }
 }
+
+glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
+glRotatef(18.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){1, 1, 1, 1});
+glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.22, 0.12, 0.4, 1});
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
+glEnable(GL_DEPTH_TEST);
+
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT1);
+glEnable(GL_LIGHT2);
+glEnable(GL_LIGHT3);
 glRotatef(16*t, 0, 1, 0);
 sponge(2, 3);

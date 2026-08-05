@@ -4,11 +4,6 @@
 // @cfg vertex_points = 0
 // @cfg grid = GRID_THEME_EMBER
 // @cfg grid_extent = GRID_EXTENT_MID
-// camera
-glTranslatef(0.0f, 0.0f, -5.00f);
-glRotatef(15.0f, 1.0f, 0.0f, 0.0f);
-glRotatef(10.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.0f, 0.0f);
 
 static float radius, angle, x, y, z; // per-particle: orbit radius, base angle, world pos
 static float count = 160;       // number of glow points
@@ -18,6 +13,11 @@ static float orbitRate = 0.4;   // angular speed of the xz orbit (animates with 
 static float yWobbleFreq = 1.3; // y wobble frequency relative to the base angle
 static float yWobbleRate = 0.6; // y wobble time-rate (animates with t)
 static float yAmp = 0.9;        // y wobble amplitude
+
+glTranslatef(0.0f, 0.0f, -5.00f);   // @camera dist
+glRotatef(15.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(10.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
 // Glow sprites: additive blend + distance-attenuated point size.
 // Each particle orbits in xz at (radius, angle) while y wobbles independently.

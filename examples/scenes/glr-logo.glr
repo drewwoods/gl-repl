@@ -6,11 +6,10 @@
 // @cfg grid = GRID_THEME_OFF
 // @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD_INVERTED
 
-// --- Camera -------------------------
-glTranslatef(0.0f, 0.0f, -6.50f);
-glRotatef(35.25f, 1.0f, 0.0f, 0.0f);
-glRotatef(45.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, -6.50f);   // @camera dist
+glRotatef(35.25f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(45.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
 //
 // gl-repl Logo

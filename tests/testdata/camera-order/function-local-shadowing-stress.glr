@@ -5,6 +5,18 @@
 static float x;
 static float y;
 
+glTranslatef(0.0f, 0.0f, -8.00f);
+glRotatef(12.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(20.0f * t, 0.0f, 1.0f, 0.0f);
+
+glClearColor(0.06f, 0.05f, 0.08f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+// Initialize top-level globals
+x = 5.0f;
+y = 10.0f;
+
 // Callee function sharing variable names x, y, i with caller & globals
 func0(r) {
   float x;
@@ -39,24 +51,6 @@ func1(scale) {
     glPopMatrix();
   }
 }
-
-glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
-glRotatef(12.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-
-// Scene spin, deliberately body geometry and deliberately untagged: the
-// camera format carries literal poses only, and `spin` is the exported C's
-// g_angle hook, not a place to put an expression in t.
-glRotatef(20.0f * t, 0.0f, 1.0f, 0.0f);
-
-glClearColor(0.06f, 0.05f, 0.08f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-
-// Initialize top-level globals
-x = 5.0f;
-y = 10.0f;
 
 // Invoke func1 with argument
 func1(1.2f);

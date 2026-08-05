@@ -7,18 +7,6 @@
 // @cfg normal_vectors = 0
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
-// camera
-glTranslatef(0.0f, 0.0f, -6.55f);
-glRotatef(20.0f, 1.0f, 0.0f, 0.0f);
-glRotatef(-115f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.0f, 0.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_COLOR_MATERIAL);
-glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
-glEnable(GL_POINT_SMOOTH);
 
 static float launchVelX, launchVelY, launchVelZ;
 static float currentVelY;
@@ -34,6 +22,7 @@ static float speed = 0.5;
 static float detail = 30;
 static float blowHoleX = 0.95, blowHoleY = 0.71, blowHoleZ;
 static float waterDroplets = 250; // @tune
+
 computeVerticalMotion(ageSeconds, launchY) {
   // Velocity is linear in age: currentVelY = gravityY*ageSeconds + launchVelY.
   // Position is its integral:
@@ -165,6 +154,19 @@ drawWhale(bhX, bhY, bhZ) {
   glutSolidSphere(1, 10, 8);
   glPopMatrix();
 }
+
+glTranslatef(0.0f, 0.0f, -6.55f);   // @camera dist
+glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(-115f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
+glEnable(GL_POINT_SMOOTH);
 
 glColor4f(0.25, 0.45, 0.85, 0.46);
 glEnable(GL_BLEND);

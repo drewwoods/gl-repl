@@ -1,17 +1,7 @@
 // @cfg view_mode = RENDER3D_VIEW_2D
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
-// camera
-glTranslatef(0.0f, 0.0f, -6.00f);
-glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.0f, 0.0f);
 
-glClearColor(0.05, 0.06, 0.08, 1.0);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_NORMALIZE);
 // Sierpinski carpet: cut the middle cell out of a 3x3 grid, then do the
 // same to the 8 cells that remain. Each call owns one square; u is a
 // 0..1 shade the children nudge so the tiles ramp MAGENTA -> AZURE.
@@ -42,5 +32,16 @@ carpet(depth, size, u) {
     }
   }
 }
+
+glTranslatef(0.0f, 0.0f, -6.00f);   // @camera dist
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+glClearColor(0.05, 0.06, 0.08, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_NORMALIZE);
 glRotatef(sin(t*0.35)*10, 0, 0, 1);
 carpet(2, 3.6, 0.5);

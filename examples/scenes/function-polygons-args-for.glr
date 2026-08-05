@@ -1,17 +1,7 @@
 // @cfg view_mode = RENDER3D_VIEW_2D
-// camera
-glTranslatef(0.0f, 0.0f, -4.00f);
-glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.0f, 0.0f);
 
 static float s; // palette mix in [0,1]
 
-glClearColor(0.05, 0.06, 0.08, 1.0);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_NORMALIZE);
 polygon(radius, sides, phase) {
   glBegin(GL_TRIANGLE_FAN);
     glNormal3f(0, 0, 1);
@@ -24,6 +14,17 @@ polygon(radius, sides, phase) {
     }
   glEnd();
 }
+
+glTranslatef(0.0f, 0.0f, -4.00f);   // @camera dist
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+glClearColor(0.05, 0.06, 0.08, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_NORMALIZE);
 glPushMatrix();
 glTranslatef(-2.4, 0, 0);
 polygon(0.9, 3, t*0.4);

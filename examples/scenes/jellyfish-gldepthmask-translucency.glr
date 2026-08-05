@@ -5,11 +5,6 @@
 // @cfg normal_vectors = 0
 // @cfg grid = GRID_THEME_OFF
 // @cfg axes = AXES_THEME_OFF
-// camera
-glTranslatef(0.0f, 0.0f, -7.50f);
-glRotatef(4.00f, 1.0f, 0.0f, 0.0f);
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.700f, 0.0f);
 
 static float pulse, bellR, bellH; // breath phase; bell radius/height pulse in opposition
 static float ang, rad, topY; // frill scratch: segment angle, rim radius, rim height (tentacle() hangs off topY)
@@ -19,38 +14,6 @@ static float rings = 9;      // bell latitude strips
 static float tentacles = 15; // @tune
 static float tentLen = 2.4;  // @tune
 static float marineSnow = 110;  // @tune
-
-// Everything glows: additive blend with depth WRITES off (reads stay on).
-// glDepthMask(GL_FALSE) is the classic translucency trick - without it the
-// bell's far side would z-fight its near side and the tentacles would
-// punch holes through the bell.
-glClearColor(0.015, 0.03, 0.07, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-glDisable(GL_LIGHTING);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_BLEND);
-glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-glEnable(GL_LINE_SMOOTH);
-glEnable(GL_POINT_SMOOTH);
-glDepthMask(GL_FALSE);
-pulse = sin(t*1.6);
-bellR = 1.5*(1 + 0.10*pulse);
-bellH = 1.1*(1 - 0.14*pulse);
-
-// marine snow: slow upward drift, wrapped with rem() so the field loops
-glPointSize(7);
-glBegin(GL_POINTS);
-  for(p, 0, marineSnow) {
-    glColor4f(0.55, 0.75, 0.95, 0.08 + 0.22*rand(p, 4));
-    // rise speed 0.15..0.5 per mote; rem() wraps y into [-3.2, 3.2]
-    glVertex3f(4.5*rand2(p, 0) + 0.2*sin(t*0.4 + p), rem(3.2*rand2(p, 1) + t*(0.15 + 0.35*rand(p, 3)), 6.4), 4.5*rand2(p, 2));
-  }
-glEnd();
-
-// gentle bob + tilt for the whole animal
-glTranslatef(0.2*sin(t*0.4), 0.18*sin(t*0.5), 0);
-glRotatef(8*sin(t*0.23), 0, 0, 1);
 
 // bell: latitude strips from crown to just past the equator (it curls
 // under). Everything except the alpha ripple depends only on the latitude
@@ -90,6 +53,59 @@ bellStrips(segs, rings, r, h) {
     glEnd();
   }
 }
+
+// one tentacle: a swaying line strip; alpha fades toward the tip and the
+// pulse tugs the strand upward (the drop*drop term makes tips lag the bell)
+tentacle(angAt, attach, len, phase, amp, cr, cg, cb) {
+  float ax, az, drop;
+  ax = cos(angAt)*attach;
+  az = sin(angAt)*attach;
+  glBegin(GL_LINE_STRIP);
+    for(s, 0, 14) {
+      drop = s/13;
+      sway = amp*(sin(t*1.4 + phase + drop*3.5) + 0.4*sin(t*2.3 + phase*1.7 + drop*6))*drop;
+      glColor4f(cr, cg, cb, 0.04 + 0.40*(1 - drop)*(1 - drop));
+      glVertex3f(ax*(1 + 0.2*drop) + sway, topY - drop*len + 0.15*pulse*drop*drop, az*(1 + 0.2*drop) + sway*0.55);
+    }
+  glEnd();
+}
+
+glTranslatef(0.0f, 0.0f, -7.50f);   // @camera dist
+glRotatef(4.00f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.700f, 0.0f);   // @camera pan
+
+// Everything glows: additive blend with depth WRITES off (reads stay on).
+// glDepthMask(GL_FALSE) is the classic translucency trick - without it the
+// bell's far side would z-fight its near side and the tentacles would
+// punch holes through the bell.
+glClearColor(0.015, 0.03, 0.07, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+glDisable(GL_LIGHTING);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_BLEND);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+glEnable(GL_LINE_SMOOTH);
+glEnable(GL_POINT_SMOOTH);
+glDepthMask(GL_FALSE);
+pulse = sin(t*1.6);
+bellR = 1.5*(1 + 0.10*pulse);
+bellH = 1.1*(1 - 0.14*pulse);
+
+// marine snow: slow upward drift, wrapped with rem() so the field loops
+glPointSize(7);
+glBegin(GL_POINTS);
+  for(p, 0, marineSnow) {
+    glColor4f(0.55, 0.75, 0.95, 0.08 + 0.22*rand(p, 4));
+    // rise speed 0.15..0.5 per mote; rem() wraps y into [-3.2, 3.2]
+    glVertex3f(4.5*rand2(p, 0) + 0.2*sin(t*0.4 + p), rem(3.2*rand2(p, 1) + t*(0.15 + 0.35*rand(p, 3)), 6.4), 4.5*rand2(p, 2));
+  }
+glEnd();
+
+// gentle bob + tilt for the whole animal
+glTranslatef(0.2*sin(t*0.4), 0.18*sin(t*0.5), 0);
+glRotatef(8*sin(t*0.23), 0, 0, 1);
 // segs/rings shadow the globals of the same name on purpose: the func takes
 // what it needs as arguments, so it reads without looking outward.
 bellStrips(segs, rings, bellR, bellH);
@@ -107,22 +123,6 @@ glBegin(GL_TRIANGLE_STRIP);
     glVertex3f(rad*1.04*cos(ang), topY + sway, rad*1.04*sin(ang));
   }
 glEnd();
-
-// one tentacle: a swaying line strip; alpha fades toward the tip and the
-// pulse tugs the strand upward (the drop*drop term makes tips lag the bell)
-tentacle(angAt, attach, len, phase, amp, cr, cg, cb) {
-  float ax, az, drop;
-  ax = cos(angAt)*attach;
-  az = sin(angAt)*attach;
-  glBegin(GL_LINE_STRIP);
-    for(s, 0, 14) {
-      drop = s/13;
-      sway = amp*(sin(t*1.4 + phase + drop*3.5) + 0.4*sin(t*2.3 + phase*1.7 + drop*6))*drop;
-      glColor4f(cr, cg, cb, 0.04 + 0.40*(1 - drop)*(1 - drop));
-      glVertex3f(ax*(1 + 0.2*drop) + sway, topY - drop*len + 0.15*pulse*drop*drop, az*(1 + 0.2*drop) + sway*0.55);
-    }
-  glEnd();
-}
 glLineWidth(1.6);
 for(k, 0, tentacles) {
   tentacle(k*TAU/tentacles + 0.2*rand2(k, 1), bellR*0.85, tentLen*(0.75 + 0.5*rand(k, 2)), rand(k, 3)*TAU, 0.3, 0.35, 0.75, 1.0);

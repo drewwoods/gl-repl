@@ -6,12 +6,6 @@
 // @cfg vertex_outlines = 0
 // @cfg variable_panel = 1
 
-// camera
-glTranslatef(0.0f, 0.0f, -1.0f);
-glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.0f, 0.0f);
-
 // Fog fades geometry toward the fog color with eye-space distance.
 // glFogi picks the equation: GL_EXP2 (used here) and GL_EXP fall off
 // exponentially with GL_FOG_DENSITY; GL_LINEAR instead ramps between
@@ -28,6 +22,11 @@ static float twist = 1.2; // @tune
 static float ringZ; // eye-space distance of the current ring
 static float bendX; // tunnel centerline x at this depth
 static float bendY; // tunnel centerline y at this depth
+
+glTranslatef(0.0f, 0.0f, -1.0f);   // @camera dist
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
 glClearColor(0.05, 0.06, 0.08, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

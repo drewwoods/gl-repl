@@ -3,11 +3,6 @@
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
 // @cfg poly_highlight = 0
-// camera
-glTranslatef(0.0f, 0.0f, -8.5f);
-glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.0f, 0.0f);
 
 static float rate = 45; // compare steps per second @tune
 static float hold = 1.5; // seconds to rest on the sorted bars @tune
@@ -15,6 +10,12 @@ static float period, cycle, steps; // seconds per cycle; shuffle index; compares
 static float tmp; // swap scratch
 static float x, h, s; // bar center x, bar height, palette mix
 static float cur; // bar index under the compare marker
+
+glTranslatef(0.0f, 0.0f, -8.5f);   // @camera dist
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
 // Bubble sort, scrubbed by t. A[0..15] holds 16 bar heights; the nested
 // loops below are the classic compare-and-swap, but each compare only
 // runs once enough time has passed (its overall index p*15 + j must stay

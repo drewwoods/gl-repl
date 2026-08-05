@@ -1,11 +1,11 @@
 // @cfg view_mode = RENDER3D_VIEW_3D
 // @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_CLASSIC
-// --- Camera -------------------------
-glTranslatef(0.0f, 0.0f, -9.00f);
-glRotatef(20.0f, 1.0f, 0.0f, 0.0f);
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.0f, 0.0f);
+
+glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
+glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
 glRotatef(25.0f * t, 0.0f, 1.0f, 0.0f);
 

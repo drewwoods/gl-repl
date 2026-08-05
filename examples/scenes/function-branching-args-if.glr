@@ -1,15 +1,5 @@
 // @cfg view_mode = RENDER3D_VIEW_2D
-// camera
-glTranslatef(0.0f, 0.0f, -4.00f);
-glRotatef(0.0f, 1.0f, 0.0f, 0.0f);
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0f, 0.0f, 0.0f);
 
-glClearColor(0.05, 0.06, 0.08, 1.0);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_NORMALIZE);
 shape(scale, phase) {
   // Two mutually-exclusive guards on the same arg -- an if/else written as
   // a complementary pair (else/else-if exist too; kept explicit here so each
@@ -34,6 +24,17 @@ shape(scale, phase) {
     glEnd();
   }
 }
+
+glTranslatef(0.0f, 0.0f, -4.00f);   // @camera dist
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+glClearColor(0.05, 0.06, 0.08, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_NORMALIZE);
 glPushMatrix();
 glTranslatef(-2.2, 0, 0);
 shape(0.9, t);
