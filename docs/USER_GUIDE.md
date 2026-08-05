@@ -841,6 +841,14 @@ down:
 - `lerp` is deliberately **not** clamped: `s` outside `[0, 1]` overshoots.
 - `smoothstep` accepts `e0 > e1`, ramping from 1 down to 0.
 
+That function list is **closed**, and a name outside it is rejected when the
+line commits (`unknown function 'fabs'`) rather than quietly evaluating to
+zero. The distinction matters because the REPL's spellings are not always
+libm's: absolute value is `abs`, not `fabs`, and there are no `f`-suffixed
+forms - `sinf` is as unknown as a typo. Export translates each name to its C
+twin (`abs` becomes `fabsf`), so a scene that commits is a scene whose
+exported C computes the same numbers.
+
 `rand` returns a deterministic value in `[0, 1]` for a given (seed, iter) pair,
 and `rand2` is the same hash mapped to `[-1, 1]`. There is no per-frame random
 state anywhere: the same pair always returns the same number, which is what

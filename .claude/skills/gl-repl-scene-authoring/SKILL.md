@@ -61,6 +61,12 @@ extrapolates), `smoothstep` clamps and eases, `sign` gives 0 at exactly 0;
 `rand` ∈ [0,1], `rand2` ∈ [-1,1], both deterministic per (seed, iter).
 Constants: `PI`, `TAU`, `e`.
 
+**That set is closed - a name outside it fails the commit** (`unknown function
+'fabs'`). Don't reach for libm spellings: absolute value is `abs`, not `fabs`,
+and no `f`-suffixed form exists (`sinf`, `powf` are as unknown as a typo).
+Export maps each name to its C twin, so anything that commits computes the
+same numbers in the exported C.
+
 Prefer `clamp`/`lerp`/`smoothstep` over hand-rolled `min(max(...))` chains and
 cubic polynomials - shorter lines, and they stay inside the per-example body
 budget.

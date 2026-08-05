@@ -948,8 +948,23 @@ static int validate_expression_idents_range(
             return 0;
         }
 
-        if (*q == '(')
+        /* Function call. Only builtins are callable from an expression -
+         * REPL functions are statements and never produce a value - so an
+         * unrecognized name here is always a mistake, and one that used to
+         * be invisible: eval_primary consumes the argument list and yields
+         * 0.0f, freezing whatever the expression drove, while export passes
+         * the unknown name through verbatim to C, where math.h may well
+         * resolve it. `fabs` is the canonical trap - the REPL spells it
+         * `abs` - and it renders a dead scene that exports to animating C.
+         * A rejected line is the better failure. */
+        if (*q == '(') {
+            if (!repl_eval_is_builtin_function(name)) {
+                if (err)
+                    snprintf(err, (size_t)errsz, "unknown function '%s'", name);
+                return 0;
+            }
             continue;
+        }
 
         int found = 0;
         for (int var_idx = 0; var_idx < num_vars; var_idx++) {
@@ -1108,7 +1123,9 @@ int repl_eval_input_has_predef_vars(const char *s) {
  *               | identifier [ "(" arg-list ")" ]
  *
  * Unknown identifiers and unrecognized function calls return 0.0f rather than
- * raise an error; validation happens upstream in validate_expression_idents().
+ * raise an error - the evaluator stays total. Rejecting them is
+ * validate_expression_idents_range's job, upstream at commit time; nothing
+ * that reaches here should still carry an unknown name.
  */
 
 static void expr_skip_ws(ExprCtx *ctx) {

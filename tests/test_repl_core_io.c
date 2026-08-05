@@ -199,7 +199,6 @@ int main(void) {
     const char *decl_func_blank_path = "/tmp/repl_core_decl_func_blank_output.c";
     const char *shape_path = "/tmp/repl_core_shapes_output.c";
     const char *tess_path = "/tmp/repl_core_tess_output.c";
-    const char *rand_alias_path = "/tmp/repl_core_rand_alias_output.c";
     const char *shape_fn_path = "/tmp/repl_core_shape_output.c";
 
     repl_eval_init_predef_vars();
@@ -479,24 +478,17 @@ int main(void) {
         remove(cross_path);
     }
 
-    /* Export helper gate must tolerate already-C spellings that can
-     * leak into source text (for example older fixtures or hand-edited
-     * snippets) so the standalone file still emits the RNG helpers. */
+    /* A C spelling of a builtin is not a REPL name, and the validator now
+     * says so at commit rather than letting it through to evaluate as 0.0f.
+     * Nothing legitimate regresses: import translates every geometry line
+     * C-to-REPL (repl_eval_c_expr_to_repl) before it reaches the editor, so
+     * a loaded export arrives spelled `rand` / `rand2` already; only a
+     * hand-typed C name lands here. */
     {
         glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("glVertex3f(repl_randf(i, 3), repl_rand2f(i, 4), 0);");
-        repl_export_save_output(rand_alias_path, source_document_view(), NULL);
-        char buf[8192];
-        read_text_file(rand_alias_path, buf, sizeof(buf));
-        ASSERT_TRUE("rand helper emitted for repl_randf source",
-                    strstr(buf, "static float repl_randf(float seed, float iter)") != NULL);
-        ASSERT_TRUE("rand2 helper emitted for repl_rand2f source",
-                    strstr(buf, "static float repl_rand2f(float seed, float iter)") != NULL);
-        ASSERT_TRUE("rand helper emitted once",
-                    count_substr(buf, "static float repl_randf(float seed, float iter)") == 1);
-        ASSERT_TRUE("rand2 helper emitted once",
-                    count_substr(buf, "static float repl_rand2f(float seed, float iter)") == 1);
-        remove(rand_alias_path);
+        ASSERT_INT("C-spelled rand builtin rejected at commit",
+                   repl_state_document_count(), 0);
     }
 
     /* Shaping builtins have no libm twin, so each one the scene uses must
@@ -521,19 +513,27 @@ int main(void) {
         remove(shape_fn_path);
     }
 
-    /* Same already-C-spelling tolerance the RNG gate has: a source line
-     * carrying the exported name still pulls its helper in. */
+    /* Same rule for the shaping helpers' C spellings. */
     {
         glr_ctrl_reset_all(); declare_test_vars();
         editor_feed_line("glVertex3f(repl_lerpf(0, 1, x), repl_signf(x), 0);");
-        repl_export_save_output(shape_fn_path, source_document_view(), NULL);
-        char buf[8192];
-        read_text_file(shape_fn_path, buf, sizeof(buf));
-        ASSERT_TRUE("lerp helper emitted for repl_lerpf source",
-                    count_substr(buf, "static float repl_lerpf(") == 1);
-        ASSERT_TRUE("sign helper emitted for repl_signf source",
-                    count_substr(buf, "static float repl_signf(") == 1);
-        remove(shape_fn_path);
+        ASSERT_INT("C-spelled shaping builtin rejected at commit",
+                   repl_state_document_count(), 0);
+    }
+
+    /* The trap this rule exists for: a real libm name the REPL does not
+     * have. It used to evaluate to 0.0f with no diagnostic and then export
+     * verbatim into C, where math.h resolved it - so the REPL rendered a
+     * frozen scene and the exported C animated. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glVertex3f(fabs(sin(t)), 0, 0);");
+        ASSERT_INT("libm name absent from the REPL is rejected",
+                   repl_state_document_count(), 0);
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("glVertex3f(abs(sin(t)), 0, 0);");
+        ASSERT_INT("its REPL spelling commits",
+                   repl_state_document_count(), 1);
     }
 
     glr_ctrl_reset_all(); declare_test_vars();
