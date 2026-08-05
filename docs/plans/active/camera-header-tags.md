@@ -269,8 +269,9 @@ deleted:
   region function without reassigning that write would silently drop the
   author's section banner (`// --- Camera --- `) from the code panel and from
   `glr_scene_write_camera`'s `.glr` round-trip (`export_glr.c:85-88`). The
-  reader returns `REPL_CAMERA_LINE_MARKER` and stashes the verbatim text;
-  `finish()` publishes it, so there is one writer instead of two. One semantic
+  reader returns `REPL_CAMERA_LINE_MARKER` and stashes the verbatim text, which
+  `finish()` hands back as `marker_text` for the caller to publish - one place
+  decides what the marker *is*, instead of two. One semantic
   change falls out, worth stating rather than discovering: today the banner is
   recorded only if the whole block validated, and it now records on sight. The
   parity test compares `camera_comment_line`, so neither the move nor the
@@ -296,6 +297,12 @@ line separated from the others by an executable line, or a role out of canonical
 pose is unambiguous, so refusing the load would be disproportionate, but the file
 is not one the exporter would ever write and its compiled twin will not match.
 `test_camera_header` covers both shapes.
+
+"Executable line" needs a definition the reader can apply without parsing C, and
+the cheap one is sufficient: a line is executable if it holds any non-whitespace
+that is not a comment (`//` or `/* … */`, including a continuation line inside an
+open block comment) and not a preprocessor directive (`#`). Declarations count as
+executable for this purpose - they are not part of a camera block either.
 
 **Where tags are honored** - "wherever it appears" needs bounding, because the
 importer already refuses camera handling inside a snippet
@@ -370,9 +377,25 @@ exporter prose block spanning several lines - moves the depth counter and
 desynchronizes the region. That is harmless while the helper only serves
 function-body tracking over `//`-commented REPL source; it stops being harmless
 the moment the same counter gates camera tags in C89 files where *every* comment
-is `/* … */`. Hoisting it therefore includes block-comment handling with
-open-across-lines state, and that state lives in `ReplCameraHeader` rather than
-in a static.
+is `/* … */`.
+
+Block-comment state has to survive across lines, so the hoisted helper takes it
+as an in/out parameter rather than hiding it in a static - two consumers with
+independent state is the whole point:
+
+```c
+int code_brace_delta(const char *line, int *in_block_comment);
+```
+
+`ReplCameraHeader` owns one flag; `import.c:2023`, the only existing caller,
+owns another beside `s->func_depth` in `ImportState`. Passing `NULL` is not
+offered as a shortcut - a caller that opts out of block-comment tracking is a
+caller that silently mis-scopes, which is the failure this is fixing.
+
+**What it already gets right:** string and char literals, *including escaped
+quotes* - `if (c == '\\' && p[i + 1]) { i++; continue; }` (`import.c:1942`), so
+`"a brace \" { inside a string"` is already safe. Block comments are the only
+gap; the escape handling does not need revisiting.
 
 **The catalog loader must offer from the top of its array**, including the
 `@cfg` header and the metadata blanks it currently skips before its body loop
@@ -391,9 +414,19 @@ counted:
 
 - **no pose role seen** → no bridge call at all; host defaults stand.
 - **some seen** → `capture_pose()` reads the baseline pose, the seen roles
-  overwrite it, and the merged - now complete - pose is applied. One warning
-  names each missing role.
+  overwrite it, and the merged - now complete - pose is applied.
 - **all four pose roles seen** → apply directly, no capture needed.
+
+**A partial header is a note, not a scolding.** A hand-authored `.glr` that sets
+only `dist` and is content with the defaults for the rest is a legitimate file,
+and the obvious reading of "one warning names each missing role" - three warnings
+on screen for one deliberate choice - would make the common hand-authoring case
+the noisiest one. So the two audiences are served differently: the accumulator
+records **one diagnostic per missing role**, because that is what a test can
+compare and what makes the parity tuple precise, while the caller emits **a
+single message naming them together** ("camera header: rx, ry, pan not set;
+keeping current"). Missing-role diagnostics carry the `note` severity, below the
+warnings that indicate a genuinely malformed file.
 
 **The baseline is the camera's *destination*, not its live pose.** A load can
 land mid-ease (example switches ease over several frames), and merging against a
@@ -519,12 +552,28 @@ typedef struct {
 capped at `REPL_CAMERA_MAX_DIAGS` = 8 with an overflow counter, so a pathological
 file cannot allocate.
 
+**Severity is derived from the rule, not stored.** The reader emits three
+strengths - a rejection (the line is malformed and discarded), a warning (the
+pose is unambiguous but the file is not one the exporter would write: order,
+interleaving, a non-zero hook initializer), and a note (a missing pose role,
+which merges cleanly from the baseline). Rather than add a fourth field that
+callers could set inconsistently, `ReplCameraRule` **fully determines** severity
+through one table:
+
+```c
+ReplCameraSeverity repl_camera_rule_severity(ReplCameraRule rule);
+```
+
+That keeps `(role, rule, line_no)` as the whole comparable key - a severity field
+would be a derived value in the parity tuple, which is how two paths end up
+"differing" on something neither of them chose.
+
 **The overflow counter is part of parity, not bookkeeping.** Comparing only the
 stored eight would let two paths agree on the first eight diagnostics and differ
 on everything after, which is a divergence the test was built to catch. The
 accumulator is a bounded *inspection cache* over a complete diagnostic stream:
 every rejection is reported to the caller's sink as it happens, and parity
-compares the stored `(role, rule)` list **plus** the overflow count.
+compares the stored `(role, rule, line_no)` list **plus** the overflow count.
 
 Line numbers are caller-supplied because the reader sees
 lines, not files; the caller also owns the human-readable message (it has the
@@ -533,15 +582,48 @@ app, stderr for the demo, the tutorial status line for setup scaffolds.
 
 Tests read the accumulator directly rather than capturing a sink.
 
-**`line_no` is not a parity key.** The two paths cannot agree on it as things
-stand: the importer reads the file directly, while the catalog path is handed a
-line array whose body pointer has already advanced past the `@cfg` header and
-the metadata blanks (`example_loader.c:370`), so it has no notion of the
-original file line. Parity therefore compares `(role, rule)` in order and
-ignores `line_no`; `test_camera_header`, where one caller controls the
-numbering, is where `line_no` is asserted. Making the example path carry true
-file line numbers is real wiring work and is deliberately **not** in scope here -
-if it is wanted later it is a phase of its own, not a free rider on this one.
+**`finish()` has explicit outputs.** The plan has been saying `finish()`
+"publishes" the marker and "applies" a pose without showing how a caller gets at
+either. It returns a summary and exposes the accumulator, so nothing is
+communicated by side effect alone:
+
+```c
+typedef struct {
+    int                  pose_applied;   /* did a bridge call happen */
+    ReplCameraPose       pose;           /* the resolved pose, applied or not */
+    unsigned             seen_mask;      /* which pose roles the file supplied */
+    const char          *marker_text;    /* verbatim marker, NULL if none seen */
+    int                  diag_count;     /* stored diagnostics */
+    int                  diag_overflow;  /* dropped past REPL_CAMERA_MAX_DIAGS */
+} ReplCameraFinish;
+
+ReplCameraFinish       repl_camera_header_finish(ReplCameraHeader *hdr,
+                                                 ReplCameraApplyMode mode);
+const ReplCameraDiag  *repl_camera_header_diags(const ReplCameraHeader *hdr);
+```
+
+`marker_text` is what the caller writes into `camera_comment_line` - the reader
+stashes, the caller publishes, so the reader still touches no state it does not
+own. `pose` is populated whether or not a bridge was installed, which is what
+lets a bridge-less test assert the resolved pose directly instead of inferring it
+from a call that never happened.
+
+**`line_no` is a parity key after all** - the offer-from-the-top rule bought it.
+An earlier draft dropped it, on the grounds that the catalog path is handed a
+line array whose body pointer has already advanced past the `@cfg` header and the
+metadata blanks (`example_loader.c:370`) and so has no notion of the original
+file line. That reasoning expired the moment the region rule required the catalog
+loader to offer **from index 0**: for a `.glr` catalog entry the array *is* the
+file's lines, so a 1-based array index and the importer's file line are the same
+number. Both paths therefore supply a real line, parity compares it, and the goal
+statement's promise that a diagnostic names file *and* line holds on every path
+rather than on one.
+
+The one case with no file behind it is a built-in example compiled into
+`examples.c`, where `line_no` is the array index - stable, useful in a message,
+and not something the parity test exercises, since it walks `.glr` corpus files.
+`0` remains legal in the signature for a caller that genuinely has no numbering,
+but no caller in this tree passes it.
 
 ### The bridge stops parsing text
 
@@ -585,14 +667,26 @@ frame, after the camera modelview is loaded"* (`glr_camera_export.h:16`).
 That precondition is **already violated on the path this plan preserves**:
 `glr_scene_load_example` (`glr_actions.c:1053`) calls `repl_load_example`
 synchronously off the action path, nowhere near a display frame. Moving the call
-into `apply_pose(…, EXAMPLE)` inherits the violation and hides it behind a mode
-name. So the third effect does not become a silent rider on `EXAMPLE`:
-`apply_pose` records the *intent* and the controller applies it at its existing
-frame-safe point, the same way other deferred view state is handled. Deciding
-between "queue it for the frame" and "split it out of the bridge entirely" is
-phase-3 work and needs an explicit answer in the commit, not an inherited
-comment. Whichever way it goes, `test_camera_apply_modes` asserts the pose
-record happens exactly once per example load.
+into `apply_pose(…, EXAMPLE)` unchanged would inherit the violation and hide it
+behind a mode name.
+
+**Decision: enqueue in the bridge implementation, drain in the controller.** The
+neutral interface in `src/repl/export.h` stays exactly `apply_pose(pose, mode)` -
+it never learns that a 3D pose record exists. The app-side implementation in
+`glr_camera_export.c`, which is already app-layer and already calls
+`glr_ctrl_view_record_external_3d_pose` today, sets a pending record instead of
+calling it, and `glr_ctrl` drains that at its existing frame-safe point, where
+other deferred view state is handled.
+
+The alternative - hoisting the call out to the action layer, so the bridge is a
+pure pose adapter - is architecturally tidier at the interface and worse
+everywhere else: "EXAMPLE also means record the 3D pose" would then have to be
+restated at each of the three call sites (example load, tutorial scaffold, and
+whatever comes next), which is precisely the duplicated-knowledge failure this
+plan exists to end. The neutral API is already clean because the effect lives
+behind the app-side implementation, not because the effect was moved to a
+caller. `test_camera_apply_modes` asserts the record is enqueued exactly once per
+example load and drained exactly once.
 
 `scene_snapshot` (`scene_snapshot.c:136`) stops carrying a
 `ReplExportCameraBlock` and carries a `ReplCameraPose`, so an in-memory scene
@@ -800,11 +894,13 @@ than that, because **phase 4 is where the corpus goes dark**:
 - Example goldens and `--dump-code` fixtures break at the same moment, for the
   same reason, and are not repaired until phase 7.
 
-So `make test` is red from phase 4 through phase 7 and the pre-push hook will
-say so. Two honest options: land 2-7 as one commit, or keep them separate as
-local checkpoints and push once at the end. What is *not* available is treating
-5, 6 and 7 as independently pushable follow-ups. Goldens regenerate exactly once,
-at the end, rather than churning at 4 and again at 6.
+So `make test` is red from phase 4 through phase 7 and the pre-push hook will say
+so. **Phases 2-7 are therefore one pushable unit.** Keep them as separate local
+commits if that helps review - the boundaries are real work boundaries - but
+nothing between 2 and 7 goes to `origin` on its own, and phase 1 is the only
+piece that lands independently green. What is *not* available is treating 5, 6
+and 7 as follow-up PRs. Goldens regenerate exactly once, at the end, rather than
+churning at 4 and again at 6.
 
 ## Tests
 
@@ -817,8 +913,8 @@ at the end, rather than churning at 4 and again at 6.
     through the shared recording bridge stub;
   - `camera_comment_line`, which the reader now owns on both paths;
   - predef variable names and values;
-  - the diagnostic list as ordered `(role, rule)` pairs plus the overflow count -
-    **not** `line_no`, per the accumulator section.
+  - the diagnostic list as ordered `(role, rule, line_no)` triples plus the
+    overflow count, per the accumulator section.
 
   Comparing row counts alone would pass a file whose camera lines became
   geometry as long as the count matched, which is precisely the bug. Both loads
@@ -831,9 +927,10 @@ at the end, rather than churning at 4 and again at 6.
   token, tagged line below baseline depth, tagged line inside a snippet, tagged
   line after the snippet ends - the last three asserting the line is consumed
   *and* not inserted - and partial-pose `finish`: the merged pose keeps the
-  destination value for every unseen role and one diagnostic names each, with
-  **`spin` absent producing no missing-role warning** since it is write-only.
-  `line_no` is asserted here, where one caller owns the numbering.
+  destination value for every unseen role and one `note`-severity diagnostic per
+  missing role, with **`spin` absent producing no missing-role diagnostic at
+  all** since it is write-only. Severity is asserted through
+  `repl_camera_rule_severity()` rather than a stored field.
 
   Also covered, because each is a live bug or a fresh rule rather than a
   variation:
