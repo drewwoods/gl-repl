@@ -11,8 +11,10 @@ The finished behavior is:
 - one camera-header reader, in `src/repl/`, called by every consumer;
 - each camera line self-identifies by role tag, so recognition never depends on
   arrival order, line position, or a parser state variable;
-- a line the reader rejects produces a diagnostic naming the file, the line, and
-  the rule it broke, and never falls through into the document as geometry;
+- a line the reader rejects produces a diagnostic naming the rule it broke -
+  plus the file and line where the caller has them, which the catalog path does
+  not (see the accumulator section) - and never falls through into the document
+  as geometry;
 - one emitted format - the save/display variant split disappears rather than
   being unified;
 - the camera bridge stops parsing text: it receives a resolved pose plus an
@@ -159,9 +161,17 @@ glTranslatef(-0.0000f, 2.5000f, -0.0000f);          // @camera pan
 ```
 
 The `ry` grammar is *a leading float literal, optionally followed by the exact
-token `+ g_angle`* (whitespace-insensitive). No other identifier is accepted:
+identifier `g_angle` added to it*. No other identifier is accepted:
 `20.0f + tweak` is a diagnostic, not a silently-ignored suffix, because the
-reader cannot know whether `tweak` is zero at load. Consequences:
+reader cannot know whether `tweak` is zero at load.
+
+Parse it by tokenizing, not by string comparison: `strtof` for the literal (which
+takes `-15.0f` for free), skip the optional `f`/`F` suffix and whitespace,
+require `+`, skip whitespace and any wrapping parens, then match the identifier
+`g_angle` and require nothing but `,` after it. That accepts `+g_angle`,
+`+  g_angle`, `+ (g_angle)`, and a negative literal without a table of literal
+spellings, and it keeps a trailing comment out of the value - the tag itself
+lives in that comment. Consequences:
 
 - **Exactly one tagged `ry` source per file**, so the duplicate-role rule below
   has no exception to carve out.
@@ -171,6 +181,17 @@ reader cannot know whether `tweak` is zero at load. Consequences:
   two-sources-of-truth failure this design rejects elsewhere. Export always
   writes `0.0f`; import warns on a non-zero initializer rather than silently
   tolerating the divergence, and a hand-edit test covers it.
+
+  **Where that warning lives, and what already eats the line.** The camera
+  reader never sees it - `static float g_angle = …;` carries no tag, so it is
+  `NOT_CAMERA` by construction. Deleting `cam_try_parse_angle_preamble` does not
+  leave the line loose: it falls through to `import_parse_predef_decl_common`,
+  which stashes the value and then explicitly declines to register it
+  (`strcmp(name, "g_angle") != 0`, `import.c:567`). That guard is load-bearing
+  and easy to miss, so it is named here: it is the reason the line is absorbed
+  rather than reappearing as a document row. The non-zero warning is a two-line
+  addition *at that guard* in phase 4, and phase 4 must also confirm the stash's
+  later apply pass no-ops on the unregistered name.
 - **The exported binary still animates.** `g_angle` starts at 0 and accumulates
   in the timer (`if (g_rotating) g_angle += 0.5f;`, `export_display.c:697`); it
   is now a pure animation offset, not a value smuggled through file scope.
@@ -216,7 +237,26 @@ when a region begins and accepts tags only at that depth:
 
 - file start → baseline 0, which is what a `.glr` uses;
 - `repl_camera_header_set_region(hdr, REPL_CAMERA_REGION_DISPLAY)` on the
-  display open line → baseline := current depth (1);
+  display open line → baseline capture is **deferred**, not taken from that
+  line. A hand-formatted file may put the brace on its own line:
+
+  ```c
+  void display(void)
+  {
+    glTranslatef(0.0f, 0.0f, -10.0f);   /* @camera dist */
+  ```
+
+  so capturing at the opener would record 0 and reject every line inside the
+  body. Instead the reader arms a pending-region flag and takes
+  `baseline := depth` at the **first offered line whose depth is > 0**. A tagged
+  line arriving while the flag is still armed at depth 0 means the body never
+  opened a brace: that is malformed, and is rejected with a diagnostic rather
+  than silently accepted at baseline 0.
+- **The region closes when depth falls below baseline** - the `}` of `display()`
+  - and baseline reverts to 0. Without this a later function body at raw depth 1
+  would match the stale display baseline and accept a camera tag that is inside
+  someone else's function. Region exit is evaluated *after* the line's brace
+  delta, so the closing brace itself is outside the region.
 - deeper than baseline is a nested `{ }` and rejected.
 
 Only the importer signals a display region; the example and tutorial loaders are
@@ -237,12 +277,52 @@ does not work: only `ImportState` has it, and `example_loader.c` /
 through `repl_load_apply_line`. Making them compute it would put three copies of
 a brace counter in the tree, which is this plan's own failure mode. Instead
 `ReplCameraHeader` counts braces itself from the lines it is offered, reusing
-`code_brace_delta` (`import.c:1936`, hoisted to a shared TU - it already skips
-braces inside string/char literals and trailing comments). The contract that
+`code_brace_delta` (`import.c:1937`, hoisted to a shared TU - it already skips
+braces inside string/char literals and `//` comments). The contract that
 buys this: **callers must offer every line, in order**, not only the ones they
 suspect. Snippet-region entry/exit is signalled by the caller through
 `repl_camera_header_set_region()`, since only the importer knows the snippet
 markers and the other two callers are always pre-snippet.
+
+**`code_brace_delta` must learn `/* … */` first.** It currently breaks out of
+the scan on `//` only, so a brace inside a block comment - `/* reset {x,y} */`,
+or an exporter prose block spanning lines - moves the depth counter and
+desynchronizes the region. That was harmless while the helper only served
+function-body tracking on `//`-commented REPL source; it is not harmless once
+the same counter gates camera tags in C89 files whose every comment is
+`/* … */`. Hoisting it therefore includes adding block-comment handling, with
+open-across-lines state, and that state lives in `ReplCameraHeader` rather than
+in a static.
+
+**The catalog loader must offer from the top of its array**, including the
+`@cfg` header and the metadata blanks it currently skips before its body loop
+(`example_loader.c:361`). Those lines contain no braces today, so skipping them
+would happen to work - which is exactly the kind of accidental correctness this
+plan is removing. Offering everything keeps one rule for all three callers and
+survives a future header line that does contain a brace.
+
+### The marker becomes presentation, and needs a new owner
+
+The `// camera` comment stays, but as a section heading for the expanded code
+panel only - stashed in `ReplImportExportState::camera_comment_line`. Nothing
+gates on it, so the two functions that currently decide whether a comment is
+"the camera marker" collapse to one.
+
+**That stash loses its writer on the example path if this is not explicit.**
+`repl_example_consume_camera_header` does two jobs and only one is parsing: it
+also writes the author's marker text into `io->camera_comment_line`
+(`example_loader.c:437`). `import.c` has its own writer
+(`import_handle_camera_comment`, `import.c:2153`); the example loader does not.
+Deleting the region function would silently drop the heading on catalog and
+tutorial-scaffold loads, and with it the `// --- Camera ---` banner that
+survives a `.glr` round-trip through `glr_scene_write_camera`
+(`export_glr.c:85`). The marker writer therefore moves **into the shared
+reader**, which all three callers already offer every line to.
+
+One semantic change rides along, worth stating rather than discovering: today
+the marker is recorded only if the block validated; per-line consumption makes
+it **record-on-sight**. The parity test compares `camera_comment_line` so
+neither the move nor the semantic change can regress unnoticed.
 
 ### Deferred application, so a partial pose is unrepresentable
 
@@ -400,11 +480,20 @@ becomes the scene default (what "Reset camera" returns to). Collapsing to
 `SNAP` + `EASE` would make a snapshot restore adopt a scene default it must
 not - the bug this plan is meant to prevent, reintroduced by its own API.
 
-| Mode | Transition | Scene default | Replaces | Caller |
-|---|---|---|---|---|
-| `REPL_CAMERA_APPLY_IMPORT` | snap | adopt | `try_consume_import_line` + `adopt_import_scene_default` | file / workspace load |
-| `REPL_CAMERA_APPLY_RESTORE` | snap | leave | `apply_capture_block_snap` | `scene_snapshot`, workspace-save staging |
-| `REPL_CAMERA_APPLY_EXAMPLE` | ease | adopt | `apply_example_block` | example, tutorial scaffold |
+| Mode | Transition | Scene default | External 3D pose | Replaces | Caller |
+|---|---|---|---|---|---|
+| `REPL_CAMERA_APPLY_IMPORT` | snap | adopt | no | `try_consume_import_line` + `adopt_import_scene_default` | file / workspace load |
+| `REPL_CAMERA_APPLY_RESTORE` | snap | leave | no | `apply_capture_block_snap` | `scene_snapshot`, workspace-save staging |
+| `REPL_CAMERA_APPLY_EXAMPLE` | ease | adopt | **yes** | `apply_example_block` | example, tutorial scaffold |
+
+**Three axes, not two.** `cam_apply_example_block` also calls
+`glr_ctrl_view_record_external_3d_pose` (`glr_camera_export.c:265`), so that a
+load while dwelling in 2D does not restore a stale pose on the 2D→3D trip. That
+is a third behavior riding on which parser ran - the same failure shape as the
+other two - so the mode table names it explicitly rather than leaving it as an
+implementation detail of one bridge function. It also carries a documented
+precondition (must run after the camera modelview is loaded in the display
+frame), which is a property of `EXAMPLE`, not of `apply_pose` in general.
 
 The fourth combination (ease without adopting) has no caller and is not
 defined - adding it later is a deliberate act, not an accident of an
@@ -422,16 +511,39 @@ directly onto `ReplCameraApplyMode` and can likely be replaced by it.
 `repl_live_demo`'s bridge becomes an `apply_pose` implementation writing its
 orbit variables - a few lines, no parser.
 
-The formatting half (`fill_save_block` → one `fill_block`) is unchanged apart
-from appending the tags and merging the two variants.
+**The formatter keeps the variant as a parameter, not as two functions.**
+`fill_display_block` has three consumers, not one: `scene_snapshot.c:117` (which
+goes away, migrating to a pose), and `repl_refresh_camera_lines`
+(`export_setup.c:786`) → `g_cam_lines` → *both* the code-panel preview and
+`export_glr.c:76`. A blanket merge onto the `g_angle` form would put
+`glRotatef(20.0000f + g_angle, …)` in the code panel - a symbol the user cannot
+type and that is not a REPL identifier - and add the suffix to every app-saved
+`.glr`. So:
+
+```c
+void (*fill_block)(ReplExportCameraBlock *block, int with_anim_hook);
+```
+
+`with_anim_hook = 1` for exported C, `0` for the panel and `.glr` writer. The
+*parser* is still one code path - the `ry` grammar accepts both spellings - so
+the divergence this plan exists to end is still ended; what survives is a
+one-bit output choice, which is what the split always should have been.
+`repl_live_demo` is the evidence that it wants to be one function: it already
+installs `demo_cam_fill_block` for `fill_save_block` *and* `fill_display_block`
+(`repl_live_demo.c:262`).
 
 ### Corpus
 
 44 of 46 `.glr` files under `examples/scenes/` and `stress/` carry a camera
-header. 38 are in canonical numeric form and need only four appended tags.
+marker, and 37 of those are in canonical numeric form needing only four appended
+tags. But **marker presence is the wrong way to classify the corpus** under this
+design: the marker stops meaning anything, so the question per file is "which
+transforms should be tagged", and a markerless file whose opening transforms are
+camera-shaped is exactly as much of an open decision as a marked one. Counting
+that way gives **seven real edits**, not six.
 
-**Six need real edits** - every one of the stress scenes uses a dynamic yaw the
-format cannot express:
+Six of the seven are marked, and every one is a stress scene using a dynamic yaw
+the format cannot express:
 
 | File | Yaw |
 |---|---|
@@ -443,7 +555,11 @@ format cannot express:
 | `stress/nested-if-branching-stress.glr` | `18.0f * t` |
 
 `matrix-stack-recursion-stress.glr` additionally folds a y offset into its
-`dist` line, which moves to `pan`.
+`dist` line. Moving it to `pan` is **not** a lossless relocation: the `-2.5f`
+currently sits before `glRotatef(15, 1,0,0)` and is therefore unrotated, while
+`pan` is applied after the rotations and gets rotated. That is an independent
+framing change on top of the yaw decision, and phase 6's per-file capture is
+what verifies it - the implementer should not treat that one as mechanical.
 
 **A seventh file diverges without a marker at all.**
 `stress/function-local-shadowing-stress.glr` heads its block
@@ -506,6 +622,8 @@ which become wrong on the day phase 5 lands:
 | `src/repl/tutorials.h:234` | setup-scaffold comment naming the 5-line block |
 | `src/subsystems/tutorial/tutorial_runner.c:690` | ditto, plus the `pos +=` contract |
 | `src/repl/export.h:58` | `ReplExportCameraBlock` doc comment and the whole bridge-callback block (lines 70-125) |
+| `src/repl/examples.h:18` | "an optional `// camera` block specifying initial camera position/rotation" |
+| `src/repl/export_glr.c:13` | the `.glr` format diagram, which draws the marker plus a literal 4-line block, and its "symmetric with example_loader.c" claim naming `repl_example_consume_camera_header` |
 | `src/app/glr_camera_export.c:5` | file header describing the two variants and the preamble |
 | `docs/ARCHITECTURE.md`, `docs/USER_GUIDE.md` | `// camera` header mentions |
 | `CLAUDE.md` | "Example metadata & presentation reset" camera sentence |
@@ -515,17 +633,27 @@ exporter, emitting the numeric form independently of the bridge formatter. It
 does not parse, so it is not a fifth reader, but it must grow the tags in phase
 5 or `.glr` files saved from the app will not reload their own camera.
 
-1. **Differential test first** - `tests/test_camera_header_parity.c` (below),
-   landing red on the seven known-divergent scenes. `make test` gates pushes, so
-   it cannot simply fail: it ships with those seven in an explicit
-   `k_known_divergent[]` list asserted as *expected* divergence, which documents
-   the bug as data and fails if a file silently stops diverging. Phase 6 empties
-   the list, and the test then asserts parity for all 46. That is the check that
-   the diagnosis is right, and it runs from day one rather than after the
-   refactor it is meant to guard.
+## Implementation phases
+
+1. **Differential test first** - `tests/test_camera_header_parity.c` (below).
+   Two constraints shape what phase 1 can actually contain:
+   - `make test` gates pushes, so it cannot land red. It ships with the seven
+     known-divergent scenes in an explicit `k_known_divergent[]` list asserted
+     as *expected* divergence - the bug as data, failing if a file silently
+     stops diverging. Phase 6 empties the list and the test asserts parity for
+     all 46.
+   - The diagnostic accumulator does not exist yet, so phase 1 compares
+     **documents, pose, `camera_comment_line`, and predefs only**; the
+     diagnostic comparison arrives with phases 2-4.
+
+   Observing a pose at all needs a bridge: a `src/repl`-only test binary has
+   none installed, so `apply_pose` is never called and the pose is invisible.
+   The recording stub therefore lands in `tests/support/` in this phase, shared
+   with `test_camera_apply_modes` rather than private to it.
 2. **`src/repl/camera_header.{c,h}`** - tag recognition, brace-depth tracking,
-   per-role parse, validation, accumulation, diagnostics, `finish` merge.
-   `code_brace_delta` hoists out of `import.c` to a shared TU. Unit-tested
+   per-role parse, validation, accumulation, diagnostics, marker stash, `finish`
+   merge. `code_brace_delta` hoists out of `import.c` to a shared TU **and gains
+   `/* … */` handling, including the open-across-lines case**. Unit-tested
    against line fixtures with no loader involvement. Add both sources to
    `REPL_DEMO_DEP_SRCS` (`Makefile:563`).
 3. **Bridge collapse** - `ReplCameraPose`, `capture_pose()`,
@@ -533,20 +661,30 @@ does not parse, so it is not a fifth reader, but it must grow the tags in phase
    bridge entry points, the import state machine, and `fill_save_preamble`.
    Migrate `scene_snapshot` to carry a pose and pass `RESTORE`.
 4. **Wire all consumers** - `import.c` (tag check before *both* gates, snippet
-   region signalled to the reader), `example_loader.c` and `tutorial_runner.c`
-   (per-line offer, `pos += n` contract deleted), `repl_live_demo` (parser
-   deleted, `apply_pose` kept).
-5. **Export the tags** - one `fill_block`, merged variants, unconditional
+   and display regions signalled to the reader, plus the non-zero `g_angle`
+   warning at the `import.c:567` guard), `example_loader.c` and
+   `tutorial_runner.c` (offer from the top of the array, `pos += n` contract
+   deleted), `repl_live_demo` (parser deleted, `apply_pose` kept).
+5. **Export the tags** - `fill_block(block, with_anim_hook)`, unconditional
    `// camera` marker, `ry` as literal-plus-`g_angle` with a `0.0f` initializer,
    **`export_glr.c:76`** so app-saved `.glr` files reload their own camera, and
    **`glprobe_extract.c:261`** so extracted scenes do too.
 6. **Corpus sweep** - 37 mechanical, 7 real edits, plus the four
    `repl_live_demo` fixtures, with an OSMesa capture per real edit. Empties the
-   parity test's `k_known_divergent[]`.
-7. **Goldens and docs** - `--dump-code` and export fixtures gain the tag
-   comments (regenerate with `BUILD=debug`); the eight documentation sites in
-   the table above are updated in the same commit, so no released text
-   describes a format the tree no longer reads.
+   parity test's `k_known_divergent[]`. `whale-full-c.c` is **not** mechanical:
+   it carries `static float g_angle = -114.3999f;` with a bare
+   `glRotatef(g_angle, …)`, so its yaw has to be folded back into the literal
+   (`-114.3999f + g_angle` with a `0.0f` initializer) rather than tagged in
+   place.
+7. **Goldens, tests and docs** - `--dump-code` and export fixtures gain the tag
+   comments (regenerate with `BUILD=debug`); the documentation sites in the
+   table above are updated in the same commit; and two existing test TUs move
+   off the deleted API in the same breath, since `make test` must stay green:
+   `tests/test_repl_state.c:879` asserts `repl_example_consume_camera_header`
+   returns 5 and installs a legacy bridge with `reset_import` /
+   `try_consume_import_line`, and `tests/test_repl_core_io.c:1318` writes
+   synthetic workspace `.c` files carrying the `g_angle` preamble and untagged
+   transforms.
 
 Phases 2-4 land together; a half-migrated tree has two readers, which is the
 state this plan exists to end.
@@ -558,7 +696,9 @@ state this plan exists to end.
   file, then compare:
   - normalized source text of every document row, and the row count;
   - command structure - `CmdType` sequence and per-command arg values;
-  - resolved camera pose (dist / rx / ry / pan) and the scene default;
+  - resolved camera pose (dist / rx / ry / pan) and the scene default, observed
+    through the shared recording bridge stub;
+  - `camera_comment_line`, so the marker stash cannot lose its writer;
   - predef variable names and values;
   - the diagnostic list as ordered `(role, rule)` pairs - **not** `line_no`, per
     the accumulator section.
@@ -576,7 +716,16 @@ state this plan exists to end.
   asserted here, where one caller owns the numbering. Both comment syntaxes
   (`// @camera dist` and the C89 `/* @camera dist */`) are covered for every
   role, and both baselines: raw depth 0 for a `.glr`, depth 1 inside a
-  `display()` wrapper.
+  `display()` wrapper - including the split-brace form where `{` is on its own
+  line, and a tag in a *later* function at raw depth 1 after `display()` closed
+  (which must be rejected, not accepted against a stale baseline).
+- **`code_brace_delta` fixtures** - a brace inside a `/* … */` comment on one
+  line, a block comment spanning lines with a brace inside it, and a brace in a
+  string literal, each asserting the depth counter is unmoved. These are the
+  inputs that would silently break region tracking in C89 files.
+- **`ry` grammar fixtures** - `+g_angle`, `+  g_angle`, `+ (g_angle)`,
+  `-15.0f + g_angle`, and a trailing comment after the suffix, all accepted;
+  `+ tweak` and a bare `g_angle` rejected.
 - **`test_camera_apply_modes`** (new, `TEST_BINS`) - a recording stub bridge
   asserting each caller passes the mode it means: file load → `IMPORT` (snap,
   scene default adopted), `scene_snapshot` restore → `RESTORE` (snap, scene
@@ -610,6 +759,14 @@ state this plan exists to end.
   **never `IMPORT`** - a snapshot restore that adopts a scene default silently
   redefines what "Reset camera" returns to. `test_camera_apply_modes` exists
   for this line specifically.
+- **Preprocessor conditionals are not evaluated.** The reader counts braces on
+  the text it is offered, so a hand-written file with unbalanced braces split
+  across `#if` / `#else` arms desynchronizes the counter and can reject a valid
+  tag. Nothing this tree emits does that - exported C's only directives are
+  includes and a balanced `#ifndef M_PI` guard - so this is a documented limit
+  rather than a case to handle. If it ever bites, the symptom is a
+  rejected-with-diagnostic camera line, not a silent misparse, which is the
+  right failure direction.
 - **The reader's depth tracking depends on callers offering every line.** A
   caller that filters before offering (an easy optimization to reach for)
   desynchronizes the brace counter and can accept a tagged line inside a
