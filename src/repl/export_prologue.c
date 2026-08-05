@@ -63,10 +63,17 @@ void write_save_restore_helpers(FILE *f) {
     fprintf(f, "}\n");
 }
 
+/* Must stay bit-identical to expr_rand01 in eval.c, seed offset included.
+ * The `seed + 0.5f` is not cosmetic: it keeps seed == 0 off the sin() zero
+ * crossing, and without it rand(0, 0) is exactly 0 and rand(0, iter)
+ * collapses to a 1-D sweep. Dropping it here made every rand() scene render
+ * differently once exported - silently, because the two hashes agree on
+ * nothing but the call count. test_export_trace_parity --full compares the
+ * values now, which is what surfaced it. */
 void write_rand_helper(FILE *f) {
     fprintf(f,
         "\nstatic float repl_randf(float seed, float iter) {\n"
-        "  float h = sinf(seed * 12.9898f + iter * 78.233f) * 43758.5453f;\n"
+        "  float h = sinf((seed + 0.5f) * 12.9898f + iter * 78.233f) * 43758.5453f;\n"
         "  float frac = h - floorf(h);\n"
         "  if (frac < 0.0f) frac += 1.0f;\n"
         "  return frac;\n"
