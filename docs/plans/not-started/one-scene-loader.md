@@ -375,3 +375,65 @@ Each step is independently landable and leaves the parity test green.
   independent work.
 - Splitting `import.c`.
 - Any change to the `.glr` or exported-`.c` formats themselves.
+
+## Review feedback
+
+The plan has a good diagnosis, but it is not implementation-ready without
+resolving the following contract-level gaps:
+
+1. **Failed-load index corrupts scene identity.** The proposed change to store
+   the failed catalog index in `active_example_idx` conflicts with the rest of
+   the app, which treats that field as a successfully active example. Scene
+   tabs, window titles, recovery-save decisions, workspace promotion, and
+   `repl_promote_transient_if_needed()` all rely on that meaning. A failed load
+   would show an empty document as the failed example and could suppress
+   recovery or promote edits under the wrong name. Add a separate cycle cursor
+   or last-attempt field, or explicitly update every consumer.
+
+2. **Camera behavior is missing from the options.** Catalog `.glr` loading
+   currently finishes with `REPL_CAMERA_APPLY_EXAMPLE`, which eases the camera
+   and records the 3D transition. The importer uses
+   `REPL_CAMERA_APPLY_IMPORT`, which snaps instead. Rerouting catalog loads
+   would silently change camera behavior. Add an explicit camera-apply mode to
+   the load options and test it.
+
+3. **`repl_load_example_lines()` behavior is contradicted.** The plan says
+   `example_idx = -1` means no presentation reset and no subset filter, then
+   makes the public wrapper pass `-1`. Today that wrapper resets the document,
+   predefs, aliases, presentation settings, input state, and filters `@cfg`;
+   existing tests depend on this behavior. Separate catalog context from
+   example-load choreography, or preserve the wrapper's current setup
+   explicitly.
+
+4. **Explicit format is not propagated to all entry points.** Making only
+   `import_set_source()` explicit leaves `repl_export_load_from_lines()` and
+   `repl_export_load_from_stream()` without a format parameter. The importer
+   also continues deriving raw-versus-exported behavior from snippet-marker
+   scans. Route all three APIs through `ReplSceneLoadOpts`, with file suffix
+   detection confined to the filesystem adapter.
+
+5. **`ATOMIC` cannot currently abort at the first parse failure.**
+   `import_feed_one_line()` converts failures into warnings and returns void,
+   while `import_process_line()` discards handler results. Add an explicit
+   failure status propagated through physical-line and staged-function paths.
+   Also define the rollback boundary: `SceneSnapshot` only captures the
+   scene-subset cfg, not unrestricted presentation cfg or full editor/input
+   state.
+
+6. **`.glr` metadata position will change unless constrained.** The current
+   catalog loader only consumes a leading `@cfg` run; the importer accepts
+   workspace directives through its general pre-snippet handler. A shared
+   importer could therefore apply `// @cfg` appearing later in a raw `.glr`
+   body. Preserve the leading-header rule or document and test the intentional
+   semantic change.
+
+7. **Body-cap semantics are underspecified.** The existing cap counts physical
+   post-metadata `.glr` body lines; the importer processes logical accumulated
+   statements and exported-C scaffolding. Specify whether `body_line_max`
+   counts physical lines, logical commands, or translated scene rows, and
+   whether it applies to `.c`.
+
+The parity-test deletion also needs a fuller migration checklist. Its camera
+diagnostics, canonical-order rejection, exported-C exemption, and failure-path
+assertions should survive as direct tests, not only its document-shape
+comparison.
