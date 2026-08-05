@@ -36,6 +36,7 @@
 #include "config.h"
 #include "app/glr_ctrl.h"
 #include "repl/camera_header.h"
+#include "repl/doc_order.h"
 #include "repl/command.h"
 #include "repl/example_loader.h"
 #include "repl/export.h"
@@ -341,6 +342,108 @@ static int parity_walk_dir(const char *dir) {
     return count;
 }
 
+/* The frozen pre-migration fixtures: the old shape must fail *loudly*.
+ * Without this the only record of what it looked like is git history, and a
+ * rejection message could silently degrade to "parse error" with no test
+ * noticing. This is the rejection half of the two comparisons - the A/B half
+ * (does the new form still render the old scene?) is the corpus walk above,
+ * which loads the migrated files on both paths. */
+static void test_frozen_rejections(void) {
+    static const struct {
+        const char *file;
+        const char *why;
+    } k_frozen[] = {
+        { "matrix-stack-recursion-stress.glr",
+          "func0 below the body" },
+        { "function-local-shadowing-stress.glr",
+          "markerless camera-shaped transforms, functions below the body" },
+        { "torus-knot-animated.glr",
+          "every violation at once" }
+    };
+    size_t i;
+
+    printf("--- frozen pre-migration fixtures still fail loudly ---\n");
+    for (i = 0; i < sizeof(k_frozen) / sizeof(k_frozen[0]); i++) {
+        char path[512], label[512];
+        char **lines;
+        ReplDocOrder ord;
+        ReplCameraHeader hdr;
+        int j;
+
+        snprintf(path, sizeof(path), "tests/testdata/camera-order/%s",
+                 k_frozen[i].file);
+        lines = parity_read_lines(path, NULL);
+        snprintf(label, sizeof(label), "frozen %s readable", k_frozen[i].file);
+        TEST_ASSERT_TRUE(&g_harness, label, lines != NULL);
+        if (!lines)
+            continue;
+
+        repl_camera_header_init(&hdr);
+        repl_doc_order_init(&ord);
+        for (j = 0; lines[j]; j++) {
+            ReplCameraLineResult r =
+                repl_camera_header_offer(&hdr, lines[j], j + 1);
+            (void)repl_doc_order_offer(&ord, lines[j], j + 1,
+                                       r != REPL_CAMERA_LINE_NOT_CAMERA);
+        }
+
+        snprintf(label, sizeof(label), "frozen %s is rejected (%s)",
+                 k_frozen[i].file, k_frozen[i].why);
+        TEST_ASSERT_TRUE(&g_harness, label, ord.violations > 0);
+
+        /* The old form carried no tags at all, so its transforms are plain
+         * geometry to the new reader - which is exactly why the ordering
+         * check, not the camera reader, is what catches these files. */
+        snprintf(label, sizeof(label), "frozen %s supplies no camera pose",
+                 k_frozen[i].file);
+        TEST_ASSERT_INT(&g_harness, label, (int)hdr.seen_mask, 0);
+
+        parity_free_lines(lines);
+    }
+}
+
+/* The shape no .glr can express: an exported .c with the spin row, in C89
+ * block-comment spelling. A reader that handled only `//` would silently drop
+ * the camera from every exported file - this bug, with new syntax. */
+static void test_exported_c_fixture(void) {
+    char **lines = parity_read_lines("tests/testdata/camera-order/"
+                                     "exported-with-spin.c", NULL);
+    ReplCameraHeader hdr;
+    ReplCameraFinish fin;
+    int i;
+
+    printf("--- exported-C fixture with the spin row ---\n");
+    TEST_ASSERT_TRUE(&g_harness, "exported-C fixture readable", lines != NULL);
+    if (!lines)
+        return;
+
+    camera_bridge_stub_install(NULL);
+    repl_camera_header_init(&hdr);
+    for (i = 0; lines[i]; i++) {
+        const char *p = lines[i];
+        while (*p == ' ' || *p == '\t') p++;
+        if (strncmp(p, "void display(void)", 18) == 0)
+            repl_camera_header_set_region(&hdr, REPL_CAMERA_REGION_DISPLAY);
+        else if (strncmp(p, "/* Snippet start", 16) == 0)
+            repl_camera_header_set_region(&hdr, REPL_CAMERA_REGION_SNIPPET);
+        (void)repl_camera_header_offer(&hdr, lines[i], i + 1);
+    }
+    fin = repl_camera_header_finish(&hdr, REPL_CAMERA_APPLY_IMPORT);
+
+    TEST_ASSERT_INT(&g_harness, "every pose role read from block comments",
+                    (int)fin.seen_mask, (int)REPL_CAMERA_MASK_POSE);
+    TEST_ASSERT_TRUE(&g_harness, "the pose is the file's, not the default",
+                     fabsf(fin.pose.dist - 12.0f) < 1e-4f &&
+                     fabsf(fin.pose.rx - 18.0f) < 1e-4f &&
+                     fabsf(fin.pose.ry - 42.0f) < 1e-4f &&
+                     fabsf(fin.pose.tx - 0.5f) < 1e-4f);
+    TEST_ASSERT_INT(&g_harness, "the spin row is accepted and discarded",
+                    hdr.spin_seen, 1);
+    TEST_ASSERT_INT(&g_harness, "no diagnostics on a canonical exported file",
+                    hdr.diag_count, 0);
+    parity_free_lines(lines);
+}
+
 int main(void) {
     int n = 0;
 
@@ -349,6 +452,8 @@ int main(void) {
     n += parity_walk_dir("tests/scenes/stress");
     printf("--- compared %d scenes on both load paths ---\n", n);
     TEST_ASSERT_TRUE(&g_harness, "the corpus was actually found", n > 0);
+    test_frozen_rejections();
+    test_exported_c_fixture();
 
     printf("\n=== Results: ");
     return test_harness_report(&g_harness, "camera_header_parity");

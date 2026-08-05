@@ -159,12 +159,124 @@ static void test_external_3d_pose_is_deferred(void) {
                glr_camera_export_take_pending_3d_pose(&rx, &ry, &tz), 0);
 }
 
+/* The transform rows are the source of truth, which is the whole argument
+ * against a one-line summary directive: a hand edit to an exported .c must
+ * survive re-import rather than losing to a directive that disagrees. */
+static void test_hand_edited_numbers_survive(void) {
+    printf("--- hand-edited camera numbers survive re-import ---\n");
+    const char *path = "/tmp/test_camera_hand_edit.c";
+    FILE *f;
+
+    glr_ctrl_reset_all();
+    camera_bridge_stub_install(NULL);
+
+    f = fopen(path, "w");
+    ASSERT_TRUE("hand-edit fixture written", f != NULL);
+    if (!f)
+        return;
+    fprintf(f,
+        "void display(void) {\n"
+        /* Someone opened the exported file and typed a different pitch. */
+        "  glTranslatef(0.0000f, 0.0000f, -3.2500f);   /* @camera dist */\n"
+        "  glRotatef(66.5000f, 1.0f, 0.0f, 0.0f);   /* @camera rx */\n"
+        "  glRotatef(12.0000f, 0.0f, 1.0f, 0.0f);   /* @camera ry */\n"
+        /* ... and left a non-zero g_angle behind, which is non-semantic and
+         * must not move the imported pose - but must warn. */
+        "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);   /* @camera spin */\n"
+        "  glTranslatef(0.0000f, 0.0000f, 0.0000f);   /* @camera pan */\n"
+        "  // Snippet start\n"
+        "  glVertex3f(0, 0, 0);\n"
+        "  // Snippet end\n"
+        "}\n");
+    fclose(f);
+
+    ASSERT_INT("hand-edited import succeeds",
+               repl_export_load_from_file(path, NULL), 1);
+    ASSERT_TRUE("the edited numbers are the imported pose",
+                fabsf(g_camera_bridge_stub.applied.dist - 3.25f) < 1e-4f &&
+                fabsf(g_camera_bridge_stub.applied.rx - 66.5f) < 1e-4f &&
+                fabsf(g_camera_bridge_stub.applied.ry - 12.0f) < 1e-4f);
+    remove(path);
+}
+
+/* A hand-edited g_angle initializer cannot move the pose - the yaw rides on
+ * the ry row - but the disagreement between the compiled C and the imported
+ * REPL is worth saying out loud. The shared reader cannot see that line, so
+ * the warning is importer-local. */
+static void test_nonzero_g_angle_warns(void) {
+    printf("--- non-zero g_angle initializer warns ---\n");
+    const char *path = "/tmp/test_camera_g_angle.c";
+    FILE *f;
+
+    glr_ctrl_reset_all();
+    camera_bridge_stub_install(NULL);
+
+    f = fopen(path, "w");
+    ASSERT_TRUE("g_angle fixture written", f != NULL);
+    if (!f)
+        return;
+    fprintf(f,
+        "static float g_angle = 45.0000f;\n"
+        "void display(void) {\n"
+        "  glTranslatef(0.0000f, 0.0000f, -8.0000f);   /* @camera dist */\n"
+        "  glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   /* @camera rx */\n"
+        "  glRotatef(20.0000f, 0.0f, 1.0f, 0.0f);   /* @camera ry */\n"
+        "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);   /* @camera spin */\n"
+        "  glTranslatef(0.0000f, 0.0000f, 0.0000f);   /* @camera pan */\n"
+        "  // Snippet start\n"
+        "  glVertex3f(0, 0, 0);\n"
+        "  // Snippet end\n"
+        "}\n");
+    fclose(f);
+
+    ASSERT_INT("g_angle import succeeds",
+               repl_export_load_from_file(path, NULL), 1);
+    ASSERT_TRUE("the yaw still comes from the ry row, not g_angle",
+                fabsf(g_camera_bridge_stub.applied.ry - 20.0f) < 1e-4f);
+    remove(path);
+}
+
+/* A load can land mid-ease. Merging a partial header against the transient
+ * interpolated pose would bake an arbitrary frame of an animation into the
+ * result, so capture_pose is specified as the *destination* reader. */
+static void test_mid_ease_load_uses_destination(void) {
+    printf("--- partial header merges against the destination ---\n");
+    ReplCameraHeader hdr;
+    ReplCameraFinish fin;
+    int i;
+
+    glr_ctrl_reset_all();
+    glr_camera_export_install_bridge();
+    glr_camera_set_orbit(5.0f, 5.0f);
+    glr_camera_set_distance(5.0f);
+    /* Arm a long ease, then load before it settles. */
+    glr_camera_ease_to(60.0f, 70.0f, 20.0f, 0.0f, 0.0f, 0.0f);
+    for (i = 0; i < 3; i++)
+        glr_camera_tick();
+    ASSERT_TRUE("the live pose is genuinely mid-ease",
+                fabsf(glr_camera().rx - 60.0f) > 1.0f);
+
+    repl_camera_header_init(&hdr);
+    (void)repl_camera_header_offer(
+        &hdr, "glTranslatef(0, 0, -9);   // @camera dist", 1);
+    fin = repl_camera_header_finish(&hdr, REPL_CAMERA_APPLY_IMPORT);
+
+    ASSERT_TRUE("the merged pose took the ease destination, not the frame",
+                fabsf(fin.pose.rx - 60.0f) < 1e-3f &&
+                fabsf(fin.pose.ry - 70.0f) < 1e-3f);
+    ASSERT_TRUE("the supplied role still wins",
+                fabsf(fin.pose.dist - 9.0f) < 1e-3f);
+}
+
 int main(void) {
     printf("=== camera apply modes ===\n");
     test_example_mode();
     test_restore_mode();
     test_import_mode();
     test_external_3d_pose_is_deferred();
+    test_hand_edited_numbers_survive();
+    test_nonzero_g_angle_warns();
+    test_mid_ease_load_uses_destination();
     printf("\n=== Results: ");
     return test_harness_report(&g_harness, "camera_apply_modes");
 }
