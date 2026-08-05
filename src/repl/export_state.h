@@ -25,7 +25,11 @@
  * ReplExportCameraBlock interchange struct (export.h). Defined here -
  * the bottom of the include chain - because state_views.h needs them
  * to declare the state struct and cannot include export.h back. */
-#define REPL_EXPORT_CAMERA_LINES    4
+/* dist, rx, ry, spin, pan - the canonical emit order. The `spin` slot
+ * carries exported C's g_angle animation hook and is empty in the
+ * hook-less projection the .glr writer and code panel use, so every
+ * consumer skips empty slots rather than assuming five rows. */
+#define REPL_EXPORT_CAMERA_LINES    5
 #define REPL_EXPORT_CAMERA_LINE_MAX 96
 #define RENDER_STATE_LINE_COUNT 2
 #define RENDER_STATE_LINE_LEN   64    /* per-line buffer width for render_state_lines[] */

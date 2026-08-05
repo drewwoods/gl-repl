@@ -2809,6 +2809,15 @@ void glr_ctrl_display_frame(void) {
         g_cur_frame_pose = glr_camera_pose_from_state(&cam);
         glr_camera_load_modelview(&g_cur_frame_pose);
     }
+    /* Drain any external-3D-pose record an example-mode camera apply
+     * enqueued. It has to happen here and not at the apply: the record's
+     * documented precondition is "after the camera modelview is loaded in
+     * the display frame", and example loads run off the action path. */
+    {
+        float rec_rx, rec_ry, rec_tz;
+        if (glr_camera_export_take_pending_3d_pose(&rec_rx, &rec_ry, &rec_tz))
+            glr_ctrl_view_record_external_3d_pose(rec_rx, rec_ry, rec_tz);
+    }
     /* Resolve motion-blur mode for this frame now that the current pose is
      * captured; installs the per-sample hook on scene_config when active. */
     glr_ctrl_resolve_blur_subframe(&scene_config);

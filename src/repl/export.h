@@ -44,6 +44,7 @@
 
 #include <stdio.h>
 #include "source_document.h"
+#include "repl/camera_header.h"  /* ReplCameraPose / ReplCameraApplyMode */
 #include "repl/cfg_baseline.h"
 #include "repl/export_state.h"  /* REPL_EXPORT_CAMERA_LINES / _LINE_MAX */
 #include "repl/state_views.h"   /* REPL_WORKSPACE_DIR_MAX, USER_SCENE_NAME_MAX */
@@ -55,16 +56,17 @@
  * batch-shaped handoff for callers that want the full bag at once. */
 void repl_export_apply_pending_cfg(void);
 
-/* Opaque 4-line camera transform block used by export, import, and examples.
+/* Opaque camera transform block used by export and the code-panel preview.
  *
- * Export writes these raw GL lines into saved files and the code-panel preview;
- * import and example loading feed the same text back to the controller bridge.
- * src/repl/export.c treats the block as opaque strings, while the bridge in
- * src/app/glr_camera_export.c owns the actual camera parsing and mutation.
+ * The bridge in src/app/glr_camera_export.c formats these raw GL lines from
+ * live camera state; src/repl/export.c treats them as opaque strings. Nothing
+ * parses them any more - reading a camera back is src/repl/camera_header.c's
+ * job, from the file's own tagged lines.
  *
  * REPL_EXPORT_CAMERA_LINES / _LINE_MAX live in export_state.h (included
  * above) so the same constants dimension the cam_lines[] preview storage
- * in state_views.h. */
+ * in state_views.h. Slot 3 is the `spin` animation hook and is empty in the
+ * hook-less projection; every consumer skips empty slots. */
 #define REPL_EXPORT_CAMERA_PREAMBLE_MAX 64
 
 typedef struct {
@@ -72,51 +74,31 @@ typedef struct {
     int  present;
 } ReplExportCameraBlock;
 
-/* Controller-installed adapter for camera block save/load.
+/* Controller-installed camera adapter. It formats and it applies; it does
+ * not parse.
  *
- * Save paths call fill_save_block() and fill_save_preamble(); the code-panel
- * preview calls fill_display_block(); file import uses reset_import() plus
- * try_consume_import_line() to stream camera lines back into live state; the
- * example loader can call apply_example_block() after validating a `// camera`
- * header. The bridge is installed from src/app/glr_camera_export.c and is
- * intentionally optional so non-rendering hosts can leave camera handling out. */
+ * `fill_block` is one formatter with two projections that differ by one
+ * optional row: `with_anim_hook` emits the `@camera spin` row carrying the
+ * exported C's g_angle animation hook, and is set only for exported C. The
+ * `.glr` writer and the code panel pass 0 - a g_angle reference is not a
+ * REPL identifier and has no business in either.
+ *
+ * The bridge is installed from src/app/glr_camera_export.c and is
+ * intentionally optional so non-rendering hosts can leave camera handling
+ * out; a header then loads, validates and diagnoses as usual but applies
+ * nothing, and the scene inherits the live camera. */
 typedef struct {
-    /* Fill block for saved-file emission. Line 3 uses the literal
-     * "glRotatef(g_angle, 0,1,0)" so the saved file animates via
-     * the file-scope g_angle variable. */
-    void (*fill_save_block)(ReplExportCameraBlock *block);
-    /* Fill block for the in-app code-panel preview. Line 3 uses the
-     * numeric ry value (no g_angle placeholder - the preview shows
-     * the current state, not the animation hook). */
-    void (*fill_display_block)(ReplExportCameraBlock *block);
-    /* Build the "static float g_angle = N.NNNNf;" preamble line for
-     * the saved file's header. */
-    void (*fill_save_preamble)(char *out, int out_sz);
-    /* Try to consume a single import line as part of the camera
-     * block (or its g_angle preamble). Returns 1 if consumed
-     * (applied to camera state), 0 otherwise. The bridge owns the
-     * stateful per-line parser. */
-    int  (*try_consume_import_line)(const char *line);
-    /* Reset import-side parser state at the start of each load. */
-    void (*reset_import)(void);
-    /* Called once at the end of a successful import: if the load
-     * streamed a complete camera block, the bridge adopts the
-     * resulting pose as the scene's camera default (what a "reset
-     * camera" action returns to). A no-op when no complete block was
-     * seen, so a header-less file keeps the host's global defaults. */
-    void (*adopt_import_scene_default)(void);
-    /* Apply a validated example camera block. This is separate from
-     * import-line consumption so app bridges can animate example
-     * switches while save/workspace imports still restore immediately. */
-    void (*apply_example_block)(const ReplExportCameraBlock *block);
-    /* Snap-apply a captured camera block to live state - used by the
-     * workspace-save iteration to stage each slot's saved camera
-     * before the export bridge reads the live state, and by
-     * stash/restore around the iteration. Unlike apply_example_block
-     * this does NOT ease, does NOT set the scene default, and does
-     * NOT record an external 3D pose - it's the symmetric inverse of
-     * fill_display_block. */
-    void (*apply_capture_block_snap)(const ReplExportCameraBlock *block);
+    void (*fill_block)(ReplExportCameraBlock *block, int with_anim_hook);
+    /* Read the camera's *destination* pose - the inverse of fill_block, and
+     * deliberately not the live pose: a load can land mid-ease, and merging
+     * a partial header against an interpolated frame would bake an arbitrary
+     * step of an animation into the result. */
+    void (*capture_pose)(ReplCameraPose *out);
+    /* Apply a fully-resolved pose. The reader merges partial headers before
+     * calling, so no bridge implementation ever reasons about a mask. The
+     * mode carries both the transition and the scene-default decision -
+     * see ReplCameraApplyMode. */
+    void (*apply_pose)(const ReplCameraPose *pose, ReplCameraApplyMode mode);
 } ReplExportCameraBridge;
 
 /* Install or read the process-wide camera bridge used by export/import and

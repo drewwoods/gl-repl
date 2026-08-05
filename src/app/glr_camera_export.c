@@ -1,24 +1,20 @@
 /*
  * glr_camera_export.c -- ReplExportCameraBridge implementation.
  *
- * The camera-block format owner: translates between camera state and the
- * 4-line `// camera` block + `static float g_angle = N.NNNNf;` preamble
- * that appear in saved files. src/repl/export.c sees only the neutral
- * ReplExportCameraBlock + a single try_consume_import_line entry point;
- * it does not parse or format glRotatef/glTranslatef strings.
+ * The camera-block *format* owner: it formats live camera state into the
+ * tagged transform rows saved files carry, and it applies a resolved pose
+ * back onto the live camera. It no longer parses anything - reading a
+ * camera out of a file is src/repl/camera_header.c's job, from the file's
+ * own `@camera` role tags.
  *
- * The format has two variants:
- *   - "save": line 3 is the literal `glRotatef(g_angle, 0,1,0)`
- *     placeholder. The saved file animates camera rotation by writing
- *     g_angle every frame.
- *   - "display": line 3 uses the numeric ry value. Used for the
- *     code-panel preview (g_cam_lines).
- *
- * Import accepts either yaw variant at line 3:
- *   - `glRotatef(g_angle, 0,1,0)` (saved-file format)
- *   - `glRotatef(<numeric ry>, 0,1,0)` (display/example format)
- *
- * (Bridge introduced to decouple camera formatting from the export core.)
+ * One formatter, two projections that differ by one optional row:
+ *   - with_anim_hook = 1 ("save"): emits the `@camera spin` row,
+ *     `glRotatef(g_angle, 0,1,0)`, so the exported C animates through its
+ *     file-scope g_angle. g_angle's initializer stays 0.0f - the yaw itself
+ *     rides on the numeric `@camera ry` row.
+ *   - with_anim_hook = 0: four pose rows, no hook. Used by the code-panel
+ *     preview (g_cam_lines) and the .glr writer, neither of which may show
+ *     a g_angle the user cannot type.
  */
 #include "app/glr_camera_export.h"
 #include "repl/export.h"
@@ -29,252 +25,107 @@
 #include <string.h>
 #include <stdlib.h>
 
-/* ----- Save-side formatting ------------------------------------------- */
+/* ----- Formatting ------------------------------------------------------- */
 
-static void cam_format_block_impl(ReplExportCameraBlock *block, int use_g_angle) {
+static void cam_fill_block(ReplExportCameraBlock *block, int with_anim_hook) {
     GlrCameraState cam = glr_camera_destination();
+
+    memset(block, 0, sizeof(*block));
     snprintf(block->lines[0], REPL_EXPORT_CAMERA_LINE_MAX,
-             "  glTranslatef(0.0000f, 0.0000f, %.4ff);", -cam.dist);
+             "  glTranslatef(0.0000f, 0.0000f, %.4ff);   // @camera dist",
+             -cam.dist);
     snprintf(block->lines[1], REPL_EXPORT_CAMERA_LINE_MAX,
-             "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);", cam.rx);
-    if (use_g_angle) {
-        snprintf(block->lines[2], REPL_EXPORT_CAMERA_LINE_MAX,
-                 "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);");
-    } else {
-        snprintf(block->lines[2], REPL_EXPORT_CAMERA_LINE_MAX,
-                 "  glRotatef(%.4ff, 0.0f, 1.0f, 0.0f);", cam.ry);
-    }
-    snprintf(block->lines[3], REPL_EXPORT_CAMERA_LINE_MAX,
-             "  glTranslatef(%.4ff, %.4ff, %.4ff);",
+             "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);   // @camera rx", cam.rx);
+    snprintf(block->lines[2], REPL_EXPORT_CAMERA_LINE_MAX,
+             "  glRotatef(%.4ff, 0.0f, 1.0f, 0.0f);   // @camera ry", cam.ry);
+    if (with_anim_hook)
+        snprintf(block->lines[3], REPL_EXPORT_CAMERA_LINE_MAX,
+                 "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);   // @camera spin");
+    snprintf(block->lines[4], REPL_EXPORT_CAMERA_LINE_MAX,
+             "  glTranslatef(%.4ff, %.4ff, %.4ff);   // @camera pan",
              -cam.tx, -cam.ty, -cam.tz);
     block->present = 1;
 }
 
-static void cam_format_save_block(ReplExportCameraBlock *block) {
-    cam_format_block_impl(block, 1);
+/* ----- Pose transfer ---------------------------------------------------- */
+
+static void cam_capture_pose(ReplCameraPose *out) {
+    GlrCameraState cam = glr_camera_destination();
+
+    if (!out)
+        return;
+    out->dist = cam.dist;
+    out->rx   = cam.rx;
+    out->ry   = cam.ry;
+    out->tx   = cam.tx;
+    out->ty   = cam.ty;
+    out->tz   = cam.tz;
 }
 
-static void cam_format_display_block(ReplExportCameraBlock *block) {
-    cam_format_block_impl(block, 0);
-}
+/* EXAMPLE also has to keep the controller's saved-3D snapshot aligned with
+ * the example the user is now looking at: without it a 2D->3D restoration
+ * lands on the pose captured at 2D entry instead of the newly loaded
+ * example's angle. glr_ctrl_view_record_external_3d_pose has a frame-timing
+ * precondition ("only after the camera modelview is loaded in the display
+ * frame") that the example-load action path does not satisfy, so the record
+ * is *enqueued* here and drained by the controller at its frame-safe point.
+ * The neutral interface in src/repl/export.h never learns this exists. */
+static int   g_pending_3d_record;
+static float g_pending_3d_rx, g_pending_3d_ry, g_pending_3d_tz;
 
-static void cam_format_save_preamble(char *out, int out_sz) {
-    if (!out || out_sz <= 0) return;
-    snprintf(out, (size_t)out_sz,
-             "static float g_angle = %.4ff;", glr_camera_destination().ry);
-}
-
-/* ----- Import-side parser -------------------------------------------- *
- *
- * The state machine matches the saved-file shape:
- *
- *   state 0  expect first glTranslatef (camera distance).
- *   state 1  expect glRotatef rx (axis 1,0,0).
- *   state 2  expect glRotatef yaw with axis 0,1,0:
- *            either numeric ry or g_angle placeholder.
- *   state 3  expect glTranslatef target.
- *   state 4  done; later lines are not part of the camera block.
- *
- * The same parser also recognises the `static float g_angle = N.NNNNf;`
- * preamble line - it treats that as a free-standing camera input that
- * sets ry. */
-static int g_cam_parse_state = 0;
-
-static const char *cam_line_skip_sep(const char *p) {
-    while (*p == 'f' || *p == 'F' || *p == ',' || *p == ' ' || *p == '\t')
-        p++;
-    return p;
-}
-
-static int cam_line_read_floats(const char *p, float *out, int n) {
-    for (int i = 0; i < n; i++) {
-        p = cam_line_skip_sep(p);
-        char *end = NULL;
-        out[i] = strtof(p, &end);
-        if (end == p) return 0;
-        p = end;
-    }
-    return 1;
-}
-
-/* The "static float g_angle = N.NNNNf;" preamble may appear before the
- * camera block. Treat it like another camera input - it sets ry. */
-static int cam_try_parse_angle_preamble(const char *text) {
-    const char *p = text;
-    while (*p == ' ' || *p == '\t') p++;
-    if (strncmp(p, "static float g_angle", 20) != 0)
+int glr_camera_export_take_pending_3d_pose(float *rx, float *ry, float *tz) {
+    if (!g_pending_3d_record)
         return 0;
-    const char *eq = strchr(p, '=');
-    if (!eq) return 0;
-    eq++;
-    char *end = NULL;
-    float v = strtof(eq, &end);
-    if (end == eq) return 0;
-    glr_camera_set_orbit(glr_camera().rx, v);
+    if (rx) *rx = g_pending_3d_rx;
+    if (ry) *ry = g_pending_3d_ry;
+    if (tz) *tz = g_pending_3d_tz;
+    g_pending_3d_record = 0;
     return 1;
 }
 
-static int cam_try_consume_block_line(const char *text) {
-    if (g_cam_parse_state >= 4) return 0;
-
-    const char *p = text;
-    while (*p == ' ' || *p == '\t') p++;
-
-    if (g_cam_parse_state == 0 && strncmp(p, "glTranslatef", 12) == 0) {
-        p = strchr(p, '(');
-        if (!p) return 0;
-        p++;
-        float v[3];
-        if (!cam_line_read_floats(p, v, 3)) return 0;
-        glr_camera_set_distance(-v[2]);
-        g_cam_parse_state = 1;
-        return 1;
-    }
-
-    if (g_cam_parse_state == 1 && strncmp(p, "glRotatef", 9) == 0) {
-        p = strchr(p, '(');
-        if (!p) return 0;
-        p++;
-        float v[4];
-        if (!cam_line_read_floats(p, v, 4)) return 0;
-        if (v[1] != 1.0f || v[2] != 0.0f || v[3] != 0.0f) return 0;
-        glr_camera_set_orbit(v[0], glr_camera().ry);
-        g_cam_parse_state = 2;
-        return 1;
-    }
-
-    if (g_cam_parse_state == 2 && strncmp(p, "glRotatef", 9) == 0) {
-        const char *q = strchr(p, '(');
-        if (q && strstr(q, "g_angle")) {
-            g_cam_parse_state = 3;
-            return 1;
-        }
-        p = strchr(p, '(');
-        if (!p) return 0;
-        p++;
-        float v[4];
-        if (!cam_line_read_floats(p, v, 4)) return 0;
-        if (v[1] != 0.0f || v[2] != 1.0f || v[3] != 0.0f) return 0;
-        glr_camera_set_orbit(glr_camera().rx, v[0]);
-        g_cam_parse_state = 3;
-        return 1;
-    }
-
-    if (g_cam_parse_state == 3 && strncmp(p, "glTranslatef", 12) == 0) {
-        p = strchr(p, '(');
-        if (!p) return 0;
-        p++;
-        float v[3];
-        if (!cam_line_read_floats(p, v, 3)) return 0;
-        glr_camera_set_pan(-v[0], -v[1], -v[2]);
-        g_cam_parse_state = 4;
-        return 1;
-    }
-
-    return 0;
-}
-
-static int cam_try_consume_import_line(const char *text) {
-    if (cam_try_parse_angle_preamble(text)) return 1;
-    return cam_try_consume_block_line(text);
-}
-
-static void cam_reset_import(void) {
-    g_cam_parse_state = 0;
-}
-
-/* End-of-import hook: a file whose `// camera` block was fully consumed
- * has an authored pose, so that pose - not the built-in defaults - is
- * what "Reset camera" should return to. Example loads get this from
- * apply_example_block; file loads stream the same four lines through
- * try_consume_import_line, which writes live state directly and would
- * otherwise leave no scene default behind. Gated on a complete block
- * (state 4) so a partial or absent header keeps the global defaults. */
-static void cam_adopt_import_scene_default(void) {
-    GlrCameraState live;
-
-    if (g_cam_parse_state < 4)
-        return;
-    glr_camera_capture(&live);
-    glr_camera_set_scene_default(&live);
-}
-
-static int cam_consume_example_block_now(const ReplExportCameraBlock *block) {
-    if (!block || !block->present)
-        return 0;
-
-    cam_reset_import();
-    if (!cam_try_consume_import_line(block->lines[0])) return 0;
-    if (!cam_try_consume_import_line(block->lines[1])) return 0;
-    if (!cam_try_consume_import_line(block->lines[2])) return 0;
-    if (!cam_try_consume_import_line(block->lines[3])) return 0;
-    return 1;
-}
-
-/* Snap-apply a captured 4-line block to live camera. Used by per-slot
- * stash/restore in src/repl/scenes.c - installs the slot's saved
- * camera so the export-side bridge reads it on the very next call,
- * with no easing in between (an ease_to would leave the live
- * camera unchanged until the next tick, so the export would write
- * the OLD pose). Symmetric inverse of fill_display_block. */
-static void cam_apply_capture_block_snap(const ReplExportCameraBlock *block) {
-    if (!block || !block->present)
-        return;
-
-    GlrCameraState start;
-    glr_camera_capture(&start);
-
-    cam_reset_import();
-    if (!cam_consume_example_block_now(block)) {
-        cam_reset_import();
-        glr_camera_restore(&start);
-        return;
-    }
-    cam_reset_import();
-    /* cam_consume_example_block_now already wrote rx/ry/dist/tx/ty/tz
-     * straight into live (no ease). Nothing further required. */
-}
-
-static void cam_apply_example_block(const ReplExportCameraBlock *block) {
-    GlrCameraState start;
+static void cam_apply_pose(const ReplCameraPose *pose,
+                           ReplCameraApplyMode mode) {
     GlrCameraState target;
 
-    if (!block || !block->present)
+    if (!pose)
         return;
 
-    glr_camera_capture(&start);
-    if (!cam_consume_example_block_now(block)) {
-        cam_reset_import();
-        glr_camera_restore(&start);
+    glr_camera_capture(&target);
+    target.rx   = pose->rx;
+    target.ry   = pose->ry;
+    target.dist = pose->dist;
+    target.tx   = pose->tx;
+    target.ty   = pose->ty;
+    target.tz   = pose->tz;
+
+    if (mode == REPL_CAMERA_APPLY_EXAMPLE) {
+        glr_camera_set_scene_default(&target);
+        glr_camera_ease_to(target.rx, target.ry, target.dist,
+                           target.tx, target.ty, target.tz);
+        g_pending_3d_record = 1;
+        g_pending_3d_rx     = target.rx;
+        g_pending_3d_ry     = target.ry;
+        g_pending_3d_tz     = target.tz;
         return;
     }
-    glr_camera_capture(&target);
-    cam_reset_import();
-    glr_camera_restore(&start);
-    glr_camera_set_scene_default(&target);
-    glr_camera_ease_to(target.rx, target.ry, target.dist,
-                       target.tx, target.ty, target.tz);
-    /* Keep the controller's saved-3D snapshot aligned with the example
-     * the user is now looking at: if we're dwelling in 2D, the visible
-     * camera will ease to this pose under ortho, but without this hook
-     * the 2D->3D restoration would still land on the pose captured at
-     * 2D entry (typically stale, sometimes flat) instead of the
-     * currently-loaded example's intended angle. */
-    /* Precondition: Must be called only after the camera modelview is loaded in the display frame. */
-    glr_ctrl_view_record_external_3d_pose(target.rx, target.ry, target.tz);
+
+    /* IMPORT and RESTORE both snap: an ease would leave the live camera
+     * unchanged until the next tick, so an export taken in between would
+     * write the OLD pose. They differ only in whether the pose becomes what
+     * "Reset camera" returns to - a snapshot restore must not redefine it. */
+    glr_camera_set_orbit(target.rx, target.ry);
+    glr_camera_set_distance(target.dist);
+    glr_camera_set_pan(target.tx, target.ty, target.tz);
+    if (mode == REPL_CAMERA_APPLY_IMPORT)
+        glr_camera_set_scene_default(&target);
 }
 
 /* ----- Bridge install ------------------------------------------------- */
 
 static const ReplExportCameraBridge g_glr_export_camera_bridge = {
-    .fill_save_block            = cam_format_save_block,
-    .fill_display_block         = cam_format_display_block,
-    .fill_save_preamble         = cam_format_save_preamble,
-    .try_consume_import_line    = cam_try_consume_import_line,
-    .reset_import               = cam_reset_import,
-    .adopt_import_scene_default = cam_adopt_import_scene_default,
-    .apply_example_block        = cam_apply_example_block,
-    .apply_capture_block_snap   = cam_apply_capture_block_snap,
+    .fill_block   = cam_fill_block,
+    .capture_pose = cam_capture_pose,
+    .apply_pose   = cam_apply_pose,
 };
 
 void glr_camera_export_install_bridge(void) {
