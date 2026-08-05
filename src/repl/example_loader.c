@@ -19,6 +19,7 @@
 #include "support/cpuprof.h"     /* prof_histogram_reset on example switch */
 #include "config.h"              /* REPL_DIAG_TEXT_MAX */
 #include "repl/camera_header.h"
+#include "repl/doc_order.h"
 
 static void example_load_error(const char *msg);
 
@@ -46,6 +47,22 @@ static void example_camera_diag(void *userdata, const ReplCameraDiag *diag,
         example_load_error(msg);
     else
         repl_set_status(msg);
+}
+
+/* Route one document-order violation to the loader's status sink. Every
+ * violation in the file is reported in one pass - a loader that stopped at
+ * the first would turn a migration into one edit-reload cycle per line. */
+static void example_order_diag(void *userdata, ReplDocOrderRule rule,
+                               int line_no, int conflict_line_no,
+                               const char *message) {
+    const char *name = (const char *)userdata;
+    char msg[REPL_DIAG_TEXT_MAX];
+
+    (void)rule;
+    (void)conflict_line_no;
+    snprintf(msg, sizeof(msg), "%s:%d: %s", name ? name : "example",
+             line_no, message);
+    example_load_error(msg);
 }
 
 /* One message naming every missing pose role together. The accumulator keeps
@@ -183,9 +200,11 @@ static int load_example_lines(const char *const *lines,
                               int example_idx) {
     ReplCameraHeader camera;
     ReplCameraFinish camera_fin;
+    ReplDocOrder     order;
     const char *name = repl_example_name(example_idx);
     int cfg_count = 0;
     int loader_edit_line = 0;
+    int order_failed = 0;
     int line_idx;
 
     reset_example_load_state(example_idx);
@@ -210,10 +229,20 @@ static int load_example_lines(const char *const *lines,
      * catalog and file paths. */
     repl_camera_header_init(&camera);
     repl_camera_header_set_sink(&camera, example_camera_diag, (void *)name);
+    repl_doc_order_init(&order);
+    repl_doc_order_set_sink(&order, example_order_diag, (void *)name);
 
     for (line_idx = 0; lines && lines[line_idx]; line_idx++) {
         ReplCameraLineResult result =
             repl_camera_header_offer(&camera, lines[line_idx], line_idx + 1);
+
+        /* The canonical order covers user code, not just camera rows, so the
+         * loader owns it: the reader owns camera-line rules, the loader owns
+         * document shape. Rejection, not a warning - the whole point of a
+         * canonical form is that non-canonical files do not accumulate. */
+        if (!repl_doc_order_offer(&order, lines[line_idx], line_idx + 1,
+                                  result != REPL_CAMERA_LINE_NOT_CAMERA))
+            order_failed = 1;
 
         if (line_idx < cfg_count)
             continue;                     /* metadata, already consumed */
@@ -241,6 +270,13 @@ static int load_example_lines(const char *const *lines,
             repl_mark_source_dirty();
             return 0;
         }
+    }
+
+    if (order_failed) {
+        reset_example_load_state(example_idx);
+        repl_dispatch_input_reset();
+        repl_mark_source_dirty();
+        return 0;
     }
 
     /* Nothing was applied while reading: the merged - now complete - pose

@@ -6,6 +6,7 @@
  */
 #include "app/boot/glr_cli.h"
 
+#include "app/boot/glr_lint_scenes.h" /* --lint-scenes */
 #include "app/glr_actions.h"   /* glr_scene_example_count / _name */
 #include "app/glr_tours.h"     /* glr_tours_count / _name */
 #include "repl/examples.h"     /* repl_examples_load_dir */
@@ -45,6 +46,9 @@ static void print_usage(const char *prog) {
             "  --examples-dir <dir>  Load example catalog.ini from <dir> at\n"
             "               runtime instead of compiled-in examples\n"
             "  --list-examples  Print the built-in examples and exit\n"
+            "  --lint-scenes <dir>  Validate every .glr in <dir> against the\n"
+            "               canonical document order and @camera tags, print\n"
+            "               every violation, and exit (no window)\n"
             "  --tour <name|idx>  Start and play a built-in guided tour on\n"
             "               launch (name is case-insensitive; or a 1-based\n"
             "               index). Space play/pause, arrows step, Esc exit.\n"
@@ -213,6 +217,7 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
     const char *prog = (argc > 0) ? argv[0] : NULL;
     const char *example_arg = NULL;       /* --example NAME|IDX (unresolved) */
     const char *tour_arg = NULL;          /* --tour NAME|IDX (unresolved)    */
+    const char *lint_scenes_dir = NULL;
     int list_examples_flag = 0;
     int list_tours_flag = 0;
 
@@ -274,6 +279,9 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
         else if (strcmp(argv[i], "--list-examples") == 0) {
             list_examples_flag = 1;
         }
+        else if (strcmp(argv[i], "--lint-scenes") == 0 && i + 1 < argc) {
+            lint_scenes_dir = argv[++i];
+        }
         else if (strcmp(argv[i], "--tour") == 0 && i + 1 < argc)
             tour_arg = argv[++i];
         else if (strcmp(argv[i], "--list-tours") == 0) {
@@ -291,6 +299,13 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
             *exit_code = 1;
             return 0;
         }
+    }
+
+    if (lint_scenes_dir) {
+        /* Exit non-zero when anything needs migrating, so the lint mode is
+         * usable from a script and from `make` without parsing its output. */
+        *exit_code = glr_lint_scenes_dir(lint_scenes_dir, stdout) > 0 ? 1 : 0;
+        return 0;
     }
 
     if (list_examples_flag) {
