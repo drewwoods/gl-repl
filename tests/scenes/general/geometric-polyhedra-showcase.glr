@@ -1,0 +1,56 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+// @cfg light_theme = LIGHT_THEME_NEON
+glTranslatef(0.0000f, 0.0000f, -9.5000f);   // @camera dist
+glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+
+glClearColor(0.05, 0.05, 0.07, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.8, 0.8, 0.8, 1.0});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 40.0);
+
+// 1. Teapot (Center)
+glPushMatrix();
+glRotatef(40 * t, 0, 1, 0);
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.9, 0.7, 0.2, 1.0});
+glutSolidTeapot(0.7);
+glPopMatrix();
+
+// 2. Cube (North)
+glPushMatrix();
+glTranslatef(0, 0, -3.2);
+glRotatef(30 * t, 1, 1, 0);
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.8, 0.2, 0.4, 1.0});
+glutSolidCube(0.8);
+glPopMatrix();
+
+// 3. Sphere (East)
+glPushMatrix();
+glTranslatef(3.2, 0, 0);
+glRotatef(35 * t, 0, 1, 1);
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.2, 0.8, 0.5, 1.0});
+glutSolidSphere(0.6, 16, 16);
+glPopMatrix();
+
+// 4. Torus (South)
+glPushMatrix();
+glTranslatef(0, 0, 3.2);
+glRotatef(45 * t, 1, 0, 1);
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.3, 0.5, 0.9, 1.0});
+glutSolidTorus(0.2, 0.5, 12, 24);
+glPopMatrix();
+
+// 5. Cone (West)
+glPushMatrix();
+glTranslatef(-3.2, 0, 0);
+glRotatef(50 * t, 1, 1, 1);
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.9, 0.4, 0.8, 1.0});
+glutSolidCone(0.5, 0.9, 16, 16);
+glPopMatrix();

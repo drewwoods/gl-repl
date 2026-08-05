@@ -1,0 +1,46 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+static float lines_count = 14;
+static float speed_z, z_pos, x_val;
+
+glTranslatef(0.0000f, 0.0000f, -7.0000f);   // @camera dist
+glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+
+glClearColor(0.05, 0.02, 0.08, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+// Retro Sun Disk (background)
+glPushMatrix();
+glTranslatef(0, 1.2, -8.0);
+glColor3f(1.0, 0.4, 0.1);
+glutSolidSphere(2.0, 24, 24);
+glPopMatrix();
+
+// Perspective Grid Floor
+glLineWidth(2.0);
+glColor3f(0.9, 0.1, 0.6);
+
+// Longitudinal grid lines
+glBegin(GL_LINES);
+  for(i, -6, 7) {
+    x_val = i * 0.8;
+    glVertex3f(x_val, -1.2, 1.0);
+    glVertex3f(x_val * 0.2, -1.2, -8.0);
+  }
+glEnd();
+
+// Transverse scrolling grid lines
+speed_z = t * 2.5;
+glBegin(GL_LINES);
+  for(i, 0, lines_count) {
+    z_pos = -8.0 + i * 0.65 + (speed_z - floor(speed_z)) * 0.65;
+    if (z_pos < 1.0) {
+      glVertex3f(-5.0, -1.2, z_pos);
+      glVertex3f(5.0, -1.2, z_pos);
+    }
+  }
+glEnd();

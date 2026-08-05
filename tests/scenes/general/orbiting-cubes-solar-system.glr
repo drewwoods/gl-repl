@@ -1,0 +1,55 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+// @cfg light_theme = LIGHT_THEME_NEON
+glTranslatef(0.0000f, 0.0000f, -10.0000f);   // @camera dist
+glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+
+glClearColor(0.02, 0.03, 0.06, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT1);
+
+// Central Sun
+glPushMatrix();
+glRotatef(15 * t, 0, 1, 0);
+glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){0.9, 0.7, 0.2, 1.0});
+glutSolidSphere(1.0, 20, 20);
+glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){0, 0, 0, 1.0});
+glPopMatrix();
+
+// Orbit 1: Inner planet (Fast red cube)
+glPushMatrix();
+glRotatef(45 * t, 0, 1, 0);
+glTranslatef(2.5, 0, 0);
+glRotatef(90 * t, 0, 1, 0);
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.9, 0.3, 0.2, 1.0});
+glutSolidCube(0.5);
+glPopMatrix();
+
+// Orbit 2: Middle planet (Cyan sphere with orbiting moon)
+glPushMatrix();
+glRotatef(25 * t, 0, 1, 0);
+glTranslatef(4.5, 0, 0);
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.2, 0.8, 0.9, 1.0});
+glutSolidSphere(0.6, 16, 16);
+
+// Moon orbiting middle planet
+glRotatef(120 * t, 0, 1, 0.4);
+glTranslatef(1.1, 0, 0);
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.7, 0.7, 0.8, 1.0});
+glutSolidSphere(0.2, 12, 12);
+glPopMatrix();
+
+// Orbit 3: Outer planet (Green torus)
+glPushMatrix();
+glRotatef(15 * t, 0.2, 1, 0);
+glTranslatef(6.5, 0, 0);
+glRotatef(60 * t, 1, 0, 0);
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.3, 0.9, 0.4, 1.0});
+glutSolidTorus(0.15, 0.45, 12, 24);
+glPopMatrix();

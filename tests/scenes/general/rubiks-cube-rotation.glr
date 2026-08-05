@@ -1,0 +1,68 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+// @cfg light_theme = LIGHT_THEME_NEON
+
+static float block_size = 0.55;
+static float gap = 0.65;
+static float angle_x, angle_y, angle_z;
+static float r, g, b_col;
+
+glTranslatef(0.0000f, 0.0000f, -7.5000f);   // @camera dist
+glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(35.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+
+glClearColor(0.04, 0.04, 0.06, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+
+// Global spin
+glPushMatrix();
+glRotatef(t * 12.0, 1, 1, 1);
+
+// We animate the layer rotations
+angle_x = 90.0 * sin(t * 1.2);
+angle_y = 90.0 * cos(t * 1.6);
+angle_z = 90.0 * sin(t * 0.8);
+
+for(x, -1, 2) {
+  for(y, -1, 2) {
+    for(z, -1, 2) {
+      glPushMatrix();
+
+      // If we are in the right layer (x == 1), rotate around X
+      if (x > 0) {
+        glRotatef(angle_x, 1, 0, 0);
+      }
+      // If we are in the top layer (y == 1), rotate around Y
+      if (y > 0) {
+        glRotatef(angle_y, 0, 1, 0);
+      }
+      // If we are in the front layer (z == 1), rotate around Z
+      if (z > 0) {
+        glRotatef(angle_z, 0, 0, 1);
+      }
+
+      glTranslatef(x * gap, y * gap, z * gap);
+
+      // Assign distinct colors based on block positions
+      r = 0.5 + 0.45 * x;
+      g = 0.5 + 0.45 * y;
+      b_col = 0.5 + 0.45 * z;
+
+      glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){r, g, b_col, 1.0});
+      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.8, 0.8, 0.8, 1.0});
+      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30.0);
+
+      // Render the sub-cube
+      glutSolidCube(block_size);
+
+      glPopMatrix();
+    }
+  }
+}
+
+glPopMatrix();

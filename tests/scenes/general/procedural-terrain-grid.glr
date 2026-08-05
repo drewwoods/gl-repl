@@ -1,0 +1,40 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+static float size = 5.0;
+static float steps = 20;
+static float step_size;
+static float half;
+static float x0, x1, z, y0, y1;
+
+glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
+glRotatef(35.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+
+glClearColor(0.04, 0.05, 0.08, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+step_size = size / steps;
+half = size * 0.5;
+
+for(i, 0, steps) {
+  x0 = -half + i * step_size;
+  x1 = x0 + step_size;
+
+  glBegin(GL_TRIANGLE_STRIP);
+    for(j, 0, steps + 1) {
+      z = -half + j * step_size;
+
+      y0 = 0.5 * sin(x0 * 1.5 + t * 2.0) * cos(z * 1.5 + t * 1.5);
+      y1 = 0.5 * sin(x1 * 1.5 + t * 2.0) * cos(z * 1.5 + t * 1.5);
+
+      glColor3f(0.2 + y0 * 0.6, 0.5 + y0 * 0.4, 0.9 - y0 * 0.3);
+      glVertex3f(x0, y0, z);
+
+      glColor3f(0.2 + y1 * 0.6, 0.5 + y1 * 0.4, 0.9 - y1 * 0.3);
+      glVertex3f(x1, y1, z);
+    }
+  glEnd();
+}

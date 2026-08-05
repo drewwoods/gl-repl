@@ -1,0 +1,47 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+static float p_id, p_time, cycle, angle, speed, vx, vy, vz;
+static float px, py, pz, r, g, b, alpha;
+
+glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
+glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+
+glClearColor(0.02, 0.02, 0.04, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_BLEND);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+
+glPointSize(4.0);
+
+glBegin(GL_POINTS);
+  for(i, 0, 120) {
+    p_id = i;
+    p_time = t * 1.2 + p_id * 0.037;
+    cycle = p_time - floor(p_time);
+
+    angle = p_id * 0.35;
+    speed = 1.5 + 1.2 * sin(p_id * 7.1);
+
+    vx = cos(angle) * speed * 0.5;
+    vz = sin(angle) * speed * 0.5;
+    vy = speed * 1.8;
+
+    px = vx * cycle;
+    py = vy * cycle - 1.5 * cycle * cycle;
+    pz = vz * cycle;
+
+    r = 0.5 + 0.5 * sin(p_id + 0.0);
+    g = 0.5 + 0.5 * sin(p_id + 2.0);
+    b = 0.5 + 0.5 * sin(p_id + 4.0);
+    alpha = 1.0 - cycle;
+
+    glColor4f(r, g, b, alpha);
+    glVertex3f(px, py - 1.0, pz);
+  }
+glEnd();
+
+glDisable(GL_BLEND);

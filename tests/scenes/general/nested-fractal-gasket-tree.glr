@@ -1,0 +1,46 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+static float sway;
+
+drawBranch(depth, len) {
+  if (depth > 0) {
+    glLineWidth(depth);
+    glColor3f(0.3 + 0.15 * depth, 0.8 - 0.1 * depth, 0.2 + 0.1 * depth);
+
+    glBegin(GL_LINES);
+      glVertex3f(0, 0, 0);
+      glVertex3f(0, len, 0);
+    glEnd();
+
+    glPushMatrix();
+    glTranslatef(0, len, 0);
+    glRotatef(25 + sway, 0, 0, 1);
+    glRotatef(40 * depth, 0, 1, 0);
+    drawBranch(depth - 1, len * 0.72);
+    glPopMatrix();
+
+    glPushMatrix();
+    glTranslatef(0, len, 0);
+    glRotatef(-25 - sway, 0, 0, 1);
+    glRotatef(-40 * depth, 0, 1, 0);
+    drawBranch(depth - 1, len * 0.72);
+    glPopMatrix();
+  }
+}
+
+glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
+glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+
+glClearColor(0.03, 0.04, 0.06, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+sway = 8.0 * sin(t * 2.0);
+
+glPushMatrix();
+glTranslatef(0, -2.2, 0);
+drawBranch(5, 1.4);
+glPopMatrix();

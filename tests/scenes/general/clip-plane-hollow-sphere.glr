@@ -1,0 +1,36 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+// @cfg light_theme = LIGHT_THEME_NEON
+static float plane_offset;
+
+glTranslatef(0.0000f, 0.0000f, -7.5000f);   // @camera dist
+glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+
+glClearColor(0.04, 0.05, 0.07, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+
+plane_offset = 0.5 * sin(t * 1.5);
+
+glPushMatrix();
+glRotatef(30 * t, 0, 1, 0);
+
+// Enable dynamic clipping plane
+glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0.707, 0.707, 0.0, plane_offset});
+glEnable(GL_CLIP_PLANE0);
+
+// Outer Sphere (Magenta)
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.85, 0.2, 0.5, 1.0});
+glutSolidSphere(1.8, 24, 24);
+
+// Inner Core Sphere (Cyan)
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.2, 0.85, 0.9, 1.0});
+glutSolidSphere(0.9, 20, 20);
+
+glDisable(GL_CLIP_PLANE0);
+glPopMatrix();
