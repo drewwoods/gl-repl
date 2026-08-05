@@ -1,0 +1,355 @@
+/*
+ * tests/test_camera_header_parity.c - The two loaders must agree.
+ *
+ * This is the test the whole plan is built around. For every `.glr` in the
+ * corpus, load it *as a file* (src/repl/import.c) and *via the catalog path*
+ * (src/repl/example_loader.c) and compare what each produced:
+ *
+ *   - the normalized source text of every document row, and the row count;
+ *   - the command structure - CmdType sequence and per-command arg values;
+ *   - the resolved camera pose, observed through the shared recording bridge;
+ *   - predefined variable names and values;
+ *   - the diagnostic list, as ordered (role, rule, line_no) triples plus the
+ *     overflow count.
+ *
+ * Not compared: a document row's cached `args[]`. Those are a snapshot of the
+ * last evaluation of an expression row, not part of the document - a row like
+ * `glColor3f(1 - 0.85*s, ...)` carries whatever `s` happened to hold when the
+ * row was parsed, and the flat program re-evaluates it every frame anyway. The
+ * source text, CmdType and arity pin the structure; comparing the cache would
+ * be comparing an artifact.
+ *
+ * Comparing row counts alone would pass a file whose camera lines became
+ * geometry as long as the count matched, which is precisely the bug this
+ * comes from: one loader ate two of three transforms and left the third as
+ * geometry, and the tree rendered 2.5 units low on one path only.
+ *
+ * Both loads run against the shared recording stub bridge; without a bridge
+ * installed there is no pose to compare.
+ */
+#include <dirent.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "config.h"
+#include "app/glr_ctrl.h"
+#include "repl/camera_header.h"
+#include "repl/command.h"
+#include "repl/example_loader.h"
+#include "repl/export.h"
+#include "repl/state.h"
+#include "source_document.h"
+#include "support/camera_bridge_stub.h"
+#include "support/test_harness.h"
+
+static TestHarness g_harness = TEST_HARNESS_INIT;
+#define ASSERT_TRUE(label, cond)      TEST_ASSERT_TRUE(&g_harness, label, cond)
+#define ASSERT_INT(label, got, want)  TEST_ASSERT_INT(&g_harness, label, got, want)
+
+/* A load's whole observable result, so the comparison is a struct compare
+ * rather than a list of ad-hoc assertions that can quietly stop covering
+ * something. */
+#define PARITY_MAX_ROWS  MAX_EDITOR_COMMANDS
+
+typedef struct {
+    int   ok;
+    int   row_count;
+    char  rows[PARITY_MAX_ROWS][MAX_LINE_LEN];
+    int   types[PARITY_MAX_ROWS];
+    int   num_args[PARITY_MAX_ROWS];
+
+    int            pose_applied;
+    ReplCameraPose pose;
+
+    int   num_predefs;
+    char  predef_names[MAX_PREDEF_VARS][REPL_PREDEF_NAME_MAX];
+    float predef_vals[MAX_PREDEF_VARS];
+} ParityResult;
+
+static void parity_capture(ParityResult *out) {
+    SourceTextView text = source_document_view();
+    const GLCmd *cmds = repl_state_document_cmds();
+    int count = repl_state_document_count();
+    int i;
+
+    if (count > PARITY_MAX_ROWS)
+        count = PARITY_MAX_ROWS;
+    out->row_count = count;
+    for (i = 0; i < count; i++) {
+        const char *line = source_text_line(text, i);
+        snprintf(out->rows[i], MAX_LINE_LEN, "%s", line ? line : "");
+        out->types[i]    = (int)cmds[i].type;
+        out->num_args[i] = cmds[i].num_args;
+    }
+
+    out->pose_applied = g_camera_bridge_stub.apply_count > 0;
+    out->pose         = g_camera_bridge_stub.applied;
+
+    {
+        ReplVariableView vars = repl_state_variables();
+        int n = vars.var_count > MAX_PREDEF_VARS ? MAX_PREDEF_VARS
+                                                 : vars.var_count;
+        out->num_predefs = n;
+        for (i = 0; i < n; i++) {
+            snprintf(out->predef_names[i], REPL_PREDEF_NAME_MAX, "%s",
+                     vars.vars[i].name);
+            out->predef_vals[i] = vars.vars[i].value;
+        }
+    }
+}
+
+/* Read a file into a NULL-terminated line array - the shape the catalog path
+ * is handed. For a `.glr` that array *is* the file's lines, which is what
+ * makes a 1-based array index and the importer's file line the same number,
+ * and therefore makes line_no a parity key rather than an approximation. */
+static char **parity_read_lines(const char *path, int *out_count) {
+    FILE *f = fopen(path, "r");
+    char line[MAX_LINE_LEN];
+    char **lines = NULL;
+    int count = 0, cap = 0;
+
+    if (!f)
+        return NULL;
+    while (fgets(line, sizeof(line), f)) {
+        size_t len = strlen(line);
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
+            line[--len] = '\0';
+        if (count + 2 > cap) {
+            cap = cap ? cap * 2 : 64;
+            lines = (char **)realloc(lines, (size_t)cap * sizeof(*lines));
+            if (!lines)
+                break;
+        }
+        lines[count] = strdup(line);
+        if (!lines[count])
+            break;
+        count++;
+    }
+    fclose(f);
+    if (lines)
+        lines[count] = NULL;
+    if (out_count)
+        *out_count = count;
+    return lines;
+}
+
+static void parity_free_lines(char **lines) {
+    int i;
+    if (!lines)
+        return;
+    for (i = 0; lines[i]; i++)
+        free(lines[i]);
+    free(lines);
+}
+
+static int parity_diags_equal(const ReplCameraDiag *a, int an, int a_overflow,
+                              const ReplCameraDiag *b, int bn, int b_overflow) {
+    int i;
+
+    /* The overflow counter is part of parity, not bookkeeping: comparing only
+     * the stored eight would let two paths agree on the first eight
+     * diagnostics and differ on everything after. */
+    if (an != bn || a_overflow != b_overflow)
+        return 0;
+    for (i = 0; i < an; i++) {
+        if (a[i].role != b[i].role || a[i].rule != b[i].rule ||
+            a[i].line_no != b[i].line_no)
+            return 0;
+    }
+    return 1;
+}
+
+static int parity_compare(const char *name, const ParityResult *file,
+                          const ParityResult *catalog) {
+    char label[512];
+    int i, j;
+    int rows_equal = 1;
+
+    snprintf(label, sizeof(label), "%s: row count agrees", name);
+    TEST_ASSERT_INT(&g_harness, label, catalog->row_count, file->row_count);
+    if (catalog->row_count != file->row_count)
+        return 0;
+
+    for (i = 0; i < file->row_count && rows_equal; i++) {
+        if (strcmp(file->rows[i], catalog->rows[i]) != 0) {
+            printf("  %s: row %d differs\n    file:    %s\n    catalog: %s\n",
+                   name, i, file->rows[i], catalog->rows[i]);
+            rows_equal = 0;
+        }
+        if (file->types[i] != catalog->types[i]) {
+            printf("  %s: row %d CmdType differs (%d vs %d)\n",
+                   name, i, file->types[i], catalog->types[i]);
+            rows_equal = 0;
+        }
+        if (file->num_args[i] != catalog->num_args[i]) {
+            printf("  %s: row %d arg count differs (%d vs %d): %s\n",
+                   name, i, file->num_args[i], catalog->num_args[i],
+                   file->rows[i]);
+            rows_equal = 0;
+        }
+        (void)j;
+    }
+    snprintf(label, sizeof(label), "%s: document text and commands agree", name);
+    TEST_ASSERT_TRUE(&g_harness, label, rows_equal);
+
+    snprintf(label, sizeof(label), "%s: camera applied on both paths", name);
+    TEST_ASSERT_INT(&g_harness, label, catalog->pose_applied,
+                    file->pose_applied);
+
+    snprintf(label, sizeof(label), "%s: resolved pose agrees", name);
+    TEST_ASSERT_TRUE(&g_harness, label,
+                     fabsf(file->pose.dist - catalog->pose.dist) < 1e-3f &&
+                     fabsf(file->pose.rx   - catalog->pose.rx)   < 1e-3f &&
+                     fabsf(file->pose.ry   - catalog->pose.ry)   < 1e-3f &&
+                     fabsf(file->pose.tx   - catalog->pose.tx)   < 1e-3f &&
+                     fabsf(file->pose.ty   - catalog->pose.ty)   < 1e-3f &&
+                     fabsf(file->pose.tz   - catalog->pose.tz)   < 1e-3f);
+
+    snprintf(label, sizeof(label), "%s: predef count agrees", name);
+    TEST_ASSERT_INT(&g_harness, label, catalog->num_predefs,
+                    file->num_predefs);
+    if (file->num_predefs == catalog->num_predefs) {
+        int vars_equal = 1;
+        for (i = 0; i < file->num_predefs; i++)
+            if (strcmp(file->predef_names[i], catalog->predef_names[i]) != 0 ||
+                fabsf(file->predef_vals[i] - catalog->predef_vals[i]) > 1e-4f)
+                vars_equal = 0;
+        snprintf(label, sizeof(label), "%s: predef names and values agree", name);
+        TEST_ASSERT_TRUE(&g_harness, label, vars_equal);
+    }
+    return rows_equal;
+}
+
+/* The two loads' diagnostics, captured straight off each reader's
+ * accumulator rather than through a sink - a fire-and-forget sink cannot be
+ * asserted on. */
+static ReplCameraDiag g_file_diags[REPL_CAMERA_MAX_DIAGS];
+static int g_file_diag_count, g_file_diag_overflow;
+static ReplCameraDiag g_catalog_diags[REPL_CAMERA_MAX_DIAGS];
+static int g_catalog_diag_count, g_catalog_diag_overflow;
+
+/* Re-run the reader over the same lines to capture what each loader's own
+ * reader would have accumulated. Both loaders offer every line from the top
+ * in order, so this reproduces their accumulators exactly - and if it ever
+ * stops doing so, that *is* the divergence the test is looking for. */
+static void parity_collect_diags(char *const *lines, ReplCameraDiag *out,
+                                 int *out_count, int *out_overflow) {
+    ReplCameraHeader hdr;
+    int i;
+
+    repl_camera_header_init(&hdr);
+    for (i = 0; lines && lines[i]; i++)
+        (void)repl_camera_header_offer(&hdr, lines[i], i + 1);
+    memcpy(out, hdr.diags, sizeof(hdr.diags));
+    *out_count    = hdr.diag_count;
+    *out_overflow = hdr.diag_overflow;
+}
+
+static void parity_check_file(const char *path, const char *name) {
+    ParityResult *as_file = (ParityResult *)calloc(1, sizeof(ParityResult));
+    ParityResult *as_catalog = (ParityResult *)calloc(1, sizeof(ParityResult));
+    char **lines;
+    int line_count = 0;
+    char label[512];
+
+    if (!as_file || !as_catalog) {
+        free(as_file);
+        free(as_catalog);
+        return;
+    }
+
+    lines = parity_read_lines(path, &line_count);
+    snprintf(label, sizeof(label), "%s: fixture readable", name);
+    TEST_ASSERT_TRUE(&g_harness, label, lines != NULL);
+    if (!lines) {
+        free(as_file);
+        free(as_catalog);
+        return;
+    }
+
+    /* Catalog path: the same line array a compiled-in example carries. A full
+     * reset between loads, because the command store is a global and the
+     * corpus would otherwise hit its 1024 cap partway through. reset_all
+     * installs the app's camera bridge, so the stub goes in after it. */
+    glr_ctrl_reset_all();
+    camera_bridge_stub_install(NULL);
+    (void)repl_load_example_lines((const char *const *)lines);
+    parity_capture(as_catalog);
+    parity_collect_diags(lines, g_catalog_diags, &g_catalog_diag_count,
+                         &g_catalog_diag_overflow);
+
+    /* File path: the same bytes, through src/repl/import.c. */
+    glr_ctrl_reset_all();
+    camera_bridge_stub_install(NULL);
+    (void)repl_export_load_from_file(path, NULL);
+    parity_capture(as_file);
+    parity_collect_diags(lines, g_file_diags, &g_file_diag_count,
+                         &g_file_diag_overflow);
+
+    (void)parity_compare(name, as_file, as_catalog);
+
+    snprintf(label, sizeof(label), "%s: diagnostics agree", name);
+    TEST_ASSERT_TRUE(&g_harness, label,
+                     parity_diags_equal(g_file_diags, g_file_diag_count,
+                                        g_file_diag_overflow,
+                                        g_catalog_diags, g_catalog_diag_count,
+                                        g_catalog_diag_overflow));
+
+    parity_free_lines(lines);
+    free(as_file);
+    free(as_catalog);
+}
+
+static int parity_name_cmp(const void *a, const void *b) {
+    return strcmp(*(const char *const *)a, *(const char *const *)b);
+}
+
+static int parity_walk_dir(const char *dir) {
+    DIR *d = opendir(dir);
+    struct dirent *entry;
+    char **names = NULL;
+    int count = 0, cap = 0, i;
+
+    if (!d) {
+        printf("  (skipping %s - not found)\n", dir);
+        return 0;
+    }
+    while ((entry = readdir(d)) != NULL) {
+        size_t len = strlen(entry->d_name);
+        if (len <= 4 || strcmp(entry->d_name + len - 4, ".glr") != 0)
+            continue;
+        if (count + 1 > cap) {
+            cap = cap ? cap * 2 : 64;
+            names = (char **)realloc(names, (size_t)cap * sizeof(*names));
+            if (!names)
+                break;
+        }
+        names[count++] = strdup(entry->d_name);
+    }
+    closedir(d);
+    qsort(names, (size_t)count, sizeof(*names), parity_name_cmp);
+
+    for (i = 0; i < count; i++) {
+        char path[1024];
+        snprintf(path, sizeof(path), "%s/%s", dir, names[i]);
+        parity_check_file(path, names[i]);
+        free(names[i]);
+    }
+    free(names);
+    return count;
+}
+
+int main(void) {
+    int n = 0;
+
+    printf("=== camera header loader parity ===\n");
+    n += parity_walk_dir("examples/scenes");
+    n += parity_walk_dir("tests/scenes/stress");
+    printf("--- compared %d scenes on both load paths ---\n", n);
+    TEST_ASSERT_TRUE(&g_harness, "the corpus was actually found", n > 0);
+
+    printf("\n=== Results: ");
+    return test_harness_report(&g_harness, "camera_header_parity");
+}

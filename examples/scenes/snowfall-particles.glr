@@ -8,7 +8,6 @@
 // @cfg msaa = 1
 // @cfg line_smooth = 0
 // @cfg variable_panel = 0
-
 static float flakeCount = 550; // @tune
 static float flakeX, flakeY; // particle position
 static float drift, fall; // per-flake horizontal drift, vertical fall speed

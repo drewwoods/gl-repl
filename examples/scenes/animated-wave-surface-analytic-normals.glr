@@ -1,6 +1,5 @@
 // @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
 // @cfg vertex_points = 0
-
 static float grid = 15; // grid size @tune
 static float extent = 3; // grid extent @tune
 static float x, y, z, dydx, dydz, s; // vertex coords, surface slopes, palette mix in [0,1]

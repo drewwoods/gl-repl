@@ -2,7 +2,6 @@
 // @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
 // @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED
 // @cfg vertex_points = 0
-
 tri() {
   glBegin(GL_TRIANGLES);
     glNormal3f(0, 0, 1);

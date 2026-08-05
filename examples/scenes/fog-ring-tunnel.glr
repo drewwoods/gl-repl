@@ -5,7 +5,6 @@
 // @cfg vertex_points = 0
 // @cfg vertex_outlines = 0
 // @cfg variable_panel = 1
-
 // Fog fades geometry toward the fog color with eye-space distance.
 // glFogi picks the equation: GL_EXP2 (used here) and GL_EXP fall off
 // exponentially with GL_FOG_DENSITY; GL_LINEAR instead ramps between

@@ -6,7 +6,6 @@
 // @cfg poly_highlight = 0
 // @cfg msaa = 0
 // @cfg line_smooth = 1
-
 // Quadratic Bezier control points A=(ax,ay), B=(bx,by), C=(cx,cy).
 // ax/ay/cy are intentionally left at their implicit 0 -> A=(0,0), C=(2,0).
 static float ax, ay, bx = 1, by = 1, cx = 2, cy;

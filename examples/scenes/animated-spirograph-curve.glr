@@ -3,7 +3,6 @@
 // @cfg vertex_points = 0
 // @cfg poly_highlight = 0
 // @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
-
 static float dist = 0.5; // @tune
 static float n = 400; // @tune
 static float x, y, ang, s; // s = palette mix in [0,1]

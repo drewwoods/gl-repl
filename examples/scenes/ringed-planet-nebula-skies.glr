@@ -6,7 +6,6 @@
 // @cfg light_indicators = 0
 // @cfg grid = GRID_THEME_STARCHART
 // @cfg backdrop = RENDER3D_BACKDROP_NEBULA
-
 static float c, a; // color/brightness mix in [0,1] (planet + ring bands); comet orbit angle
 
 // ===== Ringed gas giant under nebula skies =====

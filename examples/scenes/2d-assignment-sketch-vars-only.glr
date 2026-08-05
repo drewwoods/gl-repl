@@ -1,7 +1,6 @@
 // @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
 // @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX
 // @cfg view_mode = RENDER3D_VIEW_2D
-
 // 2D sketch driven purely by variable assignment: x accumulates across
 // loop iterations (x = x + 0.07) to sweep a running plot, and y is a
 // function of x and t -- no goto, no scratch arrays, just var = expr.

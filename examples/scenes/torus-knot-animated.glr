@@ -2,7 +2,6 @@
 // @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
-
 static float n, p, q, ang, rr, x, y, z; // samples, winds, angle, ring radius, coords
 static float s;                         // palette mix in [0,1]
 

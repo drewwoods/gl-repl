@@ -2305,8 +2305,10 @@ int main(int argc, char **argv) {
                     fabsf(glr_camera().ty - (-0.5f)) < 1e-4f);
         ASSERT_TRUE("spaced cfg camera tz preset",
                     fabsf(glr_camera().tz - 0.75f) < 1e-4f);
+        /* Blank rows are document content on both load paths now, so the
+         * spacing row between the @cfg header and the banner counts. */
         ASSERT_TRUE("spaced cfg camera body cmds loaded",
-                    repl_state_document_count() == 4);
+                    repl_state_document_count() == 5);
     }
 
     {

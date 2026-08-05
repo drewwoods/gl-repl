@@ -5,7 +5,6 @@
 // @cfg vertex_points = 0
 // @cfg vertex_outlines = 0
 // @cfg variable_panel = 1
-
 static float bright = 1.0;  // @tune @config overall lantern intensity
 static float spread = 12;   // @tune horizontal scatter of the flock and its glints
 static float rise = 0.55;   // @tune @config ascent speed

@@ -5,7 +5,6 @@
 // @cfg grid = GRID_THEME_OFF
 // @cfg light_theme = LIGHT_THEME_SOLAR
 // @cfg backdrop = RENDER3D_BACKDROP_STARS
-
 static float px, py, pz; // planet position - the caller hangs the body and its label off it
 static float orbitR; // log-compressed orbit radius, shared by the draw funcs
 static float ASTEROIDS = 140; // @tune

@@ -3,7 +3,6 @@
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
 // @cfg poly_highlight = 0
-
 static float rate = 45; // compare steps per second @tune
 static float hold = 1.5; // seconds to rest on the sorted bars @tune
 static float period, cycle, steps; // seconds per cycle; shuffle index; compares done so far

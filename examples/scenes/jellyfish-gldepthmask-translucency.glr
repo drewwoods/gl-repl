@@ -5,7 +5,6 @@
 // @cfg normal_vectors = 0
 // @cfg grid = GRID_THEME_OFF
 // @cfg axes = AXES_THEME_OFF
-
 static float pulse, bellR, bellH; // breath phase; bell radius/height pulse in opposition
 static float ang, rad, topY; // frill scratch: segment angle, rim radius, rim height (tentacle() hangs off topY)
 static float sway; // rim/tentacle sway -- read both at top level (frill) and inside tentacle()

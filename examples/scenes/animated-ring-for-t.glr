@@ -1,6 +1,5 @@
 // @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
 // @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX
-
 static float s; // color mix factor, 0..1
 
 glTranslatef(0.0f, 0.0f, -6.00f);   // @camera dist

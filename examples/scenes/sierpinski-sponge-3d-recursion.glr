@@ -3,7 +3,6 @@
 // @cfg grid_brightness = GRID_BRIGHTNESS_DIM
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
-
 // Sierpinski sponge: the carpet's rule lifted to 3D. Split the cube
 // into 3x3x3 cells, drop the 6 face centers and the core, and recurse
 // into the 20 cells that remain. Two levels deep -> 400 cubes.

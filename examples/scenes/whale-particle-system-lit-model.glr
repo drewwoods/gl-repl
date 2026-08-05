@@ -7,7 +7,6 @@
 // @cfg normal_vectors = 0
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
-
 static float launchVelX, launchVelY, launchVelZ;
 static float currentVelY;
 static float particleLife, particleAge;

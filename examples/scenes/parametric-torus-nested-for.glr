@@ -1,5 +1,4 @@
 // @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
-
 static float R = 2;  // major radius (ring center to tube center)
 static float r = 1;  // minor radius (tube thickness)
 static float n = 20; // @config segment count around both u and v

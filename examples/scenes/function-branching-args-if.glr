@@ -1,5 +1,4 @@
 // @cfg view_mode = RENDER3D_VIEW_2D
-
 shape(scale, phase) {
   // Two mutually-exclusive guards on the same arg -- an if/else written as
   // a complementary pair (else/else-if exist too; kept explicit here so each

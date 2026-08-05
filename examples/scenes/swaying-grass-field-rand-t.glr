@@ -8,7 +8,6 @@
 // @cfg axes = AXES_THEME_OFF
 // @cfg msaa = 1
 // @cfg variable_panel = 0
-
 static float bladeCount = 135; // @tune
 static float field = 3.65; // half-width @tune
 static float x, z, h, w, angle, phase, flex;

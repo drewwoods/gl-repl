@@ -782,6 +782,9 @@ TEST_BINS = \
 	test_repl_export_lights \
 	test_repl_export_clearcolor \
 	test_repl_tune \
+	test_camera_header \
+	test_camera_apply_modes \
+	test_camera_header_parity \
 	test_repl_core_examples \
 	test_repl_core_search \
 	test_repl_core_search_extra \

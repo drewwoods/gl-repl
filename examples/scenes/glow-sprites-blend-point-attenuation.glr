@@ -4,7 +4,6 @@
 // @cfg vertex_points = 0
 // @cfg grid = GRID_THEME_EMBER
 // @cfg grid_extent = GRID_EXTENT_MID
-
 static float radius, angle, x, y, z; // per-particle: orbit radius, base angle, world pos
 static float count = 160;       // number of glow points
 static float radMin = 0.4;      // nearest orbital radius (xz plane)

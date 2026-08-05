@@ -4,7 +4,6 @@
 // @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
 // @cfg vertex_points = 0
 // @cfg vertex_outlines = 0
-
 // Clip planes carve new shapes out of stock solids. glClipPlane sets a
 // plane equation a*x + b*y + c*z + d >= 0; GL keeps that half-space and
 // discards everything else. The equation is captured in the modelview

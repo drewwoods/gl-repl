@@ -23,14 +23,6 @@
 
 static void example_load_error(const char *msg);
 
-static int example_line_is_blank_only(const char *line) {
-    if (!line)
-        return 0;
-    while (*line && isspace((unsigned char)*line))
-        line++;
-    return *line == '\0';
-}
-
 /* Route one camera-reader diagnostic to the loader's status sink. The reader
  * is neutral code and knows neither the file name nor the severity policy, so
  * it hands back a rule and the caller writes the sentence. */
@@ -248,10 +240,11 @@ static int load_example_lines(const char *const *lines,
             continue;                     /* metadata, already consumed */
         if (result != REPL_CAMERA_LINE_NOT_CAMERA)
             continue;                     /* camera row: consumed either way */
-        /* Blank metadata rows between the @cfg header and the body are
-         * spacing, not document content. */
-        if (line_idx == cfg_count && example_line_is_blank_only(lines[line_idx]))
-            continue;
+        /* Everything else is document content, blank rows included. The
+         * loader used to eat the blank run between the @cfg header and the
+         * body, which the file path keeps - so the same scene had one more
+         * row when opened as a file than when loaded from the catalog. Source
+         * order in, source order out, on both paths. */
         if (line_idx >= EXAMPLE_BODY_LINES_MAX) {
             char msg[REPL_DIAG_TEXT_MAX];
             snprintf(msg, sizeof(msg),

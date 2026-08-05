@@ -1,7 +1,6 @@
 // @cfg view_mode = RENDER3D_VIEW_3D
 // @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_CLASSIC
-
 // Recursive 3D fractal tree pushing/popping matrix stack at each node
 func0(depth, len, phase) {
   if(depth > 0) {

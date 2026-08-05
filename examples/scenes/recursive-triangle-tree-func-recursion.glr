@@ -1,7 +1,6 @@
 // @cfg view_mode = RENDER3D_VIEW_2D
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
-
 // Recursive triangle tree: child calls shrink and rotate from the parent
 branch(depth, size, spin) {
   glColor3f(0.62 - 0.065*depth, 0.52 + 0.045*depth, 0.95 + 0.0075*depth);

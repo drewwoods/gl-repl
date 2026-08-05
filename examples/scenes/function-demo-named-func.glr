@@ -1,6 +1,5 @@
 // @cfg view_mode = RENDER3D_VIEW_2D
 // @cfg vertex_points = 0
-
 triangle() {
   glBegin(GL_TRIANGLES);
     glNormal3f(0, 0, 1);

@@ -8,7 +8,6 @@
 // @cfg grid_extent = GRID_EXTENT_MID
 // @cfg backdrop = RENDER3D_BACKDROP_AURORA
 // @cfg variable_panel = 0
-
 static float dd, blink, ink, ph, slit; // expanding-pulse distance; beacon blink; brightness multiplier on the base ink color; shutter-cycle phase; slit half-angle
 static float dishAz; // dish azimuth, degrees -- see the note below
 static float cycle_length = 30; // seconds per dome shutter cycle (open ~2/3 of it)

@@ -1,7 +1,6 @@
 // @cfg grid = GRID_THEME_TRON
 // @cfg grid_brightness = GRID_BRIGHTNESS_DIM
 // @cfg light_theme = LIGHT_THEME_HEADLIGHT
-
 static float z;
 
 glTranslatef(0.0f, 0.0f, -6.00f);   // @camera dist

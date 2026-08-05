@@ -6,7 +6,6 @@
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
 // @cfg light_indicators = 0
-
 static float spinRate = 0.06; // revolutions per second
 static float seats = 8;
 static float bulbs = 28;

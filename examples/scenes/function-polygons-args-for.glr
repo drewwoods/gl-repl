@@ -1,5 +1,4 @@
 // @cfg view_mode = RENDER3D_VIEW_2D
-
 static float s; // palette mix in [0,1]
 
 polygon(radius, sides, phase) {

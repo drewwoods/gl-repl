@@ -4,7 +4,6 @@
 // @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_OFF
 // @cfg backdrop = RENDER3D_BACKDROP_STARS
-
 // Top-level scratch for the firefly loop at the bottom of the scene: x/y/z
 // vertex position, k/s its polar angle/radius. sea() and island() used to
 // borrow these too; both now name their own function-scoped locals, so

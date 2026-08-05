@@ -3,7 +3,6 @@
 // @cfg grid = GRID_THEME_CLASSIC
 // @cfg light_theme = LIGHT_THEME_NEON
 // @cfg grid_brightness = GRID_BRIGHTNESS_DIM
-
 glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
 glRotatef(12.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(92.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
