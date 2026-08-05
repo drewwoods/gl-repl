@@ -751,7 +751,7 @@ int main(void) {
     ASSERT_TRUE("glMultMatrixf literal form exports via the C89 helper",
                 strstr(export_text,
                        "glMultMatrixf(repl_glfloat16(1, 0, 0, 0, 0, 1, 0, 0, "
-                       "0, 0, 1, 0, 0.5, 0, 0, 1));") != NULL);
+                       "0, 0, 1, 0, 0.5f, 0, 0, 1));") != NULL);
     ASSERT_TRUE("no exported line uses a C99 compound literal",
                 strstr(export_text, "(GLfloat[]){") == NULL &&
                 strstr(export_text, "(GLdouble[]){") == NULL);

@@ -455,7 +455,7 @@ int main(void) {
                 strstr(buf, "repl_lerp") == NULL);
         ASSERT_TRUE("scratch blend assignment exported",
             strstr(buf,
-                   "A[0] = A[0] + (A[1] - A[0])*0.25;") != NULL);
+                   "A[0] = A[0] + (A[1] - A[0])*0.25f;") != NULL);
     }
 
     /* Cross-array example: A and B used, C unused -> A and B emit, C
@@ -720,7 +720,7 @@ int main(void) {
             ASSERT_TRUE("no bare funcN def leaked",
                         strstr(buf, "static void func0(") == NULL);
             ASSERT_TRUE("expr-bearing aliased call preserved verbatim",
-                        strstr(buf, "spin(t*0.4);") != NULL);
+                        strstr(buf, "spin(t*0.4f);") != NULL);
             ASSERT_TRUE("expr-alias workspace directive emitted",
                         strstr(buf, "/* @func 0 = spin */") != NULL);
         }
@@ -739,9 +739,9 @@ int main(void) {
             char buf[16384];
             read_text_file(alias_path2, buf, sizeof(buf));
             ASSERT_TRUE("re-exported aliased call still uses alias",
-                        strstr(buf, "spin(t*0.4);") != NULL);
+                        strstr(buf, "spin(t*0.4f);") != NULL);
             ASSERT_TRUE("re-exported call did not regress to funcN",
-                        strstr(buf, "func0(t*0.4);") == NULL);
+                        strstr(buf, "func0(t*0.4f);") == NULL);
         }
         remove(alias_path);
         remove(alias_path2);
@@ -958,7 +958,7 @@ int main(void) {
                     appears_before(buf, "static void func0(float radius, float yoff) {",
                                    "static void draw_scene(void)"));
         ASSERT_TRUE("saved geometry helper func call",
-                    strstr(buf, "func0(1.5, x + 2);") != NULL);
+                    strstr(buf, "func0(1.5f, x + 2);") != NULL);
         ASSERT_TRUE("saved geometry helper once",
                     count_substr(buf, "static void draw_scene(void)") == 1);
         ASSERT_TRUE("saved no outline helper variants",
@@ -1181,7 +1181,7 @@ int main(void) {
         char buf[65536];
         read_text_file(tess_path, buf, sizeof(buf));
         ASSERT_TRUE("saved tess color keeps loop expr",
-                    strstr(buf, "_tc[0] = 0.25 + 0.15*sinf(i);") != NULL);
+                    strstr(buf, "_tc[0] = 0.25f + 0.15f*sinf(i);") != NULL);
         ASSERT_TRUE("saved tess vertex keeps param expr",
                     strstr(buf, "_v->pos[0]=radius*cosf(i);") != NULL);
         ASSERT_TRUE("saved tess vertex keeps z expr",
@@ -1189,7 +1189,7 @@ int main(void) {
         ASSERT_TRUE("saved tess func emitted only once",
                     count_substr(buf, "static void func0(float radius) {") == 1);
         ASSERT_TRUE("saved tess func call once",
-                    count_substr(buf, "func0(2.0);") == 1);
+                    count_substr(buf, "func0(2.0f);") == 1);
         ASSERT_TRUE("saved tess export includes tess global",
                     strstr(buf, "static GLUtesselator *g_tess = NULL;") != NULL);
         ASSERT_TRUE("saved tess export omits save/restore when pass specs disabled",

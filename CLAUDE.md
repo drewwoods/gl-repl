@@ -474,6 +474,18 @@ macro block is deliberately duplicated verbatim across the two TUs.
 `repl_cfg_get_int`/`_set_int` etc. go through the installed config bridge
 only (`check-repl-export-via-bridge`).
 
+**The exported expression must evaluate in float, like the evaluator.** C
+promotes on any `double` it sees, and the evaluator (`eval_term` /
+`eval_additive`, all `float`) rounds after every operation instead - so
+[`repl_eval_expr_to_c()`](src/repl/eval.h#L492) lowers `PI`/`TAU`/`e` through
+`(float)` casts and suffixes fractional literals (`1.2` → `1.2f`). Integers
+stay bare: C converts an int operand without promoting the expression, which
+is also what keeps `A[2]` and `0xFF` intact. Canonical REPL text carries no
+suffix, so [`repl_load_apply_line()`](src/repl/load.h#L78) strips it back off
+- both loaders funnel through there, which is what stops a hand-written
+`25.0f` in a `.glr` from reading differently via the file path than via the
+catalog (`test_camera_header_parity`).
+
 ### Replay
 
 State in [`replay_state_view()`](src/subsystems/replay/replay_state.h#L140); playback/fade/input split across

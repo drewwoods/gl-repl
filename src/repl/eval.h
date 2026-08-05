@@ -495,6 +495,18 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz);
  * for display in the code panel. */
 void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz);
 
+/* Drop the `f` suffix from every fractional literal in a source line
+ * (`25.0f * t` -> `25.0 * t`), leaving string literals, identifiers,
+ * integer literals and hex masks alone.
+ *
+ * Canonical REPL text carries no suffix; C needs one, because an
+ * unsuffixed `1.2` is a double and would promote the whole expression
+ * (see repl_eval_expr_to_c). The two loaders both reach this through
+ * repl_load_apply_line, which is what keeps a `.glr` written with C
+ * spelling reading the same whether it arrives as a file or through the
+ * example catalog. */
+void repl_eval_strip_c_float_suffixes(const char *in, char *out, int out_sz);
+
 /* ---- For-loop header parsers ------------------------------------------ */
 
 typedef struct {

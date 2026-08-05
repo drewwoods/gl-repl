@@ -1735,7 +1735,8 @@ void repl_eval_format_swatch_number(float v, char *out, int out_sz) {
  * sequential rewrite passes over the code (a trailing `// ...` comment
  * is split off first and re-attached untouched at the end):
  *   1. identifier mapping - REPL constants/builtins to their C names
- *      (PI -> ((float)M_PI), sin -> sinf, ...), other identifiers verbatim
+ *      (PI -> ((float)M_PI), sin -> sinf, ...), other identifiers verbatim,
+ *      and fractional number literals suffixed float (1.2 -> 1.2f)
  *   2. `LHS % RHS` -> `fmodf(LHS, RHS)` (REPL `%` is float-modulo;
  *      C's operator is integer-only), with paren/call-aware operand
  *      scanning in both directions
@@ -1748,7 +1749,137 @@ void repl_eval_format_swatch_number(float v, char *out, int out_sz) {
  * while repl_eval_named_constant_value() hands the evaluator a float and
  * keeps the whole expression in float. That 1-ulp gap is invisible until
  * a program compares against it - `if (delta < width)` sitting exactly on
- * the boundary takes the branch on one side and not the other. */
+ * the boundary takes the branch on one side and not the other.
+ *
+ * A fractional literal is the same story at a much larger scale: an
+ * unsuffixed `1.2` is a *double* in C, so `t * 1.2 + id * 0.037` runs the
+ * whole expression in double and rounds once at the store, while the
+ * evaluator (eval_term / eval_additive, all `float`) rounds after every
+ * operation. Nothing about that is 1 ulp once a program subtracts two
+ * nearly-equal terms. Integer literals need no suffix - C converts an int
+ * operand to float without promoting the expression - which is also what
+ * keeps hex masks (`0xFF`) and array subscripts (`A[2]`) untouched. */
+/* End of the decimal number literal starting at `s`, or NULL when `s` does
+ * not start one. `*needs_f` comes back 1 only for a bare fractional literal
+ * - the one case export has to suffix.
+ *
+ * Anything that runs straight into an identifier character is left alone:
+ * that is what keeps `0xFF` (scanned as `0` + the identifier `xFF`) and a
+ * printf conversion like `%5.2e` out of the rewrite. Literals inside a
+ * string are not a concern here - export splits a label()'s format string
+ * off before translating, and it is the only command that carries one. */
+static const char *scan_decimal_literal(const char *s, int *needs_f) {
+    const char *q = s;
+    int has_dot = 0, has_exp = 0, suffixed = 0;
+
+    *needs_f = 0;
+    if (!isdigit((unsigned char)*q) &&
+        !(*q == '.' && isdigit((unsigned char)q[1])))
+        return NULL;
+
+    while (isdigit((unsigned char)*q)) q++;
+    if (*q == '.') {
+        has_dot = 1;
+        q++;
+        while (isdigit((unsigned char)*q)) q++;
+    }
+    if (*q == 'e' || *q == 'E') {
+        const char *exp = q + 1;
+        if (*exp == '+' || *exp == '-') exp++;
+        if (isdigit((unsigned char)*exp)) {
+            has_exp = 1;
+            q = exp;
+            while (isdigit((unsigned char)*q)) q++;
+        }
+    }
+    if (*q == 'f' || *q == 'F') {
+        suffixed = 1;
+        q++;
+    }
+    if (!suffixed && *q != '.' &&
+        !repl_eval_is_ident_continue((unsigned char)*q))
+        *needs_f = has_dot || has_exp;
+    return q;
+}
+
+/* End of an `f`-suffixed fractional literal at `s` (suffix included), or
+ * NULL when `s` does not start one. Exactly the shape scan_decimal_literal
+ * suffixes, so import undoes what export did and nothing else: an integer
+ * `1` never grew a suffix and never loses one, and `0xFF` is not a decimal
+ * literal to begin with. */
+static const char *scan_c_float_literal(const char *s) {
+    int needs_f = 0;
+    const char *end = scan_decimal_literal(s, &needs_f);
+
+    if (!end || needs_f)
+        return NULL;                      /* not a literal, or unsuffixed */
+    if (end[-1] != 'f' && end[-1] != 'F')
+        return NULL;                      /* unsuffixed integer literal */
+    if (memchr(s, '.', (size_t)(end - s)) == NULL &&
+        memchr(s, 'e', (size_t)(end - s)) == NULL &&
+        memchr(s, 'E', (size_t)(end - s)) == NULL)
+        return NULL;                      /* `1f` - never one of ours */
+    return end;
+}
+
+void repl_eval_strip_c_float_suffixes(const char *in, char *out, int out_sz) {
+    const char *p = in;
+    char *dst = out;
+    char *end;
+
+    if (!in || !out || out_sz <= 0)
+        return;
+    end = out + out_sz - 1;
+
+    while (*p && dst < end) {
+        const char *id_start = NULL;
+        const char *id_end;
+
+        /* A string literal is copied whole: `label("t = %.2f", t)` has a
+         * conversion spec that reads exactly like a suffixed literal, and
+         * rewriting it would change what the program prints. */
+        if (*p == '"') {
+            *dst++ = *p++;
+            while (*p && *p != '"' && dst < end) {
+                if (*p == '\\' && p[1] && dst + 1 < end)
+                    *dst++ = *p++;
+                *dst++ = *p++;
+            }
+            if (*p == '"' && dst < end)
+                *dst++ = *p++;
+            continue;
+        }
+
+        /* Identifiers first, so a digit inside one (func0, x2) is never
+         * mistaken for the start of a literal. */
+        id_end = repl_eval_eat_identifier(p, &id_start);
+        if (id_end) {
+            int id_len = (int)(id_end - id_start);
+            if (dst + id_len < end) {
+                memcpy(dst, id_start, (size_t)id_len);
+                dst += id_len;
+            }
+            p = id_end;
+            continue;
+        }
+
+        {
+            const char *lit_end = scan_c_float_literal(p);
+            if (lit_end) {
+                int keep = (int)(lit_end - p) - 1;   /* minus the suffix */
+                if (dst + keep < end) {
+                    memcpy(dst, p, (size_t)keep);
+                    dst += keep;
+                }
+                p = lit_end;
+            } else {
+                *dst++ = *p++;
+            }
+        }
+    }
+    *dst = '\0';
+}
+
 void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
     static const struct { const char *from; const char *to; } k_const_expr_to_c[] = {
         { "TAU", "(2.0f*(float)M_PI)" },
@@ -1814,7 +1945,20 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
             }
             p = id_end;
         } else {
-            *dst++ = *p++;
+            int needs_f = 0;
+            const char *lit_end = scan_decimal_literal(p, &needs_f);
+            if (lit_end) {
+                int lit_len = (int)(lit_end - p);
+                if (dst + lit_len + (needs_f ? 1 : 0) < end) {
+                    memcpy(dst, p, (size_t)lit_len);
+                    dst += lit_len;
+                    if (needs_f)
+                        *dst++ = 'f';
+                }
+                p = lit_end;
+            } else {
+                *dst++ = *p++;
+            }
         }
     }
     *dst = '\0';
@@ -2031,7 +2175,21 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
             }
             p = id_end;
         } else {
-            *dst++ = *p++;
+            const char *lit_end = scan_c_float_literal(p);
+            if (lit_end) {
+                /* Drop the `f` repl_eval_expr_to_c added. Everything else
+                 * about the literal is copied through, so the document text
+                 * that comes back is the text that went out - which is what
+                 * the export/import round-trip is asserted on. */
+                int lit_len = (int)(lit_end - p) - 1;
+                if (dst + lit_len < end) {
+                    memcpy(dst, p, (size_t)lit_len);
+                    dst += lit_len;
+                }
+                p = lit_end;
+            } else {
+                *dst++ = *p++;
+            }
         }
     }
     *dst = '\0';

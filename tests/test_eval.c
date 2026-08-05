@@ -730,6 +730,18 @@ static void run_tests(void) {
     ASSERT_TO_C("rem(x,2)", "remainderf(x,2)");
     ASSERT_TO_C("nan", "NAN");
     ASSERT_TO_C("inf", "INFINITY");
+    /* Fractional literals lower float-suffixed: an unsuffixed `1.2` is a
+     * double in C, and the whole expression would promote with it while
+     * the evaluator rounds to float after every operation. Integers need
+     * no suffix (C converts an int operand without promoting), which is
+     * also what leaves subscripts and hex masks alone. */
+    ASSERT_TO_C("t*1.2 + p*0.037", "t*1.2f + p*0.037f");
+    ASSERT_TO_C("h*0.5", "h*0.5f");
+    ASSERT_TO_C("1.5e3*x", "1.5e3f*x");
+    ASSERT_TO_C("x*2", "x*2");
+    ASSERT_TO_C("1.2f*x", "1.2f*x");   /* already suffixed, not doubled */
+    ASSERT_TO_C("glStencilFunc(GL_EQUAL, 1, 0xFF)",
+                "glStencilFunc(GL_EQUAL, 1, 0xFF)");
     ASSERT_TO_C("A[2]", "A[2]");
     ASSERT_TO_C("A[i+1]", "A[(int)(i+1)]");
     ASSERT_TO_C("A[B[0]+1]", "A[(int)(B[0]+1)]");
@@ -745,7 +757,16 @@ static void run_tests(void) {
     ASSERT_TO_REPL("fabsf(-1)", "abs(-1)");
     ASSERT_TO_REPL("glVertex3f(1,2,3)", "glVertex3f(1,2,3)");
     ASSERT_TO_REPL("powf(x,2)", "pow(x,2)");
-    ASSERT_TO_REPL("powf(1.0f,2.0f)", "pow(1.0f,2.0f)");
+    /* The `f` suffix comes back off: it is what repl_eval_expr_to_c added
+     * so the exported C would evaluate in float instead of promoting to
+     * double, and canonical REPL text does not carry it. */
+    ASSERT_TO_REPL("powf(1.0f,2.0f)", "pow(1.0,2.0)");
+    ASSERT_TO_REPL("t*1.2f + p*0.037f", "t*1.2 + p*0.037");
+    ASSERT_TO_REPL("1.5e3f*x", "1.5e3*x");
+    /* Untouched: integers never grew a suffix, and a hex mask is not a
+     * decimal literal at all. */
+    ASSERT_TO_REPL("glStencilFunc(GL_EQUAL, 1, 0xFF)",
+                   "glStencilFunc(GL_EQUAL, 1, 0xFF)");
     ASSERT_TO_REPL("repl_randf(i,3)", "rand(i,3)");
     ASSERT_TO_REPL("asinf(x)", "asin(x)");
     ASSERT_TO_REPL("acosf(x)", "acos(x)");

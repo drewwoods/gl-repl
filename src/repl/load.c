@@ -86,8 +86,21 @@ int repl_load_apply_compiled_change_transaction(
 
 int repl_load_apply_line(const char *line, char *err, int err_size,
                          int *edit_line_inout) {
+    char normalized[MAX_LINE_LEN];
+
     if (!line) return 0;
     if (err && err_size > 0) err[0] = '\0';
+
+    /* Both loaders funnel through here - import.c after its own C->REPL
+     * translation, the example catalog directly - so this is where a line
+     * becomes canonical REPL text. The `f` suffix export puts on fractional
+     * literals is the one C spelling a hand-written .glr also uses, so
+     * stripping it here (rather than only in repl_eval_c_expr_to_repl) is
+     * what keeps the two paths agreeing on the document text; see
+     * test_camera_header_parity. Idempotent: the file path arrives with the
+     * suffixes already gone. */
+    repl_eval_strip_c_float_suffixes(line, normalized, (int)sizeof(normalized));
+    line = normalized;
 
     /* Don't pre-skip empty/comment lines: editor_feed_line preserves them as
      * CMD_EMPTY / CMD_COMMENT source rows so editor/export round-trips
