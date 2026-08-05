@@ -1,73 +1,72 @@
-// @cfg view_mode = RENDER3D_VIEW_3D
-// @cfg axes = AXES_THEME_OFF
-// @cfg grid = GRID_THEME_CLASSIC
+// @cfg grid = GRID_THEME_OFF
 // @cfg light_theme = LIGHT_THEME_NEON
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
 
 static float points = 28;
 static float theta, x1, y1, z1, x2, y2, z2;
 static float r, g, b_col, y;
-
-glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
+glTranslatef(0.0000f, 0.0000f, -10.3782f);   // @camera dist
 glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glClearColor(0.02, 0.02, 0.04, 1.0);
+glClearColor(0.02, 0.02, 0.04, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
 
 glPushMatrix();
-glRotatef(t * 30.0, 0, 1, 0); // slow spin around Y axis
+  glRotatef(t * 30.0, 0, 1, 0); // slow spin around Y axis
 
-for(i, 0, points) {
-  // calculate height along the Y axis
-  y = -3.2 + i * 6.4 / points;
+  for(i, 0, points) {
+    // calculate height along the Y axis
+    y = -3.2 + i * 6.4 / points;
 
-  // angle around Y axis
-  theta = i * (PI * 2.0) / 14.0 + t * 1.5;
+    // angle around Y axis
+    theta = i * (PI * 2.0) / 14.0 + t * 1.5;
 
-  // Strand 1 position
-  x1 = 1.6 * sin(theta);
-  z1 = 1.6 * cos(theta);
+    // Strand 1 position
+    x1 = 1.6 * sin(theta);
+    z1 = 1.6 * cos(theta);
 
-  // Strand 2 position (180 degrees offset)
-  x2 = 1.6 * sin(theta + PI);
-  z2 = 1.6 * cos(theta + PI);
+    // Strand 2 position (180 degrees offset)
+    x2 = 1.6 * sin(theta + PI);
+    z2 = 1.6 * cos(theta + PI);
 
-  // Color shifting along Y
-  r = 0.5 + 0.5 * sin(y + t * 1.2);
-  g = 0.5 + 0.5 * sin(y + 2.094 + t * 1.2);
-  b_col = 0.5 + 0.5 * sin(y + 4.188 + t * 1.2);
+    // Color shifting along Y
+    r = 0.5 + 0.5 * sin(y + t * 1.2);
+    g = 0.5 + 0.5 * sin(y + 2.094 + t * 1.2);
+    b_col = 0.5 + 0.5 * sin(y + 4.188 + t * 1.2);
 
-  // Draw base pair rung (connecting line)
-  glDisable(GL_LIGHTING);
-  glLineWidth(3.0);
-  glColor3f(r * 0.5, g * 0.5, b_col * 0.5);
-  glBegin(GL_LINES);
-    glVertex3f(x1, y, z1);
-    glVertex3f(x2, y, z2);
-  glEnd();
-  glEnable(GL_LIGHTING);
+    // Draw base pair rung (connecting line)
+    glDisable(GL_LIGHTING);
+    glLineWidth(2);
+    glColor3f(r * 0.5, g * 0.5, b_col * 0.5);
+    glBegin(GL_LINES);
+      glVertex3f(x1, y, z1);
+      glVertex3f(x2, y, z2);
+    glEnd();
+    glEnable(GL_LIGHTING);
 
-  // Draw Strand 1 Nucleotide Sphere (Cyan/Green/Purple-ish dynamic)
-  glPushMatrix();
-  glTranslatef(x1, y, z1);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){r, g, b_col, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.8, 0.8, 0.8, 1.0});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30.0);
-  glutSolidSphere(0.25, 12, 12);
-  glPopMatrix();
+    // Draw Strand 1 Nucleotide Sphere (Cyan/Green/Purple-ish dynamic)
+    glPushMatrix();
+      glTranslatef(x1, y, z1);
+      glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){r, g, b_col, 1.0});
+      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.8, 0.8, 0.8, 1});
+      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
+      glutSolidSphere(0.25, 12, 12);
+    glPopMatrix();
 
-  // Draw Strand 2 Nucleotide Sphere (Opposite/Complementary color)
-  glPushMatrix();
-  glTranslatef(x2, y, z2);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){1.0 - r, 1.0 - g, 1.0 - b_col, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.8, 0.8, 0.8, 1.0});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30.0);
-  glutSolidSphere(0.25, 12, 12);
-  glPopMatrix();
-}
+    // Draw Strand 2 Nucleotide Sphere (Opposite/Complementary color)
+    glPushMatrix();
+      glTranslatef(x2, y, z2);
+      glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){1.0 - r, 1.0 - g, 1.0 - b_col, 1.0});
+      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.8, 0.8, 0.8, 1});
+      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
+      glutSolidSphere(0.25, 12, 12);
+    glPopMatrix();
+  }
 
 glPopMatrix();

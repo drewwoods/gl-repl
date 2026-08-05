@@ -1,10 +1,10 @@
-// @cfg view_mode = RENDER3D_VIEW_3D
-// @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_OFF
 // @cfg light_theme = LIGHT_THEME_NEON
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
 // Crystalline cave formation - translucent geode cluster
 
-static float n_crystals = 18.0;
+static float n_crystals = 18;
 static float theta, phi;
 static float rx, ry, rz;
 static float offset;
@@ -15,14 +15,14 @@ static float f2;
 static float alpha;
 static float ang;
 static float af;
-
 glTranslatef(0.0000f, 0.0000f, -12.0000f);   // @camera dist
 glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0000f, -0.5000f, 0.0000f);   // @camera pan
+glTranslatef(-0.0000f, -0.5000f, -0.0000f);   // @camera pan
+
 
 // Dark cave background
-glClearColor(0.02, 0.01, 0.04, 1.0);
+glClearColor(0.02, 0.01, 0.04, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 
@@ -40,93 +40,93 @@ glDepthMask(GL_FALSE);
 
 // Slow rotation of the entire formation
 glPushMatrix();
-glRotatef(t * 8.0, 0.0, 1.0, 0.0);
-glRotatef(sin(t * 0.3) * 5.0, 1.0, 0.0, 0.0);
+  glRotatef(t * 8.0, 0.0, 1.0, 0.0);
+  glRotatef(sin(t * 0.3) * 5.0, 1.0, 0.0, 0.0);
 
-// --- Draw crystal cluster ---
-for(i, 0.0, n_crystals) {
+  // --- Draw crystal cluster ---
+  for(i, 0.0, n_crystals) {
     glPushMatrix();
 
-    // Deterministic pseudo-random orientation from index
-    theta = sin(i * 2.399) * 180.0;
-    phi = cos(i * 1.747) * 80.0 + 10.0;
+      // Deterministic pseudo-random orientation from index
+      theta = sin(i * 2.399) * 180.0;
+      phi = cos(i * 1.747) * 80.0 + 10.0;
 
-    // Compute direction for outward-pointing crystal
-    rx = sin(i * 3.17) * 360.0;
-    ry = cos(i * 2.53) * 360.0;
-    rz = sin(i * 1.91 + 0.5) * 360.0;
+      // Compute direction for outward-pointing crystal
+      rx = sin(i * 3.17) * 360.0;
+      ry = cos(i * 2.53) * 360.0;
+      rz = sin(i * 1.91 + 0.5) * 360.0;
 
-    // Rotate to orient crystal outward
-    glRotatef(theta, 0.0, 1.0, 0.0);
-    glRotatef(phi, 1.0, 0.0, 0.0);
-    glRotatef(rz * 0.3, 0.0, 0.0, 1.0);
+      // Rotate to orient crystal outward
+      glRotatef(theta, 0.0, 1.0, 0.0);
+      glRotatef(phi, 1.0, 0.0, 0.0);
+      glRotatef(rz * 0.3, 0.0, 0.0, 1.0);
 
-    // Slight offset from center (geode cavity)
-    offset = 0.3 + abs(sin(i * 4.13)) * 0.4;
-    glTranslatef(0.0, 0.0, offset);
+      // Slight offset from center (geode cavity)
+      offset = 0.3 + abs(sin(i * 4.13)) * 0.4;
+      glTranslatef(0.0, 0.0, offset);
 
-    // Crystal length and width vary per crystal
-    crystal_len = 1.0 + abs(sin(i * 2.71)) * 2.5;
-    crystal_rad = 0.06 + abs(cos(i * 3.37)) * 0.12;
+      // Crystal length and width vary per crystal
+      crystal_len = 1.0 + abs(sin(i * 2.71)) * 2.5;
+      crystal_rad = 0.06 + abs(cos(i * 3.37)) * 0.12;
 
-    // Color gradient: deep purple -> cyan -> white based on index
-    frac = i / (n_crystals - 1.0);
+      // Color gradient: deep purple -> cyan -> white based on index
+      frac = i / (n_crystals - 1.0);
 
-    // Purple (0.4, 0.0, 0.7) -> Cyan (0.0, 0.8, 0.9) -> White (0.9, 0.95, 1.0)
-    if(frac < 0.5) {
+      // Purple (0.4, 0.0, 0.7) -> Cyan (0.0, 0.8, 0.9) -> White (0.9, 0.95, 1.0)
+      if(frac < 0.5) {
         f2 = frac * 2.0;
         cr = lerp(0.4, 0.0, f2);
         cg = lerp(0.0, 0.8, f2);
         cb = lerp(0.7, 0.9, f2);
-    } else {
+      } else {
         f2 = (frac - 0.5) * 2.0;
         cr = lerp(0.0, 0.9, f2);
         cg = lerp(0.8, 0.95, f2);
         cb = lerp(0.9, 1.0, f2);
-    }
+      }
 
-    // Translucent alpha
-    alpha = 0.45 + abs(sin(i * 1.23)) * 0.3;
+      // Translucent alpha
+      alpha = 0.45 + abs(sin(i * 1.23)) * 0.3;
 
-    glColor4f(cr, cg, cb, alpha);
+      glColor4f(cr, cg, cb, alpha);
 
-    // Specular highlight for crystalline appearance
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){cr * 0.8 + 0.2, cg * 0.8 + 0.2, cb * 0.8 + 0.2, alpha});
-    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 90.0);
+      // Specular highlight for crystalline appearance
+      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){cr * 0.8 + 0.2, cg * 0.8 + 0.2, cb * 0.8 + 0.2, alpha});
+      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 90);
 
-    // Emission for inner glow
-    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){cr * 0.15, cg * 0.15, cb * 0.15, 1.0});
+      // Emission for inner glow
+      glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){cr * 0.15, cg * 0.15, cb * 0.15, 1.0});
 
-    // Draw the crystal cone (elongated)
-    glutSolidCone(crystal_rad, crystal_len, 6, 1);
+      // Draw the crystal cone (elongated)
+      glutSolidCone(crystal_rad, crystal_len, 6, 1);
 
-    // Reset emission
-    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){0.0, 0.0, 0.0, 1.0});
+      // Reset emission
+      glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){0, 0, 0, 1});
 
     glPopMatrix();
-}
+  }
 
-// --- Small accent crystals around the base ---
-for(j, 0.0, 12.0) {
+  // --- Small accent crystals around the base ---
+  for(j, 0, 12) {
     glPushMatrix();
 
-    ang = j * 30.0 + sin(j * 2.1) * 15.0;
-    glRotatef(ang, 0.0, 1.0, 0.0);
-    glRotatef(60.0 + cos(j * 1.7) * 25.0, 1.0, 0.0, 0.0);
-    glTranslatef(0.0, 0.0, 0.15);
+      ang = j * 30.0 + sin(j * 2.1) * 15.0;
+      glRotatef(ang, 0.0, 1.0, 0.0);
+      glRotatef(60.0 + cos(j * 1.7) * 25.0, 1.0, 0.0, 0.0);
+      glTranslatef(0, 0, 0.15);
 
-    // Tiny accent crystals - mostly purple/violet
-    af = j / 11.0;
-    glColor4f(0.5 + af * 0.2, 0.1 + af * 0.3, 0.8, 0.35);
+      // Tiny accent crystals - mostly purple/violet
+      af = j / 11.0;
+      glColor4f(0.5 + af * 0.2, 0.1 + af * 0.3, 0.8, 0.35);
 
-    // Small specular
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.7, 0.5, 1.0, 0.35});
-    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 120.0);
+      // Small specular
+      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.7, 0.5, 1, 0.35});
+      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 120);
 
-    glutSolidCone(0.03, 0.5 + abs(sin(j * 3.3)) * 0.6, 5, 1);
+      glutSolidCone(0.03, 0.5 + abs(sin(j * 3.3)) * 0.6, 5, 1);
 
     glPopMatrix();
-}
+  }
 
 glPopMatrix();
 

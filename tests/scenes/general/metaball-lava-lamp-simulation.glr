@@ -1,16 +1,16 @@
-// @cfg view_mode = RENDER3D_VIEW_3D
-// @cfg axes = AXES_THEME_OFF
-// @cfg grid = GRID_THEME_CLASSIC
+// @cfg grid = GRID_THEME_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
 static float count = 40;
 static float id, phase, bx, by, bz, sz;
 static float r, g, b;
-
 glTranslatef(0.0000f, 0.0000f, -7.5000f);   // @camera dist
 glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glClearColor(0.02, 0.03, 0.05, 1.0);
+
+glClearColor(0.02, 0.03, 0.05, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
@@ -30,8 +30,8 @@ for(i, 0, count) {
   b = 0.2 + 0.2 * sin(id * 0.7);
 
   glPushMatrix();
-  glTranslatef(bx, by, bz);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){r, g, b, 1.0});
-  glutSolidSphere(sz, 14, 14);
+    glTranslatef(bx, by, bz);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){r, g, b, 1.0});
+    glutSolidSphere(sz, 14, 14);
   glPopMatrix();
 }

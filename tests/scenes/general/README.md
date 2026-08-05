@@ -23,7 +23,7 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 | `dynamic-dna-helix.glr` | 3D, Curves & surfaces, Animation | Rotating double helix of colored spheres and rungs using sine/cosine functions and light/material properties. |
 | `torus-knot-slinky.glr` | 3D, Hierarchical, Lighting | Complex torus knot curve rendered as an animated, color-shifting beaded slinky of spheres. |
 | `stardust-spiral-galaxy.glr` | 3D, Particles, Blending | Dual-arm spiral galaxy of glowing, blending dust particles whose speed and radius vary over time. |
-| `rubiks-cube-rotation.glr` | 3D, Hierarchical, Lighting | A 3x3x3 grid of sub-cubes whose outer layers twist and rotate dynamically on different axes. |
+| `rubiks-cube-rotation.glr` | 3D, Hierarchical, Lighting | A true 3x3x3 Rubik's cube: one face turns at a time on the lattice, cubies carry their stickers through the permutation, and the 8-move sequence winds up and unwinds back to solved. |
 | `pendulum-wave-machine.glr` | 3D, Particles, Animation | A row of 14 pendulums with slightly different lengths and swing frequencies, creating the classic pendulum wave illusion. |
 | `moebius-strip-twist.glr` | 3D, Curves & surfaces, Parametric curves | Parametrically generated Möbius strip with animated rainbow color shifting and wireframe edges. |
 | `interlocking-gear-system.glr` | 3D, Hierarchical, Lighting | Three interlocking, counter-rotating metallic gears (copper, steel-blue, gold) with gear teeth and axel hubs. |

@@ -1,26 +1,27 @@
-// @cfg view_mode = RENDER3D_VIEW_3D
-// @cfg axes = AXES_THEME_OFF
-// @cfg grid = GRID_THEME_CLASSIC
+// @cfg grid = GRID_THEME_OFF
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
 static float segments = 80;
 static float radius = 1.8;
-static float length = 8.0;
+static float length = 5.9;
+static float rotations = 2;
 static float step, angle, z, r, g, b;
 
 glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
 glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glClearColor(0.03, 0.03, 0.05, 1.0);
+glClearColor(0.03, 0.03, 0.05, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
-
-glLineWidth(2.0);
 
 glBegin(GL_QUAD_STRIP);
   for(i, 0, segments + 1) {
     step = i / segments;
-    angle = step * 12.56637 + t * 2.0;
+    angle = step * rotations * TAU + t * 2.0;
+
     z = -length * 0.5 + step * length;
 
     r = 0.5 + 0.5 * sin(angle);

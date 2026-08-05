@@ -1,124 +1,128 @@
-// @cfg view_mode = RENDER3D_VIEW_3D
-// @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_OFF
+// @cfg overlay_scope = OVERLAY_SCOPE_WHOLE_SCENE
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
 
 static float steps = 30;
-static float turns = 2.0;
+static float turns = 2;
 static float radius = 1.8;
-static float totalHeight = 7.0;
+static float totalHeight = 7;
 static float angle, sx, sz, sy, stepAngle;
-
 glTranslatef(0.0000f, 0.0000f, -14.0000f);   // @camera dist
 glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glClearColor(0.05, 0.04, 0.06, 1.0);
+
+glClearColor(0.05, 0.04, 0.06, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
+glEnable(GL_NORMALIZE);
+
 
 // Entire tower rotates slowly
 glPushMatrix();
-glRotatef(t * 15.0, 0, 1, 0);
-glTranslatef(0, -totalHeight * 0.5, 0); // center vertically
+  glRotatef(t * 15.0, 0, 1, 0);
+  glTranslatef(0, -totalHeight * 0.5, 0); // center vertically
 
-// --- Central pillar ---
-glPushMatrix();
-glTranslatef(0, 0, 0);
-// Dark stone pillar material
-glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.12, 0.10, 0.08, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.35, 0.28, 0.22, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.2, 0.18, 0.15, 1.0});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 10.0);
-// Use a cone with equal top/bottom radius to approximate a cylinder
-glRotatef(-90, 1, 0, 0); // orient cone along Y axis
-glutSolidCone(0.2, totalHeight, 16, 1);
-glPopMatrix();
-
-// --- Spiral staircase steps ---
-for(i, 0, steps) {
-  // Angle: 2 full turns spread over all steps
-  angle = i * (turns * TAU) / steps;
-  // Circular position
-  sx = radius * sin(angle);
-  sz = radius * cos(angle);
-  // Linear height
-  sy = i * totalHeight / steps;
-
+  // --- Central pillar ---
   glPushMatrix();
-  glTranslatef(sx, sy, sz);
-  // Rotate step to face outward from center (tangent to circle)
-  stepAngle = angle * 180.0 / PI;
-  glRotatef(-stepAngle, 0, 1, 0);
-
-  // Warm sandstone material with subtle variation per step
-  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.15, 0.12, 0.08, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.72 + 0.08 * sin(i * 1.3), 0.58 + 0.06 * sin(i * 1.7), 0.38 + 0.05 * sin(i * 2.1), 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.3, 0.25, 0.2, 1.0});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 15.0);
-
-  // Flatten the cube to make a step: wide, thin, moderate depth
-  glScalef(1.4, 0.12, 0.55);
-  glutSolidCube(1.0);
+    glTranslatef(0, 0, 0);
+    // Dark stone pillar material
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.12, 0.1, 0.08, 1});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.35, 0.28, 0.22, 1});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.2, 0.18, 0.15, 1});
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 10);
+    // Use a cone with equal top/bottom radius to approximate a cylinder
+    glRotatef(-90, 1, 0, 0); // orient cone along Y axis
+    glutSolidCone(0.2, totalHeight, 16, 1);
   glPopMatrix();
-}
 
-// --- Handrail posts (small spheres on outer edge of each step) ---
-for(i, 0, steps) {
-  angle = i * (turns * TAU) / steps;
-  sx = (radius + 0.6) * sin(angle);
-  sz = (radius + 0.6) * cos(angle);
-  sy = i * totalHeight / steps + 0.35;
+  // --- Spiral staircase steps ---
+  for(i, 0, steps) {
+    // Angle: 2 full turns spread over all steps
+    angle = i * (turns * TAU) / steps;
+    // Circular position
+    sx = radius * sin(angle);
+    sz = radius * cos(angle);
+    // Linear height
+    sy = i * totalHeight / steps;
 
+    glPushMatrix();
+      glTranslatef(sx, sy, sz);
+      // Rotate step to face outward from center (tangent to circle)
+      stepAngle = angle * 180.0 / PI;
+      glRotatef(-stepAngle, 0, 1, 0);
+
+      // Warm sandstone material with subtle variation per step
+      glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.15, 0.12, 0.08, 1});
+      glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.72 + 0.08 * sin(i * 1.3), 0.58 + 0.06 * sin(i * 1.7), 0.38 + 0.05 * sin(i * 2.1), 1.0});
+      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.3, 0.25, 0.2, 1});
+      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 15);
+
+      // Flatten the cube to make a step: wide, thin, moderate depth
+      glScalef(1.4, 0.12, 0.55);
+      glutSolidCube(1);
+    glPopMatrix();
+  }
+
+  // --- Handrail posts (small spheres on outer edge of each step) ---
+  for(i, 0, steps) {
+    angle = i * (turns * TAU) / steps;
+    sx = (radius + 0.6) * sin(angle);
+    sz = (radius + 0.6) * cos(angle);
+    sy = i * totalHeight / steps + 0.35;
+
+    glPushMatrix();
+      glTranslatef(sx, sy, sz);
+
+      // Darker iron-like material for handrail
+      glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.05, 0.05, 0.06, 1});
+      glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.25, 0.22, 0.28, 1});
+      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.5, 0.5, 0.55, 1});
+      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 50);
+      glutSolidSphere(0.08, 8, 8);
+    glPopMatrix();
+  }
+
+  // --- Handrail rail (lines connecting the posts) ---
+  glDisable(GL_LIGHTING);
+  glLineWidth(2);
+  glColor3f(0.3, 0.28, 0.35);
+  glBegin(GL_LINE_STRIP);
+    for(i, 0, steps) {
+      angle = i * (turns * TAU) / steps;
+      sx = (radius + 0.6) * sin(angle);
+      sz = (radius + 0.6) * cos(angle);
+      sy = i * totalHeight / steps + 0.35;
+      glVertex3f(sx, sy, sz);
+    }
+  glEnd();
+  glEnable(GL_LIGHTING);
+
+  // --- Base platform (large flat disc) ---
   glPushMatrix();
-  glTranslatef(sx, sy, sz);
-
-  // Darker iron-like material for handrail
-  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.05, 0.05, 0.06, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.25, 0.22, 0.28, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.5, 0.5, 0.55, 1.0});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 50.0);
-  glutSolidSphere(0.08, 8, 8);
+    glTranslatef(0, -0.1, 0);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.1, 0.08, 0.06, 1});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.45, 0.38, 0.3, 1});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.15, 0.12, 0.1, 1});
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 8);
+    glScalef(3, 0.08, 3);
+    glutSolidCube(1);
   glPopMatrix();
-}
 
-// --- Handrail rail (lines connecting the posts) ---
-glDisable(GL_LIGHTING);
-glLineWidth(2.0);
-glColor3f(0.3, 0.28, 0.35);
-glBegin(GL_LINE_STRIP);
-for(i, 0, steps) {
-  angle = i * (turns * TAU) / steps;
-  sx = (radius + 0.6) * sin(angle);
-  sz = (radius + 0.6) * cos(angle);
-  sy = i * totalHeight / steps + 0.35;
-  glVertex3f(sx, sy, sz);
-}
-glEnd();
-glEnable(GL_LIGHTING);
-
-// --- Base platform (large flat disc) ---
-glPushMatrix();
-glTranslatef(0, -0.1, 0);
-glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.1, 0.08, 0.06, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.45, 0.38, 0.30, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.15, 0.12, 0.1, 1.0});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 8.0);
-glScalef(3.0, 0.08, 3.0);
-glutSolidCube(1.0);
-glPopMatrix();
-
-// --- Top platform ---
-glPushMatrix();
-glTranslatef(0, totalHeight + 0.05, 0);
-glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.1, 0.08, 0.06, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.50, 0.42, 0.32, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.15, 0.12, 0.1, 1.0});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 8.0);
-glScalef(3.0, 0.08, 3.0);
-glutSolidCube(1.0);
-glPopMatrix();
+  // --- Top platform ---
+  glPushMatrix();
+    glTranslatef(0, totalHeight + 0.05, 0);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.1, 0.08, 0.06, 1});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.5, 0.42, 0.32, 1});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.15, 0.12, 0.1, 1});
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 8);
+    glScalef(3, 0.08, 3);
+    glutSolidCube(1);
+  glPopMatrix();
 
 glPopMatrix();
