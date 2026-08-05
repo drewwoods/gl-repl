@@ -811,13 +811,36 @@ static void tally(ParityTotals *t, ParityResult r) {
 /* --full: walk repl_example_*. Each example is constructed on the fly
  * from the (name, lines) pair plus an XFAIL annotation looked up in
  * g_example_xfail. */
+static const char *parity_result_label(ParityResult r) {
+    switch (r) {
+    case PARITY_PASS:  return "PASS ";
+    case PARITY_FAIL:  return "FAIL ";
+    case PARITY_XFAIL: return "XFAIL";
+    case PARITY_XPASS: return "XPASS";
+    }
+    return "?????";
+}
+
+/* One line per case, naming the corpus it came from. A bare "49/50 passed"
+ * never said *what* the 50 were, and the two corpora this walks are easy to
+ * confuse: --full adds the built-in catalog compiled into the binary, not
+ * the .glr corpora under tests/scenes (those are `make test-scenes`). */
+static void run_and_report(ParityTotals *totals, const TraceProgram *prog,
+                           const char *corpus) {
+    ParityResult r = run_one_case(prog);
+
+    printf("  %s %-9s %s\n", parity_result_label(r), corpus, prog->name);
+    fflush(stdout);
+    tally(totals, r);
+}
+
 static void run_examples(ParityTotals *totals) {
     int n = repl_example_count();
     for (int i = 0; i < n; i++) {
         const char *name = repl_example_name(i);
         const char *const *lines = repl_example_lines(i);
         TraceProgram p = { name, lines, expected_fail_for_example(name) };
-        tally(totals, run_one_case(&p));
+        run_and_report(totals, &p, "example");
     }
 }
 
@@ -865,10 +888,16 @@ static void print_help(const char *argv0) {
 "  XPASS - match, has annotation; the annotation is stale, remove it.\n"
 "          Fails the test (loud) so the list doesn't accumulate cruft.\n"
 "\n"
+"Every case prints one PASS/FAIL/XFAIL/XPASS line naming its corpus, and\n"
+"the run opens with what it covers and closes with what it does not: the\n"
+".glr corpora under tests/scenes are a separate lane (`make test-scenes`)\n"
+"and are never walked here, --full or not.\n"
+"\n"
 "Options:\n"
 "  --full          After the curated table, also run every built-in\n"
-"                  example via repl_example_*. Slow: one cc invocation\n"
-"                  per program; trace files are available on failure.\n"
+"                  example - the catalog compiled into the binary from\n"
+"                  examples/catalog.ini, via repl_example_*. Slow: one cc\n"
+"                  invocation per program; traces kept on failure.\n"
 "  --keep-traces   On real FAIL, leave the .repl.tr and .child.tr trace\n"
 "                  files in /tmp for inspection. XFAIL traces are still\n"
 "                  unlinked (the divergence is expected).\n"
@@ -909,11 +938,32 @@ int main(int argc, char **argv) {
      * the stub entry point is what the controller does for a real context. */
     repl_executor_install_point_parameter_proc(glPointParameterfv);
 
+    /* State the coverage up front, so a run is self-describing and the
+     * corpora that are NOT walked here are named rather than assumed. */
+    printf("--- export trace parity: %d curated programs%s ---\n",
+           g_curated_count,
+           full ? ", plus every built-in example" : " (pass --full for the "
+                  "built-in examples too)");
+    printf("--- %d frames per case at t =", g_time_sample_count);
+    for (int i = 0; i < g_time_sample_count; i++)
+        printf(" %g", (double)g_time_samples[i]);
+    printf("; comparing call counts and argument values ---\n");
+
     ParityTotals totals = {0};
     for (int i = 0; i < g_curated_count; i++) {
-        tally(&totals, run_one_case(&g_curated[i]));
+        run_and_report(&totals, &g_curated[i], "curated");
     }
-    if (full) run_examples(&totals);
+    if (full) {
+        printf("--- built-in example catalog: %d scenes (compiled in from "
+               "examples/catalog.ini) ---\n", repl_example_count());
+        run_examples(&totals);
+    }
+    /* The .glr corpora under tests/scenes are a different lane entirely -
+     * `make test-scenes` loads them as a runtime catalog and checks that
+     * their exported C compiles. Nothing runs them through this parity
+     * comparison; say so rather than let "--full" imply everything. */
+    printf("--- not covered here: tests/scenes/{stress,general} "
+           "(see `make test-scenes`) ---\n");
 
     int total = totals.pass + totals.fail + totals.xfail + totals.xpass;
     int ok    = totals.pass + totals.xfail;
