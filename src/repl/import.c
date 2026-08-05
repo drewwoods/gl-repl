@@ -518,6 +518,19 @@ static void import_camera_diag(void *userdata, const ReplCameraDiag *diag,
     fprintf(stderr, "%s\n", msg);
 }
 
+static void import_camera_report_missing(const ReplCameraFinish *finish,
+                                         const char *label) {
+    char roles[64];
+    char msg[REPL_STATUS_TEXT_MAX];
+
+    if (!repl_camera_header_format_missing_roles(finish, roles, sizeof(roles)))
+        return;
+    snprintf(msg, sizeof(msg), "%s: camera header: %s not set; keeping current",
+             label ? label : "<memory>", roles);
+    repl_set_status(msg);
+    fprintf(stderr, "%s\n", msg);
+}
+
 /* Recognize an exported file-scope global decl
  * `[static] float a = 1, b = 2.5;` (the write_predef_var_globals
  * output) and copy each initializer into the already-registered predef
@@ -2821,7 +2834,11 @@ static int import_finish_load(ImportState *state,
      * been offered. IMPORT snaps and adopts the pose as the scene default -
      * what "Reset camera" returns to - which a header-less file must not do,
      * and finish() handles by making no bridge call at all. */
-    (void)repl_camera_header_finish(&state->camera, REPL_CAMERA_APPLY_IMPORT);
+    {
+        ReplCameraFinish camera_fin =
+            repl_camera_header_finish(&state->camera, REPL_CAMERA_APPLY_IMPORT);
+        import_camera_report_missing(&camera_fin, label);
+    }
 
     if (state->loaded > 0) {
         repl_source_scope_depth_cache_invalidate();

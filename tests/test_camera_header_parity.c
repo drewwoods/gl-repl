@@ -40,6 +40,7 @@
 #include "repl/command.h"
 #include "repl/example_loader.h"
 #include "repl/export.h"
+#include "repl/host_effects.h"
 #include "repl/state.h"
 #include "source_document.h"
 #include "support/camera_bridge_stub.h"
@@ -231,6 +232,29 @@ static int g_file_diag_count, g_file_diag_overflow;
 static ReplCameraDiag g_catalog_diags[REPL_CAMERA_MAX_DIAGS];
 static int g_catalog_diag_count, g_catalog_diag_overflow;
 
+enum { PARITY_STATUS_MAX = 32 };
+static char g_status_log[PARITY_STATUS_MAX][REPL_STATUS_TEXT_MAX];
+static int g_status_count;
+
+static void parity_status_capture(const char *msg) {
+    if (!msg || !msg[0] || g_status_count >= PARITY_STATUS_MAX)
+        return;
+    snprintf(g_status_log[g_status_count], REPL_STATUS_TEXT_MAX, "%s", msg);
+    g_status_count++;
+}
+
+static const ReplHostEffects g_parity_status_host = {
+    .status       = parity_status_capture,
+    .status_error = parity_status_capture,
+};
+
+static const char *parity_camera_status(void) {
+    for (int i = 0; i < g_status_count; i++)
+        if (strstr(g_status_log[i], "camera header:"))
+            return g_status_log[i];
+    return NULL;
+}
+
 /* Re-run the reader over the same lines to capture what each loader's own
  * reader would have accumulated. Both loaders offer every line from the top
  * in order, so this reproduces their accumulators exactly - and if it ever
@@ -301,6 +325,59 @@ static void parity_check_file(const char *path, const char *name) {
     parity_free_lines(lines);
     free(as_file);
     free(as_catalog);
+}
+
+/* The corpus has complete pose headers, so its reader-level diagnostic lists
+ * are empty. Exercise the real loader sinks with a partial header too: the
+ * catalog and file paths must both surface the same missing-role payload even
+ * though their source labels differ. */
+static void test_partial_header_diagnostic_parity(void) {
+    static const char *const lines[] = {
+        "glTranslatef(0.0f, 0.0f, -4.0f);   // @camera dist",
+        "glClear(GL_COLOR_BUFFER_BIT);",
+        NULL
+    };
+    const char *path = "/tmp/test_camera_partial_header.glr";
+    const char *catalog_msg;
+    const char *file_msg;
+    char catalog_payload[REPL_STATUS_TEXT_MAX];
+    char file_payload[REPL_STATUS_TEXT_MAX];
+    FILE *f = fopen(path, "w");
+
+    printf("--- actual loader diagnostics agree on a partial header ---\n");
+    TEST_ASSERT_TRUE(&g_harness, "partial parity fixture written", f != NULL);
+    if (!f)
+        return;
+    for (int i = 0; lines[i]; i++)
+        fprintf(f, "%s\n", lines[i]);
+    fclose(f);
+
+    glr_ctrl_reset_all();
+    camera_bridge_stub_install(NULL);
+    repl_install_host_effects(&g_parity_status_host);
+    g_status_count = 0;
+    TEST_ASSERT_TRUE(&g_harness, "catalog partial header loads",
+                     repl_load_example_lines(lines) > 0);
+    catalog_msg = parity_camera_status();
+    TEST_ASSERT_TRUE(&g_harness, "catalog reports missing camera roles",
+                     catalog_msg != NULL);
+    snprintf(catalog_payload, sizeof(catalog_payload), "%s",
+             catalog_msg ? strstr(catalog_msg, "camera header:") : "");
+
+    glr_ctrl_reset_all();
+    camera_bridge_stub_install(NULL);
+    repl_install_host_effects(&g_parity_status_host);
+    g_status_count = 0;
+    TEST_ASSERT_INT(&g_harness, "file partial header loads",
+                    repl_export_load_from_file(path, NULL), 1);
+    file_msg = parity_camera_status();
+    TEST_ASSERT_TRUE(&g_harness, "file reports missing camera roles",
+                     file_msg != NULL);
+    snprintf(file_payload, sizeof(file_payload), "%s",
+             file_msg ? strstr(file_msg, "camera header:") : "");
+    TEST_ASSERT_STR(&g_harness, "loader diagnostic payloads agree",
+                    file_payload, catalog_payload);
+    remove(path);
 }
 
 static int parity_name_cmp(const void *a, const void *b) {
@@ -508,6 +585,7 @@ int main(void) {
     printf("--- compared %d scenes on both load paths ---\n", n);
     TEST_ASSERT_TRUE(&g_harness, "the corpus was actually found", n > 0);
     test_frozen_rejections();
+    test_partial_header_diagnostic_parity();
     test_exported_c_is_exempt_from_ordering();
     test_exported_c_fixture();
 

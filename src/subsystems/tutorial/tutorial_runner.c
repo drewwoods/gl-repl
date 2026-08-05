@@ -653,6 +653,38 @@ static int setup_line_is_blank(const char *line) {
     return *line == '\0';
 }
 
+/* Route camera-header diagnostics through the same host status channel as
+ * the catalog and file loaders. Rejected rows are still consumed by the
+ * shared reader, but a tutorial setup must not make that consumption silent. */
+static void tutorial_camera_diag(void *userdata, const ReplCameraDiag *diag,
+                                 const char *rule_text) {
+    const char *name = (const char *)userdata;
+    char msg[TUTORIAL_STATUS_MAX];
+
+    if (diag->rule == REPL_CAMERA_RULE_MISSING_ROLE)
+        return;   /* report the partial pose once, after finish() */
+    snprintf(msg, sizeof(msg), "%s:%d: %s", name ? name : "tutorial",
+             diag->line_no, rule_text);
+    if (repl_camera_rule_severity(diag->rule) == REPL_CAMERA_SEVERITY_REJECTION)
+        repl_set_status_error(msg);
+    else
+        repl_set_status(msg);
+    fprintf(stderr, "%s\n", msg);
+}
+
+static void tutorial_camera_report_missing(const ReplCameraFinish *finish,
+                                           const char *name) {
+    char roles[64];
+    char msg[TUTORIAL_STATUS_MAX];
+
+    if (!repl_camera_header_format_missing_roles(finish, roles, sizeof(roles)))
+        return;
+    snprintf(msg, sizeof(msg), "%s: camera header: %s not set; keeping current",
+             name ? name : "tutorial", roles);
+    repl_set_status(msg);
+    fprintf(stderr, "%s\n", msg);
+}
+
 /* Every tutorial scene opens with a locked glClear so the scene rect is
  * cleared each frame. Nothing clears it on the program's behalf - the
  * scene-rect clear is program-owned (see glr_ctrl_clear_chrome),
@@ -720,8 +752,10 @@ static int tutorial_load_scene_prelude(int idx) {
 
     if (lines) {
         ReplCameraHeader camera;
+        ReplCameraFinish camera_fin;
         ReplDocOrder     order;
         int cfg_count;
+        const char *name = repl_tutorial_name(idx);
 
         while (lines[pos] &&
                repl_config_extract_slug(lines[pos], slug, sizeof slug, NULL)) {
@@ -737,6 +771,8 @@ static int tutorial_load_scene_prelude(int idx) {
          * role tags wherever they sit - there is no header region and no
          * `pos += n` contract any more. */
         repl_camera_header_init(&camera);
+        repl_camera_header_set_sink(&camera, tutorial_camera_diag,
+                                    (void *)name);
         repl_doc_order_init(&order);
         for (pos = 0; lines[pos]; pos++) {
             ReplCameraLineResult result =
@@ -767,7 +803,9 @@ static int tutorial_load_scene_prelude(int idx) {
                 return 0;
             }
         }
-        (void)repl_camera_header_finish(&camera, REPL_CAMERA_APPLY_EXAMPLE);
+        camera_fin = repl_camera_header_finish(&camera,
+                                               REPL_CAMERA_APPLY_EXAMPLE);
+        tutorial_camera_report_missing(&camera_fin, name);
     }
 
     /* Lock the whole prelude - the glClear plus the scaffold - read-only

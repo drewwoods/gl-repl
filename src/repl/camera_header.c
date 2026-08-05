@@ -12,6 +12,7 @@
 #include <ctype.h>
 #include <math.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -603,4 +604,39 @@ ReplCameraFinish repl_camera_header_finish(ReplCameraHeader *hdr,
         out.pose_applied = 1;
     }
     return out;
+}
+
+int repl_camera_header_format_missing_roles(const ReplCameraFinish *finish,
+                                            char *out, size_t out_size) {
+    unsigned missing;
+    size_t used = 0;
+    int role;
+
+    if (!out || out_size == 0) return 0;
+    out[0] = '\0';
+    if (!finish) return 0;
+
+    if (finish->seen_mask == 0)
+        return 0;
+    missing = REPL_CAMERA_MASK_POSE & ~finish->seen_mask;
+    if (!missing) return 0;
+
+    for (role = REPL_CAMERA_ROLE_DIST; role < REPL_CAMERA_ROLE_COUNT; role++) {
+        int written;
+        if ((REPL_CAMERA_MASK(role) & missing) == 0)
+            continue;
+        written = snprintf(out + used, out_size - used, "%s%s",
+                           used ? ", " : "",
+                           repl_camera_role_name((ReplCameraRole)role));
+        if (written < 0) {
+            out[0] = '\0';
+            return 0;
+        }
+        if ((size_t)written >= out_size - used) {
+            out[out_size - 1] = '\0';
+            return 1;
+        }
+        used += (size_t)written;
+    }
+    return used > 0;
 }

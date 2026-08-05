@@ -28,6 +28,8 @@
 #ifndef REPL_CAMERA_HEADER_H
 #define REPL_CAMERA_HEADER_H
 
+#include <stddef.h>
+
 /* Resolved camera pose. Field-for-field the orbit camera's own state:
  * `dist` is the eye distance (the dist line writes -dist), rx/ry the
  * pitch/yaw in degrees, tx/ty/tz the pan target (the pan line writes
@@ -172,6 +174,13 @@ typedef struct {
     int            diag_count;
     int            diag_overflow;
 } ReplCameraFinish;
+
+/* Format the missing pose roles from a completed header for a loader-level
+ * diagnostic. Returns 1 when at least one pose role was omitted, 0 when the
+ * header carried no pose or all four pose roles. The caller supplies the
+ * surrounding source label because the reader does not know file names. */
+int repl_camera_header_format_missing_roles(const ReplCameraFinish *finish,
+                                            char *out, size_t out_size);
 
 void repl_camera_header_init(ReplCameraHeader *hdr);
 void repl_camera_header_set_sink(ReplCameraHeader *hdr,

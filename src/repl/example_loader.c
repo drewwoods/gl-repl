@@ -61,30 +61,12 @@ static void example_order_diag(void *userdata, ReplDocOrderRule rule,
  * one diagnostic per role - that is what a test can compare - but three
  * separate warnings on screen for one deliberate choice would make the common
  * hand-authored partial header the noisiest case. */
-static void example_camera_report_missing(const ReplCameraHeader *hdr,
-                                          const ReplCameraFinish *fin,
+static void example_camera_report_missing(const ReplCameraFinish *fin,
                                           const char *name) {
     char roles[64];
     char msg[REPL_DIAG_TEXT_MAX];
-    size_t used = 0;
-    int i;
 
-    if (fin->seen_mask == 0 ||
-        (fin->seen_mask & REPL_CAMERA_MASK_POSE) == REPL_CAMERA_MASK_POSE)
-        return;
-
-    roles[0] = '\0';
-    for (i = 0; i < hdr->diag_count; i++) {
-        const char *role_name;
-        if (hdr->diags[i].rule != REPL_CAMERA_RULE_MISSING_ROLE)
-            continue;
-        role_name = repl_camera_role_name(hdr->diags[i].role);
-        used += (size_t)snprintf(roles + used, sizeof(roles) - used,
-                                 "%s%s", used ? ", " : "", role_name);
-        if (used >= sizeof(roles))
-            break;
-    }
-    if (!roles[0])
+    if (!repl_camera_header_format_missing_roles(fin, roles, sizeof(roles)))
         return;
     snprintf(msg, sizeof(msg), "%s: camera header: %s not set; keeping current",
              name ? name : "example", roles);
@@ -280,7 +262,7 @@ static int load_example_lines(const char *const *lines,
      * reaches the bridge exactly once, so a partial header is
      * unrepresentable rather than half-applied. */
     camera_fin = repl_camera_header_finish(&camera, REPL_CAMERA_APPLY_EXAMPLE);
-    example_camera_report_missing(&camera, &camera_fin, name);
+    example_camera_report_missing(&camera_fin, name);
 
     /* Post-load editor cleanup mirrors the pre-load sink dispatch so a
      * stale input line or cursor doesn't survive the loaded body. */
