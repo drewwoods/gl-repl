@@ -1582,6 +1582,7 @@ static void import_state_init(ImportState *s) {
     s->in_snippet = 0;
     s->past_snippet = 0;
     s->func_depth = 0;
+    s->func_block_comment = 0;
     s->allow_raw_scene = 0;
     s->has_func_body_markers = 0;
     s->active_staged_func_slot = -1;
