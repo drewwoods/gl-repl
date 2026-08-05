@@ -646,11 +646,35 @@ static void cycle_example_or_user_scene_dir(int direction) {
             }
         }
         if (count > 0) {
-            int example_start = (direction > 0) ? 0 : count - 1;
+            /* A promotion parks the example the promoted document came from
+             * (ReplSceneRuntimeState.example_place_idx) so this leg resumes
+             * one step past it rather than restarting the catalog. The step
+             * wraps, so a promotion off the last example still has somewhere
+             * to go. Without a parked place the leg starts at the end the
+             * direction implies, as before. */
+            int place = repl_state_scenes().example_place_idx;
+            int example_start = (place >= 0 && place < count)
+                                    ? (place + direction + count) % count
+                                    : ((direction > 0) ? 0 : count - 1);
             if (cycle_try_examples(example_start, direction, count, -1,
                                    &skipped)) {
                 cycle_report_skipped_examples(skipped, 0, 0);
                 return;
+            }
+            /* Resuming mid-catalog leaves the entries before the resume point
+             * unvisited, so they get the same wrap leg an active example
+             * gets - otherwise a parked place could shrink what this key
+             * press can reach when loads fail. */
+            if (example_start != ((direction > 0) ? 0 : count - 1)) {
+                int wrap_skipped = 0;
+                if (cycle_try_examples((direction > 0) ? 0 : count - 1,
+                                       direction, count, example_start,
+                                       &wrap_skipped)) {
+                    skipped += wrap_skipped;
+                    cycle_report_skipped_examples(skipped, 0, 0);
+                    return;
+                }
+                skipped += wrap_skipped;
             }
         }
         if (skipped > 0) {

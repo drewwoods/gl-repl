@@ -288,7 +288,7 @@ surfaces it on the CLI.
 Loop counters, function parameters and function-scoped locals don't exist in
 the source command's own scope. When [`flatten.c`](flatten.c) emits a flat command, it snapshots
 the live lexical bindings into a parallel [`FlatCmdLocalVars`](flatten.h#L43) array
-([`repl_state_flat_program_local_vars()`](state_views.h#L181)):
+([`repl_state_flat_program_local_vars()`](state_views.h#L192)):
 
 ```c
 typedef struct {
@@ -796,8 +796,8 @@ typed slices ([`state_views.h`](state_views.h)):
 | [`ReplFlatProgramState`](state_views.h#L52) | flat `GLCmd[]`, `FlatCmdLocalVars[]`, dirty flag, cursor-block range, user-lighting flag |
 | [`ReplVariableState`](state_views.h#L84) | predef var table, scratch arrays `A/B/C`, `funcN` aliases, the `t` clock (`anim_time`, `time_playing`) |
 | [`ReplRenderState`](state_views.h#L123) | the runtime-mutated render *tail*: `light_enabled_mask` alone. The frame background is not state here - the cursor observes it while emitting the program's clears and publishes a [`ReplBackgroundObservation`](executor.h#L64) |
-| [`ReplSceneRuntimeState`](state_views.h#L144) | active example index, bound workspace dir |
-| [`ReplImportExportState`](state_views.h#L153) | cached header/render/camera text + pending import metadata |
+| [`ReplSceneRuntimeState`](state_views.h#L154) | active example index, bound workspace dir |
+| [`ReplImportExportState`](state_views.h#L164) | cached header/render/camera text + pending import metadata |
 
 [`repl_state_capture()`](state.h#L29) / [`repl_state_restore()`](state.h#L30) snapshot exactly these
 slices - and nothing else (no editor, UI, replay, or app presentation
@@ -814,7 +814,7 @@ State access is intentionally two-tiered:
   owner accessors, setters, and reset helpers. For owner modules and the
   controller only; broad command-array mutators are intentionally absent.
 
-[`repl_state_ensure_sentinels()`](state_owners.h#L134) patches the non-zero defaults (most
+[`repl_state_ensure_sentinels()`](state_owners.h#L139) patches the non-zero defaults (most
 importantly the array capacities - under raw BSS zero-fill they'd be 0
 and reject every insert). It's idempotent and matters for CLI paths like
 `--dump-code` that skip `glr_ctrl_init_gl`.

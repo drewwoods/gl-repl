@@ -318,6 +318,9 @@ static int load_example(int idx) {
         return 0;
     }
     repl_state_scenes_set_active_example_idx(idx);
+    /* The live example index is the place now; drop any position parked by an
+     * earlier promotion so it cannot outlive the document it described. */
+    repl_state_scenes_set_example_place_idx(-1);
     repl_scenes_detach_active_user_scene();
     char msg[REPL_DIAG_TEXT_MAX];
     snprintf(msg, sizeof(msg), "Example %d/%d: %s (F12 for next)",

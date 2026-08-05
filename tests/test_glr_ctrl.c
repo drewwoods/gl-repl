@@ -5702,6 +5702,60 @@ static void test_scene_cycle_skips_failed_examples(void) {
     glr_ctrl_reset_all();
 }
 
+/* Promotion must not cost the user their place in the example catalog.
+ * Editing a viewed example promotes it into a user-scene slot, which ends the
+ * example tab (active_example_idx goes to -1) - and the F12 leg that walks out
+ * of the user scenes used to restart the catalog at example 1 as a result. The
+ * parked place is the example twin of a completed tutorial's retained index. */
+static void test_promotion_keeps_example_catalog_place(void) {
+    int count;
+
+    printf("--- imrepl_ctrl promotion keeps the example catalog place ---\n");
+
+    glr_ctrl_reset_all();
+    count = repl_example_count();
+    ASSERT_TRUE("catalog has at least three examples", count >= 3);
+    if (count < 3)
+        return;
+
+    ASSERT_TRUE("origin example loads", repl_load_example(1) > 0);
+    ASSERT_TRUE("example promoted to a slot",
+                repl_promote_transient_if_needed() >= 0);
+    ASSERT_INT("promotion ends the example tab",
+               repl_state_scenes().active_example_idx, -1);
+    ASSERT_INT("promotion parks the catalog place",
+               repl_state_scenes().example_place_idx, 1);
+
+    glr_ctrl_scene_cycle_next();
+    ASSERT_INT("F12 after promotion continues past the origin example",
+               repl_state_scenes().active_example_idx, 2);
+    ASSERT_INT("loading an example drops the parked place",
+               repl_state_scenes().example_place_idx, -1);
+
+    /* Shift+F12 resumes in its own direction from the same parked place. */
+    glr_ctrl_reset_all();
+    ASSERT_TRUE("origin example loads for the reverse leg",
+                repl_load_example(1) > 0);
+    ASSERT_TRUE("example promoted for the reverse leg",
+                repl_promote_transient_if_needed() >= 0);
+    glr_ctrl_scene_cycle_prev();
+    ASSERT_INT("Shift+F12 after promotion steps back from the origin example",
+               repl_state_scenes().active_example_idx, 0);
+
+    /* Scope pin: only a promotion parks a place. A user scene that never came
+     * out of the catalog still enters it at the end the direction implies. */
+    glr_ctrl_reset_all();
+    ASSERT_TRUE("standalone user scene created",
+                repl_scenes_create_empty_user_scene() >= 0);
+    ASSERT_INT("a scene with no example origin parks nothing",
+               repl_state_scenes().example_place_idx, -1);
+    glr_ctrl_scene_cycle_next();
+    ASSERT_INT("F12 from an unpromoted scene starts the catalog at example 0",
+               repl_state_scenes().active_example_idx, 0);
+
+    glr_ctrl_reset_all();
+}
+
 /* Drive one untimed pointer-script line and fire its single event. The
  * scripted `chord` verb is the only production path that synthesizes a Shift
  * modifier, so these tests install NO modifier provider - the scripted override
@@ -6072,6 +6126,7 @@ int main(void) {
     test_color_picker_materialfv();
     test_special_key_shortcuts();
     test_scene_cycle_skips_failed_examples();
+    test_promotion_keeps_example_catalog_place();
     test_scripted_chord_reaches_shift_shortcuts();
     test_post_filter_key_cycling();
     test_app_lifecycle_bootstrap_shutdown();

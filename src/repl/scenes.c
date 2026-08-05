@@ -1174,6 +1174,14 @@ int repl_promote_transient_if_needed(void) {
         apply_scene_cfg_from_slot(slot);
     }
 
+    /* Promoting an example-derived document ends the example tab, but not the
+     * user's place in the catalog: park the origin index so the next F12 leg
+     * out of the user scenes continues past that example instead of
+     * restarting at the first one. Tutorial origins have the same guarantee
+     * through the retained TutorialRuntimeState.tutorial_idx. */
+    if (origin_kind == PROMOTE_ORIGIN_EXAMPLE)
+        repl_state_scenes_set_example_place_idx(g_example_idx);
+
     g_active_user_scene = slot;
     repl_state_scenes_set_active_example_idx(-1);
     repl_state_scenes_set_tutorial_origin_idx(-1);

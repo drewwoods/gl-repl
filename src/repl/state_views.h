@@ -141,8 +141,19 @@ typedef struct {
  * tutorial down - on step 0. Only the runner's end-of-lesson path
  * (tutorial_end_keep_view in src/subsystems/tutorial/tutorial_runner.c)
  * establishes it. */
+/* `example_place_idx` is the user's parked position in the example catalog,
+ * kept ONLY across a promotion: an example-derived document promoted into a
+ * user-scene slot clears `active_example_idx` (no example tab survives), and
+ * without this the next F12 leg that walks out of the user scenes would
+ * restart the catalog at example 1. It is the example twin of the completed
+ * tutorial's retained `TutorialRuntimeState.tutorial_idx`.
+ *   -1     no parked position - the examples leg starts at the catalog end;
+ *   >= 0   resume the catalog one step past this index.
+ * Loading any example supersedes it (`active_example_idx` becomes the live
+ * place again), so it is set at promotion and cleared on example load. */
 typedef struct {
     int  active_example_idx;
+    int  example_place_idx;
     int  tutorial_origin_idx;
     char workspace_dir[REPL_WORKSPACE_DIR_MAX];
 } ReplSceneRuntimeState;

@@ -105,6 +105,11 @@ void                   repl_state_render_set_light_enabled_mask(unsigned mask);
 ReplSceneRuntimeState    repl_state_scenes(void);
 ReplSceneRuntimeState       *repl_state_scenes_writable(void);
 void                         repl_state_scenes_set_active_example_idx(int idx);
+/* Owner setter for the parked example-catalog position (see the field docs on
+ * ReplSceneRuntimeState). Set to the origin example's index by a successful
+ * promotion; cleared to -1 by every example load, which re-establishes
+ * `active_example_idx` as the live place. */
+void                         repl_state_scenes_set_example_place_idx(int idx);
 /* Owner setter for the post-tutorial promotion marker (see the field docs on
  * ReplSceneRuntimeState). Set to the finished/stopped tutorial's index by
  * the tutorial runner when a lesson ends; cleared to -1 by tutorial teardown,

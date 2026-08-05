@@ -49,6 +49,7 @@ static void repl_state_apply_sentinels(ReplRuntimeState *s) {
 
     /* --- scene_runtime --- */
     s->scene_runtime.active_example_idx  = -1;
+    s->scene_runtime.example_place_idx   = -1;
     s->scene_runtime.tutorial_origin_idx = -1;
 
     /* --- import_export: default render-state + cam lines --- */
@@ -436,6 +437,10 @@ const char *repl_state_workspace_dir(void) {
 
 void repl_state_scenes_set_active_example_idx(int idx) {
     g_repl_state.scene_runtime.active_example_idx = idx;
+}
+
+void repl_state_scenes_set_example_place_idx(int idx) {
+    g_repl_state.scene_runtime.example_place_idx = idx;
 }
 
 void repl_state_scenes_set_tutorial_origin_idx(int idx) {

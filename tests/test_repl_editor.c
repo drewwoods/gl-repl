@@ -3835,7 +3835,7 @@ int main() {
     {
         glr_ctrl_reset_all();
         int example_count = repl_example_count();
-        if (example_count > 0) {
+        if (example_count > 1) {
             /* Load example 0 */
             repl_load_example(0);
 
@@ -3843,13 +3843,16 @@ int main() {
             int slot = repl_promote_transient_if_needed();
             ASSERT_TRUE("F12 test: promoted example to slot", slot >= 0);
 
-            /* Cycle from user scene 0 -> should go to example 0 */
+            /* Cycle from user scene 0 -> continues past the promoted
+             * document's origin example rather than restarting the catalog. */
             glr_ctrl_router_handle_scene_cycle_special(GLUT_KEY_F12);
-            ASSERT_INT("F12: user scene 0 -> example 0", repl_state_scenes().active_example_idx, 0);
+            ASSERT_INT("F12: user scene 0 -> example after the promoted one",
+                       repl_state_scenes().active_example_idx, 1);
             ASSERT_INT("F12: active user scene now -1", repl_active_user_scene(), -1);
 
-            /* Cycle through all examples to reach user scenes again */
-            for (int i = 0; i < example_count; i++) {
+            /* Cycle through the remaining examples to reach user scenes again:
+             * examples 2..count-1, then one more press for the wrap. */
+            for (int i = 1; i < example_count; i++) {
                  glr_ctrl_router_handle_scene_cycle_special(GLUT_KEY_F12);
             }
             /* After all examples, it should hit the first used user scene slot */

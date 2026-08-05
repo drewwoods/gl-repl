@@ -446,7 +446,11 @@ pending cfg baseline left intact). A tutorial promotion captures the
 lesson's view into the slot *before* tutorial teardown restores the
 pre-tutorial globals, then re-applies the slot's per-scene cfg subset; see
 `docs/ARCHITECTURE.md` "Post-tutorial scene promotion".
-F12 cycles examples → user scenes → back. Inline rename filters
+F12 cycles examples → user scenes → back. An example promotion parks its
+catalog index (`ReplSceneRuntimeState.example_place_idx`) so the leg back out
+of the user scenes resumes past that example instead of restarting at the
+first - the example twin of a completed tutorial's retained index; loading any
+example drops the parked place. Inline rename filters
 path-unsafe chars. Managed workspaces require `.glr-workspace`; manifest-less
 directories are rejected and unlisted `.c` files are ignored. Scene metadata
 still round-trips through `@scene-name` / `@workspace-dir` headers.

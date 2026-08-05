@@ -915,7 +915,7 @@ signature for audited renderers.
   REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L123): the light-enable
   bitmask) remains a REPL slice.
 * pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L100), [`EditorInputView`](../src/editor/state.h#L68),
-  [`ReplImportExportView`](../src/repl/state_views.h#L165), [`FlatProgramView`](../src/repl/flatten.h#L58), [`ReplPredefView`](../src/repl/eval.h#L179))
+  [`ReplImportExportView`](../src/repl/state_views.h#L176), [`FlatProgramView`](../src/repl/flatten.h#L58), [`ReplPredefView`](../src/repl/eval.h#L179))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
   - sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L390),
   `flat_program_count`, …)
@@ -1666,7 +1666,7 @@ events through [`glr_web_io.c`](../src/app/glr_web_io.c) and no bridge is instal
   [`src/repl/compile.c`](../src/repl/compile.c). The non-editor
   [`repl_load_apply_line()`](../src/repl/load.h#L78) transaction handles example, import, and
   tutorial loads.
-- **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L125) resets core REPL
+- **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L130) resets core REPL
   state. [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L87) resets the editor, UI, and peer
   subsystems when a program is replaced wholesale.
 - **App-service bootstrap:** Dump-only CLI paths bypass normal GL
@@ -2403,7 +2403,7 @@ When a module starts owning mutable REPL state, follow this template:
    actualizes back into state.
 4. Extend the ownership tests in the same change: keep
    [`repl_state_capture()`](../src/repl/state.h#L29), [`repl_state_restore()`](../src/repl/state.h#L30), and
-   [`repl_state_reset_program()`](../src/repl/state_owners.h#L125) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L87)
+   [`repl_state_reset_program()`](../src/repl/state_owners.h#L130) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L87)
    (full-world) current for runtime slices, and add focused behavior
    coverage in the module's own tests.
 
