@@ -17,6 +17,11 @@ The finished behavior is:
   animation-hook line, `.glr` and the code panel do not - but they differ by the
   presence of one optional row, not by the spelling of a shared one, so every
   consumer parses the four pose lines identically;
+- one canonical document order - declarations, then function definitions, then
+  camera and body - **enforced by rejection**, matching the order the exported C
+  already has to use;
+- the `// camera` marker is presentation only: the `@camera` tags identify a
+  camera line, and a file without a marker is fully canonical;
 - the camera bridge stops parsing text: it receives a resolved pose plus an
   explicit snap-or-ease intent;
 - direct file load and catalog load of the same `.glr` produce identical
@@ -126,14 +131,24 @@ relying on a normalization pass, and both are covered by tests - a reader that
 handled only `//` would silently drop the camera from every exported file, which
 is this bug with new syntax.
 
-**The `// camera` marker is the reader's job too, and it needs its own result.**
-The marker stays deliberately untagged, so under a three-value result it comes
-back `NOT_CAMERA` and every caller inserts it into the document as an ordinary
-comment row. Keeping a separate marker handler beside the shared reader
-contradicts the whole design. The result enum therefore gains a fourth value,
+**The marker is optional; the tags are what identify a camera line.** `// camera`
+carries no meaning the tags do not already carry, so it is demoted to pure
+presentation: a section heading for the expanded code panel and nothing else. A
+file with tags and no marker is fully canonical. A file with a marker and no tags
+has no camera at all - the marker alone identifies nothing and the transforms
+below it are geometry.
+
+This kills the last positional concept in the format. As long as the marker was
+required, "where does the camera start" remained a question about a comment, and
+every reader needed its own answer.
+
+The marker still needs **its own result**, because it must not reach the
+document: untagged, a three-value result returns `NOT_CAMERA` and every caller
+inserts it as an ordinary comment row. The enum therefore gains a fourth value,
 `REPL_CAMERA_LINE_MARKER`: consumed, not inserted, no role accumulated. The
-reader also captures the marker's verbatim text, which is what feeds
-`camera_comment_line` (below).
+reader captures its verbatim text, which is what feeds `camera_comment_line`
+(below). The writer keeps emitting a plain marker for readability - optional to
+*read* is not an argument for dropping it from what we *write*.
 
 This closes a live bug rather than only a hypothetical one.
 `repl_comment_alpha_payload_equals` (`text_helpers.c:18`) hard-requires
@@ -293,16 +308,65 @@ because the two halves of the format disagree about what order means:
 
 So: only comments and blank lines may interleave with the tagged block. A tagged
 line separated from the others by an executable line, or a role out of canonical
-`dist, rx, ry, spin, pan` order, is **accepted with a warning diagnostic** - the
-pose is unambiguous, so refusing the load would be disproportionate, but the file
-is not one the exporter would ever write and its compiled twin will not match.
-`test_camera_header` covers both shapes.
+`dist, rx, ry, spin, pan` order, is **rejected** - see the canonical-order
+section below, which subsumes this rule into one document-wide ordering contract.
 
 "Executable line" needs a definition the reader can apply without parsing C, and
 the cheap one is sufficient: a line is executable if it holds any non-whitespace
 that is not a comment (`//` or `/* … */`, including a continuation line inside an
-open block comment) and not a preprocessor directive (`#`). Declarations count as
-executable for this purpose - they are not part of a camera block either.
+open block comment) and not a preprocessor directive (`#`).
+
+### One canonical document order, enforced
+
+The format admits exactly one shape. Comments and blank lines go anywhere, as in
+C89; everything else falls in three blocks:
+
+```
+<variable declarations>
+
+<function definitions>
+
+<camera + user body>
+```
+
+**This is the exported C's own order.** In a `.c`, `static float` globals are
+file-scope, function definitions follow them, and the camera block sits at the
+top of `display()`. The `.glr` writer emits the opposite today - camera first,
+declarations wherever the author left them, functions at the bottom - so the two
+halves of one format disagree about line order. Making `.glr` isomorphic to `.c`
+is the same argument as every other decision here: one shape, no reader gets to
+have its own opinion. It also matches the in-app document model, where camera
+lines are consumed and the document genuinely begins with its declaration
+prologue.
+
+**Rejected, with a diagnostic:**
+
+| Violation | Why |
+|---|---|
+| a `@camera` line before the declaration block ends | camera is not file-scope; in C it lives inside `display()` |
+| a variable declaration after a function definition | globals precede functions in the emitted C |
+| a variable declaration after body code | same, and the REPL hoists it anyway - the file should say what it means |
+| a function definition after body code | functions precede `display()` in the emitted C |
+| a tagged line split from the block by an executable line | the compiled twin composes a different modelview |
+| roles out of `dist, rx, ry, spin, pan` order | same |
+
+**Accepted:** the camera block sitting *between* the declarations and the
+function definitions. Canonically it comes after the functions, but the `@camera`
+tag makes the placement unambiguous, and some C layouts read better with the
+camera nearer the top. This is the one axis where the tag earns tolerance - and
+it is tolerance about a block whose lines never enter the document at all.
+
+**Rejection, not a warning.** The whole point of a canonical form is that
+non-canonical files do not accumulate; a warning is a rule nobody enforces after
+the first week. The cost is real and is paid once: **43 of the 46 corpus files
+violate this order today** and every one must be migrated before the reader
+lands. See the corpus section.
+
+**Scope note.** The ordering contract covers user code, not just camera lines, so
+it is enforced by the loader rather than by `camera_header.c` - the reader owns
+camera-line rules, the loader owns document shape. That is a deliberate expansion
+beyond the camera bug, taken because a canonical order that applies to one line
+kind is not a canonical order.
 
 **Where tags are honored** - "wherever it appears" needs bounding, because the
 importer already refuses camera handling inside a snippet
@@ -568,6 +632,48 @@ That keeps `(role, rule, line_no)` as the whole comparable key - a severity fiel
 would be a derived value in the parity tuple, which is how two paths end up
 "differing" on something neither of them chose.
 
+### Rejection messages are a migration tool, not an epitaph
+
+43 files have to be rewritten by hand against these messages, so their quality is
+not a polish item - it is most of the migration's cost. Three requirements, each
+of which a naive implementation gets wrong:
+
+**1. Name both lines.** An ordering violation is a relationship between two
+places, and reporting only the offending one makes the author hunt for the other.
+Every ordering diagnostic carries the line that broke the rule *and* the line
+that established it:
+
+```
+torus-knot-animated.glr:6: camera tag 'dist' appears before the declaration
+  block ends (declaration at line 18). Order is: declarations, then function
+  definitions, then camera and body.
+```
+
+```
+torus-knot-animated.glr:18: variable declaration after body code
+  (first body command at line 10). Move all declarations above the body.
+```
+
+```
+matrix-stack-recursion-stress.glr:17: function definition after body code
+  (first body command at line 12). Move all function definitions above the body.
+```
+
+**2. Say the rule, not the symptom.** "unexpected token" or "camera header
+rejected" tells an author nothing about what to do. Each message names the rule
+in the same words the format documentation uses, so searching the message finds
+the section.
+
+**3. Report every violation in one pass.** A loader that stops at the first error
+turns 43 files into 43 edit-reload cycles per violation. The ordering check runs
+over the whole document and reports all of it, and a `--lint-scenes <dir>` mode
+validates a directory without opening a window, so the migration is one pass and
+one list. This is worth building *before* the corpus sweep, not after - it is the
+difference between an afternoon and a week.
+
+The reader's `REPL_CAMERA_MAX_DIAGS` = 8 cap is a per-load inspection cache and
+does not bound the lint report, which streams.
+
 **The overflow counter is part of parity, not bookkeeping.** Comparing only the
 stored eight would let two paths agree on the first eight diagnostics and differ
 on everything after, which is a divergence the test was built to catch. The
@@ -776,6 +882,55 @@ All seven render *differently on the two paths today*, so there is no "current
 behavior" to preserve - the choice per file is between a static camera angle and
 moving the rotation into the scene body as geometry.
 
+### The migration, and three worked examples
+
+**43 of 46 files violate the canonical order.** The breakdown, measured:
+
+| Violation | Files |
+|---|---|
+| function definitions after the body (bottom of file) | **43 of the 43 that have functions** |
+| camera block above the declarations | 28 of the 30 that have declarations |
+| function definitions above the declarations | 6 |
+
+The dominant one is universal: *every* scene with functions defines them at the
+bottom. That is the established house style - body first, helpers below - and
+inverting it is the bulk of the work. It is worth being explicit that this buys
+consistency with the emitted C, not correctness: the REPL resolves forward
+references today, which is why the style works at all.
+
+**No file in the tree is an exemplar.** Three files pass the check
+(`conditional-colors-if-t.glr`, `glr-logo.glr`, `color-mask-clear-stress.glr`)
+and all three pass by *absence* - zero declarations and zero functions each. They
+are a useful control group (their bytes must not change) but they demonstrate
+nothing. The pilot has to create the first real exemplar rather than copy one.
+
+**Three pilot migrations land first**, before the sweep, chosen to exercise
+different violation shapes and to give the A/B comparison something to bite on.
+Each gets a before/after OSMesa capture and a pose check on both load paths:
+
+1. **`matrix-stack-recursion-stress.glr`** - the file this plan opens with, and
+   the simplest shape: no declarations at all, so the only move is `func0` from
+   line 17 to the top. Camera at 5-8 is already a canonical four-line block after
+   main's repair; it gains four tags and keeps `glRotatef(20.0f * t, …)` at line
+   10 as **body geometry, not a `spin` role**.
+2. **`function-local-shadowing-stress.glr`** - declarations at 5-6 are already
+   above the camera, the one axis the corpus otherwise fails; `func0` at 21 moves
+   up. It is also the only remaining divergent file and has no marker, so it
+   exercises tagging a camera that no reader recognises today. Its yaw is
+   `20.0f * t`, so it needs the same static-literal decision the other six got.
+3. **`torus-knot-animated.glr`** - the worst shape in one small file: camera at
+   6-9, body from 10, declarations at 18, functions at 15. All four violations,
+   35 lines, so the diff is readable and every message in the catalog above fires
+   at least once.
+
+Only after those three read cleanly does the remaining sweep start.
+
+**A hazard the pilot exists to catch.** Main's repair left six files with an
+animated `glRotatef(N * t, …)` immediately below the camera block. It is body
+geometry and must stay untagged. `spin` is exclusively the exported-C `g_angle`
+hook - its argument must be that identifier, and an expression in `t` is a
+diagnostic. Six files present exactly the shape that invites the wrong tag.
+
 ### Two more emitters outside the corpus
 
 Neither writes tags today, and with no back-compat reader both silently lose
@@ -854,21 +1009,26 @@ does not parse, so it is not a fifth reader, but it must grow the tags in phase
    warning at the `import.c:567` guard), `example_loader.c` and
    `tutorial_runner.c` (offer from the top of the array, `pos += n` contract
    deleted), `repl_live_demo` (parser deleted, `apply_pose` kept).
-5. **Export the tags** - one `fill_block(block, with_anim_hook)`, unconditional
-   marker, `ry` numeric with the hook on its own `spin` row and `g_angle` left at
-   `0.0f`, **`export_glr.c:76`** so app-saved `.glr` files reload their own
-   camera, and **`glprobe_extract.c:261`** so extracted scenes do too.
-6. **Corpus sweep** - 38 mechanical, 7 real edits, plus the four
-   `repl_live_demo` fixtures, with an OSMesa capture per real edit. (38 + 7 = 45;
-   the 46th, `pulse_bars_easing.glr`, has no camera content at all. The seventh
-   real edit is markerless, so it was never among the 44 and does not come out of
-   the 38.) **`whale-full-c.c` is not mechanical**: it is the one demo fixture
-   carrying a `g_angle`, and it carries a *pose* in it -
+5. **Export the tags and the order** - one `fill_block(block, with_anim_hook)`,
+   `ry` numeric with the hook on its own `spin` row and `g_angle` left at `0.0f`,
+   **`export_glr.c:76`** so app-saved `.glr` files reload their own camera, and
+   **`glprobe_extract.c:261`** so extracted scenes do too. `export_glr.c` also
+   changes *placement*: it must split the document so declarations and function
+   definitions precede the camera block instead of following it.
+6. **Ordering enforcement + `--lint-scenes`** - the loader's document-order check
+   and its full message catalog, plus the directory lint mode. This lands
+   **before** the sweep, not with it: the migration is 43 hand edits and the lint
+   output is the worklist. Its own tests use synthetic fixtures, since by
+   definition no corpus file passes yet.
+7. **Corpus sweep** - the three pilot migrations first, each with a before/after
+   OSMesa capture and a both-paths pose check, then the remaining 40, then the
+   four `repl_live_demo` fixtures. **`whale-full-c.c` is not mechanical**: it is
+   the one demo fixture carrying a `g_angle`, and it carries a *pose* in it -
    `static float g_angle = -114.3999f;` (`:98`) with a bare
    `glRotatef(g_angle, …)` (`:436`). Under the `spin` split that yaw has to be
    lifted out into a real `ry` literal of `-114.3999f`, with the bare rotate
    retagged `spin` and the initializer reset to `0.0f`.
-7. **Goldens, tests and docs** - `--dump-code` and export fixtures gain the tag
+8. **Goldens, tests and docs** - `--dump-code` and export fixtures gain the tag
    comments (regenerate with `BUILD=debug`); the documentation sites in the table
    above are updated in the same commit, so no released text describes a format
    the tree no longer reads; and two existing test TUs move off the deleted API
@@ -879,7 +1039,7 @@ does not parse, so it is not a fifth reader, but it must grow the tags in phase
    synthetic workspace `.c` files carrying the `g_angle` preamble and untagged
    transforms.
 
-### Sequencing: the window from 4 to 7 is not pushable
+### Sequencing: the window from 4 to 8 is not pushable
 
 Phases 2-4 land together; a half-migrated tree has two readers, which is the
 state this plan exists to end. But the commit boundary has to be drawn wider
@@ -892,15 +1052,15 @@ than that, because **phase 4 is where the corpus goes dark**:
 - Parity is restored at that instant, uniformly wrong but equal on both paths.
   So `k_known_divergent[]` must empty at **phase 4**, not phase 6.
 - Example goldens and `--dump-code` fixtures break at the same moment, for the
-  same reason, and are not repaired until phase 7.
+  same reason, and are not repaired until phase 8.
 
-So `make test` is red from phase 4 through phase 7 and the pre-push hook will say
-so. **Phases 2-7 are therefore one pushable unit.** Keep them as separate local
+So `make test` is red from phase 4 through phase 8 and the pre-push hook will say
+so. **Phases 2-8 are therefore one pushable unit.** Keep them as separate local
 commits if that helps review - the boundaries are real work boundaries - but
-nothing between 2 and 7 goes to `origin` on its own, and phase 1 is the only
-piece that lands independently green. What is *not* available is treating 5, 6
-and 7 as follow-up PRs. Goldens regenerate exactly once, at the end, rather than
-churning at 4 and again at 6.
+nothing between 2 and 8 goes to `origin` on its own, and phase 1 is the only
+piece that lands independently green. What is *not* available is treating 5, 6, 7
+and 8 as follow-up PRs. Goldens regenerate exactly once, at the end, rather than
+churning at 4 and again at 7.
 
 ## Tests
 
@@ -985,7 +1145,7 @@ churning at 4 and again at 6.
 
 ## Risks
 
-- **Phases 2-4 are one commit, and 4-7 is one push.** Splitting 2-4 leaves two
+- **Phases 2-4 are one commit, and 4-8 is one push.** Splitting 2-4 leaves two
   live readers, which is exactly the bug. Splitting 4-7 leaves the corpus with no
   camera at all and the goldens red - see "Sequencing" above.
 - **The external-3D-pose record has a frame-timing contract that is already
@@ -1018,5 +1178,5 @@ churning at 4 and again at 6.
   function body. The header contract must say so, and the parity test covers it
   only indirectly - a fixture with a tagged line inside a `funcN` body belongs
   in `test_camera_header` proper.
-- **Golden churn** is broad but mechanical; it lands with phase 7 rather than
+- **Golden churn** is broad but mechanical; it lands with phase 8 rather than
   spread across the sweep.
