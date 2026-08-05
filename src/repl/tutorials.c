@@ -1095,11 +1095,11 @@ static const TutorialStep g_tutorial_scratch_arrays_steps[] = {
 };
 
 /* REPL_TUTORIAL_TAG_ALL is a synthetic tag: every tutorial is a member.
- * It is not listed in any g_tutorials[] mask literal; instead
- * repl_tutorial_tag_mask() ORs its bit into every entry's mask, so the
- * whole tag query API picks it up with no per-entry bookkeeping. Kept at
- * index 0 so "All" sorts first in the Tutorials menu. Enum lives in
- * tutorials.h. */
+ * It is not listed in any g_tutorials[] `.tag_names` literal; instead
+ * tutorial_catalog_entry_has_tag() returns true for index 0
+ * unconditionally, so the whole tag query API picks it up with no
+ * per-entry bookkeeping. Kept at index 0 so "All" sorts first in the
+ * Tutorials menu. Enum lives in tutorials.h. */
 
 static const char *const g_tutorial_tag_labels[] = {
     "All",
@@ -1110,6 +1110,13 @@ static const char *const g_tutorial_tag_labels[] = {
     "REPL Language",
     "Effects",
 };
+/* Must stay 1:1 with the REPL_TUTORIAL_TAG_* enum: entries name tags by
+ * string, but app-layer code names them by enum value, and the two only
+ * agree if this table is in enum order. Drift here silently remaps every
+ * symbolic tag reference. */
+STATIC_ASSERT((int)(sizeof(g_tutorial_tag_labels) /
+                    sizeof(g_tutorial_tag_labels[0])) == REPL_TUTORIAL_TAG_COUNT,
+              "g_tutorial_tag_labels[] out of sync with REPL_TUTORIAL_TAG_COUNT");
 
 /* Subheading labels here are catalog-author choices, not a fixed
  * vocabulary - the menu just emits `### subheading` chrome rows when
@@ -1321,7 +1328,7 @@ static int tutorial_catalog_entry_count(void) {
 }
 
 static int tutorial_catalog_tag_count(void) {
-    return (int)(sizeof(g_tutorial_tag_labels) / sizeof(g_tutorial_tag_labels[0]));
+    return REPL_TUTORIAL_TAG_COUNT;
 }
 
 static const char *tutorial_catalog_tag_label(int tag_idx) {

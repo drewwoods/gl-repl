@@ -4,6 +4,9 @@
 // --- Camera -------------------------
 glTranslatef(0.0f, 0.0f, -9.00f);
 glRotatef(20.0f, 1.0f, 0.0f, 0.0f);
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);
+glTranslatef(0.0f, 0.0f, 0.0f);
+
 glRotatef(25.0f * t, 0.0f, 1.0f, 0.0f);
 
 // Baseline state setup
@@ -32,7 +35,7 @@ glColor3f(1.0f, 1.0f, 1.0f); // Unlit white -> appears Magenta due to green mask
 
 glPushMatrix();
 glTranslatef(-0.7f, 0.0f, 0.0f);
-glutWireCube(1.2f);
+glutSolidCube(1.2f);
 glPopMatrix();
 
 // --- Attrib Push Level 2: Push All Attribs ---
@@ -55,7 +58,7 @@ glPopAttrib();
 glColor3f(1.0f, 1.0f, 0.0f); // Yellow -> appears Red due to green mask
 glPushMatrix();
 glTranslatef(1.8f, 0.0f, 0.0f);
-glutWireSphere(0.7f, 12, 12);
+glutSolidSphere(0.7f, 12, 12);
 glPopMatrix();
 
 // --- Restore Level 1 (Pops ENABLE | LIGHTING | COLOR_BUFFER) ---

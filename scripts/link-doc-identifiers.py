@@ -421,6 +421,7 @@ def scan_file(
     by_path: dict[str, Target],
     types: dict[str, list[Target]],
     functions: dict[str, list[Target]],
+    only_lines: set[int] | None = None,
 ) -> tuple[list[Occurrence], list[str]]:
     occurrences: list[Occurrence] = []
     lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
@@ -431,6 +432,8 @@ def scan_file(
             in_fence = not in_fence
             continue
         if in_fence:
+            continue
+        if only_lines is not None and line_no not in only_lines:
             continue
 
         linked_ranges = existing_link_ranges(line)
@@ -489,8 +492,37 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true", help="Print matches without writing files (default).")
     mode.add_argument("--write", action="store_true", help="Rewrite files, linking unique matches.")
+    parser.add_argument(
+        "--only",
+        action="append",
+        default=[],
+        metavar="PATH:LINE[,LINE...]",
+        help="Restrict PATH to only the given 1-based line numbers, leaving the "
+             "rest of the file untouched. Repeatable, one PATH per occurrence. "
+             "Used by fix-doc-links.sh to relink exactly the labels it just "
+             "stripped without touching unrelated pre-existing bare identifiers "
+             "elsewhere in the file.",
+    )
     parser.add_argument("files", nargs="*", help="Markdown files to scan. Defaults to tracked docs outside docs/plans/.")
     return parser.parse_args(argv)
+
+
+def parse_only_lines(root: Path, specs: list[str]) -> dict[Path, set[int]]:
+    only_lines: dict[Path, set[int]] = {}
+    for spec in specs:
+        path_str, _, lines_str = spec.rpartition(":")
+        if not path_str or not lines_str:
+            print(f"ERROR: --only expects PATH:LINE[,LINE...], got {spec!r}", file=sys.stderr)
+            raise SystemExit(2)
+        path = Path(path_str) if Path(path_str).is_absolute() else root / path_str
+        path = path.resolve()
+        try:
+            line_nos = {int(n) for n in lines_str.split(",") if n}
+        except ValueError:
+            print(f"ERROR: --only line numbers must be integers, got {spec!r}", file=sys.stderr)
+            raise SystemExit(2)
+        only_lines.setdefault(path, set()).update(line_nos)
+    return only_lines
 
 
 def main(argv: list[str]) -> int:
@@ -500,6 +532,8 @@ def main(argv: list[str]) -> int:
     files = dedupe_paths(files)
     if not files:
         files = default_markdown_files(root)
+
+    only_lines_by_path = parse_only_lines(root, args.only)
 
     by_basename, by_path = build_file_index(root)
     types = build_type_index(root)
@@ -511,7 +545,10 @@ def main(argv: list[str]) -> int:
         if not path.exists():
             print(f"ERROR: {path} does not exist", file=sys.stderr)
             return 1
-        occurrences, lines = scan_file(path, root, by_basename, by_path, types, functions)
+        only_lines = only_lines_by_path.get(path.resolve())
+        occurrences, lines = scan_file(
+            path, root, by_basename, by_path, types, functions, only_lines
+        )
         all_occurrences.extend(occurrences)
         if args.write:
             new_lines = apply_replacements(lines, occurrences)

@@ -610,8 +610,10 @@ Tutorials; wheel-scroll for tall flyouts). Parent/tag rows are **inert on
 click** (hover-open only - the activate branches return 0); flyout item
 clicks route via `route_submenu_item_hit` (`glr_cfg_cycle_row` for config,
 `tutorial_start` for tutorials); right-press cycles backward. Tutorials
-mirror the example tag system (`REPL_TUTORIAL_TAG_*` mask; `.tags` required
-- metadata test fails on 0/unknown bits); optional `.subheading` renders
+mirror the example tag system (`.tag_names` = string labels matched against
+`g_tutorial_tag_labels[]`, which stays in `REPL_TUTORIAL_TAG_*` enum order;
+required, and `test_catalog_tag_metadata` fails on a missing list or a name
+that resolves to no label); optional `.subheading` renders
 `### ` group headers - entries sharing one must be contiguous per tag
 (enforced by `test_catalog_subheading_metadata`). Tutorial step kinds
 (COMMAND / NOTE / SET / REQUIRE / REQUIRE_VAR incl. declaration steps and

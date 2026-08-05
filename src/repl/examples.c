@@ -38,9 +38,16 @@ static void free_tag_list(ReplTagNode *head) {
     }
 }
 
+/* Returns the registry node for `name`, registering it if new. NULL on a
+ * rejected name (empty, or longer than REPL_TAG_NAME_MAX-1 - truncating
+ * would silently alias two distinct long names onto one tag) and on
+ * allocation failure; callers that need to tell those apart check the
+ * length themselves first. */
 static const ReplTagNode *find_or_register_tag_in_registry(
     ReplTagNode **head, int *count, const char *name) {
     if (!head || !count || !name || !*name)
+        return NULL;
+    if (strlen(name) >= REPL_TAG_NAME_MAX)
         return NULL;
 
     for (ReplTagNode *curr = *head; curr; curr = curr->next) {
@@ -94,15 +101,18 @@ const ReplTagNode *repl_example_find_or_register_tag(const char *name) {
         &g_example_tags_head, &g_example_tag_count, name);
 }
 
-static int g_default_tags_initializing = 0;
-
+/* Lazily seed the live registry with the built-in tag names so the
+ * REPL_EXAMPLE_TAG_* enum values app-layer code passes (glr_defaults.h's
+ * tag-default table) keep matching ids 0..4. A non-empty head means the
+ * registry is seeded; init_default_tag_registry() unwinds to empty on
+ * allocation failure, so a failed attempt is simply retried on the next
+ * query rather than leaving a half-built list. No callee reaches back
+ * into this function, so it needs no reentrancy guard. */
 static void ensure_default_tags_initialized(void) {
-    if (g_example_tags_head != NULL || g_default_tags_initializing)
+    if (g_example_tags_head != NULL)
         return;
-    g_default_tags_initializing = 1;
     (void)init_default_tag_registry(&g_example_tags_head,
                                     &g_example_tag_count);
-    g_default_tags_initializing = 0;
 }
 
 static void clear_dynamic_tags_list(void) {
@@ -111,6 +121,9 @@ static void clear_dynamic_tags_list(void) {
     g_example_tag_count = 0;
 }
 
+/* Idempotent: attaching a tag the item already carries succeeds without
+ * adding a second node. Callers that need to *diagnose* a repeat (the
+ * catalog parser) test membership first - see item_tag_list_contains. */
 int repl_example_attach_tag(ReplItemTagNode **head, const ReplTagNode *tag) {
     if (!head || !tag)
         return 0;
@@ -332,6 +345,14 @@ static int catalog_file_seen(const RuntimeCatalogBuild *build,
     return 0;
 }
 
+static int item_tag_list_contains(const ReplItemTagNode *head,
+                                  const ReplTagNode *tag) {
+    for (const ReplItemTagNode *curr = head; curr; curr = curr->next)
+        if (curr->tag == tag)
+            return 1;
+    return 0;
+}
+
 static int examples_parse_tags(const char *section,
                                const char *tags_str,
                                ReplTagNode **tags_head,
@@ -368,10 +389,29 @@ static int examples_parse_tags(const char *section,
                 free(scratch);
                 return 0;
             }
+            if (strlen(tag_name) >= REPL_TAG_NAME_MAX) {
+                examples_set_error(err_buf, err_sz,
+                                   "[%s] tag '%s' too long (max %d chars)",
+                                   section, tag_name, REPL_TAG_NAME_MAX - 1);
+                repl_example_free_item_tags(item_tags);
+                free(scratch);
+                return 0;
+            }
             const ReplTagNode *tag = find_or_register_tag_in_registry(
                 tags_head, tag_registry_count, tag_name);
             if (!tag) {
                 examples_set_error(err_buf, err_sz, "out of memory");
+                repl_example_free_item_tags(item_tags);
+                free(scratch);
+                return 0;
+            }
+            /* repl_example_attach_tag() is idempotent, so a repeated tag
+             * would otherwise be absorbed silently. A catalog listing one
+             * twice is a typo worth reporting, exactly as the retired
+             * bitmask parser did. */
+            if (item_tag_list_contains(item_tags, tag)) {
+                examples_set_error(err_buf, err_sz,
+                                   "[%s] duplicate tag '%s'", section, tag_name);
                 repl_example_free_item_tags(item_tags);
                 free(scratch);
                 return 0;
