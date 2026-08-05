@@ -40,6 +40,7 @@
 #include "repl/state_notify.h"
 #include "repl/command.h"
 #include "repl/eval.h"
+#include "repl/camera_header.h"
 #include "repl/text_helpers.h"
 #include "repl/executor.h"
 #include "repl/parser.h"
@@ -88,9 +89,11 @@ typedef struct {
 #define IMPORT_MAX_PENDING_COMMENTS 16
 
 struct ImportState {
+    ReplCameraHeader camera;          /* the one camera-header reader */
     int in_snippet;
     int past_snippet;
     int func_depth;                   /* depth inside a function definition */
+    int func_block_comment;           /* block-comment state for the brace scan */
     int allow_raw_scene;              /* markerless files are plain REPL source */
     int has_func_body_markers;         /* exported snippets can place staged funcs */
     int active_staged_func_slot;       /* pre-snippet function currently buffered */
@@ -489,30 +492,23 @@ int repl_state_parse_workspace_header_line(const char *line) {
     return import_parse_workspace_header_line(&g_public_workspace_accum, line);
 }
 
-/* The camera-block parser state machine lives in the bridge implementation
- * (glr_camera_export.c). src/repl/import.c delegates import-side line
- * consumption and reset to the bridge. */
-static void import_cam_parser_reset(void) {
-    const ReplExportCameraBridge *bridge = repl_export_camera_bridge();
-    if (bridge && bridge->reset_import)
-        bridge->reset_import();
-}
+/* Route one camera-reader diagnostic to the importer's sink. The reader is
+ * neutral code and knows neither the file name nor the severity policy, so it
+ * hands back a rule and the caller writes the sentence. */
+static void import_camera_diag(void *userdata, const ReplCameraDiag *diag,
+                               const char *rule_text) {
+    char msg[REPL_STATUS_TEXT_MAX];
 
-/* Let the bridge promote a fully-parsed `// camera` block to the scene's
- * camera default. Import writes camera state line by line into live state;
- * without this a loaded file's authored pose would be forgotten the moment
- * the user asked to reset the camera. */
-static void import_cam_adopt_scene_default(void) {
-    const ReplExportCameraBridge *bridge = repl_export_camera_bridge();
-    if (bridge && bridge->adopt_import_scene_default)
-        bridge->adopt_import_scene_default();
-}
-
-static int import_parse_cam_line(const char *text) {
-    const ReplExportCameraBridge *bridge = repl_export_camera_bridge();
-    if (!bridge || !bridge->try_consume_import_line)
-        return 0;
-    return bridge->try_consume_import_line(text);
+    (void)userdata;
+    if (diag->rule == REPL_CAMERA_RULE_MISSING_ROLE)
+        return;   /* a partial header is a note, not a scolding */
+    snprintf(msg, sizeof(msg), "camera header, line %d: %s",
+             diag->line_no, rule_text);
+    if (repl_camera_rule_severity(diag->rule) == REPL_CAMERA_SEVERITY_REJECTION)
+        repl_set_status_error(msg);
+    else
+        repl_set_status(msg);
+    fprintf(stderr, "%s\n", msg);
 }
 
 /* Recognize an exported file-scope global decl
@@ -521,7 +517,8 @@ static int import_parse_cam_line(const char *text) {
  * var of the same name. Declaration/registration itself happens via the
  * `static float` declarations / `@declare` directives - this only restores values. Returns 1
  * when at least one var was updated. */
-static int import_parse_predef_decl_common(const char *line, ImportFloatStash *out_stash, int *out_count, int max_stash) {
+static int import_parse_predef_decl_common(const char *line, ImportFloatStash *out_stash, int *out_count, int max_stash,
+                                           ReplCameraHeader *hdr) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
     /* Optional canonical `static ` prefix (see format_decl_text). */
@@ -564,6 +561,18 @@ static int import_parse_predef_decl_common(const char *line, ImportFloatStash *o
                 /* Register the predefined variable immediately so helper functions
                  * defined before display() can successfully reference it on compile.
                  * Skip system scaffold variables like g_angle. */
+                /* g_angle's initializer is non-semantic and must stay 0.0f:
+                 * the compiled C animates from 0 while the pose rides on the
+                 * `@camera ry` row, so a hand-edited value makes the two views
+                 * disagree. The shared reader cannot catch this - the
+                 * declaration carries no tag, and teaching it to inspect
+                 * untagged lines would resurrect the preamble reader this
+                 * format deleted - so the warning lives here, at the guard
+                 * that already singles the name out. The example, tutorial and
+                 * demo paths never see a g_angle line. */
+                if (hdr && strcmp(name, "g_angle") == 0 && val != 0.0f)
+                    repl_camera_header_record(hdr, REPL_CAMERA_ROLE_SPIN,
+                                              REPL_CAMERA_RULE_G_ANGLE_INIT, 0);
                 if (strcmp(name, "g_angle") != 0) {
                     int was_registered = (repl_eval_find_predef_var_idx(name) >= 0);
                     if (!was_registered) {
@@ -597,11 +606,12 @@ static int import_parse_predef_decl_common(const char *line, ImportFloatStash *o
 }
 
 static int import_parse_predef_decl(const char *line) {
-    return import_parse_predef_decl_common(line, NULL, NULL, 0);
+    return import_parse_predef_decl_common(line, NULL, NULL, 0, NULL);
 }
 
 static int import_try_stash_predef_decl(ImportState *s, const char *line) {
-    return import_parse_predef_decl_common(line, s->float_stash, &s->float_stash_count, MAX_PREDEF_VARS);
+    return import_parse_predef_decl_common(line, s->float_stash, &s->float_stash_count,
+                                           MAX_PREDEF_VARS, &s->camera);
 }
 
 /* 1 if `s` carries the whole-token `tag` (a trailing tag the exporter
@@ -1919,39 +1929,7 @@ static void import_flush_pending_blank_run(ImportState *s) {
     s->pending_blank_run = 0;
 }
 
-/* --- pre-snippet handlers (camera, workspace header, function bodies) ----- */
-
-static int import_try_camera(const char *p) {
-    /* Both the g_angle preamble and the body lines flow
-     * through a single bridge entry point. The bridge's stateful
-     * parser dispatches internally based on which line shape it
-     * sees. */
-    return import_parse_cam_line(p);
-}
-
-/* Net { - } over a line's code portion, ignoring braces inside string
- * and char literals and a // line-comment - a brace in a trailing
- * comment (e.g. `glEnd(); // close the { block`) must not move
- * function-body nesting depth. Mirrors scan_code_line's literal /
- * comment skipping. */
-static int code_brace_delta(const char *p) {
-    int in_str = 0, in_chr = 0, delta = 0;
-    for (int i = 0; p[i]; i++) {
-        char c = p[i];
-        if (in_str || in_chr) {
-            if (c == '\\' && p[i + 1]) { i++; continue; }
-            if (in_str && c == '"')  in_str = 0;
-            if (in_chr && c == '\'') in_chr = 0;
-            continue;
-        }
-        if (c == '/' && p[i + 1] == '/') break; /* line comment */
-        if (c == '"')  { in_str = 1; continue; }
-        if (c == '\'') { in_chr = 1; continue; }
-        if (c == '{') delta++;
-        else if (c == '}') delta--;
-    }
-    return delta;
-}
+/* --- pre-snippet handlers (workspace header, function bodies) ------------ */
 
 static int import_comment_matches_marker(const char *comment,
                                          const char *marker) {
@@ -2020,7 +1998,7 @@ static int import_try_function_body(ImportState *s, const char *p) {
     } else {
         import_feed_one_line(s, p);
     }
-    s->func_depth += code_brace_delta(p);
+    s->func_depth += repl_code_brace_delta(p, &s->func_block_comment);
     if (s->func_depth <= 0)
         s->active_staged_func_slot = -1;
     return 1;
@@ -2127,8 +2105,6 @@ static int import_try_snippet_body_line(ImportState *s, const char *p) {
 /* --- dispatch --------------------------------------------------------------- */
 
 typedef enum {
-    IMPORT_LINE_CAMERA_COMMENT,
-    IMPORT_LINE_CAMERA,
     IMPORT_LINE_WORKSPACE_HEADER,
     IMPORT_LINE_FUNCTION_BODY,
     IMPORT_LINE_FUNCTION_HEADER,
@@ -2149,29 +2125,6 @@ typedef struct {
     ImportLineKind    kind;
     ImportLineHandler handle;
 } ImportLineHandlerSpec;
-
-static int import_handle_camera_comment(ImportState *s, const char *p,
-                                        const char *raw) {
-    const char *marker = p;
-
-    (void)raw;
-    if (s->in_snippet || s->func_depth != 0 ||
-        !repl_comment_alpha_payload_equals(p, "camera"))
-        return 0;
-    while (*marker && isspace((unsigned char)*marker))
-        marker++;
-    snprintf(g_camera_comment_line_writable,
-             REPL_EXPORT_CAMERA_LINE_MAX, "  %s", marker);
-    return 1;
-}
-
-static int import_handle_camera(ImportState *s, const char *p,
-                                const char *raw) {
-    (void)raw;
-    if (s->in_snippet || s->func_depth != 0)
-        return 0;
-    return import_try_camera(p);
-}
 
 static int import_handle_workspace_header(ImportState *s, const char *p,
                                           const char *raw) {
@@ -2260,11 +2213,6 @@ static int import_run_handlers(const ImportLineHandlerSpec *handlers,
 
 #define IMPORT_HANDLER_COUNT(table) ((int)(sizeof(table) / sizeof((table)[0])))
 
-static const ImportLineHandlerSpec IMPORT_EARLY_NON_SNIPPET_HANDLERS[] = {
-    { IMPORT_LINE_CAMERA_COMMENT, import_handle_camera_comment },
-    { IMPORT_LINE_CAMERA, import_handle_camera },
-};
-
 static const ImportLineHandlerSpec IMPORT_PRE_SNIPPET_HANDLERS[] = {
     { IMPORT_LINE_WORKSPACE_HEADER, import_handle_workspace_header },
     { IMPORT_LINE_FUNCTION_BODY,    import_handle_function_body },
@@ -2283,21 +2231,6 @@ static const ImportLineHandlerSpec IMPORT_SNIPPET_HANDLERS[] = {
 };
 
 static void import_process_line(ImportState *s, const char *p, const char *raw) {
-    /* Camera-state lines appear both in the pre-snippet header and inside the
-     * display() body that wraps the snippet, so they are recognised any time
-     * we are not already inside a snippet. They live at top level (the
-     * g_angle preamble) or inside display() - never inside a user funcN body,
-     * which the importer tracks with func_depth > 0. Gate on func_depth == 0
-     * so the greedy camera state machine doesn't consume a user function's
-     * own glTranslatef/glRotatef calls (e.g. a drawWhale() helper exported
-     * before display()), which would corrupt both that function and the
-     * real camera block that follows it. */
-    if (import_run_handlers(IMPORT_EARLY_NON_SNIPPET_HANDLERS,
-                            IMPORT_HANDLER_COUNT(IMPORT_EARLY_NON_SNIPPET_HANDLERS),
-                            s, p, raw)) {
-        return;
-    }
-
     /* Everything after Snippet end is discarded. */
     if (s->past_snippet)
         return;
@@ -2320,7 +2253,6 @@ static void import_process_line(ImportState *s, const char *p, const char *raw) 
 static void import_clear_pending_result_fields(void) {
     g_pending_scene_name_writable[0]    = '\0';
     g_pending_workspace_dir_writable[0] = '\0';
-    g_camera_comment_line_writable[0]   = '\0';
 }
 
 static const char *import_find_block_comment_start(const char *s) {
@@ -2586,7 +2518,8 @@ static void import_begin_load(ImportState *state, ReplImportResult *result) {
     }
     import_clear_pending_result_fields();
     import_state_init(state);
-    import_cam_parser_reset();
+    repl_camera_header_init(&state->camera);
+    repl_camera_header_set_sink(&state->camera, import_camera_diag, NULL);
     repl_func_alias_clear_all();
 }
 
@@ -2657,11 +2590,41 @@ static int import_file_has_func_body_marker(FILE *f) {
     return found;
 }
 
+/* Signal the region a line sits in, then offer it to the shared camera
+ * reader - before block-comment stripping, so the reader sees the file's own
+ * text and its brace counter stays in step, and before the snippet and
+ * function-depth gates, so a tagged line in either position is consumed with
+ * a diagnostic rather than falling through into the document as geometry.
+ *
+ * Returns 1 when the line was consumed (accepted or rejected). */
+static int import_offer_camera_line(ImportState *state, const char *line) {
+    const char *p = line;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (strncmp(p, "// Snippet start", 16) == 0 ||
+        strncmp(p, "/* Snippet start", 16) == 0)
+        repl_camera_header_set_region(&state->camera,
+                                      REPL_CAMERA_REGION_SNIPPET);
+    else if (strncmp(p, "// Snippet end", 14) == 0 ||
+             strncmp(p, "/* Snippet end", 14) == 0)
+        repl_camera_header_set_region(&state->camera,
+                                      REPL_CAMERA_REGION_POST_SNIPPET);
+    else if (strncmp(p, "void display(void)", 18) == 0)
+        repl_camera_header_set_region(&state->camera,
+                                      REPL_CAMERA_REGION_DISPLAY);
+
+    return repl_camera_header_offer(&state->camera, line, state->line_no) !=
+           REPL_CAMERA_LINE_NOT_CAMERA;
+}
+
 static void import_process_physical_line(ImportState *state,
                                          char *line,
                                          ImportAccum *acc) {
     char normalized_line[MAX_LINE_LEN];
     const char *proc_line = line;
+
+    if (import_offer_camera_line(state, line))
+        return;
 
     /* Multi-line comments are dropped before anything else looks at the
      * line, so they can never be mistaken for an in-progress statement. */
@@ -2782,8 +2745,13 @@ static int import_finish_load(ImportState *state,
                  "%s", g_pending_workspace_dir);
     }
 
+    /* Resolve and apply the camera exactly once, after the whole file has
+     * been offered. IMPORT snaps and adopts the pose as the scene default -
+     * what "Reset camera" returns to - which a header-less file must not do,
+     * and finish() handles by making no bridge call at all. */
+    (void)repl_camera_header_finish(&state->camera, REPL_CAMERA_APPLY_IMPORT);
+
     if (state->loaded > 0) {
-        import_cam_adopt_scene_default();
         repl_source_scope_depth_cache_invalidate();
         repl_reformat_program();
         /* Publish the post-import cursor to the host. Without this,

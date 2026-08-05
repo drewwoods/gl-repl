@@ -704,15 +704,6 @@ void emit_export_header_pre(FILE *f, const ExportNeeds *needs) {
      * code reads as a sanitization bug even though it compiles. */
     int needs_stdio = needs && (needs->needs_label || needs->tune_count > 0);
 
-    /* Ask the camera bridge for the g_angle preamble line.
-     * Without a bridge installed (the demo case) we emit the
-     * placeholder unchanged so the file is still valid C. */
-    char angle_line[REPL_EXPORT_CAMERA_PREAMBLE_MAX];
-    const ReplExportCameraBridge *camera_bridge = repl_export_camera_bridge();
-    angle_line[0] = '\0';
-    if (camera_bridge && camera_bridge->fill_save_preamble)
-        camera_bridge->fill_save_preamble(angle_line, (int)sizeof(angle_line));
-
     /* NOTE: resolving a dynamic boilerplate line at the consumer site
      * (as here) is safe ONLY because this one consumer is the file
      * writer - a single pass off the frame loop. Do NOT copy this shape
@@ -724,13 +715,11 @@ void emit_export_header_pre(FILE *f, const ExportNeeds *needs) {
     for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
         if (!repl_export_header_pre_line_visible(line_idx, collision_mask))
             continue;
-        if (strcmp(g_header_pre[line_idx], "static float g_angle = 0.0f;") == 0) {
-            if (angle_line[0])
-                export_write_c89_line(f, angle_line);
-            else
-                export_write_c89_line(f, g_header_pre[line_idx]);
-            continue;
-        }
+        /* `static float g_angle = 0.0f;` is plain boilerplate: the animation
+         * hook is a pure offset accumulated by the timer, and the pose rides
+         * on the `@camera ry` row. A non-zero initializer would make the
+         * compiled C and the imported REPL pose disagree, so nothing here
+         * ever writes one. */
         export_write_c89_line(f, g_header_pre[line_idx]);
         if (needs_stdio &&
             strcmp(g_header_pre[line_idx], "#include <stdlib.h>") == 0) {
@@ -746,11 +735,13 @@ void emit_export_cam_lines(FILE *f) {
      * exported file - that's fine, the demo doesn't export
      * through the controller bridge. */
     const ReplExportCameraBridge *camera_bridge = repl_export_camera_bridge();
-    if (!camera_bridge || !camera_bridge->fill_save_block)
+    if (!camera_bridge || !camera_bridge->fill_block)
         return;
     ReplExportCameraBlock block;
     memset(&block, 0, sizeof(block));
-    camera_bridge->fill_save_block(&block);
+    /* with_anim_hook: exported C is the one projection that carries the
+     * `@camera spin` row. */
+    camera_bridge->fill_block(&block, 1);
     if (!block.present) return;
     for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++) {
         if (block.lines[i][0])
@@ -774,24 +765,22 @@ void repl_refresh_render_state_strings(void) {
              line_smooth_on ? "Enable" : "Disable");
 }
 
-/* The camera-block parser state machine lives in the bridge implementation
- * (glr_camera_export.c). src/repl/import.c delegates import-side line
- * consumption and reset to the bridge. */
-
 void repl_refresh_camera_lines(void) {
-    /* Bridge-driven preview: the bridge formats the 4-line block from
-     * current camera state with numeric ry (no g_angle placeholder).
+    /* Bridge-driven preview: the bridge formats the tagged pose rows from
+     * current camera state, without the exported-C animation hook.
      * Without a bridge installed (the demo case), g_cam_lines stays
      * empty - the demo doesn't render a code panel. */
     const ReplExportCameraBridge *camera_bridge = repl_export_camera_bridge();
-    if (!camera_bridge || !camera_bridge->fill_display_block) {
+    if (!camera_bridge || !camera_bridge->fill_block) {
         for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++)
             g_cam_lines_writable[i][0] = '\0';
         return;
     }
     ReplExportCameraBlock block;
     memset(&block, 0, sizeof(block));
-    camera_bridge->fill_display_block(&block);
+    /* No animation hook: the panel must not show a g_angle the user cannot
+     * type, so the spin slot stays empty and every consumer skips it. */
+    camera_bridge->fill_block(&block, 0);
     for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++) {
         snprintf(g_cam_lines_writable[i], sizeof(g_cam_lines_writable[i]), "%s", block.lines[i]);
     }
@@ -1123,8 +1112,8 @@ static int generated_display_state_writes(
 
     memset(&camera, 0, sizeof(camera));
     camera_bridge = repl_export_camera_bridge();
-    if (camera_bridge && camera_bridge->fill_display_block) {
-        camera_bridge->fill_display_block(&camera);
+    if (camera_bridge && camera_bridge->fill_block) {
+        camera_bridge->fill_block(&camera, 0);
         for (i = 0; i < REPL_EXPORT_CAMERA_LINES; i++) {
             if (generated_parse_command_write(camera.lines[i], &write))
                 out[count++] = write;

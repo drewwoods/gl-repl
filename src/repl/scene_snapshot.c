@@ -108,13 +108,12 @@ void scene_snapshot_capture_live(SceneSnapshot *dst) {
     }
 
     {
-        ReplImportExportView io = repl_state_import_export();
         const ReplExportCameraBridge *cam_bridge = repl_export_camera_bridge();
 
-        snprintf(dst->camera_comment_line, sizeof(dst->camera_comment_line),
-                 "%s", io.camera_comment_line);
-        if (cam_bridge && cam_bridge->fill_display_block)
-            cam_bridge->fill_display_block(&dst->camera_block);
+        if (cam_bridge && cam_bridge->capture_pose) {
+            cam_bridge->capture_pose(&dst->camera_pose);
+            dst->camera_valid = 1;
+        }
     }
 }
 
@@ -133,21 +132,19 @@ static void scene_snapshot_apply_cfg(const ReplConfigBag *cfg) {
         bridge->apply(cfg);
 }
 
-static void scene_snapshot_apply_camera(
-    const ReplExportCameraBlock *camera_block,
-    SceneSnapshotCameraMode camera_mode) {
+/* EASE is an example-shaped transition (and adopts a scene default);
+ * everything else is RESTORE - never IMPORT. A snapshot restore that adopted
+ * a scene default would silently redefine what "Reset camera" returns to. */
+static void scene_snapshot_apply_camera(const SceneSnapshot *src,
+                                        SceneSnapshotCameraMode camera_mode) {
     const ReplExportCameraBridge *cam_bridge = repl_export_camera_bridge();
-    if (!cam_bridge)
-        return;
 
-    if (camera_mode == SCENE_SNAPSHOT_CAMERA_EASE) {
-        if (cam_bridge->apply_example_block)
-            cam_bridge->apply_example_block(camera_block);
+    if (!cam_bridge || !cam_bridge->apply_pose || !src->camera_valid)
         return;
-    }
-
-    if (cam_bridge->apply_capture_block_snap)
-        cam_bridge->apply_capture_block_snap(camera_block);
+    cam_bridge->apply_pose(&src->camera_pose,
+                           camera_mode == SCENE_SNAPSHOT_CAMERA_EASE
+                               ? REPL_CAMERA_APPLY_EXAMPLE
+                               : REPL_CAMERA_APPLY_RESTORE);
 }
 
 int scene_snapshot_apply_live(const SceneSnapshot *src,
@@ -164,8 +161,6 @@ int scene_snapshot_apply_live(const SceneSnapshot *src,
     repl_eval_restore_scratch_arrays(src->scratch_arrays);
     scene_snapshot_apply_aliases(src->func_aliases);
     scene_snapshot_apply_cfg(&src->cfg);
-    snprintf(repl_state_import_export_writable()->camera_comment_line,
-             REPL_EXPORT_CAMERA_LINE_MAX, "%s", src->camera_comment_line);
-    scene_snapshot_apply_camera(&src->camera_block, camera_mode);
+    scene_snapshot_apply_camera(src, camera_mode);
     return 1;
 }

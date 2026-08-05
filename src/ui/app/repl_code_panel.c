@@ -233,14 +233,13 @@ static int repl_code_panel_header_row_count(const UiRenderSnapshot *snap,
     for (int i = 0; i < snap->lights_pre_camera_count; i++)
         rows += repl_code_panel_row_count(
             snap, snap->lights_pre_camera_lines[i], text_x, panel_w);
-    if (import_export.camera_comment_line[0])
-        rows += repl_code_panel_row_count(snap,
-                                          import_export.camera_comment_line,
-                                          text_x, panel_w);
+    /* The spin slot is empty in the panel's hook-less projection; an empty
+     * slot draws no row, so it must not be counted as one either. */
     for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++)
-        rows += repl_code_panel_row_count(snap,
-                                          import_export.cam_lines[i],
-                                          text_x, panel_w);
+        if (import_export.cam_lines[i][0])
+            rows += repl_code_panel_row_count(snap,
+                                              import_export.cam_lines[i],
+                                              text_x, panel_w);
     {
         for (int i = 0; i < snap->lights_display_count; i++) {
             rows += repl_code_panel_row_count(snap, snap->lights_display_lines[i], text_x, panel_w);
@@ -2017,16 +2016,11 @@ static void repl_code_panel_add_header_rows(ReplCodePanelBuilder *builder) {
         snap->lights_pre_camera_count,
         sizeof(snap->lights_pre_camera_lines[0]),
         snap->lights_pre_camera_lines);
-    if (snap->import_export.camera_comment_line[0]) {
-        repl_code_panel_add_static_row(
-            builder,
-            snap->import_export.camera_comment_line);
+    for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++) {
+        if (snap->import_export.cam_lines[i][0])
+            repl_code_panel_add_static_row(builder,
+                                           snap->import_export.cam_lines[i]);
     }
-    repl_code_panel_add_static_buffer_lines(
-        builder,
-        REPL_EXPORT_CAMERA_LINES,
-        sizeof(snap->import_export.cam_lines[0]),
-        snap->import_export.cam_lines);
     repl_code_panel_add_static_buffer_lines(
         builder,
         snap->lights_display_count,

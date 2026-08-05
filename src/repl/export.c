@@ -534,11 +534,11 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
     }
 
     fprintf(dst, "--- camera ---\n");
-    /* Dump the optional authored heading plus camera transformation lines. */
-    if (g_camera_comment_line[0])
-        fprintf(dst, "%s\n", g_camera_comment_line);
+    /* Camera transform rows. The spin slot is empty in this projection, and
+     * an empty slot is skipped rather than dumped as a blank row. */
     for (int cam_line_idx = 0; cam_line_idx < REPL_EXPORT_CAMERA_LINES; cam_line_idx++)
-        fprintf(dst, "%s\n", g_cam_lines[cam_line_idx]);
+        if (g_cam_lines[cam_line_idx][0])
+            fprintf(dst, "%s\n", g_cam_lines[cam_line_idx]);
 
     fprintf(dst, "--- header_post ---\n");
     /* Dump post-header lines (light setup, etc). */

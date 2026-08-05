@@ -35,13 +35,9 @@
 int repl_load_example(int idx);
 int repl_load_example_lines(const char *const *lines);
 
-/* If `lines` starts with a valid 5-line camera preset block (the marker may
- * be compact `// camera` or decorated `// --- Camera ---`), validate it,
- * apply it through the camera bridge, and return the number of lines consumed
- * (5). Returns 0 - applying nothing - when the block is absent or malformed,
- * so a truncated header falls through to ordinary line parsing instead of
- * being silently swallowed. Shared with the tutorial setup-scaffold loader,
- * which honors the same header vocabulary. */
-int repl_example_consume_camera_header(const char *const *lines);
+/* Camera rows are recognised by their `@camera` role tags, wherever they
+ * sit - there is no header region and nothing to "consume N lines of".
+ * Every loader offers each line to one src/repl/camera_header.c reader and
+ * skips the ones it consumes; see repl_camera_header_offer(). */
 
 #endif /* REPL_EXAMPLE_LOADER_H */

@@ -383,8 +383,6 @@ static void emit_export_display_begin(FILE *f) {
             export_write_c89_line(f, line);
         }
     }
-    if (g_camera_comment_line[0])
-        export_write_c89_line(f, g_camera_comment_line);
     emit_export_cam_lines(f);
     /* Light positions are set after the camera transforms so
      * glLightfv(GL_POSITION) snapshots the post-camera modelview and

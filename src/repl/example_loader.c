@@ -18,95 +18,9 @@
 #include "source_document.h"     /* source_document_clear */
 #include "support/cpuprof.h"     /* prof_histogram_reset on example switch */
 #include "config.h"              /* REPL_DIAG_TEXT_MAX */
+#include "repl/camera_header.h"
 
-static const char *example_cam_skip_ws(const char *text) {
-    while (*text && isspace((unsigned char)*text))
-        text++;
-    return text;
-}
-
-static const char *example_cam_skip_sep(const char *text) {
-    while (*text == ' ' || *text == '\t' || *text == ',' ||
-           *text == 'f' || *text == 'F')
-        text++;
-    return text;
-}
-
-static int example_cam_read_floats(const char *text, float *out_vals,
-                                   int out_count, const char **end_out) {
-    for (int i = 0; i < out_count; i++) {
-        char *end = NULL;
-
-        text = example_cam_skip_sep(text);
-        out_vals[i] = strtof(text, &end);
-        if (end == text)
-            return 0;
-        text = end;
-    }
-
-    if (end_out)
-        *end_out = text;
-    return 1;
-}
-
-static int example_cam_finish_call(const char *text) {
-    text = example_cam_skip_sep(text);
-    while (*text == ')' || *text == ';' || isspace((unsigned char)*text))
-        text++;
-    return *text == '\0';
-}
-
-static int example_cam_parse_translate(const char *text,
-                                       float *x, float *y, float *z) {
-    const char *end = NULL;
-    float vals[3];
-
-    text = example_cam_skip_ws(text);
-    if (strncmp(text, "glTranslatef", 12) != 0)
-        return 0;
-
-    text = strchr(text, '(');
-    if (!text)
-        return 0;
-    text++;
-
-    if (!example_cam_read_floats(text, vals, 3, &end) ||
-        !example_cam_finish_call(end))
-        return 0;
-
-    *x = vals[0];
-    *y = vals[1];
-    *z = vals[2];
-    return 1;
-}
-
-static int example_cam_parse_rotate(const char *text,
-                                    float axis_x, float axis_y, float axis_z,
-                                    float *angle_out) {
-    const char *end = NULL;
-    float vals[4];
-
-    text = example_cam_skip_ws(text);
-    if (strncmp(text, "glRotatef", 9) != 0)
-        return 0;
-
-    text = strchr(text, '(');
-    if (!text)
-        return 0;
-    text++;
-
-    if (!example_cam_read_floats(text, vals, 4, &end) ||
-        !example_cam_finish_call(end))
-        return 0;
-
-    if (fabsf(vals[1] - axis_x) > 1e-4f ||
-        fabsf(vals[2] - axis_y) > 1e-4f ||
-        fabsf(vals[3] - axis_z) > 1e-4f)
-        return 0;
-
-    *angle_out = vals[0];
-    return 1;
-}
+static void example_load_error(const char *msg);
 
 static int example_line_is_blank_only(const char *line) {
     if (!line)
@@ -116,87 +30,56 @@ static int example_line_is_blank_only(const char *line) {
     return *line == '\0';
 }
 
-static int example_line_is_camera_marker(const char *line) {
-    /* Treat punctuation as presentation, not syntax, while requiring the
-     * complete alphabetic payload to be exactly "camera". */
-    return repl_comment_alpha_payload_equals(line, "camera");
+/* Route one camera-reader diagnostic to the loader's status sink. The reader
+ * is neutral code and knows neither the file name nor the severity policy, so
+ * it hands back a rule and the caller writes the sentence. */
+static void example_camera_diag(void *userdata, const ReplCameraDiag *diag,
+                                const char *rule_text) {
+    const char *name = (const char *)userdata;
+    char msg[REPL_DIAG_TEXT_MAX];
+
+    if (diag->rule == REPL_CAMERA_RULE_MISSING_ROLE)
+        return;   /* collapsed into one message at finish() */
+    snprintf(msg, sizeof(msg), "%s:%d: %s",
+             name ? name : "example", diag->line_no, rule_text);
+    if (repl_camera_rule_severity(diag->rule) == REPL_CAMERA_SEVERITY_REJECTION)
+        example_load_error(msg);
+    else
+        repl_set_status(msg);
 }
 
-static int try_apply_example_camera_header(const char *const *lines) {
-    /* Validate the example's `// camera` block shape before applying.
-     * Pre-7e the loader called glr_camera_set_* directly, dragging
-     * the controller's camera storage into the demo link set. The
-     * camera bridge is the controller-installed adapter the export
-     * importer already uses for `// camera` blocks; routing example
-     * loading through the same bridge removes the direct
-     * glr_camera_* dependency. */
-    float dist_x, dist_y, dist_z;
-    float rx, ry;
-    float tx, ty, tz;
+/* One message naming every missing pose role together. The accumulator keeps
+ * one diagnostic per role - that is what a test can compare - but three
+ * separate warnings on screen for one deliberate choice would make the common
+ * hand-authored partial header the noisiest case. */
+static void example_camera_report_missing(const ReplCameraHeader *hdr,
+                                          const ReplCameraFinish *fin,
+                                          const char *name) {
+    char roles[64];
+    char msg[REPL_DIAG_TEXT_MAX];
+    size_t used = 0;
+    int i;
 
-    if (!lines || !lines[0] || !example_line_is_camera_marker(lines[0]))
-        return 0;
-    if (!lines[1] || !lines[2] || !lines[3] || !lines[4])
-        return 0;
+    if (fin->seen_mask == 0 ||
+        (fin->seen_mask & REPL_CAMERA_MASK_POSE) == REPL_CAMERA_MASK_POSE)
+        return;
 
-    if (!example_cam_parse_translate(lines[1], &dist_x, &dist_y, &dist_z) ||
-        fabsf(dist_x) > 1e-4f || fabsf(dist_y) > 1e-4f ||
-        !example_cam_parse_rotate(lines[2], 1.0f, 0.0f, 0.0f, &rx) ||
-        !example_cam_parse_rotate(lines[3], 0.0f, 1.0f, 0.0f, &ry) ||
-        !example_cam_parse_translate(lines[4], &tx, &ty, &tz))
-        return 0;
-
-    /* Apply via the camera bridge. The bridge is unset in the
-     * standalone demo (no rendering), where camera state is
-     * irrelevant; the example still loads, the camera block is just
-     * a no-op. App bridges can consume the validated block directly
-     * (used for animated example-camera presets). Older/fallback
-     * bridges can still receive the block through the import parser. */
-    const ReplExportCameraBridge *bridge = repl_export_camera_bridge();
-    if (bridge && bridge->apply_example_block) {
-        ReplExportCameraBlock block;
-
-        for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++)
-            snprintf(block.lines[i], sizeof(block.lines[i]), "%s", lines[i + 1]);
-        block.present = 1;
-        bridge->apply_example_block(&block);
-        return 1;
+    roles[0] = '\0';
+    for (i = 0; i < hdr->diag_count; i++) {
+        const char *role_name;
+        if (hdr->diags[i].rule != REPL_CAMERA_RULE_MISSING_ROLE)
+            continue;
+        role_name = repl_camera_role_name(hdr->diags[i].role);
+        used += (size_t)snprintf(roles + used, sizeof(roles) - used,
+                                 "%s%s", used ? ", " : "", role_name);
+        if (used >= sizeof(roles))
+            break;
     }
-
-    if (!bridge || !bridge->try_consume_import_line)
-        return 1;  /* validated; bridge absent; treat as successfully consumed */
-
-    /* Stream the same four transform lines an import would see. A saved
-     * file's camera block is four lines too - its `glRotatef(g_angle, 0,1,0)`
-     * animation hook *substitutes for* the numeric Y-rotate rather than
-     * adding a line (cam_format_block_impl in src/app/glr_camera_export.c) -
-     * so an example's block needs no padding to match the parser's shape.
-     * Feeding a synthetic hook line here used to desynchronise the parser at
-     * the target translate, which failed the whole header and dropped the
-     * camera transforms into the document as geometry. */
-    if (bridge->reset_import) bridge->reset_import();
-    for (int i = 1; i <= REPL_EXPORT_CAMERA_LINES; i++)
-        if (!bridge->try_consume_import_line(lines[i])) return 0;
-    return 1;
-}
-
-int repl_example_consume_camera_header(const char *const *lines) {
-    if (!lines || !lines[0] || !example_line_is_camera_marker(lines[0]))
-        return 0;
-    if (!try_apply_example_camera_header(lines))
-        return 0;
-
-    /* The camera transforms are metadata, but their authored marker is useful
-     * as a section heading in the expanded (Code Focus off) code panel. Keep
-     * its punctuation/case verbatim and indent it to match display() body
-     * boilerplate. */
-    {
-        const char *marker = example_cam_skip_ws(lines[0]);
-        ReplImportExportState *io = repl_state_import_export_writable();
-        snprintf(io->camera_comment_line, sizeof(io->camera_comment_line),
-                 "  %s", marker);
-    }
-    return 5;
+    if (!roles[0])
+        return;
+    snprintf(msg, sizeof(msg), "%s: camera header: %s not set; keeping current",
+             name ? name : "example", roles);
+    repl_set_status(msg);
 }
 
 static void reset_example_presentation_defaults(int example_idx) {
@@ -255,26 +138,6 @@ static void example_load_error(const char *msg) {
     fprintf(stderr, "%s\n", msg);
 }
 
-static int example_body_count(const char *const *body, int *count_out) {
-    int n = 0;
-
-    if (!count_out)
-        return 0;
-    while (body && body[n]) {
-        if (n >= EXAMPLE_BODY_LINES_MAX) {
-            char msg[REPL_DIAG_TEXT_MAX];
-            snprintf(msg, sizeof(msg),
-                     "Example load failed: body exceeds EXAMPLE_BODY_LINES_MAX=%d",
-                     EXAMPLE_BODY_LINES_MAX);
-            example_load_error(msg);
-            return 0;
-        }
-        n++;
-    }
-    *count_out = n;
-    return 1;
-}
-
 static int apply_example_body_line(const char *line,
                                    int body_line_idx,
                                    int *edit_line_inout) {
@@ -288,41 +151,6 @@ static int apply_example_body_line(const char *line,
         example_load_error(msg);
         return 0;
     }
-    return 1;
-}
-
-/* Emit the body one line at a time, in the order its author wrote it.
- *
- * This used to bucket lines into three passes - declarations, then
- * func_def blocks with their leading comments, then everything else - to
- * reproduce a canonical layout. That layout was the loader's own
- * invention: it reordered the file, so the same scene read one way from
- * `./gl-repl scene.glr` (which goes through src/repl/import.c, line by
- * line) and another way from the Scene menu, F12, or --example. The
- * bucketing also defeated the declaration-prologue rule, because
- * declarations were applied into an empty document where no comment
- * existed to keep them below.
- *
- * repl_load_apply_line places each row itself - a declaration lands at the
- * end of the declaration prologue (compile_decl_prologue_end), a func_def
- * keeps its leading comment run - so source order in, source order out.
- * The one thing the decl-first pass bought was registering top-level
- * predef vars before a func body that reads them compiles; in source order
- * that holds by construction for any scene the editor could have produced,
- * since a declaration always precedes its references. A hand-written
- * example that forward-references a global now fails to load with the same
- * diagnostic the REPL gives for typing that line. */
-static int emit_example_body_in_source_order(const char *const *body,
-                                             int *edit_line_inout) {
-    int n = 0;
-
-    if (!body) return 1;
-    if (!example_body_count(body, &n))
-        return 0;
-
-    for (int i = 0; i < n; i++)
-        if (!apply_example_body_line(body[i], i, edit_line_inout))
-            return 0;
     return 1;
 }
 
@@ -348,68 +176,78 @@ static void reset_example_load_state(int example_idx) {
     /* Examples use bare funcN; clear any user-aliased names from the
      * outgoing scene so funcN free-slot allocation starts fresh. */
     repl_func_alias_clear_all();
-    repl_state_import_export_writable()->camera_comment_line[0] = '\0';
     reset_example_presentation_defaults(example_idx);
 }
 
 static int load_example_lines(const char *const *lines,
                               int example_idx) {
-    const char *const *body = lines;
+    ReplCameraHeader camera;
+    ReplCameraFinish camera_fin;
+    const char *name = repl_example_name(example_idx);
+    int cfg_count = 0;
+    int loader_edit_line = 0;
+    int line_idx;
 
     reset_example_load_state(example_idx);
 
-    int cfg_count = 0;
-    if (body) {
-        cfg_count = consume_example_cfg_header(body);
-        body += cfg_count;
+    if (lines) {
+        cfg_count = consume_example_cfg_header(lines);
     }
     /* Drain the @cfg accumulator: the leading example metadata is
      * parsed into the bag by parse_workspace_header_line; the bridge
      * applies it to live state. */
     repl_export_apply_pending_cfg();
 
-    int metadata_blank_count = 0;
-    if (cfg_count > 0) {
-        while (body && body[metadata_blank_count] &&
-               example_line_is_blank_only(body[metadata_blank_count]))
-            metadata_blank_count++;
-    }
+    /* Offer from index 0 - the @cfg header and the metadata blanks
+     * included. The reader counts braces from what it is offered to know
+     * which region a tag sits in, so a caller that filters first
+     * desynchronizes it. Those lines carry no braces today, which is
+     * exactly the kind of accidental correctness this format removes.
+     *
+     * A .glr catalog entry's array *is* the file's lines, so a 1-based
+     * array index and a file line number are the same number - which is
+     * what lets the differential test compare line numbers across the
+     * catalog and file paths. */
+    repl_camera_header_init(&camera);
+    repl_camera_header_set_sink(&camera, example_camera_diag, (void *)name);
 
-    if (body && body[metadata_blank_count]) {
-        /* Only consume the 5 header lines if the block was actually
-         * validated; otherwise leave them for ordinary parsing so a
-         * malformed camera header doesn't silently swallow real
-         * geometry that happens to follow it (e.g., a truncated 4-line
-         * header where the missing slot is filled by the first real
-         * line of the example body). */
-        int camera_line_count =
-            repl_example_consume_camera_header(body + metadata_blank_count);
-        if (camera_line_count > 0) {
-            body += metadata_blank_count;
-            for (int skip = 0; skip < camera_line_count && body[0]; skip++)
-                body++;
+    for (line_idx = 0; lines && lines[line_idx]; line_idx++) {
+        ReplCameraLineResult result =
+            repl_camera_header_offer(&camera, lines[line_idx], line_idx + 1);
+
+        if (line_idx < cfg_count)
+            continue;                     /* metadata, already consumed */
+        if (result != REPL_CAMERA_LINE_NOT_CAMERA)
+            continue;                     /* camera row: consumed either way */
+        /* Blank metadata rows between the @cfg header and the body are
+         * spacing, not document content. */
+        if (line_idx == cfg_count && example_line_is_blank_only(lines[line_idx]))
+            continue;
+        if (line_idx >= EXAMPLE_BODY_LINES_MAX) {
+            char msg[REPL_DIAG_TEXT_MAX];
+            snprintf(msg, sizeof(msg),
+                     "Example load failed: body exceeds EXAMPLE_BODY_LINES_MAX=%d",
+                     EXAMPLE_BODY_LINES_MAX);
+            example_load_error(msg);
+            reset_example_load_state(example_idx);
+            repl_dispatch_input_reset();
+            repl_mark_source_dirty();
+            return 0;
+        }
+        if (!apply_example_body_line(lines[line_idx], line_idx,
+                                     &loader_edit_line)) {
+            reset_example_load_state(example_idx);
+            repl_dispatch_input_reset();
+            repl_mark_source_dirty();
+            return 0;
         }
     }
 
-    /* Examples are loaded via the lean repl_load_apply_line,
-     * mirroring src/repl/export.c's importer.
-     *
-     * Lines emit in the order the .glr author wrote them, so a scene
-     * loaded from the catalog reads exactly like the same scene opened
-     * as a file (see emit_example_body_in_source_order).
-     *
-     * Caller-owned cursor: the loader threads
-     * the cursor through each per-line apply via a local int
-     * starting at 0 (load policy: cursor begins at the top before
-     * the body emits). The post-load value is returned to the
-     * caller, which applies it to EditorState at the editor boundary. */
-    int loader_edit_line = 0;
-    if (!emit_example_body_in_source_order(body, &loader_edit_line)) {
-        reset_example_load_state(example_idx);
-        repl_dispatch_input_reset();
-        repl_mark_source_dirty();
-        return 0;
-    }
+    /* Nothing was applied while reading: the merged - now complete - pose
+     * reaches the bridge exactly once, so a partial header is
+     * unrepresentable rather than half-applied. */
+    camera_fin = repl_camera_header_finish(&camera, REPL_CAMERA_APPLY_EXAMPLE);
+    example_camera_report_missing(&camera, &camera_fin, name);
 
     /* Post-load editor cleanup mirrors the pre-load sink dispatch so a
      * stale input line or cursor doesn't survive the loaded body. */

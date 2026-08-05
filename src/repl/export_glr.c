@@ -9,17 +9,22 @@
  *
  *     // @cfg <slug> = <value>     (only where the scene differs from
  *     // @cfg <slug> = <value>      the presentation defaults an example
- *     // camera                     load resets to)
- *     glTranslatef(...);           (the 4-line camera block)
- *     glRotatef(...);
- *     glRotatef(...);
- *     glTranslatef(...);
- *     <the document, verbatim>
+ *                                   load resets to)
+ *     float a, b;                  (declarations)
+ *     func0(x) { ... }             (function definitions)
+ *     glTranslatef(...);  // @camera dist
+ *     glRotatef(...);     // @camera rx
+ *     glRotatef(...);     // @camera ry
+ *     glTranslatef(...);  // @camera pan
+ *     <the body>
  *
- * Symmetric with src/repl/example_loader.c, which reads exactly this:
- * consume_example_cfg_header() then repl_example_consume_camera_header()
- * then the body. Round-tripping a scene through save -> catalog entry ->
- * load is the point of the format, so the two files move together.
+ * That order - declarations, then function definitions, then camera and
+ * body - is the exported C's own order and the one shape the loader accepts;
+ * see the phase machine in src/repl/doc_order.c. Symmetric with
+ * src/repl/example_loader.c, which reads exactly this: the @cfg header, then
+ * every line offered to the shared camera reader. Round-tripping a scene
+ * through save -> catalog entry -> load is the point of the format, so the
+ * two files move together.
  *
  * Only the @cfg rows the loader would actually honour are emitted (the
  * bridge's scene subset), and only where they differ from the default -
@@ -73,27 +78,97 @@ static void glr_scene_write_cfg_overrides(FILE *f) {
     }
 }
 
-/* The camera marker plus the 4-line transform block, in the numeric form the
- * loader parses (fill_display_block, not the saved-C variant that substitutes
- * g_angle). No camera bridge installed - the demo, tests - leaves the block
+/* The tagged camera transform rows, in the hook-less projection (no
+ * `@camera spin`: that row is exported C's animation hook and never appears
+ * in a .glr). No camera bridge installed - the demo, tests - leaves the block
  * empty, and the scene simply inherits the live camera on load, which is the
  * documented no-header behaviour.
  *
- * A scene loaded from a .glr keeps whatever heading its author wrote
- * (`// --- Camera --- `, say) in camera_comment_line; the marker matcher
- * only requires the alphabetic payload to be "camera", so round-tripping the
- * original text costs nothing and keeps a hand-edited example's section
- * banners intact. Plain `// camera` for scenes that never had one. */
+ * No heading of its own: `// camera` is an ordinary comment now, so whatever
+ * marker the author wrote is a document row and is re-emitted by the document
+ * loop below. Writing one here too would append a second marker on every
+ * save - three on the next - and filtering the row back out would resurrect
+ * the marker matcher this format deleted. The rows are self-describing,
+ * which is the whole argument for tagging them. */
 static void glr_scene_write_camera(FILE *f) {
     repl_refresh_camera_lines();
     if (!g_cam_lines[0][0])
         return;
-    if (g_camera_comment_line[0])
-        glr_scene_write_line(f, g_camera_comment_line);
-    else
-        fprintf(f, "// camera\n");
     for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++)
-        glr_scene_write_line(f, g_cam_lines[i]);
+        if (g_cam_lines[i][0])
+            glr_scene_write_line(f, g_cam_lines[i]);
+}
+
+/* Which of the canonical document phases a row belongs to. The .glr format
+ * admits exactly one order - declarations, then function definitions, then
+ * camera and body - and it is the exported C's own order, so the two halves
+ * of one format cannot disagree about line placement. The loader rejects a
+ * file that violates it, so the writer must not produce one: the document
+ * emits in three passes rather than verbatim.
+ *
+ * A comment or blank row carries no phase and would be legal anywhere, but a
+ * *writer* has to put it somewhere - it stays with the row it precedes, which
+ * is what keeps a declaration's or a function's explanatory comment attached
+ * to it. */
+typedef enum {
+    GLR_ROW_PHASE_DECLS = 0,
+    GLR_ROW_PHASE_FUNCS,
+    GLR_ROW_PHASE_BODY,
+    GLR_ROW_PHASE_COUNT
+} GlrRowPhase;
+
+static GlrRowPhase glr_row_phase(const GLCmd *cmd, int in_func_body) {
+    if (in_func_body || cmd->type == CMD_FUNC_DEF || cmd->type == CMD_FUNC_END)
+        return GLR_ROW_PHASE_FUNCS;
+    if (cmd->type == CMD_VAR_DECLARE)
+        return GLR_ROW_PHASE_DECLS;
+    return GLR_ROW_PHASE_BODY;
+}
+
+/* Emit every document row whose phase is `want`, carrying each row's leading
+ * run of comments and blank lines with it. */
+static void glr_scene_write_phase(FILE *f, GlrRowPhase want) {
+    const GLCmd *cmds = repl_state_document_cmds();
+    int count = repl_state_document_count();
+    int pending_start = -1;   /* first row of the current comment/blank run */
+    int func_depth = 0;
+
+    for (int cmd_idx = 0; cmd_idx < count; cmd_idx++) {
+        GlrRowPhase phase;
+        int was_in_func;
+
+        if (!cmds[cmd_idx].valid)
+            continue;
+        if (cmds[cmd_idx].type == CMD_COMMENT ||
+            cmds[cmd_idx].type == CMD_EMPTY) {
+            if (pending_start < 0)
+                pending_start = cmd_idx;
+            continue;
+        }
+
+        was_in_func = func_depth > 0;
+        if (cmds[cmd_idx].type == CMD_FUNC_DEF)
+            func_depth++;
+        else if (cmds[cmd_idx].type == CMD_FUNC_END && func_depth > 0)
+            func_depth--;
+
+        phase = glr_row_phase(&cmds[cmd_idx], was_in_func);
+        if (phase == want) {
+            for (int run = pending_start; run >= 0 && run < cmd_idx; run++)
+                if (cmds[run].valid)
+                    glr_scene_write_line(f, export_document_text(run));
+            glr_scene_write_line(f, export_document_text(cmd_idx));
+        }
+        pending_start = -1;
+    }
+
+    /* A trailing comment/blank run belongs to no row, so it lands at the end
+     * of the body - the only phase a reader will accept it after. */
+    if (want == GLR_ROW_PHASE_BODY && pending_start >= 0) {
+        for (int run = pending_start; run < count; run++)
+            if (cmds[run].valid)
+                glr_scene_write_line(f, export_document_text(run));
+    }
 }
 
 int repl_export_save_glr(const char *filename, SourceTextView text) {
@@ -117,12 +192,10 @@ int repl_export_save_glr(const char *filename, SourceTextView text) {
     export_set_source_text_view(text);
 
     glr_scene_write_cfg_overrides(f);
+    glr_scene_write_phase(f, GLR_ROW_PHASE_DECLS);
+    glr_scene_write_phase(f, GLR_ROW_PHASE_FUNCS);
     glr_scene_write_camera(f);
-    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-        if (!repl_state_document_cmds()[cmd_idx].valid)
-            continue;
-        glr_scene_write_line(f, export_document_text(cmd_idx));
-    }
+    glr_scene_write_phase(f, GLR_ROW_PHASE_BODY);
 
     had_error = ferror(f);
     close_failed = fclose(f) != 0;

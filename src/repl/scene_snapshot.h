@@ -28,8 +28,12 @@ typedef struct SceneSnapshot {
     char func_aliases[REPL_FUNC_SLOT_COUNT][REPL_FUNC_NAME_MAX];
 
     ReplConfigBag cfg;
-    char camera_comment_line[REPL_EXPORT_CAMERA_LINE_MAX];
-    ReplExportCameraBlock camera_block;
+    /* A resolved pose, not formatted text: an in-memory scene switch has
+     * no business paying for the file format or inheriting its failure
+     * modes. `camera_valid` is 0 for a snapshot taken with no camera
+     * bridge installed, where there is no pose to restore. */
+    ReplCameraPose camera_pose;
+    int            camera_valid;
 } SceneSnapshot;
 
 typedef enum {

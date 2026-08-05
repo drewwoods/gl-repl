@@ -9,7 +9,7 @@
 #include "repl/host_effects.h"
 #include "repl/cfg_baseline.h" /* For repl_cfg_get_int, repl_cfg_set_int, and repl_cfg_known */
 #include "repl/eval.h"          /* repl_eval_find_predef_var_idx + predef-vars view */
-#include "repl/example_loader.h" /* repl_example_consume_camera_header (setup scaffold) */
+#include "repl/camera_header.h"  /* shared @camera reader (setup scaffold) */
 #include "repl/load.h"
 #include "repl/scenes.h"
 #include "repl/state_owners.h"  /* repl_state_scenes_set_tutorial_origin_idx */
@@ -687,8 +687,9 @@ STATIC_ASSERT((int)(sizeof(g_tutorial_scene_prelude) /
  * every tutorial), then the optional setup scaffold (TutorialEntry.setup).
  * The scaffold honors the example header vocabulary: a leading contiguous
  * `// @cfg` run (parsed into the pending bag, applied through the bridge),
- * optional blank spacing, an optional 5-line `// camera` block, then body
- * lines fed through the non-editor loader. Every loaded row is locked.
+ * optional blank spacing, any `@camera`-tagged transform rows (recognised by
+ * their tags, in place, by the shared reader), then body lines fed through
+ * the non-editor loader. Every loaded row is locked.
  * Returns 1 on success; 0 (with a status message set) on any load failure
  * - tutorial_start unwinds via the baseline restore. Runs BEFORE
  * `state->active` is set so the cfg writes cannot trigger step
@@ -717,20 +718,28 @@ static int tutorial_load_scene_prelude(int idx) {
     }
 
     if (lines) {
+        ReplCameraHeader camera;
+        int cfg_count;
+
         while (lines[pos] &&
                repl_config_extract_slug(lines[pos], slug, sizeof slug, NULL)) {
             repl_state_parse_workspace_header_line(lines[pos]);
             pos++;
         }
         repl_export_apply_pending_cfg();
+        cfg_count = pos;
 
-        while (lines[pos] && setup_line_is_blank(lines[pos]))
-            pos++;
-        if (lines[pos])
-            pos += repl_example_consume_camera_header(lines + pos);
-
-        for (; lines[pos]; pos++) {
-            if (setup_line_is_blank(lines[pos]))
+        /* Offer from the top of the array, @cfg header included: the reader
+         * counts braces from what it is offered, so a caller that filters
+         * first mis-scopes its own tags. Camera rows are recognised by their
+         * role tags wherever they sit - there is no header region and no
+         * `pos += n` contract any more. */
+        repl_camera_header_init(&camera);
+        for (pos = 0; lines[pos]; pos++) {
+            if (repl_camera_header_offer(&camera, lines[pos], pos + 1) !=
+                REPL_CAMERA_LINE_NOT_CAMERA)
+                continue;
+            if (pos < cfg_count || setup_line_is_blank(lines[pos]))
                 continue;
             if (!repl_load_apply_line(lines[pos], err, (int)sizeof(err),
                                       &loader_edit_line)) {
@@ -741,6 +750,7 @@ static int tutorial_load_scene_prelude(int idx) {
                 return 0;
             }
         }
+        (void)repl_camera_header_finish(&camera, REPL_CAMERA_APPLY_EXAMPLE);
     }
 
     /* Lock the whole prelude - the glClear plus the scaffold - read-only

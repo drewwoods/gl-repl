@@ -138,131 +138,62 @@ static const ReplHostEffects g_host_effects = {
 
 /* --- Demo-local camera bridge ------------------------------------------- *
  *
- * Mirrors the import-side parser in src/app/glr_camera_export.c (which the demo
- * cannot link -- it is app-layer), writing the saved `// camera` block's
- * glTranslatef/glRotatef sequence into the demo's orbit-camera variables. Only
- * the two import callbacks are needed: repl_export_load_from_file() calls
- * reset_import() once then try_consume_import_line() per line, and a `.glr`'s
- * `// camera` header streams through the same pair (the example loader's
- * fallback for a bridge with no apply_example_block, which is the app's
- * shortcut, not a requirement). The save/example callbacks are unused
- * (left NULL).
- *
- *   state 0  glTranslatef -> camera distance (-z)
- *   state 1  glRotatef axis (1,0,0) -> rx
- *   state 2  glRotatef axis (0,1,0) or g_angle placeholder -> ry
- *   state 3  glTranslatef -> pan target (negated)
- * Plus the `static float g_angle = N;` preamble, treated as a free ry input.
+ * A pose adapter and nothing else. The demo used to carry a hand-copied clone
+ * of the app's import parser - a copy that drifted by construction - and that
+ * is gone: parsing a camera out of a file is src/repl/camera_header.c's job on
+ * every path, including this one. What is left writes a resolved pose into the
+ * demo's orbit variables and formats them back out for the 'e' round-trip
+ * export.
  */
-static int g_cam_parse_state = 0;
-
-static const char *cam_skip_sep(const char *p) {
-    while (*p == 'f' || *p == 'F' || *p == ',' || *p == ' ' || *p == '\t') p++;
-    return p;
+static void demo_cam_capture_pose(ReplCameraPose *out) {
+    out->dist = g_cam_dist;
+    out->rx   = g_cam_rx;
+    out->ry   = g_cam_ry;
+    out->tx   = g_cam_tx;
+    out->ty   = g_cam_ty;
+    out->tz   = g_cam_tz;
 }
 
-static int cam_read_floats(const char *p, float *out, int n) {
-    int i;
-    for (i = 0; i < n; i++) {
-        char *end = NULL;
-        p = cam_skip_sep(p);
-        out[i] = strtof(p, &end);
-        if (end == p) return 0;
-        p = end;
-    }
-    return 1;
+/* No easing and no scene default in the demo, so every mode lands the same
+ * way; the parameter stays for interface parity with the app bridge. */
+static void demo_cam_apply_pose(const ReplCameraPose *pose,
+                                ReplCameraApplyMode mode) {
+    (void)mode;
+    g_cam_dist = pose->dist;
+    g_cam_rx   = pose->rx;
+    g_cam_ry   = pose->ry;
+    g_cam_tx   = pose->tx;
+    g_cam_ty   = pose->ty;
+    g_cam_tz   = pose->tz;
 }
 
-static int cam_try_parse_angle_preamble(const char *text) {
-    const char *p = text;
-    const char *eq;
-    char *end = NULL;
-    float v;
-    while (*p == ' ' || *p == '\t') p++;
-    if (strncmp(p, "static float g_angle", 20) != 0) return 0;
-    eq = strchr(p, '=');
-    if (!eq) return 0;
-    eq++;
-    v = strtof(eq, &end);
-    if (end == eq) return 0;
-    g_cam_ry = v;
-    return 1;
-}
-
-static int cam_try_consume_block_line(const char *text) {
-    const char *p = text;
-    if (g_cam_parse_state >= 4) return 0;
-    while (*p == ' ' || *p == '\t') p++;
-
-    if (g_cam_parse_state == 0 && strncmp(p, "glTranslatef", 12) == 0) {
-        float v[3];
-        p = strchr(p, '('); if (!p) return 0; p++;
-        if (!cam_read_floats(p, v, 3)) return 0;
-        g_cam_dist = -v[2];
-        g_cam_parse_state = 1;
-        return 1;
-    }
-    if (g_cam_parse_state == 1 && strncmp(p, "glRotatef", 9) == 0) {
-        float v[4];
-        p = strchr(p, '('); if (!p) return 0; p++;
-        if (!cam_read_floats(p, v, 4)) return 0;
-        if (v[1] != 1.0f || v[2] != 0.0f || v[3] != 0.0f) return 0;
-        g_cam_rx = v[0];
-        g_cam_parse_state = 2;
-        return 1;
-    }
-    if (g_cam_parse_state == 2 && strncmp(p, "glRotatef", 9) == 0) {
-        const char *q = strchr(p, '(');
-        float v[4];
-        if (q && strstr(q, "g_angle")) { g_cam_parse_state = 3; return 1; }
-        p = strchr(p, '('); if (!p) return 0; p++;
-        if (!cam_read_floats(p, v, 4)) return 0;
-        if (v[1] != 0.0f || v[2] != 1.0f || v[3] != 0.0f) return 0;
-        g_cam_ry = v[0];
-        g_cam_parse_state = 3;
-        return 1;
-    }
-    if (g_cam_parse_state == 3 && strncmp(p, "glTranslatef", 12) == 0) {
-        float v[3];
-        p = strchr(p, '('); if (!p) return 0; p++;
-        if (!cam_read_floats(p, v, 3)) return 0;
-        g_cam_tx = -v[0]; g_cam_ty = -v[1]; g_cam_tz = -v[2];
-        g_cam_parse_state = 4;
-        return 1;
-    }
-    return 0;
-}
-
-static int demo_cam_try_consume_import_line(const char *text) {
-    if (cam_try_parse_angle_preamble(text)) return 1;
-    return cam_try_consume_block_line(text);
-}
-
-static void demo_cam_reset_import(void) {
-    g_cam_parse_state = 0;
-}
-
-/* Write side (used by the 'e' round-trip export): emit the 4-line camera block
- * from the demo's live orbit camera, so a re-exported file carries the view the
- * user is looking at. Mirrors the format the import parser above reads back. */
-static void demo_cam_fill_block(ReplExportCameraBlock *block) {
+/* Write side (used by the 'e' round-trip export): emit the tagged camera rows
+ * from the demo's live orbit camera, so a re-exported file carries the view
+ * the user is looking at. `with_anim_hook` adds the exported-C `@camera spin`
+ * row; the demo's own .glr writes never want it. */
+static void demo_cam_fill_block(ReplExportCameraBlock *block,
+                                int with_anim_hook) {
+    memset(block, 0, sizeof(*block));
     snprintf(block->lines[0], REPL_EXPORT_CAMERA_LINE_MAX,
-             "  glTranslatef(0.0000f, 0.0000f, %.4ff);", -g_cam_dist);
+             "  glTranslatef(0.0000f, 0.0000f, %.4ff);   // @camera dist",
+             -g_cam_dist);
     snprintf(block->lines[1], REPL_EXPORT_CAMERA_LINE_MAX,
-             "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);", g_cam_rx);
+             "  glRotatef(%.4ff, 1.0f, 0.0f, 0.0f);   // @camera rx", g_cam_rx);
     snprintf(block->lines[2], REPL_EXPORT_CAMERA_LINE_MAX,
-             "  glRotatef(%.4ff, 0.0f, 1.0f, 0.0f);", g_cam_ry);
-    snprintf(block->lines[3], REPL_EXPORT_CAMERA_LINE_MAX,
-             "  glTranslatef(%.4ff, %.4ff, %.4ff);",
+             "  glRotatef(%.4ff, 0.0f, 1.0f, 0.0f);   // @camera ry", g_cam_ry);
+    if (with_anim_hook)
+        snprintf(block->lines[3], REPL_EXPORT_CAMERA_LINE_MAX,
+                 "  glRotatef(g_angle, 0.0f, 1.0f, 0.0f);   // @camera spin");
+    snprintf(block->lines[4], REPL_EXPORT_CAMERA_LINE_MAX,
+             "  glTranslatef(%.4ff, %.4ff, %.4ff);   // @camera pan",
              -g_cam_tx, -g_cam_ty, -g_cam_tz);
     block->present = 1;
 }
 
 static const ReplExportCameraBridge g_cam_bridge = {
-    .fill_save_block         = demo_cam_fill_block,
-    .fill_display_block      = demo_cam_fill_block,
-    .reset_import            = demo_cam_reset_import,
-    .try_consume_import_line = demo_cam_try_consume_import_line,
+    .fill_block   = demo_cam_fill_block,
+    .capture_pose = demo_cam_capture_pose,
+    .apply_pose   = demo_cam_apply_pose,
 };
 
 /* --- Variable panel wiring ---------------------------------------------- */
