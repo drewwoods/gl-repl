@@ -5649,6 +5649,47 @@ static void test_scene_cycle_skips_failed_examples(void) {
                    ui_state_status().kind, UI_STATUS_ERROR);
         ASSERT_TRUE("all-fail cycle explains the failure",
                     strstr(ui_state_status().text, "F12 cycle failed") != NULL);
+
+        ASSERT_TRUE("user-origin broken example rewrite succeeds",
+                    write_cycle_fixture(good0_path,
+                                        "glBegin(GL_POINTS);\n"
+                                        "notACommand(1, 2, 3);\n"
+                                        "glEnd();\n"));
+        error[0] = '\0';
+        ASSERT_TRUE("user-origin all-fail catalog reloads",
+                    repl_examples_load_dir(root, error, sizeof(error)));
+        glr_ctrl_reset_all();
+        int user_slot = repl_scenes_create_empty_user_scene();
+        ASSERT_TRUE("user-origin scene created", user_slot >= 0);
+        int expected_user_rows = repl_state_document_count() + 4;
+        editor_feed_line("glVertex3f(0, 0, 0);");
+        editor_feed_line("glVertex3f(1, 0, 0);");
+        editor_feed_line("glVertex3f(0, 1, 0);");
+        editor_feed_line("glVertex3f(1, 1, 0);");
+        ASSERT_INT("user-origin scene has expected rows",
+                   repl_state_document_count(), expected_user_rows);
+
+        glr_ctrl_scene_cycle_prev();
+        ASSERT_INT("all-fail user-origin cycle restores active slot",
+                   repl_active_user_scene(), user_slot);
+        ASSERT_INT("all-fail user-origin cycle preserves rows",
+                   repl_state_document_count(), expected_user_rows);
+        ASSERT_INT("all-fail user-origin cycle remains an error",
+                   ui_state_status().kind, UI_STATUS_ERROR);
+        repl_scenes_mark_example_active();
+        ASSERT_TRUE("preserved user slot reloads after detaching",
+                    repl_load_user_scene_idx(user_slot));
+        ASSERT_INT("reloaded user slot still has expected rows",
+                   repl_state_document_count(), expected_user_rows);
+
+        glr_ctrl_reset_all();
+        glr_ctrl_scene_cycle_next();
+        ASSERT_TRUE("transient all-fail cycle scans each entry once",
+                    strstr(ui_state_status().text,
+                           "skipped 2 unavailable examples") != NULL);
+        ASSERT_TRUE("transient all-fail cycle does not double-scan",
+                    strstr(ui_state_status().text,
+                           "skipped 4 unavailable examples") == NULL);
     }
 
     repl_examples_clear_runtime_catalog();

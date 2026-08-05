@@ -106,53 +106,51 @@ Which is exactly the reported symptom. The empty document also means no
 `glClear`, so the previous frame smears - a cosmetic consequence of the same
 disagreement, and acceptable as-is.
 
-**Fix: stamp the index on failure too.** `active_example_idx` should mean "where
-you are in the catalog", not "the last thing that loaded successfully". Then
-F12 advances to N+2 and Shift+F12 returns to N, both one step from the errored
-scene, and a broken scene is a scene you can page over instead of a wall.
+The standalone F12 fix deliberately uses **skip-on-failure**, not index
+stamping. Each candidate load still emits its detailed loader diagnostic, but
+the cycler continues through the remaining candidates in the same direction
+and wraps without retrying entries it already examined. A failed load detaches
+the active user-scene identity after the pre-load save, so a later candidate
+cannot save the wiped document back over that slot. If every candidate fails,
+the cycler restores the captured origin when possible and leaves an error
+status; the last successful example index remains the scene identity.
 
-Two things move with it:
-
-- `repl_scenes_mark_example_active()` must also run on the failure path. It
-  clears `g_active_user_scene`, and without it a failed load *entered from a
-  user scene* leaves that scene marked active over an empty document, so the
-  cycler takes its user-scene branch (`glr_ctrl_router.c:545`) instead of the
-  example branch. Different symptom, same root cause.
-- **Promotion needs a decision.** `repl_promote_transient_if_needed()`
-  (`scenes.c:1141`) names the new slot from `repl_example_name(g_example_idx)`,
-  so the first keystroke into the wiped document promotes it. Today that
-  produces an empty slot named after scene **N** - the innocent one; after the
-  fix it would be named after the scene that failed. Neither is right. Either
-  suppress promotion when the document is empty, or let the failed scene's name
-  through on the grounds that it is where the user actually is. I lean toward
-  suppressing, but it is a judgment call, not a derivation.
+This means a broken catalog entry is not a current F12 destination while it is
+broken: from good scene N, F12 skips a bad N+1 and lands on the next loadable
+scene; Shift+F12 applies the same rule in reverse. Direct Scene-menu selection
+of the broken entry reports the loader error without selecting it. This is a
+deliberate authoring/runtime trade-off for the standalone fix; a future
+cycle-cursor design could instead make the errored entry current while keeping
+`active_example_idx` reserved for successfully loaded scenes.
 
 **The coverage gap is failure, not cycling.** Cycling itself is tested -
 `tests/test_repl_editor.c:895` asserts F12 advances `active_example_idx` 0 → 1,
 and `:3847` covers the example ↔ user-scene transitions in both directions.
 (`test_glr_actions.c`'s `GLR_NEXT_EXAMPLE` hits are keymap string formatting,
-not cycling.) What no test does is cycle **into a catalog entry that fails to
-load**, so nothing observes that `active_example_idx` and the live document
-disagree afterwards. Every existing assertion is on the success path, where the
-stamp always happens.
+not cycling.) What no test did was cycle across a catalog entry that fails to
+load, especially from a user-scene origin. Every existing assertion was on the
+success path.
 
-That shape is why this survived: the tests confirm the index advances when a
-load works, and the bug is entirely in what the index does when one doesn't.
+That shape is why this survived: the tests confirmed the index advances when a
+load works, but did not exercise the loader's document wipe or the active-slot
+save that precedes a subsequent attempt.
 
 So the test to write first is a cycle across a deliberately-broken entry,
-asserting three things the current suite cannot see:
+asserting the behavior the standalone fix promises:
 
-- `active_example_idx` equals the failed scene's index, not the previous one;
-- a second F12 reaches index+1 rather than retrying the same entry;
-- Shift+F12 from there returns to the failed scene, not two back.
+- a failed entry is skipped within the same F12/Shift+F12 action;
+- the reverse direction skips the same entry without landing two scenes back;
+- an all-fail cycle from a user scene preserves that scene's slot;
+- transient all-fail scans do not retry the catalog and inflate the skip count.
 
 It needs a catalog with a known-bad entry. `--examples-dir` + a fixture
 directory under `tests/scenes/` is the cheapest route, and it doubles as
 coverage for the runtime catalog path.
 
 This is independent of the loader merge and can land first. It interacts with
-one step: §2's `REPL_SCENE_LOAD_ATOMIC` is exactly this wipe-on-failure
-behavior, so whichever lands second must keep the index stamp.
+one step: §2's `REPL_SCENE_LOAD_ATOMIC` must preserve the same failure-safe
+scene identity and slot-save boundary, even though the standalone cycler does
+not stamp failed entries.
 
 ## Design
 
@@ -298,12 +296,10 @@ run. So:
 Both are gaps in **failure** behavior. The suite tests these paths thoroughly
 when the load succeeds, which is why neither bug was caught.
 
-1. **No test cycles into a failed catalog entry.** F12 cycling is covered
-   (`test_repl_editor.c:895`, `:3847`) but only over scenes that load. Nothing
-   observes the index/document disagreement a failed load leaves behind. See
-   §"The second bug" for the three assertions needed and the fixture-catalog
-   approach; this is step 0's test and it must be written before the fix, not
-   with it.
+1. **No test cycles across a failed catalog entry.** F12 cycling is covered
+   (`test_repl_editor.c:895`, `:3847`) but only over scenes that load. The
+   fixture-catalog coverage in §"The second bug" now checks skip-on-failure,
+   user-scene slot preservation, all-fail diagnostics, and no duplicate scan.
 2. **No test compares the two loaders' error policies.** `test_camera_header_parity.c`
    compares the loaders only on scenes that load cleanly - `parity_capture()`
    records a successful document. The whole tolerant-vs-atomic divergence sits
@@ -324,9 +320,11 @@ Also affected:
 
 Each step is independently landable and leaves the parity test green.
 
-0. **Index stamp on failed load** (§"The second bug"), preceded by the first
-   scene-cycle test. Independent of everything below; land it first because it
-   is the user-visible one.
+0. **Failure-safe scene-cycle policy** (§"The second bug"), preceded by the
+   fixture-catalog test. Keep the last successful scene identity, skip failed
+   entries once per keypress, preserve user-scene slots, and keep all-fail
+   diagnostics visible. Independent of everything below; land it first because
+   it is the user-visible one.
 1. **Explicit format.** Add `ReplExampleSourceFormat` to `import_set_source()`;
    the file entry points derive it from the path at the call site. No behavior
    change for files; fixes the silent `check_order` dropout for non-path

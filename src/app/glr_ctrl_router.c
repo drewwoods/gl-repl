@@ -660,9 +660,11 @@ static void cycle_example_or_user_scene_dir(int direction) {
         return;
     }
 
+    int attempted_examples = 0;
     if (count > 0) {
         int next = active_example + direction;
         if (next >= 0 && next < count) {
+            attempted_examples = 1;
             if (cycle_try_examples(next, direction, count, -1, &skipped)) {
                 cycle_report_skipped_examples(skipped, 0, 0);
                 return;
@@ -681,7 +683,11 @@ static void cycle_example_or_user_scene_dir(int direction) {
             return;
         }
     }
-    if (count > 0) {
+    /* With no active example, the first leg can already cover the entire
+     * catalog (notably from transient state with F12). Do not run that same
+     * catalog a second time as a wrap leg. An active example still needs a
+     * wrap leg because it must scan the entries before the origin. */
+    if (count > 0 && (!attempted_examples || active_example >= 0)) {
         int wrap_skipped = 0;
         int stop_before = active_example >= 0 ? active_example : -1;
         if (cycle_try_examples((direction > 0) ? 0 : count - 1,

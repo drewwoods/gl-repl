@@ -308,8 +308,15 @@ static int load_example(int idx) {
         new_edit_line = load_example_c_source(lines, idx, name);
     else
         new_edit_line = load_example_lines(lines, idx);
-    if (new_edit_line <= 0)
+    if (new_edit_line <= 0) {
+        /* The loader has already cleared the live document. Do not leave the
+         * old user-scene slot marked active: a cycle may try another example,
+         * whose pre-load save would otherwise overwrite that slot with the
+         * failed, empty document. The original slot remains intact because
+         * the save at the top of this function ran before the wipe. */
+        repl_scenes_mark_example_active();
         return 0;
+    }
     repl_state_scenes_set_active_example_idx(idx);
     repl_scenes_mark_example_active();
     char msg[REPL_DIAG_TEXT_MAX];
