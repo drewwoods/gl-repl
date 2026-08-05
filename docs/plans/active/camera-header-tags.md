@@ -161,8 +161,17 @@ That deletes, rather than relocates, a surprising amount:
   `//`, so an exported `.c` loses its `/* camera */` marker on re-import today).
   That bug does not need fixing; a block comment is just a comment now.
 
-The writer still emits a plain `// camera` for readability - optional to *read* is
-no argument for dropping it from what we *write*.
+**The writer therefore stops generating one.** It has to: with the marker demoted
+to a document row, `glr_scene_write_camera` (`export_glr.c:87`) emitting its own
+`// camera` *before* the transforms, while the document loop (`:121`) re-emits the
+author's marker row after them, appends a second marker on every save - three on
+the next, and so on. Filtering the row back out would resurrect the matcher this
+change deletes.
+
+So the `.glr` writer emits the tagged transforms with no heading of its own, and
+whatever marker the author wrote survives as the ordinary document row it now is.
+The tags are self-describing (`// @camera dist`), which is the entire argument for
+having them; a heading above four self-labelled lines was never load-bearing.
 
 **One cosmetic consequence, stated so it is not a surprise.** The marker is a
 document row while the camera transforms are consumed metadata, so a marker
@@ -390,18 +399,23 @@ the questions the phase table answers:
   since the exported C executes them in place and a different order composes a
   different modelview.
 
-**The exported `.c` wrapper is exempt.** `void display(void) {` and its closing
-brace are generated scaffolding, not user code: the machine skips them and keeps
-enforcing the same phase order on the user code inside. Without that exemption
-every exported file fails at its own boilerplate. This is the ordering twin of
-the reader's baseline-depth rule, and the two share the notion of "generated
-wrapper".
+**The phase machine runs on `.glr` only.** An exported `.c` is generated output
+whose layout the exporter fixes, and that layout does not satisfy these phases:
+`void reshape(int, int)` and `int main(int, char **)` are emitted *after*
+`display()` (`export_setup.c:384`, `:446`), so a machine that classified every
+line would reject "function definition after body code" on every file this
+project writes. Generated math helpers and the `draw_scene` snippet sit ahead of
+the camera for the same structural reason.
 
-**Rejection, not a warning.** The whole point of a canonical form is that
-non-canonical files do not accumulate; a warning is a rule nobody enforces after
-the first week. The cost is real and is paid once: **43 of the 46 corpus files
-violate this order today** and every one must be migrated before the reader
-lands. See the corpus section.
+Exempting `display()` alone does not rescue that - the violations are outside it.
+So the ordering contract is a property of the **authored** format: `.glr` files
+are checked, exported `.c` is re-imported without an ordering pass. This costs
+nothing, because a `.c` the project generated is canonical by construction and a
+hand-edited one is already outside the format's guarantees.
+
+The camera *reader* is unaffected and still works on both - only the ordering
+checker is `.glr`-scoped, which is why it lives in the loader rather than in
+`camera_header.c`.
 
 **Rejection, not a warning.** The whole point of a canonical form is that
 non-canonical files do not accumulate; a warning is a rule nobody enforces after
@@ -607,13 +621,14 @@ Rules the shared reader owns, so they cannot diverge again:
 | `spin` argument must be the bare `g_angle` token | new |
 | Duplicate role in one file | undefined |
 | Tagged line below baseline depth | falls through as geometry |
-| Roles out of canonical order, or split by an executable line | undefined |
+| Roles out of canonical order, or split by an executable line | undefined - now **rejected** by the phase machine |
 | Missing role | importer half-applies; example loader rejects the block |
 | `/* camera */` marker (C89 form) | unreadable - `text_helpers.c:18` requires `//` |
 
 Decisions: duplicate role is an error (first wins, second diagnosed); tagged
 line in a function body is an error; missing pose roles warn at finish (`spin`
-is exempt - it is write-only); out-of-order or interleaved tagged lines warn;
+is exempt - it is write-only); out-of-order or interleaved tagged lines are
+rejected, not warned, per the phase machine;
 every rejection names file, line, and rule.
 
 Atomicity stops being a policy question. The example loader's all-or-nothing
@@ -663,10 +678,11 @@ capped at `REPL_CAMERA_MAX_DIAGS` = 8 with an overflow counter, so a pathologica
 file cannot allocate.
 
 **Severity is derived from the rule, not stored.** The reader emits three
-strengths - a rejection (the line is malformed and discarded), a warning (the
-pose is unambiguous but the file is not one the exporter would write: order,
-interleaving, a non-zero hook initializer), and a note (a missing pose role,
-which merges cleanly from the baseline). Rather than add a fourth field that
+strengths - a rejection (the line is malformed, out of phase, or otherwise
+outside the canonical form, and is discarded), a warning (the file loads as
+written but says something the exporter never would: a non-zero `g_angle`
+initializer), and a note (a missing pose role, which merges cleanly from the
+baseline). Ordering is *not* in the warning tier: the phase machine rejects. Rather than add a fourth field that
 callers could set inconsistently, `ReplCameraRule` **fully determines** severity
 through one table:
 
@@ -1059,7 +1075,7 @@ does not parse, so it is not a fifth reader, but it must grow the tags in phase
    The recording stub therefore lands in `tests/support/` in this phase, shared
    with `test_camera_apply_modes` rather than private to it.
 2. **`src/repl/camera_header.{c,h}`** - tag recognition, brace-depth tracking,
-   per-role parse, validation, accumulation, diagnostics, marker stash, `finish`
+   per-role parse, validation, accumulation, diagnostics, `finish`
    merge. `code_brace_delta` hoists out of `import.c` to a shared TU **and gains
    `/* … */` handling, including the open-across-lines case**. Unit-tested
    against line fixtures with no loader involvement. Add both sources to
@@ -1168,9 +1184,10 @@ churning at 4 and again at 7.
     must be rejected rather than accepted against a stale baseline.
   - **A tagged line inside a `funcN` body**, which the parity test covers only
     indirectly.
-  - **Order warnings**: roles out of canonical order, and a tagged line split
-    from the block by an executable line - accepted, pose correct, one warning
-    each.
+  - **Order rejections**: roles out of canonical order, a tagged line split from
+    the block by an executable line, a declaration after a function definition,
+    a function definition after body code - each rejected, each naming both its
+    own line and the line that established the phase.
   - **Diagnostic overflow**: more than `REPL_CAMERA_MAX_DIAGS` rejections in one
     load, asserting the stored list truncates and the overflow count is exact.
 - **`code_brace_delta` fixtures** - a brace inside a `/* … */` comment on one
