@@ -1717,6 +1717,16 @@ ReplCompileResult repl_compile_var_assign(const char *input,
         return REPL_COMPILE_OK;
     }
 
+    /* The extractor keeps everything up to the trailing `;` as the rhs, so
+     * `A[0] = 0.9; B[0] = 0.2;` would compile as a single assignment whose
+     * expression evaluates to 0.9 and whose remaining statements are
+     * silently dropped - while export writes the source line verbatim and
+     * the C runs all of them. Reject the form instead, the way
+     * check_trailing_garbage does for `glFoo(...)` lines. */
+    if (strchr(rhs, ';'))
+        return compile_set_err(err, err_size,
+                               "unexpected text after ';' - one statement per line");
+
     comment[0] = '\0';
     {
         const char *cp = strstr(input ? input : "", "//");

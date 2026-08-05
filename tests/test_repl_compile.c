@@ -333,6 +333,44 @@ static void test_compile_var_assign_failure_is_pure(void) {
                 fingerprint_equal(&before, &after));
 }
 
+/* Two statements on one line are rejected rather than truncated. The
+ * extractor keeps everything up to the trailing `;` as the rhs, so
+ * `X = 1; Y = 2;` used to compile as `X = 1` with `Y = 2` silently
+ * dropped - while export writes the whole source line and the exported C
+ * runs both (caught as a trace-parity failure in a scene that seeded
+ * scratch arrays three-per-line). */
+static void test_compile_var_assign_rejects_two_statements(void) {
+    glr_ctrl_reset_all();
+
+    ReplCompileContext ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ReplCompiledChange change;
+    char err[REPL_STATUS_TEXT_MAX];
+
+    repl_compile_float_decl("float X, Y;", &ctx, &change, err, sizeof(err));
+    editor_commit_apply_external_change(&change, 0, 0);
+
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ReplCompileResult r = repl_compile_var_assign(
+        "X = 1; Y = 2;", &ctx, &change, err, sizeof(err));
+    ASSERT_INT("two var statements on one line return ERROR",
+               r, REPL_COMPILE_ERROR);
+    ASSERT_TRUE("two var statements fill err", err[0] != '\0');
+
+    /* Same rule for the scratch-array form the scene corpus tripped on. */
+    r = repl_compile_var_assign("A[0] = 0.9; B[0] = 0.2;", &ctx, &change,
+                                err, sizeof(err));
+    ASSERT_INT("two scratch statements on one line return ERROR",
+               r, REPL_COMPILE_ERROR);
+
+    /* A single statement with a trailing comment still compiles. */
+    err[0] = '\0';
+    r = repl_compile_var_assign("X = 1;  // fine", &ctx, &change,
+                                err, sizeof(err));
+    ASSERT_INT("single statement with comment returns OK", r, REPL_COMPILE_OK);
+    ASSERT_TRUE("single statement with comment produces a change",
+                change.kind != REPL_COMPILED_NO_CHANGE);
+}
+
 /* Compile NO_CHANGE (input that doesn't match the handler) leaves
  * everything untouched and never fills err. */
 static void test_compile_no_change_leaves_state(void) {
@@ -2390,6 +2428,7 @@ int main(void) {
     test_split_decl_non_decl_no_change();
     test_split_decl_via_editor_entry();
     test_compile_var_assign_failure_is_pure();
+    test_compile_var_assign_rejects_two_statements();
     test_compile_no_change_leaves_state();
     test_compile_apply_updates_both();
     test_compile_apply_var_assign_updates_value();

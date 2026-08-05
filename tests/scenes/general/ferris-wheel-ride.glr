@@ -27,14 +27,30 @@ wheel_angle = wheel_speed * t;
 
 // Gondola colors stored in scratch arrays (R, G, B per gondola, 8 gondolas)
 // Array A = red channel, Array B = green channel, Array C = blue channel
-A[0] = 0.9; B[0] = 0.2; C[0] = 0.2;
-A[1] = 0.2; B[1] = 0.8; C[1] = 0.3;
-A[2] = 0.3; B[2] = 0.4; C[2] = 0.9;
-A[3] = 0.9; B[3] = 0.8; C[3] = 0.1;
-A[4] = 0.9; B[4] = 0.4; C[4] = 0.0;
-A[5] = 0.7; B[5] = 0.2; C[5] = 0.8;
-A[6] = 0.1; B[6] = 0.9; C[6] = 0.8;
-A[7] = 0.9; B[7] = 0.5; C[7] = 0.6;
+A[0] = 0.9;
+B[0] = 0.2;
+C[0] = 0.2;
+A[1] = 0.2;
+B[1] = 0.8;
+C[1] = 0.3;
+A[2] = 0.3;
+B[2] = 0.4;
+C[2] = 0.9;
+A[3] = 0.9;
+B[3] = 0.8;
+C[3] = 0.1;
+A[4] = 0.9;
+B[4] = 0.4;
+C[4] = 0.0;
+A[5] = 0.7;
+B[5] = 0.2;
+C[5] = 0.8;
+A[6] = 0.1;
+B[6] = 0.9;
+C[6] = 0.8;
+A[7] = 0.9;
+B[7] = 0.5;
+C[7] = 0.6;
 
 // -- A-Frame support structure --
 glDisable(GL_LIGHTING);
