@@ -253,7 +253,7 @@ lists to make the layer boundaries observable.
   wires the REPL pipeline **and** the variable-panel peer together under a real
   external-editor workflow. It imports scene `.c` files (edited in vim, watched
   by mtime, re-imported on save) via `repl_export_load_from_file`, applies each
-  scene's `// camera` block through a demo-local [`ReplExportCameraBridge`](../src/repl/export.h#L83), runs
+  scene's `// camera` block through a demo-local [`ReplExportCameraBridge`](../src/repl/export.h#L90), runs
   the executor each frame under a manual orbit camera, and drives predefined-
   variable sliders live. Reuses `repl_demo`'s editor-free `source_document`
   backend; its link set is `REPL_DEMO_DEP_SRCS` + the four variable-panel TUs,

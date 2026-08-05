@@ -1928,8 +1928,10 @@ int main(void) {
         remove(import_cursor_path);
     }
 
-    /* Audit #11/#12: camera export block shape - pin the exact 4-line
-     * format and the g_angle preamble so format drift is caught. */
+    /* Camera export block shape - pin the exact tagged rows so format drift
+     * is caught. The yaw rides on the numeric `@camera ry` row; `@camera spin`
+     * is a separate row carrying the animation hook, and g_angle's initializer
+     * is non-semantic boilerplate that must stay 0.0f. */
     {
         const char *cam_shape_path = "/tmp/repl_core_cam_shape.c";
         glr_ctrl_reset_all(); declare_test_vars();
@@ -1942,23 +1944,29 @@ int main(void) {
         char buf[16384];
         read_text_file(cam_shape_path, buf, sizeof(buf));
 
-        ASSERT_TRUE("cam shape: g_angle preamble",
-                    strstr(buf, "static float g_angle = 45.0000f;") != NULL);
-        ASSERT_TRUE("cam shape: line 0 distance",
+        ASSERT_TRUE("cam shape: g_angle initializer stays 0.0f",
+                    strstr(buf, "static float g_angle = 0.0f;") != NULL);
+        ASSERT_TRUE("cam shape: dist row tagged",
                     strstr(buf, "glTranslatef(0.0000f, 0.0000f, -8.0000f);") != NULL);
-        ASSERT_TRUE("cam shape: line 1 rx pitch",
+        ASSERT_TRUE("cam shape: rx row tagged",
                     strstr(buf, "glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);") != NULL);
-        ASSERT_TRUE("cam shape: line 2 g_angle yaw (not numeric)",
+        ASSERT_TRUE("cam shape: ry row is numeric, not the hook",
+                    strstr(buf, "glRotatef(45.0000f, 0.0f, 1.0f, 0.0f);") != NULL);
+        ASSERT_TRUE("cam shape: spin row carries the hook",
                     strstr(buf, "glRotatef(g_angle, 0.0f, 1.0f, 0.0f);") != NULL);
-        ASSERT_TRUE("cam shape: line 2 NOT numeric ry",
-                    strstr(buf, "glRotatef(45.0000f, 0.0f, 1.0f, 0.0f);") == NULL);
-        ASSERT_TRUE("cam shape: line 3 pan target",
+        ASSERT_TRUE("cam shape: pan row tagged",
                     strstr(buf, "glTranslatef(-1.0000f, -2.0000f, -3.0000f);") != NULL);
+        ASSERT_TRUE("cam shape: every role tag survives the C89 rewrite",
+                    strstr(buf, "@camera dist") && strstr(buf, "@camera rx") &&
+                    strstr(buf, "@camera ry") && strstr(buf, "@camera spin") &&
+                    strstr(buf, "@camera pan"));
 
         remove(cam_shape_path);
     }
 
-    /* Audit #12: import tolerates older numeric-ry format (no g_angle). */
+    /* Import reads a hand-written .c whose camera rows carry role tags but
+     * no `spin` hook: an absent optional role needs no reader branching, which
+     * is what lets the .c and .glr projections share one parse path. */
     {
         const char *cam_old_path = "/tmp/repl_core_cam_old_fmt.c";
         FILE *f = fopen(cam_old_path, "w");
@@ -1969,10 +1977,10 @@ int main(void) {
                 "#include <GL/gl.h>\n"
                 "#include <GL/glut.h>\n"
                 "void display(void) {\n"
-                "  glTranslatef(0.0000f, 0.0000f, -6.5000f);\n"
-                "  glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);\n"
-                "  glRotatef(55.0000f, 0.0f, 1.0f, 0.0f);\n"
-                "  glTranslatef(-0.5000f, -1.0000f, -1.5000f);\n"
+                "  glTranslatef(0.0000f, 0.0000f, -6.5000f);   /* @camera dist */\n"
+                "  glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);   /* @camera rx */\n"
+                "  glRotatef(55.0000f, 0.0f, 1.0f, 0.0f);   /* @camera ry */\n"
+                "  glTranslatef(-0.5000f, -1.0000f, -1.5000f);   /* @camera pan */\n"
                 "  // Snippet start\n"
                 "  glBegin(GL_POINTS);\n"
                 "  glVertex3f(0, 0, 0);\n"
@@ -1982,77 +1990,22 @@ int main(void) {
             fclose(f);
 
             glr_ctrl_reset_all(); declare_test_vars();
-            ASSERT_TRUE("old-fmt import succeeds",
+            ASSERT_TRUE("tagged-c import succeeds",
                         repl_export_load_from_file(cam_old_path, NULL) == 1);
-            ASSERT_TRUE("old-fmt rx restored",
+            ASSERT_TRUE("tagged-c rx restored",
                         fabsf(glr_camera().rx - 25.0f) < 1e-2f);
-            ASSERT_TRUE("old-fmt ry restored",
+            ASSERT_TRUE("tagged-c ry restored",
                         fabsf(glr_camera().ry - 55.0f) < 1e-2f);
-            ASSERT_TRUE("old-fmt dist restored",
+            ASSERT_TRUE("tagged-c dist restored",
                         fabsf(glr_camera().dist - 6.5f) < 1e-2f);
-            ASSERT_TRUE("old-fmt tx restored",
+            ASSERT_TRUE("tagged-c tx restored",
                         fabsf(glr_camera().tx - 0.5f) < 1e-2f);
-            ASSERT_TRUE("old-fmt ty restored",
+            ASSERT_TRUE("tagged-c ty restored",
                         fabsf(glr_camera().ty - 1.0f) < 1e-2f);
-            ASSERT_TRUE("old-fmt tz restored",
+            ASSERT_TRUE("tagged-c tz restored",
                         fabsf(glr_camera().tz - 1.5f) < 1e-2f);
 
             remove(cam_old_path);
-        }
-    }
-
-    /* Audit #11/#12: numeric-ry camera blocks advance directly to the target
-     * translate step. A later g_angle line is not part of the camera block and
-     * must not be consumed by the camera parser. */
-    {
-        const ReplExportCameraBridge *bridge;
-
-        glr_ctrl_reset_all(); declare_test_vars();
-        bridge = repl_export_camera_bridge();
-        ASSERT_TRUE("cam parser bridge installed", bridge != NULL);
-        ASSERT_TRUE("cam parser bridge has reset",
-                    bridge && bridge->reset_import != NULL);
-        ASSERT_TRUE("cam parser bridge has consumer",
-                    bridge && bridge->try_consume_import_line != NULL);
-
-        if (bridge && bridge->reset_import && bridge->try_consume_import_line) {
-            bridge->reset_import();
-
-            ASSERT_INT("cam parser consumes dist line",
-                       bridge->try_consume_import_line(
-                           "glTranslatef(0.0000f, 0.0000f, -6.5000f);"),
-                       1);
-            ASSERT_INT("cam parser consumes rx line",
-                       bridge->try_consume_import_line(
-                           "glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);"),
-                       1);
-            ASSERT_INT("cam parser consumes numeric ry line",
-                       bridge->try_consume_import_line(
-                           "glRotatef(55.0000f, 0.0f, 1.0f, 0.0f);"),
-                       1);
-
-            ASSERT_INT("cam parser does not consume g_angle after numeric ry",
-                       bridge->try_consume_import_line(
-                           "glRotatef(g_angle, 0.0f, 1.0f, 0.0f);"),
-                       0);
-
-            ASSERT_INT("cam parser still consumes target translate",
-                       bridge->try_consume_import_line(
-                           "glTranslatef(-0.5000f, -1.0000f, -1.5000f);"),
-                       1);
-
-            ASSERT_TRUE("cam parser keeps rx from parsed block",
-                        fabsf(glr_camera().rx - 25.0f) < 1e-2f);
-            ASSERT_TRUE("cam parser keeps ry from parsed block",
-                        fabsf(glr_camera().ry - 55.0f) < 1e-2f);
-            ASSERT_TRUE("cam parser keeps tx from parsed block",
-                        fabsf(glr_camera().tx - 0.5f) < 1e-2f);
-            ASSERT_TRUE("cam parser keeps ty from parsed block",
-                        fabsf(glr_camera().ty - 1.0f) < 1e-2f);
-            ASSERT_TRUE("cam parser keeps tz from parsed block",
-                        fabsf(glr_camera().tz - 1.5f) < 1e-2f);
-
-            bridge->reset_import();
         }
     }
 

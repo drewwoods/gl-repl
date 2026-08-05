@@ -915,7 +915,7 @@ signature for audited renderers.
   REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L123): the light-enable
   bitmask) remains a REPL slice.
 * pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L100), [`EditorInputView`](../src/editor/state.h#L68),
-  [`ReplImportExportView`](../src/repl/state_views.h#L166), [`FlatProgramView`](../src/repl/flatten.h#L58), [`ReplPredefView`](../src/repl/eval.h#L179))
+  [`ReplImportExportView`](../src/repl/state_views.h#L165), [`FlatProgramView`](../src/repl/flatten.h#L58), [`ReplPredefView`](../src/repl/eval.h#L179))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
   - sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L390),
   `flat_program_count`, …)
@@ -1635,7 +1635,7 @@ values through these seams:
 | Camera bridge | [`glr_camera_export_install_bridge()`](../src/app/glr_camera_export.h#L14) supplies coordinates for `// camera` blocks. |
 | Reshape-projection bridge | Supplies the active perspective or orthographic projection to export and code-panel calculations. |
 | Camera-distance source | Supplies executor point-size fallback data without linking [`glr_camera.c`](../src/app/glr_camera.c). |
-| [`ReplExportLayout`](../src/repl/export.h#L256) | Passes viewport and code-panel geometry explicitly instead of calling `ui_layout_*`. |
+| [`ReplExportLayout`](../src/repl/export.h#L259) | Passes viewport and code-panel geometry explicitly instead of calling `ui_layout_*`. |
 
 #### 4. OS-Clipboard Bridge ([`EditorClipboardHostBridge`](../src/editor/clipboard.h#L82))
 
@@ -1853,12 +1853,12 @@ mechanisms:
    does not format text or know about export.
 
 2. **Controller-installed projection bridge** (same shape as
-   [`ReplExportCameraBridge`](../src/repl/export.h#L83)). [`src/repl/export.c`](../src/repl/export.c) is GL-free, so it owns
+   [`ReplExportCameraBridge`](../src/repl/export.h#L90)). [`src/repl/export.c`](../src/repl/export.c) is GL-free, so it owns
    no projection math. `ReplExportProjectionBridge.fill_reshape_block`
    is installed by [`glr_ctrl.c`](../src/app/glr_ctrl.c) next to the camera-distance source; its
    adapter reads [`render3d_get_active_projection()`](../src/render3d/render.h#L135) and formats the C
    lines. No bridge installed (render3d_demo, tests) ⇒
-   [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L186) returns the canonical
+   [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L168) returns the canonical
    perspective default (correct `0.1, 200.0` near/far).
 
 **Rule - where a per-frame dynamic value is resolved.** Apply this test
@@ -1912,10 +1912,10 @@ Per the rule above:
   `REPL_EXPORT_PROJ_*` source-of-truth in [`glr_ctrl.c`](../src/app/glr_ctrl.c) (same pattern as
   the scene-tab dims).
 * **File save (discrete action):** `repl_export_save_output()` calls
-  [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L186) directly - a single pass on
+  [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L168) directly - a single pass on
   the Ctrl+S thread, not split across render3d render, so it correctly
   captures the projection in effect at save time. (Routing this through
-  a controller-owned [`ReplExportLayout`](../src/repl/export.h#L256)-style export context is the
+  a controller-owned [`ReplExportLayout`](../src/repl/export.h#L259)-style export context is the
   documented next step if save is ever folded into the frame path.)
 
 [`render3d_get_active_projection()`](../src/render3d/render.h#L135) is the *nearest-steady* projection: the
@@ -1932,13 +1932,13 @@ snapshot for the panel, special-case in the consumers.
 `check-state-ownership` gate):
 
 * `check-ui-no-export-resolver` - no `src/ui/` file may call
-  [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L186); the panel reads the
+  [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L168); the panel reads the
   snapshot-frozen block. This is the structural backstop for the rule
   above: the mistake fails the build, not just review.
 * `check-repl-export-via-bridge` - [`src/repl/export.c`](../src/repl/export.c) may not include
   `render3d/`/`app/` headers or call `render3d_*`/`glr_*`; it pulls
   app/render3d-derived values only through controller-installed bridges
-  ([`ReplExportProjectionBridge`](../src/repl/export.h#L150), [`ReplExportCameraBridge`](../src/repl/export.h#L83),
+  ([`ReplExportProjectionBridge`](../src/repl/export.h#L134), [`ReplExportCameraBridge`](../src/repl/export.h#L90),
   [`ReplConfigBridge`](../src/repl/cfg_baseline.h#L49)). Complements `check-gl-boundaries` (which already
   bars GL *calls* in the REPL pipeline) and `check-repl-export-no-ui-layout`.
 

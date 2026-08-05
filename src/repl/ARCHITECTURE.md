@@ -288,7 +288,7 @@ surfaces it on the CLI.
 Loop counters, function parameters and function-scoped locals don't exist in
 the source command's own scope. When [`flatten.c`](flatten.c) emits a flat command, it snapshots
 the live lexical bindings into a parallel [`FlatCmdLocalVars`](flatten.h#L43) array
-([`repl_state_flat_program_local_vars()`](state_views.h#L183)):
+([`repl_state_flat_program_local_vars()`](state_views.h#L181)):
 
 ```c
 typedef struct {
@@ -852,7 +852,7 @@ scroll-to-line, tutorial teardown, edit-line get/set, cursor parking,
 completion clear/update, input read, and time-playing toggle.
 
 The export path uses the same pattern with dedicated bridges
-([`ReplExportLightBridge`](export.h#L176), cfg/camera bridges) so [`export.c`](export.c) can emit
+([`ReplExportLightBridge`](export.h#L161), cfg/camera bridges) so [`export.c`](export.c) can emit
 live light/config/camera state without including any render3d or app
 header - verified by `check-repl-export-via-bridge`.
 
