@@ -978,8 +978,18 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
             save->mask = mask;
             save->render = repl_state_render();
             save->clear = cursor->clear_state;
-            if (!cursor->options.suppress_attrib_gl)
-                glPushAttrib((GLbitfield)mask);
+            if (!cursor->options.suppress_attrib_gl) {
+                /* GL_ALL_ATTRIB_BITS reaches args[0] as the union of the
+                 * supported bits (command_spec.c's k_attrib_bits[]) - GL's
+                 * own 0xFFFFFFFF does not survive the float storage. That
+                 * union is the REPL's bookkeeping mask, but what real GL
+                 * gets must be what the user wrote, which is also what the
+                 * exporter writes into the standalone C. */
+                GLbitfield gl_mask = (mask == repl_attrib_all_bits_mask())
+                                         ? GL_ALL_ATTRIB_BITS
+                                         : (GLbitfield)mask;
+                glPushAttrib(gl_mask);
+            }
         }
         break;
     }

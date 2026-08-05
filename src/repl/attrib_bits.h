@@ -98,6 +98,13 @@ unsigned repl_attrib_bits_for_type(CmdType type, unsigned enum_arg0);
  * if it is not one of the supported bits. */
 int repl_attrib_bit_index(unsigned single_bit);
 
+/* Union of every supported bit - the value the parser bakes into args[0] for
+ * the GL_ALL_ATTRIB_BITS alias, which is a union of the table rather than
+ * GL's 0xFFFFFFFF so it round-trips through GLCmd's float storage. Callers
+ * that hand the mask to real GL compare against this to spell the alias back
+ * out (see the executor's CMD_PUSH_ATTRIB). */
+unsigned repl_attrib_all_bits_mask(void);
+
 /* Scan `text` for supported GL_*_BIT names inside its first (...) range.
  * Fills up to `max` spans and returns the number written. The scan is purely
  * textual: callers decide whether a matched bit is active in a parsed mask. */

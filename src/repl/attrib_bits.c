@@ -186,6 +186,14 @@ int repl_attrib_bit_index(unsigned single_bit) {
     return -1;
 }
 
+unsigned repl_attrib_all_bits_mask(void) {
+    const ReplEnumEntry *bits = repl_attrib_bit_entries();
+    unsigned mask = 0;
+    for (int i = 0; bits[i].name; i++)
+        mask |= (unsigned)bits[i].value;
+    return mask;
+}
+
 int repl_attrib_bit_token_spans(const char *text, ReplAttribTokenSpan *out,
                                 int max) {
     const ReplEnumEntry *bits = repl_attrib_bit_entries();
