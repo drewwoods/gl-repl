@@ -29,6 +29,19 @@
 #include "source_document.h"  /* SourceTextView */
 #include "config.h"           /* REPL_DIAG_TEXT_MAX */
 
+/* Half-open loop bound, guarded. `for(u, 0, 1, 0.01)` accumulates in float,
+ * so u lands on 0.99999994 rather than 1.0 and a bare `u < end` runs a 101st
+ * iteration nobody asked for; the guard pulls the bound in by less than any
+ * meaningful step so the loop ends where its author wrote it.
+ *
+ * The C text is the same constant spelled for the exporter, which must emit
+ * this guard into the exported for-header or the exported program iterates a
+ * different number of times than the REPL did. Keep the two in sync - they
+ * are one contract, and the export/import round trip strips the text form
+ * back off (import_strip_loop_bound_guard). */
+#define REPL_LOOP_BOUND_EPS        1e-6f
+#define REPL_LOOP_BOUND_EPS_C_TEXT "1e-6f"
+
 /* Local variable snapshot for a single flat command. Captured when the
  * command is emitted (e.g., loop counter value, function parameter binding).
  * Not read by the executor (which consumes baked args); consumers that need

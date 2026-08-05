@@ -1,4 +1,5 @@
 #include "repl/export_internal.h"
+#include "repl/flatten.h"       /* REPL_LOOP_BOUND_EPS_C_TEXT */
 #include "repl/text_helpers.h"
 #include "repl/util.h"          /* repl_format_fits */
 
@@ -70,11 +71,13 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
                 ind, var_name, REPL_EXPORT_C89_LOOP_VAR_MARKER);
         float step_v = cmd->args[2];
         if (step_v >= 0) {
-            fprintf(f, "%sfor (%s = %s; %s < %s; %s += %s) {\n",
-                    ind, var_name, c_start, var_name, c_end, var_name, c_step);
+            fprintf(f, "%sfor (%s = %s; %s < (%s) - %s; %s += %s) {\n",
+                    ind, var_name, c_start, var_name, c_end,
+                    REPL_LOOP_BOUND_EPS_C_TEXT, var_name, c_step);
         } else {
-            fprintf(f, "%sfor (%s = %s; %s > %s; %s += %s) {\n",
-                    ind, var_name, c_start, var_name, c_end, var_name, c_step);
+            fprintf(f, "%sfor (%s = %s; %s > (%s) + %s; %s += %s) {\n",
+                    ind, var_name, c_start, var_name, c_end,
+                    REPL_LOOP_BOUND_EPS_C_TEXT, var_name, c_step);
         }
         return;
     }
@@ -98,17 +101,21 @@ static void write_for_begin_as_c(FILE *f, const GLCmd *cmd,
         fprintf(f, "%sfloat %s; /* %s */\n",
                 ind, var_name, REPL_EXPORT_C89_LOOP_VAR_MARKER);
         if (step_v == 1.0f) {
-            fprintf(f, "%sfor (%s = %s; %s < %s; %s += 1.0f) {\n",
-                    ind, var_name, start_s, var_name, end_s, var_name);
+            fprintf(f, "%sfor (%s = %s; %s < %s - %s; %s += 1.0f) {\n",
+                    ind, var_name, start_s, var_name, end_s,
+                    REPL_LOOP_BOUND_EPS_C_TEXT, var_name);
         } else if (step_v == -1.0f) {
-            fprintf(f, "%sfor (%s = %s; %s > %s; %s -= 1.0f) {\n",
-                    ind, var_name, start_s, var_name, end_s, var_name);
+            fprintf(f, "%sfor (%s = %s; %s > %s + %s; %s -= 1.0f) {\n",
+                    ind, var_name, start_s, var_name, end_s,
+                    REPL_LOOP_BOUND_EPS_C_TEXT, var_name);
         } else {
             char step_s[EXPORT_FLOAT_TEXT_MAX];
             repl_format_source_float(step_s, sizeof(step_s), step_v);
-            fprintf(f, "%sfor (%s = %s; %s %s %s; %s += %s) {\n",
+            fprintf(f, "%sfor (%s = %s; %s %s %s %c %s; %s += %s) {\n",
                     ind, var_name, start_s, var_name,
-                    step_v > 0 ? "<" : ">", end_s, var_name, step_s);
+                    step_v > 0 ? "<" : ">", end_s,
+                    step_v > 0 ? '-' : '+', REPL_LOOP_BOUND_EPS_C_TEXT,
+                    var_name, step_s);
         }
     } else {
         export_write_c89_line(f, source_text);

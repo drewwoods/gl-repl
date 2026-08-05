@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include "repl/export.h"          /* public reader API */
 #include "repl/export_format_shared.h"
+#include "repl/flatten.h"        /* REPL_LOOP_BOUND_EPS_C_TEXT */
 #include "source_document.h"      /* source_document_insert_line */
 #include "repl/load.h"            /* repl_load_apply_line */
 #include "config.h"
@@ -1063,9 +1064,87 @@ static int import_extract_c_for_exprs(const char *line,
     return 0;
 }
 
-static int import_make_repl_for_header(const char *line, char *out, int out_sz) {
+/* Undo the exporter's half-open bound guard: a `for (u = 0; u < (1) - 1e-6f;
+ * ...)` header came from `for(u, 0, 1, 0.01)` and must go back as exactly
+ * that. Flatten re-applies the guard itself, so keeping it would both
+ * double-apply it and make the export/import round trip text-unstable
+ * (`for(u, 0, (1) - 1e-6f, 0.01)`).
+ *
+ * Removes two things, in the order write_for_begin_as_c added them: the
+ * ` - 1e-6f` / ` + 1e-6f` tail, then the parens the exporter wrapped the
+ * bound in (those exist so the guard cannot bind tighter than the bound's
+ * own operators). Only a fully-enclosing pair is dropped, so a bound the
+ * author parenthesized keeps its own. A line without the guard - anything
+ * hand-written - is copied through untouched. */
+static void import_strip_loop_bound_guard(const char *in, char *out, int out_sz) {
+    static const char *k_guard_ops[] = { " - ", " + " };
+    size_t eps_len = strlen(REPL_LOOP_BOUND_EPS_C_TEXT);
+
+    snprintf(out, (size_t)out_sz, "%s", in);
+
+    const char *init_end = strchr(in, ';');
+    if (!init_end) return;
+    const char *cond_end = strchr(init_end + 1, ';');
+    if (!cond_end) return;
+
+    /* The guard is the tail of the condition clause. */
+    const char *guard = NULL;
+    size_t guard_len = 0;
+    for (size_t i = 0; i < sizeof(k_guard_ops) / sizeof(k_guard_ops[0]); i++) {
+        size_t op_len = strlen(k_guard_ops[i]);
+        if ((size_t)(cond_end - init_end) < op_len + eps_len + 1)
+            continue;
+        const char *q = cond_end - (op_len + eps_len);
+        if (strncmp(q, k_guard_ops[i], op_len) == 0 &&
+            strncmp(q + op_len, REPL_LOOP_BOUND_EPS_C_TEXT, eps_len) == 0) {
+            guard = q;
+            guard_len = op_len + eps_len;
+            break;
+        }
+    }
+    if (!guard) return;
+
+    /* The bound runs from just past the comparison operator to the guard. */
+    const char *bound = init_end + 1;
+    while (bound < guard && *bound != '<' && *bound != '>') bound++;
+    if (bound >= guard) return;
+    bound++;
+    if (*bound == '=') bound++;
+    while (bound < guard && isspace((unsigned char)*bound)) bound++;
+
+    const char *head_end = bound;   /* everything up to here is copied verbatim */
+    const char *bound_end = guard;
+    while (bound_end > bound && isspace((unsigned char)bound_end[-1])) bound_end--;
+
+    /* Drop the exporter's wrapping parens, but only when the opening one
+     * closes at the very end of the bound - `(a) + (b)` must keep both. */
+    if (bound_end - bound >= 2 && *bound == '(' && bound_end[-1] == ')') {
+        int depth = 0;
+        const char *q = bound;
+        for (; q < bound_end; q++) {
+            if (*q == '(') depth++;
+            else if (*q == ')' && --depth == 0) break;
+        }
+        if (q == bound_end - 1) {
+            bound++;
+            bound_end--;
+        }
+    }
+
+    int n = snprintf(out, (size_t)out_sz, "%.*s%.*s%s",
+                     (int)(head_end - in), in,
+                     (int)(bound_end - bound), bound,
+                     cond_end);
+    if (n < 0 || n >= out_sz)
+        snprintf(out, (size_t)out_sz, "%s", in);
+}
+
+static int import_make_repl_for_header(const char *raw_line, char *out, int out_sz) {
     char var[16];
     float start_v, end_v, step_v;
+    char line[MAX_LINE_LEN];
+
+    import_strip_loop_bound_guard(raw_line, line, sizeof(line));
     if (!repl_eval_parse_c_for_header(line, var, sizeof(var), &start_v, &end_v, &step_v))
         return 0;
 

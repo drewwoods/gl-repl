@@ -90,7 +90,7 @@ The editor owns text-document behavior; UI renders its 2D view.
 The controller translates REPL state into per-frame view inputs.
 ```
 
-Render3d modules may consume [`FlatProgramView`](../src/repl/flatten.h#L58), [`CmdType`](../src/repl/command.h#L44), and other
+Render3d modules may consume [`FlatProgramView`](../src/repl/flatten.h#L71), [`CmdType`](../src/repl/command.h#L44), and other
 command-domain data when that data is already present in the
 [`Render3dRenderConfig`](../src/render3d/render_types.h#L139) or a derived frame snapshot. They should not fetch REPL
 globals or call `repl_state_*` APIs directly during rendering.
@@ -318,7 +318,7 @@ Source commands are the editing model.
 
 Flattened commands are the execution, replay, export, and 3D annotation model.
 
-Code outside the command pipeline should use [`FlatProgramView`](../src/repl/flatten.h#L58) or a snapshot
+Code outside the command pipeline should use [`FlatProgramView`](../src/repl/flatten.h#L71) or a snapshot
 derived from it instead of poking raw global arrays.
 
 ### Flatten cache and render-pass reuse
@@ -349,7 +349,7 @@ before returning. While animation is playing, advancing `t` is routed by its
 dependency bit: stable value-only scenes rebake, while `t`-dependent loops or
 conditions full-flatten. Ordinary jitter AA, replay overlay passes, and vertex
 outlines reuse the same frame-level
-[`FlatProgramView`](../src/repl/flatten.h#L58)/snapshot instead of reparsing, reflattening, or re-evaluating
+[`FlatProgramView`](../src/repl/flatten.h#L71)/snapshot instead of reparsing, reflattening, or re-evaluating
 expressions per sample. Those passes may reapply precomputed assignment
 commands from `args[]` while walking the flat stream, but the frame/probe
 side-effect brackets restore predefined variables and scratch arrays so
@@ -582,7 +582,7 @@ requirement.
 The controller builds the config once per frame, and [`render3d_draw_scene()`](../src/render3d/render.h#L129)
 consumes it directly without calling back into REPL globals or rebuilding the
 frame inputs itself. The config currently carries the execute callback,
-[`FlatProgramView`](../src/repl/flatten.h#L58), viewport, camera, animation, quality flags, lighting,
+[`FlatProgramView`](../src/repl/flatten.h#L71), viewport, camera, animation, quality flags, lighting,
 backdrop, overlay toggles, replay/HUD layout, grid tables, cursor-block
 metadata, and the [`Render3dFocusVertex`](../src/render3d/render_types.h#L131) / [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L44) snapshots needed by
 3D overlays.
@@ -822,7 +822,7 @@ funcN-local parameters or loop-assigned values, so the controller must override
 cursor arguments from the **flat** command stream before rendering guides inside
 functions or loops.
 
-[`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L187) walks the current [`FlatProgramView`](../src/repl/flatten.h#L58) via
+[`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L187) walks the current [`FlatProgramView`](../src/repl/flatten.h#L71) via
 the replay/user-vertex walkers while tracking the modelview with
 `apply_tracked_transform` / `unwind_transform_stack`. At the cursor's chosen
 flat command - its first expansion, or its last when the snapshot's
@@ -915,7 +915,7 @@ signature for audited renderers.
   REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L123): the light-enable
   bitmask) remains a REPL slice.
 * pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L100), [`EditorInputView`](../src/editor/state.h#L68),
-  [`ReplImportExportView`](../src/repl/state_views.h#L165), [`FlatProgramView`](../src/repl/flatten.h#L58), [`ReplPredefView`](../src/repl/eval.h#L179))
+  [`ReplImportExportView`](../src/repl/state_views.h#L165), [`FlatProgramView`](../src/repl/flatten.h#L71), [`ReplPredefView`](../src/repl/eval.h#L179))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
   - sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L390),
   `flat_program_count`, …)
@@ -2372,7 +2372,7 @@ after the ownership and boundary sections above identify the correct layer.
 * New user-geometry execution behavior: [`src/repl/executor.c`](../src/repl/executor.c).
 * New 3D world decorator: `render3d_*`.
 * New 3D REPL-aware overlay: current home is still `render3d_*`, consuming
-  [`FlatProgramView`](../src/repl/flatten.h#L58) or a snapshot from [`Render3dRenderConfig`](../src/render3d/render_types.h#L139).
+  [`FlatProgramView`](../src/repl/flatten.h#L71) or a snapshot from [`Render3dRenderConfig`](../src/render3d/render_types.h#L139).
 * New 2D UI: a `ui_*` renderer plus an editor, REPL, or peer-subsystem action
   path when mutation is required.
 * New per-frame render3d/UI wiring: [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c).

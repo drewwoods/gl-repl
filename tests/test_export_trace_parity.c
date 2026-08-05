@@ -275,10 +275,7 @@ static const struct {
     const char *name;
     const char *reason;
 } g_example_xfail[] = {
-    { "Bezier curve with guides",
-      "for(u, 0, 1, 0.01) accumulator drifts past 1.0 in REPL eval vs "
-      "native float loop; one side runs an extra iteration. Fix: use "
-      "an integer counter and compute u = k * 0.01 inside the body." },
+    { NULL, NULL }   /* empty: keep it that way, fix the divergence instead */
 };
 static const int g_example_xfail_count =
     (int)(sizeof(g_example_xfail)/sizeof(g_example_xfail[0]));
@@ -286,7 +283,8 @@ static const int g_example_xfail_count =
 static const char *expected_fail_for_example(const char *name) {
     if (!name) return NULL;
     for (int i = 0; i < g_example_xfail_count; i++)
-        if (strcmp(g_example_xfail[i].name, name) == 0)
+        if (g_example_xfail[i].name &&
+            strcmp(g_example_xfail[i].name, name) == 0)
             return g_example_xfail[i].reason;
     return NULL;
 }

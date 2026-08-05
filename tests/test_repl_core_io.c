@@ -5,6 +5,7 @@
 #include "app/glr_ctrl.h"
 #include "repl/command_store.h"
 #include "repl/example_loader.h"
+#include "repl/flatten.h"        /* REPL_LOOP_BOUND_EPS_C_TEXT */
 #include "repl/reformat.h"
 #include "repl/state_notify.h"
 #include "source_document.h"
@@ -1021,8 +1022,13 @@ int main(void) {
         read_text_file(param_loop_path, buf, sizeof(buf));
         ASSERT_TRUE("saved param loop hoists loop var decl with marker",
                     strstr(buf, "float i; /* repl-export-c89-loop-var */") != NULL);
+        /* The bound is parenthesized and guarded: flatten stops the REPL
+         * loop at `end - REPL_LOOP_BOUND_EPS`, so the exported loop has to
+         * as well or it runs an extra iteration. */
         ASSERT_TRUE("saved param loop keeps symbolic C bound",
-                    strstr(buf, "for (i = 0; i < sides + 1; i += 1.0f)") != NULL);
+                    strstr(buf,
+                           "for (i = 0; i < (sides + 1) - " REPL_LOOP_BOUND_EPS_C_TEXT
+                           "; i += 1.0f)") != NULL);
     }
 
     glr_ctrl_reset_all();
@@ -1801,8 +1807,8 @@ int main(void) {
                     strstr(buf, "/* @var") == NULL);
 
         snprintf(expected_loop, sizeof(expected_loop),
-                 "for (i = %s; i < %s; i += %s) {",
-                 start_s, end_s, step_s);
+                 "for (i = %s; i < %s - %s; i += %s) {",
+                 start_s, end_s, REPL_LOOP_BOUND_EPS_C_TEXT, step_s);
         ASSERT_TRUE("generated loop hoists loop var decl",
                     strstr(buf, "float i; /* repl-export-c89-loop-var */") != NULL);
         ASSERT_TRUE("generated loop uses shortest exact float",
