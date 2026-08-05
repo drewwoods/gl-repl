@@ -73,7 +73,6 @@ glTranslatef(0.0f, 0.0f, -7.50f);   // @camera dist
 glRotatef(4.00f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
 glTranslatef(0.0f, 0.700f, 0.0f);   // @camera pan
-
 // Everything glows: additive blend with depth WRITES off (reads stay on).
 // glDepthMask(GL_FALSE) is the classic translucency trick - without it the
 // bell's far side would z-fight its near side and the tentacles would

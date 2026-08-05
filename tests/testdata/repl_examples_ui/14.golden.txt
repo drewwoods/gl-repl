@@ -115,7 +115,6 @@ void display(void) {
     y = pow(1-u, 2) * ay + 2 * (1-u)*u * by + u*u * cy;
   }
 
-
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glEnable(GL_DEPTH_TEST);

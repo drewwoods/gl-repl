@@ -54,7 +54,6 @@ glTranslatef(0.0f, 0.0f, -10.5f);   // @camera dist
 glRotatef(13.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(-18.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
 glTranslatef(0.0f, -1.35f, 0.0f);   // @camera pan
-
 // The dish is posed twice: once in the lit opaque pass and again in the
 // unlit glow pass that hangs the feed struts and pulses off it. Both read
 // dishAz so the two frames cannot drift apart -- the same reason the

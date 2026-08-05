@@ -155,7 +155,6 @@ glTranslatef(0.0f, 0.0f, -24.0f);   // @camera dist
 glRotatef(6.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
 glTranslatef(0.0f, -5.0f, 0.0f);   // @camera pan
-
 // Keep config sensible
 rise = clamp(rise, 0.1, 2.0);
 bright = clamp(bright, 0.1, 10.0);

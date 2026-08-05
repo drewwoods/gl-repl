@@ -110,7 +110,6 @@ void display(void) {
   static float wrapX = 12, wrapY = 5; // half-extents of the wrap region
   static float depthScale = 10; // multiplier on `depth` for z position
 
-
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 

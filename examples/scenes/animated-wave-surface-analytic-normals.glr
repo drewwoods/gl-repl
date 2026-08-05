@@ -12,7 +12,6 @@ glTranslatef(0.0f, 0.0f, -5.0f);   // @camera dist
 glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
 glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-
 // Animated surface: y = sin(freq*x + t) * cos(freq*z + zPhase*t) * amp
 // Drawn as a triangle strip per row with analytic per-vertex normals.
 

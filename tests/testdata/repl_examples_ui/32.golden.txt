@@ -152,7 +152,6 @@ void display(void) {
     glPopMatrix();
   }
 
-
   // The dish is posed twice: once in the lit opaque pass and again in the
   // unlit glow pass that hangs the feed struts and pulses off it. Both read
   // dishAz so the two frames cannot drift apart -- the same reason the

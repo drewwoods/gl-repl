@@ -9,7 +9,6 @@ glTranslatef(0.0f, 0.0f, -6.50f);   // @camera dist
 glRotatef(35.25f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(45.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
 glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-
 //
 // gl-repl Logo
 // An open cube rendered with two-sided lighting.

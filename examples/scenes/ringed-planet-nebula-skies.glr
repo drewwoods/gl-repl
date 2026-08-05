@@ -71,7 +71,6 @@ glTranslatef(0.0f, 0.0f, -12.5f);   // @camera dist
 glRotatef(16.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(-30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
 glTranslatef(0.0f, -1.20f, 0.0f);   // @camera pan
-
 glClearColor(0.04, 0.04, 0.1, 1.0);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 

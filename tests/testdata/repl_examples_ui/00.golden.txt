@@ -103,7 +103,6 @@ void display(void) {
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
-
   //
   // gl-repl Logo
   // An open cube rendered with two-sided lighting.

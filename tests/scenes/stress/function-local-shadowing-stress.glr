@@ -44,7 +44,6 @@ glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
 glRotatef(12.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
 glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-
 // Scene spin, deliberately body geometry and deliberately untagged: the
 // camera format carries literal poses only, and `spin` is the exported C's
 // g_angle hook, not a place to put an expression in t.

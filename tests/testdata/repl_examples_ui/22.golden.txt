@@ -110,7 +110,6 @@ void display(void) {
   static float yWobbleRate = 0.6; // y wobble time-rate (animates with t)
   static float yAmp = 0.9; // y wobble amplitude
 
-
   // Glow sprites: additive blend + distance-attenuated point size.
   // Each particle orbits in xz at (radius, angle) while y wobbles independently.
   glClearColor(0.05, 0.06, 0.08, 1);

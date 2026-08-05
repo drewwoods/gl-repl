@@ -33,7 +33,6 @@ glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
 glRotatef(18.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
 glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-
 glClearColor(0.05, 0.06, 0.08, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 

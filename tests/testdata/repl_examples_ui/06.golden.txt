@@ -109,7 +109,6 @@ void display(void) {
   static float freq = 2.5; // spatial frequency along x and z
   static float zPhase = 0.7; // z-axis time phase: z evolves slower than x (<1)
 
-
   // Animated surface: y = sin(freq*x + t) * cos(freq*z + zPhase*t) * amp
   // Drawn as a triangle strip per row with analytic per-vertex normals.
 

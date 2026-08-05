@@ -120,7 +120,6 @@ void display(void) {
   // Tip: park the cursor on a glClipPlane line to see its plane guide.
   static float d; // sliding cut offset for the animated cutaway
 
-
   glClearColor(0.04, 0.05, 0.08, 1);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_LIGHTING);

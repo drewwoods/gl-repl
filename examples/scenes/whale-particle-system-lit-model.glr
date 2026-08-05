@@ -158,7 +158,6 @@ glTranslatef(0.0f, 0.0f, -6.55f);   // @camera dist
 glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(-115f, 0.0f, 1.0f, 0.0f);   // @camera ry
 glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_COLOR_MATERIAL);
 glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);

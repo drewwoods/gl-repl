@@ -165,7 +165,6 @@ void display(void) {
     glEnd();
   }
 
-
   // Everything glows: additive blend with depth WRITES off (reads stay on).
   // glDepthMask(GL_FALSE) is the classic translucency trick - without it the
   // bell's far side would z-fight its near side and the tentacles would

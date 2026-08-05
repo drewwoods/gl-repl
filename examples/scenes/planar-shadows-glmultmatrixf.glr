@@ -20,7 +20,6 @@ glTranslatef(0.0f, 0.0f, -7.90f);   // @camera dist
 glRotatef(24.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(-28.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
 glTranslatef(0.0f, -1.15f, 0.0f);   // @camera pan
-
 // Translate, rotate and scale cannot flatten a solid onto a plane -- that
 // takes a matrix of their own. glMultMatrixf posts one onto the modelview
 // stack: 16 column-major cells, either inline as below or read from a

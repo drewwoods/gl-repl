@@ -41,7 +41,6 @@ glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
 glRotatef(18.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
 glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-
 glRotatef(30.0f * t, 0.0f, 1.0f, 0.0f);
 
 glClearColor(0.05f, 0.05f, 0.09f, 1.0f);

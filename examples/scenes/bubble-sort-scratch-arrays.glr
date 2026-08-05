@@ -14,7 +14,6 @@ glTranslatef(0.0f, 0.0f, -8.5f);   // @camera dist
 glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
 glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-
 // Bubble sort, scrubbed by t. A[0..15] holds 16 bar heights; the nested
 // loops below are the classic compare-and-swap, but each compare only
 // runs once enough time has passed (its overall index p*15 + j must stay

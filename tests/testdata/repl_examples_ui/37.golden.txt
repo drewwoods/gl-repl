@@ -131,7 +131,6 @@ void display(void) {
     glPopMatrix();
   }
 
-
   // Translate, rotate and scale cannot flatten a solid onto a plane -- that
   // takes a matrix of their own. glMultMatrixf posts one onto the modelview
   // stack: 16 column-major cells, either inline as below or read from a

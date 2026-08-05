@@ -108,7 +108,6 @@ void display(void) {
   static float phase, width, delta, amp, ang, bump, x, y;
   static float n = 400; // ring segment count
 
-
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glEnable(GL_COLOR_MATERIAL);

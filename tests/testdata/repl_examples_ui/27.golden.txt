@@ -247,7 +247,6 @@ void display(void) {
     }
   }
 
-
   // Keep config sensible
   rise = clamp(rise, 0.1, 2.0);
   bright = clamp(bright, 0.1, 10.0);
