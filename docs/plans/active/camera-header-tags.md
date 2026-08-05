@@ -136,8 +136,10 @@ void display(void) {
   glTranslatef(-0.0000f, 2.5000f, -0.0000f);        // @camera pan
 ```
 
-The `ry` grammar is *leading float literal, optional `+ <identifier>` suffix
-which the reader ignores*. Consequences:
+The `ry` grammar is *a leading float literal, optionally followed by the exact
+token `+ g_angle`* (whitespace-insensitive). No other identifier is accepted:
+`20.0f + tweak` is a diagnostic, not a silently-ignored suffix, because the
+reader cannot know whether `tweak` is zero at load. Consequences:
 
 - **Exactly one tagged `ry` source per file**, so the duplicate-role rule below
   has no exception to carve out.
@@ -165,37 +167,74 @@ deleted:
 - Tag order is free, and tagged lines need not be contiguous. Blank lines,
   comments, and the `// camera` marker between them are irrelevant because
   nothing is scanning for a run.
-- **Scanning does not stop.** A tagged line is consumed wherever it appears in
-  the file or display body.
+
+**Where tags are honored** - "wherever it appears" needs bounding, because the
+importer already refuses camera handling inside a snippet
+(`s->in_snippet`, `import.c:2171`). The region rule, identical for all callers:
+
+| Position | Result |
+|---|---|
+| Pre-snippet region or `display()` body, brace depth 0 | accepted |
+| Brace depth > 0 (inside any `{ }`) | `REJECTED` + diagnostic |
+| Inside a snippet region | `REJECTED` + diagnostic |
+| After the snippet region ends | `REJECTED` + diagnostic |
+
+Every case outside the accepted one is *consumed with a diagnostic*, never
+passed through as geometry - the tag is reserved syntax, so a line carrying it
+is a camera line that is in the wrong place, not a document row. Exported files
+put the camera block before the snippet start (`export_display.c:386`), so the
+accepted region is where the format already writes.
+
+**The reader tracks its own depth.** Requiring callers to supply `func_depth`
+does not work: only `ImportState` has it, and `example_loader.c` /
+`tutorial_runner.c` have no nesting tracking at all - they stream lines straight
+through `repl_load_apply_line`. Making them compute it would put three copies of
+a brace counter in the tree, which is this plan's own failure mode. Instead
+`ReplCameraHeader` counts braces itself from the lines it is offered, reusing
+`code_brace_delta` (`import.c:1936`, hoisted to a shared TU - it already skips
+braces inside string/char literals and trailing comments). The contract that
+buys this: **callers must offer every line, in order**, not only the ones they
+suspect. Snippet-region entry/exit is signalled by the caller through
+`repl_camera_header_set_region()`, since only the importer knows the snippet
+markers and the other two callers are always pre-snippet.
 
 ### Deferred application, so a partial pose is unrepresentable
 
-The reader accumulates roles into a `ReplCameraPose` with a seen-mask and
-applies **nothing** until end of load. `repl_camera_header_finish()` then either
-applies the pose once, via one bridge call, or reports what was missing:
+The reader accumulates roles into a `ReplCameraPose` plus a seen-mask and
+applies **nothing** until end of load. `repl_camera_header_finish()` resolves the
+partial pose to a complete one *before* it reaches the bridge:
 
-- all four roles seen → apply with the caller's snap/ease intent, and adopt as
-  the scene default;
-- some roles seen → apply the seen roles over the current camera, warn once
-  naming each missing role;
-- none seen → no camera call at all, host defaults stand.
+- **none seen** → no bridge call at all; host defaults stand.
+- **some seen** → `capture_pose()` reads the live camera, the seen roles
+  overwrite it, and the merged - now complete - pose is applied. One warning
+  names each missing role.
+- **all four seen** → apply directly, no capture needed.
 
-This subsumes `cam_adopt_import_scene_default`'s state-4 gate and makes the
-half-applied camera that started this investigation structurally impossible.
+Merging lives in the reader, not the bridge, so `apply_pose()` never receives a
+partial pose and no bridge implementation has to reason about a mask. That
+requires the bridge to gain the symmetric reader:
 
-### Tag detection precedes depth gating
+```c
+void (*capture_pose)(ReplCameraPose *out);   /* inverse of apply_pose */
+```
 
-Today a tagged line inside a `funcN` body would never reach the camera handler -
-`import_handle_camera` (`import.c:2168`) returns 0 at `func_depth != 0` and the
-line falls through to the function-body handler as geometry. The new order is:
+which `glr_camera_capture` already provides in all but name. This subsumes
+`cam_adopt_import_scene_default`'s state-4 gate and makes the half-applied
+camera that started this investigation structurally impossible.
+
+### Tag detection precedes both gates
+
+Today `import_handle_camera` (`import.c:2168`) returns 0 when
+`s->in_snippet || s->func_depth != 0`, so a tagged line in either position falls
+through to the function-body or snippet handler and becomes geometry. Tag
+detection must therefore run **before both gates**, not just the depth one:
 
 1. detect the `@camera` tag;
-2. if tagged and `func_depth > 0`: **consume** the line (do not insert it) and
-   emit a diagnostic - a camera role inside a function body is meaningless, and
-   silently rendering it as geometry is the failure mode this plan exists to
-   remove;
-3. if tagged at depth 0: parse, validate, accumulate;
-4. untagged: existing handling, unchanged.
+2. tagged, but in a snippet or at depth > 0: **consume** the line (do not
+   insert it) and record a diagnostic;
+3. tagged in the accepted region: parse, validate, accumulate;
+4. untagged: existing handling, entirely unchanged - the existing gates still
+   run, they are simply no longer the first thing a tagged line meets.
 
 ### One reader, in `src/repl/`
 
@@ -248,12 +287,31 @@ ReplCameraLineResult repl_camera_header_offer(ReplCameraHeader *hdr,
                                               ReplCameraDiag *diag_out);
 ```
 
-`ReplCameraDiag` carries the rule that failed and the role, as an enum plus a
-short message; the caller prefixes its own `file:line` and routes to the sink it
-already uses (`repl_set_status` for the app, stderr for the demo, the tutorial
-status line for setup scaffolds). The critical property is that
-`REJECTED` and `NOT_CAMERA` are distinct: rejected lines are consumed, which is
-what stops a malformed header becoming geometry.
+The critical property is that `REJECTED` and `NOT_CAMERA` are distinct: rejected
+lines are consumed, which is what stops a malformed header becoming geometry.
+
+**Diagnostics accumulate; they are not only routed.** A fire-and-forget sink
+cannot be asserted on, and the parity test compares an ordered diagnostic list.
+`ReplCameraHeader` therefore owns a per-load accumulator - a fixed array of
+
+```c
+typedef struct {
+    ReplCameraRole role;       /* which role, or NONE for whole-load warnings */
+    ReplCameraRule rule;       /* which rule failed - the comparable key */
+    int            line_no;    /* caller-supplied; 0 when unknown */
+} ReplCameraDiag;
+```
+
+capped at `REPL_CAMERA_MAX_DIAGS` = 8 with an overflow counter, so a pathological
+file cannot allocate. Line numbers are caller-supplied because the reader sees
+lines, not files; the caller also owns the human-readable message (it has the
+file name) and routes it to the sink it already uses - `repl_set_status` for the
+app, stderr for the demo, the tutorial status line for setup scaffolds.
+
+Tests read the accumulator directly rather than capturing a sink. Parity
+compares the `(role, rule, line_no)` triples in order; message text is
+presentation and is not compared, so the two loaders may word a warning
+differently without failing.
 
 ### The bridge stops parsing text
 
@@ -266,11 +324,25 @@ point taking a resolved pose and an explicit intent:
 void (*apply_pose)(const ReplCameraPose *pose, ReplCameraApplyMode mode);
 ```
 
-`SNAP` for file load and snapshot restore, `EASE` for example load. That
-difference is real and wanted - examples animate the transition
-(`glr_camera_ease_to`, `glr_camera_export.c:255`) while a file load should land
-immediately - but today it is a side effect of *which parser ran*. Making it an
-argument is what keeps it from drifting again.
+**Three modes, not two.** A snap/ease flag alone loses a second, independent
+axis that the current bridge encodes structurally: whether the applied pose
+becomes the scene default (what "Reset camera" returns to). Collapsing to
+`SNAP` + `EASE` would make a snapshot restore adopt a scene default it must
+not - the bug this plan is meant to prevent, reintroduced by its own API.
+
+| Mode | Transition | Scene default | Replaces | Caller |
+|---|---|---|---|---|
+| `REPL_CAMERA_APPLY_IMPORT` | snap | adopt | `try_consume_import_line` + `adopt_import_scene_default` | file / workspace load |
+| `REPL_CAMERA_APPLY_RESTORE` | snap | leave | `apply_capture_block_snap` | `scene_snapshot`, workspace-save staging |
+| `REPL_CAMERA_APPLY_EXAMPLE` | ease | adopt | `apply_example_block` | example, tutorial scaffold |
+
+The fourth combination (ease without adopting) has no caller and is not
+defined - adding it later is a deliberate act, not an accident of an
+orthogonal flag pair. The transition difference is real and wanted - examples
+animate (`glr_camera_ease_to`, `glr_camera_export.c:255`) while a file load
+lands immediately - but today both it *and* the scene-default decision are side
+effects of *which parser ran*. Making both explicit is what keeps them from
+drifting again.
 
 `scene_snapshot` (`scene_snapshot.c:136`) stops carrying a
 `ReplExportCameraBlock` and carries a `ReplCameraPose`, so an in-memory scene
@@ -309,27 +381,52 @@ moving the rotation into the scene body as geometry. Note the two files already
 carrying uncommitted edits (`attrib-stack-push-pop`, `function-order-dependency`)
 before touching them.
 
-## Implementation phases
+### Documentation and the fifth writer
+
+The five-line positional format is described in prose in several places, all of
+which become wrong on the day phase 5 lands:
+
+| Location | Change |
+|---|---|
+| `src/repl/example_loader.h:38` | dies with `repl_example_consume_camera_header` |
+| `docs/ADVANCED_USAGE.md:522` | directive table row "a 5-line camera preset" → tagged lines; the surrounding metadata prose describes leading-directives-only, which the tags do not follow |
+| `src/repl/tutorials.h:234` | setup-scaffold comment naming the 5-line block |
+| `src/subsystems/tutorial/tutorial_runner.c:690` | ditto, plus the `pos +=` contract |
+| `src/repl/export.h:58` | `ReplExportCameraBlock` doc comment and the whole bridge-callback block (lines 70-125) |
+| `src/app/glr_camera_export.c:5` | file header describing the two variants and the preamble |
+| `docs/ARCHITECTURE.md`, `docs/USER_GUIDE.md` | `// camera` header mentions |
+| `CLAUDE.md` | "Example metadata & presentation reset" camera sentence |
+
+`src/repl/export_glr.c:76` is a **fifth** camera-block writer - the `.glr`
+exporter, emitting the numeric form independently of the bridge formatter. It
+does not parse, so it is not a fifth reader, but it must grow the tags in phase
+5 or `.glr` files saved from the app will not reload their own camera.
 
 1. **Differential test first** - `tests/test_camera_header_parity.c` (below).
    Expected red on all six dynamic-yaw stress scenes before any other change;
    that is the check that the diagnosis is right.
-2. **`src/repl/camera_header.{c,h}`** - tag recognition, per-role parse,
-   validation, accumulation, `finish`, diagnostics. Unit-tested against line
-   fixtures with no loader involvement. Add to `REPL_DEMO_DEP_SRCS`
-   (`Makefile:563`).
-3. **Bridge collapse** - `ReplCameraPose` + `apply_pose(mode)`; delete the five
-   line-oriented bridge entry points, the import state machine, and
-   `fill_save_preamble`. Migrate `scene_snapshot` to carry a pose.
-4. **Wire all consumers** - `import.c` (tag check before the depth gate),
-   `example_loader.c` and `tutorial_runner.c` (per-line offer, `pos += n`
-   contract deleted), `repl_live_demo` (parser deleted).
+2. **`src/repl/camera_header.{c,h}`** - tag recognition, brace-depth tracking,
+   per-role parse, validation, accumulation, diagnostics, `finish` merge.
+   `code_brace_delta` hoists out of `import.c` to a shared TU. Unit-tested
+   against line fixtures with no loader involvement. Add both sources to
+   `REPL_DEMO_DEP_SRCS` (`Makefile:563`).
+3. **Bridge collapse** - `ReplCameraPose`, `capture_pose()`,
+   `apply_pose(pose, IMPORT|RESTORE|EXAMPLE)`; delete the five line-oriented
+   bridge entry points, the import state machine, and `fill_save_preamble`.
+   Migrate `scene_snapshot` to carry a pose and pass `RESTORE`.
+4. **Wire all consumers** - `import.c` (tag check before *both* gates, snippet
+   region signalled to the reader), `example_loader.c` and `tutorial_runner.c`
+   (per-line offer, `pos += n` contract deleted), `repl_live_demo` (parser
+   deleted, `apply_pose` kept).
 5. **Export the tags** - one `fill_block`, merged variants, unconditional
-   `// camera` marker, `ry` as literal-plus-`g_angle`.
+   `// camera` marker, `ry` as literal-plus-`g_angle`, **and `export_glr.c:76`**
+   so app-saved `.glr` files reload their own camera.
 6. **Corpus sweep** - 38 mechanical, 6 real edits, with an OSMesa capture per
    real edit.
-7. **Goldens** - `--dump-code` and export fixtures gain the tag comments.
-   Regenerate with `BUILD=debug`.
+7. **Goldens and docs** - `--dump-code` and export fixtures gain the tag
+   comments (regenerate with `BUILD=debug`); the eight documentation sites in
+   the table above are updated in the same commit, so no released text
+   describes a format the tree no longer reads.
 
 Phases 2-4 land together; a half-migrated tree has two readers, which is the
 state this plan exists to end.
@@ -349,9 +446,17 @@ state this plan exists to end.
   geometry as long as the count matched, which is precisely the bug.
 - **`test_camera_header`** (new, `TEST_BINS`) - per-role parse plus every
   rejection rule: non-literal argument, `dist` with non-zero x/y, wrong rotate
-  axis, trailing garbage after the call, duplicate role, tagged line at
-  `func_depth > 0` (asserting the line is consumed *and* not inserted),
-  `ry` without a leading literal, missing roles at `finish`.
+  axis, trailing garbage after the call, duplicate role, `ry` without a leading
+  literal, **`ry` with an unknown suffix identifier (`20.0f + typo`)**, tagged
+  line at brace depth > 0, tagged line inside a snippet, tagged line after the
+  snippet ends - the last three asserting the line is consumed *and* not
+  inserted - and partial-pose `finish`: the merged pose keeps the live value for
+  every unseen role and one diagnostic names each.
+- **`test_camera_apply_modes`** (new, `TEST_BINS`) - a recording stub bridge
+  asserting each caller passes the mode it means: file load → `IMPORT` (snap,
+  scene default adopted), `scene_snapshot` restore → `RESTORE` (snap, scene
+  default *unchanged*), example and tutorial scaffold → `EXAMPLE` (ease, adopted).
+  The `RESTORE` case is the one a two-mode API would have silently broken.
 - Existing export/import round-trip tests - extended so a file whose transform
   numbers are edited by hand between export and import reads back the edited
   pose. That is the property the rejected one-line-directive design would have
@@ -368,9 +473,16 @@ state this plan exists to end.
   visibly; each needs a before/after capture and a per-file call on static angle
   vs. body rotation.
 - **`scene_snapshot` migration is on the hot path** for F12 cycling and scene
-  restore. The pose swap should be behavior-identical, but SNAP/EASE mapping is
-  easy to get backwards - `SCENE_SNAPSHOT_CAMERA_EASE` → `EASE`,
-  everything else → `SNAP`, and the snapshot path must not adopt a scene
-  default the way a file load does.
+  restore, and its mode mapping is the easiest thing here to get wrong:
+  `SCENE_SNAPSHOT_CAMERA_EASE` → `EXAMPLE`, everything else → `RESTORE`, and
+  **never `IMPORT`** - a snapshot restore that adopts a scene default silently
+  redefines what "Reset camera" returns to. `test_camera_apply_modes` exists
+  for this line specifically.
+- **The reader's depth tracking depends on callers offering every line.** A
+  caller that filters before offering (an easy optimization to reach for)
+  desynchronizes the brace counter and can accept a tagged line inside a
+  function body. The header contract must say so, and the parity test covers it
+  only indirectly - a fixture with a tagged line inside a `funcN` body belongs
+  in `test_camera_header` proper.
 - **Golden churn** is broad but mechanical; it lands with phase 7 rather than
   spread across the sweep.
