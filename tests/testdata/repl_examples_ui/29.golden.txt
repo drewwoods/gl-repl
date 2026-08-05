@@ -91,11 +91,10 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  // camera
-  glTranslatef(0.0000f, 0.0000f, -6.5500f);
-  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(-115.0000f, 0.0f, 1.0f, 0.0f);
-  glTranslatef(-0.0000f, -0.0000f, -0.0000f);
+  glTranslatef(0.0000f, 0.0000f, -6.5500f);   // @camera dist
+  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(-115.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
@@ -116,13 +115,6 @@ void display(void) {
   static float detail = 30;
   static float blowHoleX = 0.95, blowHoleY = 0.71, blowHoleZ;
   static float waterDroplets = 250; // @tune
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glEnable(GL_COLOR_MATERIAL);
-  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
-  glEnable(GL_POINT_SMOOTH);
 
   computeVerticalMotion(ageSeconds, launchY) {
     // Velocity is linear in age: currentVelY = gravityY*ageSeconds + launchVelY.
@@ -255,6 +247,15 @@ void display(void) {
       glutSolidSphere(1, 10, 8);
     glPopMatrix();
   }
+
+
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
+  glEnable(GL_POINT_SMOOTH);
 
   glColor4f(0.25, 0.45, 0.85, 0.46);
   glEnable(GL_BLEND);

@@ -91,18 +91,16 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  // camera
-  glTranslatef(0.0000f, 0.0000f, -15.0000f);
-  glRotatef(26.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(-20.0000f, 0.0f, 1.0f, 0.0f);
-  glTranslatef(-0.0000f, -0.0000f, -0.0000f);
+  glTranslatef(0.0000f, 0.0000f, -15.0000f);   // @camera dist
+  glRotatef(26.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(-20.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
-
   // Top-level scratch for the firefly loop at the bottom of the scene: x/y/z
   // vertex position, k/s its polar angle/radius. sea() and island() used to
   // borrow these too; both now name their own function-scoped locals, so
@@ -111,26 +109,6 @@ void display(void) {
   static float fireflies = 44; // @tune
   static float flyRadius = 2.6; // @tune
   static float c = 3; // color scaling factor for sea sheet
-
-  glClearColor(0.05, 0.06, 0.08, 1);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  // ===== Dusk lighthouse atoll - a coherent feature tour =====
-  // One scene, many features: a parametric sea, a tessellated island with a
-  // lagoon cutout, a lighthouse of stacked GLUT solids with a sweeping
-  // translucent beam, a recursive tree (if / else if / else), GLUT-solid
-  // rocks, additive-blended firefly points, and a moon with a halo ring.
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_LIGHTING);
-  glEnable(GL_NORMALIZE);
-  glEnable(GL_LIGHT0);
-  glEnable(GL_LIGHT2);
-  glEnable(GL_LIGHT3);
-  glShadeModel(GL_SMOOTH);
-  glEnable(GL_COLOR_MATERIAL);
-  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
-  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16);
 
   // --- sea(): animated water sheet (nested for + analytic normals) ---
   // Colored by wave height: deep azure troughs lift to bright azure crests.
@@ -283,6 +261,27 @@ void display(void) {
       glPopMatrix();
     }
   }
+
+
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  // ===== Dusk lighthouse atoll - a coherent feature tour =====
+  // One scene, many features: a parametric sea, a tessellated island with a
+  // lagoon cutout, a lighthouse of stacked GLUT solids with a sweeping
+  // translucent beam, a recursive tree (if / else if / else), GLUT-solid
+  // rocks, additive-blended firefly points, and a moon with a halo ring.
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_NORMALIZE);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT2);
+  glEnable(GL_LIGHT3);
+  glShadeModel(GL_SMOOTH);
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16);
 
   // ===== Scene composition =====
   glLineWidth(1);

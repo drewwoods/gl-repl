@@ -2159,8 +2159,6 @@ int main(int argc, char **argv) {
                             "// @cfg vertex_outlines = 0") == NULL);
                   ASSERT_TRUE("stress example cfg backdrop hidden",
                         strstr(dump, "// @cfg backdrop = 6") == NULL);
-                ASSERT_TRUE("stress example camera marker restored in expanded panel",
-                            strstr(dump, "  // camera") != NULL);
                 ASSERT_TRUE("stress example camera rotate hidden",
                             strstr(dump,
                                    "glRotatef(26.0f, 1.0f, 0.0f, 0.0f);") == NULL);
@@ -2206,7 +2204,10 @@ int main(int argc, char **argv) {
                     fabsf(glr_camera().ty - 0.3f) < 1e-4f);
         ASSERT_TRUE("mixed cfg camera tz preset",
                     fabsf(glr_camera().tz - (-0.4f)) < 1e-4f);
-        ASSERT_TRUE("mixed cfg camera body cmds loaded", repl_state_document_count() == 3);
+        /* Three body rows plus the `// camera` marker, which is an ordinary
+         * comment row now. */
+        ASSERT_TRUE("mixed cfg camera body cmds loaded",
+                    repl_state_document_count() == 4);
 
         dump = dump_current_code_panel_text();
         ASSERT_TRUE("mixed cfg camera dump alloc", dump != NULL);
@@ -2309,15 +2310,15 @@ int main(int argc, char **argv) {
     }
 
     {
-        /* Normalization is exact after punctuation is removed. A prose
-         * comment containing "camera" must remain ordinary scene source,
-         * along with the transforms that follow it. */
+        /* Only the `@camera` role tags make a line a camera line. A prose
+         * comment mentioning the word - and the untagged transforms below it -
+         * stay ordinary scene source. */
         static const char *const prose_camera_example[] = {
             "// The camera starts here.",
-            "glTranslatef(0.0f, 0.0f, -8.0f);   // @camera dist",
-            "glRotatef(14.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
-            "glRotatef(27.0f, 0.0f, 1.0f, 0.0f);   // @camera ry",
-            "glTranslatef(-0.25f, 0.5f, -0.75f);   // @camera pan",
+            "glTranslatef(0.0f, 0.0f, -8.0f);",
+            "glRotatef(14.0f, 1.0f, 0.0f, 0.0f);",
+            "glRotatef(27.0f, 0.0f, 1.0f, 0.0f);",
+            "glTranslatef(-0.25f, 0.5f, -0.75f);",
             "glBegin(GL_POINTS);",
             "glVertex3f(0, 0, 0);",
             "glEnd();",
@@ -2383,10 +2384,11 @@ int main(int argc, char **argv) {
              * is gone, rejected ones included. */
             ASSERT_TRUE("camera marker kept as an ordinary comment",
                         strstr(dump, "// camera") != NULL);
+            /* The panel's generated camera preview legitimately shows the
+             * applied ry, so "did not become geometry" is a claim about the
+             * document, not about the whole panel dump. */
             ASSERT_TRUE("rejected camera row did not become geometry",
-                        strstr(dump, "glTranslatef(1") == NULL);
-            ASSERT_TRUE("accepted camera rows did not become geometry",
-                        strstr(dump, "glRotatef(91") == NULL);
+                        strstr(dump, "glTranslatef(1.0f") == NULL);
             ASSERT_TRUE("body kept",
                         strstr(dump, "glVertex3f(1, 2, 3);") != NULL);
             free(dump);

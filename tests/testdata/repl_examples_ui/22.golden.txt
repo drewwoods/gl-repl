@@ -91,18 +91,16 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  // camera
-  glTranslatef(0.0000f, 0.0000f, -5.0000f);
-  glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(10.0000f, 0.0f, 1.0f, 0.0f);
-  glTranslatef(-0.0000f, -0.0000f, -0.0000f);
+  glTranslatef(0.0000f, 0.0000f, -5.0000f);   // @camera dist
+  glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(10.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
-
   static float radius, angle, x, y, z; // per-particle: orbit radius, base angle, world pos
   static float count = 160; // number of glow points
   static float radMin = 0.4; // nearest orbital radius (xz plane)
@@ -111,6 +109,7 @@ void display(void) {
   static float yWobbleFreq = 1.3; // y wobble frequency relative to the base angle
   static float yWobbleRate = 0.6; // y wobble time-rate (animates with t)
   static float yAmp = 0.9; // y wobble amplitude
+
 
   // Glow sprites: additive blend + distance-attenuated point size.
   // Each particle orbits in xz at (radius, angle) while y wobbles independently.

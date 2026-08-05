@@ -102,18 +102,16 @@ void display(void) {
   // Eye-space light positions, set before the camera transform.
   glLightfv(GL_LIGHT0, GL_POSITION, repl_glfloat4(0, 0, -1, 1));
 --- camera ---
-  // camera
-  glTranslatef(0.0000f, 0.0000f, -9.5000f);
-  glRotatef(14.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
-  glTranslatef(-0.0000f, -0.5000f, -0.0000f);
+  glTranslatef(0.0000f, 0.0000f, -9.5000f);   // @camera dist
+  glRotatef(14.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.5000f, -0.0000f);   // @camera pan
 --- header_post ---
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
-
   // Clip planes carve new shapes out of stock solids. glClipPlane sets a
   // plane equation a*x + b*y + c*z + d >= 0; GL keeps that half-space and
   // discards everything else. The equation is captured in the modelview
@@ -121,6 +119,7 @@ void display(void) {
   // position the plane. glEnable(GL_CLIP_PLANEi) switches each one on.
   // Tip: park the cursor on a glClipPlane line to see its plane guide.
   static float d; // sliding cut offset for the animated cutaway
+
 
   glClearColor(0.04, 0.05, 0.08, 1);
   glEnable(GL_DEPTH_TEST);
@@ -139,7 +138,6 @@ void display(void) {
   glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE); // outer color set by glColor3f calls below
   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
-
 
   // 1) Dome - one plane. (0, 1, 0, 0) keeps y >= 0: the sphere's top
   // half. The plane rides the translated frame, so it cuts through the

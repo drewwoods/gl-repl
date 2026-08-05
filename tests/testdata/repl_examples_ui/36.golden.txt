@@ -91,18 +91,16 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  // camera
-  glTranslatef(0.0000f, 0.0000f, -1.0000f);
-  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);
-  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);
-  glTranslatef(-0.0000f, -0.0000f, -0.0000f);
+  glTranslatef(0.0000f, 0.0000f, -1.0000f);   // @camera dist
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
   float A[16], B[16], C[16];
 --- source ---
-
   // Fog fades geometry toward the fog color with eye-space distance.
   // glFogi picks the equation: GL_EXP2 (used here) and GL_EXP fall off
   // exponentially with GL_FOG_DENSITY; GL_LINEAR instead ramps between
@@ -119,6 +117,7 @@ void display(void) {
   static float ringZ; // eye-space distance of the current ring
   static float bendX; // tunnel centerline x at this depth
   static float bendY; // tunnel centerline y at this depth
+
 
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
