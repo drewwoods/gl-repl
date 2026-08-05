@@ -1726,6 +1726,21 @@ static int rebake_one_cmd(const ReplRebakeOptions *o, int k,
         return 1;
     }
 
+    /* glMultMatrixf(A): the line is a bare array name, so has_vars is 0 and
+     * there is nothing to re-evaluate - but the cells behind the name were
+     * just rewritten by the scratch assignments above, in stream order, and
+     * the payload snapshot is what every later walker reads. Re-take it here
+     * for the same reason flatten_append_cmd takes it; skipping would freeze
+     * the matrix at whatever the last full flatten baked, so a scene that
+     * animates through a scratch matrix would stop animating under the
+     * value-only rebake path (the exported C, which reads A live, would not). */
+    if (cmd->type == CMD_MULT_MATRIXF && repl_cmd_mult_matrix_from_array(cmd)) {
+        int array_idx = (int)cmd->args[0];
+        for (int cell = 0; cell < REPL_MATRIX_CELL_COUNT; cell++)
+            repl_eval_scratch_get(array_idx, cell, &cmd->payload.matrix.m[cell]);
+        return 1;
+    }
+
     if (!cmd->has_vars)
         return 1;   /* constant non-assignment commands need no work */
 

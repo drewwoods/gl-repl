@@ -113,6 +113,13 @@ static int flat_cmd_equal(const GLCmd *a, const GLCmd *b) {
         memcmp(&a->payload.assign, &b->payload.assign,
                sizeof(a->payload.assign)) != 0)
         return 0;
+    /* glMultMatrixf carries its 16 cells in the payload, not args[] - for the
+     * scratch-array form args[] is just the array id and never changes, so
+     * this is the only field that can catch a stale matrix. */
+    if (a->type == CMD_MULT_MATRIXF &&
+        memcmp(a->payload.matrix.m, b->payload.matrix.m,
+               sizeof(a->payload.matrix.m)) != 0)
+        return 0;
     return 1;
 }
 
@@ -265,6 +272,39 @@ static const char *const k_scene_scratch[] = {
     "glBegin(GL_POINTS);",
     "glVertex3f(A[0], A[1], 0);",
     "glEnd();",
+    NULL,
+};
+
+/* glMultMatrixf(A) reads the scratch array rather than an expression slot:
+ * its line is a bare name, so has_vars is 0 and there is nothing for the
+ * rebake to re-evaluate. The payload snapshot of A's cells is still stale
+ * once the assignments above it re-bake, so the rebake has to re-take it -
+ * otherwise the matrix freezes at the last full flatten while the exported
+ * C, which reads A live, keeps animating. */
+static const char *const k_scene_scratch_matrix[] = {
+    "A[0] = 1;",
+    "A[1] = 0;",
+    "A[2] = 0;",
+    "A[3] = 0;",
+    "A[4] = sin(t) * 0.5;",
+    "A[5] = 1;",
+    "A[6] = 0;",
+    "A[7] = 0;",
+    "A[8] = 0;",
+    "A[9] = 0;",
+    "A[10] = 1;",
+    "A[11] = 0;",
+    "A[12] = 0;",
+    "A[13] = 0;",
+    "A[14] = 0;",
+    "A[15] = 1;",
+    "for(i, -2, 3) {",
+    "glPushMatrix();",
+    "A[13] = cos(t + i);",
+    "glMultMatrixf(A);",
+    "glutSolidCube(0.8);",
+    "glPopMatrix();",
+    "}",
     NULL,
 };
 
@@ -434,6 +474,12 @@ static void test_rebake_assignment_scene(void) {
 static void test_rebake_scratch_scene(void) {
     printf("--- rebake: scratch threading ---\n");
     check_rebake_matches_full("scratch", k_scene_scratch, 0.5f, 3.0f);
+}
+
+static void test_rebake_scratch_matrix_scene(void) {
+    printf("--- rebake: glMultMatrixf(A) scratch snapshot ---\n");
+    check_rebake_matches_full("scratch matrix", k_scene_scratch_matrix,
+                              0.0f, 1.7f);
 }
 
 static void test_rebake_replays_constant_assignment_resets(void) {
@@ -723,6 +769,7 @@ int main(void) {
     test_rebake_value_scene();
     test_rebake_assignment_scene();
     test_rebake_scratch_scene();
+    test_rebake_scratch_matrix_scene();
     test_rebake_replays_constant_assignment_resets();
     test_rebake_leaves_local_assignments_alone();
     test_dynamic_stencil_ref_rebake();
