@@ -2030,14 +2030,21 @@ examples ship in - no C scaffold at all:
 ```
 // @cfg grid = GRID_THEME_OFF          <- only the settings that differ
 // @cfg projection = PROJ_ORTHO           from the presentation defaults
-// camera
-glTranslatef(0.0000f, 0.0000f, -6.5000f);
-glRotatef(35.2500f, 1.0f, 0.0f, 0.0f);
-glRotatef(45.0000f, 0.0f, 1.0f, 0.0f);
-glTranslatef(0.0000f, 0.0000f, 0.0000f);
+static float a, b;                     <- declarations first,
+func0(r) { ... }                       <- then function definitions,
+glTranslatef(0.0000f, 0.0000f, -6.5000f);   // @camera dist
+glRotatef(35.2500f, 1.0f, 0.0f, 0.0f);      // @camera rx
+glRotatef(45.0000f, 0.0f, 1.0f, 0.0f);      // @camera ry
+glTranslatef(0.0000f, 0.0000f, 0.0000f);    // @camera pan
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 ...your commands, verbatim...
 ```
+
+That order - declarations, then function definitions, then camera and body -
+is the exported C's own order, and it is the one shape the loader accepts:
+a file that puts its helpers at the bottom is rejected with a message naming
+both the offending line and the line that established the phase. Comments and
+blank lines carry no phase and are legal anywhere.
 
 It goes to the same directory as Save Scene, but uses the distinct
 `<scene-slug>.glr` filename and format. Reach for it when you are **authoring

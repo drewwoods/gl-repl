@@ -1354,7 +1354,7 @@ Runtime shape:
   reproduced (its glide samples dispatch synchronously) but not its dynamics -
   seek suppresses animation-time, REPL-replay, view-transition, and camera ticks,
   so orbit momentum + time-driven settling are not simulated. Camera easing
-  requested by the reconstructed prefix (most visibly an example's `// camera`
+  requested by the reconstructed prefix (most visibly an example's `@camera`
   block) resolves immediately inside a scoped camera-reconstruction policy. The
   target boundary therefore renders directly, instead of briefly exposing the
   restored baseline camera and replaying the scene-load ease after every Back.
@@ -1632,10 +1632,10 @@ values through these seams:
 | Seam | Purpose |
 |---|---|
 | Config bridge | [`glr_actions_install_export_cfg_bridge()`](../src/app/glr_actions.h#L122) exposes `@cfg` reads and writes without coupling export to app config modules. |
-| Camera bridge | [`glr_camera_export_install_bridge()`](../src/app/glr_camera_export.h#L14) supplies coordinates for `// camera` blocks. |
+| Camera bridge | [`glr_camera_export_install_bridge()`](../src/app/glr_camera_export.h#L14) formats the tagged `@camera` rows and applies a resolved pose; it does not parse - src/repl/camera_header.c is the one reader. |
 | Reshape-projection bridge | Supplies the active perspective or orthographic projection to export and code-panel calculations. |
 | Camera-distance source | Supplies executor point-size fallback data without linking [`glr_camera.c`](../src/app/glr_camera.c). |
-| [`ReplExportLayout`](../src/repl/export.h#L259) | Passes viewport and code-panel geometry explicitly instead of calling `ui_layout_*`. |
+| [`ReplExportLayout`](../src/repl/export.h#L262) | Passes viewport and code-panel geometry explicitly instead of calling `ui_layout_*`. |
 
 #### 4. OS-Clipboard Bridge ([`EditorClipboardHostBridge`](../src/editor/clipboard.h#L82))
 
@@ -1853,12 +1853,12 @@ mechanisms:
    does not format text or know about export.
 
 2. **Controller-installed projection bridge** (same shape as
-   [`ReplExportCameraBridge`](../src/repl/export.h#L90)). [`src/repl/export.c`](../src/repl/export.c) is GL-free, so it owns
+   [`ReplExportCameraBridge`](../src/repl/export.h#L93)). [`src/repl/export.c`](../src/repl/export.c) is GL-free, so it owns
    no projection math. `ReplExportProjectionBridge.fill_reshape_block`
    is installed by [`glr_ctrl.c`](../src/app/glr_ctrl.c) next to the camera-distance source; its
    adapter reads [`render3d_get_active_projection()`](../src/render3d/render.h#L135) and formats the C
    lines. No bridge installed (render3d_demo, tests) ⇒
-   [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L168) returns the canonical
+   [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L171) returns the canonical
    perspective default (correct `0.1, 200.0` near/far).
 
 **Rule - where a per-frame dynamic value is resolved.** Apply this test
@@ -1912,10 +1912,10 @@ Per the rule above:
   `REPL_EXPORT_PROJ_*` source-of-truth in [`glr_ctrl.c`](../src/app/glr_ctrl.c) (same pattern as
   the scene-tab dims).
 * **File save (discrete action):** `repl_export_save_output()` calls
-  [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L168) directly - a single pass on
+  [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L171) directly - a single pass on
   the Ctrl+S thread, not split across render3d render, so it correctly
   captures the projection in effect at save time. (Routing this through
-  a controller-owned [`ReplExportLayout`](../src/repl/export.h#L259)-style export context is the
+  a controller-owned [`ReplExportLayout`](../src/repl/export.h#L262)-style export context is the
   documented next step if save is ever folded into the frame path.)
 
 [`render3d_get_active_projection()`](../src/render3d/render.h#L135) is the *nearest-steady* projection: the
@@ -1932,13 +1932,13 @@ snapshot for the panel, special-case in the consumers.
 `check-state-ownership` gate):
 
 * `check-ui-no-export-resolver` - no `src/ui/` file may call
-  [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L168); the panel reads the
+  [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L171); the panel reads the
   snapshot-frozen block. This is the structural backstop for the rule
   above: the mistake fails the build, not just review.
 * `check-repl-export-via-bridge` - [`src/repl/export.c`](../src/repl/export.c) may not include
   `render3d/`/`app/` headers or call `render3d_*`/`glr_*`; it pulls
   app/render3d-derived values only through controller-installed bridges
-  ([`ReplExportProjectionBridge`](../src/repl/export.h#L134), [`ReplExportCameraBridge`](../src/repl/export.h#L90),
+  ([`ReplExportProjectionBridge`](../src/repl/export.h#L133), [`ReplExportCameraBridge`](../src/repl/export.h#L93),
   [`ReplConfigBridge`](../src/repl/cfg_baseline.h#L49)). Complements `check-gl-boundaries` (which already
   bars GL *calls* in the REPL pipeline) and `check-repl-export-no-ui-layout`.
 
@@ -2771,8 +2771,8 @@ Orthogonal to step kinds, a tutorial may declare a `setup` scaffold
 (`TutorialEntry.setup`): starting code preloaded locked into the
 transient scene before step 0, so a tutorial builds on what an earlier
 tutorial taught without the learner re-typing it. Setup honors the
-example header vocabulary (leading `// @cfg` run, optional 5-line
-`// camera` block), its `@cfg` slugs join the teardown-restore
+example header vocabulary (leading `// @cfg` run, optional
+`@camera`-tagged transform rows), its `@cfg` slugs join the teardown-restore
 baseline, and its body may carry `// @anchor <name>` directives that
 label-placement steps target to splice commands into the scaffold
 (resolved against the live document's comment rows at step entry, by the
@@ -2802,7 +2802,7 @@ primitive being taught. Whole units read better in the code panel *and*
 give the overlays something to annotate, but +/-2 does not fit the
 built-in dist of 5.0 (which frames only +/-2.07 vertically), hence the
 pull-back. Two scaffolds whose scenes are genuinely wider or deeper than
-that (`glut_solids`, `fog`) carry their own `// camera` block. The
+that (`glut_solids`, `fog`) carry their own `@camera`-tagged rows. The
 tutorial's own leading
 `@cfg` runs after the reset and still wins. Every slug touched here is in
 the `fill_scene_subset` baseline, so teardown restores the user's own

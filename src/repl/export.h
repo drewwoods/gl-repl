@@ -11,16 +11,19 @@
  *      @scene-name <name>, @workspace-dir <path>). Used by import to restore context.
  *   3. Flattened system GL/GLUT includes, without depending on gl_includes.h.
  *   4. Global variable declarations for user-defined predefined variables (float x, y, z).
- *   5. Camera state as the raw glTranslatef/glRotatef sequence the REPL uses internally
- *      (not a pose matrix - the exact command history).
+ *   5. Camera state as the raw glTranslatef/glRotatef sequence the REPL uses
+ *      internally (not a pose matrix - the exact command history), each row
+ *      tagged with its `@camera` role so import can recognise it by tag
+ *      rather than by position.
  *   6. REPL function definitions converted to C function syntax (for reloading as
  *      CMD_FUNC_DEF on import).
  *   7. Geometry commands in the display() function body (user-edited commands).
  *
  * Import format (load_from_file): Line-by-line scan that:
  *   1. Parses leading workspace header directives (@cfg, @scene-name, @workspace-dir).
- *   2. Extracts camera state (raw glTranslatef/glRotatef lines) via the
- *      controller-installed camera bridge.
+ *   2. Extracts camera state from the `@camera`-tagged transform rows via the
+ *      shared reader in src/repl/camera_header.c, and applies one resolved
+ *      pose through the controller-installed camera bridge at end of load.
  *   3. Detects function definitions (lines matching C function syntax).
  *   4. Feeds remaining geometry lines through repl_load_apply_line() - the
  *      lean non-editor source-load path - for normal parsing.
@@ -266,8 +269,9 @@ int repl_save_default_output(const ReplExportLayout *layout);
 
 /* Write the scene as a `.glr` source file - the authoring format built-in
  * examples ship in (see src/repl/export_glr.c), not a compilable C program.
- * Content is the non-default `@cfg` rows, the `// camera` block, and the
- * document text; nothing else. Symmetric with the example loader, so the
+ * Content is the non-default `@cfg` rows, the tagged `@camera` transform
+ * rows, and the document text in canonical order - declarations, then
+ * function definitions, then camera and body; nothing else. Symmetric with the example loader, so the
  * output can be dropped into examples/scenes/ and referenced from
  * examples/catalog.ini as-is. Returns 1 on success, 0 on write failure
  * (status message set either way). No ReplExportLayout: the format carries

@@ -436,7 +436,7 @@ still round-trips through `@scene-name` / `@workspace-dir` headers.
 `view_mode`) to `CFG_DEFAULT_*` (in [`src/app/glr_defaults.h`](src/app/glr_defaults.h)
 - the single source of truth; reuse the macros, never duplicate literals)
 before applying the example's `@cfg`.** Camera is deliberately excluded
-(inherited unless a `// camera` header is present); `restore_user_scene()`
+(inherited unless the scene carries `@camera`-tagged rows); `restore_user_scene()`
 restores commands + predef vars only.
 
 Full authoring detail - `@cfg` slugs, the five files that move together, size

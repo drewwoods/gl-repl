@@ -15,13 +15,15 @@
  *   - @cfg directives to customize scene presentation (grid theme, axes,
  *     overlays, backdrop, etc.). Metadata is stripped before the code-panel
  *     renders the example.
- *   - An optional // camera block specifying initial camera position/rotation.
+ *   - Optional `@camera`-tagged transform rows specifying the initial camera
+ *     pose. The tag - not the row's position, and not a `// camera` comment -
+ *     is what makes a row camera state; see src/repl/camera_header.h.
  *
  * Example lifecycle: F12 cycles through examples and user scenes. Loading an
  * example resets non-camera scene-presentation settings to defaults, applies
  * the example's @cfg metadata, and feeds the example lines through the commit
  * pipeline. Camera is inherited (not reset) unless the example supplies an
- * explicit // camera block. Built-in defaults (CFG_DEFAULT_* macros in
+ * `@camera`-tagged rows. Built-in defaults (CFG_DEFAULT_* macros in
  * src/app/glr_defaults.h) define the reset baseline, ensuring consistent
  * starting state across example transitions.
  *

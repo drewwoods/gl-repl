@@ -365,8 +365,8 @@ time without dropping animation states. The `profile-panels` screenshot still
 reflects live rendering performance and should be regenerated on an otherwise
 unloaded machine.
 
-Each asset is a staged snippet scene with optional `@cfg` headers, a `// camera`
-block, and sometimes `GLR_EDIT_LINE` to pose cursor-bound overlays. Captures use
+Each asset is a staged snippet scene with optional `@cfg` headers, `@camera`-tagged
+rows, and sometimes `GLR_EDIT_LINE` to pose cursor-bound overlays. Captures use
 record mode and keep the last frame, so theme fades and other frame-based
 settling are deterministic.
 
@@ -519,17 +519,43 @@ metadata that round-trips on reload:
 | `// @declare name` | Reconstructs a `float name;` declaration on import. |
 | `// @tune` | Marks a variable as a tunable knob in the exported program - see [User Guide → Tunable Variables](USER_GUIDE.md#tunable-variables--tune). |
 | `// @config` | Marks an assigned variable as config so the variable panel doesn't dim it (bounds-keeping writes like clamps) - see [Config Variables](#config-variables--config) below. |
-| `// camera` block | A 5-line camera preset applied on load. |
+| `// @camera <role>` | Tags a transform row as camera state. Five roles: `dist`, `rx`, `ry`, `spin`, `pan`. |
 
-Built-in examples use the same `@cfg` + `// camera` headers, so a saved
-scene and an example are the same file format. Only *leading* directives
-are metadata; the same text later in the file is an ordinary comment.
+Built-in examples use the same `@cfg` header and `@camera` tags, so a saved
+scene and an example are the same file format. The `@cfg` directives are
+metadata only where they *lead* the file; the same text later on is an
+ordinary comment.
+
+The camera tags are different, and deliberately so: a row is a camera row
+because of its tag, never because of where it sits, so `@camera` is reserved
+syntax wherever it appears. A tagged row in a place the format does not allow
+- inside a function body, inside the geometry snippet, after body code, or out
+of the canonical `dist, rx, ry, spin, pan` order - is **rejected with a
+diagnostic naming the file, the line and the rule**, and is never passed
+through into the document as geometry.
+
+`// camera` itself carries no meaning the tags do not already carry: it is an
+ordinary comment, and a file with tags and no marker is fully canonical.
+
+Each pose row's arguments must be plain float literals - `dist` with x = y = 0,
+`rx` on axis 1,0,0, `ry` on 0,1,0, `pan` free - and nothing may follow the
+call. `spin` is the exported C's `g_angle` animation hook: it appears only in
+a `.c`, its argument must be the bare `g_angle` token, and it is accepted and
+discarded. Roles the file omits keep their current value and produce a note.
+
+Exported C rewrites `//` into C89 block comments, so the same block reads
+`/* @camera dist */` there; both spellings are read identically.
+
+`--lint-scenes <dir>` validates every `.glr` in a directory against these
+rules and the document order below, reporting every violation in one pass
+without opening a window.
 
 ### Authoring an example catalog
 
 **File → Save Scene as .glr** writes the same file shape the built-in examples
-ship in - `@cfg` + `// camera` headers and the commands verbatim, with no C
-scaffold (see [User Guide → Scene export](USER_GUIDE.md#scene-export-glr) for
+ship in - the `@cfg` header, the tagged `@camera` rows, and the commands in
+the canonical order (declarations, then function definitions, then camera and
+body), with no C scaffold (see [User Guide → Scene export](USER_GUIDE.md#scene-export-glr) for
 what the format drops). To turn one into an example:
 
 1. Drop the `.glr` file into `examples/scenes/`.

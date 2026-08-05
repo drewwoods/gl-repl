@@ -231,7 +231,7 @@ typedef struct {
      * tutorial can build on code an earlier tutorial taught without
      * making the learner re-type it. Honors the example header
      * vocabulary: leading `// @cfg slug = value` lines and an optional
-     * 5-line `// camera` block are consumed like example metadata
+     * `@camera`-tagged transform rows are consumed like example metadata
      * (setup @cfg slugs join the teardown-restore baseline); the
      * remaining body lines are REPL source fed through the non-editor
      * loader. Every loaded row is LOCKED (read-only for the duration
