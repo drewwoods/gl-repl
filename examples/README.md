@@ -58,6 +58,19 @@ The app still uses the compiled-in generated catalog by default, so app bundles
 and installed binaries do not need the repository `examples/` directory at
 runtime.
 
+## Scenes that are not examples
+
+Everything in this directory ships: it is compiled into the binary and appears
+in the Scene menu. A scene written to *exercise* the pipeline rather than to be
+shown belongs in [`tests/scenes/stress/`](../tests/scenes/stress/README.md)
+instead - a runtime `--examples-dir` catalog that is not compiled in.
+
+The tag vocabulary is the mechanical form of that split.
+[`scripts/gen_examples.py`](../scripts/gen_examples.py) maps `tags` onto the
+four `EXAMPLE_TAG_*` bits and rejects anything else, so a scene wanting to
+describe itself as `Scoping` or `AttribStack` cannot be a built-in example; a
+runtime catalog registers arbitrary tag names and can.
+
 ## Authoring notes
 
 No predefined `goto` examples are shipped: `goto` support is partial - top-level

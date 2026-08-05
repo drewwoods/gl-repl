@@ -27,7 +27,7 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--tour name|n]
 | `-h`, `--help` | Print the full flag + environment reference and exit. |
 | `--example` *name*\|*n* | Start on a built-in example (case-insensitive name, or 1-based index). |
 | `--list-examples` | Print the built-in examples and exit. |
-| `--examples-dir` *dir* | Load `catalog.ini` + `scenes/` from *dir* at runtime instead of the compiled-in examples. |
+| `--examples-dir` *dir* | Load `catalog.ini` + its scene files from *dir* at runtime instead of the compiled-in examples. The tree ships one such directory: [`tests/scenes/stress/`](../tests/scenes/stress/README.md). |
 | `--tour` *name*\|*n* | Start and play a built-in guided tour on launch (case-insensitive name, or 1-based index). Space play/pause, arrows step, Esc exit. |
 | `--list-tours` | Print the built-in guided tours and exit. |
 | `--time` *secs* | Initial value of the animation variable `t` (applied after any `--example` load). Overrides `GLR_TIME`. |
@@ -536,15 +536,36 @@ what the format drops). To turn one into an example:
 2. Add a section for it to `examples/catalog.ini`.
 
 It then loads as a built-in. Runtime example directories take the same layout
-as-is, so `--examples-dir <dir>` will load `<dir>/catalog.ini` +
-`<dir>/scenes/` without a rebuild:
+as-is, so `--examples-dir <dir>` will load `<dir>/catalog.ini` without a
+rebuild:
 
 ```bash
 ./gl-repl --examples-dir examples --example <name-or-idx>
 ```
 
+Each entry's `file` is any relative path under the directory - the built-in
+catalog's `scenes/` subdirectory is a convention, not a requirement, and a flat
+directory of `.glr` files beside its `catalog.ini` works too.
+
 Catalog entry fields, size budgets, and the other files an example must be
 edited alongside are covered by the `gl-repl-scene-authoring` skill.
+
+**A runtime catalog is not a built-in catalog**, and the difference is what the
+directory is for. `examples/` is compiled into the binary by
+`scripts/gen_examples.py`, so its `tags` are restricted to the four
+`EXAMPLE_TAG_*` values (`2D`, `3D`, `Polygons`, `Lines`) and every entry ships
+to users in the Scene menu. A `--examples-dir` catalog registers arbitrary tag
+names at runtime and ships nothing, which makes it the home for scenes that
+exist to be *exercised* rather than shown.
+
+[`tests/scenes/stress/`](../tests/scenes/stress/README.md) is the one such
+catalog in the tree - targeted scenes covering parser, flattener, evaluator and
+GL-state corner cases, tagged by the corner case each one probes:
+
+```bash
+./gl-repl --examples-dir tests/scenes/stress --list-examples
+./gl-repl tests/scenes/stress/matrix-stack-recursion-stress.glr
+```
 
 ### `@cfg` scene-presentation slugs
 

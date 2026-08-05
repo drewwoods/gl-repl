@@ -29,9 +29,9 @@ deleted, not kept as fallbacks.
 
 ## The bug this comes from
 
-`stress/matrix-stack-recursion-stress.glr` carries a hand-authored header whose
-first transform folds a y offset into the distance line and whose yaw is
-`20.0f * t`:
+`tests/scenes/stress/matrix-stack-recursion-stress.glr` carries a
+hand-authored header whose first transform folds a y offset into the distance
+line and whose yaw is `20.0f * t`:
 
 ```c
 // --- Camera -------------------------
@@ -40,10 +40,10 @@ glRotatef(15.0f, 1.0f, 0.0f, 0.0f);
 glRotatef(20.0f * t, 0.0f, 1.0f, 0.0f);
 ```
 
-Loaded as a file it looks like it works; loaded from `stress/catalog.ini` the
-three transforms land in the document and the tree renders 2.5 units low,
-spinning. The two loaders disagree because they were written to opposite
-contracts.
+Loaded as a file it looks like it works; loaded from
+`tests/scenes/stress/catalog.ini` the three transforms land in the document and
+the tree renders 2.5 units low, spinning. The two loaders disagree because they
+were written to opposite contracts.
 
 **File load** - `src/repl/import.c` delegates to the bridge state machine
 `cam_try_consume_block_line` (`src/app/glr_camera_export.c:117`):
@@ -633,20 +633,21 @@ two entry points want to be one function; it already installs
 
 ### Corpus
 
-44 of 46 `.glr` files under `examples/scenes/` and `stress/` carry a camera
-header. 38 are in canonical numeric form and need only four appended tags.
+44 of 46 `.glr` files under `examples/scenes/` and `tests/scenes/stress/` carry
+a camera header. 38 are in canonical numeric form and need only four appended
+tags.
 
 **Six need real edits** - every one of the stress scenes uses a dynamic yaw the
 format cannot express:
 
 | File | Yaw |
 |---|---|
-| `stress/attrib-stack-push-pop-stress.glr` | `25.0f * t` |
-| `stress/color-mask-clear-stress.glr` | `25.0f * t` |
-| `stress/expression-eval-boundary-stress.glr` | `12.0f * t` |
-| `stress/function-order-dependency-stress.glr` | `30.0f * t` |
-| `stress/matrix-stack-recursion-stress.glr` | `20.0f * t` |
-| `stress/nested-if-branching-stress.glr` | `18.0f * t` |
+| `tests/scenes/stress/attrib-stack-push-pop-stress.glr` | `25.0f * t` |
+| `tests/scenes/stress/color-mask-clear-stress.glr` | `25.0f * t` |
+| `tests/scenes/stress/expression-eval-boundary-stress.glr` | `12.0f * t` |
+| `tests/scenes/stress/function-order-dependency-stress.glr` | `30.0f * t` |
+| `tests/scenes/stress/matrix-stack-recursion-stress.glr` | `20.0f * t` |
+| `tests/scenes/stress/nested-if-branching-stress.glr` | `18.0f * t` |
 
 `matrix-stack-recursion-stress.glr` additionally folds a y offset into its
 `dist` line, which moves to `pan`. That relocation is **not** a behavior-
@@ -656,7 +657,7 @@ so the offset ends up rotated. It needs its own visual check alongside the yaw
 decision.
 
 **A seventh file diverges without a marker at all.**
-`stress/function-local-shadowing-stress.glr` heads its block
+`tests/scenes/stress/function-local-shadowing-stress.glr` heads its block
 `// --- Global Declarations ---` and then opens with camera-shaped transforms at
 depth 0:
 
@@ -808,8 +809,8 @@ at the end, rather than churning at 4 and again at 6.
 ## Tests
 
 - **`test_camera_header_parity`** (new, registered in `TEST_BINS`) - for every
-  `.glr` in `examples/scenes/` and `stress/`, load via the catalog and as a
-  file, then compare:
+  `.glr` in `examples/scenes/` and `tests/scenes/stress/`, load via the catalog
+  and as a file, then compare:
   - normalized source text of every document row, and the row count;
   - command structure - `CmdType` sequence and per-command arg values;
   - resolved camera pose (dist / rx / ry / pan) and the scene default, observed

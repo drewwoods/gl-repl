@@ -236,7 +236,7 @@ authority; don't re-derive a file's job from its name.
 | **src/render3d/** | 3D scene renderer - **no REPL dependency** (proof: `render3d_demo`). Grid/axes/backdrop/lights/overlays/depth-viz/guides |
 | **src/ui/** | 2D view rendering + hit-test, **pure over snapshots**. `core/` primitives, `app/` panels + menus + layout, `subsystems/` peer renderers, `support/` prof panels |
 | **src/support/** | Neutral utilities: `cpuprof`, `gpuprof` (GL-free TU), `mesh_ply` |
-| `tests/` | Tests, `tests/support/` harness, `tests/gl-stubs/` no-op GL headers |
+| `tests/` | Tests, `tests/support/` harness, `tests/gl-stubs/` no-op GL headers, `tests/testdata/` goldens, `tests/scenes/stress/` corner-case scene corpus (runtime `--examples-dir` catalog, not compiled in) |
 
 Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/glr_defaults.h)
 (`CFG_DEFAULT_*`), [`keymap.h`](keymap.h) (bindings), [`command_spec.c`](src/repl/command_spec.c)

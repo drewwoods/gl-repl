@@ -2,6 +2,8 @@
 
 This directory contains a suite of targeted `.glr` stress test files designed to exercise parser, compiler, evaluator, flattener, and OpenGL execution corner cases in `gl-repl`.
 
+It is a **runtime `--examples-dir` catalog, not a built-in one**: nothing here is compiled into the binary, and none of it appears in the Scene menu. That is why it lives under `tests/` rather than in [`examples/`](../../../examples/README.md), and it is also what lets `catalog.ini` tag entries by the corner case each probes (`Scoping`, `AttribStack`, `Evaluator`) - the compiled-in catalog accepts only `2D` / `3D` / `Polygons` / `Lines`.
+
 ## Test Catalogue
 
 | File | Corner Case Tested | Description |
@@ -23,18 +25,18 @@ Machine-readable entries for all test cases are recorded in `catalog.ini`.
 ### 1. Load as an Example Catalog
 Replace the built-in example catalog at runtime with the stress directory:
 ```bash
-./gl-repl --examples-dir ./stress/
-./gl-repl --examples-dir ./stress/ --list-examples
+./gl-repl --examples-dir tests/scenes/stress
+./gl-repl --examples-dir tests/scenes/stress --list-examples
 ```
 
 ### 2. Load Individual Scene Files
 Launch `gl-repl` directly on any stress scene:
 ```bash
-./gl-repl stress/color-mask-clear-stress.glr
-./gl-repl stress/nested-if-branching-stress.glr
-./gl-repl stress/function-local-shadowing-stress.glr
-./gl-repl stress/function-order-dependency-stress.glr
-./gl-repl stress/attrib-stack-push-pop-stress.glr
-./gl-repl stress/matrix-stack-recursion-stress.glr
-./gl-repl stress/expression-eval-boundary-stress.glr
+./gl-repl tests/scenes/stress/color-mask-clear-stress.glr
+./gl-repl tests/scenes/stress/nested-if-branching-stress.glr
+./gl-repl tests/scenes/stress/function-local-shadowing-stress.glr
+./gl-repl tests/scenes/stress/function-order-dependency-stress.glr
+./gl-repl tests/scenes/stress/attrib-stack-push-pop-stress.glr
+./gl-repl tests/scenes/stress/matrix-stack-recursion-stress.glr
+./gl-repl tests/scenes/stress/expression-eval-boundary-stress.glr
 ```

@@ -125,6 +125,13 @@ budget (hoist loop-invariant assignments out of loops), then run
 Use `./gl-repl --examples-dir examples --example <name-or-idx>` to test catalog
 edits without rebuilding.
 
+**A corner-case scene is not a built-in example.** Scenes that exist to exercise
+the parser, flattener, evaluator or GL-state handling live in
+[`tests/scenes/stress/`](../tests/scenes/stress/README.md), a runtime
+`--examples-dir` catalog that is not compiled in and does not appear in the
+Scene menu. It also takes tags outside the built-in `2D` / `3D` / `Polygons` /
+`Lines` vocabulary, which is what lets an entry name the corner case it probes.
+
 **A new tutorial** - add a `TutorialStep[]` entry to `g_tutorials[]` in
 [`src/repl/tutorials.c`](../src/repl/tutorials.c) with a `.tags` mask; the metadata tests fail if you
 forget the tags. Use the catalog macros for the intended step shape:
