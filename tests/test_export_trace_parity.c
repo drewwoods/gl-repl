@@ -766,13 +766,27 @@ static ParityResult run_one_case(const TraceProgram *prog) {
          * computed from the start. */
         (void)compare_counts(prog->name, repl_counts, child_counts, stderr);
         (void)compare_traces(prog->name, temp_repl_tr, temp_child_tr, stderr);
+        /* Color only for a terminal: --color=always would otherwise write
+         * escape codes into the log scripts/run-tests.sh captures. And
+         * reset afterwards regardless - `head` truncates the diff at 50
+         * lines, which can cut the stream after a color is set and before
+         * diff's own reset, leaving the terminal stuck in that color. */
+        int diff_color = isatty(STDERR_FILENO);
         char diff_cmd[1024];
+        /* diff's stderr is dropped because closing the pipe early is the
+         * plan, not a fault: head exits at 50 lines and diff then reports
+         * "stdout: Broken pipe", which reads like a failure in the test. */
         snprintf(diff_cmd, sizeof diff_cmd,
-                 "diff --color=always -u '%s' '%s' | head -50 >&2",
+                 "diff %s -u '%s' '%s' 2>/dev/null | head -50 >&2",
+                 diff_color ? "--color=always" : "",
                  temp_repl_tr, temp_child_tr);
         fprintf(stderr, "  [%s] trace diff (repl - / child +):\n",
                 prog->name);
         (void)system(diff_cmd);
+        if (diff_color) {
+            fputs("\033[0m", stderr);
+            fflush(stderr);
+        }
         break;
     }
     case PARITY_XPASS:
