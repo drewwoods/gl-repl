@@ -46,6 +46,7 @@
 #include "repl/pipeline.h"
 #include "repl/state.h"
 #include "repl/state_owners.h"
+#include "support/scene_corpus.h"
 #include "source_document.h"
 #include "ui/app/state.h"
 
@@ -858,6 +859,45 @@ static void run_examples(ParityTotals *totals) {
     }
 }
 
+/* Walk a runtime .glr catalog - the corpora under tests/scenes - through the
+ * same comparison. repl_example_lines() serves a runtime catalog exactly as
+ * it serves the compiled-in one, so the only extra care is the source
+ * format: a `.c` entry is a complete exported file that has to go through
+ * the import path, and feeding it as REPL source would produce a
+ * meaningless failure. Report those rather than run them.
+ *
+ * The runtime catalog replaces the built-in one while loaded, so callers run
+ * this after any --full pass and clear it here. */
+static void run_scene_dir(ParityTotals *totals, const char *dir) {
+    const char *tag = repl_test_scene_corpus_tag(dir);
+    char err[512];
+    int n;
+
+    err[0] = '\0';
+    if (!repl_examples_load_dir(dir, err, sizeof err)) {
+        fprintf(stderr, "  FAIL  %-9s catalog load failed for %s: %s\n",
+                tag, dir, err[0] ? err : "unknown error");
+        totals->fail++;
+        return;
+    }
+
+    n = repl_example_count();
+    printf("--- scene corpus %s: %d scenes ---\n", dir, n);
+    for (int i = 0; i < n; i++) {
+        const char *name = repl_example_name(i);
+        TraceProgram p = { name, repl_example_lines(i),
+                           expected_fail_for_example(name) };
+
+        if (repl_example_source_format(i) != REPL_EXAMPLE_SOURCE_GLR) {
+            printf("  SKIP  %-9s %s (exported-C entry; needs the import "
+                   "path, not editor_feed_line)\n", tag, name);
+            continue;
+        }
+        run_and_report(totals, &p, tag);
+    }
+    repl_examples_clear_runtime_catalog();
+}
+
 static void print_help(const char *argv0) {
     printf(
 "Usage: %s [--full] [--help]\n"
@@ -912,6 +952,10 @@ static void print_help(const char *argv0) {
 "                  example - the catalog compiled into the binary from\n"
 "                  examples/catalog.ini, via repl_example_*. Slow: one cc\n"
 "                  invocation per program; traces kept on failure.\n"
+"  --scenes-dir D  Also walk the .glr catalog in directory D (a runtime\n"
+"                  catalog, as `--examples-dir` loads). Repeatable. Runs\n"
+"                  after --full, since a runtime catalog displaces the\n"
+"                  built-in one while loaded.\n"
 "  --keep-traces   On real FAIL, leave the .repl.tr and .child.tr trace\n"
 "                  files in /tmp for inspection. XFAIL traces are still\n"
 "                  unlinked (the divergence is expected).\n"
@@ -922,12 +966,11 @@ static void print_help(const char *argv0) {
 "  compose_compile_cmd), unlike test_repl_core_examples, which honors\n"
 "  REPL_EXPORT_CC and REPL_EXPORT_COMPILE_CFLAGS.\n"
 "\n"
-"  REPL_SCENE_CORPUS=1 has NO effect here, despite sounding like it\n"
-"  would. It gates the .glr corpora under tests/scenes for\n"
-"  test_repl_core_examples and test_camera_header_parity - that is what\n"
-"  `make test-scenes` sets. Those scenes get load + export + compile\n"
-"  coverage there; nothing runs them through the value comparison this\n"
-"  test does, at any setting.\n"
+"  REPL_SCENE_CORPUS=1 walks the standard corpora under tests/scenes\n"
+"  (the same pair test_repl_core_examples and test_camera_header_parity\n"
+"  gate on it, listed in tests/support/scene_corpus.h), equivalent to\n"
+"  passing --scenes-dir for each. An explicit --scenes-dir overrides it.\n"
+"  Unset, no corpus is walked and only the curated table runs.\n"
 "\n"
 "Notes:\n"
 "  Stub-only test (linked only when USE_GL_STUBS=1) because both legs\n"
@@ -938,9 +981,25 @@ static void print_help(const char *argv0) {
 
 int main(int argc, char **argv) {
     int full = 0;
+    /* Explicit --scenes-dir wins; REPL_SCENE_CORPUS asks for the standard
+     * pair, which is what `make test-scenes` sets. */
+    const char *scene_dirs[16];
+    int scene_dir_count = 0;
+
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--full") == 0) {
             full = 1;
+        } else if (strcmp(argv[i], "--scenes-dir") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "--scenes-dir needs a directory\n");
+                return 2;
+            }
+            if (scene_dir_count >=
+                (int)(sizeof scene_dirs / sizeof scene_dirs[0])) {
+                fprintf(stderr, "too many --scenes-dir arguments\n");
+                return 2;
+            }
+            scene_dirs[scene_dir_count++] = argv[++i];
         } else if (strcmp(argv[i], "--keep-traces") == 0) {
             g_keep_traces = 1;
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
@@ -984,12 +1043,18 @@ int main(int argc, char **argv) {
                "examples/catalog.ini) ---\n", repl_example_count());
         run_examples(&totals);
     }
-    /* The .glr corpora under tests/scenes are a different lane entirely -
-     * `make test-scenes` loads them as a runtime catalog and checks that
-     * their exported C compiles. Nothing runs them through this parity
-     * comparison; say so rather than let "--full" imply everything. */
-    printf("--- not covered here: tests/scenes/{stress,general} "
-           "(see `make test-scenes`) ---\n");
+    /* Scene corpora last: loading a runtime catalog displaces the built-in
+     * one, so --full has to have finished with it first. */
+    if (scene_dir_count == 0 && repl_test_scene_corpus_enabled()) {
+        const char *const *dirs = repl_test_scene_corpus_dirs();
+        for (int i = 0; dirs[i]; i++)
+            run_scene_dir(&totals, dirs[i]);
+    }
+    for (int i = 0; i < scene_dir_count; i++)
+        run_scene_dir(&totals, scene_dirs[i]);
+    if (scene_dir_count == 0 && !repl_test_scene_corpus_enabled())
+        printf("--- scene corpora not walked (REPL_SCENE_CORPUS unset; see "
+               "--scenes-dir and `make test-scenes`) ---\n");
 
     int total = totals.pass + totals.fail + totals.xfail + totals.xpass;
     int ok    = totals.pass + totals.xfail;

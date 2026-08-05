@@ -19,4 +19,22 @@ static inline int repl_test_scene_corpus_enabled(void) {
     return env && env[0] && strcmp(env, "0") != 0;
 }
 
+/* The corpora themselves, NULL-terminated. Three tests walk these now, so
+ * the paths live here rather than in each of them. */
+static inline const char *const *repl_test_scene_corpus_dirs(void) {
+    static const char *const dirs[] = {
+        "tests/scenes/stress",
+        "tests/scenes/general",
+        NULL
+    };
+    return dirs;
+}
+
+/* Last path component, used as the short corpus tag in assertion labels and
+ * export filenames ("tests/scenes/stress" -> "stress"). */
+static inline const char *repl_test_scene_corpus_tag(const char *dir) {
+    const char *slash = dir ? strrchr(dir, '/') : NULL;
+    return slash && slash[1] ? slash + 1 : (dir ? dir : "scene");
+}
+
 #endif /* TESTS_SUPPORT_SCENE_CORPUS_H */
