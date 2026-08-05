@@ -182,6 +182,11 @@ int repl_export_reshape_projection_lines(const char *out[REPL_EXPORT_PROJ_LINES]
  * scroll_to_display_function - exposed via this macro so both sides
  * stay in sync if the line text ever changes. */
 #define REPL_EXPORT_DISPLAY_OPEN_LINE "void display(void) {"
+/* The same line without its brace. The importer matches on this to signal the
+ * camera reader's display region, because a hand-formatted file may put the
+ * `{` on its own line - so the signature, not the whole opener, is the part
+ * that identifies the function. */
+#define REPL_EXPORT_DISPLAY_OPEN_SIGNATURE "void display(void)"
 extern const char  *g_header_pre[];
 extern const char  *g_display_header[];
 extern const char  *g_header_post[];

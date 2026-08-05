@@ -263,17 +263,34 @@ static const char *cam_read_literal(const char *p, float *out) {
     return p;
 }
 
-/* After the closing paren: an optional `;`, then nothing but whitespace or
- * a comment. */
+/* After the closing paren: an optional `;`, then nothing but whitespace and
+ * comments.
+ *
+ * A block comment has to be skipped *through*, not merely recognised. The
+ * whole line is consumed when a role is accepted, so treating a block-comment
+ * opener as end-of-line would let a tagged call followed by a closed comment
+ * and then a glClear swallow that glClear - a camera tag quietly eating
+ * geometry, which is the failure this format exists to end. An *unterminated*
+ * block comment does run to the end of the line, so that one really is the
+ * end. */
 static int cam_call_ends(const char *p) {
     p = cam_skip_ws(p);
     if (*p == ';')
         p = cam_skip_ws(p + 1);
-    if (*p == '\0')
-        return 1;
-    if (p[0] == '/' && (p[1] == '/' || p[1] == '*'))
-        return 1;
-    return 0;
+    for (;;) {
+        if (*p == '\0')
+            return 1;
+        if (p[0] == '/' && p[1] == '/')
+            return 1;
+        if (p[0] == '/' && p[1] == '*') {
+            const char *close = strstr(p + 2, "*/");
+            if (!close)
+                return 1;           /* runs past end of line */
+            p = cam_skip_ws(close + 2);
+            continue;
+        }
+        return 0;
+    }
 }
 
 /* Read `count` literal arguments and the call's tail. */

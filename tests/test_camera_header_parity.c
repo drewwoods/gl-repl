@@ -391,6 +391,25 @@ static void test_frozen_rejections(void) {
                  k_frozen[i].file, k_frozen[i].why);
         TEST_ASSERT_TRUE(&g_harness, label, ord.violations > 0);
 
+        /* And rejected by *both real loaders*, not just by the checker they
+         * are supposed to share. Running the fixture through doc_order alone
+         * proves the rule exists; it says nothing about whether every entry
+         * point applies it, which is exactly the gap that let the ordering
+         * contract be enforced on one loader out of three. */
+        glr_ctrl_reset_all();
+        camera_bridge_stub_install(NULL);
+        snprintf(label, sizeof(label), "frozen %s rejected by the catalog path",
+                 k_frozen[i].file);
+        TEST_ASSERT_INT(&g_harness, label,
+                        repl_load_example_lines((const char *const *)lines), 0);
+
+        glr_ctrl_reset_all();
+        camera_bridge_stub_install(NULL);
+        snprintf(label, sizeof(label), "frozen %s rejected by the file path",
+                 k_frozen[i].file);
+        TEST_ASSERT_INT(&g_harness, label,
+                        repl_export_load_from_file(path, NULL), 0);
+
         /* The old form carried no tags at all, so its transforms are plain
          * geometry to the new reader - which is exactly why the ordering
          * check, not the camera reader, is what catches these files. */
@@ -405,6 +424,42 @@ static void test_frozen_rejections(void) {
 /* The shape no .glr can express: an exported .c with the spin row, in C89
  * block-comment spelling. A reader that handled only `//` would silently drop
  * the camera from every exported file - this bug, with new syntax. */
+/* An exported `.c` is generated output whose layout the exporter fixes, and
+ * that layout does not satisfy the phases - reshape() and main() follow
+ * display(). The ordering contract is a property of the *authored* format, so
+ * the same bytes that would be rejected as a `.glr` must still import as a
+ * `.c`. This is the other half of the P1 fix: enforcing everywhere would be
+ * just as wrong as enforcing in one place. */
+static void test_exported_c_is_exempt_from_ordering(void) {
+    const char *path = "/tmp/test_camera_parity_exported.c";
+    FILE *f = fopen(path, "w");
+
+    printf("--- exported .c is exempt from the ordering contract ---\n");
+    TEST_ASSERT_TRUE(&g_harness, "exempt fixture written", f != NULL);
+    if (!f)
+        return;
+    /* Body code, then a function definition: a phase violation in a .glr. */
+    fprintf(f,
+        "void display(void) {\n"
+        "  glTranslatef(0.0000f, 0.0000f, -4.0000f);   /* @camera dist */\n"
+        "  // Snippet start\n"
+        "  glVertex3f(0, 0, 0);\n"
+        "  // Snippet end\n"
+        "}\n"
+        "void reshape(int w, int h) {\n"
+        "  glViewport(0, 0, w, h);\n"
+        "}\n");
+    fclose(f);
+
+    glr_ctrl_reset_all();
+    camera_bridge_stub_install(NULL);
+    TEST_ASSERT_INT(&g_harness, "a .c whose functions follow the body imports",
+                    repl_export_load_from_file(path, NULL), 1);
+    TEST_ASSERT_TRUE(&g_harness, "and its camera still applies",
+                     fabsf(g_camera_bridge_stub.applied.dist - 4.0f) < 1e-4f);
+    remove(path);
+}
+
 static void test_exported_c_fixture(void) {
     char **lines = parity_read_lines("tests/testdata/camera-order/"
                                      "exported-with-spin.c", NULL);
@@ -453,6 +508,7 @@ int main(void) {
     printf("--- compared %d scenes on both load paths ---\n", n);
     TEST_ASSERT_TRUE(&g_harness, "the corpus was actually found", n > 0);
     test_frozen_rejections();
+    test_exported_c_is_exempt_from_ordering();
     test_exported_c_fixture();
 
     printf("\n=== Results: ");

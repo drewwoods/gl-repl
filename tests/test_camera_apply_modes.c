@@ -268,6 +268,36 @@ static void test_mid_ease_load_uses_destination(void) {
                 fabsf(fin.pose.dist - 9.0f) < 1e-3f);
 }
 
+/* The example body cap is a *body* budget. Metadata and camera rows are
+ * consumed before a line reaches it, so counting the raw source index would
+ * fail a scene merely for carrying @cfg rows. */
+static void test_body_budget_excludes_metadata(void) {
+    printf("--- example body budget counts body lines only ---\n");
+    static const char *lines[EXAMPLE_BODY_LINES_MAX + 16];
+    int n = 0;
+    int i;
+
+    glr_ctrl_reset_all();
+    camera_bridge_stub_install(NULL);
+
+    lines[n++] = "// @cfg axes = 4";
+    lines[n++] = "// @cfg grid = GRID_THEME_CLASSIC";
+    lines[n++] = "glTranslatef(0.0f, 0.0f, -4.0f);   // @camera dist";
+    lines[n++] = "glRotatef(1.0f, 1.0f, 0.0f, 0.0f);   // @camera rx";
+    lines[n++] = "glRotatef(2.0f, 0.0f, 1.0f, 0.0f);   // @camera ry";
+    lines[n++] = "glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan";
+    /* Exactly the budget in body rows, on top of six consumed metadata rows -
+     * so the raw index runs past the cap while the body does not. */
+    for (i = 0; i < EXAMPLE_BODY_LINES_MAX; i++)
+        lines[n++] = "glVertex3f(0, 0, 0);";
+    lines[n] = NULL;
+
+    ASSERT_TRUE("a full body plus metadata still loads",
+                repl_load_example_lines(lines) > 0);
+    ASSERT_INT("the camera was still applied",
+               g_camera_bridge_stub.apply_count, 1);
+}
+
 int main(void) {
     printf("=== camera apply modes ===\n");
     test_example_mode();
@@ -277,6 +307,7 @@ int main(void) {
     test_hand_edited_numbers_survive();
     test_nonzero_g_angle_warns();
     test_mid_ease_load_uses_destination();
+    test_body_budget_excludes_metadata();
     printf("\n=== Results: ");
     return test_harness_report(&g_harness, "camera_apply_modes");
 }

@@ -157,6 +157,21 @@ static void test_rejection_rules(void) {
     ASSERT_RULE("code after the call",
                 "glRotatef(15.0f, 1.0f, 0.0f, 0.0f); glEnd();   // @camera rx",
                 REPL_CAMERA_RULE_TRAILING_TEXT);
+
+    /* A closed block comment is not the end of the line. Accepting a role
+     * consumes the whole physical line, so treating the opener as end-of-line
+     * would let a camera tag quietly swallow the geometry behind it. */
+    ASSERT_RULE("code after a closed block comment",
+                "glRotatef(15.0f, 1, 0, 0); /* note */ glEnd();  // @camera rx",
+                REPL_CAMERA_RULE_TRAILING_TEXT);
+    ASSERT_INT("a closed block comment with nothing after it is fine",
+               offer_alone("glRotatef(15.0f, 1, 0, 0); /* n */ /* m */"
+                           "   // @camera rx"),
+               REPL_CAMERA_LINE_ACCEPTED);
+    /* An unterminated block comment really does run to end of line. */
+    ASSERT_INT("an unterminated block comment ends the line",
+               offer_alone("glRotatef(15.0f, 1, 0, 0);  /* @camera rx"),
+               REPL_CAMERA_LINE_ACCEPTED);
 }
 
 /* The spin hook's argument is tokenized, not string-compared. */
@@ -603,6 +618,50 @@ static void test_document_order(void) {
     };
     ASSERT_INT("comments and blanks never advance the phase",
                check_order(commented).count, 0);
+
+    /* A hand-formatted definition may put its brace on its own line. Calling
+     * that body code the moment it is seen produces a diagnostic that blames
+     * the wrong line - it reports a later camera row as out of phase when the
+     * author's real problem is that their definition was not recognised. */
+    static const char *const split_brace[] = {
+        "static float a;",
+        "func0(x)",
+        "{",
+        "  glVertex3f(x, 0, 0);",
+        "}",
+        "glTranslatef(0, 0, -4);   // @camera dist",
+        "glClear(GL_COLOR_BUFFER_BIT);",
+        NULL
+    };
+    ASSERT_INT("a split-brace definition is a definition",
+               check_order(split_brace).count, 0);
+
+    /* ... and the deferred classification must not turn ordinary body code
+     * into a definition just because its trailing `;` is optional. */
+    static const char *const bare_call[] = {
+        "glClear(GL_COLOR_BUFFER_BIT)",
+        "static float a;",
+        NULL
+    };
+    {
+        OrderRecord rec = check_order(bare_call);
+        ASSERT_INT("a semicolon-less command is still body code", rec.count, 1);
+        ASSERT_INT("... reported against its own line", rec.line_no, 2);
+    }
+
+    /* A phase that does not occur must not change what is legal: a scene with
+     * no declarations gets the same tolerated CAMERA -> FUNCS edge as one
+     * that has them, or adding a variable would change whether it loads. */
+    static const char *const camera_first_no_decls[] = {
+        "glTranslatef(0, 0, -4);   // @camera dist",
+        "func0(x) {",
+        "  glVertex3f(x, 0, 0);",
+        "}",
+        "glClear(GL_COLOR_BUFFER_BIT);",
+        NULL
+    };
+    ASSERT_INT("no declarations does not forbid CAMERA -> FUNCS",
+               check_order(camera_first_no_decls).count, 0);
 
     /* A compound literal contains a brace and is emphatically not a
      * definition. */

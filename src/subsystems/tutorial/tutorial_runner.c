@@ -10,6 +10,7 @@
 #include "repl/cfg_baseline.h" /* For repl_cfg_get_int, repl_cfg_set_int, and repl_cfg_known */
 #include "repl/eval.h"          /* repl_eval_find_predef_var_idx + predef-vars view */
 #include "repl/camera_header.h"  /* shared @camera reader (setup scaffold) */
+#include "repl/doc_order.h"      /* canonical order - scaffolds are .glr source */
 #include "repl/load.h"
 #include "repl/scenes.h"
 #include "repl/state_owners.h"  /* repl_state_scenes_set_tutorial_origin_idx */
@@ -719,6 +720,7 @@ static int tutorial_load_scene_prelude(int idx) {
 
     if (lines) {
         ReplCameraHeader camera;
+        ReplDocOrder     order;
         int cfg_count;
 
         while (lines[pos] &&
@@ -735,9 +737,24 @@ static int tutorial_load_scene_prelude(int idx) {
          * role tags wherever they sit - there is no header region and no
          * `pos += n` contract any more. */
         repl_camera_header_init(&camera);
+        repl_doc_order_init(&order);
         for (pos = 0; lines[pos]; pos++) {
-            if (repl_camera_header_offer(&camera, lines[pos], pos + 1) !=
-                REPL_CAMERA_LINE_NOT_CAMERA)
+            ReplCameraLineResult result =
+                repl_camera_header_offer(&camera, lines[pos], pos + 1);
+
+            /* A setup scaffold is authored `.glr` vocabulary, so it answers to
+             * the same canonical order every other .glr does - one contract,
+             * every loader, or the format has two readings again. */
+            if (!repl_doc_order_offer(&order, lines[pos], pos + 1,
+                                      result != REPL_CAMERA_LINE_NOT_CAMERA)) {
+                char msg[TUTORIAL_STATUS_MAX];
+                snprintf(msg, sizeof msg,
+                         "Tutorial setup is not in canonical order (line %d)",
+                         pos + 1);
+                repl_set_status(msg);
+                return 0;
+            }
+            if (result != REPL_CAMERA_LINE_NOT_CAMERA)
                 continue;
             if (pos < cfg_count || setup_line_is_blank(lines[pos]))
                 continue;

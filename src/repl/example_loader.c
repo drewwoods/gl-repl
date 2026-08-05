@@ -197,6 +197,7 @@ static int load_example_lines(const char *const *lines,
     int cfg_count = 0;
     int loader_edit_line = 0;
     int order_failed = 0;
+    int body_lines = 0;
     int line_idx;
 
     reset_example_load_state(example_idx);
@@ -245,7 +246,10 @@ static int load_example_lines(const char *const *lines,
          * body, which the file path keeps - so the same scene had one more
          * row when opened as a file than when loaded from the catalog. Source
          * order in, source order out, on both paths. */
-        if (line_idx >= EXAMPLE_BODY_LINES_MAX) {
+        /* The cap is a *body* budget: metadata and camera rows are consumed
+         * before this point, so counting the raw source index would let a
+         * scene fail merely for carrying @cfg rows. */
+        if (body_lines++ >= EXAMPLE_BODY_LINES_MAX) {
             char msg[REPL_DIAG_TEXT_MAX];
             snprintf(msg, sizeof(msg),
                      "Example load failed: body exceeds EXAMPLE_BODY_LINES_MAX=%d",

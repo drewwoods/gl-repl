@@ -19,6 +19,9 @@
  * One tolerated edge: CAMERA may be entered straight from DECLS, and FUNCS
  * may then follow it, because the `@camera` tag makes the placement
  * unambiguous and some layouts read better with the camera near the top.
+ * "Straight from DECLS" includes a file with *no* declarations: a phase that
+ * does not occur must not change what is legal, or adding one variable to a
+ * scene would change whether its layout is accepted.
  *
  * **The phase machine runs on `.glr` only.** An exported `.c` is generated
  * output whose layout the exporter fixes, and that layout does not satisfy
@@ -30,6 +33,12 @@
  * The camera *reader* is unaffected and works on both; only this checker is
  * `.glr`-scoped, which is why it lives here and not in camera_header.c: the
  * reader owns camera-line rules, the loader owns document shape.
+ *
+ * **Every loader runs it, or the format has two readings again.** The catalog
+ * loader, the file importer (gated on a `.glr` source), the tutorial
+ * setup-scaffold loader and `--lint-scenes` all offer their lines here. A
+ * contract enforced at one entry point and not another is the same defect
+ * this format exists to end, just relocated.
  */
 #ifndef REPL_DOC_ORDER_H
 #define REPL_DOC_ORDER_H
@@ -63,6 +72,7 @@ typedef struct {
     int              depth;              /* raw brace depth */
     int              in_block_comment;
     int              camera_from_decls;  /* the tolerated DECLS->CAMERA edge */
+    int              pending_line;       /* split-brace header awaiting its { */
     int              violations;
     ReplDocOrderSink sink;
     void            *sink_userdata;

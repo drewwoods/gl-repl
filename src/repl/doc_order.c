@@ -88,27 +88,60 @@ static char order_last_code_char(const char *p) {
     return last;
 }
 
-/* A definition header: an identifier, and code that ends by opening a block.
- * `name {` (the alias form) and `name(...) {` both count. Purely lexical -
- * the loader will reject a malformed one on its own terms. */
-static int order_is_func_def(const char *p) {
+/* How a top-level line relates to opening a definition block. */
+typedef enum {
+    ORDER_DEF_NO = 0,
+    ORDER_DEF_YES,      /* `name(...) {` or the alias form `name {` */
+    ORDER_DEF_PENDING   /* `name(...)` - a definition iff `{` follows */
+} OrderDefKind;
+
+/* Purely lexical - the loader rejects a malformed definition on its own
+ * terms. The pending case is the hand-formatted split-brace layout:
+ *
+ *     func0(x)
+ *     {
+ *
+ * which the REPL accepts and normalizes. Classifying it as body code the
+ * moment it is seen produces a diagnostic that blames the wrong line - it
+ * tells the author a later camera row is out of phase when their real
+ * problem is that their function definition was not recognised. A bare
+ * `glVertex3f(0, 0, 0)` has the same shape (the trailing `;` is optional in
+ * REPL source), so this cannot be decided without seeing the next line. */
+static OrderDefKind order_def_kind(const char *p) {
+    char last;
+
     if (order_is_control_head(p))
-        return 0;
+        return ORDER_DEF_NO;
     if (!(isalpha((unsigned char)*p) || *p == '_'))
-        return 0;
-    return order_last_code_char(p) == '{';
+        return ORDER_DEF_NO;
+    last = order_last_code_char(p);
+    if (last == '{')
+        return ORDER_DEF_YES;
+    if (last == ')')
+        return ORDER_DEF_PENDING;
+    return ORDER_DEF_NO;
 }
 
-static ReplDocPhase order_classify(const char *line, int is_camera_row) {
+/* Classify a top-level line. `*out_pending` reports the undecided
+ * split-brace case, which the caller resolves against the next line. */
+static ReplDocPhase order_classify(const char *line, int is_camera_row,
+                                   int *out_pending) {
     const char *p = line;
+    OrderDefKind def;
 
+    *out_pending = 0;
     if (is_camera_row)
         return REPL_DOC_PHASE_CAMERA;
     while (*p && isspace((unsigned char)*p)) p++;
     if (repl_scan_decl_float_prefix(p, NULL))
         return REPL_DOC_PHASE_DECLS;
-    if (order_is_func_def(p))
+    def = order_def_kind(p);
+    if (def == ORDER_DEF_YES)
         return REPL_DOC_PHASE_FUNCS;
+    if (def == ORDER_DEF_PENDING) {
+        *out_pending = 1;
+        return REPL_DOC_PHASE_FUNCS;   /* provisional; resolved next line */
+    }
     return REPL_DOC_PHASE_BODY;
 }
 
@@ -133,11 +166,51 @@ static void order_report(ReplDocOrder *ord, ReplDocPhase phase, int line_no) {
     ord->sink(ord->sink_userdata, rule, line_no, conflict, msg);
 }
 
+/* The first character of a line's code portion, or 0 when there is none. */
+static char order_first_code_char(const char *p) {
+    int i;
+
+    for (i = 0; p[i]; i++) {
+        if (isspace((unsigned char)p[i]))
+            continue;
+        if (p[i] == '/' && (p[i + 1] == '/' || p[i + 1] == '*'))
+            return 0;
+        return p[i];
+    }
+    return 0;
+}
+
+/* Advance (or reject against) the phase counter. Returns 1 when the line is
+ * in phase. */
+static int order_commit(ReplDocOrder *ord, ReplDocPhase phase, int line_no) {
+    if (phase < ord->phase) {
+        /* The one tolerated edge: functions may follow a camera block that
+         * nothing but declarations preceded. "Nothing but declarations"
+         * includes *no* declarations - a phase that does not occur must not
+         * change what is legal, or adding one variable to a scene would
+         * change whether its layout is accepted. */
+        if (phase == REPL_DOC_PHASE_FUNCS &&
+            ord->phase == REPL_DOC_PHASE_CAMERA && ord->camera_from_decls)
+            return 1;
+        order_report(ord, phase, line_no);
+        return 0;
+    }
+    if (phase > ord->phase) {
+        if (phase == REPL_DOC_PHASE_CAMERA &&
+            ord->phase <= REPL_DOC_PHASE_DECLS)
+            ord->camera_from_decls = 1;
+        ord->phase                  = phase;
+        ord->phase_line[(int)phase] = line_no;
+    }
+    return 1;
+}
+
 int repl_doc_order_offer(ReplDocOrder *ord, const char *line, int line_no,
                          int is_camera_row) {
     ReplDocPhase phase;
     int depth_at_start;
     int executable;
+    int pending = 0;
     int ok = 1;
 
     if (!ord || !line)
@@ -158,24 +231,29 @@ int repl_doc_order_offer(ReplDocOrder *ord, const char *line, int line_no,
     if (depth_at_start > 0)
         return 1;
 
-    phase = order_classify(line, is_camera_row);
+    /* Resolve a deferred split-brace header against this line: a `{` here
+     * makes the previous line a definition, anything else makes it body. */
+    if (ord->pending_line > 0) {
+        int opens = order_first_code_char(line) == '{';
+        int deferred = ord->pending_line;
 
-    if (phase < ord->phase) {
-        /* The one tolerated edge: functions may follow a camera block that
-         * was itself entered straight from the declarations. */
-        if (phase == REPL_DOC_PHASE_FUNCS &&
-            ord->phase == REPL_DOC_PHASE_CAMERA && ord->camera_from_decls) {
-            /* in phase - do not lower the counter */
-        } else {
-            order_report(ord, phase, line_no);
+        ord->pending_line = 0;
+        if (!order_commit(ord, opens ? REPL_DOC_PHASE_FUNCS
+                                     : REPL_DOC_PHASE_BODY, deferred))
             ok = 0;
-        }
-    } else if (phase > ord->phase) {
-        if (phase == REPL_DOC_PHASE_CAMERA &&
-            ord->phase <= REPL_DOC_PHASE_DECLS)
-            ord->camera_from_decls = 1;
-        ord->phase                   = phase;
-        ord->phase_line[(int)phase]  = line_no;
+        if (opens)
+            return ok;             /* the brace belongs to that definition */
     }
+
+    phase = order_classify(line, is_camera_row, &pending);
+    if (pending) {
+        /* Undecided until the next line. A file that ends here is malformed
+         * on the loader's own terms, so nothing is lost by not classifying
+         * it. */
+        ord->pending_line = line_no;
+        return ok;
+    }
+    if (!order_commit(ord, phase, line_no))
+        ok = 0;
     return ok;
 }

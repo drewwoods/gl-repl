@@ -41,6 +41,7 @@
 #include "repl/command.h"
 #include "repl/eval.h"
 #include "repl/camera_header.h"
+#include "repl/doc_order.h"
 #include "repl/text_helpers.h"
 #include "repl/executor.h"
 #include "repl/parser.h"
@@ -90,6 +91,10 @@ typedef struct {
 
 struct ImportState {
     ReplCameraHeader camera;          /* the one camera-header reader */
+    ReplDocOrder     order;           /* canonical document order (.glr only) */
+    int              check_order;     /* .glr source: the authored format */
+    int              order_failed;
+    const char      *source_label;    /* for diagnostics; never retained */
     int in_snippet;
     int past_snippet;
     int func_depth;                   /* depth inside a function definition */
@@ -497,13 +502,15 @@ int repl_state_parse_workspace_header_line(const char *line) {
  * hands back a rule and the caller writes the sentence. */
 static void import_camera_diag(void *userdata, const ReplCameraDiag *diag,
                                const char *rule_text) {
+    const char *label = (const char *)userdata;
     char msg[REPL_STATUS_TEXT_MAX];
 
-    (void)userdata;
     if (diag->rule == REPL_CAMERA_RULE_MISSING_ROLE)
         return;   /* a partial header is a note, not a scolding */
-    snprintf(msg, sizeof(msg), "camera header, line %d: %s",
-             diag->line_no, rule_text);
+    /* The goal statement promises a diagnostic that names the file *and* the
+     * line, so the importer supplies the name the reader cannot know. */
+    snprintf(msg, sizeof(msg), "%s:%d: %s",
+             label ? label : "<memory>", diag->line_no, rule_text);
     if (repl_camera_rule_severity(diag->rule) == REPL_CAMERA_SEVERITY_REJECTION)
         repl_set_status_error(msg);
     else
@@ -518,7 +525,7 @@ static void import_camera_diag(void *userdata, const ReplCameraDiag *diag,
  * `static float` declarations / `@declare` directives - this only restores values. Returns 1
  * when at least one var was updated. */
 static int import_parse_predef_decl_common(const char *line, ImportFloatStash *out_stash, int *out_count, int max_stash,
-                                           ReplCameraHeader *hdr) {
+                                           ReplCameraHeader *hdr, int decl_line_no) {
     const char *p = line;
     while (*p && isspace((unsigned char)*p)) p++;
     /* Optional canonical `static ` prefix (see format_decl_text). */
@@ -572,7 +579,8 @@ static int import_parse_predef_decl_common(const char *line, ImportFloatStash *o
                  * demo paths never see a g_angle line. */
                 if (hdr && strcmp(name, "g_angle") == 0 && val != 0.0f)
                     repl_camera_header_record(hdr, REPL_CAMERA_ROLE_SPIN,
-                                              REPL_CAMERA_RULE_G_ANGLE_INIT, 0);
+                                              REPL_CAMERA_RULE_G_ANGLE_INIT,
+                                              decl_line_no);
                 if (strcmp(name, "g_angle") != 0) {
                     int was_registered = (repl_eval_find_predef_var_idx(name) >= 0);
                     if (!was_registered) {
@@ -606,12 +614,12 @@ static int import_parse_predef_decl_common(const char *line, ImportFloatStash *o
 }
 
 static int import_parse_predef_decl(const char *line) {
-    return import_parse_predef_decl_common(line, NULL, NULL, 0, NULL);
+    return import_parse_predef_decl_common(line, NULL, NULL, 0, NULL, 0);
 }
 
 static int import_try_stash_predef_decl(ImportState *s, const char *line) {
     return import_parse_predef_decl_common(line, s->float_stash, &s->float_stash_count,
-                                           MAX_PREDEF_VARS, &s->camera);
+                                           MAX_PREDEF_VARS, &s->camera, s->line_no);
 }
 
 /* 1 if `s` carries the whole-token `tag` (a trailing tag the exporter
@@ -1583,6 +1591,9 @@ static void import_state_init(ImportState *s) {
     s->past_snippet = 0;
     s->func_depth = 0;
     s->func_block_comment = 0;
+    s->check_order = 0;
+    s->order_failed = 0;
+    s->source_label = NULL;
     s->allow_raw_scene = 0;
     s->has_func_body_markers = 0;
     s->active_staged_func_slot = -1;
@@ -2127,6 +2138,24 @@ typedef struct {
     ImportLineHandler handle;
 } ImportLineHandlerSpec;
 
+/* The canonical document order covers user code, not just camera rows, so it
+ * is the loader's to enforce - and it has to be enforced by *every* loader or
+ * the same file is accepted from one entry point and rejected from another,
+ * which is the divergence this format exists to end. */
+static void import_order_diag(void *userdata, ReplDocOrderRule rule,
+                              int line_no, int conflict_line_no,
+                              const char *message) {
+    const char *label = (const char *)userdata;
+    char msg[REPL_STATUS_TEXT_MAX];
+
+    (void)rule;
+    (void)conflict_line_no;
+    snprintf(msg, sizeof(msg), "%s:%d: %s",
+             label ? label : "<memory>", line_no, message);
+    repl_set_status_error(msg);
+    fprintf(stderr, "%s\n", msg);
+}
+
 static int import_handle_workspace_header(ImportState *s, const char *p,
                                           const char *raw) {
     (void)raw;
@@ -2520,8 +2549,26 @@ static void import_begin_load(ImportState *state, ReplImportResult *result) {
     import_clear_pending_result_fields();
     import_state_init(state);
     repl_camera_header_init(&state->camera);
-    repl_camera_header_set_sink(&state->camera, import_camera_diag, NULL);
+    repl_doc_order_init(&state->order);
     repl_func_alias_clear_all();
+}
+
+/* Name the source and decide whether the canonical document order applies.
+ *
+ * It applies to `.glr` - the *authored* format - and not to an exported `.c`,
+ * whose layout the exporter fixes and which legitimately violates the phases:
+ * reshape() and main() are emitted after display(), so a machine that
+ * classified every line would reject every file this project writes. A
+ * generated `.c` is canonical by construction; a hand-edited one is already
+ * outside the format's guarantees. */
+static void import_set_source(ImportState *s, const char *label) {
+    size_t len = label ? strlen(label) : 0;
+
+    s->source_label = label;
+    s->check_order  = (len > 4 && strcmp(label + len - 4, ".glr") == 0);
+    repl_camera_header_set_sink(&s->camera, import_camera_diag,
+                                (void *)label);
+    repl_doc_order_set_sink(&s->order, import_order_diag, (void *)label);
 }
 
 typedef struct {
@@ -2610,12 +2657,21 @@ static int import_offer_camera_line(ImportState *state, const char *line) {
              strncmp(p, "/* Snippet end", 14) == 0)
         repl_camera_header_set_region(&state->camera,
                                       REPL_CAMERA_REGION_POST_SNIPPET);
-    else if (strncmp(p, "void display(void)", 18) == 0)
+    else if (strncmp(p, REPL_EXPORT_DISPLAY_OPEN_SIGNATURE,
+                     sizeof(REPL_EXPORT_DISPLAY_OPEN_SIGNATURE) - 1) == 0)
         repl_camera_header_set_region(&state->camera,
                                       REPL_CAMERA_REGION_DISPLAY);
 
-    return repl_camera_header_offer(&state->camera, line, state->line_no) !=
-           REPL_CAMERA_LINE_NOT_CAMERA;
+    {
+        ReplCameraLineResult result =
+            repl_camera_header_offer(&state->camera, line, state->line_no);
+
+        if (state->check_order &&
+            !repl_doc_order_offer(&state->order, line, state->line_no,
+                                  result != REPL_CAMERA_LINE_NOT_CAMERA))
+            state->order_failed = 1;
+        return result != REPL_CAMERA_LINE_NOT_CAMERA;
+    }
 }
 
 static void import_process_physical_line(ImportState *state,
@@ -2729,6 +2785,21 @@ static int import_finish_load(ImportState *state,
         import_staged_functions_clear(state);
         return 0;
     }
+    /* Rejection, not a warning: the whole point of a canonical form is that
+     * non-canonical files do not accumulate. Every violation has already been
+     * reported through the sink, so the summary here just names the count -
+     * the migration worklist is the sink's output, not this line. */
+    if (state->order_failed) {
+        import_workspace_accum_reset(&state->workspace);
+        import_clear_pending_result_fields();
+        char msg[REPL_STATUS_TEXT_MAX];
+        snprintf(msg, sizeof(msg),
+                 "Import failed: %s is not in canonical order (%d violations)",
+                 label, state->order.violations);
+        repl_set_status_error(msg);
+        import_staged_functions_clear(state);
+        return 0;
+    }
 
     /* Values are restored directly when @declare is parsed from the stash. */
 
@@ -2799,6 +2870,7 @@ int repl_export_load_from_lines(const char *const *lines,
                                 ReplImportResult *result) {
     ImportState state;
     import_begin_load(&state, result);
+    import_set_source(&state, source_name);
     state.allow_raw_scene = !import_lines_have_snippet_marker(lines);
     state.has_func_body_markers = import_lines_have_func_body_marker(lines);
 
@@ -2828,6 +2900,7 @@ static int import_load_seekable_stream(FILE *f, const char *source_name,
                                        ReplImportResult *result) {
     ImportState state;
     import_begin_load(&state, result);
+    import_set_source(&state, source_name);
     state.allow_raw_scene = !import_file_has_snippet_marker(f);
     state.has_func_body_markers = import_file_has_func_body_marker(f);
 
