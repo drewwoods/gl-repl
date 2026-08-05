@@ -9,10 +9,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include "subsystems/assign_plot/assign_plot.h"
 #include "editor/undo.h"
 #include "repl/example_loader.h"
+#include "repl/examples.h"
 #include "repl/export.h"
 #include "repl/flatten.h"
 #include "repl/command_store.h"
@@ -5529,6 +5531,136 @@ static void test_special_key_shortcuts(void) {
     editor_input_set_modifier_provider_for_test(NULL);
 }
 
+static int write_cycle_fixture(const char *path, const char *text) {
+    FILE *file = fopen(path, "w");
+    if (!file)
+        return 0;
+    if (fputs(text, file) == EOF) {
+        fclose(file);
+        return 0;
+    }
+    return fclose(file) == 0;
+}
+
+static void test_scene_cycle_skips_failed_examples(void) {
+    char root_template[] = "/tmp/glr_ctrl_cycle_XXXXXX";
+    char *root = mkdtemp(root_template);
+    char scenes_dir[512];
+    char catalog_path[512];
+    char good0_path[512];
+    char bad_path[512];
+    char good2_path[512];
+    char error[REPL_DIAG_TEXT_MAX];
+    int catalog_loaded = 0;
+
+    printf("--- imrepl_ctrl scene cycle skips failed examples ---\n");
+    ASSERT_TRUE("cycle fixture directory created", root != NULL);
+    if (!root)
+        return;
+
+    snprintf(scenes_dir, sizeof(scenes_dir), "%s/scenes", root);
+    snprintf(catalog_path, sizeof(catalog_path), "%s/catalog.ini", root);
+    snprintf(good0_path, sizeof(good0_path), "%s/good-0.glr", scenes_dir);
+    snprintf(bad_path, sizeof(bad_path), "%s/bad-1.glr", scenes_dir);
+    snprintf(good2_path, sizeof(good2_path), "%s/good-2.glr", scenes_dir);
+
+    ASSERT_INT("cycle fixture scenes directory created",
+               mkdir(scenes_dir, 0700), 0);
+    ASSERT_TRUE("cycle fixture first example written",
+                write_cycle_fixture(good0_path,
+                                    "glBegin(GL_POINTS);\n"
+                                    "glVertex3f(0, 0, 0);\n"
+                                    "glEnd();\n"));
+    ASSERT_TRUE("cycle fixture broken example written",
+                write_cycle_fixture(bad_path,
+                                    "glBegin(GL_POINTS);\n"
+                                    "notACommand(1, 2, 3);\n"
+                                    "glEnd();\n"));
+    ASSERT_TRUE("cycle fixture last example written",
+                write_cycle_fixture(good2_path,
+                                    "glBegin(GL_LINES);\n"
+                                    "glVertex3f(0, 0, 0);\n"
+                                    "glVertex3f(1, 0, 0);\n"
+                                    "glEnd();\n"));
+    ASSERT_TRUE("cycle fixture catalog written",
+                write_cycle_fixture(catalog_path,
+                                    "[good-0]\n"
+                                    "file = scenes/good-0.glr\n"
+                                    "name = Cycle good 0\n"
+                                    "tags = 2D\n"
+                                    "group = Cycle\n\n"
+                                    "[bad-1]\n"
+                                    "file = scenes/bad-1.glr\n"
+                                    "name = Cycle broken 1\n"
+                                    "tags = 2D\n"
+                                    "group = Cycle\n\n"
+                                    "[good-2]\n"
+                                    "file = scenes/good-2.glr\n"
+                                    "name = Cycle good 2\n"
+                                    "tags = 2D\n"
+                                    "group = Cycle\n"));
+
+    error[0] = '\0';
+    catalog_loaded = repl_examples_load_dir(root, error, sizeof(error));
+    ASSERT_TRUE("cycle fixture catalog loads", catalog_loaded);
+    if (catalog_loaded) {
+        glr_ctrl_reset_all();
+        ASSERT_INT("cycle fixture has three examples", repl_example_count(), 3);
+        ASSERT_TRUE("cycle fixture starts at first example",
+                    repl_load_example(0) > 0);
+
+        glr_ctrl_scene_cycle_next();
+        ASSERT_INT("F12 skips broken middle example",
+                   repl_state_scenes().active_example_idx, 2);
+        ASSERT_TRUE("F12 reports skipped example",
+                    strstr(ui_state_status().text,
+                           "skipped 1 unavailable example") != NULL);
+        ASSERT_TRUE("F12 reports loaded destination",
+                    strstr(ui_state_status().text, "Cycle good 2") != NULL);
+        ASSERT_INT("successful fallback is informational",
+                   ui_state_status().kind, UI_STATUS_INFO);
+
+        glr_ctrl_scene_cycle_prev();
+        ASSERT_INT("Shift+F12 skips broken middle example",
+                   repl_state_scenes().active_example_idx, 0);
+        ASSERT_TRUE("Shift+F12 reports skipped example",
+                    strstr(ui_state_status().text,
+                           "skipped 1 unavailable example") != NULL);
+
+        ASSERT_TRUE("all-fail catalog rewrite succeeds",
+                    write_cycle_fixture(catalog_path,
+                                        "[good-0]\n"
+                                        "file = scenes/good-0.glr\n"
+                                        "name = Cycle good 0\n"
+                                        "tags = 2D\n"
+                                        "group = Cycle\n\n"
+                                        "[bad-1]\n"
+                                        "file = scenes/bad-1.glr\n"
+                                        "name = Cycle broken 1\n"
+                                        "tags = 2D\n"
+                                        "group = Cycle\n"));
+        error[0] = '\0';
+        ASSERT_TRUE("all-fail catalog reloads",
+                    repl_examples_load_dir(root, error, sizeof(error)));
+        glr_ctrl_scene_cycle_next();
+        ASSERT_INT("all-fail cycle preserves active example",
+                   repl_state_scenes().active_example_idx, 0);
+        ASSERT_INT("all-fail cycle leaves an error status",
+                   ui_state_status().kind, UI_STATUS_ERROR);
+        ASSERT_TRUE("all-fail cycle explains the failure",
+                    strstr(ui_state_status().text, "F12 cycle failed") != NULL);
+    }
+
+    repl_examples_clear_runtime_catalog();
+    unlink(good0_path);
+    unlink(bad_path);
+    unlink(good2_path);
+    unlink(catalog_path);
+    rmdir(scenes_dir);
+    rmdir(root);
+    glr_ctrl_reset_all();
+}
+
 /* Drive one untimed pointer-script line and fire its single event. The
  * scripted `chord` verb is the only production path that synthesizes a Shift
  * modifier, so these tests install NO modifier provider - the scripted override
@@ -5898,6 +6030,7 @@ int main(void) {
     test_mouse_routing_and_hit_testing();
     test_color_picker_materialfv();
     test_special_key_shortcuts();
+    test_scene_cycle_skips_failed_examples();
     test_scripted_chord_reaches_shift_shortcuts();
     test_post_filter_key_cycling();
     test_app_lifecycle_bootstrap_shutdown();

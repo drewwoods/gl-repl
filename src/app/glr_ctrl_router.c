@@ -535,11 +535,105 @@ int glr_ctrl_router_handle_help_toggle_special(int key) {
     return 0;
 }
 
+/* Try every example in one leg of the F12 cycle. A malformed runtime
+ * catalog entry must not turn a single failed load into a permanent stop at
+ * that index: the next example is still a valid destination for this key
+ * press. The loader emits the detailed diagnostic for each failure. */
+static int cycle_try_examples(int start, int direction, int count,
+                              int stop_before, int *skipped_out) {
+    int skipped = 0;
+
+    for (int example_idx = start;
+         example_idx >= 0 && example_idx < count &&
+         example_idx != stop_before;
+         example_idx += direction) {
+        int edit_line = repl_load_example(example_idx);
+        if (edit_line <= 0) {
+            skipped++;
+            continue;
+        }
+        editor_state_edit_line_set(edit_line);
+        if (skipped_out)
+            *skipped_out = skipped;
+        return 1;
+    }
+
+    if (skipped_out)
+        *skipped_out = skipped;
+    return 0;
+}
+
+static int cycle_restore_origin(int active_scene, int active_example) {
+    if (active_scene >= 0) {
+        if (!repl_load_user_scene_idx(active_scene))
+            return 0;
+        editor_load_line_to_input(editor_state_edit_line());
+        return 1;
+    }
+
+    if (active_example >= 0) {
+        int edit_line = repl_load_example(active_example);
+        if (edit_line <= 0)
+            return 0;
+        editor_state_edit_line_set(edit_line);
+        return 1;
+    }
+    return 0;
+}
+
+static void cycle_report_skipped_examples(int skipped, int keep_error,
+                                          int restored_origin) {
+    if (skipped <= 0)
+        return;
+
+    char msg[REPL_DIAG_TEXT_MAX];
+    const char *plural = skipped == 1 ? "" : "s";
+    if (keep_error) {
+        if (restored_origin) {
+            snprintf(msg, sizeof(msg),
+                     "F12 cycle failed: skipped %d unavailable example%s; "
+                     "previous scene was restored; see stderr for details",
+                     skipped, plural);
+        } else {
+            snprintf(msg, sizeof(msg),
+                     "F12 cycle failed: skipped %d unavailable example%s; "
+                     "no scene could be loaded; see stderr for details",
+                     skipped, plural);
+        }
+        repl_set_status_error(msg);
+        return;
+    }
+
+    int active_scene = repl_active_user_scene();
+    if (active_scene >= 0) {
+        snprintf(msg, sizeof(msg),
+                 "Loaded scene: %s (skipped %d unavailable example%s; "
+                 "see stderr for details)",
+                 repl_user_scene_name(active_scene), skipped, plural);
+    } else {
+        int active_example = repl_state_scenes().active_example_idx;
+        if (active_example >= 0 && active_example < repl_example_count()) {
+            snprintf(msg, sizeof(msg),
+                     "Example %d/%d: %s (F12 for next; skipped %d "
+                     "unavailable example%s; see stderr for details)",
+                     active_example + 1, repl_example_count(),
+                     repl_example_name(active_example), skipped, plural);
+        } else {
+            snprintf(msg, sizeof(msg),
+                     "Scene cycle skipped %d unavailable example%s; "
+                     "see stderr for details", skipped, plural);
+        }
+    }
+    repl_set_status(msg);
+}
+
 static void cycle_example_or_user_scene_dir(int direction) {
     glr_ctrl_reset_transients();
     editor_undo_note_wholesale_replacement();
     int count = repl_example_count();
     int active_scene = repl_active_user_scene();
+    int active_example = repl_state_scenes().active_example_idx;
+    int skipped = 0;
 
     if (active_scene >= 0) {
         int start = active_scene + direction;
@@ -551,16 +645,28 @@ static void cycle_example_or_user_scene_dir(int direction) {
                 return;
             }
         }
-        if (count > 0)
-            editor_state_edit_line_set(repl_load_example((direction > 0) ? 0 : count - 1));
+        if (count > 0) {
+            int example_start = (direction > 0) ? 0 : count - 1;
+            if (cycle_try_examples(example_start, direction, count, -1,
+                                   &skipped)) {
+                cycle_report_skipped_examples(skipped, 0, 0);
+                return;
+            }
+        }
+        if (skipped > 0) {
+            int restored = cycle_restore_origin(active_scene, active_example);
+            cycle_report_skipped_examples(skipped, 1, restored);
+        }
         return;
     }
 
     if (count > 0) {
-        int next = repl_state_scenes().active_example_idx + direction;
+        int next = active_example + direction;
         if (next >= 0 && next < count) {
-            editor_state_edit_line_set(repl_load_example(next));
-            return;
+            if (cycle_try_examples(next, direction, count, -1, &skipped)) {
+                cycle_report_skipped_examples(skipped, 0, 0);
+                return;
+            }
         }
     }
 
@@ -568,13 +674,32 @@ static void cycle_example_or_user_scene_dir(int direction) {
     int end = (direction > 0) ? MAX_USER_SCENES : -1;
     for (int scene_idx = start; scene_idx != end; scene_idx += direction) {
         if (repl_user_scene_slot_used(scene_idx)) {
-            if (repl_load_user_scene_idx(scene_idx))
+            if (repl_load_user_scene_idx(scene_idx)) {
                 editor_load_line_to_input(editor_state_edit_line());
+                cycle_report_skipped_examples(skipped, 0, 0);
+            }
             return;
         }
     }
-    if (count > 0)
-        editor_state_edit_line_set(repl_load_example((direction > 0) ? 0 : count - 1));
+    if (count > 0) {
+        int wrap_skipped = 0;
+        int stop_before = active_example >= 0 ? active_example : -1;
+        if (cycle_try_examples((direction > 0) ? 0 : count - 1,
+                               direction, count, stop_before,
+                               &wrap_skipped)) {
+            skipped += wrap_skipped;
+            cycle_report_skipped_examples(skipped, 0, 0);
+            return;
+        }
+        skipped += wrap_skipped;
+    }
+
+    /* Failed loads reset the document before reporting the error. Preserve a
+     * known-good origin when every destination in this leg is unavailable. */
+    if (skipped > 0) {
+        int restored = cycle_restore_origin(active_scene, active_example);
+        cycle_report_skipped_examples(skipped, 1, restored);
+    }
 }
 
 /* Public scene-cycle entry points: the F12 / Shift+F12 key path and the
