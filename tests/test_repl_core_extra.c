@@ -713,10 +713,10 @@ void test_markerless_raw_scene_import() {
     if (f) {
         fprintf(f, "// @cfg light_theme = LIGHT_THEME_NEON\n");
         fprintf(f, "// camera\n");
-        fprintf(f, "glTranslatef(0.0000f, 0.0000f, -9.1513f);\n");
-        fprintf(f, "glRotatef(12.0069f, 1.0f, 0.0f, 0.0f);\n");
-        fprintf(f, "glRotatef(92.0173f, 0.0f, 1.0f, 0.0f);\n");
-        fprintf(f, "glTranslatef(-0.0000f, -0.0000f, -0.0000f);\n");
+        fprintf(f, "glTranslatef(0.0000f, 0.0000f, -9.1513f);   // @camera dist\n");
+        fprintf(f, "glRotatef(12.0069f, 1.0f, 0.0f, 0.0f);   // @camera rx\n");
+        fprintf(f, "glRotatef(92.0173f, 0.0f, 1.0f, 0.0f);   // @camera ry\n");
+        fprintf(f, "glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan\n");
         fprintf(f, "glColor3f(1, 0.4, 0.8);\n");
         fprintf(f, "glutSolidTorus(0.3, 0.9, 24, 48);\n");
         fclose(f);
@@ -724,8 +724,11 @@ void test_markerless_raw_scene_import() {
 
     ASSERT_INT("raw scene import succeeds",
                repl_export_load_from_file(path, NULL), 1);
+    /* The `// camera` marker is an ordinary comment row now - it lands in the
+     * document like any other comment, while the four tagged rows are
+     * consumed as metadata. */
     ASSERT_INT("only raw scene commands enter document",
-               repl_state_document_count(), 2);
+               repl_state_document_count(), 3);
 
     unlink(path);
 }
@@ -815,10 +818,10 @@ void test_scene_text_load_as_new_slot() {
     const char *scene_text =
         "// @cfg light_theme = LIGHT_THEME_NEON\n"
         "// camera\n"
-        "glTranslatef(0.0000f, 0.0000f, -9.1513f);\n"
-        "glRotatef(12.0069f, 1.0f, 0.0f, 0.0f);\n"
-        "glRotatef(92.0173f, 0.0f, 1.0f, 0.0f);\n"
-        "glTranslatef(-0.0000f, -0.0000f, -0.0000f);\n"
+        "glTranslatef(0.0000f, 0.0000f, -9.1513f);   // @camera dist\n"
+        "glRotatef(12.0069f, 1.0f, 0.0f, 0.0f);   // @camera rx\n"
+        "glRotatef(92.0173f, 0.0f, 1.0f, 0.0f);   // @camera ry\n"
+        "glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan\n"
         "glColor3f(1, 0.4, 0.8);\n"
         "glutSolidTorus(0.3, 0.9, 24, 48);\n";
 
@@ -830,7 +833,7 @@ void test_scene_text_load_as_new_slot() {
     ASSERT_STR("scene text fallback name",
                repl_user_scene_name(slot), "Clipboard Scene");
     ASSERT_INT("scene text commands enter document",
-               repl_state_document_count(), 2);
+               repl_state_document_count(), 3);
 
     const char *cr_scene_text =
         "glColor3f(0, 1, 0);\r"
