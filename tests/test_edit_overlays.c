@@ -2584,6 +2584,25 @@ static void test_render_via_repl_program(void) {
     ASSERT_INT("vertex-number label at second vertex",
                trace_count_line(&log, "glRasterPos2f 384 192"), 1);
 
+    /* The depth readback is the expensive step of this pass (a synchronous
+     * full-viewport glReadPixels), and it is taken lazily: a label mode that
+     * is on but has nothing in scope must not pay it. It used to be read up
+     * front, so every frame with labels enabled carried the stall whether or
+     * not a single vertex got labelled. */
+    OverlayWalkCtx empty_walk = walk;
+    empty_walk.cursor.cursor_block_begin = 0;
+    empty_walk.cursor.cursor_block_end = 0;   /* glNormal3f row: no vertices */
+    trace_begin();
+    edit_overlays_render_vertex_numbers(&empty_walk, OVERLAY_VERTEX_LABEL_INDEX_POS, 0,
+                                        OVERLAY_SCOPE_LAST_INSTANCE,
+                                        OVERLAY_LABEL_PLACEMENT_DECLUTTERED,
+                                        1);
+    trace_end(&log);
+    ASSERT_INT("empty label scope draws no labels",
+               trace_count_sym(&log, "glRasterPos2f"), 0);
+    ASSERT_INT("empty label scope skips the depth readback",
+               trace_count_sym(&log, "glReadPixels"), 0);
+
     /* Normal vectors: arrow base at each vertex (scale GLR_NORMAL_ARROW_SCALE). */
     trace_begin();
     edit_overlays_render_normal_vectors(&walk);

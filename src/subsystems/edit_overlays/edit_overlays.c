@@ -1328,10 +1328,40 @@ typedef struct {
     int   poly_first;
     int   poly_last;
     int   poly_fan_anchor;
-    /* Scene depth buffer (vw*vh, viewport-local, bottom-up) read once before
-     * the walk, for the occlusion cull; NULL only if the readback failed. */
-    const float *depthbuf;
+    /* Scene depth buffer (vw*vh, viewport-local, bottom-up) for the occlusion
+     * cull. Read at most once per pass, and *lazily* - the first vertex that
+     * actually reaches the cull triggers it. The readback is a synchronous
+     * full-viewport stall (~ms), so a label mode that is on but has nothing to
+     * label (cursor off a vertex row, scope empty, everything off-screen or
+     * over the label cap) must not pay it. depthbuf stays NULL when the
+     * context can't read depth or the read failed; labels then stay visible. */
+    int    depth_supported;
+    int    depth_tried;
+    int    depth_vp_x, depth_vp_y;
+    float *depthbuf;
 } VertexLabelCtx;
+
+/* Lazy one-shot scene-depth snapshot for the occlusion cull; see depthbuf. */
+static const float *vertex_label_depth_snapshot(VertexLabelCtx *ctx) {
+    size_t n;
+
+    if (ctx->depth_tried)
+        return ctx->depthbuf;
+    ctx->depth_tried = 1;
+    if (!ctx->depth_supported || ctx->vw <= 0 || ctx->vh <= 0)
+        return NULL;
+
+    n = (size_t)ctx->vw * (size_t)ctx->vh;
+    ctx->depthbuf = (float *)malloc(n * sizeof(float));
+    if (!ctx->depthbuf)
+        return NULL;
+    /* The label pass runs with GL_DEPTH_TEST disabled and draws only bitmap
+     * text, so nothing between here and the end of the walk writes depth -
+     * reading mid-walk sees exactly what an up-front read would have. */
+    glReadPixels(ctx->depth_vp_x, ctx->depth_vp_y, ctx->vw, ctx->vh,
+                 GL_DEPTH_COMPONENT, GL_FLOAT, ctx->depthbuf);
+    return ctx->depthbuf;
+}
 
 static float sanitize_zero(float val) {
     if (val > -0.005f && val < 0.005f) {
@@ -1550,12 +1580,17 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
 
     /* Drop the vertex if the scene rendered nearer geometry at this pixel
      * (i.e. the vertex is occluded) - labels never show through solid
-     * geometry, in any scope. depthbuf is NULL only when the readback failed;
-     * the off-screen guard above keeps the index in range. */
-    if (ctx->depthbuf) {
-        float scene_d = ctx->depthbuf[(int)sy * ctx->vw + (int)sx];
-        if (depth > scene_d + VERTEX_LABEL_OCCLUDE_BIAS)
-            return;
+     * geometry, in any scope. This is the first point that needs the scene
+     * depth, so it is where the snapshot gets taken; depthbuf is NULL when the
+     * context can't read depth or the read failed. The off-screen guard above
+     * keeps the index in range. */
+    {
+        const float *depthbuf = vertex_label_depth_snapshot(ctx);
+        if (depthbuf) {
+            float scene_d = depthbuf[(int)sy * ctx->vw + (int)sx];
+            if (depth > scene_d + VERTEX_LABEL_OCCLUDE_BIAS)
+                return;
+        }
     }
 
     /* Numbering exists to disambiguate, so it keys on whether ambiguity is
@@ -1993,7 +2028,6 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
      * this is reset per call. */
     static VertexLabelCtx label_ctx;
     GLint vp[4];
-    float *depthbuf = NULL;   /* scene depth snapshot: occlusion cull */
 
     if (mode == OVERLAY_VERTEX_LABEL_OFF)
         return;
@@ -2024,6 +2058,8 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     label_ctx.placement       = placement;
     label_ctx.block_instances = 0;
     label_ctx.labelable_seen  = 0;
+    label_ctx.depth_supported = depth_readback_supported;
+    label_ctx.depth_tried     = 0;
     label_ctx.depthbuf        = NULL;
     label_ctx.poly_valid      = walk_ctx ? walk_ctx->cursor_poly_valid : 0;
     label_ctx.poly_first      = walk_ctx ? walk_ctx->cursor_poly_first : 0;
@@ -2037,24 +2073,19 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     glGetIntegerv(GL_VIEWPORT, vp);
     label_ctx.vw = vp[2];
     label_ctx.vh = vp[3];
+    label_ctx.depth_vp_x = vp[0];
+    label_ctx.depth_vp_y = vp[1];
 
-    /* Snapshot the scene depth buffer once (one readback, not a per-vertex GL
-     * round-trip) so the callback can cull occluded vertices. The scene
-     * geometry has already drawn its depths by the time overlays run. Indexed
+    /* The scene depth buffer feeds the occlusion cull (one readback for the
+     * whole pass, not a per-vertex GL round-trip), taken lazily by
+     * vertex_label_depth_snapshot() when the first vertex reaches the cull -
+     * the scene geometry has already drawn its depths by the time overlays
+     * run, and a pass that labels nothing must not pay the stall. Indexed
      * viewport-local (bottom-up), matching project_to_screen. Occlusion
      * applies in every scope when the context supports this readback. WebGL
      * forbids reading default-framebuffer depth and gl4es may silently no-op,
-     * so the controller's capability probe must gate both the allocation and
-     * read; without a valid snapshot, labels deliberately remain visible. */
-    if (depth_readback_supported && label_ctx.vw > 0 && label_ctx.vh > 0) {
-        size_t n = (size_t)label_ctx.vw * (size_t)label_ctx.vh;
-        depthbuf = malloc(n * sizeof(float));
-        if (depthbuf) {
-            glReadPixels(vp[0], vp[1], label_ctx.vw, label_ctx.vh,
-                         GL_DEPTH_COMPONENT, GL_FLOAT, depthbuf);
-            label_ctx.depthbuf = depthbuf;
-        }
-    }
+     * so the controller's capability probe gates the read; without a valid
+     * snapshot, labels deliberately remain visible. */
 
     if (mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD ||
         mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE) {
@@ -2074,7 +2105,8 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     if (label_ctx.vw > 0 && label_ctx.vh > 0)
         vertex_labels_layout_and_draw(&label_ctx);
 
-    free(depthbuf);
+    free(label_ctx.depthbuf);
+    label_ctx.depthbuf = NULL;
     glPopAttrib();
 }
 
