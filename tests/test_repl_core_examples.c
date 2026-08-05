@@ -2081,10 +2081,10 @@ int main(int argc, char **argv) {
     {
         static const char *const easing_camera_example[] = {
             "// camera",
-            "glTranslatef(0.0f, 0.0f, -10.0f);",
-            "glRotatef(40.0f, 1.0f, 0.0f, 0.0f);",
-            "glRotatef(64.0f, 0.0f, 1.0f, 0.0f);",
-            "glTranslatef(-1.0f, 0.5f, -2.0f);",
+            "glTranslatef(0.0f, 0.0f, -10.0f);   // @camera dist",
+            "glRotatef(40.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
+            "glRotatef(64.0f, 0.0f, 1.0f, 0.0f);   // @camera ry",
+            "glTranslatef(-1.0f, 0.5f, -2.0f);   // @camera pan",
             "glBegin(GL_POINTS);",
             "glVertex3f(0, 0, 0);",
             "glEnd();",
@@ -2176,10 +2176,10 @@ int main(int argc, char **argv) {
             "// @cfg top_code_panel = 1",
             "// @cfg code_panel = 3",
             "// camera",
-            "glTranslatef(0.0f, 0.0f, -9.0f);",
-            "glRotatef(11.0f, 1.0f, 0.0f, 0.0f);",
-            "glRotatef(-17.0f, 0.0f, 1.0f, 0.0f);",
-            "glTranslatef(-0.2f, -0.3f, 0.4f);",
+            "glTranslatef(0.0f, 0.0f, -9.0f);   // @camera dist",
+            "glRotatef(11.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
+            "glRotatef(-17.0f, 0.0f, 1.0f, 0.0f);   // @camera ry",
+            "glTranslatef(-0.2f, -0.3f, 0.4f);   // @camera pan",
             "glBegin(GL_POINTS);",
             "glVertex3f(0, 0, 0);",
             "glEnd();",
@@ -2314,10 +2314,10 @@ int main(int argc, char **argv) {
          * along with the transforms that follow it. */
         static const char *const prose_camera_example[] = {
             "// The camera starts here.",
-            "glTranslatef(0.0f, 0.0f, -8.0f);",
-            "glRotatef(14.0f, 1.0f, 0.0f, 0.0f);",
-            "glRotatef(27.0f, 0.0f, 1.0f, 0.0f);",
-            "glTranslatef(-0.25f, 0.5f, -0.75f);",
+            "glTranslatef(0.0f, 0.0f, -8.0f);   // @camera dist",
+            "glRotatef(14.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
+            "glRotatef(27.0f, 0.0f, 1.0f, 0.0f);   // @camera ry",
+            "glTranslatef(-0.25f, 0.5f, -0.75f);   // @camera pan",
             "glBegin(GL_POINTS);",
             "glVertex3f(0, 0, 0);",
             "glEnd();",
@@ -2341,19 +2341,18 @@ int main(int argc, char **argv) {
     }
 
     {
-        /* Shape-check fails (dist_x = 1.0f > 1e-4f) so the camera bridge
-         * is NOT applied. Pre-#12 the loader still skipped the 5 lines
-         * after `// camera` regardless, eating the marker + 4 would-be
-         * camera transforms before geometry parsing resumed. Post-#12
-         * the lines are left for ordinary parsing so the user sees
-         * what they typed instead of silent loss. Camera state is
-         * still untouched (the bridge rejected the block). */
+        /* A tagged line the reader rejects is *consumed*, never passed
+         * through as geometry: the tag is reserved syntax, so the line is a
+         * camera line in the wrong shape, not a document row. Here the `dist`
+         * row folds a pan offset into x, which the reader refuses; the other
+         * three roles are fine and apply, and `dist` merges from the camera's
+         * destination - so a partial pose is still a complete one. */
         static const char *const invalid_camera_example[] = {
             "// camera",
-            "glTranslatef(1.0f, 0.0f, -9.0f);",
-            "glRotatef(20.0f, 1.0f, 0.0f, 0.0f);",
-            "glRotatef(91.0f, 0.0f, 1.0f, 0.0f);",
-            "glTranslatef(-0.5f, 0.0f, 0.0f);",
+            "glTranslatef(1.0f, 0.0f, -9.0f);   // @camera dist",
+            "glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
+            "glRotatef(91.0f, 0.0f, 1.0f, 0.0f);   // @camera ry",
+            "glTranslatef(-0.5f, 0.0f, 0.0f);   // @camera pan",
             "glBegin(GL_POINTS);",
             "glVertex3f(1, 2, 3);",
             "glEnd();",
@@ -2362,33 +2361,33 @@ int main(int argc, char **argv) {
         char *dump;
 
         load_custom_example_lines_for_test(invalid_camera_example);
-        ASSERT_TRUE("invalid camera header keeps all body cmds (no data loss)",
-                    repl_state_document_count() == 8);
-        ASSERT_TRUE("invalid camera header keeps cmds valid",
+        ASSERT_TRUE("rejected camera row is consumed, not inserted",
+                    repl_state_document_count() == 4);
+        ASSERT_TRUE("rejected camera row keeps cmds valid",
                     examples_have_no_invalid_cmds());
-        ASSERT_TRUE("invalid camera header preserves rx",
-                    fabsf(glr_camera().rx - 18.0f) < 1e-4f);
-        ASSERT_TRUE("invalid camera header preserves ry",
-                    fabsf(glr_camera().ry - 32.0f) < 1e-4f);
-        ASSERT_TRUE("invalid camera header preserves dist",
+        ASSERT_TRUE("accepted roles still apply (rx)",
+                    fabsf(glr_camera().rx - 20.0f) < 1e-4f);
+        ASSERT_TRUE("accepted roles still apply (ry)",
+                    fabsf(glr_camera().ry - 91.0f) < 1e-4f);
+        ASSERT_TRUE("rejected dist keeps the destination value",
                     fabsf(glr_camera().dist - 5.5f) < 1e-4f);
-        ASSERT_TRUE("invalid camera header preserves tx",
-                    fabsf(glr_camera().tx - 0.0f) < 1e-4f);
-        ASSERT_TRUE("invalid camera header preserves ty",
-                    fabsf(glr_camera().ty - 0.0f) < 1e-4f);
-        ASSERT_TRUE("invalid camera header preserves tz",
+        ASSERT_TRUE("accepted pan applies",
+                    fabsf(glr_camera().tx - 0.5f) < 1e-4f &&
+                    fabsf(glr_camera().ty - 0.0f) < 1e-4f &&
                     fabsf(glr_camera().tz - 0.0f) < 1e-4f);
 
         dump = dump_current_code_panel_text();
-        ASSERT_TRUE("invalid camera header dump alloc", dump != NULL);
+        ASSERT_TRUE("rejected camera dump alloc", dump != NULL);
         if (dump) {
-            ASSERT_TRUE("invalid camera marker kept",
+            /* The marker is an ordinary comment and stays; every tagged row
+             * is gone, rejected ones included. */
+            ASSERT_TRUE("camera marker kept as an ordinary comment",
                         strstr(dump, "// camera") != NULL);
-            ASSERT_TRUE("invalid camera rotate kept",
-                        strstr(dump, "glRotatef(91") != NULL);
-            ASSERT_TRUE("invalid camera translate kept",
-                        strstr(dump, "glTranslatef(1") != NULL);
-            ASSERT_TRUE("invalid camera body kept",
+            ASSERT_TRUE("rejected camera row did not become geometry",
+                        strstr(dump, "glTranslatef(1") == NULL);
+            ASSERT_TRUE("accepted camera rows did not become geometry",
+                        strstr(dump, "glRotatef(91") == NULL);
+            ASSERT_TRUE("body kept",
                         strstr(dump, "glVertex3f(1, 2, 3);") != NULL);
             free(dump);
         }

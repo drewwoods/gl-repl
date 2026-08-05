@@ -3706,10 +3706,10 @@ static void test_view_mode_restore_honors_pending_camera_reset(void) {
 static void test_import_camera_block_becomes_scene_default(void) {
     static const char *const k_lines[] = {
         "// camera",
-        "glTranslatef(0.0f, 0.0f, -15.0f);",
-        "glRotatef(26.0f, 1.0f, 0.0f, 0.0f);",
-        "glRotatef(-20.0f, 0.0f, 1.0f, 0.0f);",
-        "glTranslatef(-1.0f, -2.0f, -3.0f);",
+        "glTranslatef(0.0f, 0.0f, -15.0f);   // @camera dist",
+        "glRotatef(26.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
+        "glRotatef(-20.0f, 0.0f, 1.0f, 0.0f);   // @camera ry",
+        "glTranslatef(-1.0f, -2.0f, -3.0f);   // @camera pan",
         "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
         "glColor3f(1.0f, 0.0f, 0.0f);",
         NULL
