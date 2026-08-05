@@ -1859,6 +1859,58 @@ static int update_all_golden_fixtures(void) {
     return 0;
 }
 
+static void test_stress_scene_exports_compile(const char *temp_dir) {
+    char err[512];
+    int loaded;
+
+    err[0] = '\0';
+    loaded = repl_examples_load_dir("tests/scenes/stress", err, sizeof(err));
+    ASSERT_TRUE("stress scene catalog loads", loaded);
+    if (!loaded) {
+        printf("DETAIL [stress scene catalog load failed] %s\n",
+               err[0] ? err : "unknown error");
+        return;
+    }
+
+    ASSERT_TRUE("stress scene catalog is non-empty", repl_example_count() > 0);
+    for (int idx = 0; idx < repl_example_count(); idx++) {
+        const char *name = repl_example_name(idx);
+        char export_path[512];
+        char detail[4096];
+        char label[160];
+        int exported;
+        int compiled = 0;
+
+        load_example_for_test(idx);
+        snprintf(label, sizeof(label), "stress scene %02d loads", idx);
+        ASSERT_TRUE(label, repl_state_document_count() > 0);
+        snprintf(label, sizeof(label), "stress scene %02d has no invalid cmds", idx);
+        ASSERT_TRUE(label, examples_have_no_invalid_cmds());
+
+        snprintf(export_path, sizeof(export_path), "%s/stress_%02d.c",
+                 temp_dir, idx);
+        exported = repl_export_save_output(export_path, source_document_view(), NULL);
+        snprintf(label, sizeof(label), "stress scene %02d exports", idx);
+        ASSERT_TRUE(label, exported);
+        detail[0] = '\0';
+        if (exported && repl_state_document_count() > 0 &&
+            examples_have_no_invalid_cmds())
+            compiled = compile_exported_source(idx, name, export_path,
+                                                detail, sizeof(detail));
+        if (!compiled) {
+            printf("DETAIL [stress scene export compile failed] name=%s file=%s\n%s\n",
+                   name ? name : "(unnamed)", export_path, detail);
+        }
+        snprintf(label, sizeof(label), "stress scene %02d export compiles", idx);
+        ASSERT_TRUE(label, compiled);
+
+        if (!g_keep_temp)
+            remove(export_path);
+    }
+
+    repl_examples_clear_runtime_catalog();
+}
+
 int main(int argc, char **argv) {
     char temp_dir[] = "/tmp/repl_examples_export.XXXXXX";
     const char *verbose_env = getenv("REPL_EXPORT_VERBOSE");
@@ -2670,6 +2722,8 @@ int main(int argc, char **argv) {
             }
         }
     }
+
+    test_stress_scene_exports_compile(temp_dir);
 
     if (g_keep_temp)
         fprintf(stderr, "repl_core_examples: keeping temp dir %s\n", temp_dir);

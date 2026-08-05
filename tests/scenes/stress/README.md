@@ -15,6 +15,9 @@ It is a **runtime `--examples-dir` catalog, not a built-in one**: nothing here i
 | `attrib-stack-push-pop-stress.glr` | `glPushAttrib` / `glPopAttrib` nesting | Pushes and pops multiple attribute bitmasks (`GL_ENABLE_BIT`, `GL_LIGHTING_BIT`, `GL_COLOR_BUFFER_BIT`, `GL_ALL_ATTRIB_BITS`), verifying state preservation, depth test toggling, and proper restoration upon popping stacked frames. |
 | `matrix-stack-recursion-stress.glr` | Matrix stack & recursive function calls | Implements a 3D fractal tree using recursive function calls with nested `glPushMatrix()` / `glPopMatrix()` calls, unrolling up to 81 branch nodes and verifying matrix stack balance. |
 | `expression-eval-boundary-stress.glr` | Math evaluator edge cases | Exercises floating-point modulo (`%`), inverse trig (`atan2`), `sqrt(abs(...))`, `pow`, `clamp`, `lerp`, high-frequency trig signals, and complex boolean expressions (`&&`, `||`). |
+| `loop-break-continue-stress.glr` | Loop control flow boundaries | Exercises nested loops up to 3 levels deep with dynamic loop boundaries, dynamic loop steps, conditional `break` statements, and conditional `continue` statements to test control flow correctness. |
+| `scratch-array-stress.glr` | Scratch arrays & custom matrix transforms | Tests reading and writing to scratch arrays (`A` & `B`), variable array indexing under loops, and composing custom affine transformations via `glMultMatrixf(A)`. |
+| `mutual-recursion-stress.glr` | Mutual recursion & function call stack | Establishes a mutual recursion chain (`func1` -> `func2` -> `func1`) with local variables shadowing, parameter stack push/pop overhead, and depth exit condition checking. |
 
 ## Catalog File
 
@@ -39,4 +42,7 @@ Launch `gl-repl` directly on any stress scene:
 ./gl-repl tests/scenes/stress/attrib-stack-push-pop-stress.glr
 ./gl-repl tests/scenes/stress/matrix-stack-recursion-stress.glr
 ./gl-repl tests/scenes/stress/expression-eval-boundary-stress.glr
+./gl-repl tests/scenes/stress/loop-break-continue-stress.glr
+./gl-repl tests/scenes/stress/scratch-array-stress.glr
+./gl-repl tests/scenes/stress/mutual-recursion-stress.glr
 ```
