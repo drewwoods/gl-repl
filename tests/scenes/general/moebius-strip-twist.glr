@@ -1,0 +1,86 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_OFF
+// Animated Moebius strip with color gradients
+// Parametric: (cos(u)*(1+v*cos(u/2)), sin(u)*(1+v*cos(u/2)), v*sin(u/2))
+
+static float segments = 120.0;
+static float half_w = 0.3;
+static float u, hu, hue, phase, r_col, g_col, b_col;
+static float v1, x1, y1, z1;
+static float v2, x2, y2, z2;
+
+glTranslatef(0.0000f, 0.0000f, -5.0000f);   // @camera dist
+glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+
+glClearColor(0.03, 0.03, 0.08, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+// Slow rotation around Y axis
+glRotatef(t * 15.0, 0.0, 1.0, 0.0);
+
+// Draw the Moebius strip as a quad strip
+glBegin(GL_QUAD_STRIP);
+
+for(i, 0, segments + 1) {
+    u = (i / segments) * TAU;
+    hu = u * 0.5;
+
+    // Color gradient: hue shifts along strip and with time
+    hue = (i / segments) + t * 0.1;
+    phase = hue * TAU;
+    r_col = 0.5 + 0.5 * sin(phase);
+    g_col = 0.5 + 0.5 * sin(phase + TAU / 3.0);
+    b_col = 0.5 + 0.5 * sin(phase + 2.0 * TAU / 3.0);
+
+    // Bottom edge (v = -half_w)
+    v1 = -half_w;
+    x1 = cos(u) * (1.0 + v1 * cos(hu));
+    y1 = sin(u) * (1.0 + v1 * cos(hu));
+    z1 = v1 * sin(hu);
+
+    // Slightly darker for bottom edge
+    glColor3f(r_col * 0.6, g_col * 0.6, b_col * 0.6);
+    glVertex3f(x1, y1, z1);
+
+    // Top edge (v = +half_w)
+    v2 = half_w;
+    x2 = cos(u) * (1.0 + v2 * cos(hu));
+    y2 = sin(u) * (1.0 + v2 * cos(hu));
+    z2 = v2 * sin(hu);
+
+    // Full brightness for top edge
+    glColor3f(r_col, g_col, b_col);
+    glVertex3f(x2, y2, z2);
+}
+
+glEnd();
+
+// Draw wireframe outline for definition
+glLineWidth(1.5);
+glBegin(GL_LINE_LOOP);
+for(i, 0, segments + 1) {
+    u = (i / segments) * TAU;
+    hu = u * 0.5;
+    v1 = -half_w;
+    hue = (i / segments) + t * 0.1;
+    phase = hue * TAU;
+    glColor4f(0.5 + 0.5 * sin(phase), 0.5 + 0.5 * sin(phase + TAU / 3.0), 0.5 + 0.5 * sin(phase + 2.0 * TAU / 3.0), 0.4);
+    glVertex3f(cos(u) * (1.0 + v1 * cos(hu)), sin(u) * (1.0 + v1 * cos(hu)), v1 * sin(hu));
+}
+glEnd();
+
+glBegin(GL_LINE_LOOP);
+for(i, 0, segments + 1) {
+    u = (i / segments) * TAU;
+    hu = u * 0.5;
+    v2 = half_w;
+    hue = (i / segments) + t * 0.1;
+    phase = hue * TAU;
+    glColor4f(0.5 + 0.5 * sin(phase), 0.5 + 0.5 * sin(phase + TAU / 3.0), 0.5 + 0.5 * sin(phase + 2.0 * TAU / 3.0), 0.4);
+    glVertex3f(cos(u) * (1.0 + v2 * cos(hu)), sin(u) * (1.0 + v2 * cos(hu)), v2 * sin(hu));
+}
+glEnd();

@@ -24,6 +24,17 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 | `torus-knot-slinky.glr` | 3D, Hierarchical, Lighting | Complex torus knot curve rendered as an animated, color-shifting beaded slinky of spheres. |
 | `stardust-spiral-galaxy.glr` | 3D, Particles, Blending | Dual-arm spiral galaxy of glowing, blending dust particles whose speed and radius vary over time. |
 | `rubiks-cube-rotation.glr` | 3D, Hierarchical, Lighting | A 3x3x3 grid of sub-cubes whose outer layers twist and rotate dynamically on different axes. |
+| `pendulum-wave-machine.glr` | 3D, Particles, Animation | A row of 14 pendulums with slightly different lengths and swing frequencies, creating the classic pendulum wave illusion. |
+| `moebius-strip-twist.glr` | 3D, Curves & surfaces, Parametric curves | Parametrically generated Möbius strip with animated rainbow color shifting and wireframe edges. |
+| `interlocking-gear-system.glr` | 3D, Hierarchical, Lighting | Three interlocking, counter-rotating metallic gears (copper, steel-blue, gold) with gear teeth and axel hubs. |
+| `crystalline-cave-formation.glr` | 3D, Polygons, Materials | Dynamic cluster of translucent crystal spires radiating from a central geode structure with high specular highlights. |
+| `wave-interference-pattern.glr` | 3D, Particles, Math | Circular wave superposition rendering constructive and destructive interference fringes on a 2D point grid. |
+| `ferris-wheel-ride.glr` | 3D, Hierarchical, Lighting | Rotating Ferris wheel with 8 uniquely-colored gondola cubes that counter-rotate to stay upright. |
+| `spiral-staircase-tower.glr` | 3D, Hierarchical, Lighting | Helical stone staircase tower with 30 steps, central pillar, and connecting handrail. |
+| `aurora-borealis-curtain.glr` | 3D, Curves & surfaces, Blending | Animated layered ribbons of waving auroras with green/cyan/magenta gradients and stars. |
+| `atom-electron-orbits.glr` | 3D, Hierarchical, Lighting | Bohr model atom featuring a glowing nucleus and five electrons orbiting along tilted orbital rings. |
+| `kaleidoscope-mandala.glr` | 3D, Polygons, Animation | An 8-fold symmetric rotating mandala with pulsing triangle fans, outer petals, and vibrant color cycles. |
+
 
 ## How to Run & Validate
 
@@ -51,4 +62,14 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 ./gl-repl tests/scenes/general/torus-knot-slinky.glr
 ./gl-repl tests/scenes/general/stardust-spiral-galaxy.glr
 ./gl-repl tests/scenes/general/rubiks-cube-rotation.glr
+./gl-repl tests/scenes/general/pendulum-wave-machine.glr
+./gl-repl tests/scenes/general/moebius-strip-twist.glr
+./gl-repl tests/scenes/general/interlocking-gear-system.glr
+./gl-repl tests/scenes/general/crystalline-cave-formation.glr
+./gl-repl tests/scenes/general/wave-interference-pattern.glr
+./gl-repl tests/scenes/general/ferris-wheel-ride.glr
+./gl-repl tests/scenes/general/spiral-staircase-tower.glr
+./gl-repl tests/scenes/general/aurora-borealis-curtain.glr
+./gl-repl tests/scenes/general/atom-electron-orbits.glr
+./gl-repl tests/scenes/general/kaleidoscope-mandala.glr
 ```

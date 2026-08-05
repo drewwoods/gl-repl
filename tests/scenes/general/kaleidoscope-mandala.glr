@@ -1,0 +1,146 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_OFF
+// Kaleidoscope Mandala - 8-fold symmetry with animated geometry
+
+static float NUM_FOLDS = 8.0;
+static float WEDGE_ANGLE = 45.0;
+
+static float frac;
+static float angle;
+static float r_dist;
+static float hue;
+static float cr, cg, cb;
+static float kf;
+static float a1, a2;
+static float r_inner;
+static float r_outer;
+static float hue2;
+static float mf;
+static float la;
+static float wave;
+static float lr_start;
+static float lr_end;
+static float lhue;
+static float pf;
+static float pa_center;
+static float pa_left;
+static float pa_right;
+static float pr_base;
+static float pr_tip;
+static float phue;
+
+glTranslatef(0.0000f, 0.0000f, -7.0000f);   // @camera dist
+glRotatef(5.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+
+glClearColor(0.02, 0.02, 0.06, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_BLEND);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+glLineWidth(1.5);
+
+// Slow overall rotation
+glPushMatrix();
+glRotatef(t * 12.0, 0.0, 0.0, 1.0);
+
+// Draw 8 symmetric wedges
+for(i, 0, NUM_FOLDS) {
+    glPushMatrix();
+    glRotatef(i * WEDGE_ANGLE, 0.0, 0.0, 1.0);
+
+    // === Layer 1: Inner pulsing triangle fan ===
+    glBegin(GL_TRIANGLE_FAN);
+    // Center vertex - bright white/cyan core
+    glColor4f(0.9, 0.95, 1.0, 0.8);
+    glVertex3f(0.0, 0.0, 0.0);
+    // Fan vertices along the wedge
+    for(j, 0, 6) {
+        frac = j / 5.0;
+        angle = frac * WEDGE_ANGLE * PI / 180.0;
+        r_dist = 0.8 + 0.3 * sin(t * 1.5 + frac * 4.0);
+        hue = frac + t * 0.15;
+        // HSV-like color cycling
+        cr = 0.5 + 0.5 * sin(hue * TAU);
+        cg = 0.5 + 0.5 * sin(hue * TAU + TAU / 3.0);
+        cb = 0.5 + 0.5 * sin(hue * TAU + 2.0 * TAU / 3.0);
+        glColor4f(cr, cg, cb, 0.6);
+        glVertex3f(cos(angle) * r_dist, sin(angle) * r_dist, 0.0);
+    }
+    glEnd();
+
+    // === Layer 2: Mid-ring geometry - oscillating quads ===
+    for(k, 0, 4) {
+        kf = k / 4.0;
+        a1 = kf * WEDGE_ANGLE * PI / 180.0;
+        a2 = (kf + 0.25) * WEDGE_ANGLE * PI / 180.0;
+
+        r_inner = 1.1 + 0.2 * sin(t * 2.0 + k * 1.5);
+        r_outer = 1.8 + 0.4 * sin(t * 1.2 + k * 0.8);
+
+        hue2 = kf * 0.5 + t * 0.1 + 0.33;
+
+        glBegin(GL_QUADS);
+        glColor4f(0.5 + 0.5 * sin(hue2 * TAU), 0.5 + 0.5 * sin(hue2 * TAU + 2.0), 0.5 + 0.5 * sin(hue2 * TAU + 4.0), 0.4);
+        glVertex3f(cos(a1) * r_inner, sin(a1) * r_inner, 0.01);
+        glColor4f(0.5 + 0.5 * sin(hue2 * TAU + 1.0), 0.5 + 0.5 * sin(hue2 * TAU + 3.0), 0.5 + 0.5 * sin(hue2 * TAU + 5.0), 0.35);
+        glVertex3f(cos(a2) * r_inner, sin(a2) * r_inner, 0.01);
+        glColor4f(0.5 + 0.5 * cos(hue2 * TAU), 0.5 + 0.5 * cos(hue2 * TAU + 2.0), 0.5 + 0.5 * cos(hue2 * TAU + 4.0), 0.25);
+        glVertex3f(cos(a2) * r_outer, sin(a2) * r_outer, 0.01);
+        glColor4f(0.5 + 0.5 * cos(hue2 * TAU + 1.0), 0.5 + 0.5 * cos(hue2 * TAU + 3.0), 0.5 + 0.5 * cos(hue2 * TAU + 5.0), 0.3);
+        glVertex3f(cos(a1) * r_outer, sin(a1) * r_outer, 0.01);
+        glEnd();
+    }
+
+    // === Layer 3: Outer radiating lines ===
+    glBegin(GL_LINES);
+    for(m, 0, 7) {
+        mf = m / 7.0;
+        la = mf * WEDGE_ANGLE * PI / 180.0;
+        wave = 0.3 * sin(t * 2.5 + m * 0.9);
+
+        lr_start = 1.9 + wave;
+        lr_end = 2.8 + 0.5 * sin(t * 0.8 + m * 1.2);
+
+        lhue = mf + t * 0.2;
+        glColor4f(0.5 + 0.5 * sin(lhue * TAU), 0.5 + 0.5 * sin(lhue * TAU + 2.1), 0.5 + 0.5 * sin(lhue * TAU + 4.2), 0.7);
+        glVertex3f(cos(la) * lr_start, sin(la) * lr_start, 0.02);
+        glColor4f(0.5 + 0.5 * sin(lhue * TAU + 1.0), 0.5 + 0.5 * sin(lhue * TAU + 3.1), 0.5 + 0.5 * sin(lhue * TAU + 5.2), 0.1);
+        glVertex3f(cos(la) * lr_end, sin(la) * lr_end, 0.02);
+    }
+    glEnd();
+
+    // === Layer 4: Outer petal triangles ===
+    for(p, 0, 3) {
+        pf = p / 3.0;
+        pa_center = (pf + 0.5 / 3.0) * WEDGE_ANGLE * PI / 180.0;
+        pa_left = pa_center - 0.06;
+        pa_right = pa_center + 0.06;
+
+        pr_base = 2.3 + 0.3 * sin(t * 1.8 + p * 2.0);
+        pr_tip = 3.0 + 0.4 * sin(t * 1.1 + p * 1.5);
+
+        phue = pf * 0.33 + t * 0.12 + 0.66;
+
+        glBegin(GL_TRIANGLES);
+        glColor4f(0.5 + 0.5 * sin(phue * TAU), 0.5 + 0.5 * sin(phue * TAU + 2.1), 0.5 + 0.5 * sin(phue * TAU + 4.2), 0.5);
+        glVertex3f(cos(pa_left) * pr_base, sin(pa_left) * pr_base, 0.03);
+        glVertex3f(cos(pa_right) * pr_base, sin(pa_right) * pr_base, 0.03);
+        glColor4f(0.5 + 0.5 * cos(phue * TAU), 0.5 + 0.5 * cos(phue * TAU + 2.1), 1.0, 0.15);
+        glVertex3f(cos(pa_center) * pr_tip, sin(pa_center) * pr_tip, 0.03);
+        glEnd();
+    }
+
+    glPopMatrix();
+}
+
+glPopMatrix();
+
+// Central glow dot
+glPointSize(6.0);
+glBegin(GL_POINTS);
+glColor4f(1.0, 1.0, 1.0, 0.9);
+glVertex3f(0.0, 0.0, 0.05);
+glEnd();

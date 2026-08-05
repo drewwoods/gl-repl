@@ -1,0 +1,92 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_OFF
+// Bohr Model Atom - nucleus with 3 electron orbital rings
+
+static float orbitRadius = 3.2;
+static float ringPts = 80.0;
+static float angle, ex, ey;
+
+// -- Draw orbital ring ---------------------------------
+// Draws a ring of points as a faint dashed circle
+drawRing(tiltX, tiltZ, cr, cg, cb) {
+  glPushMatrix();
+  glRotatef(tiltX, 1.0, 0.0, 0.0);
+  glRotatef(tiltZ, 0.0, 0.0, 1.0);
+  glDisable(GL_LIGHTING);
+  glPointSize(1.5);
+  glBegin(GL_POINTS);
+  for(i, 0, ringPts) {
+    angle = i * TAU / ringPts;
+    // Alternate visibility for dashed look
+    if(fmod(i, 3.0) < 2.0) {
+      glColor4f(cr, cg, cb, 0.5);
+      glVertex3f(cos(angle) * orbitRadius, sin(angle) * orbitRadius, 0.0);
+    }
+  }
+  glEnd();
+  glEnable(GL_LIGHTING);
+  glPopMatrix();
+}
+
+// -- Draw electron on orbit ----------------------------
+drawElectron(tiltX, tiltZ, speed, phase, er, eg, eb) {
+  angle = t * speed + phase;
+  ex = cos(angle) * orbitRadius;
+  ey = sin(angle) * orbitRadius;
+
+  glPushMatrix();
+  glRotatef(tiltX, 1.0, 0.0, 0.0);
+  glRotatef(tiltZ, 0.0, 0.0, 1.0);
+  glTranslatef(ex, ey, 0.0);
+
+  // Bright electron material
+  glMaterialfv(GL_FRONT, GL_DIFFUSE, er, eg, eb, 1.0);
+  glMaterialfv(GL_FRONT, GL_AMBIENT, er * 0.3, eg * 0.3, eb * 0.3, 1.0);
+  glMaterialfv(GL_FRONT, GL_SPECULAR, 1.0, 1.0, 1.0, 1.0);
+  glMaterialf(GL_FRONT, GL_SHININESS, 80.0);
+  // Slight glow on electrons
+  glMaterialfv(GL_FRONT, GL_EMISSION, er * 0.25, eg * 0.25, eb * 0.25, 1.0);
+  glutSolidSphere(0.18, 12, 12);
+  glMaterialfv(GL_FRONT, GL_EMISSION, 0.0, 0.0, 0.0, 1.0);
+  glPopMatrix();
+}
+
+glTranslatef(0.0000f, 0.0000f, -12.0000f);   // @camera dist
+glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+
+glClearColor(0.02, 0.02, 0.06, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+
+// Slow global rotation
+glRotatef(t * 8.0, 0.0, 1.0, 0.0);
+
+// -- Nucleus (glowing sphere) --------------------------
+glPushMatrix();
+  // Emissive orange-yellow glow
+  glMaterialfv(GL_FRONT, GL_EMISSION, 0.9, 0.45, 0.1, 1.0);
+  glMaterialfv(GL_FRONT, GL_DIFFUSE, 0.9, 0.5, 0.15, 1.0);
+  glMaterialfv(GL_FRONT, GL_AMBIENT, 0.3, 0.15, 0.05, 1.0);
+  glutSolidSphere(0.55, 24, 24);
+  // Reset emission
+  glMaterialfv(GL_FRONT, GL_EMISSION, 0.0, 0.0, 0.0, 1.0);
+glPopMatrix();
+
+// -- Orbit 1: XY plane (blue) --------------------------
+drawRing(0.0, 0.0, 0.2, 0.5, 0.9);
+drawElectron(0.0, 0.0, 1.8, 0.0, 0.3, 0.6, 1.0);
+drawElectron(0.0, 0.0, 1.8, PI, 0.3, 0.6, 1.0);
+
+// -- Orbit 2: tilted ~60 deg from XY (cyan-green) -------
+drawRing(60.0, 30.0, 0.1, 0.8, 0.6);
+drawElectron(60.0, 30.0, 2.3, 0.5, 0.2, 0.9, 0.7);
+
+// -- Orbit 3: tilted ~-55 deg the other way (magenta) ----
+drawRing(-55.0, -40.0, 0.7, 0.25, 0.8);
+drawElectron(-55.0, -40.0, 1.5, 1.2, 0.8, 0.3, 0.9);
+drawElectron(-55.0, -40.0, 1.5, 1.2 + PI, 0.8, 0.3, 0.9);

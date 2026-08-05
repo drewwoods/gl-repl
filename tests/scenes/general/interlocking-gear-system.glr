@@ -1,0 +1,132 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_OFF
+// @cfg light_theme = LIGHT_THEME_NEON
+
+// Gear radii and layout
+static float r1 = 1.8;
+static float r2 = 1.2;
+static float r3 = 1.8;
+static float teeth1 = 24;
+static float teeth2 = 16;
+static float teeth3 = 24;
+static float tooth_size = 0.12;
+static float speed = 40.0;
+static float angle, tx, ty, cx, cy, cz;
+
+// -------------------------------------------------------
+// Gear drawing function: draws torus body + cube teeth
+// param1 = inner radius, param2 = outer radius
+// param3 = number of teeth, param4 = rotation angle
+// -------------------------------------------------------
+drawGear(param1, param2, param3, param4) {
+  glPushMatrix();
+  glRotatef(param4, 0, 0, 1);
+
+  // Gear body - torus
+  glutSolidTorus(param1, param2, 20, 40);
+
+  // Teeth around the rim
+  for(i, 0, param3) {
+    angle = i * 360.0 / param3;
+    glPushMatrix();
+    glRotatef(angle, 0, 0, 1);
+    glTranslatef(param2 + param1 * 0.8, 0, 0);
+    glutSolidCube(tooth_size);
+    glPopMatrix();
+  }
+
+  glPopMatrix();
+}
+
+glTranslatef(0.0000f, 0.0000f, -10.0000f);   // @camera dist
+glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(15.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+
+glClearColor(0.04, 0.03, 0.06, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);
+
+// -------------------------------------------------------
+// Gear 1 (left) - Copper - rotates clockwise
+// -------------------------------------------------------
+glPushMatrix();
+glTranslatef(-2.8, 0, 0);
+
+// Copper material
+glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.19, 0.07, 0.02, 1.0});
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.7, 0.27, 0.08, 1.0});
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.95, 0.73, 0.45, 1.0});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 50.0);
+glColor3f(0.7, 0.27, 0.08);
+
+drawGear(0.25, r1, teeth1, t * speed);
+glPopMatrix();
+
+// -------------------------------------------------------
+// Gear 2 (center, smaller) - Steel blue - opposite dir
+// Speed ratio: r1/r2 so it meshes correctly
+// -------------------------------------------------------
+glPushMatrix();
+glTranslatef(0.0, -0.9, 0);
+
+// Steel-blue material
+glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.05, 0.08, 0.15, 1.0});
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.35, 0.50, 0.70, 1.0});
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.85, 0.85, 0.95, 1.0});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 70.0);
+glColor3f(0.35, 0.50, 0.70);
+
+// Opposite direction, speed scaled by r1/r2 ratio
+drawGear(0.20, r2, teeth2, -t * speed * r1 / r2);
+glPopMatrix();
+
+// -------------------------------------------------------
+// Gear 3 (right) - Gold - same dir as gear 1
+// -------------------------------------------------------
+glPushMatrix();
+glTranslatef(2.8, 0, 0);
+
+// Gold material
+glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.24, 0.20, 0.07, 1.0});
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.75, 0.61, 0.23, 1.0});
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.95, 0.88, 0.55, 1.0});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 60.0);
+glColor3f(0.75, 0.61, 0.23);
+
+drawGear(0.25, r3, teeth3, t * speed);
+glPopMatrix();
+
+// -------------------------------------------------------
+// Axle hubs - small spheres at each gear center
+// -------------------------------------------------------
+
+// Left axle
+glPushMatrix();
+glTranslatef(-2.8, 0, 0);
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.3, 0.3, 0.3, 1.0});
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.9, 0.9, 0.9, 1.0});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 80.0);
+glColor3f(0.3, 0.3, 0.3);
+glutSolidSphere(0.3, 16, 16);
+glPopMatrix();
+
+// Center axle
+glPushMatrix();
+glTranslatef(0.0, -0.9, 0);
+glColor3f(0.3, 0.3, 0.3);
+glutSolidSphere(0.25, 16, 16);
+glPopMatrix();
+
+// Right axle
+glPushMatrix();
+glTranslatef(2.8, 0, 0);
+glColor3f(0.3, 0.3, 0.3);
+glutSolidSphere(0.3, 16, 16);
+glPopMatrix();
