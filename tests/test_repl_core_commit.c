@@ -1151,6 +1151,60 @@ static void run_scratch_block_matrix(void) {
                     fabsf(scratch_cell(0, 3) - 12.0f) < 1e-6f);
     }
 
+    /* --- Replay annotation, both expansion modes --------------------- */
+    /* A block row resolves to N flat rows but the annotation paths pick
+     * one - the first. Annotating from it would label the whole row with
+     * cell 0's value and say nothing about the other N-1, so both modes
+     * must leave the row bare. The scalar row after it proves the
+     * suppression is about the form, not about scratch rows. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    {
+        char display[MAX_INPUT_LEN];
+
+        editor_feed_line("A[0] = {n, n * 2, n * 3, n * 4};");
+        editor_feed_line("A[8] = n + 1;");
+        repl_flatten_commands(editor_state_edit_line());
+        replay_start();
+        replay_state = REPLAY_PAUSED;
+        replay_pc = repl_state_flat_program_count();
+
+        for (int mode = 0; mode < 2; mode++) {
+            replay_state_mut()->expand_args = mode == 0
+                ? REPLAY_EXPAND_EXPANDED : REPLAY_EXPAND_VERBOSE;
+
+            replay_src_line = 0;
+            ASSERT_TRUE("block replay display text",
+                        replay_code_panel_get_command_display_text(
+                            source_document_view(), 0, display, sizeof(display)));
+            ASSERT_STR(mode == 0
+                           ? "expanded leaves a block row unannotated"
+                           : "verbose leaves a block row unannotated",
+                       skip_indent(display), "A[0] = {n, n * 2, n * 3, n * 4};");
+
+            /* No virtual rows for it either (Verbose's own channel). */
+            {
+                ReplReplayAnnotationOutput ann;
+                replay_annotations_prepare(source_document_view(), &ann);
+                ASSERT_INT(mode == 0
+                               ? "expanded emits no block virtual rows"
+                               : "verbose emits no block virtual rows",
+                           ann.count, 0);
+            }
+
+            /* The scalar scratch row beside it still expands. */
+            replay_src_line = 1;
+            ASSERT_TRUE("scalar replay display text",
+                        replay_code_panel_get_command_display_text(
+                            source_document_view(), 1, display, sizeof(display)));
+            ASSERT_TRUE(mode == 0
+                            ? "expanded still annotates a scalar scratch row"
+                            : "verbose still annotates a scalar scratch row",
+                        strstr(display, "//") != NULL);
+        }
+        replay_state_mut()->expand_args = REPLAY_EXPAND_DEFAULT;
+        replay_state = REPLAY_OFF;
+    }
+
     /* A scalar row keeps re-evaluating its own index under the rebake -
      * the from_block flag must not blur the two forms. */
     glr_ctrl_reset_all(); declare_test_vars();

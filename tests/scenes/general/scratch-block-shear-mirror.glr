@@ -1,0 +1,88 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// Scratch block assignment - a 4x4 written four cells at a time.
+//
+// glTranslatef/glRotatef/glScalef cannot express a shear or a mirror, so
+// this builds the matrices cell by cell and hands them to glMultMatrixf.
+// Each `A[base] = {...}` row is one column of the column-major 4x4, which
+// is the whole point of the form: the source reads as the matrix it is.
+
+static float shear, tick, bob;
+
+// Column-major, so each row below is a COLUMN, and cells 12..14 hold the
+// translation. Reading down the four rows gives the transpose of how the
+// matrix is usually printed - that is OpenGL's convention, not a typo.
+
+// -- A: animated shear of x by y ------------------------
+buildShear() {
+  A[0]  = {1, 0, 0, 0};
+  A[4]  = {shear, 1, 0, 0};
+  A[8]  = {0, 0, 1, 0};
+  A[12] = {0, 0, 0, 1};
+}
+
+// -- B: mirror through the yz plane ---------------------
+// Constant cells, so this row never re-evaluates; it also exercises the
+// bare form, which names the array without a subscript.
+buildMirror() {
+  B = {-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+}
+
+// -- C: a lift, mixing block rows with single-cell writes -
+buildLift() {
+  C[0]  = {1, 0, 0, 0};
+  C[4]  = {0, 1, 0, 0};
+  C[8]  = {0, 0, 1, 0};
+  C[12] = {0, bob, 0, 1};
+  // A block row and an ordinary A[k] = expr; row may target the same
+  // array - the block writes a window, this rewrites one cell inside it.
+  C[13] = bob * 0.5;
+}
+
+glClearColor(0.05, 0.06, 0.09, 1);
+glClear(GL_COLOR_BUFFER_BIT);
+glClear(GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+shear = 0.45 * sin(t * 0.7);
+bob = 0.6 * sin(t * 1.3);
+tick = fmod(t, TAU);
+
+buildShear();
+buildMirror();
+buildLift();
+
+// -- Sheared, lifted teapot -----------------------------
+glPushMatrix();
+  glTranslatef(-1.6, 0.0, 0.0);
+  glMultMatrixf(C);
+  glMultMatrixf(A);
+  glColor3f(0.95, 0.72, 0.28);
+  glutSolidTeapot(0.75);
+glPopMatrix();
+
+// -- Its mirror image, sheared the same way -------------
+glPushMatrix();
+  glTranslatef(1.6, 0.0, 0.0);
+  glMultMatrixf(B);
+  glMultMatrixf(A);
+  glColor3f(0.38, 0.72, 0.95);
+  glutSolidTeapot(0.75);
+glPopMatrix();
+
+// -- Ground line so the shear reads against something ---
+glDisable(GL_LIGHTING);
+glLineWidth(1.5);
+glColor3f(0.28, 0.30, 0.36);
+glBegin(GL_LINES);
+  for(i, 0, 13) {
+    glVertex3f(-3.0 + i * 0.5, -1.1, -1.5);
+    glVertex3f(-3.0 + i * 0.5, -1.1, 1.5);
+  }
+glEnd();
+glEnable(GL_LIGHTING);
+
+glColor3f(0.7, 0.7, 0.75);
+glRasterPos3f(-1.1, 1.9, 0.0);
+label("shear %f  lift %f", shear, bob);

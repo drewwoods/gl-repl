@@ -1211,6 +1211,14 @@ static int format_evaluated_cmd(const GLCmd *cmd, const char *orig_source,
         char index_expr[MAX_LINE_LEN] = "";
         char rhs[MAX_LINE_LEN] = "";
         int array_idx = (int)cmd->args[0];
+        /* One cell of `A[base] = {e0, ..., eN-1}`. The callers here resolve
+         * a source row to a single flat row - the first one - so annotating
+         * this would label the whole block with cell 0's value and say
+         * nothing about the other N-1. There is no one-line evaluated form
+         * for the row, so report that there is none and let it render
+         * unannotated rather than misdescribed. */
+        if (cmd->payload.scratch.from_block)
+            return 0;
         if (!repl_extract_assignment_target_parts(orig_source,
                                                  name, sizeof(name),
                                                  index_expr, sizeof(index_expr),

@@ -624,11 +624,51 @@ static void test_scratch_block_roundtrip(void) {
     remove(path);
 }
 
+/* The bare form `A = {…}` names its array without subscripting it, so the
+ * "A[" scan in export_collect_needs() cannot see it - yet the row *exports*
+ * as `A[0] = …`. Without the command-type branch beside glMultMatrixf(A)'s,
+ * the generated C assigns to an undeclared array and does not compile.
+ * Nothing else in the scene may mention A, or the scan would cover for it. */
+static void test_bare_scratch_block_declares_array(void) {
+    const char *path = "/tmp/repl_export_bare_block.c";
+    char *export_text;
+
+    repl_eval_init_predef_vars();
+    glr_ctrl_reset_all();
+    declare_test_vars();
+
+    editor_feed_line("A = {0.2, 0.6, 0.9};");
+    editor_feed_line("C = {1, 2};");
+    editor_feed_line("glutSolidCube(1);");
+    ASSERT_TRUE("bare-block rows committed", repl_state_document_count() == 3);
+
+    repl_export_save_output(path, source_document_view(), NULL);
+    export_text = slurp_path(path);
+    ASSERT_TRUE("bare-block export read back", export_text != NULL);
+
+    if (export_text) {
+        ASSERT_TRUE("bare block declares its array",
+                    strstr(export_text, "static float A[16]") != NULL);
+        ASSERT_TRUE("second bare block declares its array too",
+                    strstr(export_text, "static float C[16]") != NULL);
+        ASSERT_TRUE("the row still exports as cell stores",
+                    strstr(export_text, "A[0] = 0.2f;") != NULL);
+        /* An array no row mentions must not get a global conjured for it -
+         * the same restraint glMultMatrixf's literal form relies on. */
+        ASSERT_TRUE("untouched array stays undeclared",
+                    strstr(export_text, "static float B[16]") == NULL);
+    }
+
+    free(export_text);
+    remove(path);
+}
+
 int main(void) {
     test_export_prologue_direct();
     test_auto_normal_marker_roundtrip();
     test_loop_jump_roundtrip();
     test_scratch_block_roundtrip();
+    test_bare_scratch_block_declares_array();
     const char *path1 = "/tmp/repl_export_all_commands_1.c";
     const char *path2 = "/tmp/repl_export_all_commands_2.c";
     int cmd_count_before = 0;
