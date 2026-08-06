@@ -1692,7 +1692,7 @@ what they *could* plausibly cover, and the lines between them are load-bearing:
 
 | Pair | Owns | Excludes (intentionally) |
 |---|---|---|
-| [`repl_state_capture`](../src/repl/state.h#L29) / [`_restore`](../src/repl/state.h#L30) | The REPL slices on [`ReplRuntimeState`](../src/repl/state.h#L18): source document, flat program, predef vars + scratch arrays, executor-mutated render tail, scene/workspace identity, import/export buffers. | Editor session state; the user-scene catalog slots, which have their own [`repl_scenes_snapshot_capture`](../src/repl/scenes.h#L198). |
+| [`repl_state_capture`](../src/repl/state.h#L29) / [`_restore`](../src/repl/state.h#L30) | The REPL slices on [`ReplRuntimeState`](../src/repl/state.h#L18): source document, flat program, predef vars + scratch arrays, executor-mutated render tail, scene/workspace identity, import/export buffers. | Editor session state; the user-scene catalog slots, which have their own [`repl_scenes_snapshot_capture`](../src/repl/scenes.h#L199). |
 | [`editor_state_capture`](../src/editor/state.h#L226) / [`_restore`](../src/editor/state.h#L227) | The editor session on [`EditorState`](../src/editor/state.h#L199): line buffer, input buffer, edit-line cursor, selection anchor, clipboard, search, autocomplete, scroll, cursor blink, and the per-frame overlay lists. | The REPL document. |
 | [`editor_undo_snapshot_save`](../src/editor/undo.h#L112) / [`_restore`](../src/editor/undo.h#L113) | One [`EditorUndoSnapshot`](../src/editor/undo.h#L60) ring entry: source commands, editor-buffer text, edit_line, predef names + values, scratch arrays, funcN aliases. | Input-buffer bytes, selection anchor, clipboard, search, autocomplete, scroll. Restore rebuilds the input row from the restored source via [`editor_load_line_to_input()`](../src/editor/input.h#L183). |
 
@@ -3033,8 +3033,8 @@ status hint, and the autocomplete provider. Adding a tutorial means:
   The simplest path is to place the new entry between two same-subheading
   entries in catalog order.
 - The catalog validator `expected_is_single_command` rejects
-  `float ...;` declarations in a COMMAND `expected` (CMD_VAR_DECLARE is
-  relocated to the end of the declaration prologue by
+  `float ...;` declarations in a COMMAND `expected` (a CMD_VAR_DECLARE typed
+  below existing code is relocated to the end of the declaration prologue by
   `editor_try_commit_float_decl`, breaking `pending.commit_line`). To teach
   a declaration like
   `float n = 5;`, use a REQUIRE_VAR step whose variable does not exist

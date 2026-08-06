@@ -1626,8 +1626,8 @@ static int setup_defines_anchor(const TutorialEntry *entry,
  *     commit would still insert header + auto `}` (two rows) while
  *     the runner expected one;
  *   - any `float ` declaration (single- or multi-name) - the
- *     CMD_VAR_DECLARE placement rule relocates the new decl to the
- *     top of non-decl code regardless of edit_line, so
+ *     CMD_VAR_DECLARE placement rule can relocate a decl typed below the
+ *     declaration prologue to the top of non-decl code, so
  *     pending.commit_line would not match the actual landing row
  *     and committed_line_for_step would point at the wrong source
  *     line for any later label-targeted step.
@@ -1693,10 +1693,9 @@ static int expected_is_single_command(const char *expected,
     }
 
     /* Reject every `float ` declaration. Single-name decls like
-     * `float x` parse fine but the commit path relocates them to
-     * the top of non-decl code (CLAUDE.md: "new CMD_VAR_DECLARE
-     * lines are inserted at the top of non-decl code [...]
-     * regardless of cursor position"), which means
+     * `float x` parse fine but the commit path can relocate them to
+     * the top of non-decl code (CLAUDE.md: declarations typed below
+     * the prologue are hoisted up), which means
      * pending.commit_line drifts away from the actual landing row
      * and any later label-targeted step that targets this decl
      * would resolve to the wrong source line. Multi-name decls

@@ -2380,7 +2380,56 @@ int main() {
                    repl_state_document_cmds()[2].type, CMD_END);
     }
 
-    /* 34. Overwriting a multi-name decl that shares a name with the new
+    /* 34. A new declaration typed above existing declarations keeps that
+     * position. Declarations typed below code still use the prologue as
+     * their upper bound, so hoisting never moves a declaration downward. */
+    {
+        glr_ctrl_reset_all();
+        editor_feed_line("float existing;");
+        editor_feed_line("float later;");
+        editor_feed_line("glBegin(GL_POINTS);");
+
+        editor_state_edit_line_set(0);
+        editor_insert_mode_set(1);
+        editor_feed_line("float first;");
+
+        ASSERT_INT("decl-order: 4 cmds after inserting above decls",
+                   repl_state_document_count(), 4);
+        ASSERT_STR("decl-order: new decl keeps its position above existing",
+                   repl_state_document_cmds()[0].payload.decl.names[0],
+                   "first");
+        ASSERT_STR("decl-order: original first decl stays below new decl",
+                   repl_state_document_cmds()[1].payload.decl.names[0],
+                   "existing");
+        ASSERT_STR("decl-order: original last decl remains in order",
+                   repl_state_document_cmds()[2].payload.decl.names[0],
+                   "later");
+        ASSERT_INT("decl-order: code remains after declarations",
+                   repl_state_document_cmds()[3].type, CMD_BEGIN);
+    }
+
+    /* 35. Trailing blank lines stay below a newly appended declaration.
+     * The new row belongs immediately below the last declaration, not
+     * after the blank separator before the executable code. */
+    {
+        glr_ctrl_reset_all();
+        editor_feed_line("float a, b;");
+        editor_feed_line("");
+        editor_feed_line("glEnable(GL_DEPTH_TEST);");
+        editor_feed_line("float c;");
+
+        ASSERT_INT("decl-order blank: 4 cmds", repl_state_document_count(), 4);
+        ASSERT_STR("decl-order blank: first declaration",
+                   repl_state_document_cmds()[0].payload.decl.names[0], "a");
+        ASSERT_STR("decl-order blank: new declaration is below last decl",
+                   repl_state_document_cmds()[1].payload.decl.names[0], "c");
+        ASSERT_INT("decl-order blank: separator remains below declarations",
+                   repl_state_document_cmds()[2].type, CMD_EMPTY);
+        ASSERT_INT("decl-order blank: executable code remains last",
+                   repl_state_document_cmds()[3].type, CMD_ENABLE);
+    }
+
+    /* 36. Overwriting a multi-name decl that shares a name with the new
      * decl must not fail with "already declared". Regression: previously
      * `declare_predef_var` ran before `undeclare_predef_var`, so shared
      * names (still registered from the old decl) collided. */

@@ -385,10 +385,12 @@ is [`repl_parse_and_normalize()`](src/repl/normalize.h#L20) → `parse_command()
   when there is an enclosing `CMD_FUNC_DEF` and a global at top level. A local
   row is marked `var_idx == REPL_VAR_IDX_LOCAL` (no payload field - the decl
   arm already dominates the union) and emits no predef op.
-- New decls insert at the **end of the declaration prologue** regardless of
-  cursor (so every reference follows its declaration) - the prologue being
-  the leading run of comments, blank lines and other declarations, and
-  **nothing else**: no command type is part of it
+- New decls are hoisted up to the **end of the declaration prologue** when
+  typed below it (so every reference follows its declaration), but a decl
+  typed above an existing declaration stays at the cursor - declarations
+  move up, never down. The prologue is the leading run of comments, blank
+  lines and other declarations, and **nothing else**: no command type is
+  part of it
   (`compile_decl_prologue_end`). Prose that introduces the declarations
   therefore stays above them. Scope picks the range - the *document* for a
   global, the enclosing *function body* for a local - and hoisting works from

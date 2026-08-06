@@ -1574,8 +1574,8 @@ static void test_validate_rejects_multi_row_expected(void) {
                 !repl_tutorial_validate_entry(&entry_decl, err, sizeof(err)));
 
     /* Single-name float decls also rejected: even though they
-     * parse to one source command, the commit path relocates
-     * CMD_VAR_DECLARE rows to the top of non-decl code, so the
+     * parse to one source command, a decl typed below the prologue is
+     * relocated to the top of non-decl code, so the
      * pending bookkeeping cannot trust pending.commit_line for
      * label resolution. */
     static const TutorialStep single_decl_steps[] = {

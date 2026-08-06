@@ -1485,6 +1485,27 @@ int main(void) {
                 repl_state_document_cmds()[6].type == CMD_VERTEX3F &&
                 repl_state_document_cmds()[7].type == CMD_FUNC_END);
 
+    /* Local declarations use the same one-way placement rule: inserting
+     * above an existing local does not move the new row below it. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("func0() {");
+    editor_feed_line("float existing;");
+    editor_feed_line("glVertex3f(existing, 0, 0);");
+    editor_feed_line("}");
+    editor_state_edit_line_set(1);
+    editor_insert_mode_set(1);
+    editor_feed_line("float first;");
+    ASSERT_TRUE("local decl-order keeps new local above existing",
+                repl_state_document_count() == 5 &&
+                repl_state_document_cmds()[1].type == CMD_VAR_DECLARE &&
+                strcmp(repl_state_document_cmds()[1].payload.decl.names[0],
+                       "first") == 0 &&
+                repl_state_document_cmds()[2].type == CMD_VAR_DECLARE &&
+                strcmp(repl_state_document_cmds()[2].payload.decl.names[0],
+                       "existing") == 0 &&
+                repl_state_document_cmds()[1].var_idx == REPL_VAR_IDX_LOCAL &&
+                repl_state_document_cmds()[2].var_idx == REPL_VAR_IDX_LOCAL);
+
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0(scale) {");
     editor_feed_line("if(scale > 1) {");
@@ -2836,9 +2857,8 @@ int main(void) {
 
         /* A line-range selection over a float decl is guarded - copy/cut
          * must both report 0, and cut must not touch the document. New
-         * decls are always inserted at the top of non-decl code (see
-         * CMD_VAR_DECLARE's placement rule), so the decl lands at index 0
-         * regardless of where it was fed from, pushing the two lines above
+         * this decl is inserted at the top of non-decl code (see
+         * CMD_VAR_DECLARE's placement rule), pushing the two lines above
          * to indices 1 and 2. */
         editor_feed_line("float m = 4;");
         int decl_idx = 0;

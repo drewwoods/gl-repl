@@ -385,8 +385,8 @@ int repl_tutorial_expected_is_func_open(const char *expected);
  *     and each expected parses to a single source command and lands at
  *     the runner's chosen row (v1 catalog rule, syntactic best-effort:
  *     no `;`, no `\n`, no `float` declarations of any shape -
- *     single-name float decls are relocated to the top of non-decl
- *     code on commit, which breaks pending.commit_line). Braces are
+ *     a float decl typed below the prologue is relocated to the top of
+ *     non-decl code on commit, which breaks pending.commit_line). Braces are
  *     allowed only in the block shapes classified by
  *     repl_tutorial_expected_shape(); the validator walks the steps
  *     with a depth counter: opens/branches/closes must balance
