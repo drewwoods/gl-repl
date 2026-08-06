@@ -272,7 +272,7 @@ text copied from anywhere else - multi-line text arrives as source lines, a
 single line lands in the input row when you are editing one. Right-click a GL command for
 a short description, or an assignment for [a plot of its
 values](#plotting-an-assignments-values). **Ctrl+D** deletes the current line or selection;
-**Ctrl+L** clears the scene and restores the [five editable display
+The status-bar trash button clears the scene and restores the [five editable display
 defaults](#display-default-commands).
 
 **Ctrl+F** opens case-insensitive search over the buffer; **Up / Down** move
@@ -312,7 +312,7 @@ Two things worth knowing: matching is case-insensitive, so `Radius` and
 ### Display default commands
 
 A new user scene is not empty. **File → New Scene** starts one with these five
-lines already committed, and **Ctrl+L** resets the current scene to the same
+lines already committed, and the status-bar trash button resets the current scene to the same
 five lines. A fresh app launch is different: it opens the default built-in
 example, as described under [Scenes & Workspaces](#scenes--workspaces).
 
@@ -472,7 +472,6 @@ report; click elsewhere or send input to the editor to dismiss it.
 |---|---|
 | Ctrl+\ | Reformat all lines (re-indent blocks) |
 | Ctrl+/ | Toggle `//` comment on the selection, the enclosing block, or the current line |
-| Ctrl+Shift+Q | Split a multi-name `float` declaration into one decl per line (also File → Split Declaration) |
 | Ctrl+Shift+F | Toggle code focus - the first-run view shows just your code; turn it off to show generated C/workspace chrome (also the *focus* keycap) |
 | Ctrl+B | Cycle code panel layout: Left / Top / Bottom / Hidden |
 | PgUp / PgDn | Scroll the active panel or overlay |
@@ -1707,7 +1706,7 @@ taller than the window):
 
 **Left-click** a flyout item to cycle it forward, **right-click** to cycle
 backward. Multi-state items show their current state name. Items this guide
-names without a shortcut - Line smooth, Point attenuation, Post FX Effect,
+names without a shortcut - Point attenuation, Post FX Effect,
 Auto-normals, Vertex label placement - are menu-only; they have no key.
 
 Function keys drive the most common cycles directly (**Shift+F*n*** steps
@@ -1792,7 +1791,7 @@ command set does not include `glLightfv`, so you choose a preset rig and use
 `glEnable` / `glDisable` to select its slots rather than editing each light.
 See [Scope & Current Limitations](#scope--current-limitations).
 
-**Light indicators** (Ctrl+Shift+L) draw a marker at each light's position
+**Light indicators** (Ctrl+L) draw a marker at each light's position
 (labelled `L0..L3`, with *off* noted for disabled lights), so you can see
 where the rig sits. Park the cursor on a light's own
 `glEnable`/`glDisable(GL_LIGHTn)` line and that light's indicator is wrapped
@@ -1814,7 +1813,7 @@ lines, where they can be inspected or edited as ordinary C.
 ### Rendering quality
 
 - **MSAA** (Ctrl+U) - hardware multisampling on/off.
-- **Line smooth** - GL line antialiasing.
+- **Line smooth** (Ctrl+Shift+L) - GL line antialiasing.
 - **Accum effect** (Ctrl+Shift+U) + **Accum passes** (Ctrl+= / Ctrl+-) - the
   accumulation buffer drives antialiasing and motion blur:
   - **AA** *(default, 1 pass)* - jitters the camera frustum per pass.
@@ -2442,13 +2441,11 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+C / Ctrl+X / Ctrl+V | Copy / cut / paste |
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 | Ctrl+D | Delete line or selection |
-| Ctrl+L | Reset the scene to the five display defaults |
 | Ctrl+F | Search (seeded from highlighted text) |
 | Tab (find bar) | Cycle find field / replace field / whole-word chip |
 | Enter (replace field) | Replace all matches |
 | Ctrl+\ | Reformat buffer |
 | Ctrl+/ | Toggle comment on the selection / block / line |
-| Ctrl+Shift+Q | Split multi-variable declaration |
 | Ctrl+Shift+F | Toggle code focus |
 | Ctrl+B | Cycle code panel layout |
 | Ctrl+Shift+Y | Cycle syntax highlight |
@@ -2469,6 +2466,8 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+G | Wireframe |
 | Ctrl+Shift+D | Depth view (Off / Linear / Scene / Split) |
 | Ctrl+Shift+S | Stencil view (Off / Palette / Ramp / Split) |
+| Ctrl+L | Light indicators |
+| Ctrl+Shift+L | Line smooth |
 | Ctrl+U | MSAA |
 | Ctrl+Shift+U | Accum effect |
 | Ctrl+Shift+G | Grid major spacing |
@@ -2476,7 +2475,6 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+X | Transform guides |
 | Ctrl+N | Normal vectors |
 | Ctrl+Shift+O | Vertex outlines |
-| Ctrl+Shift+L | Light indicators |
 | Ctrl+Shift+P | Vertex points |
 | Ctrl+P | Polygon highlight (Off / On / Clipped & culled) |
 | Ctrl+Shift+K | Open Config menu |

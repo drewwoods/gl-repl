@@ -3785,7 +3785,7 @@ int main() {
         g_mock_modifiers = saved_mods;
     }
 
-    /* Extra coverage: Ctrl+L (Clear All) */
+    /* Ctrl+L is owned by the light-indicators config action, not the editor. */
     {
         int saved_mods = g_mock_modifiers;
         glr_ctrl_reset_all();
@@ -3794,12 +3794,12 @@ int main() {
 
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
         editor_handle_key(12, 0, 0); /* Ctrl+L is 12 */
-        ASSERT_INT("Ctrl+L: restored baseline", repl_state_document_count(), 6);
+        ASSERT_INT("Ctrl+L: editor buffer unchanged", repl_state_document_count(), 1);
 
         g_mock_modifiers = saved_mods;
     }
 
-    /* Statusbar trash chip: same Clear All action as Ctrl+L. */
+    /* Statusbar trash chip: the remaining Clear All action. */
     {
         UiHit hit = ui_hit_none();
 

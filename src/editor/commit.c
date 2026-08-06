@@ -1129,7 +1129,7 @@ int editor_try_commit_var_statements_then_insert(void) {
 
 /* Split the multi-variable declaration under the cursor into one
  * single-name decl per line (`float a, b, c;` -> three lines). Shared
- * entry point for the Ctrl+Shift+S keybinding and the File-menu item.
+ * entry point for the File-menu item.
  * Returns 1 when it consumed the request (split applied, or a status
  * was published), 0 when the cursor isn't on a multi-name decl so the
  * caller can decide what else to do. */

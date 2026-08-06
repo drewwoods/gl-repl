@@ -2200,11 +2200,17 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
     ASSERT_INT("Ctrl+N toggles normal vectors",
                glr_state_presentation().show_normal_vectors, 1);
 
-    g_test_mods = GLUT_ACTIVE_SHIFT;
+    g_test_mods = 0;
     glr_state_presentation_mut()->show_light_indicators = 0;
-    ASSERT_INT("Ctrl+Shift+L consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_L), 1);
-    ASSERT_INT("Ctrl+Shift+L toggles light indicators",
+    ASSERT_INT("Ctrl+L consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_L), 1);
+    ASSERT_INT("Ctrl+L toggles light indicators",
                glr_state_presentation().show_light_indicators, 1);
+
+    g_test_mods = GLUT_ACTIVE_SHIFT;
+    glr_config_set(GLR_CONFIG_LINE_SMOOTH, 0);
+    ASSERT_INT("Ctrl+Shift+L consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_L), 1);
+    ASSERT_INT("Ctrl+Shift+L toggles line smooth",
+               glr_config_get(GLR_CONFIG_LINE_SMOOTH), 1);
 
     glr_state_presentation_mut()->projection_mode = PROJ_PERSPECTIVE;
     ASSERT_INT("Ctrl+Shift+E consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_E), 1);
@@ -2223,7 +2229,6 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
     g_test_mods = 0;
     ASSERT_INT("plain Ctrl+D not claimed by cfg", glr_cfg_handle_ascii_shortcut(KEY_CTRL_D), 0);
     ASSERT_INT("plain Ctrl+E not claimed by cfg", glr_cfg_handle_ascii_shortcut(KEY_CTRL_E), 0);
-    ASSERT_INT("plain Ctrl+L not claimed by cfg", glr_cfg_handle_ascii_shortcut(KEY_CTRL_L), 0);
 
     editor_input_set_modifier_provider_for_test(NULL);
     g_test_mods = 0;
@@ -2323,9 +2328,9 @@ static void test_keymap_binding_to_string(void) {
                "Ctrl+S");
     ASSERT_STR("format Ctrl+Shift letter",
                keymap_binding_to_string(buf, (int)sizeof(buf),
-                                        KM_KEY(GLR_SPLIT_DECL),
-                                        KM_MODS(GLR_SPLIT_DECL), 0),
-               "Ctrl+Shift+Q");
+                                        KM_KEY(GLR_LINE_SMOOTH),
+                                        KM_MODS(GLR_LINE_SMOOTH), 0),
+               "Ctrl+Shift+L");
     ASSERT_STR("format F-key",
                keymap_binding_to_string(buf, (int)sizeof(buf),
                                         KM_KEY(GLR_NEXT_EXAMPLE),
@@ -2480,11 +2485,6 @@ static void test_help_keys_tab_uses_keymap_labels(void) {
                              KM_KEY(GLR_SAVE), KM_MODS(GLR_SAVE), 0);
     ASSERT_TRUE("help Keys tab renders Save shortcut from keymap",
                 help_tab_contains_binding("Keys", shortcut, "Save to output.c"));
-
-    keymap_binding_to_string(shortcut, (int)sizeof(shortcut),
-                             KM_KEY(GLR_SPLIT_DECL), KM_MODS(GLR_SPLIT_DECL), 0);
-    ASSERT_TRUE("help Keys tab renders Split shortcut from keymap",
-                help_tab_contains_binding("Keys", shortcut, "Split multi-variable"));
 
     keymap_binding_to_string(shortcut, (int)sizeof(shortcut),
                              KM_KEY(GLR_NEXT_EXAMPLE), KM_MODS(GLR_NEXT_EXAMPLE), 1);

@@ -112,7 +112,7 @@
 #define GLR_RESET_CAMERA     KEY_CTRL_C, GLUT_ACTIVE_SHIFT  /* plain Ctrl+C = Copy */
 #define GLR_WIREFRAME        KEY_CTRL_G, 0
 #define GLR_GRID_MAJOR       KEY_CTRL_G, GLUT_ACTIVE_SHIFT
-#define GLR_LIGHT_INDICATORS KEY_CTRL_L, GLUT_ACTIVE_SHIFT  /* plain Ctrl+L = Clear all */
+#define GLR_LIGHT_INDICATORS KEY_CTRL_L, 0
 #define GLR_DEPTH_VIZ        KEY_CTRL_D, GLUT_ACTIVE_SHIFT  /* plain Ctrl+D = Delete line */
 #define GLR_NORMAL_VECTORS   KEY_CTRL_N, 0
 #define GLR_FOCUS_ORIGIN     KEY_CTRL_O, 0
@@ -122,10 +122,10 @@
 #define GLR_REPLAY           KEY_CTRL_R, 0     /* pairs w/ Camera rotate */
 #define GLR_CAMERA_ROTATE    KEY_CTRL_R, GLUT_ACTIVE_SHIFT  /* plain Ctrl+R = Replay */
 #define GLR_STENCIL_VIZ      KEY_CTRL_S, GLUT_ACTIVE_SHIFT  /* plain Ctrl+S = Save */
-#define GLR_SPLIT_DECL       KEY_CTRL_Q, GLUT_ACTIVE_SHIFT
 #define GLR_AUTO_TIME        KEY_CTRL_T, 0
 #define GLR_WINDING_VIEW     KEY_CTRL_B, GLUT_ACTIVE_SHIFT
 #define GLR_MSAA             KEY_CTRL_U, 0
+#define GLR_LINE_SMOOTH     KEY_CTRL_L, GLUT_ACTIVE_SHIFT
 #define GLR_ACCUM_EFFECT     KEY_CTRL_U, GLUT_ACTIVE_SHIFT  /* Shift toggles accum-AA (read in handler) */
 #define GLR_VIEW_MODE        KEY_CTRL_V, GLUT_ACTIVE_SHIFT  /* plain Ctrl+V = Paste */
 #define GLR_PROJECTION       KEY_CTRL_E, GLUT_ACTIVE_SHIFT  /* pairs w/ Line end */
@@ -146,7 +146,6 @@
 #define GLR_DELETE_LINE      KEY_CTRL_D, 0
 #define GLR_UNDO             KEY_CTRL_Z, 0     /* Shift -> redo (read in handler) */
 #define GLR_REDO             KEY_CTRL_Y, 0     /* pairs w/ Syntax highlight (Ctrl+Shift+Y) */
-#define GLR_CLEAR_ALL        KEY_CTRL_L, 0     /* pairs w/ Light indicators */
 #define GLR_REFORMAT         KEY_CTRL_BACKSLASH, 0
 #define GLR_SEARCH           KEY_CTRL_F, 0     /* pairs w/ Code focus (Ctrl+Shift+F) */
 #define GLR_REPLAY_JUMP      KEY_CTRL_K, 0     /* jump replay PC to cursor */

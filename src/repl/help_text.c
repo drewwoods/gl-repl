@@ -408,10 +408,7 @@ const ReplHelpContent *repl_help_text_build(void) {
                           "Toggle code focus (hide boilerplate chrome)");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_DELETE_LINE), KM_MODS(GLR_DELETE_LINE), 0, "",
                           "Delete line or selection");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_CLEAR_ALL), KM_MODS(GLR_CLEAR_ALL), 0, "", "Clear all commands");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_REFORMAT), KM_MODS(GLR_REFORMAT), 0, "", "Reformat buffer");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_SPLIT_DECL), KM_MODS(GLR_SPLIT_DECL), 0, "",
-                          "Split multi-variable declaration at cursor (one per line)");
     nk = key_emit(nk, "  Ctrl+/               \tToggle comment on line");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_DEBUG_DUMP), KM_MODS(GLR_DEBUG_DUMP), 0, "",
                           "Dump debug state to stdout");
@@ -464,6 +461,8 @@ const ReplHelpContent *repl_help_text_build(void) {
     nk = key_emit(nk, "  Ctrl+-               \tDecrease jitter samples");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_MSAA), KM_MODS(GLR_MSAA), 0, "",
                           "Toggle GL_MULTISAMPLE");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_LINE_SMOOTH), KM_MODS(GLR_LINE_SMOOTH), 0, "",
+                          "Toggle GL_LINE_SMOOTH");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_GRID_MAJOR), KM_MODS(GLR_GRID_MAJOR), 0, "",
                           "Cycle grid major tick spacing (1 / 2 / 5 / 10)");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_CPU_PROFILE), KM_MODS(GLR_CPU_PROFILE), 0, "",

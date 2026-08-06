@@ -1307,15 +1307,10 @@ static int handle_line_delete_key_route(unsigned char key) {
     return 0;
 }
 
-/* Editor halves of the buffer-command route: Ctrl+L clear-all,
- * Ctrl+\ reformat. The save (Ctrl+S), debug dump (Ctrl+P), and quit
+/* Editor half of the buffer-command route: Ctrl+\ reformat. The save
+ * (Ctrl+S), debug dump (Ctrl+P), and quit
  * (Ctrl+Q) variants are router-side. */
 static int handle_buffer_command_key_route(unsigned char key) {
-    if (keymap_event_is(key, GLR_CLEAR_ALL)) {
-        editor_clear_all_cmds();
-        return 1;
-    }
-
     if (keymap_event_is(key, GLR_REFORMAT)) {
         if (repl_state_document_count() > 0) {
             if (!tutorial_guard_source_change_or_status(
@@ -1330,13 +1325,6 @@ static int handle_buffer_command_key_route(unsigned char key) {
         return 1;
     }
 
-    if (keymap_event_is(key, GLR_SPLIT_DECL)) {
-        /* Splits the multi-var decl under the cursor one-per-line; a
-         * no-op (with a hint) anywhere else. Owns its own undo + tutorial
-         * guard, so consume the key regardless of outcome. */
-        editor_split_decl_at_cursor();
-        return 1;
-    }
     return 0;
 }
 

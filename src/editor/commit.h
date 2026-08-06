@@ -276,7 +276,7 @@ int editor_try_commit_any(void);
 int editor_try_commit_var_statements_then_insert(void);
 
 /* Split the multi-variable declaration under the cursor into one decl
- * per line. Shared by the Ctrl+Shift+S keybinding and the File menu.
+ * per line. Shared by the File menu.
  * Returns 1 if consumed (split applied or status published), 0 if the
  * cursor is not on a multi-name declaration. */
 int editor_split_decl_at_cursor(void);

@@ -169,12 +169,11 @@ int editor_input_file_prompt_capture_special(int key);
  * variable is still referenced elsewhere. */
 void editor_delete_cmd_range(int start, int count, const char *what);
 
-/* Clear ALL commands unconditionally (same behavior as Ctrl+L). */
+/* Clear ALL commands unconditionally (used by the status-bar trash action). */
 void editor_clear_all_cmds(void);
 
 /* Programmatic document reset for callers that already own undo/status
- * policy and scene-slot lifecycle. For interactive Ctrl+L, use
- * editor_clear_all_cmds(). */
+ * policy and scene-slot lifecycle. */
 void editor_reset_for_new_scene(void);
 
 /* Sync the input buffer to the source line at `idx` (strips trailing

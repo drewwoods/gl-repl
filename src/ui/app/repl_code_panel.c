@@ -2505,6 +2505,14 @@ static void repl_code_panel_statusbar_tooltip_set(
     tooltip->anchor_w = anchor_w;
 }
 
+static void repl_code_panel_statusbar_tooltip_set_label(
+        ReplStatusbarTooltip *tooltip, const char *label,
+        int anchor_x, int anchor_w) {
+    snprintf(tooltip->text, sizeof tooltip->text, "%s", label);
+    tooltip->anchor_x = anchor_x;
+    tooltip->anchor_w = anchor_w;
+}
+
 static int repl_code_panel_statusbar_tooltip_for_hit(
         int hit_kind, const ReplStatusbarHints *h,
         ReplStatusbarTooltip *tooltip) {
@@ -2538,9 +2546,8 @@ static int repl_code_panel_statusbar_tooltip_for_hit(
             h->paste_kx, h->paste_kw);
         return 1;
     case UI_HIT_CODE_CLEAR_ALL:
-        repl_code_panel_statusbar_tooltip_set(
-            tooltip, "Clear all", KM_KEY(GLR_CLEAR_ALL),
-            KM_MODS(GLR_CLEAR_ALL), 0, h->trash_kx, h->trash_kw);
+        repl_code_panel_statusbar_tooltip_set_label(
+            tooltip, "Clear all", h->trash_kx, h->trash_kw);
         return 1;
     case UI_HIT_CODE_FOCUS_TOGGLE:
         repl_code_panel_statusbar_tooltip_set(

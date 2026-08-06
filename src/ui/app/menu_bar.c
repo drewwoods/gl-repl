@@ -556,9 +556,6 @@ static const char *menu_item_shortcut(int menu_id, int i) {
     if (menu_id == MENU_FILE && i == GLR_FILE_ITEM_SAVE_SCENE)
         return keymap_binding_to_string(buf, (int)sizeof(buf),
                                         KM_KEY(GLR_SAVE), KM_MODS(GLR_SAVE), 0);
-    if (menu_id == MENU_FILE && i == GLR_FILE_ITEM_SPLIT_DECL)
-        return keymap_binding_to_string(buf, (int)sizeof(buf),
-                                        KM_KEY(GLR_SPLIT_DECL), KM_MODS(GLR_SPLIT_DECL), 0);
     if (menu_id == MENU_FILE && i == GLR_FILE_ITEM_QUIT)
         return keymap_binding_to_string(buf, (int)sizeof(buf),
                                         KM_KEY(GLR_QUIT), KM_MODS(GLR_QUIT), 0);
