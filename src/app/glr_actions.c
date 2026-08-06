@@ -1585,15 +1585,26 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             glr_action_save_active_scene();
             return 1;
         }
-        case GLR_FILE_ITEM_SAVE_GLR:
-            /* Same target directory and base name as Save Scene / Export
-             * .ply, just the authoring format - a .glr you can drop into
-             * examples/scenes/ instead of a standalone C program. */
+        case GLR_FILE_ITEM_SAVE_GLR: {
+            /* Editing a runtime `--examples-dir` catalog: write straight back
+             * to the file the catalog names, so iterating on a scene updates
+             * it in place instead of dropping a differently-named export into
+             * a workspace the author then has to reconcile. No workspace is
+             * bound for this path - the catalog dir is the destination. */
+            const char *write_back = repl_active_scene_glr_write_back_path();
+            if (write_back) {
+                repl_export_save_glr(write_back, source_document_view());
+                return 1;
+            }
+            /* Otherwise: same target directory and base name as Save Scene /
+             * Export .ply, just the authoring format - a .glr you can drop
+             * into examples/scenes/ instead of a standalone C program. */
             if (!bind_app_workspace_for_scene_save_if_needed())
                 return 1;
             repl_export_save_glr(repl_active_scene_export_path("glr"),
                                  source_document_view());
             return 1;
+        }
         case GLR_FILE_ITEM_LOAD_SCENE:
             glr_modal_cancel();
             editor_inline_file_prompt_begin(DEFAULT_SCENE_FILE);

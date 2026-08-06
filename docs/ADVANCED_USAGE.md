@@ -573,6 +573,17 @@ Each entry's `file` is any relative path under the directory - the built-in
 catalog's `scenes/` subdirectory is a convention, not a requirement, and a flat
 directory of `.glr` files beside its `catalog.ini` works too.
 
+Under a runtime catalog, **File → Save Scene as .glr writes back to the file
+the catalog names**, in place - the loaded entry, or the user scene the first
+edit promoted it into. That is what makes `--examples-dir` an editing loop
+rather than an export-and-copy-back chore: tweak the scene, save, reload. The
+binding survives a rename (it tracks the file you opened, not the display
+name) and takes precedence over any bound workspace. It applies to `.glr`
+entries only; a `.c` catalog entry is a different format, so Save as .glr
+falls back to the usual workspace export rather than overwriting it. Built-in
+examples are compiled-in strings with no file behind them and behave the same
+way.
+
 Catalog entry fields, size budgets, and the other files an example must be
 edited alongside are covered by the `gl-repl-scene-authoring` skill.
 

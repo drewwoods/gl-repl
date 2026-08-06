@@ -22,6 +22,12 @@ typedef struct {
     ReplItemTagNode *tags;           /* Dynamic linked list for runtime catalog entries */
     ReplExampleSourceFormat format;
     const char *subheading;
+    /* Absolute on-disk path the entry was read from, for runtime
+     * `--examples-dir` catalogs only - built-in entries are compiled-in string
+     * arrays with no file behind them and leave this NULL. Save Scene as .glr
+     * writes back here so catalog authoring edits land in the file the
+     * catalog names; see repl_example_source_path(). */
+    const char *source_path;
 } ReplExampleEntry;
 
 static ReplTagNode *g_example_tags_head = NULL;
@@ -216,6 +222,7 @@ static void examples_free_entry(ReplExampleEntry *entry) {
         return;
     free((char *)entry->name);
     free((char *)entry->subheading);
+    free((char *)entry->source_path);
     repl_example_free_item_tags(entry->tags);
     if (entry->lines) {
         char **lines = (char **)entry->lines;
@@ -622,7 +629,8 @@ static int catalog_finalize_draft(RuntimeCatalogBuild *build,
     entry.tag_names = NULL;
     entry.tags = item_tags;
     entry.format = format;
-    if (!entry.name || !entry.subheading) {
+    entry.source_path = examples_strdup(file_real);
+    if (!entry.name || !entry.subheading || !entry.source_path) {
         examples_set_error(err_buf, err_sz, "out of memory");
         examples_free_entry(&entry);
         return 0;
@@ -928,6 +936,11 @@ const char *repl_example_name(int idx) {
 const char *const *repl_example_lines(int idx) {
     const ReplExampleEntry *entry = active_example_entry(idx);
     return entry ? entry->lines : NULL;
+}
+
+const char *repl_example_source_path(int idx) {
+    const ReplExampleEntry *entry = active_example_entry(idx);
+    return entry ? entry->source_path : NULL;
 }
 
 ReplExampleSourceFormat repl_example_source_format(int idx) {

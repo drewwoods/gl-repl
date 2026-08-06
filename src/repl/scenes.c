@@ -81,6 +81,11 @@ typedef struct {
     int           used;
     char          name[USER_SCENE_NAME_MAX];
     char          file_name[WORKSPACE_IO_FILE_MAX];
+    /* Absolute path of the runtime-catalog `.glr` this scene was promoted
+     * from, else empty. Bound once at promotion and never rewritten - a
+     * rename changes the display name, not which file the scene came out of.
+     * See repl_active_scene_glr_write_back_path(). */
+    char          glr_origin_path[SCENE_GLR_ORIGIN_PATH_MAX];
     uint32_t      last_touch;
     SceneSnapshot snapshot;
 } UserScene;
@@ -194,8 +199,37 @@ static void save_scene_to_slot(int idx, const char *name, int edit_line) {
         if (name != s->name)
             snprintf(s->name, sizeof(s->name), "%s", name);
     }
+    /* A freshly claimed slot starts unbound; every path that takes a free slot
+     * lands here, so this is the one place that has to forget the previous
+     * occupant's catalog origin. Re-saving a live slot must NOT clear it. */
+    if (!s->used)
+        s->glr_origin_path[0] = '\0';
     s->used       = 1;
     s->last_touch = next_user_scene_tick();
+}
+
+/* Remember which runtime-catalog file `example_idx` came out of, so a later
+ * Save Scene as .glr rewrites that file instead of exporting to a name-derived
+ * slug. Only file-backed `.glr` entries qualify: built-in examples are
+ * compiled-in strings with no path, and a `.c` catalog entry is a different
+ * format - overwriting it with .glr text would corrupt the catalog. A path too
+ * long for the slot is left unbound; a truncated one would name a real but
+ * wrong file. */
+static void bind_glr_origin_from_example(int slot, int example_idx) {
+    const char *src;
+    UserScene *s;
+    if (slot < 0 || slot >= MAX_USER_SCENES)
+        return;
+    s = &g_user_scenes[slot];
+    s->glr_origin_path[0] = '\0';
+    if (repl_example_source_format(example_idx) != REPL_EXAMPLE_SOURCE_GLR)
+        return;
+    src = repl_example_source_path(example_idx);
+    if (!src || !src[0])
+        return;
+    if (snprintf(s->glr_origin_path, sizeof(s->glr_origin_path), "%s", src) >=
+        (int)sizeof(s->glr_origin_path))
+        s->glr_origin_path[0] = '\0';
 }
 
 void repl_scenes_save_active_scene_if_any(void);
@@ -693,6 +727,23 @@ const char *repl_active_scene_export_path(const char *ext) {
     return path;
 }
 
+const char *repl_active_scene_glr_write_back_path(void) {
+    int slot = g_active_user_scene;
+
+    /* Still viewing the catalog entry itself - no edit has promoted it yet,
+     * so the binding comes straight from the live example index. */
+    if (slot < 0 && g_example_idx >= 0 &&
+        repl_example_source_format(g_example_idx) == REPL_EXAMPLE_SOURCE_GLR) {
+        const char *src = repl_example_source_path(g_example_idx);
+        return (src && src[0]) ? src : NULL;
+    }
+    if (slot < 0 || slot >= MAX_USER_SCENES || !g_user_scenes[slot].used)
+        return NULL;
+    return g_user_scenes[slot].glr_origin_path[0]
+        ? g_user_scenes[slot].glr_origin_path
+        : NULL;
+}
+
 static void reset_live_for_scene_import(void) {
     scene_snapshot_load_live_commands(NULL, NULL, 0, 0);
     /* Start each imported scene from the built-in predef baseline (`t`).
@@ -1179,8 +1230,10 @@ int repl_promote_transient_if_needed(void) {
      * out of the user scenes continues past that example instead of
      * restarting at the first one. Tutorial origins have the same guarantee
      * through the retained TutorialRuntimeState.tutorial_idx. */
-    if (origin_kind == PROMOTE_ORIGIN_EXAMPLE)
+    if (origin_kind == PROMOTE_ORIGIN_EXAMPLE) {
         repl_state_scenes_set_example_place_idx(g_example_idx);
+        bind_glr_origin_from_example(slot, g_example_idx);
+    }
 
     g_active_user_scene = slot;
     repl_state_scenes_set_active_example_idx(-1);
@@ -1278,6 +1331,7 @@ int repl_user_scene_delete(int slot) {
         return 0;
     g_user_scenes[slot].used = 0;
     g_user_scenes[slot].file_name[0] = '\0';
+    g_user_scenes[slot].glr_origin_path[0] = '\0';
     scene_cfg_clear(slot);
     if (g_active_user_scene == slot)
         g_active_user_scene = -1;

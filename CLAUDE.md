@@ -434,7 +434,7 @@ Up to `MAX_USER_SCENES` = 8 slots in `g_user_scenes[]`
 ([`src/repl/scenes.c`](src/repl/scenes.c)); no automatic startup scene.
 Editing a **transient** document auto-promotes it into a fresh slot - the
 hook is [`editor_undo_push_snapshot()`](src/editor/undo.h#L126) →
-[`repl_promote_transient_if_needed()`](src/repl/scenes.h#L64) before every
+[`repl_promote_transient_if_needed()`](src/repl/scenes.h#L71) before every
 mutation. User-facing managed-workspace saves call the same promotion first,
 so Ctrl+S / Save Workspace / Save Workspace As include the visible example
 tab instead of committing an empty manifest. Two promotable origins: a loaded

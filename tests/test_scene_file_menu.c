@@ -321,6 +321,99 @@ static void test_save_glr_round_trips_through_example_loader(void) {
     rmdir(dir);
 }
 
+/* Authoring a runtime `--examples-dir` catalog: Save Scene as .glr rewrites
+ * the file the catalog names, in place. Without this the export lands on a
+ * name-derived slug in some workspace, and every iteration on a catalog scene
+ * has to be copied back by hand. The binding must survive both the promotion
+ * the first edit triggers and a later rename, and must win over a bound
+ * workspace dir. */
+static void test_save_glr_writes_back_to_catalog_file(void) {
+    char tmpl[] = "/tmp/glr_scene_wb_XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    char scenes_dir[512];
+    char work_dir[512];
+    char catalog_path[512];
+    char glr_path[512];
+    char catalog_text[512];
+    char err[512];
+    char *text;
+    FILE *cat;
+    int off_default_extent;
+
+    ASSERT_TRUE("mkdtemp", dir != NULL);
+    if (!dir)
+        return;
+
+    snprintf(scenes_dir, sizeof(scenes_dir), "%s/scenes", dir);
+    snprintf(work_dir, sizeof(work_dir), "%s/work", dir);
+    ASSERT_INT_EQ("write-back scenes mkdir", mkdir(scenes_dir, 0700), 0);
+    ASSERT_INT_EQ("write-back work mkdir", mkdir(work_dir, 0700), 0);
+
+    save_glr_fixture(scenes_dir, glr_path, sizeof(glr_path));
+
+    snprintf(catalog_path, sizeof(catalog_path), "%s/catalog.ini", dir);
+    snprintf(catalog_text, sizeof(catalog_text),
+             "[unit-write-back]\n"
+             "file = scenes/unit_save_glr.glr\n"
+             "name = Unit Save Glr\n"
+             "tags = 3D, Polygons\n"
+             "group = Runtime\n");
+    cat = fopen(catalog_path, "w");
+    ASSERT_TRUE("write-back catalog written", cat != NULL);
+    if (cat) {
+        fputs(catalog_text, cat);
+        fclose(cat);
+    }
+
+    err[0] = '\0';
+    ASSERT_TRUE("write-back catalog loads",
+                repl_examples_load_dir(dir, err, sizeof(err)));
+
+    reset_fixture();
+    repl_load_example(0);
+    ASSERT_TRUE("write-back path bound while viewing the example",
+                repl_active_scene_glr_write_back_path() != NULL);
+
+    /* Edit -> promotion, then a rename: neither may move the target. A bound
+     * workspace is the fallback destination, and must lose to the binding. */
+    ASSERT_TRUE("write-back promotes on edit",
+                repl_promote_transient_if_needed() >= 0);
+    repl_user_scene_rename(repl_active_user_scene(), "Totally Different Name");
+    repl_set_workspace_dir(work_dir);
+
+    /* Mark the document so the rewrite is distinguishable from the original:
+     * the fixture deliberately leaves grid extent at its default, and
+     * test_save_glr_writes_scene_source asserts the row's absence. */
+    off_default_extent = (CFG_DEFAULT_GRID_EXTENT_IDX + 1) % GRID_EXTENT_COUNT;
+    glr_config_set(GLR_CONFIG_GRID_EXTENT, off_default_extent);
+
+    ASSERT_INT_EQ("Save Scene as .glr handled",
+                  glr_action_menu_item_activate(GLR_MENU_FILE,
+                                                GLR_FILE_ITEM_SAVE_GLR), 1);
+
+    text = read_file_text(glr_path);
+    ASSERT_TRUE("write-back rewrote the catalog file", text != NULL);
+    ASSERT_TRUE("write-back rewrote it with the new cfg",
+                text && strstr(text, "// @cfg grid_extent") != NULL);
+    free(text);
+
+    /* And nothing was written under the workspace: no stray copy to reconcile. */
+    {
+        char stray[640];
+        snprintf(stray, sizeof(stray), "%s/totally_different_name.glr", work_dir);
+        ASSERT_TRUE("write-back left no workspace copy",
+                    read_file_text(stray) == NULL);
+    }
+
+    repl_examples_clear_runtime_catalog();
+    unlink(glr_path);
+    unlink(catalog_path);
+    rmdir(scenes_dir);
+    rmdir(work_dir);
+    repl_set_workspace_dir(NULL);
+    rmdir(dir);
+}
+
 /* Finder-launched macOS apps have cwd "/"; relative saves then target an
  * unwritable location. With no bound workspace, Save Scene and Save
  * Workspace should fall back to the per-user Application Support / XDG
@@ -570,7 +663,8 @@ int main(void) {
     test_rename_scene_guard();
     test_scene_menu_is_selector();
     test_save_glr_writes_scene_source();
-    /* Last: it swaps the process-wide example catalog for a runtime one. */
+    /* Last two: they swap the process-wide example catalog for a runtime one. */
+    test_save_glr_writes_back_to_catalog_file();
     test_save_glr_round_trips_through_example_loader();
     return test_harness_report(&g_harness, "scene_file_menu");
 }

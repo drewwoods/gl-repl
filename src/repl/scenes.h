@@ -25,6 +25,13 @@ typedef struct ReplExportLayout ReplExportLayout;
 #ifndef USER_SCENE_NAME_MAX
 #define USER_SCENE_NAME_MAX 64
 #endif
+/* Room for the absolute path of a runtime-catalog scene file a user scene was
+ * promoted from. Matches REPL_WORKSPACE_DIR_MAX rather than PATH_MAX: these
+ * are catalog.ini-relative paths under a directory the user passed on the
+ * command line, and eight slots carry one each. */
+#ifndef SCENE_GLR_ORIGIN_PATH_MAX
+#define SCENE_GLR_ORIGIN_PATH_MAX 1024
+#endif
 
 /* Reasons repl_load_scene_as_new_slot can fail. Callers (status-bar
  * prompts, menu wiring) translate these into user-visible messages
@@ -144,6 +151,20 @@ int  repl_save_active_scene(const ReplExportLayout *layout);
  * export so it tracks the scene name the way Save Scene does. Returns a
  * pointer to a static buffer valid until the next call. */
 const char *repl_active_scene_export_path(const char *ext);
+
+/* Return the runtime-catalog `.glr` file the active document should be
+ * written back to, or NULL when there is none. Non-NULL only under
+ * `--examples-dir`, where a catalog entry is a real file: while the catalog
+ * scene is still being viewed, and afterwards through the user-scene slot the
+ * first edit promoted it into. Save Scene as .glr prefers this over
+ * repl_active_scene_export_path("glr") so that authoring a catalog updates the
+ * file the catalog names instead of scattering renamed copies - the whole
+ * point of editing with --examples-dir. The binding survives a rename and is
+ * dropped when the slot is deleted or reused. Built-in examples and `.c`
+ * catalog entries never qualify. The returned pointer is owned by the scene
+ * slot or the runtime catalog; copy it before doing either. */
+const char *repl_active_scene_glr_write_back_path(void);
+
 const char *repl_user_scene_file_name(int slot);
 int  repl_user_scene_delete(int slot);
 int  repl_workspace_is_managed(void);

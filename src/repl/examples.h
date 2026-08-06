@@ -59,6 +59,16 @@ typedef enum {
  * the runtime examples catalog is replaced or cleared. */
 const char *const *repl_example_lines(int idx);
 
+/* Query the absolute on-disk path an example was read from, or NULL when it
+ * has none. Only a runtime `--examples-dir` catalog has file-backed entries;
+ * the compiled-in catalog is string arrays, so this is NULL for every built-in
+ * example. Save Scene as .glr writes back through this so editing a catalog
+ * scene updates the file the catalog names instead of exporting to a fresh
+ * slug (src/repl/scenes.c, repl_active_scene_glr_write_back_path). The
+ * returned pointer is valid until the runtime catalog is replaced or
+ * cleared. */
+const char *repl_example_source_path(int idx);
+
 /* Query how repl_example_lines() should be loaded. `.glr` catalog files are
  * raw REPL/example-source snippets; `.c` catalog files are complete exported-C
  * files and must be fed through the import path. */
