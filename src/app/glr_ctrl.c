@@ -2929,6 +2929,25 @@ void glr_ctrl_display_frame(void) {
     ui_panels_render_code_panel(&ui_snap, &cp_out);
     prof_end(PROF_CODE_PANEL);
 
+    /* Assignment-value plot. Drawn before the panel block because the
+     * OpenGL-state popup in it is anchored to a click anywhere in the code
+     * panel and routinely lands on top of this parked panel: a popup the
+     * reader just summoned must not be buried under it. Closes the accum
+     * bracket opened around the capture earlier in the frame, so
+     * PROF_ASSIGN_PLOT reports what the whole feature costs rather than just
+     * its draw. The `open` guard has to match the one at the capture site:
+     * committing an accumulator that was never reset this frame would report
+     * the previous plot's time forever. */
+    if (ui_snap.assign_plot.open) {
+        UiAssignPlotPanelView plot_view = glr_ctrl_build_assign_plot_view(&ui_snap);
+        prof_begin(PROF_ASSIGN_PLOT);
+        prof_begin(PROF_ASSIGN_PLOT_PANEL);
+        ui_assign_plot_panel_render(&plot_view);
+        prof_end(PROF_ASSIGN_PLOT_PANEL);
+        prof_accum_end(PROF_ASSIGN_PLOT);
+        prof_accum_commit(PROF_ASSIGN_PLOT);
+    }
+
     prof_begin(PROF_UI_PANELS);
     /* Stencil legend first in the panel block: it is scene chrome parked
      * in a corner, so every popup below draws over it rather than under
@@ -3002,26 +3021,12 @@ void glr_ctrl_display_frame(void) {
     }
     prof_end(PROF_MEMORY_PANEL);
 
-    /* Assignment-value plot. Closes the accum bracket opened around the
-     * capture earlier in the frame, so PROF_ASSIGN_PLOT reports what the whole
-     * feature costs rather than just its draw. The `open` guard has to match
-     * the one at the capture site: committing an accumulator that was never
-     * reset this frame would report the previous plot's time forever. */
-    if (ui_snap.assign_plot.open) {
-        UiAssignPlotPanelView plot_view = glr_ctrl_build_assign_plot_view(&ui_snap);
-        prof_begin(PROF_ASSIGN_PLOT);
-        prof_begin(PROF_ASSIGN_PLOT_PANEL);
-        ui_assign_plot_panel_render(&plot_view);
-        prof_end(PROF_ASSIGN_PLOT_PANEL);
-        prof_accum_end(PROF_ASSIGN_PLOT);
-        prof_accum_commit(PROF_ASSIGN_PLOT);
-    }
-
     /* The status-history list is anchored to the bell, but is still a popup:
      * paint it after every floating telemetry surface so its rows remain
      * readable and own their overlapping pixels. The variable panel was
      * already below this layer; this extends that established ordering to the
-     * CPU/memory panels and assignment-value plot. */
+     * CPU/memory panels (the assignment-value plot draws earlier still, under
+     * the OpenGL-state popup). */
     ui_panels_render_scene_status(&ui_snap);
 
     /* Compositor post-process: the whole-frame filter runs over the

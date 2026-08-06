@@ -1749,6 +1749,7 @@ static void route_right_press(int x, int y) {
         hit = front_hit;
     } else {
         UiGlStateInspectorState inspector;
+        UiHit plot_hit;
         hit = ui_panels_hit_test(&ui_snap, x, y,
                                  repl_eval_predef_view().count);
         /* The inspector itself is display-only chrome. With no later-rendered
@@ -1769,6 +1770,12 @@ static void route_right_press(int x, int y) {
                 editor_request_redraw();
                 return;
             }
+        } else {
+            /* The assignment-value plot paints under the inspector, so it
+             * classifies only where the popup did not. */
+            plot_hit = ui_panels_hit_test_assign_plot(&ui_snap, x, y);
+            if (plot_hit.kind != UI_HIT_NONE)
+                hit = plot_hit;
         }
     }
 
@@ -2302,6 +2309,8 @@ static int router_press_routes_to(int x, int y, int kind) {
         return 0;
     if (glr_ctrl_router_point_in_gl_state_popup(x, y))
         return 0;
+    if (ui_panels_hit_test_assign_plot(&snap, x, y).kind != UI_HIT_NONE)
+        return 0;
     return ui_panels_hit_test(&snap, x, y, variable_count).kind == kind;
 }
 
@@ -2407,6 +2416,11 @@ static void route_wheel(int x, int y, int delta) {
                 (void)ui_menu_bar_handle_wheel_scroll(x, y, delta);
         } else if (glr_ctrl_router_handle_gl_state_popup_wheel(x, y, delta)) {
             /* Consumed by the OpenGL-state popup under the pointer. */
+        } else if (ui_panels_hit_test_assign_plot(&ui_snap, x, y).kind
+                       != UI_HIT_NONE) {
+            /* The plot paints below the popup but is still a floating panel:
+             * it consumes the wheel inert rather than letting it reach the
+             * code panel or the camera behind it. */
         } else if (editor_input_point_in_code_panel(x, y)) {
             glr_ctrl_router_dismiss_gl_state_for_editor_input();
             editor_input_code_panel_scroll(delta);
@@ -2735,6 +2749,13 @@ static void mouse_dispatch(int button, int state, int x, int y) {
          * the click still routes below). */
         if (glr_ctrl_router_handle_gl_state_popup_left_press(x, y))
             return;
+        /* The assignment-value plot paints under that popup, so its chips
+         * are claimed here rather than in the front pass above. */
+        UiHit plot_hit = ui_panels_hit_test_assign_plot(&ui_snap, x, y);
+        if (plot_hit.kind != UI_HIT_NONE) {
+            (void)glr_ctrl_router_handle_code_panel_hit(plot_hit, x, y);
+            return;
+        }
         /* Classify the click via the canonical hit-test, then route by
          * UiHit.kind to the owning subsystem. The hit-test covers
          * variable panel, color picker, menu bar, code panel (including

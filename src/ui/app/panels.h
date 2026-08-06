@@ -76,4 +76,12 @@ UiHit ui_panels_hit_test_above_gl_state(const UiRenderSnapshot *snap,
                                         int mx, int my,
                                         int variable_count);
 
+/* The assignment-value plot's own pass: it is the one overlay panel painted
+ * *before* the OpenGL-state inspector, so the router consults it only after
+ * the inspector has declined the point. Same result vocabulary as the pass
+ * above - actionable hits for its chips, UI_HIT_OVERLAY_CHROME for the rest
+ * of the panel, UI_HIT_NONE when the point is outside it. */
+UiHit ui_panels_hit_test_assign_plot(const UiRenderSnapshot *snap,
+                                     int mx, int my);
+
 #endif /* UI_PANELS_H */
