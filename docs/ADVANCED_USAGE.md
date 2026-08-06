@@ -734,6 +734,23 @@ separators to `, `. Import rebuilds the list that way, so a row committed as
 `{1,2}` would otherwise return from a save/load as `{1, 2}` and break the
 text-exact round trip the scene corpora compare.
 
+### A cell that reads its own array
+
+Don't write one. `A[0] = {t, A[0] + 100}` - a cell referring to the array the
+row is writing - is the one construct where the three legs disagree. The full
+flatten evaluates every cell before applying any of them, so `A[0]` reads its
+pre-row value; the in-place rebake and the exported C both write as they go,
+so the second cell sees what the first just stored. Same row, 101 or 105
+depending on which path ran.
+
+There is no reason to write it - the cells of one row are written together by
+construction, and a genuinely sequential dependency is what the single-cell
+`A[k] = expr;` form is for. The divergence is pinned as an XFAIL case
+(`scratch_block_self_ref` in
+[`tests/test_export_trace_parity.c`](../tests/test_export_trace_parity.c)),
+whose annotation carries the full reasoning and why each available fix costs
+more than the bug.
+
 ### Export shape
 
 An array is not assignable in C, so the row lowers to the cell stores it

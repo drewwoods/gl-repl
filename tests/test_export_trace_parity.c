@@ -233,6 +233,18 @@ static const char *prog_scratch_matrix[] = {
     NULL
 };
 
+/* A block assignment whose own array appears on the right-hand side. The
+ * three legs disagree about when the writes land, and this program exists
+ * to hold that disagreement still - see the g_curated XFAIL reason. */
+static const char *prog_scratch_block_self_ref[] = {
+    "A = {1, 2};",
+    "A[0] = {t, A[0] + 100};",
+    "glBegin(GL_POINTS);",
+    "glVertex3f(A[0], A[1], 0);",
+    "glEnd();",
+    NULL
+};
+
 /* Material colors are an array arg too, and a scene that picks its
  * material by a time-driven branch keeps every counter fixed while the
  * values swing. */
@@ -261,6 +273,36 @@ static const TraceProgram g_curated[] = {
     { "stencil_mask",        prog_stencil_mask,    NULL },
     { "func_locals",         prog_func_locals,     NULL },
     { "scratch_matrix",      prog_scratch_matrix,  NULL },
+    { "scratch_block_self_ref", prog_scratch_block_self_ref,
+      "block RHS ordering: `A[base] = {…}` reads its own array. The full "
+      "flatten evaluates every cell before writing any of them, so a cell "
+      "referring to A[k] sees the value from before this row ran "
+      "(flatten_scratch_block_assign fills vals[] in one loop and applies "
+      "it in the next). Both other legs are sequential instead: the "
+      "in-place rebake handles one flat row per call and writes as it goes "
+      "(rebake_one_cmd), and the exported C is a run of plain stores "
+      "(`A[0] = t; A[1] = A[0] + 100;`), so cell 1 reads the value cell 0 "
+      "just wrote. With A[0]=1 going in, the full flatten yields 101 and "
+      "the other two 105.\n"
+      "\n"
+      "So this is not the usual REPL-vs-C drift: the odd leg out is the "
+      "full flatten, and the two in-app paths disagree with each other "
+      "depending on whether a frame took the rebake route. Nothing in the "
+      "catalog does this - a block cell reading the array it writes is a "
+      "pattern with no reason to exist, since the cells of one row are "
+      "written together by construction.\n"
+      "\n"
+      "Not fixed because every fix is worse than the bug. Making the "
+      "rebake atomic means buffering a whole row's values across "
+      "rebake_one_cmd calls, which are per-flat-row by design and carry no "
+      "row-level state. Making export atomic means temporaries, which "
+      "costs the one-C-line-per-source-row invariant the importer's fold "
+      "depends on. Forcing scratch-reading blocks through the full flatten "
+      "means detecting a scratch read in a cell's dependency set, which "
+      "scratch cells do not participate in (they contribute no dep bits, "
+      "unlike predefs). Revisit if a real scene ever wants it - the "
+      "cheapest honest answer then is probably to reject the pattern at "
+      "commit rather than make three paths agree." },
     { "material_branch",     prog_material_branch, NULL },
 };
 static const int g_curated_count = (int)(sizeof(g_curated)/sizeof(g_curated[0]));
