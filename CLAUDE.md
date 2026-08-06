@@ -227,7 +227,12 @@ successive frames of one session - which is what puts the value-only rebake
 path under test, since frame 1 never reaches it. Array payloads
 (`glMultMatrixf`'s 16 cells, `glMaterialfv`'s color) are in the trace too.
 A new fungible executor/exporter spelling needs a `g_fusion_pairs` entry;
-both the counter and the trace comparison read that one table.
+both the counter and the trace comparison read that one table. The *source
+text* has one fungible spelling of its own: export writes out an optional
+argument the source omitted (`rand(x)` → `rand(x, 0)` - `rand`/`rand2` are
+the only builtins with `arity_min != arity_max`), so round-trip text
+comparisons collapse the two through
+[`tests/support/expr_equivalence.h`](tests/support/expr_equivalence.h).
 
 **Guards**: `make check-state-ownership` runs the full ownership/contract
 inventory (includes `check-c99`, `check-include-style`, `check-keymap-no-dup`,
@@ -483,7 +488,7 @@ only (`check-repl-export-via-bridge`).
 **The exported expression must evaluate in float, like the evaluator.** C
 promotes on any `double` it sees, and the evaluator (`eval_term` /
 `eval_additive`, all `float`) rounds after every operation instead - so
-[`repl_eval_expr_to_c()`](src/repl/eval.h#L499) lowers `PI`/`TAU`/`e` through
+[`repl_eval_expr_to_c()`](src/repl/eval.h#L506) lowers `PI`/`TAU`/`e` through
 `(float)` casts and suffixes fractional literals (`1.2` → `1.2f`). Integers
 stay bare: C converts an int operand without promoting the expression, which
 is also what keeps `A[2]` and `0xFF` intact. Canonical REPL text carries no

@@ -26,6 +26,7 @@
 #define g_multisample_enabled (glr_state_render_mut()->multisample_enabled)
 #define g_line_smooth_enabled (glr_state_render_mut()->line_smooth_enabled)
 
+#include "support/expr_equivalence.h"
 #include "support/scene_corpus.h"
 #include "support/test_harness.h"
 #include <ctype.h>
@@ -520,6 +521,16 @@ static char *canonicalize_definition_line(const char *line) {
     }
 
     canonicalize_float_literals(repl_line, canon_float_line, sizeof(canon_float_line));
+
+    /* Collapse `rand(x, 0)` to `rand(x)` on both sides - export writes the
+     * optional argument out even when the source omitted it. */
+    {
+        char *collapsed = repl_test_collapse_optional_args(canon_float_line);
+        if (collapsed) {
+            snprintf(canon_float_line, sizeof(canon_float_line), "%s", collapsed);
+            free(collapsed);
+        }
+    }
 
     /* Strip initializers from float declarations, e.g. "static float x = 1, y = 2;" -> "static float x, y;" */
     /* This allows comparing the structure of the declarations without being sensitive to live snapshot values. */
@@ -2633,6 +2644,7 @@ int main(int argc, char **argv) {
                 if (!imported_defs_exact) {
                     printf("DETAIL [example %02d definition roundtrip mismatch] name=%s line=%d export=%s\nEXPECTED DEFS:\n%sIMPORTED DEFS:\n%s\n",
                            idx, name, diff_line, export_path, expected_defs, imported_defs);
+                    printf("  note: %s\n", REPL_TEST_EQUIVALENCE_NOTE);
                     print_text_mismatch("definition roundtrip mismatch",
                                         "source example definitions",
                                         "imported definitions",
@@ -2652,14 +2664,17 @@ int main(int argc, char **argv) {
                 char *imported_cmp_raw = strip_decl_trailing_comments(imported);
                 char *actual_cmp_floats = canonicalize_text_floats(actual_cmp_raw);
                 char *imported_cmp_floats = canonicalize_text_floats(imported_cmp_raw);
-                char *actual_cmp = strip_declaration_initializers(actual_cmp_floats);
-                char *imported_cmp = strip_declaration_initializers(imported_cmp_floats);
+                char *actual_cmp_args = repl_test_collapse_optional_args(actual_cmp_floats);
+                char *imported_cmp_args = repl_test_collapse_optional_args(imported_cmp_floats);
+                char *actual_cmp = strip_declaration_initializers(actual_cmp_args);
+                char *imported_cmp = strip_declaration_initializers(imported_cmp_args);
                 roundtrip_exact = compare_exact_text(actual_cmp, imported_cmp,
                                                      &diff_line);
                 if (!roundtrip_exact) {
                     printf("%sDETAIL [example %02d export/import mismatch] name=%s line=%d export=%s%s\n",
                            ansi_yellow(), idx, name, diff_line, export_path,
                            ansi_reset());
+                    printf("  note: %s\n", REPL_TEST_EQUIVALENCE_NOTE);
                     print_text_mismatch("export/import mismatch",
                                         "pre-export code panel",
                                         "imported code panel",
@@ -2667,6 +2682,8 @@ int main(int argc, char **argv) {
                 }
                 free(actual_cmp);
                 free(imported_cmp);
+                free(actual_cmp_args);
+                free(imported_cmp_args);
                 free(actual_cmp_floats);
                 free(imported_cmp_floats);
                 free(actual_cmp_raw);

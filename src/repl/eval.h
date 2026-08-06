@@ -516,7 +516,10 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz);
  * as 0), just not the same characters. Nothing depends on textual
  * identity here; if something ever does, the fix belongs at the round-trip
  * site, not in a rule that lets this function delete a user's explicitly
- * written `, 0`. */
+ * written `, 0`. Tests comparing REPL source text across an export/import
+ * boundary collapse the two spellings through
+ * tests/support/expr_equivalence.h - add an optional-argument builtin and
+ * that is the other end you have to think about. */
 void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz);
 
 /* Drop the `f` suffix from every fractional literal in a source line

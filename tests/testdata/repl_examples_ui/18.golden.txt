@@ -145,7 +145,7 @@ void display(void) {
       for(i, 0, 3) {
         // rand() keeps the three children from being clones: each gets its
         // own length and spread, stable per limb because the seed is.
-        s = rand(seed + i, 0);
+        s = rand(seed + i);
         // Child 0 is the leader -- near-vertical and long, so the trunk
         // keeps climbing; 1 and 2 are the side limbs that swing out.
         side = min(i, 1);
