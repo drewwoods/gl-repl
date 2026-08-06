@@ -21,6 +21,8 @@ Full reference: `docs/ADVANCED_USAGE.md`. This is the working subset.
 ./gl-repl --assets <dir>   # Music dir override (also GLR_ASSETS_DIR)
 ./gl-repl --time 5         # Initial animation t (also GLR_TIME; --time wins)
 ./gl-repl --example 9 --export-ply out.ply [--export-ply-srgb]
+./gl-repl --example 9 --export-c out.c   # Standalone C export, GL-free (no window)
+./gl-repl --example 9 --export-glr out.glr  # .glr authoring format, same GL-free path
 ./gl-repl --dump-code      # Print loaded buffer; --dump-* family honors --example
 ./gl-repl --no-accum       # Disable accumulation buffer (AA + blur)
 ./gl-repl --accum          # Force it on - required under OSMesa, where the

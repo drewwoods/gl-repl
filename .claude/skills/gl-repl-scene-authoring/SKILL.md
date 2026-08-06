@@ -213,6 +213,11 @@ catalog row, done. (Writer: `src/repl/export_glr.c`, symmetric with
 `example_loader.c`.) It does *not* carry `@cfg` slugs outside the per-scene
 presentation subset - those never applied on load anyway.
 
+**Same writer from the command line**: `./gl-repl <scene-or---example>
+--export-glr out.glr` (and `--export-c out.c` for the C form). GL-free - no
+window - so it scripts, and it is the way to re-canonicalize a hand-edited
+`.glr` or convert a saved `.c` session into one.
+
 **Index-keyed goldens shift when you insert mid-catalog.** Appending is cheap;
 inserting is not.
 

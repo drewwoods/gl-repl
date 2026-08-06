@@ -258,6 +258,13 @@ int main(int argc, char **argv) {
      * before any window opens. */
     if (glr_boot_run_dumps(&opts, stdout))
         return 0;
+    /* --export-c / --export-glr: same GL-free bootstrap, but they write the
+     * session out as a scene file instead of dumping to stdout. Unlike
+     * --export-ply (which needs a live context and runs from the display
+     * callback), both source exporters are pure text over the loaded
+     * program, so they never open a window. */
+    if (glr_boot_run_exports(&opts, &exit_code))
+        return exit_code;
 
     glr_init_trace("glutInit begin");
     glutInit(&argc, argv);

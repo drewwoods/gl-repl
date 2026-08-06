@@ -1995,6 +1995,17 @@ cc -std=c89 -Wall -o scene output.c -framework OpenGL -framework GLUT -lm  # mac
 Everything round-trips: `./gl-repl output.c` reloads the file with
 variables, settings, camera, scene name, and `// @tune` tags intact.
 
+The same export is available without opening the app at all:
+
+```bash
+./gl-repl --example "Parametric torus (nested for)" --export-c torus.c
+./gl-repl saved.c --export-c rewritten.c        # load a session, re-export it
+```
+
+`--export-c` loads the session, writes the file, and exits. It never creates a
+window or touches GL, so it works over ssh and in CI; `--window WxH` sets the
+window size the exported program opens with.
+
 `Ctrl+Q` quits and saves a recovery copy to a temp file - an unedited built-in
 example is skipped instead (any unsaved scenes go to `recovery-workspace/`).
 
@@ -2075,6 +2086,10 @@ is the exported C's own order, and it is the one shape the loader accepts:
 a file that puts its helpers at the bottom is rejected with a message naming
 both the offending line and the line that established the phase. Comments and
 blank lines carry no phase and are legal anywhere.
+
+`--export-glr <path>` writes the same file from the command line, without
+opening a window - `./gl-repl --example torus --export-glr torus.glr`. It
+pairs with `--export-c`, which writes the C form of the same session.
 
 It goes to the same directory as Save Scene, but uses the distinct
 `<scene-slug>.glr` filename and format. Reach for it when you are **authoring
@@ -2413,6 +2428,8 @@ runs.
 --list-examples        print the built-in examples and exit
 --time <secs>          initial animation time t (also GLR_TIME; --time wins)
 --window <WxH>         initial window size (default 1200x800)
+--export-c <path>      write the session out as standalone C, then exit (no window)
+--export-glr <path>    write it in the .glr authoring format instead (no window)
 --export-ply <path>    capture frame 1 geometry to PLY, then exit
 --export-ply-srgb      decode vertex colors sRGB -> linear during PLY export
 --assets <dir>         scan this dir for *.mp3 (also GLR_ASSETS_DIR)

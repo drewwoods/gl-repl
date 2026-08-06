@@ -37,6 +37,12 @@ static void print_usage(const char *prog) {
             "  --dump-state-layout  Print ReplRuntimeState field layout\n"
             "  --detailed-prof  Emit finer-grained startup init traces\n"
             "               (also via GLR_DETAILED_PROF env var)\n"
+            "  --export-c <file>  Load the session and write it to <file> as a\n"
+            "               standalone C program (what Ctrl+S writes), then\n"
+            "               exit. Runs GL-free - no window, no display\n"
+            "  --export-glr <file>  Same, in the .glr authoring format built-in\n"
+            "               examples ship in (File -> Save .glr). May be\n"
+            "               combined with --export-c\n"
             "  --export-ply <file>  Render one frame, capture geometry to <file>\n"
             "               as a PLY mesh, then exit (needs a display)\n"
             "  --export-ply-srgb  Decode vertex colors sRGB -> linear on export\n"
@@ -249,6 +255,10 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
             out->dump_state_layout = 1;
         else if (strcmp(argv[i], "--detailed-prof") == 0)
             out->detailed_prof = 1;
+        else if (strcmp(argv[i], "--export-c") == 0 && i + 1 < argc)
+            out->export_c_path = argv[++i];
+        else if (strcmp(argv[i], "--export-glr") == 0 && i + 1 < argc)
+            out->export_glr_path = argv[++i];
         else if (strcmp(argv[i], "--export-ply") == 0 && i + 1 < argc)
             out->export_ply_path = argv[++i];
         else if (strcmp(argv[i], "--export-ply-srgb") == 0)

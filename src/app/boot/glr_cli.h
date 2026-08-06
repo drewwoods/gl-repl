@@ -36,6 +36,8 @@ typedef struct GlrCliOptions {
     const char *time_arg;          /* --time SECS (else GLR_TIME)               */
     const char *export_ply_path;   /* --export-ply FILE, else NULL              */
     int         export_ply_srgb;   /* --export-ply-srgb                         */
+    const char *export_c_path;     /* --export-c FILE, else NULL                */
+    const char *export_glr_path;   /* --export-glr FILE, else NULL              */
 
     int dump_code;                 /* --dump-code                               */
     int dump_flat;                 /* --dump-flat                               */

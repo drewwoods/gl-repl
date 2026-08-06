@@ -79,6 +79,8 @@ static void test_defaults(void) {
     ASSERT_TRUE("no time arg", o.time_arg == NULL);
     ASSERT_TRUE("no export-ply path", o.export_ply_path == NULL);
     ASSERT_INT("export-ply srgb off", o.export_ply_srgb, 0);
+    ASSERT_TRUE("no export-c path", o.export_c_path == NULL);
+    ASSERT_TRUE("no export-glr path", o.export_glr_path == NULL);
     ASSERT_INT("dump-code off", o.dump_code, 0);
     ASSERT_INT("dump-flat off", o.dump_flat, 0);
     ASSERT_INT("flat-histogram off", o.dump_flat_histogram, 0);
@@ -178,6 +180,32 @@ static void test_value_flags(void) {
     char *av3[] = { "gl-repl", "--export-ply", "out.ply", NULL };
     ASSERT_INT("--export-ply proceeds", parse_v(&o, &code, av3), 1);
     ASSERT_STR("--export-ply captured", o.export_ply_path, "out.ply");
+
+    char *av4[] = { "gl-repl", "--export-c", "out.c", NULL };
+    ASSERT_INT("--export-c proceeds", parse_v(&o, &code, av4), 1);
+    ASSERT_STR("--export-c captured", o.export_c_path, "out.c");
+    /* The C exporter is GL-free and runs before any window opens, so it
+     * must not be confused with the frame-1 PLY capture. */
+    ASSERT_TRUE("--export-c leaves export-ply unset", o.export_ply_path == NULL);
+
+    /* A value flag with no value is dropped, not treated as a path: the
+     * dangling argument falls through to the positional input file. */
+    char *av5[] = { "gl-repl", "--export-c", NULL };
+    ASSERT_INT("valueless --export-c proceeds", parse_v(&o, &code, av5), 1);
+    ASSERT_TRUE("valueless --export-c sets no path", o.export_c_path == NULL);
+
+    char *av6[] = { "gl-repl", "--export-glr", "out.glr", NULL };
+    ASSERT_INT("--export-glr proceeds", parse_v(&o, &code, av6), 1);
+    ASSERT_STR("--export-glr captured", o.export_glr_path, "out.glr");
+    ASSERT_TRUE("--export-glr leaves export-c unset", o.export_c_path == NULL);
+
+    /* The two source exporters are independent flags, not a mode switch:
+     * one load can write both formats. */
+    char *av7[] = { "gl-repl", "--export-c", "out.c", "--export-glr",
+                    "out.glr", NULL };
+    ASSERT_INT("both source exports proceed", parse_v(&o, &code, av7), 1);
+    ASSERT_STR("both: C path captured", o.export_c_path, "out.c");
+    ASSERT_STR("both: glr path captured", o.export_glr_path, "out.glr");
 }
 
 static void test_window_size(void) {

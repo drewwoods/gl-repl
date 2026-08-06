@@ -10,7 +10,9 @@ the language, the panels), see the [User Guide](USER_GUIDE.md).
 ```
 gl-repl [file.c | workspace/ | -] [--example name|n] [--tour name|n]
         [--time secs] [--window WxH]
-        [--export-ply out.ply [--export-ply-srgb]] [--accum | --no-accum]
+        [--export-c out.c] [--export-glr out.glr]
+        [--export-ply out.ply [--export-ply-srgb]]
+        [--accum | --no-accum]
         [--assets dir] [--examples-dir dir] [--no-audio]
         [--dump-code] [--dump-flat] [--flat-histogram]
         [--dump-state-layout] [--detailed-prof]
@@ -32,6 +34,8 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--tour name|n]
 | `--list-tours` | Print the built-in guided tours and exit. |
 | `--time` *secs* | Initial value of the animation variable `t` (applied after any `--example` load). Overrides `GLR_TIME`. |
 | `--window` *WxH* | Initial window size (default 1200x800). |
+| `--export-c` *out*.c | Load the session, write it out as a standalone C program (the same file Ctrl+S / File → Save writes), then exit. Runs GL-free - no window, no display - so it works over ssh and in CI. Honors `--example`, a positional session file, and `--window` (which sets the exported program's window size). |
+| `--export-glr` *out*.glr | The same, in the `.glr` authoring format built-in examples ship in (File → Save Scene as .glr). Combines with `--export-c`: the session loads once and is written in both formats. |
 | `--export-ply` *out*.ply | Capture the scene geometry to an ASCII PLY mesh on frame 1, then exit. Needs a display. |
 | `--export-ply-srgb` | With the above, decode vertex colors sRGB → linear for color-managed viewers. |
 | `--no-accum` | Disable the accumulation buffer (anti-aliasing + motion blur). |
@@ -561,6 +565,14 @@ what the format drops). To turn one into an example:
 
 1. Drop the `.glr` file into `examples/scenes/`.
 2. Add a section for it to `examples/catalog.ini`.
+
+`--export-glr <file>` writes the same thing without opening the app, so an
+existing scene can be re-canonicalized from a script:
+
+```bash
+./gl-repl scene.c --export-glr examples/scenes/scene.glr   # C session -> authoring format
+./gl-repl --example "Parametric torus (nested for)" --export-glr copy.glr
+```
 
 It then loads as a built-in. Runtime example directories take the same layout
 as-is, so `--examples-dir <dir>` will load `<dir>/catalog.ini` without a
