@@ -1874,6 +1874,71 @@ ReplCompileResult repl_compile_var_assign(const char *input,
                 has_cell_vars = 1;
         }
 
+        /* Reject a block whose exported C would not fit one physical line.
+         *
+         * The row itself is short - it is the *expansion* that is long.
+         * Export lowers `A[0] = {TAU, ...}` to `A[0] = …; A[1] = …;`, one
+         * store per cell, and each `TAU` becomes a parenthesised float
+         * cast several times its source width; sixteen of them reach ~440
+         * characters. Import reads physical lines into a MAX_LINE_LEN
+         * buffer and rejects anything longer outright ("Import failed:
+         * line too long"), so such a row exports to a file the importer
+         * will not take back.
+         *
+         * Checked here rather than at export because export has no way to
+         * refuse: the alternatives there are wrapping the run (each
+         * fragment ends in `;` at depth 0, so the importer's accumulator
+         * flushes them as separate rows and the fold produces N blocks
+         * instead of one) or exceeding the logical-statement budget, which
+         * is the same MAX_LINE_LEN. Rejecting at commit is the only point
+         * where the user can still do something about it - and what they
+         * do is the documented idiom anyway: split the run across rows,
+         * four cells at a time. */
+        {
+            char block_indent[REPL_INDENT_TEXT_MAX];
+            int exported;
+
+            compile_scope_cmd_indent(ctx, insert_idx,
+                                     block_indent, sizeof(block_indent));
+            /* Mirrors write_scratch_block_as_c89's output exactly: per cell
+             * `NAME[IDX] = EXPR;` joined by one space, then the trailing
+             * comment behind two. test_scratch_block_export_line_budget
+             * pins the two together so a change to either is caught. */
+            exported = (int)strlen(block_indent);
+            for (k = 0; k < cell_count; k++) {
+                char cell[MAX_LINE_LEN];
+                char c_cell[MAX_LINE_LEN];
+                int idx = base_idx + k;
+
+                repl_scratch_block_cell_text(&cells[k], cell, sizeof(cell));
+                repl_eval_expr_to_c(cell, c_cell, sizeof(c_cell));
+                exported += (k ? 1 : 0)                 /* joining space   */
+                          + (int)strlen(name)           /* A               */
+                          + 1                           /* [               */
+                          + (idx >= 10 ? 2 : 1)         /* index digits    */
+                          + 4                           /* ] = _           */
+                          + (int)strlen(c_cell)         /* the expression  */
+                          + 1;                          /* ;               */
+            }
+            if (comment[0])
+                exported += 2 + (int)strlen(comment);
+            if (exported >= MAX_LINE_LEN)
+                return compile_set_err(err, err_size,
+                    "block is too long to export - it expands to %d chars of C "
+                    "and the line limit is %d; split it across rows",
+                    exported, MAX_LINE_LEN - 1);
+        }
+
+        /* `A = {…}` is input sugar; the row is stored subscripted.
+         * Export writes `A[0] = …` for both spellings, so import can only
+         * ever fold back to the subscripted one - leaving the bare form in
+         * the document would mean a row that silently rewrites itself on
+         * the first save/load, which is the same defect the single-cell
+         * list is rejected for. Canonicalising here makes the round trip
+         * stable instead of merely tested. */
+        if (!index_expr[0])
+            repl_copy_string_fits(index_expr, sizeof(index_expr), "0");
+
         cmd.type = CMD_SCRATCH_BLOCK_ASSIGN;
         cmd.valid = 1;
         cmd.args[0] = (float)scratch_array_idx;

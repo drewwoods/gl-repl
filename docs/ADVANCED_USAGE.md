@@ -728,11 +728,23 @@ Three limits, each of which buys something concrete:
   the long way. It exports as the scalar form and would come back from a
   save/load as `CMD_SCRATCH_ASSIGN`, so it is rejected rather than shipped as
   a spelling that silently rewrites itself.
+- **The row must fit its own exported C.** The *row* is short; the expansion
+  need not be. Each cell becomes a `A[k] = …;` store, and a token like `TAU`
+  lowers to a parenthesised float cast several times its source width - so
+  sixteen `TAU` cells reach ~440 characters, past the 255 the importer will
+  read back. Commit computes the exported width and refuses with
+  `block is too long to export`; the remedy is the documented idiom, four
+  cells to a row.
 
-The committed row keeps the expressions you typed but standardises the
-separators to `, `. Import rebuilds the list that way, so a row committed as
-`{1,2}` would otherwise return from a save/load as `{1, 2}` and break the
-text-exact round trip the scene corpora compare.
+The committed row keeps the expressions you typed but standardises two
+things, both so that what you see is what a save and reload returns:
+
+- **Separators become `, `.** Import rebuilds the list that way, so a row
+  committed as `{1,2}` would otherwise come back as `{1, 2}`.
+- **A bare `A = {…}` is stored as `A[0] = {…}`.** Export writes `A[0] = …`
+  for either spelling, so import can only fold back to the subscripted one.
+  The bare form remains accepted as input; it just does not survive as a
+  distinct spelling.
 
 ### A cell that reads its own array
 

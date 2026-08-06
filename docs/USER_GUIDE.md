@@ -921,6 +921,7 @@ A braced list fills a contiguous run of cells from one row:
 A[0] = {1, 0, 0, 0};      // writes A[0], A[1], A[2], A[3]
 A[4] = {0, c, s, 0};
 A = {1, 2, 3};            // no subscript means start at cell 0
+                          //   (stored as `A[0] = {1, 2, 3};`)
 ```
 
 The cells are ordinary expressions, re-evaluated every frame just like a

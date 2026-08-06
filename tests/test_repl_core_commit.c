@@ -986,6 +986,11 @@ static void run_scratch_block_matrix(void) {
                (int)repl_state_document_cmds()[0].args[1], 0);
     ASSERT_TRUE("bare block wrote B[0]", fabsf(scratch_cell(1, 0) - 7.0f) < 1e-6f);
     ASSERT_TRUE("bare block wrote B[1]", fabsf(scratch_cell(1, 1) - 8.0f) < 1e-6f);
+    /* Stored subscripted: export writes `B[0] = …` for both spellings, so
+     * the bare one would not survive a save/load as itself. */
+    ASSERT_TRUE("bare block canonicalises to a subscript",
+                strcmp(skip_indent(editor_buffer_line(0)),
+                       "B[0] = {7, 8};") == 0);
 
     /* A whole array in one row is the intended top end. */
     glr_ctrl_reset_all(); declare_test_vars();
@@ -1006,6 +1011,10 @@ static void run_scratch_block_matrix(void) {
         } bad[] = {
             { "not a scratch array",   "n = {1, 2};" },
             { "single-cell list",      "A[3] = {5};" },
+            /* Expands to ~440 chars of C, past what import will read back. */
+            { "exports past the line limit",
+              "A = {TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, "
+              "TAU, TAU, TAU, TAU, TAU};" },
             { "past the array end",    "A[14] = {1, 2, 3};" },
             { "base past the array",   "A[16] = {1};" },
             { "too many values",

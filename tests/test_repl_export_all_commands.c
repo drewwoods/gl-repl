@@ -663,12 +663,74 @@ static void test_bare_scratch_block_declares_array(void) {
     remove(path);
 }
 
+/* The commit path refuses a block whose exported C would not fit one
+ * physical line, using its own reconstruction of what the exporter will
+ * write. This ties the two together: take a block right at the edge of
+ * what commit accepts, and prove the real exported line fits and reads
+ * back. If either side's spelling drifts, the estimate stops matching and
+ * this fails - which is the point, since the estimate lives in compile.c
+ * and the emission in export_cmd_writer.c.
+ *
+ * TAU is the widest-expanding token available: it lowers to a
+ * parenthesised float cast several times its source width, so nine cells
+ * of it land just under the limit and ten are rejected. */
+static void test_scratch_block_export_line_budget(void) {
+    const char *path = "/tmp/repl_export_block_budget.c";
+    char *export_text;
+    int longest = 0;
+
+    repl_eval_init_predef_vars();
+    glr_ctrl_reset_all();
+    declare_test_vars();
+
+    editor_feed_line("A = {TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU};");
+    ASSERT_TRUE("widest accepted block commits",
+                repl_state_document_count() == 1);
+
+    editor_feed_line("A = {TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU};");
+    ASSERT_TRUE("one cell wider is refused",
+                repl_state_document_count() == 1);
+
+    repl_export_save_output(path, source_document_view(), NULL);
+    export_text = slurp_path(path);
+    ASSERT_TRUE("budget export read back", export_text != NULL);
+
+    if (export_text) {
+        const char *p = export_text;
+        while (*p) {
+            const char *nl = strchr(p, '\n');
+            int len = nl ? (int)(nl - p) : (int)strlen(p);
+            if (len > longest) longest = len;
+            if (!nl) break;
+            p = nl + 1;
+        }
+        /* Import reads physical lines into a MAX_LINE_LEN buffer and
+         * rejects anything longer outright, so this is the real budget. */
+        ASSERT_TRUE("no exported line exceeds what import will read",
+                    longest < MAX_LINE_LEN);
+        ASSERT_TRUE("the block really did expand near the limit",
+                    longest > MAX_LINE_LEN - 20);
+    }
+
+    glr_ctrl_reset_all();
+    declare_test_vars();
+    ASSERT_TRUE("widest accepted block re-imports",
+                repl_export_load_from_file(path, NULL) == 1);
+    ASSERT_TRUE("and folds back to one block row",
+                repl_state_document_count() == 1 &&
+                repl_state_document_cmds()[0].type == CMD_SCRATCH_BLOCK_ASSIGN);
+
+    free(export_text);
+    remove(path);
+}
+
 int main(void) {
     test_export_prologue_direct();
     test_auto_normal_marker_roundtrip();
     test_loop_jump_roundtrip();
     test_scratch_block_roundtrip();
     test_bare_scratch_block_declares_array();
+    test_scratch_block_export_line_budget();
     const char *path1 = "/tmp/repl_export_all_commands_1.c";
     const char *path2 = "/tmp/repl_export_all_commands_2.c";
     int cmd_count_before = 0;
