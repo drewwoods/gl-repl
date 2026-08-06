@@ -793,7 +793,7 @@ GL pipeline rasterize the wireframe itself. The actual `glutSolid*` call
 goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L312) (shared with the live
 render loop in [`src/repl/executor.c`](../src/repl/executor.c), so the dispatch stays in one place
 and the GLUT-symbol call site stays inside the executor TU). The
-membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L309) in [`src/repl/command.h`](../src/repl/command.h)
+membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L334) in [`src/repl/command.h`](../src/repl/command.h)
 - the single source that also feeds `repl_cmd_starts_geometry_emit` and
 `repl_cmd_consumes_current_color` (a new `glutSolid*` [`CmdType`](../src/repl/command.h#L44) joins all
 three at once; `test_is_glut_solid_predicate` in [`tests/test_replay_walk.c`](../tests/test_replay_walk.c)

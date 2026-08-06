@@ -149,6 +149,7 @@ typedef struct {
      *   CMD_LABEL        -> payload.label
      *   CMD_MULT_MATRIXF -> payload.matrix
      *   CMD_SCRATCH_BLOCK_ASSIGN -> payload.scratch_block
+     *   CMD_SCRATCH_ASSIGN -> payload.scratch (flat rows only)
      *   anything else    -> zeroed; do not read.
      *
      * Writers must zero/init the relevant member before touching it. */
@@ -205,6 +206,30 @@ typedef struct {
         struct {
             float v[REPL_SCRATCH_ARRAY_LEN];
         } scratch_block;
+        /* CMD_SCRATCH_ASSIGN, flat rows only. Which cell of a block
+         * assignment this row came from: 0 for a hand-written
+         * `A[i] = expr;` (the zeroed-payload contract gives that for
+         * free), k for the k'th cell of `A[base] = {e0, ..., eN-1}`.
+         *
+         * The in-place rebake is the only reader. A block's cells capture
+         * at REPL_EXPR_ROLE_SCRATCH_RHS ordinals 0..N-1, and without this
+         * the rebake walk cannot tell which one a given flat row wants -
+         * it would re-evaluate ordinal 0 for all of them and write cell
+         * 0's value into every cell. `from_block` is separate from the
+         * ordinal because cell 0 and a scalar row share ordinal 0 and
+         * still differ: a block has no SCRATCH_INDEX program to
+         * re-evaluate (its base is a literal), and a rebake that looked
+         * for one would read the missing program as an extraction failure
+         * and freeze the row at its baked value.
+         *
+         * Everything else downstream reads args[0..2] and is form-blind,
+         * which is the point: this rides in the union at no cost rather
+         * than becoming a second shape of CMD_SCRATCH_ASSIGN that every
+         * consumer has to know about. */
+        struct {
+            int from_block;     /* 1 when this row is one cell of a block */
+            int block_ordinal;  /* its SCRATCH_RHS slot; read when from_block */
+        } scratch;
     } payload;
     int      src_cmd_idx;           /* Owning source command for flat->source mapping */
     int      call_src_cmd_idx;      /* Immediate call site that expanded this command */

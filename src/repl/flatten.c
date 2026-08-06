@@ -1364,6 +1364,11 @@ static int flatten_scratch_assign(FlattenContext *ctx, const GLCmd *src_cmd,
         tmp.args[1] = (float)elem_idx;
         tmp.args[2] = value;
         tmp.num_args = 3;
+        /* Not a block cell: this row has an index program of its own and
+         * its value is SCRATCH_RHS slot 0. Stated rather than inherited
+         * from the source row's zeroed payload, because the rebake reads
+         * it and the two forms must not be able to blur. */
+        memset(&tmp.payload, 0, sizeof(tmp.payload));
         tmp.has_vars = src_cmd->has_vars || local_index_vars || local_rhs_vars;
         repl_flatten_expr_note_emitted(&ctx->expr, tmp.has_vars, i);
         if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
@@ -1381,18 +1386,17 @@ static int flatten_scratch_assign(FlattenContext *ctx, const GLCmd *src_cmd,
  * so nothing downstream of here has to know the form exists.
  *
  * The cells capture at REPL_EXPR_ROLE_SCRATCH_RHS ordinals 0..N-1, which
- * is why the base index is a literal and not an expression: ordinal 0 of
- * SCRATCH_INDEX stays unused here, and there is no per-cell index program
- * to keep in step with the values.
+ * is why the base index is a literal and not an expression: SCRATCH_INDEX
+ * stays unused here, and there is no per-cell index program to keep in step
+ * with the values.
  *
- * A var-bearing block forfeits the value-only rebake for the whole flat
- * program. The flat rows it emits are indistinguishable from hand-written
- * `A[k] = expr;` rows, so rebake_one_cmd would re-evaluate ordinal 0 for
- * every one of them - cell 0's value written into all N cells. Carrying an
- * ordinal on the flat command would fix that, but only by giving
- * CMD_SCRATCH_ASSIGN two shapes for every consumer to know about; the full
- * flatten already re-runs each frame for anything animated, which is the
- * only case that reaches here. */
+ * Each emitted row carries the ordinal it re-evaluates from, in
+ * payload.scratch. Without it the rebake walk - which sees only the flat
+ * row - would re-evaluate ordinal 0 for every cell and write cell 0's value
+ * into all N. Stamping it here is what keeps a var-bearing block on the
+ * value-only rebake route: forfeiting the rebake instead would cost the
+ * *whole* flat program its cheap path (measured on the Wave example:
+ * 280us -> 473us per frame for a scene that gained four commands). */
 static int flatten_scratch_block_assign(FlattenContext *ctx, const GLCmd *src_cmd,
                                         int i, ExprVar *vars,
                                         const ReplExprDepMask *var_deps, int nv,
@@ -1488,9 +1492,6 @@ static int flatten_scratch_block_assign(FlattenContext *ctx, const GLCmd *src_cm
     }
     repl_flatten_expr_note_value(&ctx->expr, assign_deps);
 
-    if (src_cmd->has_vars || local_cell_vars)
-        repl_flatten_expr_forfeit_rebake(&ctx->expr);
-
     for (k = 0; k < count && rv; k++) {
         GLCmd tmp;
         int elem_idx = base_idx + k;
@@ -1498,8 +1499,8 @@ static int flatten_scratch_block_assign(FlattenContext *ctx, const GLCmd *src_cm
         repl_eval_scratch_set(array_idx, elem_idx, vals[k]);
 
         /* Built from scratch rather than copied from src_cmd: the source
-         * row's payload holds the cell array, and a CMD_SCRATCH_ASSIGN
-         * must leave the union zeroed. */
+         * row's payload holds the cell array, and this row's payload holds
+         * only its ordinal. */
         memset(&tmp, 0, sizeof(tmp));
         tmp.type = CMD_SCRATCH_ASSIGN;
         tmp.valid = 1;
@@ -1508,6 +1509,10 @@ static int flatten_scratch_block_assign(FlattenContext *ctx, const GLCmd *src_cm
         tmp.args[1] = (float)elem_idx;
         tmp.args[2] = vals[k];
         tmp.num_args = 3;
+        /* Which SCRATCH_RHS expression slot this cell re-evaluates from.
+         * The rebake walk has only the flat row to go on. */
+        tmp.payload.scratch.from_block = 1;
+        tmp.payload.scratch.block_ordinal = k;
         tmp.has_vars = src_cmd->has_vars || local_cell_vars;
         repl_flatten_expr_note_emitted(&ctx->expr, tmp.has_vars, i);
         if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
@@ -1861,15 +1866,22 @@ static int rebake_one_cmd(const ReplRebakeOptions *o, int k,
     if (cmd->type == CMD_SCRATCH_ASSIGN) {
         float idx_f = cmd->args[1];
         float value = cmd->args[2];
+        int from_block = cmd->payload.scratch.from_block;
+        int rhs_ordinal = from_block ? cmd->payload.scratch.block_ordinal : 0;
         int ok_idx = 1;
         int ok_rhs = 1;
         if (cmd->has_vars) {
-            ok_idx = repl_flatten_expr_rebake_eval(
-                o->expr_cache, line, REPL_EXPR_ROLE_SCRATCH_INDEX, 0,
-                locals ? locals->vars : NULL, locals ? locals->num_vars : 0,
-                &idx_f);
+            /* A block cell has no index program to re-evaluate - the
+             * block's base is a literal, so args[1] is already final -
+             * and its value lives in the SCRATCH_RHS slot its cell
+             * captured at rather than in slot 0. */
+            if (!from_block)
+                ok_idx = repl_flatten_expr_rebake_eval(
+                    o->expr_cache, line, REPL_EXPR_ROLE_SCRATCH_INDEX, 0,
+                    locals ? locals->vars : NULL, locals ? locals->num_vars : 0,
+                    &idx_f);
             ok_rhs = repl_flatten_expr_rebake_eval(
-                o->expr_cache, line, REPL_EXPR_ROLE_SCRATCH_RHS, 0,
+                o->expr_cache, line, REPL_EXPR_ROLE_SCRATCH_RHS, rhs_ordinal,
                 locals ? locals->vars : NULL, locals ? locals->num_vars : 0,
                 &value);
         }

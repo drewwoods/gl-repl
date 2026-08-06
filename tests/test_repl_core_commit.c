@@ -1104,16 +1104,77 @@ static void run_scratch_block_matrix(void) {
         ASSERT_TRUE("warm cell 3", fabsf(cells[3] - 28.0f) < 1e-6f);
     }
 
-    /* A var-bearing block forfeits the value-only rebake for the program;
-     * that is what keeps the warm values above honest. */
-    ASSERT_TRUE("var-bearing block forfeits rebake",
-                repl_state_flat_program_rebake_ok() == 0);
-
-    glr_ctrl_reset_all(); declare_test_vars();
-    editor_feed_line("A[0] = {1, 2};");
-    repl_flatten_commands(editor_state_edit_line());
-    ASSERT_TRUE("constant block keeps rebake",
+    /* A block does not cost the program its value-only rebake: each flat
+     * cell carries the SCRATCH_RHS ordinal it re-evaluates from. */
+    ASSERT_TRUE("var-bearing block keeps rebake",
                 repl_state_flat_program_rebake_ok() != 0);
+
+    /* And the rebake route itself must produce per-cell values, not cell
+     * 0's value written into every cell. This is the whole reason
+     * payload.scratch.block_ordinal exists, so drive the production
+     * full-vs-rebake boundary rather than repl_flatten_commands(). */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("A[0] = {t, t * 2, t * 3, t * 4};");
+    {
+        int t_idx = predef_idx("t");
+        ReplExprDepMask t_bit;
+        ReplFlatRefreshKind kind;
+        float cells[REPL_SCRATCH_ARRAY_LEN];
+
+        ASSERT_TRUE("t predef exists for block rebake", t_idx >= 0);
+        t_bit = (ReplExprDepMask)1u << t_idx;
+
+        g_predef_vars_mut[t_idx].value = 2.0f;
+        repl_flatten_commands(editor_state_edit_line());
+        repl_state_flat_program_clear_dirty();
+
+        /* t must be a value-only dep of this row, so the tick rebakes. */
+        ASSERT_TRUE("t is not structural for a block row",
+                    (repl_state_flat_program_structural_dep_mask() & t_bit) == 0);
+
+        g_predef_vars_mut[t_idx].value = 3.0f;
+        kind = repl_refresh_flat_program_for_deps(editor_state_edit_line(),
+                                                  t_bit);
+        ASSERT_TRUE("block row takes the rebake route",
+                    kind == REPL_FLAT_REFRESH_REBAKE);
+
+        for (int i = 0; i < REPL_SCRATCH_ARRAY_LEN; i++)
+            cells[i] = -1.0f;
+        flat_scratch_writes(0, cells);
+        ASSERT_TRUE("rebaked cell 0", fabsf(cells[0] - 3.0f) < 1e-6f);
+        ASSERT_TRUE("rebaked cell 1", fabsf(cells[1] - 6.0f) < 1e-6f);
+        ASSERT_TRUE("rebaked cell 2", fabsf(cells[2] - 9.0f) < 1e-6f);
+        ASSERT_TRUE("rebaked cell 3", fabsf(cells[3] - 12.0f) < 1e-6f);
+        /* The live scratch table is threaded too, so a later
+         * glMultMatrixf(A) in the same program sees the new cells. */
+        ASSERT_TRUE("rebake threaded the live scratch table",
+                    fabsf(scratch_cell(0, 3) - 12.0f) < 1e-6f);
+    }
+
+    /* A scalar row keeps re-evaluating its own index under the rebake -
+     * the from_block flag must not blur the two forms. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("for(i, 0, 4) {");
+    editor_feed_line("A[i] = i + t;");
+    editor_feed_line("}");
+    {
+        int t_idx = predef_idx("t");
+        ReplExprDepMask t_bit = (ReplExprDepMask)1u << t_idx;
+        float cells[REPL_SCRATCH_ARRAY_LEN];
+
+        g_predef_vars_mut[t_idx].value = 0.0f;
+        repl_flatten_commands(editor_state_edit_line());
+        repl_state_flat_program_clear_dirty();
+
+        g_predef_vars_mut[t_idx].value = 10.0f;
+        repl_refresh_flat_program_for_deps(editor_state_edit_line(), t_bit);
+
+        for (int i = 0; i < REPL_SCRATCH_ARRAY_LEN; i++)
+            cells[i] = -1.0f;
+        flat_scratch_writes(0, cells);
+        ASSERT_TRUE("scalar rebake cell 0", fabsf(cells[0] - 10.0f) < 1e-6f);
+        ASSERT_TRUE("scalar rebake cell 3", fabsf(cells[3] - 13.0f) < 1e-6f);
+    }
 }
 
 int main(void) {
