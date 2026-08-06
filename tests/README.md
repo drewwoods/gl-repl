@@ -67,22 +67,56 @@ rot. Stub-only (both legs need the stub counters live).
 
 ### `test_repl_core_examples` — *"the catalog changed and 32 goldens disagree"*
 
-Owns the index-keyed golden fixtures under
-[`testdata/repl_examples_ui/`](testdata/repl_examples_ui/) — the code-panel
-text of every built-in example — plus the export/compile pass over the catalog.
+Despite the name this is the catalog/export omnibus. It owns the index-keyed
+golden fixtures under [`testdata/repl_examples_ui/`](testdata/repl_examples_ui/)
+— the code-panel text of every built-in example — and runs three legs in this order, each
+announced by a `--- … ---` banner:
+
+1. **Catalog checks** — loader limits, catalog/tag/subheading metadata, `@cfg`
+   symbolic names, tag-default dispatch and collisions, presentation reset,
+   clear-color ordering.
+2. **Built-in catalog** — per example: golden code-panel text vs
+   `NN.golden.txt` (`--show-mismatch` prints context here), export + a real
+   `cc`, import round-trip (the `Loaded N commands from …` chatter),
+   re-export + `cc`. One progress line each:
+
+   ```
+   example 29/39  447 cmds  golden=ok cc=ok import=ok recc=ok  Orrery (labels track 3D orbits)
+   ```
+3. **Scene corpora** (opt-in, see below) — load, no-invalid-cmds, export,
+   compile, one line per scene. No goldens and no round-trip: those scenes
+   exist to be corner cases, and a golden apiece would turn every deliberate
+   edit into a regen. They run **last** because a runtime catalog displaces the
+   built-in one.
 
 ```bash
 make run-test-repl-core-examples TEST_ARGS='--help'
 make run-test-repl-core-examples TEST_ARGS='--show-mismatch'   # context diff around a text mismatch
 make run-test-repl-core-examples TEST_ARGS='--dump-index 7'    # one example's panel text to stdout
 make run-test-repl-core-examples TEST_ARGS='--keep-temp'       # leave the exported .c files behind
+make run-test-repl-core-examples TEST_ARGS='--scenes-dir tests/scenes/general'
+REPL_SCENE_CORPUS=1 make run-test-repl-core-examples            # the standard corpora
 make rebuild-golden                                            # = --update-golden, all fixtures
 ```
 
-Environment: `REPL_EXPORT_VERBOSE=1`, `REPL_EXPORT_KEEP_TEMP=1`,
-`REPL_EXPORT_CC`, `REPL_EXPORT_COMPILE_CFLAGS`, `NO_COLOR`. Regenerating
-goldens needs a **debug** build (`make test_repl_core_examples BUILD=debug`
-first) — the `run-` targets otherwise give you release.
+The banners and progress lines print unconditionally — before they existed the
+only sign of life was the loader's `Loaded N commands from …` chatter, which
+comes from leg 2's round-trip and which leg 3 does not do at all, so a corpus
+run looked identical to a run without one but for the trailing `N/N passed`
+count. Passing assertions still print nothing; `FAIL` lines and `DETAIL`
+dumps come from the assertions, the progress line is the map, not the
+diagnosis. When no corpus is selected the run says so rather than staying
+quiet about it.
+
+Environment: `REPL_SCENE_CORPUS=1`, `REPL_EXPORT_VERBOSE=1`,
+`REPL_EXPORT_KEEP_TEMP=1`, `REPL_EXPORT_CC`, `REPL_EXPORT_COMPILE_CFLAGS`,
+`NO_COLOR`. Regenerating goldens needs a **debug** build
+(`make test_repl_core_examples BUILD=debug` first) — the `run-` targets
+otherwise give you release.
+
+A corpus scene is walked only if `catalog.ini` lists it; an unlisted `.glr`
+in the directory is silently ignored, so check the scene count if a new
+corner case seems to have no effect.
 
 ### `test_eval` — an interactive expression REPL
 
@@ -136,9 +170,18 @@ answer "is our model of GL wrong?" rather than "did we regress?". Both need
 | [`scenes/stress/`](scenes/stress/), `scenes/general/` | opt-in `.glr` corpora, loaded as runtime catalogs (`make test-scenes`) |
 | [`export_trace_driver.c`](export_trace_driver.c) | not a test — the child program for export parity |
 
-Adding a scene directory means **two** edits: a `parity_walk_dir_checked()`
-line *and* a `test_scene_dir_exports_compile()` line. A walk over a missing
-directory returns 0 and would otherwise pass silently.
+Adding a scene directory to the standard set is one edit — the `dirs[]` list
+in [`scene_corpus.h`](support/scene_corpus.h), which
+[`test_repl_core_examples`](test_repl_core_examples.c) and
+[`test_export_trace_parity`](test_export_trace_parity.c) both iterate — plus a
+`parity_walk_dir_checked()` line in
+[`test_camera_header_parity`](test_camera_header_parity.c), which still names
+its dirs. A walk over a missing directory returns 0 and would otherwise pass
+silently.
+
+Both corpus-walking binaries also take a repeatable **`--scenes-dir D`** to
+walk an arbitrary `.glr` catalog directory, on the same precedence: an
+explicit flag replaces the `REPL_SCENE_CORPUS` set rather than adding to it.
 
 ## Lanes
 
@@ -153,8 +196,11 @@ directory returns 0 and would otherwise pass silently.
   `test_scene_underwater_fill_gl`, `test_attrib_bits_gl`,
   `test_tour_overlay_feedback`, `test_gl_state_inspector_gl`. Never built by
   `make test`.
-- **Scene corpora.** Only `test_repl_core_examples` and
-  `test_camera_header_parity` read `REPL_SCENE_CORPUS`.
+- **Scene corpora.** Only `test_repl_core_examples`,
+  `test_export_trace_parity` and `test_camera_header_parity` read
+  `REPL_SCENE_CORPUS` (all three via `support/scene_corpus.h`); the first two
+  also take `--scenes-dir`. `make test-scenes` builds and runs the first and
+  third.
 
 ## The catalog
 

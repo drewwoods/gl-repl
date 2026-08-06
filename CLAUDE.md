@@ -214,10 +214,13 @@ at the repo root (`./test_eval`, …).
 plus a `cc`, and those dirs exist to collect corner cases and grow freely.
 `make test-scenes` runs them (`test-full` includes it); the gate is
 `REPL_SCENE_CORPUS=1`, read only through
-[`tests/support/scene_corpus.h`](tests/support/scene_corpus.h). Adding a
-scene dir means a `parity_walk_dir_checked()` line **and** a
-`test_scene_dir_exports_compile()` line - a walk whose directory is missing
-returns 0 and would otherwise pass silently.
+[`tests/support/scene_corpus.h`](tests/support/scene_corpus.h), whose `dirs[]`
+list `test_repl_core_examples` and `test_export_trace_parity` iterate; adding a
+scene dir there also needs a `parity_walk_dir_checked()` line in
+`test_camera_header_parity`, which still names its own - a walk whose
+directory is missing returns 0 and would otherwise pass silently. Both
+iterating binaries take a repeatable `--scenes-dir D` for a one-off catalog,
+which **replaces** the gated set rather than adding to it.
 
 **Export parity** ([`tests/test_export_trace_parity.c`](tests/test_export_trace_parity.c))
 compiles and *runs* the exported C against the GL stubs and compares it to

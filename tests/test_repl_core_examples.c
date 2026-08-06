@@ -79,6 +79,17 @@ static void assert_true_impl(const char *label, int cond, int line) {
 
 #define ASSERT_TRUE(label, cond) assert_true_impl(label, (cond), __LINE__)
 
+/* Progress output. The legs below are long-running (a cc per program) and
+ * were previously visible only through the loader's own "Loaded N commands"
+ * chatter - which the corpus leg does not produce at all, so a corpus run
+ * looked identical to no run but for the final count. These print one line
+ * per program, unconditionally: `ok`/`FAIL` per stage, so a run is
+ * self-describing while it is still going. The FAIL details keep coming from
+ * ASSERT_TRUE; this is the map, not the diagnosis. */
+static const char *step_mark(int ok) {
+    return ok ? "ok" : "FAIL";
+}
+
 static void log_example_step(int idx, const char *name,
                              const char *step, const char *detail) {
     if (!g_verbose)
@@ -1805,6 +1816,26 @@ static void test_example_tag_default_dispatch(void) {
 
 static void print_usage(const char *prog) {
     printf("Usage: %s [OPTIONS]\n\n", prog);
+    printf("The catalog/export omnibus. It runs three legs, in this order, each\n");
+    printf("announced by a `--- ... ---` banner:\n");
+    printf("  1. catalog checks  - loader limits, catalog/tag/subheading metadata,\n");
+    printf("                       @cfg symbolic names, tag-default dispatch and\n");
+    printf("                       collisions, presentation reset, clear-color order\n");
+    printf("  2. built-in catalog- per example: golden code-panel text vs\n");
+    printf("                       testdata/repl_examples_ui/NN.golden.txt, export +\n");
+    printf("                       a real cc, import round-trip (the source of the\n");
+    printf("                       \"Loaded N commands from ...\" chatter), re-export\n");
+    printf("                       + cc. One `example NN/NN ... golden=/cc=/import=/\n");
+    printf("                       recc=` progress line each.\n");
+    printf("  3. scene corpora   - opt-in (see --scenes-dir / REPL_SCENE_CORPUS):\n");
+    printf("                       load, no-invalid-cmds, export, cc. No goldens and\n");
+    printf("                       no round-trip - those scenes are corner cases, not\n");
+    printf("                       pinned byte-for-byte, and a golden apiece would\n");
+    printf("                       turn every edit into a fixture regen. Runs last,\n");
+    printf("                       since a runtime catalog displaces the built-in one.\n\n");
+    printf("A corpus scene is walked only if that directory's catalog.ini lists it;\n");
+    printf("an unlisted .glr is silently ignored, so check the announced scene count\n");
+    printf("if a new corner case seems to have no effect.\n\n");
     printf("Options:\n");
     printf("  --help, -h             Show this help message\n");
     printf("  --dump-index N         Dump code-panel text for example N to stdout\n");
@@ -1814,7 +1845,16 @@ static void print_usage(const char *prog) {
     printf("                         (alias: --diff)\n\n");
     printf("  --keep-temp            Do not delete the temp dir / export files on exit\n");
     printf("                         (leaves artifacts under /tmp for inspection)\n\n");
+    printf("  --scenes-dir D         Also walk the .glr catalog in directory D (a runtime\n");
+    printf("                         catalog, as `--examples-dir` loads) through\n");
+    printf("                         load+export+compile. Repeatable. Runs after the\n");
+    printf("                         built-in catalog, which it displaces while loaded.\n");
+    printf("                         An explicit --scenes-dir overrides REPL_SCENE_CORPUS.\n\n");
     printf("Environment:\n");
+    printf("  REPL_SCENE_CORPUS=1    Walk the standard corpora under tests/scenes\n");
+    printf("                         (listed in tests/support/scene_corpus.h), equivalent\n");
+    printf("                         to passing --scenes-dir for each; `make test-scenes`\n");
+    printf("                         sets it\n");
     printf("  REPL_EXPORT_VERBOSE=1  Print per-example step details\n");
     printf("  REPL_EXPORT_KEEP_TEMP=1  Same as --keep-temp\n");
     printf("  REPL_EXPORT_CC         C compiler to use (default: cc)\n");
@@ -1898,6 +1938,11 @@ static void test_scene_dir_exports_compile(const char *dir, const char *tag,
 
     snprintf(label, sizeof(label), "%s scene catalog is non-empty", tag);
     ASSERT_TRUE(label, repl_example_count() > 0);
+    /* Scene count comes from the directory's catalog.ini, not from the .glr
+     * files on disk - an unlisted scene is silently not walked, so print what
+     * was actually found. */
+    printf("--- scene corpus '%s' (%s): %d scenes from catalog.ini "
+           "(load, export+cc) ---\n", tag, dir, repl_example_count());
     for (int idx = 0; idx < repl_example_count(); idx++) {
         const char *name = repl_example_name(idx);
         char export_path[512];
@@ -1928,6 +1973,11 @@ static void test_scene_dir_exports_compile(const char *dir, const char *tag,
         snprintf(label, sizeof(label), "%s scene %02d export compiles", tag, idx);
         ASSERT_TRUE(label, compiled);
 
+        printf("  %s %02d/%02d  %3d cmds  export=%s cc=%s  %s\n",
+               tag, idx + 1, repl_example_count(), repl_state_document_count(),
+               step_mark(exported), step_mark(compiled),
+               name ? name : "(unnamed)");
+
         if (!g_keep_temp)
             remove(export_path);
     }
@@ -1940,6 +1990,11 @@ int main(int argc, char **argv) {
     const char *verbose_env = getenv("REPL_EXPORT_VERBOSE");
     int dump_idx = -1;
     int update_golden = 0;
+    /* Explicit --scenes-dir wins; REPL_SCENE_CORPUS asks for the standard
+     * pair, which is what `make test-scenes` sets. Same precedence as
+     * test_export_trace_parity. */
+    const char *scene_dirs[16];
+    int scene_dir_count = 0;
 
     g_verbose = verbose_env && verbose_env[0] && strcmp(verbose_env, "0") != 0;
     g_keep_temp = env_truthy("REPL_EXPORT_KEEP_TEMP");
@@ -1965,6 +2020,19 @@ int main(int argc, char **argv) {
         }
         if (strcmp(argv[argi], "--update-golden") == 0) {
             update_golden = 1;
+            continue;
+        }
+        if (strcmp(argv[argi], "--scenes-dir") == 0) {
+            if (argi + 1 >= argc) {
+                fprintf(stderr, "--scenes-dir requires a directory\n");
+                return 2;
+            }
+            if (scene_dir_count >=
+                (int)(sizeof scene_dirs / sizeof scene_dirs[0])) {
+                fprintf(stderr, "too many --scenes-dir arguments\n");
+                return 2;
+            }
+            scene_dirs[scene_dir_count++] = argv[++argi];
             continue;
         }
         if (strcmp(argv[argi], "--dump-index") == 0) {
@@ -1993,6 +2061,7 @@ int main(int argc, char **argv) {
     }
 
     repl_eval_init_predef_vars();
+    printf("--- catalog + loader checks (metadata, tags, @cfg, presentation reset) ---\n");
     test_runtime_examples_dir_catalog(temp_dir);
     test_example_loader_body_import_limits();
     test_example_catalog_metadata();
@@ -2512,6 +2581,8 @@ int main(int argc, char **argv) {
         }
     }
 
+    printf("--- built-in catalog: %d examples (golden text, export+cc, import "
+           "round-trip, re-export+cc) ---\n", repl_example_count());
     for (int idx = 0; idx < repl_example_count(); idx++) {
         char fixture_path[256];
         char label[160];
@@ -2715,6 +2786,12 @@ int main(int argc, char **argv) {
         if (!g_keep_temp)
             remove(export_path);
 
+        printf("  example %02d/%02d  %3d cmds  golden=%s cc=%s import=%s recc=%s  %s\n",
+               idx + 1, repl_example_count(), original_cmd_count,
+               step_mark(exact), step_mark(compiled),
+               step_mark(roundtrip_exact), step_mark(roundtrip_compiled),
+               name ? name : "(unnamed)");
+
         free(expected_defs);
         free(expected);
         free(actual);
@@ -2753,10 +2830,22 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (repl_test_scene_corpus_enabled()) {
-        test_scene_dir_exports_compile("tests/scenes/stress",  "stress",  temp_dir);
-        test_scene_dir_exports_compile("tests/scenes/general", "general", temp_dir);
+    /* Scene corpora last: loading a runtime catalog displaces the built-in
+     * one, so everything above has to have finished with it first. */
+    if (scene_dir_count == 0 && repl_test_scene_corpus_enabled()) {
+        const char *const *dirs = repl_test_scene_corpus_dirs();
+        for (int i = 0; dirs[i]; i++)
+            test_scene_dir_exports_compile(dirs[i],
+                                           repl_test_scene_corpus_tag(dirs[i]),
+                                           temp_dir);
     }
+    for (int i = 0; i < scene_dir_count; i++)
+        test_scene_dir_exports_compile(scene_dirs[i],
+                                       repl_test_scene_corpus_tag(scene_dirs[i]),
+                                       temp_dir);
+    if (scene_dir_count == 0 && !repl_test_scene_corpus_enabled())
+        printf("--- scene corpora not walked (REPL_SCENE_CORPUS unset; see "
+               "--scenes-dir and `make test-scenes`) ---\n");
 
     if (g_keep_temp)
         fprintf(stderr, "repl_core_examples: keeping temp dir %s\n", temp_dir);
