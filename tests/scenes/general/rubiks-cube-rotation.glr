@@ -1,68 +1,157 @@
-// @cfg view_mode = RENDER3D_VIEW_3D
-// @cfg axes = AXES_THEME_OFF
-// @cfg grid = GRID_THEME_CLASSIC
+// @cfg grid = GRID_THEME_OFF
 // @cfg light_theme = LIGHT_THEME_NEON
+// @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
+// @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX
+// @cfg vertex_points = 0
+// A real 3x3x3 Rubik's cube: one face turns at a time, on the lattice.
+//
+// The move list is R U F L L' F' U' R' - four quarter turns wound up and
+// then unwound, so the cube is exactly solved again every cycle.
+//
+// Each move m is stored in two scratch arrays:
+//   A[m] = signed turn angle so far (0 -> +/-90, eased)
+//   B[m] = (axis + 1) * layer, i.e. +/-1 = X, +/-2 = Y, +/-3 = Z; the sign
+//          is which of the two outer layers on that axis turns
+// C[m] is per-cubie: 1 when this cubie sits in move m's layer, else 0.
+//
+// A cubie is drawn by replaying the move history: a forward pass walks its
+// lattice coordinate through every completed turn (so layer membership is
+// always tested against where the cubie *is*, not where it started), and a
+// reverse pass emits the matching glRotatef calls last-move-first, which is
+// the order GL needs to compose them. Position and orientation both fall out
+// of that transform, so nothing ever drifts off the lattice.
+static float cell, phase, dir, layer, sel;
+static float px, py, pz, qx, qy, qz;
+static float mi, ax;
 
-static float block_size = 0.55;
-static float gap = 0.65;
-static float angle_x, angle_y, angle_z;
-static float r, g, b_col;
+// One sticker: a quad on the cubie face whose outward normal is (nx, ny, nz),
+// drawn in the cubie's local frame so it rides along with every turn.
+sticker(nx, ny, nz, cr, cg, cb) {
+  float ux, uy, uz;
+  float vx, vy, vz;
+  // u is any in-plane axis; v = n x u completes a right-handed frame, so the
+  // corner order below winds counter-clockwise seen from outside.
+  ux = ny;
+  uy = nz;
+  uz = nx;
+  vx = ny * nx - nz * nz;
+  vy = nz * ny - nx * nx;
+  vz = nx * nz - ny * ny;
 
-glTranslatef(0.0000f, 0.0000f, -7.5000f);   // @camera dist
-glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(35.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){cr, cg, cb, 1});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.35, 0.35, 0.35, 1});
+  glNormal3f(nx, ny, nz);
+  glBegin(GL_QUADS);
+    glVertex3f(nx * 0.48 - ux * 0.36 - vx * 0.36, ny * 0.48 - uy * 0.36 - vy * 0.36, nz * 0.48 - uz * 0.36 - vz * 0.36);
+    glVertex3f(nx * 0.48 + ux * 0.36 - vx * 0.36, ny * 0.48 + uy * 0.36 - vy * 0.36, nz * 0.48 + uz * 0.36 - vz * 0.36);
+    glVertex3f(nx * 0.48 + ux * 0.36 + vx * 0.36, ny * 0.48 + uy * 0.36 + vy * 0.36, nz * 0.48 + uz * 0.36 + vz * 0.36);
+    glVertex3f(nx * 0.48 - ux * 0.36 + vx * 0.36, ny * 0.48 - uy * 0.36 + vy * 0.36, nz * 0.48 - uz * 0.36 + vz * 0.36);
+  glEnd();
+}
+glTranslatef(0.0000f, 0.0000f, -7.2222f);   // @camera dist
+glRotatef(24.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(-32.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glClearColor(0.04, 0.04, 0.06, 1.0);
+glClearColor(0.04, 0.04, 0.06, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
 
-// Global spin
-glPushMatrix();
-glRotatef(t * 12.0, 1, 1, 1);
+cell = 1.0;
+// 0.8 s per quarter turn, 8 moves per cycle.
+phase = fmod(t, 8 * 0.8) / 0.8;
 
-// We animate the layer rotations
-angle_x = 90.0 * sin(t * 1.2);
-angle_y = 90.0 * cos(t * 1.6);
-angle_z = 90.0 * sin(t * 0.8);
-
-for(x, -1, 2) {
-  for(y, -1, 2) {
-    for(z, -1, 2) {
-      glPushMatrix();
-
-      // If we are in the right layer (x == 1), rotate around X
-      if (x > 0) {
-        glRotatef(angle_x, 1, 0, 0);
-      }
-      // If we are in the top layer (y == 1), rotate around Y
-      if (y > 0) {
-        glRotatef(angle_y, 0, 1, 0);
-      }
-      // If we are in the front layer (z == 1), rotate around Z
-      if (z > 0) {
-        glRotatef(angle_z, 0, 0, 1);
-      }
-
-      glTranslatef(x * gap, y * gap, z * gap);
-
-      // Assign distinct colors based on block positions
-      r = 0.5 + 0.45 * x;
-      g = 0.5 + 0.45 * y;
-      b_col = 0.5 + 0.45 * z;
-
-      glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){r, g, b_col, 1.0});
-      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.8, 0.8, 0.8, 1.0});
-      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30.0);
-
-      // Render the sub-cube
-      glutSolidCube(block_size);
-
-      glPopMatrix();
-    }
+// Bake the move table for this frame.
+for(m, 0, 8) {
+  // Moves pair up as m <-> 7 - m: same face, opposite direction.
+  ax = min(m, 7 - m) + 1;
+  B[m] = ax;
+  if(ax > 3.5) {
+    B[m] = -1;
   }
+  A[m] = 90 * sign(3.5 - m) * smoothstep(0, 1, clamp(phase - m, 0, 1));
 }
 
+glPushMatrix();
+  glRotatef(t * 11.0, 0, 1, 0);
+  glRotatef(9.0 * sin(t * 0.5), 1, 0, 0);
+
+  for(hx, -1, 2) {
+    for(hy, -1, 2) {
+      for(hz, -1, 2) {
+        // Forward pass: walk this cubie's lattice coordinate through the
+        // move history, recording which moves picked it up.
+        px = hx;
+        py = hy;
+        pz = hz;
+        for(m, 0, 8) {
+          C[m] = 0;
+          if(abs(A[m]) > 0.0001) {
+            layer = sign(B[m]);
+            dir = sign(A[m]);
+            ax = abs(B[m]);
+            if(ax < 1.5) {
+              sel = max(0, 1 - abs(px - layer));
+              qy = lerp(py, -dir * pz, sel);
+              qz = lerp(pz, dir * py, sel);
+              py = qy;
+              pz = qz;
+              C[m] = sel;
+            }
+            if(ax > 1.5 && ax < 2.5) {
+              sel = max(0, 1 - abs(py - layer));
+              qx = lerp(px, dir * pz, sel);
+              qz = lerp(pz, -dir * px, sel);
+              px = qx;
+              pz = qz;
+              C[m] = sel;
+            }
+            if(ax > 2.5) {
+              sel = max(0, 1 - abs(pz - layer));
+              qx = lerp(px, -dir * py, sel);
+              qy = lerp(py, dir * px, sel);
+              px = qx;
+              py = qy;
+              C[m] = sel;
+            }
+          }
+        }
+
+        glPushMatrix();
+          // Reverse pass: newest turn first, so GL composes them in order.
+          for(k, 0, 8) {
+            mi = 7 - k;
+            glRotatef(C[mi] * A[mi], max(0, 1 - abs(abs(B[mi]) - 1)), max(0, 1 - abs(abs(B[mi]) - 2)), max(0, 1 - abs(abs(B[mi]) - 3)));
+          }
+          glTranslatef(hx * cell, hy * cell, hz * cell);
+
+          // Plastic body, then the stickers this cubie was born with.
+          glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.06, 0.06, 0.07, 1});
+          glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.15, 0.15, 0.15, 1});
+          glutSolidCube(0.94);
+
+          if(hx > 0.5) {
+            sticker(1, 0, 0, 0.85, 0.16, 0.13);
+          }
+          if(hx < -0.5) {
+            sticker(-1, 0, 0, 0.95, 0.45, 0.10);
+          }
+          if(hy > 0.5) {
+            sticker(0, 1, 0, 0.95, 0.95, 0.93);
+          }
+          if(hy < -0.5) {
+            sticker(0, -1, 0, 0.95, 0.83, 0.15);
+          }
+          if(hz > 0.5) {
+            sticker(0, 0, 1, 0.12, 0.68, 0.30);
+          }
+          if(hz < -0.5) {
+            sticker(0, 0, -1, 0.10, 0.36, 0.85);
+          }
+        glPopMatrix();
+      }
+    }
+  }
 glPopMatrix();
