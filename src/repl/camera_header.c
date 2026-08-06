@@ -116,6 +116,7 @@ static const struct {
     ReplCameraRole role;
     const char    *name;
 } k_role_names[] = {
+    /* role,                  name */
     { REPL_CAMERA_ROLE_DIST, "dist" },
     { REPL_CAMERA_ROLE_RX,   "rx"   },
     { REPL_CAMERA_ROLE_RY,   "ry"   },

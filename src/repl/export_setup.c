@@ -76,6 +76,7 @@ typedef struct {
 } MathCollisionWrapper;
 
 static const MathCollisionWrapper g_math_collision_wrappers[] = {
+    /* name,    define_line,              undef_line,      bit */
     { "j0",     "#define j0 _j0",         "#undef j0",     1u << 0 },
     { "j1",     "#define j1 _j1",         "#undef j1",     1u << 1 },
     { "jn",     "#define jn _jn",         "#undef jn",     1u << 2 },
@@ -250,8 +251,9 @@ static void emit_cfgs(int *n) {
 
 #define WS_DIR(name, emit_fn) { name, emit_fn }
 
+/* Emit order matches this array */
 static const WorkspaceDirective WORKSPACE_DIRECTIVES[] = {
-    /* Emit order matches this array. */
+    /* name,                                       emit */
     WS_DIR(REPL_WORKSPACE_DIRECTIVE_SCENE_NAME,    emit_scene_name),
     WS_DIR(REPL_WORKSPACE_DIRECTIVE_WORKSPACE_DIR, emit_workspace_dir),
     WS_DIR(REPL_WORKSPACE_DIRECTIVE_FUNC,          emit_func_aliases),

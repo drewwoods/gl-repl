@@ -408,21 +408,22 @@ static void emit_export_display_section(FILE *f,
  * The tune helpers must precede the display section so display()/keyboard()/
  * reshape() can reference tune_compute_step/draw_tunable_overlay/the globals. */
 static const ExportScaffoldSectionSpec EXPORT_SCAFFOLD_SECTIONS[] = {
-    { emit_export_banner_section },
+    /* emit */
+    { emit_export_banner_section             },
     { emit_export_workspace_metadata_section },
-    { emit_export_header_section },
-    { emit_export_glfloat_helpers_section },
-    { emit_export_predef_globals_section },
-    { emit_export_scratch_globals_section },
-    { emit_export_rand_helper_section },
-    { emit_export_shape_helper_section },
-    { emit_export_label_helper_section },
-    { emit_export_tess_preamble_section },
-    { emit_export_save_restore_section },
-    { emit_export_functions_section },
-    { emit_export_render_helper_section },
-    { emit_export_tune_section },
-    { emit_export_display_section },
+    { emit_export_header_section             },
+    { emit_export_glfloat_helpers_section    },
+    { emit_export_predef_globals_section     },
+    { emit_export_scratch_globals_section    },
+    { emit_export_rand_helper_section        },
+    { emit_export_shape_helper_section       },
+    { emit_export_label_helper_section       },
+    { emit_export_tess_preamble_section      },
+    { emit_export_save_restore_section       },
+    { emit_export_functions_section          },
+    { emit_export_render_helper_section      },
+    { emit_export_tune_section               },
+    { emit_export_display_section            },
 };
 
 static void emit_export_scaffold(FILE *f, const ExportScaffoldContext *ctx) {

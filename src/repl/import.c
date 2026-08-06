@@ -444,6 +444,7 @@ static int parse_cfg(ImportWorkspaceAccum *accum, const char *args) {
 #define WS_DIR(name, parse_fn) { name, sizeof(name) - 1, parse_fn }
 
 static const WorkspaceDirective WORKSPACE_DIRECTIVES[] = {
+    /* name,                                       parse */
     WS_DIR(REPL_WORKSPACE_DIRECTIVE_SCENE_NAME,    parse_scene_name),
     WS_DIR(REPL_WORKSPACE_DIRECTIVE_WORKSPACE_DIR, parse_workspace_dir),
     WS_DIR(REPL_WORKSPACE_DIRECTIVE_VAR,           parse_var),
@@ -871,7 +872,8 @@ static int parse_snippet_func_body(const char *args, ImportState *s) {
 }
 
 static const SnippetDirective SNIPPET_DIRECTIVES[] = {
-    SNIPPET_DIR(REPL_SNIPPET_DIRECTIVE_DECLARE, parse_snippet_declare),
+    /* name,                                    parse */
+    SNIPPET_DIR(REPL_SNIPPET_DIRECTIVE_DECLARE,   parse_snippet_declare),
     SNIPPET_DIR(REPL_SNIPPET_DIRECTIVE_FUNC_BODY, parse_snippet_func_body),
 };
 
@@ -2257,19 +2259,21 @@ static int import_run_handlers(const ImportLineHandlerSpec *handlers,
 #define IMPORT_HANDLER_COUNT(table) ((int)(sizeof(table) / sizeof((table)[0])))
 
 static const ImportLineHandlerSpec IMPORT_PRE_SNIPPET_HANDLERS[] = {
-    { IMPORT_LINE_WORKSPACE_HEADER, import_handle_workspace_header },
-    { IMPORT_LINE_FUNCTION_BODY,    import_handle_function_body },
-    { IMPORT_LINE_FUNCTION_HEADER,  import_handle_function_header },
-    { IMPORT_LINE_PRE_SNIPPET_STASH_DECL, import_handle_stash_predef_decl },
-    { IMPORT_LINE_SNIPPET_START,    import_handle_snippet_start },
-    { IMPORT_LINE_RAW_SCENE_BODY,   import_handle_raw_scene_body },
-    { IMPORT_LINE_PENDING_COMMENT,  import_handle_pending_comment },
+    /* kind,                               handle */
+    { IMPORT_LINE_WORKSPACE_HEADER,        import_handle_workspace_header },
+    { IMPORT_LINE_FUNCTION_BODY,           import_handle_function_body    },
+    { IMPORT_LINE_FUNCTION_HEADER,         import_handle_function_header  },
+    { IMPORT_LINE_PRE_SNIPPET_STASH_DECL,  import_handle_stash_predef_decl },
+    { IMPORT_LINE_SNIPPET_START,           import_handle_snippet_start    },
+    { IMPORT_LINE_RAW_SCENE_BODY,          import_handle_raw_scene_body   },
+    { IMPORT_LINE_PENDING_COMMENT,         import_handle_pending_comment  },
 };
 
 static const ImportLineHandlerSpec IMPORT_SNIPPET_HANDLERS[] = {
-    { IMPORT_LINE_SNIPPET_END,  import_handle_snippet_end },
-    { IMPORT_LINE_BLANK,        import_handle_blank },
-    { IMPORT_LINE_PREDEF_DECL,  import_handle_predef_decl },
+    /* kind,                    handle */
+    { IMPORT_LINE_SNIPPET_END,  import_handle_snippet_end  },
+    { IMPORT_LINE_BLANK,        import_handle_blank        },
+    { IMPORT_LINE_PREDEF_DECL,  import_handle_predef_decl  },
     { IMPORT_LINE_SNIPPET_BODY, import_handle_snippet_body },
 };
 

@@ -414,33 +414,34 @@ static float builtin_rand(const float *args)  { return expr_rand01(args[0], args
 static float builtin_rand2(const float *args) { return expr_rand_signed(args[0], args[1]); }
 
 static const ExprBuiltin k_expr_builtins[] = {
-    { "sin",   "sinf",       1, 1, builtin_sin   },
-    { "cos",   "cosf",       1, 1, builtin_cos   },
-    { "tan",   "tanf",       1, 1, builtin_tan   },
-    { "asin",  "asinf",      1, 1, builtin_asin  },
-    { "acos",  "acosf",      1, 1, builtin_acos  },
-    { "atan",  "atanf",      1, 1, builtin_atan  },
-    { "atan2", "atan2f",     2, 2, builtin_atan2 },
-    { "sqrt",  "sqrtf",      1, 1, builtin_sqrt  },
-    { "abs",   "fabsf",      1, 1, builtin_abs   },
-    { "pow",   "powf",       2, 2, builtin_pow   },
-    { "log",   "log10f",     1, 1, builtin_log   },
-    { "ln",    "logf",       1, 1, builtin_ln    },
-    { "min",   "fminf",      2, 2, builtin_min   },
-    { "max",   "fmaxf",      2, 2, builtin_max   },
-    { "clamp", "repl_clampf", 3, 3, builtin_clamp },
-    { "lerp",  "repl_lerpf", 3, 3, builtin_lerp  },
-    { "smoothstep", "repl_smoothstepf", 3, 3, builtin_smoothstep },
-    { "sign",  "repl_signf", 1, 1, builtin_sign  },
-    { "floor", "floorf",     1, 1, builtin_floor },
-    { "ceil",  "ceilf",      1, 1, builtin_ceil  },
-    { "round", "roundf",     1, 1, builtin_round },
-    { "fmod",  "fmodf",      2, 2, builtin_fmod  },
-    { "rem",   "remainderf", 2, 2, builtin_rem   },
+    /* name,          c_name,              arity_min, arity_max, eval,               arg_defaults */
+    { "sin",          "sinf",                      1,         1, builtin_sin                        },
+    { "cos",          "cosf",                      1,         1, builtin_cos                        },
+    { "tan",          "tanf",                      1,         1, builtin_tan                        },
+    { "asin",         "asinf",                     1,         1, builtin_asin                       },
+    { "acos",         "acosf",                     1,         1, builtin_acos                       },
+    { "atan",         "atanf",                     1,         1, builtin_atan                       },
+    { "atan2",        "atan2f",                    2,         2, builtin_atan2                      },
+    { "sqrt",         "sqrtf",                     1,         1, builtin_sqrt                       },
+    { "abs",          "fabsf",                     1,         1, builtin_abs                        },
+    { "pow",          "powf",                      2,         2, builtin_pow                        },
+    { "log",          "log10f",                    1,         1, builtin_log                        },
+    { "ln",           "logf",                      1,         1, builtin_ln                         },
+    { "min",          "fminf",                     2,         2, builtin_min                        },
+    { "max",          "fmaxf",                     2,         2, builtin_max                        },
+    { "clamp",        "repl_clampf",               3,         3, builtin_clamp                      },
+    { "lerp",         "repl_lerpf",                3,         3, builtin_lerp                       },
+    { "smoothstep",   "repl_smoothstepf",          3,         3, builtin_smoothstep                 },
+    { "sign",         "repl_signf",                1,         1, builtin_sign                       },
+    { "floor",        "floorf",                    1,         1, builtin_floor                      },
+    { "ceil",         "ceilf",                     1,         1, builtin_ceil                       },
+    { "round",        "roundf",                    1,         1, builtin_round                      },
+    { "fmod",         "fmodf",                     2,         2, builtin_fmod                       },
+    { "rem",          "remainderf",                2,         2, builtin_rem                        },
     /* The only two builtins with arity_min < arity_max: `iter` defaults to
      * the 0 that expr_call's zero-initialized args[] hands builtin_rand. */
-    { "rand",  "repl_randf", 1, 2, builtin_rand,  { NULL, "0" } },
-    { "rand2", "repl_rand2f", 1, 2, builtin_rand2, { NULL, "0" } },
+    { "rand",         "repl_randf",                1,         2, builtin_rand,       { NULL, "0" }  },
+    { "rand2",        "repl_rand2f",               1,         2, builtin_rand2,      { NULL, "0" }  },
 };
 
 static const char *const k_reserved_identifiers[] = {
@@ -1946,14 +1947,15 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
     int paren_depth = 0;
 
     static const struct { const char *from; const char *to; } k_const_expr_to_c[] = {
-        { "TAU", "(2.0f*(float)M_PI)" },
-        { "PI",  "((float)M_PI)" },
-        { "e",   "((float)M_E)" },
-        { "NAN", "NAN" },
-        { "nan", "NAN" },
-        { "INFINITY", "INFINITY" },
-        { "inf", "INFINITY" },
-        { "infinity", "INFINITY" }
+        /* from,       to */
+        { "TAU",       "(2.0f*(float)M_PI)" },
+        { "PI",        "((float)M_PI)"      },
+        { "e",         "((float)M_E)"       },
+        { "NAN",       "NAN"                },
+        { "nan",       "NAN"                },
+        { "INFINITY",  "INFINITY"           },
+        { "inf",       "INFINITY"           },
+        { "infinity",  "INFINITY"           },
     };
     const char *p = in;
     char *dst = out;
@@ -2185,10 +2187,11 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
     /* Longest-first: `(2.0f*(float)M_PI)` contains `((float)M_PI)`'s
      * tail, so a shorter entry matching first would strand `2.0f*`. */
     static const struct { const char *from; const char *to; } k_const_c_substr[] = {
+        /* from,                to */
         { "(2.0f*(float)M_PI)", "TAU" },
         { "((float)M_PI)",      "PI"  },
         { "((float)M_E)",       "e"   },
-        { "(2*M_PI)",           "TAU" }   /* pre-float-cast exports */
+        { "(2*M_PI)",           "TAU" },  /* pre-float-cast exports */
     };
 
     if (!in || !out || out_sz <= 0)
@@ -2227,13 +2230,14 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
 
     /* Identifier-aware replacement: sinf->sin, M_PI->PI, M_E->e, etc. */
     static const struct { const char *from; const char *to; } k_const_c_to_expr[] = {
-        { "M_PI", "PI" },
-        { "M_E",  "e"  },
-        { "NAN", "NAN" },
-        { "nan", "NAN" },
-        { "INFINITY", "INFINITY" },
-        { "inf", "INFINITY" },
-        { "infinity", "INFINITY" }
+        /* from,       to */
+        { "M_PI",      "PI"       },
+        { "M_E",       "e"        },
+        { "NAN",       "NAN"      },
+        { "nan",       "NAN"      },
+        { "INFINITY",  "INFINITY" },
+        { "inf",       "INFINITY" },
+        { "infinity",  "INFINITY" },
     };
     const char *p = tmp;
     char *dst = out;

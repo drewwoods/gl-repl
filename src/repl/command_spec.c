@@ -5,146 +5,159 @@
 #include "c_compat.h"  /* STATIC_ASSERT */
 
 static const ReplEnumEntry k_begin_modes[] = {
-    { "GL_POINTS",         GL_POINTS },
-    { "GL_LINES",          GL_LINES },
-    { "GL_LINE_STRIP",     GL_LINE_STRIP },
-    { "GL_LINE_LOOP",      GL_LINE_LOOP },
-    { "GL_TRIANGLES",      GL_TRIANGLES },
-    { "GL_TRIANGLE_STRIP", GL_TRIANGLE_STRIP },
-    { "GL_TRIANGLE_FAN",   GL_TRIANGLE_FAN },
-    { "GL_QUADS",          GL_QUADS },
-    { "GL_QUAD_STRIP",     GL_QUAD_STRIP },
-    { "GL_POLYGON",        GL_POLYGON },
-    { NULL, 0 }
+    /* name,                value */
+    { "GL_POINTS",          GL_POINTS         },
+    { "GL_LINES",           GL_LINES          },
+    { "GL_LINE_STRIP",      GL_LINE_STRIP     },
+    { "GL_LINE_LOOP",       GL_LINE_LOOP      },
+    { "GL_TRIANGLES",       GL_TRIANGLES      },
+    { "GL_TRIANGLE_STRIP",  GL_TRIANGLE_STRIP },
+    { "GL_TRIANGLE_FAN",    GL_TRIANGLE_FAN   },
+    { "GL_QUADS",           GL_QUADS          },
+    { "GL_QUAD_STRIP",      GL_QUAD_STRIP     },
+    { "GL_POLYGON",         GL_POLYGON        },
+    { NULL,                 0                 }
 };
 
 static const ReplEnumEntry k_enable_caps[] = {
-    { "GL_BLEND",           GL_BLEND },
-    { "GL_CLIP_PLANE0",     GL_CLIP_PLANE0 },
-    { "GL_CLIP_PLANE1",     GL_CLIP_PLANE1 },
-    { "GL_CLIP_PLANE2",     GL_CLIP_PLANE2 },
-    { "GL_CLIP_PLANE3",     GL_CLIP_PLANE3 },
-    { "GL_CLIP_PLANE4",     GL_CLIP_PLANE4 },
-    { "GL_CLIP_PLANE5",     GL_CLIP_PLANE5 },
-    { "GL_COLOR_MATERIAL",  GL_COLOR_MATERIAL },
-    { "GL_CULL_FACE",       GL_CULL_FACE },
-    { "GL_DEPTH_TEST",      GL_DEPTH_TEST },
-    { "GL_FOG",             GL_FOG },
-    { "GL_LIGHT0",          GL_LIGHT0 },
-    { "GL_LIGHT1",          GL_LIGHT1 },
-    { "GL_LIGHT2",          GL_LIGHT2 },
-    { "GL_LIGHT3",          GL_LIGHT3 },
-    { "GL_LIGHTING",        GL_LIGHTING },
-    { "GL_LINE_SMOOTH",     GL_LINE_SMOOTH },
-    { "GL_LINE_STIPPLE",    GL_LINE_STIPPLE },
-    { "GL_MULTISAMPLE",     GL_MULTISAMPLE },
-    { "GL_NORMALIZE",       GL_NORMALIZE },
-    { "GL_POINT_SMOOTH",    GL_POINT_SMOOTH },
+    /* name,                     value */
+    { "GL_BLEND",                GL_BLEND                },
+    { "GL_CLIP_PLANE0",          GL_CLIP_PLANE0          },
+    { "GL_CLIP_PLANE1",          GL_CLIP_PLANE1          },
+    { "GL_CLIP_PLANE2",          GL_CLIP_PLANE2          },
+    { "GL_CLIP_PLANE3",          GL_CLIP_PLANE3          },
+    { "GL_CLIP_PLANE4",          GL_CLIP_PLANE4          },
+    { "GL_CLIP_PLANE5",          GL_CLIP_PLANE5          },
+    { "GL_COLOR_MATERIAL",       GL_COLOR_MATERIAL       },
+    { "GL_CULL_FACE",            GL_CULL_FACE            },
+    { "GL_DEPTH_TEST",           GL_DEPTH_TEST           },
+    { "GL_FOG",                  GL_FOG                  },
+    { "GL_LIGHT0",               GL_LIGHT0               },
+    { "GL_LIGHT1",               GL_LIGHT1               },
+    { "GL_LIGHT2",               GL_LIGHT2               },
+    { "GL_LIGHT3",               GL_LIGHT3               },
+    { "GL_LIGHTING",             GL_LIGHTING             },
+    { "GL_LINE_SMOOTH",          GL_LINE_SMOOTH          },
+    { "GL_LINE_STIPPLE",         GL_LINE_STIPPLE         },
+    { "GL_MULTISAMPLE",          GL_MULTISAMPLE          },
+    { "GL_NORMALIZE",            GL_NORMALIZE            },
+    { "GL_POINT_SMOOTH",         GL_POINT_SMOOTH         },
     /* The three glPolygonOffset switches - one per glPolygonMode fill mode.
      * GL_POLYGON_OFFSET_FILL is the one decal passes want; the LINE and
      * POINT variants offset wireframe and point rasterization of polygons. */
-    { "GL_POLYGON_OFFSET_FILL",  GL_POLYGON_OFFSET_FILL },
-    { "GL_POLYGON_OFFSET_LINE",  GL_POLYGON_OFFSET_LINE },
+    { "GL_POLYGON_OFFSET_FILL",  GL_POLYGON_OFFSET_FILL  },
+    { "GL_POLYGON_OFFSET_LINE",  GL_POLYGON_OFFSET_LINE  },
     { "GL_POLYGON_OFFSET_POINT", GL_POLYGON_OFFSET_POINT },
-    { "GL_STENCIL_TEST",         GL_STENCIL_TEST },
-    { NULL, 0 }
+    { "GL_STENCIL_TEST",         GL_STENCIL_TEST         },
+    { NULL,                      0                       }
 };
 
 /* glPolygonMode's mode slot. GL also accepts these on glPolygonMode's face
  * slot only as GL_FRONT / GL_BACK / GL_FRONT_AND_BACK, which is k_face_types
  * (shared with glCullFace and the material commands). */
 static const ReplEnumEntry k_polygon_modes[] = {
-    { "GL_FILL",  GL_FILL },
-    { "GL_LINE",  GL_LINE },
+    /* name,     value */
+    { "GL_FILL",  GL_FILL  },
+    { "GL_LINE",  GL_LINE  },
     { "GL_POINT", GL_POINT },
-    { NULL, 0 }
+    { NULL,       0        }
 };
 
 static const ReplEnumEntry k_shade_models[] = {
+    /* name,       value */
     { "GL_SMOOTH", GL_SMOOTH },
-    { "GL_FLAT",   GL_FLAT },
-    { NULL, 0 }
+    { "GL_FLAT",   GL_FLAT   },
+    { NULL,        0         }
 };
 
 static const ReplEnumEntry k_face_types[] = {
-    { "GL_FRONT",            GL_FRONT },
-    { "GL_BACK",             GL_BACK },
+    /* name,                 value */
+    { "GL_FRONT",            GL_FRONT          },
+    { "GL_BACK",             GL_BACK           },
     { "GL_FRONT_AND_BACK",   GL_FRONT_AND_BACK },
-    { NULL, 0 }
+    { NULL,                  0                 }
 };
 
 static const ReplEnumEntry k_front_face[] = {
-    { "GL_CW",              GL_CW },
-    { "GL_CCW",             GL_CCW },
-    { NULL, 0 }
+    /* name,      value */
+    { "GL_CW",   GL_CW  },
+    { "GL_CCW",  GL_CCW },
+    { NULL,      0      }
 };
 
 static const ReplEnumEntry k_depth_funcs[] = {
-    { "GL_NEVER",           GL_NEVER },
-    { "GL_LESS",            GL_LESS },
-    { "GL_EQUAL",           GL_EQUAL },
-    { "GL_LEQUAL",          GL_LEQUAL },
-    { "GL_GREATER",         GL_GREATER },
-    { "GL_NOTEQUAL",        GL_NOTEQUAL },
-    { "GL_GEQUAL",          GL_GEQUAL },
-    { "GL_ALWAYS",          GL_ALWAYS },
-    { NULL, 0 }
+    /* name,         value */
+    { "GL_NEVER",    GL_NEVER    },
+    { "GL_LESS",     GL_LESS     },
+    { "GL_EQUAL",    GL_EQUAL    },
+    { "GL_LEQUAL",   GL_LEQUAL   },
+    { "GL_GREATER",  GL_GREATER  },
+    { "GL_NOTEQUAL", GL_NOTEQUAL },
+    { "GL_GEQUAL",   GL_GEQUAL   },
+    { "GL_ALWAYS",   GL_ALWAYS   },
+    { NULL,          0           }
 };
 
 static const ReplEnumEntry k_stencil_ops[] = {
-    { "GL_KEEP",    GL_KEEP },
-    { "GL_ZERO",    GL_ZERO },
+    /* name,        value */
+    { "GL_KEEP",    GL_KEEP    },
+    { "GL_ZERO",    GL_ZERO    },
     { "GL_REPLACE", GL_REPLACE },
-    { "GL_INCR",    GL_INCR },
-    { "GL_DECR",    GL_DECR },
-    { "GL_INVERT",  GL_INVERT },
-    { NULL, 0 }
+    { "GL_INCR",    GL_INCR    },
+    { "GL_DECR",    GL_DECR    },
+    { "GL_INVERT",  GL_INVERT  },
+    { NULL,         0          }
 };
 
 static const ReplEnumEntry k_material_params[] = {
-    { "GL_AMBIENT",             GL_AMBIENT },
-    { "GL_DIFFUSE",             GL_DIFFUSE },
-    { "GL_SPECULAR",            GL_SPECULAR },
-    { "GL_EMISSION",            GL_EMISSION },
-    { "GL_SHININESS",           GL_SHININESS },
+    /* name,                     value */
+    { "GL_AMBIENT",             GL_AMBIENT             },
+    { "GL_DIFFUSE",             GL_DIFFUSE             },
+    { "GL_SPECULAR",            GL_SPECULAR            },
+    { "GL_EMISSION",            GL_EMISSION            },
+    { "GL_SHININESS",           GL_SHININESS           },
     { "GL_AMBIENT_AND_DIFFUSE", GL_AMBIENT_AND_DIFFUSE },
-    { NULL, 0 }
+    { NULL,                     0                      }
 };
 
 /* Single-pname pool for glMaterialf's pname slot. The RGBA pnames need
  * 4 floats and live on glMaterialfv; restricting autocomplete here keeps
  * the only-GL_SHININESS rule visible at the spec layer. */
 static const ReplEnumEntry k_material_shininess_only[] = {
-    { "GL_SHININESS",           GL_SHININESS },
-    { NULL, 0 }
+    /* name,           value */
+    { "GL_SHININESS", GL_SHININESS },
+    { NULL,           0            }
 };
 
 static const ReplEnumEntry k_color_material_modes[] = {
-    { "GL_AMBIENT",             GL_AMBIENT },
-    { "GL_DIFFUSE",             GL_DIFFUSE },
-    { "GL_SPECULAR",            GL_SPECULAR },
-    { "GL_EMISSION",            GL_EMISSION },
+    /* name,                     value */
+    { "GL_AMBIENT",             GL_AMBIENT             },
+    { "GL_DIFFUSE",             GL_DIFFUSE             },
+    { "GL_SPECULAR",            GL_SPECULAR            },
+    { "GL_EMISSION",            GL_EMISSION            },
     { "GL_AMBIENT_AND_DIFFUSE", GL_AMBIENT_AND_DIFFUSE },
-    { NULL, 0 }
+    { NULL,                     0                      }
 };
 
 static const ReplEnumEntry k_light_model_params[] = {
+    /* name,                         value */
     { "GL_LIGHT_MODEL_LOCAL_VIEWER", GL_LIGHT_MODEL_LOCAL_VIEWER },
-    { "GL_LIGHT_MODEL_TWO_SIDE",     GL_LIGHT_MODEL_TWO_SIDE },
-    { NULL, 0 }
+    { "GL_LIGHT_MODEL_TWO_SIDE",     GL_LIGHT_MODEL_TWO_SIDE     },
+    { NULL,                          0                           }
 };
 
 /* The six planes GL guarantees (GL_MAX_CLIP_PLANES >= 6). Slot 0 of the
  * custom-parsed glClipPlane command; also merged into k_enable_caps
  * above so glEnable/glDisable can toggle them. */
 static const ReplEnumEntry k_clip_planes[] = {
-    { "GL_CLIP_PLANE0", GL_CLIP_PLANE0 },
-    { "GL_CLIP_PLANE1", GL_CLIP_PLANE1 },
-    { "GL_CLIP_PLANE2", GL_CLIP_PLANE2 },
-    { "GL_CLIP_PLANE3", GL_CLIP_PLANE3 },
-    { "GL_CLIP_PLANE4", GL_CLIP_PLANE4 },
-    { "GL_CLIP_PLANE5", GL_CLIP_PLANE5 },
-    { NULL, 0 }
+    /* name,              value */
+    { "GL_CLIP_PLANE0",  GL_CLIP_PLANE0 },
+    { "GL_CLIP_PLANE1",  GL_CLIP_PLANE1 },
+    { "GL_CLIP_PLANE2",  GL_CLIP_PLANE2 },
+    { "GL_CLIP_PLANE3",  GL_CLIP_PLANE3 },
+    { "GL_CLIP_PLANE4",  GL_CLIP_PLANE4 },
+    { "GL_CLIP_PLANE5",  GL_CLIP_PLANE5 },
+    { NULL,              0              }
 };
 
 /* The buffers glClear() can clear. The REPL owns the frame's own scene
@@ -153,10 +166,11 @@ static const ReplEnumEntry k_clip_planes[] = {
  * bit is intentionally available alongside color and depth. Table order is
  * the canonical emission order for the ENUM_BITFIELD slot. */
 static const ReplEnumEntry k_clear_bits[] = {
-    { "GL_COLOR_BUFFER_BIT", GL_COLOR_BUFFER_BIT },
-    { "GL_DEPTH_BUFFER_BIT", GL_DEPTH_BUFFER_BIT },
+    /* name,                   value */
+    { "GL_COLOR_BUFFER_BIT",   GL_COLOR_BUFFER_BIT   },
+    { "GL_DEPTH_BUFFER_BIT",   GL_DEPTH_BUFFER_BIT   },
     { "GL_STENCIL_BUFFER_BIT", GL_STENCIL_BUFFER_BIT },
-    { NULL, 0 }
+    { NULL,                    0                     }
 };
 
 /* The attribute-group bits glPushAttrib()/glPopAttrib() can save/restore,
@@ -168,56 +182,63 @@ static const ReplEnumEntry k_clear_bits[] = {
  * of this atomic table: the glPushAttrib slot exposes it as an alias for the
  * union of these entries, whose value also round-trips exactly. */
 static const ReplEnumEntry k_attrib_bits[] = {
-    { "GL_CURRENT_BIT",      GL_CURRENT_BIT },
-    { "GL_POINT_BIT",        GL_POINT_BIT },
-    { "GL_LINE_BIT",         GL_LINE_BIT },
-    { "GL_POLYGON_BIT",      GL_POLYGON_BIT },
-    { "GL_LIGHTING_BIT",     GL_LIGHTING_BIT },
-    { "GL_FOG_BIT",          GL_FOG_BIT },
-    { "GL_DEPTH_BUFFER_BIT", GL_DEPTH_BUFFER_BIT },
+    /* name,                   value */
+    { "GL_CURRENT_BIT",        GL_CURRENT_BIT        },
+    { "GL_POINT_BIT",          GL_POINT_BIT          },
+    { "GL_LINE_BIT",           GL_LINE_BIT           },
+    { "GL_POLYGON_BIT",        GL_POLYGON_BIT        },
+    { "GL_LIGHTING_BIT",       GL_LIGHTING_BIT       },
+    { "GL_FOG_BIT",            GL_FOG_BIT            },
+    { "GL_DEPTH_BUFFER_BIT",   GL_DEPTH_BUFFER_BIT   },
     { "GL_STENCIL_BUFFER_BIT", GL_STENCIL_BUFFER_BIT },
-    { "GL_TRANSFORM_BIT",    GL_TRANSFORM_BIT },
-    { "GL_ENABLE_BIT",       GL_ENABLE_BIT },
-    { "GL_COLOR_BUFFER_BIT", GL_COLOR_BUFFER_BIT },
-    { NULL, 0 }
+    { "GL_TRANSFORM_BIT",      GL_TRANSFORM_BIT      },
+    { "GL_ENABLE_BIT",         GL_ENABLE_BIT         },
+    { "GL_COLOR_BUFFER_BIT",   GL_COLOR_BUFFER_BIT   },
+    { NULL,                    0                     }
 };
 
 static const ReplEnumEntry k_bool_vals[] = {
+    /* name,       value */
     { "GL_TRUE",  GL_TRUE  },
     { "GL_FALSE", GL_FALSE },
-    { NULL, 0 }
+    { NULL,       0        }
 };
 
 static const ReplEnumEntry k_point_param_pnames[] = {
+    /* name,                           value */
     { "GL_POINT_DISTANCE_ATTENUATION", GL_POINT_DISTANCE_ATTENUATION },
-    { NULL, 0 }
+    { NULL,                            0                             }
 };
 
 /* Fog pnames split by call shape, mirroring the glMaterialf /
  * glMaterialfv precedent: the mode enum lives on glFogi, the scalar
  * pnames on glFogf, and the RGBA color on glFogfv. */
 static const ReplEnumEntry k_fog_i_pnames[] = {
+    /* name,          value */
     { "GL_FOG_MODE", GL_FOG_MODE },
-    { NULL, 0 }
+    { NULL,          0           }
 };
 
 static const ReplEnumEntry k_fog_modes[] = {
+    /* name,        value */
     { "GL_LINEAR", GL_LINEAR },
-    { "GL_EXP",    GL_EXP },
-    { "GL_EXP2",   GL_EXP2 },
-    { NULL, 0 }
+    { "GL_EXP",    GL_EXP    },
+    { "GL_EXP2",   GL_EXP2   },
+    { NULL,        0         }
 };
 
 static const ReplEnumEntry k_fog_f_pnames[] = {
+    /* name,             value */
     { "GL_FOG_DENSITY", GL_FOG_DENSITY },
-    { "GL_FOG_START",   GL_FOG_START },
-    { "GL_FOG_END",     GL_FOG_END },
-    { NULL, 0 }
+    { "GL_FOG_START",   GL_FOG_START   },
+    { "GL_FOG_END",     GL_FOG_END     },
+    { NULL,             0              }
 };
 
 static const ReplEnumEntry k_fog_color_pnames[] = {
+    /* name,          value */
     { "GL_FOG_COLOR", GL_FOG_COLOR },
-    { NULL, 0 }
+    { NULL,          0             }
 };
 
 /* Blend factors are split into the source (sfactor) and destination
@@ -227,28 +248,30 @@ static const ReplEnumEntry k_fog_color_pnames[] = {
  * the rest are shared. Slots are strict token-only, so the asymmetry
  * teaches the GL 1.1 rule at autocomplete time. */
 static const ReplEnumEntry k_blend_src_factors[] = {
-    { "GL_ZERO",                GL_ZERO },
-    { "GL_ONE",                 GL_ONE },
-    { "GL_DST_COLOR",           GL_DST_COLOR },
+    /* name,                    value */
+    { "GL_ZERO",                GL_ZERO                },
+    { "GL_ONE",                 GL_ONE                 },
+    { "GL_DST_COLOR",           GL_DST_COLOR           },
     { "GL_ONE_MINUS_DST_COLOR", GL_ONE_MINUS_DST_COLOR },
-    { "GL_SRC_ALPHA",           GL_SRC_ALPHA },
+    { "GL_SRC_ALPHA",           GL_SRC_ALPHA           },
     { "GL_ONE_MINUS_SRC_ALPHA", GL_ONE_MINUS_SRC_ALPHA },
-    { "GL_DST_ALPHA",           GL_DST_ALPHA },
+    { "GL_DST_ALPHA",           GL_DST_ALPHA           },
     { "GL_ONE_MINUS_DST_ALPHA", GL_ONE_MINUS_DST_ALPHA },
-    { "GL_SRC_ALPHA_SATURATE",  GL_SRC_ALPHA_SATURATE },
-    { NULL, 0 }
+    { "GL_SRC_ALPHA_SATURATE",  GL_SRC_ALPHA_SATURATE  },
+    { NULL,                     0                      }
 };
 
 static const ReplEnumEntry k_blend_dst_factors[] = {
-    { "GL_ZERO",                GL_ZERO },
-    { "GL_ONE",                 GL_ONE },
-    { "GL_SRC_COLOR",           GL_SRC_COLOR },
+    /* name,                    value */
+    { "GL_ZERO",                GL_ZERO                },
+    { "GL_ONE",                 GL_ONE                 },
+    { "GL_SRC_COLOR",           GL_SRC_COLOR           },
     { "GL_ONE_MINUS_SRC_COLOR", GL_ONE_MINUS_SRC_COLOR },
-    { "GL_SRC_ALPHA",           GL_SRC_ALPHA },
+    { "GL_SRC_ALPHA",           GL_SRC_ALPHA           },
     { "GL_ONE_MINUS_SRC_ALPHA", GL_ONE_MINUS_SRC_ALPHA },
-    { "GL_DST_ALPHA",           GL_DST_ALPHA },
+    { "GL_DST_ALPHA",           GL_DST_ALPHA           },
     { "GL_ONE_MINUS_DST_ALPHA", GL_ONE_MINUS_DST_ALPHA },
-    { NULL, 0 }
+    { NULL,                     0                      }
 };
 
 /* The list below hand-enumerates the 10 funcN slots. If
@@ -717,28 +740,29 @@ static const ReplEnumCommandSpec k_enum_command_specs[] = {
 };
 
 static const ReplStdCommandSpec k_std_command_specs[] = {
-    { "glClearColor",   CMD_CLEAR_COLOR,      4, "glClearColor(%g, %g, %g, %g);",   "Usage: glClearColor(r, g, b, a)", 0 },
-    { "glClearDepth",   CMD_CLEAR_DEPTH,      1, "glClearDepth(%g);",               "Usage: glClearDepth(depth)", 0 },
-    { "glColor3f",      CMD_COLOR3F,          3, "glColor3f(%g, %g, %g);",          "Usage: glColor3f(r, g, b)", 0 },
-    { "glColor4f",      CMD_COLOR4F,          4, "glColor4f(%g, %g, %g, %g);",      "Usage: glColor4f(r, g, b, a)", 0 },
-    { "glLineWidth",    CMD_LINE_WIDTH,       1, "glLineWidth(%g);",                "Usage: glLineWidth(width)", 0 },
-    { "glNormal3f",     CMD_NORMAL3F,         3, "glNormal3f(%g, %g, %g);",         "Usage: glNormal3f(nx, ny, nz)", 0 },
-    { "glPointSize",    CMD_POINT_SIZE,       1, "glPointSize(%g);",                "Usage: glPointSize(size)", 0 },
-    { "glPolygonOffset", CMD_POLYGON_OFFSET,  2, "glPolygonOffset(%g, %g);",       "Usage: glPolygonOffset(factor, units)", 0 },
-    { "glRasterPos3f",  CMD_RASTER_POS3F,     3, "glRasterPos3f(%g, %g, %g);",      "Usage: glRasterPos3f(x, y, z)", 0 },
-    { "glRotatef",      CMD_ROTATEF,          4, "glRotatef(%g, %g, %g, %g);",      "Usage: glRotatef(angle, x, y, z)", 0 },
-    { "glScalef",       CMD_SCALEF,           3, "glScalef(%g, %g, %g);",           "Usage: glScalef(x, y, z)", 0 },
-    { "glTranslatef",   CMD_TRANSLATE3F,      3, "glTranslatef(%g, %g, %g);",       "Usage: glTranslatef(x, y, z)", 0 },
-    { "glVertex2f",     CMD_VERTEX2F,         2, "glVertex2f(%g, %g);",             "Usage: glVertex2f(x, y)", 0 },
-    { "glVertex3f",     CMD_VERTEX3F,         3, "glVertex3f(%g, %g, %g);",         "Usage: glVertex3f(x, y, z)", 0 },
-    { "gluNormal",      CMD_TESS_NORMAL,      3, "gluNormal(%g, %g, %g);",          "Usage: gluNormal(x, y, z)", 1 },
-    { "gluVertex",      CMD_TESS_VERTEX,      3, "gluVertex(%g, %g, %g);",          "Usage: gluVertex(x, y, z)", 1 },
-    { "glutSolidCone",    CMD_GLUT_CONE,     4, "glutSolidCone(%g, %g, %g, %g);",     "Usage: glutSolidCone(base, height, slices, stacks)", 0 },
-    { "glutSolidCube",    CMD_GLUT_CUBE,     1, "glutSolidCube(%g);",                 "Usage: glutSolidCube(size)", 0 },
-    { "glutSolidSphere",  CMD_GLUT_SPHERE,   3, "glutSolidSphere(%g, %g, %g);",       "Usage: glutSolidSphere(radius, slices, stacks)", 0 },
-    { "glutSolidTeapot",  CMD_GLUT_TEAPOT,   1, "glutSolidTeapot(%g);",               "Usage: glutSolidTeapot(size)", 0 },
-    { "glutSolidTorus",   CMD_GLUT_TORUS,    4, "glutSolidTorus(%g, %g, %g, %g);",   "Usage: glutSolidTorus(innerR, outerR, nsides, rings)", 0 },
-    { NULL, 0, 0, NULL, NULL, 0 }
+    /* name,              type,               num_args, fmt,                                  usage,                                                   is_tess */
+    { "glClearColor",     CMD_CLEAR_COLOR,           4, "glClearColor(%g, %g, %g, %g);",      "Usage: glClearColor(r, g, b, a)",                     0 },
+    { "glClearDepth",     CMD_CLEAR_DEPTH,           1, "glClearDepth(%g);",                  "Usage: glClearDepth(depth)",                          0 },
+    { "glColor3f",        CMD_COLOR3F,               3, "glColor3f(%g, %g, %g);",             "Usage: glColor3f(r, g, b)",                           0 },
+    { "glColor4f",        CMD_COLOR4F,               4, "glColor4f(%g, %g, %g, %g);",         "Usage: glColor4f(r, g, b, a)",                        0 },
+    { "glLineWidth",      CMD_LINE_WIDTH,            1, "glLineWidth(%g);",                   "Usage: glLineWidth(width)",                           0 },
+    { "glNormal3f",       CMD_NORMAL3F,              3, "glNormal3f(%g, %g, %g);",            "Usage: glNormal3f(nx, ny, nz)",                       0 },
+    { "glPointSize",      CMD_POINT_SIZE,            1, "glPointSize(%g);",                   "Usage: glPointSize(size)",                            0 },
+    { "glPolygonOffset",  CMD_POLYGON_OFFSET,        2, "glPolygonOffset(%g, %g);",          "Usage: glPolygonOffset(factor, units)",               0 },
+    { "glRasterPos3f",    CMD_RASTER_POS3F,          3, "glRasterPos3f(%g, %g, %g);",         "Usage: glRasterPos3f(x, y, z)",                       0 },
+    { "glRotatef",        CMD_ROTATEF,               4, "glRotatef(%g, %g, %g, %g);",         "Usage: glRotatef(angle, x, y, z)",                    0 },
+    { "glScalef",         CMD_SCALEF,                3, "glScalef(%g, %g, %g);",              "Usage: glScalef(x, y, z)",                            0 },
+    { "glTranslatef",     CMD_TRANSLATE3F,           3, "glTranslatef(%g, %g, %g);",          "Usage: glTranslatef(x, y, z)",                        0 },
+    { "glVertex2f",       CMD_VERTEX2F,              2, "glVertex2f(%g, %g);",                "Usage: glVertex2f(x, y)",                             0 },
+    { "glVertex3f",       CMD_VERTEX3F,              3, "glVertex3f(%g, %g, %g);",            "Usage: glVertex3f(x, y, z)",                          0 },
+    { "gluNormal",        CMD_TESS_NORMAL,           3, "gluNormal(%g, %g, %g);",             "Usage: gluNormal(x, y, z)",                           1 },
+    { "gluVertex",        CMD_TESS_VERTEX,           3, "gluVertex(%g, %g, %g);",             "Usage: gluVertex(x, y, z)",                           1 },
+    { "glutSolidCone",    CMD_GLUT_CONE,             4, "glutSolidCone(%g, %g, %g, %g);",        "Usage: glutSolidCone(base, height, slices, stacks)",  0 },
+    { "glutSolidCube",    CMD_GLUT_CUBE,             1, "glutSolidCube(%g);",                    "Usage: glutSolidCube(size)",                          0 },
+    { "glutSolidSphere",  CMD_GLUT_SPHERE,           3, "glutSolidSphere(%g, %g, %g);",          "Usage: glutSolidSphere(radius, slices, stacks)",      0 },
+    { "glutSolidTeapot",  CMD_GLUT_TEAPOT,           1, "glutSolidTeapot(%g);",                  "Usage: glutSolidTeapot(size)",                        0 },
+    { "glutSolidTorus",   CMD_GLUT_TORUS,            4, "glutSolidTorus(%g, %g, %g, %g);",      "Usage: glutSolidTorus(innerR, outerR, nsides, rings)",0 },
+    { NULL,               0,                         0, NULL,                                 NULL,                                                  0 }
 };
 
 #define CMD_TYPE_SPEC(type_, semicolon_, category_) \

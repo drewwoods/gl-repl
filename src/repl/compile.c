@@ -88,6 +88,7 @@ ReplCompileResult repl_compile_dispatch(const char *text,
         ReplCompileResult (*fn)(const char *, const ReplCompileContext *,
                                 ReplCompiledChange *, char *, int);
     } chain[] = {
+        /* fn */
         { repl_compile_float_decl  },
         { repl_compile_var_assign  },
         { repl_compile_if_branch   },

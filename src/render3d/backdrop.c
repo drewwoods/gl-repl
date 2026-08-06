@@ -573,6 +573,7 @@ static void draw_starry_sky(
  * dusk purple -> near-black night blue at the zenith. */
 static void sunset_sky_color(float h, float *r, float *g, float *b) {
     static const struct { float h, r, g, b; } stops[] = {
+        /* h,        r,     g,     b */
         { -0.32f, 0.05f, 0.02f, 0.08f },
         {  0.00f, 0.46f, 0.10f, 0.34f },
         {  0.16f, 0.28f, 0.08f, 0.33f },
@@ -1009,12 +1010,12 @@ static void draw_nebula(
  * white-out, which is this same tint) renders over it seamlessly. */
 static void polar_sky_color(float h, float *r, float *g, float *b) {
     static const struct { float h, r, g, b; } stops[] = {
-        {  -1.00f, 0.12f, 0.24f, 0.32f },
-        {  0.00f, RENDER3D_GLACIAL_TINT_R, RENDER3D_GLACIAL_TINT_G,
-                  RENDER3D_GLACIAL_TINT_B },
-        {  0.18f, 0.50f, 0.66f, 0.82f },
-        {  0.55f, 0.34f, 0.48f, 0.68f },
-        {  1.00f, 0.22f, 0.34f, 0.52f },
+        /* h,        r,                       g,                       b */
+        {  -1.00f, 0.12f,                   0.24f,                   0.32f                   },
+        {   0.00f, RENDER3D_GLACIAL_TINT_R, RENDER3D_GLACIAL_TINT_G, RENDER3D_GLACIAL_TINT_B },
+        {   0.18f, 0.50f,                   0.66f,                   0.82f                   },
+        {   0.55f, 0.34f,                   0.48f,                   0.68f                   },
+        {   1.00f, 0.22f,                   0.34f,                   0.52f                   },
     };
     const int n = (int)(sizeof(stops) / sizeof(stops[0]));
 

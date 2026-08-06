@@ -201,11 +201,12 @@ typedef struct {
 } ExportGlVectorHelper;
 
 static const ExportGlVectorHelper g_gl_vector_helpers[] = {
-    { REPL_EXPORT_GL_VECTOR_FLOAT1,  g_glfloat1_helper_lines },
-    { REPL_EXPORT_GL_VECTOR_FLOAT3,  g_glfloat3_helper_lines },
-    { REPL_EXPORT_GL_VECTOR_FLOAT4,  g_glfloat4_helper_lines },
-    { REPL_EXPORT_GL_VECTOR_DOUBLE4, g_gldouble4_helper_lines },
-    { REPL_EXPORT_GL_VECTOR_FLOAT16, g_glfloat16_helper_lines },
+    /* bit,                           lines */
+    { REPL_EXPORT_GL_VECTOR_FLOAT1,   g_glfloat1_helper_lines  },
+    { REPL_EXPORT_GL_VECTOR_FLOAT3,   g_glfloat3_helper_lines  },
+    { REPL_EXPORT_GL_VECTOR_FLOAT4,   g_glfloat4_helper_lines  },
+    { REPL_EXPORT_GL_VECTOR_DOUBLE4,  g_gldouble4_helper_lines },
+    { REPL_EXPORT_GL_VECTOR_FLOAT16,  g_glfloat16_helper_lines },
 };
 
 static unsigned export_gl_vector_mask_from_needs(const ExportNeeds *needs) {

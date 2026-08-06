@@ -283,17 +283,27 @@ static void ps_unescape_caption(const char *src, char *dst, size_t cap) {
 /* Special-key names for the `skey` verb -> GLUT_KEY_* codes. */
 static int ps_special_from_name(const char *name) {
     static const struct { const char *name; int key; } k_map[] = {
-        { "f1", GLUT_KEY_F1 },   { "f2", GLUT_KEY_F2 },
-        { "f3", GLUT_KEY_F3 },   { "f4", GLUT_KEY_F4 },
-        { "f5", GLUT_KEY_F5 },   { "f6", GLUT_KEY_F6 },
-        { "f7", GLUT_KEY_F7 },   { "f8", GLUT_KEY_F8 },
-        { "f9", GLUT_KEY_F9 },   { "f10", GLUT_KEY_F10 },
-        { "f11", GLUT_KEY_F11 }, { "f12", GLUT_KEY_F12 },
-        { "up", GLUT_KEY_UP },       { "down", GLUT_KEY_DOWN },
-        { "left", GLUT_KEY_LEFT },   { "right", GLUT_KEY_RIGHT },
-        { "home", GLUT_KEY_HOME },   { "end", GLUT_KEY_END },
-        { "pageup", GLUT_KEY_PAGE_UP },
-        { "pagedown", GLUT_KEY_PAGE_DOWN },
+        /* name,       key */
+        { "f1",        GLUT_KEY_F1        },
+        { "f2",        GLUT_KEY_F2        },
+        { "f3",        GLUT_KEY_F3        },
+        { "f4",        GLUT_KEY_F4        },
+        { "f5",        GLUT_KEY_F5        },
+        { "f6",        GLUT_KEY_F6        },
+        { "f7",        GLUT_KEY_F7        },
+        { "f8",        GLUT_KEY_F8        },
+        { "f9",        GLUT_KEY_F9        },
+        { "f10",       GLUT_KEY_F10       },
+        { "f11",       GLUT_KEY_F11       },
+        { "f12",       GLUT_KEY_F12       },
+        { "up",        GLUT_KEY_UP        },
+        { "down",      GLUT_KEY_DOWN      },
+        { "left",      GLUT_KEY_LEFT      },
+        { "right",     GLUT_KEY_RIGHT     },
+        { "home",      GLUT_KEY_HOME      },
+        { "end",       GLUT_KEY_END       },
+        { "pageup",    GLUT_KEY_PAGE_UP   },
+        { "pagedown",  GLUT_KEY_PAGE_DOWN },
     };
     for (size_t i = 0; i < sizeof(k_map) / sizeof(k_map[0]); i++)
         if (strcmp(name, k_map[i].name) == 0)
@@ -1836,10 +1846,11 @@ typedef struct {
  * nearest font from this ladder). */
 static PsEchoFont ps_echo_font(float cap_px) {
     static const struct { float px; PsEchoFont f; } k_fonts[] = {
-        { 10.0f, { GLUT_BITMAP_HELVETICA_10,    8.0f, 2.0f } },
-        { 12.0f, { GLUT_BITMAP_HELVETICA_12,   10.0f, 3.0f } },
-        { 18.0f, { GLUT_BITMAP_HELVETICA_18,   14.0f, 4.0f } },
-        { 24.0f, { GLUT_BITMAP_TIMES_ROMAN_24, 18.0f, 6.0f } },
+        /*       px  {                       font, ascent, decent} */
+        { 10.0f, { GLUT_BITMAP_HELVETICA_10,     8.0f, 2.0f } },
+        { 12.0f, { GLUT_BITMAP_HELVETICA_12,    10.0f, 3.0f } },
+        { 18.0f, { GLUT_BITMAP_HELVETICA_18,    14.0f, 4.0f } },
+        { 24.0f, { GLUT_BITMAP_TIMES_ROMAN_24,  18.0f, 6.0f } },
     };
     size_t best = 0;
     float best_d = -1.0f;
