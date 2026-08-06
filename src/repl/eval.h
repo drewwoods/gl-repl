@@ -495,11 +495,28 @@ void  repl_eval_format_swatch_number(float v, char *out, int out_sz);
 /* ---- Expression translation: REPL <-> C syntax ----------------------- */
 
 /* Translate REPL expression (sin, cos, etc.) to C (sinf, cosf, etc.).
- * Used internally when parsing C-style expressions. */
+ * Used internally when parsing C-style expressions.
+ *
+ * Omitted optional arguments are spelled out: `rand(x)` lowers to
+ * `repl_randf(x, 0)`. The C helpers have fixed signatures, while the
+ * evaluator reads a missing argument out of a zero-initialized args[], so
+ * the default has to become text somewhere - it lives beside the arity in
+ * k_expr_builtins. rand/rand2 are the only builtins this can reach; every
+ * other one has arity_min == arity_max. */
 void repl_eval_expr_to_c(const char *in, char *out, int out_sz);
 
 /* Translate C expression (sinf, cosf, etc.) back to REPL (sin, cos, etc.)
- * for display in the code panel. */
+ * for display in the code panel.
+ *
+ * Not a left inverse of repl_eval_expr_to_c on the text, only on the
+ * meaning - it is a token rewrite and does not re-derive what the source
+ * spelled. It strips the `f` suffixes lowering added, and it keeps the
+ * argument lowering padded in, so `rand(x)` round-trips to `rand(x, 0)`.
+ * That is the same call by the evaluator's own rule (a missing iter reads
+ * as 0), just not the same characters. Nothing depends on textual
+ * identity here; if something ever does, the fix belongs at the round-trip
+ * site, not in a rule that lets this function delete a user's explicitly
+ * written `, 0`. */
 void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz);
 
 /* Drop the `f` suffix from every fractional literal in a source line

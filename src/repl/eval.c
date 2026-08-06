@@ -338,6 +338,13 @@ typedef struct {
     int            arity_min;
     int            arity_max;
     ExprBuiltinFn  eval;
+    /* Only meaningful where arity_min < arity_max. Slot k holds the C text
+     * the exporter appends when the call omitted argument k, and MUST spell
+     * whatever the evaluator's zero-filled args[] supplies for that slot -
+     * these are two encodings of one default, and they have to agree or the
+     * exported C computes different numbers. NULL means "no default known",
+     * which suppresses padding for that call. */
+    const char    *arg_defaults[REPL_EXPR_BUILTIN_ARGS_MAX];
 } ExprBuiltin;
 
 static float expr_rand01(float seed, float iter);
@@ -430,8 +437,10 @@ static const ExprBuiltin k_expr_builtins[] = {
     { "round", "roundf",     1, 1, builtin_round },
     { "fmod",  "fmodf",      2, 2, builtin_fmod  },
     { "rem",   "remainderf", 2, 2, builtin_rem   },
-    { "rand",  "repl_randf", 1, 2, builtin_rand  },
-    { "rand2", "repl_rand2f", 1, 2, builtin_rand2 },
+    /* The only two builtins with arity_min < arity_max: `iter` defaults to
+     * the 0 that expr_call's zero-initialized args[] hands builtin_rand. */
+    { "rand",  "repl_randf", 1, 2, builtin_rand,  { NULL, "0" } },
+    { "rand2", "repl_rand2f", 1, 2, builtin_rand2, { NULL, "0" } },
 };
 
 static const char *const k_reserved_identifiers[] = {
@@ -1884,7 +1893,58 @@ void repl_eval_strip_c_float_suffixes(const char *in, char *out, int out_sz) {
     *dst = '\0';
 }
 
+/* Count the top-level arguments of the call whose '(' is at `open`, or
+ * return -1 when the paren is unmatched. `()` counts as zero. Splitting is
+ * paren-aware (repl_scan_next_arg_delim), so `rand(max(a, b))` is one arg. */
+static int expr_count_call_args(const char *open) {
+    const char *p = open + 1;
+    int count = 0;
+
+    while (isspace((unsigned char)*p)) p++;
+    if (*p == ')') return 0;
+
+    for (;;) {
+        p = repl_scan_next_arg_delim(p);
+        count++;
+        if (*p == ')') return count;
+        if (*p != ',') return -1;   /* ran off the end - unmatched paren */
+        p++;
+    }
+}
+
+/* Text this builtin's call must gain to reach `c_name`'s fixed arity when
+ * the source supplied only `have` arguments, or NULL when nothing is needed
+ * (already full arity, no optional slots, or a slot with no known default).
+ * Written into `buf`; the caller emits it just before the call's ')'. */
+static const char *expr_missing_arg_tail(const ExprBuiltin *b, int have,
+                                         char *buf, size_t buf_sz) {
+    size_t used = 0;
+
+    if (have < 0 || have >= b->arity_max)
+        return NULL;
+    for (int slot = have; slot < b->arity_max; slot++) {
+        const char *def = (slot < REPL_EXPR_BUILTIN_ARGS_MAX)
+                              ? b->arg_defaults[slot] : NULL;
+        int n;
+        if (!def)
+            return NULL;
+        n = snprintf(buf + used, buf_sz - used, ", %s", def);
+        if (n < 0 || (size_t)n >= buf_sz - used)
+            return NULL;
+        used += (size_t)n;
+    }
+    return used ? buf : NULL;
+}
+
 void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
+    /* Deepest nesting of optional-arg calls one expression can pad. Past
+     * this the call is emitted unpadded (today's behavior) rather than
+     * silently mispaired with the wrong ')'. */
+    enum { EXPR_PAD_STACK_MAX = 8 };
+    struct { int depth; char tail[32]; } pad_stack[EXPR_PAD_STACK_MAX];
+    int pad_n = 0;
+    int paren_depth = 0;
+
     static const struct { const char *from; const char *to; } k_const_expr_to_c[] = {
         { "TAU", "(2.0f*(float)M_PI)" },
         { "PI",  "((float)M_PI)" },
@@ -1935,6 +1995,33 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
                             memcpy(dst, k_expr_builtins[i].c_name, rlen);
                             dst += rlen;
                         }
+                        /* An omitted optional argument has to be spelled out
+                         * here: the C helper's signature is fixed, while the
+                         * evaluator just reads a zero out of args[]. Schedule
+                         * the defaults against the paren this call is about
+                         * to open, so nested calls unwind in the right order
+                         * and the args themselves still get translated by the
+                         * ordinary loop below. */
+                        if (k_expr_builtins[i].arity_min <
+                            k_expr_builtins[i].arity_max &&
+                            pad_n < EXPR_PAD_STACK_MAX) {
+                            const char *q = id_end;
+                            while (q < expr_end && isspace((unsigned char)*q)) q++;
+                            if (q < expr_end && *q == '(') {
+                                char tail[32];
+                                const char *need = expr_missing_arg_tail(
+                                    &k_expr_builtins[i],
+                                    expr_count_call_args(q),
+                                    tail, sizeof(tail));
+                                if (need) {
+                                    pad_stack[pad_n].depth = paren_depth + 1;
+                                    snprintf(pad_stack[pad_n].tail,
+                                             sizeof(pad_stack[pad_n].tail),
+                                             "%s", need);
+                                    pad_n++;
+                                }
+                            }
+                        }
                         found = 1;
                         break;
                     }
@@ -1961,6 +2048,22 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
                 }
                 p = lit_end;
             } else {
+                if (*p == '(') {
+                    paren_depth++;
+                } else if (*p == ')') {
+                    /* Flush any defaults scheduled against this paren before
+                     * closing it. */
+                    while (pad_n > 0 &&
+                           pad_stack[pad_n - 1].depth == paren_depth) {
+                        int tlen = (int)strlen(pad_stack[pad_n - 1].tail);
+                        if (dst + tlen < end) {
+                            memcpy(dst, pad_stack[pad_n - 1].tail, (size_t)tlen);
+                            dst += tlen;
+                        }
+                        pad_n--;
+                    }
+                    paren_depth--;
+                }
                 *dst++ = *p++;
             }
         }

@@ -1182,6 +1182,45 @@ static void run_tests(void) {
     ASSERT_TO_C("e", "((float)M_E)");
     ASSERT_TO_C("ln(e)", "logf(((float)M_E))");
 
+    /* ---- Omitted optional arguments are spelled out ----
+     * rand/rand2 are the only builtins with arity_min < arity_max. The
+     * evaluator reads the missing `iter` out of a zero-filled args[]; the C
+     * helper's signature is fixed, so lowering has to write the 0 or the
+     * exported translation unit does not compile. The default stays a bare
+     * integer: it converts to the float parameter exactly, and an argument
+     * is not an operand, so there is nothing here to promote. */
+    printf("expr_to_c (optional args):\n");
+    ASSERT_TO_C("rand(x)", "repl_randf(x, 0)");
+    ASSERT_TO_C("rand2(x)", "repl_rand2f(x, 0)");
+    /* A call already at full arity is untouched - no second default. */
+    ASSERT_TO_C("rand(x, 3)", "repl_randf(x, 3)");
+    /* The argument is still translated, and a nested call that also needs
+     * padding closes against its own paren. */
+    ASSERT_TO_C("rand(cos(x))", "repl_randf(cosf(x), 0)");
+    ASSERT_TO_C("rand(rand(x))", "repl_randf(repl_randf(x, 0), 0)");
+    ASSERT_TO_C("rand(max(a, b))", "repl_randf(fmaxf(a, b), 0)");
+    /* Two sibling calls each get their own default. */
+    ASSERT_TO_C("rand(a) + rand2(b)", "repl_randf(a, 0) + repl_rand2f(b, 0)");
+    /* Padding is keyed to the call's own paren, not the nearest one. */
+    ASSERT_TO_C("(rand(a))*2", "(repl_randf(a, 0))*2");
+    ASSERT_TO_C("sin(rand(a))", "sinf(repl_randf(a, 0))");
+    /* A trailing comment is copied raw, so a call named inside it is not
+     * padded - it is not code. */
+    ASSERT_TO_C("rand(a) // rand(b)", "repl_randf(a, 0) // rand(b)");
+
+    /* Lowering pads and c_expr_to_repl does not un-pad, so `rand(x)` comes
+     * back as `rand(x, 0)`: the same call by the evaluator's own rule (a
+     * missing iter reads as 0), different characters. Teaching the inverse
+     * to strip a trailing `, 0` would also delete one a user wrote on
+     * purpose, so the asymmetry is the documented behavior. */
+    {
+        char c_buf[512], repl_buf[512];
+        repl_eval_expr_to_c("rand(x)", c_buf, sizeof(c_buf));
+        repl_eval_c_expr_to_repl(c_buf, repl_buf, sizeof(repl_buf));
+        TEST_ASSERT_STR(&g_harness, "roundtrip: rand(x) normalizes to 2 args",
+                        repl_buf, "rand(x, 0)");
+    }
+
     /* ---- c_expr_to_repl additional translations ---- */
     printf("c_expr_to_repl (additional):\n");
     ASSERT_TO_REPL("fmaxf(x,y)", "max(x,y)");
