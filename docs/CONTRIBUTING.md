@@ -38,6 +38,11 @@ differential oracles against the driver rather than regression tests:
 `gl_state_inspector` fold, then diff every reported row against `glGet*`).
 Reach for that pattern whenever a pure module re-implements GL semantics.
 
+[`tests/README.md`](../tests/README.md) maps every binary in the suite and
+highlights the ones with their own `--help` - `test_export_trace_parity`,
+`test_repl_core_examples`, `test_eval` - which are debugging instruments, not
+just regression gates.
+
 `make web` (or `scripts/build-web.sh` for a cold start with no emsdk
 sourced yet) builds the Emscripten/wasm browser target; see
 [`packaging/web/README.md`](../packaging/web/README.md).
