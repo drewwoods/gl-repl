@@ -483,7 +483,7 @@ only (`check-repl-export-via-bridge`).
 **The exported expression must evaluate in float, like the evaluator.** C
 promotes on any `double` it sees, and the evaluator (`eval_term` /
 `eval_additive`, all `float`) rounds after every operation instead - so
-[`repl_eval_expr_to_c()`](src/repl/eval.h#L492) lowers `PI`/`TAU`/`e` through
+[`repl_eval_expr_to_c()`](src/repl/eval.h#L499) lowers `PI`/`TAU`/`e` through
 `(float)` casts and suffixes fractional literals (`1.2` → `1.2f`). Integers
 stay bare: C converts an int operand without promoting the expression, which
 is also what keeps `A[2]` and `0xFF` intact. Canonical REPL text carries no
@@ -534,6 +534,19 @@ the frame); the reset and the commit are both gated on the panel being open, so
 never reset one without the other. Controls are mouse-only (no keymap slot, no
 `GlrConfigKey`, so no `@cfg`/golden churn) - the rate, `lin`/`log` and
 `1x`/`2x` chips plus the legend all live in the panel.
+
+A scene can open the plot on itself with a trailing **`// @plot`** on an
+assignment row - which is why the target is a comment tag and not a config
+slug: the tag rides the row's canonical text
+(`repl_append_trailing_comment`), so it survives commit/reformat/export/import
+with no index bookkeeping, where an `@cfg` row index would be applied before
+the document it indexes is fed and would rot on the first edit.
+`glr_assign_plot_sync_tags()` (glr_assign_plot_bridge.c) resolves it from the
+frame path, **after the flat refresh** (the series-compatibility check reads
+the flat program), keyed on `editor_undo_generation()` - so it fires only on
+*wholesale* document replacement and never stomps a manual retarget. On a
+replacement the tags decide the whole series set: no tags means close, because
+row indices don't survive one.
 
 **Replay draws a PC marker per series** (`assign_plot_exec_progress`), and that
 forces per-frame capture: the rule is only true of the frame it was computed

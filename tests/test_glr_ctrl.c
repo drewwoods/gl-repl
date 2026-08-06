@@ -1975,6 +1975,55 @@ static void test_shift_right_click_adds_plot_series(void) {
     assign_plot_reset_all();
 }
 
+/* A document can open the plot on itself: `// @plot` on an assignment row.
+ * Resolved in the frame path (after the flat program is current), keyed on
+ * the undo generation, so a load applies the tags and an ordinary edit does
+ * not re-apply them. */
+static void test_plot_tag_opens_the_plot_on_load(void) {
+    printf("--- imrepl_ctrl @plot tag sync ---\n");
+
+    glr_ctrl_reset_all();
+    assign_plot_reset_all();
+    editor_feed_line("static float w;   // @plot");
+    editor_feed_line("static float h;");
+    editor_feed_line("w = sin(t);       // @plot");
+    editor_feed_line("h = cos(t);       // @plot");
+    editor_feed_line("glVertex3f(w, h, 0);");
+
+    ASSERT_INT("no tag is honored before a frame runs", assign_plot_is_open(), 0);
+    glr_ctrl_display_frame();
+    ASSERT_INT("the tagged rows opened the plot", assign_plot_is_open(), 1);
+    ASSERT_INT("one series per tagged assignment", assign_plot_series_count(), 2);
+    /* Row 0's decl carries a tag too and is deliberately not a series: only an
+     * assignment has values to plot. So the primary is the first tagged
+     * assignment, row 2. */
+    ASSERT_INT("first tagged assignment is the primary",
+               assign_plot_source_line(), 2);
+    ASSERT_INT("the second tagged row joined", assign_plot_has_series(3), 1);
+    ASSERT_INT("an untagged row stays out", assign_plot_has_series(0), 0);
+
+    /* An ordinary edit does not bump the undo generation, so the sync stays
+     * out of the way of a manual retarget. */
+    assign_plot_open(3);
+    glr_ctrl_display_frame();
+    ASSERT_INT("a later frame does not re-apply the tags",
+               assign_plot_series_count(), 1);
+    ASSERT_INT("leaving the manual target alone", assign_plot_source_line(), 3);
+
+    /* A wholesale replacement re-reads the tags. Row identity does not survive
+     * one, so an untagged document closes the plot rather than keeping indices
+     * that now address someone else's rows. */
+    glr_ctrl_reset_all();
+    editor_feed_line("static float w;");
+    editor_feed_line("w = sin(t);");
+    glr_ctrl_display_frame();
+    ASSERT_INT("replacing with an untagged document closes the plot",
+               assign_plot_is_open(), 0);
+
+    glr_ctrl_reset_all();
+    assign_plot_reset_all();
+}
+
 static void test_right_click_gl_command_description_popup(void) {
     UiCommandDescriptionPanelView view;
     UiHit hit;
@@ -6071,6 +6120,7 @@ int main(void) {
     test_right_click_code_panel_does_not_start_camera_pan();
     test_scrollbar_drag_scrolls_code_panel();
     test_right_click_assignment_opens_value_plot();
+    test_plot_tag_opens_the_plot_on_load();
     test_shift_right_click_adds_plot_series();
     test_right_click_gl_command_description_popup();
     test_right_click_empty_line_toggles_gl_state_report();

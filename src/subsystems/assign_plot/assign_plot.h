@@ -59,6 +59,16 @@
  * flatten each other - the per-series statistics under the legend are what
  * carry the real numbers in that case.
  *
+ * --- Who targets a row ---
+ *
+ * The gestures (right-click, Shift+right-click) are one caller. The other is
+ * the document itself: an assignment row whose trailing comment carries
+ * `@plot` becomes a series when that document is loaded. Nothing about that
+ * lives here - the host resolves the tags and calls assign_plot_open() /
+ * assign_plot_toggle_series() like any other caller (glr_assign_plot_sync_tags
+ * in src/app/glr_assign_plot_bridge.c), so this module still knows only about
+ * row indices.
+ *
  * --- Decimation vs. statistics ---
  *
  * The plot is impressionistic by design: a frame with more executions than

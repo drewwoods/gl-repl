@@ -519,6 +519,7 @@ metadata that round-trips on reload:
 | `// @declare name` | Reconstructs a `float name;` declaration on import. |
 | `// @tune` | Marks a variable as a tunable knob in the exported program - see [User Guide → Tunable Variables](USER_GUIDE.md#tunable-variables--tune). |
 | `// @config` | Marks an assigned variable as config so the variable panel doesn't dim it (bounds-keeping writes like clamps) - see [Config Variables](#config-variables--config) below. |
+| `// @plot` | On an assignment row: opens the [assignment value plot](USER_GUIDE.md#plotting-an-assignments-values) on that row when the document loads. Tag up to four rows to overlay them. |
 | `// @camera <role>` | Tags a transform row as camera state. Five roles: `dist`, `rx`, `ry`, `spin`, `pan`. |
 
 Built-in examples use the same `@cfg` header and `@camera` tags, so a saved

@@ -422,6 +422,24 @@ Plain right-click retargets the plot to one row. Editing a plotted row keeps
 tracking it; deleting it removes that series and closes the panel when none
 remain.
 
+**Opening the plot from the scene: `// @plot`.** A trailing `// @plot` comment
+on an assignment row plots that row as soon as the document loads, so a saved
+scene can arrive with its plot already open on the interesting values:
+
+```c
+static float wobble;
+wobble = sin(t * 3) * 0.4;   // @plot
+```
+
+Tag several rows to overlay them, exactly as Shift+right-click would; the first
+tagged row is the primary that fixes the X axis, rows past the four-series limit
+are ignored, and a row whose executions per frame disagree with the primary is
+skipped with a status message. The tag rides the row's text, so it survives
+save, reload, reformat and export to C - and it is document state, not a
+setting: it is re-read whenever a document is loaded, never in the middle of an
+editing session, so it cannot undo a retarget you just made by hand. Loading a
+document with no `// @plot` in it closes the plot.
+
 ### Inspecting OpenGL state
 
 Right-click a visually blank row in the code panel to inspect OpenGL state at

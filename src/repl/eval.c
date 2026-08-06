@@ -1462,6 +1462,10 @@ int repl_eval_line_has_config_tag(const char *line) {
     return line_comment_has_tag(line, "@config", 7);
 }
 
+int repl_eval_line_has_plot_tag(const char *line) {
+    return line_comment_has_tag(line, "@plot", 5);
+}
+
 void repl_append_trailing_comment(char *dst, size_t dst_sz, const char *source) {
     const char *cmt = repl_line_trailing_comment(source);
     if (!dst || dst_sz == 0 || !cmt)

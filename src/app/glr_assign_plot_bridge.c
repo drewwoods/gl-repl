@@ -15,9 +15,15 @@
  */
 #include "app/glr_assign_plot_bridge.h"
 
+#include <stdio.h>
+
+#include "editor/state.h"       /* editor_buffer_line - the row's text */
+#include "editor/undo.h"        /* editor_undo_generation */
 #include "repl/command.h"       /* GLCmd, CMD_VAR_ASSIGN, CMD_SCRATCH_ASSIGN */
+#include "repl/eval.h"          /* repl_eval_line_has_plot_tag */
 #include "repl/state_views.h"   /* flat-program + document reads */
 #include "subsystems/assign_plot/assign_plot.h"  /* AssignPlotHostBridge */
+#include "ui/app/state.h"       /* ui_state_status_set */
 
 static int glr_ap_is_assign(CmdType type) {
     return type == CMD_VAR_ASSIGN || type == CMD_SCRATCH_ASSIGN;
@@ -68,4 +74,69 @@ static const AssignPlotHostBridge g_glr_ap_host = {
 
 void glr_assign_plot_install_host(void) {
     assign_plot_install_host(&g_glr_ap_host);
+}
+
+/* --- `// @plot` tag sync -------------------------------------------------
+ *
+ * A scene can open the plot on itself: an assignment row whose trailing
+ * comment carries `@plot` becomes a series when the document is loaded. The
+ * tag rides the row's canonical text (repl_append_trailing_comment in the
+ * parser), so it survives commit, reformat, export to C and re-import with no
+ * index bookkeeping anywhere - which is exactly why this is a comment tag and
+ * not a config slug. A row index in an `@cfg` header would be applied before
+ * the document it indexes has been fed, and would rot on the first edit.
+ *
+ * Keyed on the undo generation, which bumps only on *wholesale* document
+ * replacement (example / scene / workspace / file load, reset). Ordinary
+ * edits leave it alone, so a manual right-click retarget is never stomped by
+ * the tags in the file. The flip side is the rule for a replacement: row
+ * identity does not survive one, so the tags decide the whole series set -
+ * no tags means the plot closes rather than keeping indices that now address
+ * someone else's rows. */
+static unsigned int g_glr_ap_synced_gen;
+static int          g_glr_ap_have_synced;
+
+void glr_assign_plot_sync_tags(void) {
+    unsigned int gen = editor_undo_generation();
+    int rows[MAX_ASSIGN_PLOT_SERIES];
+    int found = 0, refused = 0, doc_count, i;
+
+    if (g_glr_ap_have_synced && gen == g_glr_ap_synced_gen)
+        return;
+    g_glr_ap_have_synced = 1;
+    g_glr_ap_synced_gen  = gen;
+
+    doc_count = repl_state_document_count();
+    for (i = 0; i < doc_count && found < MAX_ASSIGN_PLOT_SERIES; i++) {
+        const char *text;
+        if (!glr_ap_row_is_plottable(i))
+            continue;
+        text = editor_buffer_line(i);
+        if (text && repl_eval_line_has_plot_tag(text))
+            rows[found++] = i;
+    }
+
+    if (found == 0) {
+        assign_plot_close();
+        return;
+    }
+
+    /* First tagged row is the primary: it fixes the shared X axis, so the
+     * order the series are added in is the document's order. */
+    assign_plot_open(rows[0]);
+    for (i = 1; i < found; i++) {
+        if (assign_plot_toggle_series(rows[i]) == ASSIGN_PLOT_SERIES_INCOMPATIBLE)
+            refused++;
+    }
+
+    /* A refusal here has no click to report against, and a silently-missing
+     * series looks like a broken scene rather than an incompatible pair of
+     * rows (a once-per-frame row and one inside a loop have no common X). */
+    if (refused > 0) {
+        char msg[REPL_STATUS_TEXT_MAX];
+        snprintf(msg, sizeof(msg),
+                 "assignment plot: %d @plot row%s skipped (x axis differs)",
+                 refused, refused == 1 ? "" : "s");
+        ui_state_status_set(msg);
+    }
 }

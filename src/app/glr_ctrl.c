@@ -2673,6 +2673,14 @@ void glr_ctrl_display_frame(void) {
         }
     }
 
+    /* A freshly-loaded document may ask for the plot itself, via `// @plot`
+     * tags on its assignment rows. Resolved here rather than at load time
+     * because the compatibility check between series reads the flat program,
+     * which the refresh above has just brought current; self-gated on the
+     * undo generation, so this is free on every frame that did not replace
+     * the document. */
+    glr_assign_plot_sync_tags();
+
     /* Assignment-value capture, immediately after the flat program is current
      * and before anything narrows it (replay clamps the executed count, but
      * the plot wants the whole frame).

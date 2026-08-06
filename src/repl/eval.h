@@ -471,6 +471,13 @@ int repl_eval_line_has_tune_tag(const char *line);
  * 0. Token-bounded like `@tune`. Pure string predicate. */
 int repl_eval_line_has_config_tag(const char *line);
 
+/* 1 if `line`'s trailing comment carries a whole-token `@plot` marker (the
+ * tag that opens the assignment value plot on that row when a document is
+ * loaded), else 0. Token-bounded like `@tune`. Pure string predicate - the
+ * rows it selects, and the cap on how many, are the host's business (see
+ * glr_assign_plot_sync_tags). */
+int repl_eval_line_has_plot_tag(const char *line);
+
 /* ---- Inline numeric swatch helpers ------------------------------------- */
 
 typedef struct {
