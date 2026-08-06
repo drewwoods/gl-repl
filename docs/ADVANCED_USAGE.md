@@ -736,15 +736,17 @@ Three limits, each of which buys something concrete:
   `block is too long to export`; the remedy is the documented idiom, four
   cells to a row.
 
-The committed row keeps the expressions you typed but standardises two
-things, both so that what you see is what a save and reload returns:
+A fourth rule is about the target rather than the values: **the subscript is
+required.** `A = {…}` is rejected. It would be the only place in the language
+where an array name is itself assignable - `A = 5;` is an error everywhere
+else - and export writes `A[0] = …` regardless, so import could only ever fold
+it back subscripted. Requiring it also keeps the bases lined up when four rows
+stack into a 4x4.
 
-- **Separators become `, `.** Import rebuilds the list that way, so a row
-  committed as `{1,2}` would otherwise come back as `{1, 2}`.
-- **A bare `A = {…}` is stored as `A[0] = {…}`.** Export writes `A[0] = …`
-  for either spelling, so import can only fold back to the subscripted one.
-  The bare form remains accepted as input; it just does not survive as a
-  distinct spelling.
+The committed row keeps the expressions you typed but standardises the
+separators to `, `, so what you see is what a save and reload returns: import
+rebuilds the list that way, and a row committed as `{1,2}` would otherwise
+come back as `{1, 2}`.
 
 ### A cell that reads its own array
 
@@ -776,10 +778,10 @@ Import recognises a run of consecutive literal subscripts on one line and
 folds it back. A lone `A[4] = c;` is left alone, which is what the two-value
 minimum above protects.
 
-The bare spelling `A = {…}` is the one to watch when reading exported C: it
-names its array without a subscript, exactly as `glMultMatrixf(A)` does, so
-the exporter detects the need for the `static float A[16];` global from the
-command rather than from the source text.
+The `static float A[16];` global the run needs is detected from the command
+type rather than from a scan of the source text - the same route
+`glMultMatrixf(A)` takes, since a row that only ever *writes* an array is as
+much a reason to declare it as one that reads it.
 
 ### Why a block row cannot be plotted
 

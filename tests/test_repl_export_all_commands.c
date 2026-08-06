@@ -624,12 +624,11 @@ static void test_scratch_block_roundtrip(void) {
     remove(path);
 }
 
-/* The bare form `A = {…}` names its array without subscripting it, so the
- * "A[" scan in export_collect_needs() cannot see it - yet the row *exports*
- * as `A[0] = …`. Without the command-type branch beside glMultMatrixf(A)'s,
- * the generated C assigns to an undeclared array and does not compile.
- * Nothing else in the scene may mention A, or the scan would cover for it. */
-static void test_bare_scratch_block_declares_array(void) {
+/* A block row exports as `A[0] = …`, so export_collect_needs() has to emit
+ * the `static float A[16];` global for it or the generated C assigns to an
+ * undeclared array. Nothing else in this scene reads the arrays, so the
+ * declaration can only come from the block rows themselves. */
+static void test_scratch_block_declares_array(void) {
     const char *path = "/tmp/repl_export_bare_block.c";
     char *export_text;
 
@@ -637,19 +636,19 @@ static void test_bare_scratch_block_declares_array(void) {
     glr_ctrl_reset_all();
     declare_test_vars();
 
-    editor_feed_line("A = {0.2, 0.6, 0.9};");
-    editor_feed_line("C = {1, 2};");
+    editor_feed_line("A[0] = {0.2, 0.6, 0.9};");
+    editor_feed_line("C[0] = {1, 2};");
     editor_feed_line("glutSolidCube(1);");
-    ASSERT_TRUE("bare-block rows committed", repl_state_document_count() == 3);
+    ASSERT_TRUE("block rows committed", repl_state_document_count() == 3);
 
     repl_export_save_output(path, source_document_view(), NULL);
     export_text = slurp_path(path);
-    ASSERT_TRUE("bare-block export read back", export_text != NULL);
+    ASSERT_TRUE("block export read back", export_text != NULL);
 
     if (export_text) {
-        ASSERT_TRUE("bare block declares its array",
+        ASSERT_TRUE("block declares its array",
                     strstr(export_text, "static float A[16]") != NULL);
-        ASSERT_TRUE("second bare block declares its array too",
+        ASSERT_TRUE("second block declares its array too",
                     strstr(export_text, "static float C[16]") != NULL);
         ASSERT_TRUE("the row still exports as cell stores",
                     strstr(export_text, "A[0] = 0.2f;") != NULL);
@@ -683,11 +682,11 @@ static void test_scratch_block_export_line_budget(void) {
     glr_ctrl_reset_all();
     declare_test_vars();
 
-    editor_feed_line("A = {TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU};");
+    editor_feed_line("A[0] = {TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU};");
     ASSERT_TRUE("widest accepted block commits",
                 repl_state_document_count() == 1);
 
-    editor_feed_line("A = {TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU};");
+    editor_feed_line("A[0] = {TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU};");
     ASSERT_TRUE("one cell wider is refused",
                 repl_state_document_count() == 1);
 
@@ -729,7 +728,7 @@ int main(void) {
     test_auto_normal_marker_roundtrip();
     test_loop_jump_roundtrip();
     test_scratch_block_roundtrip();
-    test_bare_scratch_block_declares_array();
+    test_scratch_block_declares_array();
     test_scratch_block_export_line_budget();
     const char *path1 = "/tmp/repl_export_all_commands_1.c";
     const char *path2 = "/tmp/repl_export_all_commands_2.c";

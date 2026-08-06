@@ -218,20 +218,17 @@ ExportNeeds export_collect_needs(void) {
         default:
             break;
         }
-        /* Two forms name a scratch array without subscripting it, so the
-         * "A[" text scan below cannot see either:
+        /* glMultMatrixf(A) reads its scratch array by bare name, so the
+         * "A[" text scan below cannot see it; the command carries the array
+         * in args[0], so key off that rather than widening the scan to a
+         * bare `A` token. The compound-literal form names no array at all
+         * and must not conjure an unused global.
          *
-         *   glMultMatrixf(A)      reads the array by bare name
-         *   A = {e0, ..., eN-1}   writes it by bare name (the block form's
-         *                         optional base index; `A[4] = {...}` does
-         *                         carry the subscript and the scan finds it)
-         *
-         * Both carry the array in args[0], so key off the command type
-         * rather than widening the scan to a bare `A` token. The block form
-         * matters more than it looks: it *exports* as `A[0] = ...`, so
-         * missing it here emits C that assigns to an undeclared array.
-         * glMultMatrixf's compound-literal form names no array at all and
-         * must not conjure an unused global. */
+         * CMD_SCRATCH_BLOCK_ASSIGN is here for the same reason even though
+         * its subscript is mandatory and the scan would therefore find it:
+         * the row *exports* as `A[0] = ...`, so getting this wrong emits C
+         * that assigns to an undeclared array, and the command type is the
+         * authoritative answer where the scan is a heuristic. */
         if ((cmd->type == CMD_MULT_MATRIXF &&
              repl_cmd_mult_matrix_from_array(cmd)) ||
             cmd->type == CMD_SCRATCH_BLOCK_ASSIGN) {

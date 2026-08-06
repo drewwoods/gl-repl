@@ -23,10 +23,11 @@ buildShear() {
 }
 
 // -- B: mirror through the yz plane ---------------------
-// Constant cells, so this row never re-evaluates; it also exercises the
-// bare form, which names the array without a subscript.
+// Constant cells, so this row never re-evaluates. A whole 4x4 fits one row
+// here only because every cell is a literal; expressions this wide would
+// be refused for exceeding what the exported C can put on one line.
 buildMirror() {
-  B = {-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+  B[0] = {-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
 }
 
 // -- C: a lift, mixing block rows with single-cell writes -

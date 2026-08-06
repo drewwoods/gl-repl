@@ -1826,6 +1826,18 @@ ReplCompileResult repl_compile_var_assign(const char *input,
             return compile_set_err(err, err_size,
                                    "'%s' is not a scratch array - the {...} form writes A, B, or C",
                                    name);
+        /* The target cell is required. A bare `A = {...}` would be the only
+         * place in the language where an array name is itself assignable -
+         * `A = 5;` is an error everywhere else - and it is a spelling export
+         * cannot preserve, since it writes `A[0] = ...` for either form and
+         * import can only fold back to the subscripted one. One spelling per
+         * row, and the subscript is the one that lines up when four of these
+         * stack into a 4x4. */
+        if (!index_expr[0])
+            return compile_set_err(err, err_size,
+                                   "scratch block needs a target cell - write '%s[0] = {...}'; "
+                                   "the array name alone is not assignable",
+                                   name);
         /* One cell is the scalar form spelled oddly, and it does not survive
          * a round trip as itself: it exports to `A[4] = e;`, which import
          * reads back as CMD_SCRATCH_ASSIGN. Reject it rather than ship a
@@ -1839,8 +1851,7 @@ ReplCompileResult repl_compile_var_assign(const char *input,
          * reachable one cell at a time through `A[i] = expr;`, and this
          * restriction can be relaxed later without breaking any scene -
          * the reverse could not. */
-        if (index_expr[0] &&
-            !compile_parse_scratch_base_literal(index_expr, &base_idx))
+        if (!compile_parse_scratch_base_literal(index_expr, &base_idx))
             return compile_set_err(err, err_size,
                                    "the {...} form needs a literal base index - "
                                    "use '%s[i] = expr;' for a computed one", name);
@@ -1928,16 +1939,6 @@ ReplCompileResult repl_compile_var_assign(const char *input,
                     "and the line limit is %d; split it across rows",
                     exported, MAX_LINE_LEN - 1);
         }
-
-        /* `A = {…}` is input sugar; the row is stored subscripted.
-         * Export writes `A[0] = …` for both spellings, so import can only
-         * ever fold back to the subscripted one - leaving the bare form in
-         * the document would mean a row that silently rewrites itself on
-         * the first save/load, which is the same defect the single-cell
-         * list is rejected for. Canonicalising here makes the round trip
-         * stable instead of merely tested. */
-        if (!index_expr[0])
-            repl_copy_string_fits(index_expr, sizeof(index_expr), "0");
 
         cmd.type = CMD_SCRATCH_BLOCK_ASSIGN;
         cmd.valid = 1;

@@ -975,26 +975,25 @@ static void run_scratch_block_matrix(void) {
                 strcmp(skip_indent(editor_buffer_line(0)),
                        "A[0] = {max(n, 1), n * 2};") == 0);
 
-    /* --- Bare `A = {...}` is base 0 ---------------------------------- */
+    /* --- The subscript is required ----------------------------------- */
+    /* `B = {7, 8}` would be the only assignable bare array name in the
+     * language, and export cannot preserve it. */
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("B = {7, 8};");
-    ASSERT_TRUE("bare block type",
+    ASSERT_INT("bare array name rejected", repl_state_document_count(), 0);
+    editor_feed_line("B[0] = {7, 8};");
+    ASSERT_TRUE("subscripted block type",
                 repl_state_document_cmds()[0].type == CMD_SCRATCH_BLOCK_ASSIGN);
-    ASSERT_INT("bare block array idx",
+    ASSERT_INT("block array idx",
                (int)repl_state_document_cmds()[0].args[0], 1);
-    ASSERT_INT("bare block base idx",
+    ASSERT_INT("block base idx",
                (int)repl_state_document_cmds()[0].args[1], 0);
-    ASSERT_TRUE("bare block wrote B[0]", fabsf(scratch_cell(1, 0) - 7.0f) < 1e-6f);
-    ASSERT_TRUE("bare block wrote B[1]", fabsf(scratch_cell(1, 1) - 8.0f) < 1e-6f);
-    /* Stored subscripted: export writes `B[0] = …` for both spellings, so
-     * the bare one would not survive a save/load as itself. */
-    ASSERT_TRUE("bare block canonicalises to a subscript",
-                strcmp(skip_indent(editor_buffer_line(0)),
-                       "B[0] = {7, 8};") == 0);
+    ASSERT_TRUE("block wrote B[0]", fabsf(scratch_cell(1, 0) - 7.0f) < 1e-6f);
+    ASSERT_TRUE("block wrote B[1]", fabsf(scratch_cell(1, 1) - 8.0f) < 1e-6f);
 
     /* A whole array in one row is the intended top end. */
     glr_ctrl_reset_all(); declare_test_vars();
-    editor_feed_line("C = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};");
+    editor_feed_line("C[0] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};");
     ASSERT_TRUE("full-array block type",
                 repl_state_document_cmds()[0].type == CMD_SCRATCH_BLOCK_ASSIGN);
     ASSERT_INT("full-array block count",
@@ -1009,21 +1008,21 @@ static void run_scratch_block_matrix(void) {
             const char *label;
             const char *input;
         } bad[] = {
-            { "not a scratch array",   "n = {1, 2};" },
+            { "not a scratch array",   "n[0] = {1, 2};" },
             { "single-cell list",      "A[3] = {5};" },
             /* Expands to ~440 chars of C, past what import will read back. */
             { "exports past the line limit",
-              "A = {TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, "
-              "TAU, TAU, TAU, TAU, TAU};" },
+              "A[0] = {TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, TAU, "
+              "TAU, TAU, TAU, TAU, TAU, TAU};" },
             { "past the array end",    "A[14] = {1, 2, 3};" },
             { "base past the array",   "A[16] = {1};" },
             { "too many values",
-              "A = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};" },
-            { "empty cell",            "A = {1, , 3};" },
-            { "trailing comma",        "A = {1, 2,};" },
-            { "unclosed brace",        "A = {1, 2;" },
-            { "text after brace",      "A = {1, 2} 3;" },
-            { "nested brace",          "A = {1, {2}};" },
+              "A[0] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};" },
+            { "empty cell",            "A[0] = {1, , 3};" },
+            { "trailing comma",        "A[0] = {1, 2,};" },
+            { "unclosed brace",        "A[0] = {1, 2;" },
+            { "text after brace",      "A[0] = {1, 2} 3;" },
+            { "nested brace",          "A[0] = {1, {2}};" },
         };
         for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
             char label[128];

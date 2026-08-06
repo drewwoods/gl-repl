@@ -716,10 +716,11 @@ label("fmt", ...)              (bitmap text; REPL primitive)
 for(var, start, end[, step]) { }   func0..func9(params) { }   if(expr) { }
 break;   continue;                (innermost enclosing loop, same func body)
 float name[, ...];    var = expr;    A[i] = expr;    // comment
-A[base] = {e0, ..., eN};       (2..16 cells at once; literal base, or none
-                                for 0. Source-only CMD_SCRATCH_BLOCK_ASSIGN:
-                                flatten expands it to one CMD_SCRATCH_ASSIGN
-                                per cell, so nothing downstream sees it)
+A[base] = {e0, ..., eN};       (2..16 cells at once; base is a required
+                                integer literal. Source-only
+                                CMD_SCRATCH_BLOCK_ASSIGN: flatten expands it
+                                to one CMD_SCRATCH_ASSIGN per cell, so
+                                nothing downstream sees it)
 static float name[, ...];      (global from anywhere; plain `float` inside a
                                 function body is a function-scoped local)
 ```

@@ -237,7 +237,7 @@ static const char *prog_scratch_matrix[] = {
  * three legs disagree about when the writes land, and this program exists
  * to hold that disagreement still - see the g_curated XFAIL reason. */
 static const char *prog_scratch_block_self_ref[] = {
-    "A = {1, 2};",
+    "A[0] = {1, 2};",
     "A[0] = {t, A[0] + 100};",
     "glBegin(GL_POINTS);",
     "glVertex3f(A[0], A[1], 0);",
