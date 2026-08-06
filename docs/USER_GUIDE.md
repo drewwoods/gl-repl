@@ -150,11 +150,11 @@ lists them grouped by tag. `./gl-repl --list-examples` prints the compiled-in
 set.
 
 ```
- 1  gl-repl logo                                        21  GLU concave arrow cutout
- 2  Rotating cube                                       22  GLU concave arrow extrusion
- 3  Animated ring (for + t)                             23  Glow sprites (blend + point attenuation)
- 4  Conditional colors (if + t)                         24  Snowfall particles
- 5  Transform stress (translate/rotate/scale guides)    25  Swaying grass field (rand + t)
+ 1  gl-repl logo                                        21  GLU concave arrow
+ 2  Rotating cube                                       22  GLU concave arrow cutout
+ 3  Animated ring (for + t)                             23  GLU concave arrow extrusion
+ 4  Conditional colors (if + t)                         24  Glow sprites (blend + point attenuation)
+ 5  Transform stress (translate/rotate/scale guides)    25  Snowfall particles
  6  Parametric torus (nested for)                       26  Jellyfish (glDepthMask translucency)
  7  Animated wave surface (analytic normals)            27  Dusk lighthouse atoll (stress test)
  8  Torus knot (animated)                               28  Lantern festival (additive glow + reflections)
@@ -166,10 +166,10 @@ set.
 14  Traveling ripple ring                               34  Pulse bars (easing)
 15  Bezier curve with guides                            35  Bubble sort (scratch arrays)
 16  Annotated orbit plot (labels)                       36  Clip planes carve solids (glClipPlane)
-17  Recursive triangle tree (func + recursion)          37  Fog ring tunnel (glFog)
-18  Sierpinski carpet (2D recursion)                    38  Planar shadows (glMultMatrixf)
-19  Sierpinski sponge (3D recursion)                    39  Stencil mask window (glStencilOp)
-20  GLU concave arrow
+17  Sierpinski carpet (2D recursion)                    37  Fog ring tunnel (glFog)
+18  Sierpinski sponge (3D recursion)                    38  Planar shadows (glMultMatrixf)
+19  Recursive 3D tree (func + recursion)                39  Stencil mask window (glStencilOp)
+20  Swaying grass field (rand + t)
 ```
 
 Examples may carry their own presentation presets (grid theme, backdrop,
@@ -1028,7 +1028,7 @@ drawCube();
 ```
 
 Ten function slots are available. Recursion works when paired with an
-`if(...)` guard - see the *Recursive triangle tree* example.
+`if(...)` guard - see the *Recursive 3D tree* example.
 
 #### Function-scoped locals
 

@@ -2248,7 +2248,7 @@ if want sc-parametric-torus; then
 fi
 if want sc-recursive-tree; then
     gif "$SHOW/recursive-tree.gif" 200 2 20 720 \
-        --example "Recursive triangle tree (func + recursion)"
+        --example "Recursive 3D tree (func + recursion)"
 fi
 
 # Curves & line art.

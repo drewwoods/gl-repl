@@ -98,43 +98,34 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  // Recursive triangle tree: child calls shrink and rotate from the parent
-  branch(depth, size, spin) {
-    glColor3f(0.62 - 0.065*depth, 0.52 + 0.045*depth, 0.95 + 0.0075*depth);
-    glBegin(GL_LINE_LOOP);
-      glNormal3f(0, 0, 1);
-      glVertex3f(0, size, 0);
-      glVertex3f(-0.866*size, -0.5*size, 0);
-      glVertex3f(0.866*size, -0.5*size, 0);
-    glEnd();
-    // Base case vs recursive case as a complementary if pair (an if/else):
-    // depth 0 caps the branch with a filled leaf; otherwise recurse into 3
-    // children.
+  // Sierpinski carpet: cut the middle cell out of a 3x3 grid, then do the
+  // same to the 8 cells that remain. Each call owns one square; u is a
+  // 0..1 shade the children nudge so the tiles ramp MAGENTA -> AZURE.
+  carpet(depth, size, u) {
+    // Base case: fill this cell. The holes are simply cells nobody fills.
     if(depth <= 0) {
-      glColor3f(1, 0.85, 0.15);
-      glBegin(GL_TRIANGLES);
+      glColor3f(0.95 - 0.8*u, 0.25 + 0.3*u, 1);
+      glBegin(GL_QUADS);
         glNormal3f(0, 0, 1);
-        glVertex3f(0, size*0.55, 0);
-        glVertex3f(-0.48*size, -0.25*size, 0);
-        glVertex3f(0.48*size, -0.25*size, 0);
+        glVertex3f(-0.5*size, -0.5*size, 0);
+        glVertex3f(0.5*size, -0.5*size, 0);
+        glVertex3f(0.5*size, 0.5*size, 0);
+        glVertex3f(-0.5*size, 0.5*size, 0);
       glEnd();
     }
+    // Recursive case: walk the 3x3 grid -- loops are half-open, so
+    // -1..2 visits -1, 0, 1 -- and skip the center cell.
     if(depth > 0) {
-      glPushMatrix();
-        glTranslatef(0, size*1.02, 0);
-        glRotatef(18 + spin*14, 0, 0, 1);
-        branch(depth - 1, size*0.62, spin + 0.15);
-      glPopMatrix();
-      glPushMatrix();
-        glTranslatef(-size*0.9, -size*0.38, 0);
-        glRotatef(-30 - spin*12, 0, 0, 1);
-        branch(depth - 1, size*0.58, spin + 0.12);
-      glPopMatrix();
-      glPushMatrix();
-        glTranslatef(size*0.9, -size*0.38, 0);
-        glRotatef(30 + spin*12, 0, 0, 1);
-        branch(depth - 1, size*0.58, spin + 0.12);
-      glPopMatrix();
+      for(i, -1, 2) {
+        for(j, -1, 2) {
+          if(abs(i) + abs(j) > 0) {
+            glPushMatrix();
+              glTranslatef(i*size/3, j*size/3, 0);
+              carpet(depth - 1, size/3, u + (i + j)*0.12);
+            glPopMatrix();
+          }
+        }
+      }
     }
   }
 
@@ -143,8 +134,8 @@ void display(void) {
 
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_NORMALIZE);
-  glRotatef(sin(t*0.35)*12, 0, 0, 1);
-  branch(4, 1.05, sin(t*0.4));
+  glRotatef(sin(t*0.35)*10, 0, 0, 1);
+  carpet(2, 3.6, 0.5);
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);

@@ -22,7 +22,7 @@ scripts/docs-assets.sh --list             # asset names
 | `torus-knot.gif` | `sc-torus-knot` | Torus knot (animated) |
 | `snowfall.gif` | `sc-snowfall` | Snowfall demo (550 particles) |
 | `parametric-torus.png` | `sc-parametric-torus` | Parametric torus (nested for) - still (static geometry) |
-| `recursive-tree.gif` | `sc-recursive-tree` | Recursive triangle tree (func + recursion) |
+| `recursive-tree.gif` | `sc-recursive-tree` | Recursive 3D tree (func + recursion) |
 | `spirograph.gif` | `sc-spirograph` | Animated spirograph curve |
 | `ripple-ring.gif` | `sc-ripple-ring` | Traveling ripple ring |
 | `bezier.png` | `sc-bezier` | Bezier curve with guides (draws its own control points) |

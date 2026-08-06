@@ -145,25 +145,27 @@ for(i, 0, n) {
 
 ---
 
-### [Recursive triangle tree](../examples/scenes/recursive-triangle-tree-func-recursion.glr)
+### [Recursive 3D tree](../examples/scenes/recursive-3d-tree-func-recursion.glr)
 
-A `branch(depth, size, spin)` function that calls itself - recursion,
-inlined by the flattener, capped at depth 64.
+A `limb(depth, len, rad, seed)` function that calls itself - recursion,
+inlined by the flattener, capped at depth 64. Each call draws one tapered
+tube and forks into three children, so 121 limbs and a full canopy come out
+of a few lines.
 
 <!-- images/showcase/recursive-tree.gif
-     Shot: the branching triangle tree; animate t so the spin parameter sways.
+     Shot: the branching 3D tree; animate t so the wind term sways the limbs.
      Generate: scripts/docs-assets.sh sc-recursive-tree
      Intent: "the REPL does recursion" in one image. -->
 <div align="center">
-<img src="images/showcase/recursive-tree.gif" alt="A recursive triangle tree" width="70%">
+<img src="images/showcase/recursive-tree.gif" alt="A recursive 3D tree" width="70%">
 </div>
 
 ```c
-branch(depth, size, spin) {
-  glColor3f(0.25 + depth*0.14, 0.45 + 0.2*sin(spin), 1 - depth*0.12);
-  glBegin(GL_LINE_LOOP);  /* the triangle */  glEnd();
+limb(depth, len, rad, seed) {
+  glBegin(GL_QUAD_STRIP);  /* the tapered limb */  glEnd();
+  glTranslatef(0, len, 0);
   if(depth > 0) {
-    /* recurse: shrink + rotate two children */
+    /* recurse: three shorter, thinner, tilted children */
   }
 }
 ```
