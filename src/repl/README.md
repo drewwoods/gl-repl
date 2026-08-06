@@ -31,8 +31,8 @@ The pieces map onto standard interpreter parts:
 
 | General concept | Here |
 |---|---|
-| Lexer/parser → AST | [`parser.c`](parser.c) → [`GLCmd`](command.h#L121) records |
-| Static validation / compile pass | [`compile.c`](compile.c) → [`ReplCompiledChange`](compile.h#L130) (pure, never mutates) |
+| Lexer/parser → AST | [`parser.c`](parser.c) → [`GLCmd`](command.h#L122) records |
+| Static validation / compile pass | [`compile.c`](compile.c) → [`ReplCompiledChange`](compile.h#L132) (pure, never mutates) |
 | Expression evaluator | [`eval.c`](eval.c) (recursive descent; `sin`, `cos`, `%`, comparisons, vars) |
 | IR / lowering | [`flatten.c`](flatten.c): unrolls loops, inlines functions, resolves `if` → a flat command stream; [`flatten_query.c`](flatten_query.c): live flat-program cost/cursor queries |
 | Bytecode VM / executor | [`executor.c`](executor.c): walks the flat stream emitting GL calls |
@@ -111,7 +111,7 @@ Inside the full app this is **layers 1 and 3** of the ownership map:
 - The editor proposes text; `repl_compile` validates it *purely* (it never
   edits state, never touches the cursor, never calls `set_status`).
 - On success the editor applies the change to REPL runtime state via
-  `repl_apply_*`, and `repl_command_store` does the low-level [`GLCmd`](command.h#L121) array
+  `repl_apply_*`, and `repl_command_store` does the low-level [`GLCmd`](command.h#L122) array
   shuffling.
 - Each frame, [`repl_refresh_flat_program()`](pipeline.h) brings the flat
   program current: it either does nothing, rebakes values in place, or asks
@@ -125,7 +125,7 @@ Inside the full app this is **layers 1 and 3** of the ownership map:
   separately in [`scenes.c`](scenes.c) (as [`SceneSnapshot`](scene_snapshot.h#L17)s); [`ReplRuntimeState`](state.h#L18) only tracks the
   active example index and bound workspace dir.
 
-[`GLCmd`](command.h#L121) is a pure parse result (type, args, flags, provenance) - it carries
+[`GLCmd`](command.h#L122) is a pure parse result (type, args, flags, provenance) - it carries
 **no source text**; the per-line text lives in the editor's buffer. That
 split is what keeps the pipeline editor-agnostic (and what `repl_demo`
 proves by supplying its own line store).
@@ -150,16 +150,16 @@ at build time, like the example catalog.
 
 | File | Responsibility |
 |---|---|
-| [`command.h`](command.h) | Core types: [`CmdType`](command.h#L44), [`GLCmd`](command.h#L121), control-flow predicates |
+| [`command.h`](command.h) | Core types: [`CmdType`](command.h#L44), [`GLCmd`](command.h#L122), control-flow predicates |
 | [`command_spec.c`](command_spec.c) / `.h` | Per-command descriptor tables (arity, enum args, highlight category) |
 | [`color_limits.h`](color_limits.h), [`util.h`](util.h) | Shared limits (clear-color cap) and size-checked buffer helpers |
 | **Edit flow** | *text → program model* |
-| [`parser.c`](parser.c) / `.h` | One source line → [`GLCmd`](command.h#L121) + canonical text |
+| [`parser.c`](parser.c) / `.h` | One source line → [`GLCmd`](command.h#L122) + canonical text |
 | [`normalize.c`](normalize.c) / `.h` | Parse-and-normalize pipeline |
 | [`eval.c`](eval.c) / `.h` | Expression evaluator, predefined-variable lookup, REPL↔C translation |
-| [`compile.c`](compile.c) / `.h` | Pure validators → [`ReplCompiledChange`](compile.h#L130) (never mutates) |
+| [`compile.c`](compile.c) / `.h` | Pure validators → [`ReplCompiledChange`](compile.h#L132) (never mutates) |
 | [`apply.c`](apply.c) / `.h` | Applies a compiled change to REPL runtime state (cmd store + predef/scratch/alias ops) |
-| [`command_store.c`](command_store.c) / `.h` | Low-level [`GLCmd`](command.h#L121) array mechanics (insert/replace/delete/load) |
+| [`command_store.c`](command_store.c) / `.h` | Low-level [`GLCmd`](command.h#L122) array mechanics (insert/replace/delete/load) |
 | [`load.c`](load.c) / `.h` | Non-editor line loader + apply transaction (import/example/tutorial/tests) |
 | [`replace.c`](replace.c) / `.h`, [`comment_toggle.c`](comment_toggle.c) / `.h` | Range transactions - whole-document rebuild behind find/replace, and the Ctrl+/ range + direction. Both are invalid at every intermediate step, so both run under a [`SceneSnapshot`](scene_snapshot.h#L17) restored wholesale on any rejection (`ARCHITECTURE.md` §4.5) |
 | [`visible_vars.c`](visible_vars.c) / `.h`, [`text_helpers.c`](text_helpers.c) / `.h` | Ordered lexical scope collection - loop iterators, function parameters and function-scoped locals, each tagged with its [`ReplVisibleVarKind`](visible_vars.h#L20); parse/extract/canonical-text helpers |

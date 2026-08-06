@@ -413,6 +413,32 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
         export_write_c89_line(f, c_src);
         break;
     }
+    case CMD_SCRATCH_BLOCK_ASSIGN:
+        /* No source-text fallback: the REPL form is not C, so a row this
+         * writer cannot lower would export as something that does not
+         * compile. Dropping it is equally wrong, so emit the block's baked
+         * cell values - the same shape, minus the animation. */
+        if (!write_scratch_block_as_c89(f, source_text)) {
+            int indent = 0;
+            int cell;
+            while (source_text[indent] == ' ' || source_text[indent] == '\t')
+                indent++;
+            fprintf(f, "%.*s", indent, source_text);
+            for (cell = 0; cell < (int)cmd->args[2]; cell++) {
+                char v[EXPORT_FLOAT_TEXT_MAX];
+                repl_format_source_float(v, sizeof(v),
+                                         cmd->payload.scratch_block.v[cell]);
+                /* Cast rather than an `f` suffix: repl_format_source_float
+                 * drops the fractional part of a whole number, and `2f` is
+                 * not a C literal. */
+                fprintf(f, "%s%c[%d] = (float)%s;",
+                        cell ? " " : "",
+                        (char)('A' + (int)cmd->args[0]),
+                        (int)cmd->args[1] + cell, v);
+            }
+            fprintf(f, "\n");
+        }
+        break;
     case CMD_CALL:
         write_cmd_source_as_c(f, source_text, 1);
         break;
@@ -875,6 +901,71 @@ int write_clip_plane_as_c89(FILE *f, const char *source_text) {
     fprintf(f, "%.*sglClipPlane(%s, %s(%s, %s, %s, %s));\n",
             indent, source_text, plane[0], REPL_EXPORT_GLDOUBLE4_HELPER,
             c_args[0], c_args[1], c_args[2], c_args[3]);
+    return 1;
+}
+
+/* `A[base] = {e0, ..., eN-1};` - an array is not assignable in C, so the
+ * row lowers to the run of cell stores it means:
+ *
+ *   A[4] = {c, s, 0, 0};   ->   A[4] = c; A[5] = s; A[6] = 0.0f; A[7] = 0.0f;
+ *
+ * One C line per source row, which is what lets import fold the run back
+ * into the block form (repl_import_fold_scratch_block). The base index is a
+ * literal - compile rejects a computed one for exactly this reason - so
+ * every subscript here is a constant and the base expression is never
+ * evaluated more than once. */
+int write_scratch_block_as_c89(FILE *f, const char *source_text) {
+    char name[REPL_PREDEF_NAME_MAX];
+    char index_expr[MAX_LINE_LEN];
+    char rhs[MAX_LINE_LEN];
+    ReplScratchBlockCell cells[REPL_SCRATCH_ARRAY_LEN];
+    char out[MAX_LINE_LEN * 3];
+    const char *comment;
+    int base = 0;
+    int count, indent, used = 0, k;
+
+    if (!repl_extract_assignment_target_parts(source_text ? source_text : "",
+                                              name, sizeof(name),
+                                              index_expr, sizeof(index_expr),
+                                              rhs, sizeof(rhs)))
+        return 0;
+    if (repl_eval_scratch_array_index(name) < 0)
+        return 0;
+    count = repl_split_scratch_block_rhs(rhs, cells, REPL_SCRATCH_ARRAY_LEN);
+    if (count < 0)
+        return 0;
+    if (index_expr[0]) {
+        char *end = NULL;
+        long parsed = strtol(index_expr, &end, 10);
+        if (!end || *end != '\0' || parsed < 0)
+            return 0;
+        base = (int)parsed;
+    }
+    if (base + count > REPL_SCRATCH_ARRAY_LEN)
+        return 0;
+
+    indent = 0;
+    while (source_text[indent] == ' ' || source_text[indent] == '\t')
+        indent++;
+
+    out[0] = '\0';
+    for (k = 0; k < count; k++) {
+        char cell[MAX_LINE_LEN];
+        char c_cell[MAX_LINE_LEN];
+        int wrote;
+
+        repl_scratch_block_cell_text(&cells[k], cell, sizeof(cell));
+        repl_eval_expr_to_c(cell, c_cell, sizeof(c_cell));
+        wrote = snprintf(out + used, sizeof(out) - (size_t)used, "%s%s[%d] = %s;",
+                         k ? " " : "", name, base + k, c_cell);
+        if (wrote < 0 || wrote >= (int)sizeof(out) - used)
+            return 0;
+        used += wrote;
+    }
+
+    comment = repl_line_trailing_comment(source_text);
+    fprintf(f, "%.*s%s%s%s\n", indent, source_text, out,
+            comment ? "  " : "", comment ? comment : "");
     return 1;
 }
 

@@ -1976,7 +1976,8 @@ static void glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *snap) {
         if (!repl_parser_parse_command_ctx(in.input, &pl, &parse_ctx)) {
             if (edit_type != CMD_VAR_ASSIGN &&
                 edit_type != CMD_VAR_DECLARE &&
-                edit_type != CMD_SCRATCH_ASSIGN)
+                edit_type != CMD_SCRATCH_ASSIGN &&
+                edit_type != CMD_SCRATCH_BLOCK_ASSIGN)
                 return;
             memset(&pl, 0, sizeof pl);
             pl.cmd.type = edit_type;

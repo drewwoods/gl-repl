@@ -1764,6 +1764,126 @@ static int import_make_repl_local_decl(const char *line, char *out,
     return 1;
 }
 
+/* Fold the C a scratch block exports to back into the block form:
+ *
+ *   A[4] = c; A[5] = s; A[6] = 0.0f; A[7] = 0.0f;  ->  A[4] = {c, s, 0, 0};
+ *
+ * The run has to be one array, literal subscripts, consecutive and
+ * ascending, and at least two of them - a lone `A[4] = c;` is the scalar
+ * form and must round-trip as itself. Anything else falls through to the
+ * generic path, which handles each statement the way it always did.
+ *
+ * This is the only reader of that shape: nothing else in the exported C
+ * puts several statements on one line, which is what makes the run
+ * unambiguous without tracking the writer's intent across lines. */
+static int import_make_repl_scratch_block_line(const char *line,
+                                               char *out, int out_sz) {
+    const char *p = line;
+    const char *comment;
+    char array_name = '\0';
+    char cells[REPL_SCRATCH_ARRAY_LEN][MAX_LINE_LEN];
+    int indent = 0;
+    int base = -1;
+    int count = 0;
+    int used, k;
+
+    if (!line || !out || out_sz <= 0)
+        return 0;
+
+    while (line[indent] == ' ' || line[indent] == '\t')
+        indent++;
+    p = line + indent;
+
+    comment = repl_line_trailing_comment(p);
+
+    while (*p && (!comment || p < comment)) {
+        const char *expr_start;
+        const char *semi;
+        int subscript = 0;
+        int digits = 0;
+        int expr_len;
+        char c_expr[MAX_LINE_LEN];
+
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (!*p || (comment && p >= comment))
+            break;
+
+        if (*p != 'A' && *p != 'B' && *p != 'C')
+            return 0;
+        if (array_name && *p != array_name)
+            return 0;
+        array_name = *p;
+        p++;
+
+        if (*p != '[')
+            return 0;
+        p++;
+        while (isdigit((unsigned char)*p)) {
+            subscript = subscript * 10 + (*p - '0');
+            if (subscript > REPL_SCRATCH_ARRAY_LEN)
+                return 0;
+            digits++;
+            p++;
+        }
+        if (!digits || *p != ']')
+            return 0;
+        p++;
+
+        while (*p && isspace((unsigned char)*p)) p++;
+        if (*p != '=' || p[1] == '=')
+            return 0;
+        p++;
+
+        semi = strchr(p, ';');
+        if (!semi || (comment && semi > comment))
+            return 0;
+        expr_start = p;
+        while (expr_start < semi && isspace((unsigned char)*expr_start))
+            expr_start++;
+        expr_len = (int)(semi - expr_start);
+        while (expr_len > 0 && isspace((unsigned char)expr_start[expr_len - 1]))
+            expr_len--;
+        if (expr_len <= 0 || expr_len >= MAX_LINE_LEN)
+            return 0;
+
+        if (count == 0)
+            base = subscript;
+        else if (subscript != base + count)
+            return 0;
+        if (count >= REPL_SCRATCH_ARRAY_LEN)
+            return 0;
+
+        memcpy(c_expr, expr_start, (size_t)expr_len);
+        c_expr[expr_len] = '\0';
+        repl_eval_c_expr_to_repl(c_expr, cells[count], sizeof(cells[count]));
+        count++;
+
+        p = semi + 1;
+    }
+
+    if (count < 2 || base < 0 || base + count > REPL_SCRATCH_ARRAY_LEN)
+        return 0;
+
+    used = snprintf(out, (size_t)out_sz, "%.*s%c[%d] = {",
+                    indent, line, array_name, base);
+    if (used < 0 || used >= out_sz)
+        return 0;
+    for (k = 0; k < count; k++) {
+        int wrote = snprintf(out + used, (size_t)(out_sz - used), "%s%s",
+                             k ? ", " : "", cells[k]);
+        if (wrote < 0 || wrote >= out_sz - used)
+            return 0;
+        used += wrote;
+    }
+    {
+        int wrote = snprintf(out + used, (size_t)(out_sz - used), "};%s%s",
+                             comment ? "  " : "", comment ? comment : "");
+        if (wrote < 0 || wrote >= out_sz - used)
+            return 0;
+    }
+    return 1;
+}
+
 static void import_translate_repl_line(const char *line,
                                        char *repl_line,
                                        int repl_line_sz) {
@@ -1776,6 +1896,7 @@ static void import_translate_repl_line(const char *line,
         import_make_repl_clip_plane_line(line, repl_line, repl_line_sz) ||
         import_make_repl_fog_fv_line(line, repl_line, repl_line_sz) ||
         import_make_repl_mult_matrixf_line(line, repl_line, repl_line_sz) ||
+        import_make_repl_scratch_block_line(line, repl_line, repl_line_sz) ||
         import_make_repl_glut_bitmap_string(line, repl_line, repl_line_sz))
         return;
 

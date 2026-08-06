@@ -946,6 +946,8 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
     case CMD_FOR_BEGIN: case CMD_FOR_END:
     case CMD_BREAK: case CMD_CONTINUE:
     case CMD_FUNC_DEF: case CMD_FUNC_END: case CMD_CALL:
+    /* Expanded by flatten into one CMD_SCRATCH_ASSIGN per cell. */
+    case CMD_SCRATCH_BLOCK_ASSIGN:
     case CMD_IF_BEGIN: case CMD_ELSE_IF: case CMD_ELSE: case CMD_IF_END:
     case CMD_COMMENT:
     case CMD_EMPTY:

@@ -360,7 +360,7 @@ frame baseline so accumulating programs don't compound.
 ### Two-level command model
 
 Source `GLCmd[]` (per-line canonical **text lives in [`EditorState`](src/editor/state.h#L199)'s editor
-buffer, not on [`GLCmd`](src/repl/command.h#L121)**) → flat array (loops unrolled, funcs inlined, ifs
+buffer, not on [`GLCmd`](src/repl/command.h#L122)**) → flat array (loops unrolled, funcs inlined, ifs
 resolved; each flat cmd records `src_cmd_idx` / `call_src_cmd_idx` /
 `func_scope_mask`) → executor emits GL. Any edit marks the flat array dirty;
 rebuilt next frame. Budgets: `MAX_FLATTEN_VISIT_BUDGET` = 200000,
@@ -411,12 +411,12 @@ is [`repl_parse_and_normalize()`](src/repl/normalize.h#L20) → `parse_command()
   [`repl_eval_declare_predef_var()`](src/repl/eval.h#L319). Locals register
   nowhere: `flatten_bind_func_locals` re-derives them from
   `payload.decl.names[]` per call.
-- [`GLCmd`](src/repl/command.h#L121) payload is a tagged union keyed on `type`
+- [`GLCmd`](src/repl/command.h#L122) payload is a tagged union keyed on `type`
   (`payload.decl.*`, `payload.assign.prev_local_value`, `payload.label.fmt`,
   `payload.matrix.m[]`); other types must not read it. A flat local assignment
   captures its pre-write target value in the assignment arm because the
   ordinary `FlatCmdLocalVars` snapshot is post-write.
-- Deleting a decl range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L565) which
+- Deleting a decl range goes through [`repl_compile_delete_range()`](src/repl/compile.h#L567) which
   validates no variable is still referenced outside the range. Cut/copy/
   paste of decl rows is blocked outright.
 - Export writes `// @declare` markers; import reconstructs decls bypassing
@@ -542,6 +542,12 @@ the frame); the reset and the commit are both gated on the panel being open, so
 never reset one without the other. Controls are mouse-only (no keymap slot, no
 `GlrConfigKey`, so no `@cfg`/golden churn) - the rate, `lin`/`log` and
 `1x`/`2x` chips plus the legend all live in the panel.
+
+`CMD_SCRATCH_BLOCK_ASSIGN` rows are **deliberately unplottable** - a series is
+keyed by document row alone (`AssignPlotSample` is `{source_line_idx, value}`),
+so a row producing N values per execution would interleave them into one trace.
+The single gate is `glr_ap_is_assign()` in glr_assign_plot_bridge.c; the reason
+is written there.
 
 A scene can open the plot on itself with a trailing **`// @plot`** on an
 assignment row - which is why the target is a comment tag and not a config
@@ -709,6 +715,10 @@ label("fmt", ...)              (bitmap text; REPL primitive)
 for(var, start, end[, step]) { }   func0..func9(params) { }   if(expr) { }
 break;   continue;                (innermost enclosing loop, same func body)
 float name[, ...];    var = expr;    A[i] = expr;    // comment
+A[base] = {e0, ..., eN};       (2..16 cells at once; literal base, or none
+                                for 0. Source-only CMD_SCRATCH_BLOCK_ASSIGN:
+                                flatten expands it to one CMD_SCRATCH_ASSIGN
+                                per cell, so nothing downstream sees it)
 static float name[, ...];      (global from anywhere; plain `float` inside a
                                 function body is a function-scoped local)
 ```

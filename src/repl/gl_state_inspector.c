@@ -1420,6 +1420,7 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
     case CMD_ELSE:
     case CMD_VAR_ASSIGN:
     case CMD_SCRATCH_ASSIGN:
+    case CMD_SCRATCH_BLOCK_ASSIGN:
     case CMD_VAR_DECLARE:
     case CMD_COMMENT:
     case CMD_EMPTY:

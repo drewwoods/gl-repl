@@ -25,6 +25,27 @@
 #include "subsystems/assign_plot/assign_plot.h"  /* AssignPlotHostBridge */
 #include "ui/app/state.h"       /* ui_state_status_set */
 
+/* Which document rows the plot can be pointed at. This is the single gate:
+ * right-click targeting, the `// @plot` tag sync, and the per-capture drift
+ * pruning all reach the document through row_is_plottable() below, so a type
+ * left out of here is unplottable everywhere at once.
+ *
+ * CMD_SCRATCH_BLOCK_ASSIGN (`A[base] = {e0, ..., eN-1};`) is deliberately
+ * absent. A series is identified by its document row and nothing else -
+ * AssignPlotSample is {source_line_idx, value} - and a block row produces N
+ * values per execution, all carrying that one row index. Adding the type
+ * without widening the sample identity would not plot N series; it would
+ * interleave N unrelated cells into one trace and describe them as a single
+ * row's history, which is wrong data rather than a missing feature. Leaving
+ * it out costs nothing: the row simply refuses to be targeted, and a `@plot`
+ * tag on it is ignored.
+ *
+ * Supporting it properly means a sub-index on both AssignPlotSample and the
+ * series target key, inside a peer that deliberately links no src/repl (see
+ * assign_plot_demo). It is also not obviously wanted: MAX_ASSIGN_PLOT_SERIES
+ * is 4, so a 4-cell row would consume the whole plot and could never be
+ * overlaid against another row - which is what the plot is for. Plot the
+ * cells you care about as `A[k] = expr;` rows instead. */
 static int glr_ap_is_assign(CmdType type) {
     return type == CMD_VAR_ASSIGN || type == CMD_SCRATCH_ASSIGN;
 }

@@ -46,10 +46,10 @@ The standard interpreter parts map cleanly onto files:
 
 | Interpreter part | Here |
 |---|---|
-| Lexer / parser → AST | [`parser.c`](parser.c) → [`GLCmd`](command.h#L121) records |
+| Lexer / parser → AST | [`parser.c`](parser.c) → [`GLCmd`](command.h#L122) records |
 | Symbol / spec table | [`command_spec.c`](command_spec.c) (per-command arity, arg kinds, highlight category) |
 | Expression evaluator | [`eval.c`](eval.c) (recursive descent: `+ - * / %`, comparisons, `sin`/`cos`/…, variables) |
-| Static validation / compile pass | [`compile.c`](compile.c) → [`ReplCompiledChange`](compile.h#L130) (**pure**; never mutates) |
+| Static validation / compile pass | [`compile.c`](compile.c) → [`ReplCompiledChange`](compile.h#L132) (**pure**; never mutates) |
 | Mutation / "linker" | [`apply.c`](apply.c) + [`command_store.c`](command_store.c) (write the program model) |
 | IR lowering | [`flatten.c`](flatten.c) (unroll loops, inline functions, resolve `if`) |
 | Bytecode VM / executor | [`executor.c`](executor.c) (walk the flat program, emit GL) |
@@ -197,9 +197,9 @@ flowchart LR
 
 This is the core data structure. Read this section before anything else.
 
-### 3.1 [`GLCmd`](command.h#L121) - the universal command record
+### 3.1 [`GLCmd`](command.h#L122) - the universal command record
 
-A single [`GLCmd`](command.h#L121) ([`command.h`](command.h)) represents one command in *either* level.
+A single [`GLCmd`](command.h#L122) ([`command.h`](command.h)) represents one command in *either* level.
 It is a **pure parse result** - it carries type, evaluated args, flags,
 and provenance, but **no source text**. The per-line canonical text
 lives in the editor's buffer, not here. That omission is what keeps the
@@ -400,10 +400,10 @@ absolute and machine-checked:
 
 > A `repl_compile_*` function is **pure**: no editor mutation, no
 > command-store mutation, no status mutation, no undo entry. It returns
-> a [`ReplCompiledChange`](compile.h#L130) describing what *should* happen, or fills an
+> a [`ReplCompiledChange`](compile.h#L132) describing what *should* happen, or fills an
 > `err` buffer.
 
-The compiler reads everything it needs from a [`ReplCompileContext`](compile.h#L178)
+The compiler reads everything it needs from a [`ReplCompileContext`](compile.h#L180)
 snapshot (current cmds, edit line, source-scope view, predef table,
 func aliases) - it never reaches into REPL globals. Build one with
 `repl_compile_context_from_live(edit_line_idx)`; the caller supplies the
@@ -416,7 +416,7 @@ separate calls (`repl_apply_predef_ops`, `repl_apply_scratch_ops`,
 `repl_apply_alias_ops`) so the orchestrator can sequence them correctly
 relative to undo capture.
 
-### 4.2 [`ReplCompiledChange`](compile.h#L130) - the descriptor
+### 4.2 [`ReplCompiledChange`](compile.h#L132) - the descriptor
 
 A compiled change ([`compile.h`](compile.h)) is a *source-command-level* plan, not a
 flat program. Its `kind` selects the meaningful fields:
@@ -446,7 +446,7 @@ tests and the demo can compile-and-inspect without ever mutating state.
 
 ### 4.3 The compile dispatcher and handler order
 
-[`repl_compile_dispatch()`](compile.h#L286) walks per-kind validators in **canonical
+[`repl_compile_dispatch()`](compile.h#L288) walks per-kind validators in **canonical
 order** and returns the first non-`NO_CHANGE` result:
 
 ```
@@ -465,7 +465,7 @@ Block constructs share a **kernel** (`repl_compile_*_kernel`) between two
 callers: the lean loader's thin wrapper and the editor's richer wrapper
 (which adds header-replace, one-liner-body, and paired-end branches).
 The kernel does the parse/validate work; the wrappers shape it into the
-right [`ReplCompiledChange`](compile.h#L130). This is why import, examples, and live typing
+right [`ReplCompiledChange`](compile.h#L132). This is why import, examples, and live typing
 all agree on what a valid `for(...)` is.
 
 ### 4.4 The two apply paths
@@ -495,7 +495,7 @@ editor input widget. Keeping it separate from [`compile.c`](compile.c) preserves
 purity boundary - [`compile.c`](compile.c) only *describes* changes; [`load.c`](load.c) owns the
 apply orchestration.
 
-[`command_store.c`](command_store.c) underneath is the lowest layer: pure [`GLCmd`](command.h#L121) array
+[`command_store.c`](command_store.c) underneath is the lowest layer: pure [`GLCmd`](command.h#L122) array
 mechanics (insert/replace/delete/load, range normalization, capacity
 checks). It owns array shifting and bounds; callers own parsing, undo,
 variable registration, and cursor policy. Cursor shifting is opt-in per
@@ -627,7 +627,7 @@ provenance (§3.3) and a [`FlatCmdLocalVars`](flatten.h#L43) snapshot (§3.4).
 #### Expression paths and cache lifecycle
 
 Flatten has one control-flow walk and several progressively cheaper expression
-paths. They all produce the same baked [`GLCmd`](command.h#L121) stream:
+paths. They all produce the same baked [`GLCmd`](command.h#L122) stream:
 
 1. A command whose `has_vars` is 0 is appended verbatim from the committed
    source array. `has_vars` is decided at commit time against predefs and the
@@ -759,7 +759,7 @@ emitting GL. Key behaviors:
   read. `goto` was the sole holder of both, and both went with it.
 - **Matrix-stack tracking.** `repl_executor_apply_tracked_transform_cmd`
   maintains a depth counter (push++/pop--) that overlays read to color
-  geometry by transform depth. The GL matrix stack - not [`GLCmd`](command.h#L121) - is the
+  geometry by transform depth. The GL matrix stack - not [`GLCmd`](command.h#L122) - is the
   canonical transform truth at execution time.
 - **Replay clamp.** The caller passes `flat_cmd_count` (full count, or
   the replay program counter when replay is active) so only commands up
@@ -1122,9 +1122,9 @@ flowchart LR
 
 Each line is fed to [`repl_load_apply_line()`](load.h#L78) ([`load.c`](load.c)) - the same
 non-editor entry the example loader and file importer use (§4.4). For
-each line it builds a [`ReplCompileContext`](compile.h#L178), runs `repl_compile_dispatch`
+each line it builds a [`ReplCompileContext`](compile.h#L180), runs `repl_compile_dispatch`
 (falling back to the GL parser), and applies the resulting
-[`ReplCompiledChange`](compile.h#L130) to the source array + variable table:
+[`ReplCompiledChange`](compile.h#L132) to the source array + variable table:
 
 ```
 float r;       src+1 (now 1)  [t=0.00 r=0.00]   ← compile float_decl → predef DECLARE r

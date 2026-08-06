@@ -112,4 +112,32 @@ int  repl_extract_assignment_target_parts(const char *src,
 int  split_top_level_args(const char *src,
                           char args[][MAX_LINE_LEN], int max_args);
 
+/* One cell of a scratch-block RHS, as a span into the caller's text
+ * rather than a copy: sixteen MAX_LINE_LEN cells would be a 4 KB stack
+ * frame in flatten, which runs this per row per frame. Callers that need
+ * a NUL-terminated expression copy one cell at a time into a single
+ * scratch buffer (repl_scratch_block_cell_text). */
+typedef struct {
+    const char *start;
+    int         len;
+} ReplScratchBlockCell;
+
+/* Split the `{e0, e1, ...}` RHS of a scratch block assignment into its
+ * cell expressions. Purely lexical - no evaluation, no state reads.
+ * Splitting uses repl_scan_next_arg_delim, so a cell may itself contain
+ * commas inside parens (`clamp(x, 0, 1)`).
+ *
+ * Returns the cell count (>= 1), or -1 when `rhs` is not brace-delimited,
+ * the braces are unbalanced, there is trailing text after `}`, a cell is
+ * empty, or there are more than `max_cells` of them. A `-1` here is not
+ * an error by itself at every call site: the commit path uses it to fall
+ * through to the ordinary scalar-RHS handling. */
+int  repl_split_scratch_block_rhs(const char *rhs,
+                                  ReplScratchBlockCell *cells, int max_cells);
+
+/* Copy cell `c`'s span into `out` as a NUL-terminated string. Truncates
+ * (never overruns) when the cell does not fit; returns `out`. */
+char *repl_scratch_block_cell_text(const ReplScratchBlockCell *c,
+                                   char *out, int out_sz);
+
 #endif /* REPL_TEXT_HELPERS_H */

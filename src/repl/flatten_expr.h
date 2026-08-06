@@ -86,6 +86,11 @@ void repl_flatten_expr_set_predef_deps(ReplFlattenExprEngine *engine,
                                        int slot, ReplExprDepMask deps);
 void repl_flatten_expr_note_emitted(ReplFlattenExprEngine *engine,
                                     int has_vars, int line_idx);
+/* Give up the value-only rebake for this whole flat program. For a source
+ * form whose flat expansion cannot be re-evaluated in place from the flat
+ * command alone - the caller knows something the rebake walk does not.
+ * The next change to any dependency takes the full flatten instead. */
+void repl_flatten_expr_forfeit_rebake(ReplFlattenExprEngine *engine);
 ReplExprDepMask repl_flatten_expr_value_deps(
     const ReplFlattenExprEngine *engine);
 ReplExprDepMask repl_flatten_expr_structural_deps(

@@ -1375,6 +1375,168 @@ static int flatten_scratch_assign(FlattenContext *ctx, const GLCmd *src_cmd,
     return rv;
 }
 
+/* A[base] = {e0, ..., eN-1} block assignment. Re-evaluates every cell,
+ * writes the window in stream order, and appends one ordinary
+ * CMD_SCRATCH_ASSIGN per cell - CMD_SCRATCH_BLOCK_ASSIGN is source-only,
+ * so nothing downstream of here has to know the form exists.
+ *
+ * The cells capture at REPL_EXPR_ROLE_SCRATCH_RHS ordinals 0..N-1, which
+ * is why the base index is a literal and not an expression: ordinal 0 of
+ * SCRATCH_INDEX stays unused here, and there is no per-cell index program
+ * to keep in step with the values.
+ *
+ * A var-bearing block forfeits the value-only rebake for the whole flat
+ * program. The flat rows it emits are indistinguishable from hand-written
+ * `A[k] = expr;` rows, so rebake_one_cmd would re-evaluate ordinal 0 for
+ * every one of them - cell 0's value written into all N cells. Carrying an
+ * ordinal on the flat command would fix that, but only by giving
+ * CMD_SCRATCH_ASSIGN two shapes for every consumer to know about; the full
+ * flatten already re-runs each frame for anything animated, which is the
+ * only case that reaches here. */
+static int flatten_scratch_block_assign(FlattenContext *ctx, const GLCmd *src_cmd,
+                                        int i, ExprVar *vars,
+                                        const ReplExprDepMask *var_deps, int nv,
+                                        int call_src_cmd_idx,
+                                        int root_call_src_cmd_idx,
+                                        unsigned int func_scope_mask) {
+    prof_begin(PROF_FLATTEN_SCRATCH_ASSIGN);
+    int rv = 1;
+    int array_idx = (int)src_cmd->args[0];
+    int base_idx = (int)src_cmd->args[1];
+    int count = (int)src_cmd->args[2];
+    float vals[REPL_SCRATCH_ARRAY_LEN];
+    int local_cell_vars = 0;
+    ReplExprDepMask assign_deps = 0;
+    int warm = repl_flatten_expr_line_ready(&ctx->expr, i);
+    const char *src_text = flatten_src_text(ctx->text, i);
+    int k;
+
+    if (array_idx < 0 || array_idx >= REPL_SCRATCH_ARRAY_COUNT ||
+        base_idx < 0 || count < 1 ||
+        base_idx + count > REPL_SCRATCH_ARRAY_LEN) {
+        flatten_fail(ctx, "scratch block write out of range");
+        prof_accum_end(PROF_FLATTEN_SCRATCH_ASSIGN);
+        return 0;
+    }
+
+    /* Baked values are the fallback at every level, exactly as the scalar
+     * form falls back to args[2]: a cell whose program is missing on a
+     * READY line keeps what the commit evaluated. */
+    for (k = 0; k < count; k++)
+        vals[k] = src_cmd->payload.scratch_block.v[k];
+
+    if (warm) {
+        for (k = 0; k < count; k++) {
+            ReplFlattenExprValue v = repl_flatten_expr_eval(
+                &ctx->expr, i, REPL_EXPR_ROLE_SCRATCH_RHS, k,
+                vars, var_deps, nv, /*structural=*/0);
+            if (!v.found)
+                continue;
+            vals[k] = v.value;
+            assign_deps |= v.deps;
+            if (vars && nv > 0 && v.used_local)
+                local_cell_vars = 1;
+        }
+    } else {
+        char name[REPL_PREDEF_NAME_MAX] = "";
+        char index_expr[MAX_LINE_LEN] = "";
+        char rhs[MAX_LINE_LEN] = "";
+        ReplScratchBlockCell cells[REPL_SCRATCH_ARRAY_LEN];
+        int split = -1;
+
+        if (repl_extract_assignment_target_parts(src_text,
+                                                 name, sizeof(name),
+                                                 index_expr, sizeof(index_expr),
+                                                 rhs, sizeof(rhs)))
+            split = repl_split_scratch_block_rhs(rhs, cells,
+                                                 REPL_SCRATCH_ARRAY_LEN);
+
+        if (split == count) {
+            int building = repl_flatten_expr_build_begin(&ctx->expr, i, vars, nv);
+            for (k = 0; k < count; k++) {
+                char cell[MAX_LINE_LEN];
+                char repl_cell[MAX_LINE_LEN];
+
+                repl_scratch_block_cell_text(&cells[k], cell, sizeof(cell));
+                repl_eval_c_expr_to_repl(cell, repl_cell, sizeof(repl_cell));
+                if (building)
+                    repl_flatten_expr_capture_span(
+                        &ctx->expr, REPL_EXPR_ROLE_SCRATCH_RHS, k,
+                        repl_cell, repl_cell + strlen(repl_cell));
+
+                {
+                    ExprCtx cell_ctx = { repl_cell, vars, nv, NULL, 0 };
+                    vals[k] = repl_eval_expr(&cell_ctx);
+                }
+                if (vars && nv > 0 && input_has_expr_vars(cell, vars, nv))
+                    local_cell_vars = 1;
+            }
+            if (building)
+                repl_flatten_expr_build_finish(&ctx->expr, i, 1);
+        } else {
+            /* Text and command disagree (truncated line, or a source row
+             * edited out from under the parse). Freeze the keep-baked
+             * verdict the same way the scalar form does. */
+            if (repl_flatten_expr_build_begin(&ctx->expr, i, vars, nv))
+                repl_flatten_expr_build_finish(&ctx->expr, i, 1);
+        }
+
+        for (k = 0; k < count; k++)
+            assign_deps |= repl_flatten_expr_deps(
+                &ctx->expr, i, REPL_EXPR_ROLE_SCRATCH_RHS, k,
+                vars, var_deps, nv, /*structural=*/0, /*missing_ok=*/1);
+    }
+    repl_flatten_expr_note_value(&ctx->expr, assign_deps);
+
+    if (src_cmd->has_vars || local_cell_vars)
+        repl_flatten_expr_forfeit_rebake(&ctx->expr);
+
+    for (k = 0; k < count && rv; k++) {
+        GLCmd tmp;
+        int elem_idx = base_idx + k;
+
+        repl_eval_scratch_set(array_idx, elem_idx, vals[k]);
+
+        /* Built from scratch rather than copied from src_cmd: the source
+         * row's payload holds the cell array, and a CMD_SCRATCH_ASSIGN
+         * must leave the union zeroed. */
+        memset(&tmp, 0, sizeof(tmp));
+        tmp.type = CMD_SCRATCH_ASSIGN;
+        tmp.valid = 1;
+        tmp.is_auto = src_cmd->is_auto;
+        tmp.args[0] = (float)array_idx;
+        tmp.args[1] = (float)elem_idx;
+        tmp.args[2] = vals[k];
+        tmp.num_args = 3;
+        tmp.has_vars = src_cmd->has_vars || local_cell_vars;
+        repl_flatten_expr_note_emitted(&ctx->expr, tmp.has_vars, i);
+        if (!flatten_append_cmd(ctx, &tmp, i, call_src_cmd_idx,
+                                root_call_src_cmd_idx, func_scope_mask,
+                                vars, nv))
+            rv = 0;
+    }
+    prof_accum_end(PROF_FLATTEN_SCRATCH_ASSIGN);
+    return rv;
+}
+
+/* Route a scratch-writing source row to its form's handler. One dispatch
+ * point so flatten_range keeps a single branch for both spellings. */
+static int flatten_scratch_row(FlattenContext *ctx, const GLCmd *src_cmd,
+                               int i, ExprVar *vars,
+                               const ReplExprDepMask *var_deps, int nv,
+                               int call_src_cmd_idx,
+                               int root_call_src_cmd_idx,
+                               unsigned int func_scope_mask) {
+    if (src_cmd->type == CMD_SCRATCH_BLOCK_ASSIGN)
+        return flatten_scratch_block_assign(ctx, src_cmd, i, vars, var_deps, nv,
+                                            call_src_cmd_idx,
+                                            root_call_src_cmd_idx,
+                                            func_scope_mask);
+    return flatten_scratch_assign(ctx, src_cmd, i, vars, var_deps, nv,
+                                  call_src_cmd_idx, root_call_src_cmd_idx,
+                                  func_scope_mask);
+}
+
 /* Raise a pending loop jump. Kept out of flatten_range's body so the
  * reasoning lives somewhere it can be read: the statement emits nothing,
  * it only asks the walk to unwind to the innermost enclosing
@@ -1472,10 +1634,10 @@ static void flatten_range(FlattenContext *ctx,
             continue;
         }
 
-        if (src_cmd->type == CMD_SCRATCH_ASSIGN) {
-            if (!flatten_scratch_assign(ctx, src_cmd, i, vars, var_deps, nv,
-                                        call_src_cmd_idx, root_call_src_cmd_idx,
-                                        func_scope_mask))
+        if (repl_cmd_is_scratch_assign(src_cmd->type)) {
+            if (!flatten_scratch_row(ctx, src_cmd, i, vars, var_deps, nv,
+                                     call_src_cmd_idx, root_call_src_cmd_idx,
+                                     func_scope_mask))
                 return;
             i++;
             continue;

@@ -1289,7 +1289,11 @@ static void replay_annotations_refresh_output(ReplReplayAnnotationOutput *out) {
         return;
     const GLCmd *cmd = repl_state_document_cmd_at(cmd_idx);
     if (!cmd || !cmd->has_vars || cmd->type == CMD_VAR_ASSIGN ||
-        cmd->type == CMD_SCRATCH_ASSIGN)
+        cmd->type == CMD_SCRATCH_ASSIGN ||
+        /* One block row owns N flat rows; substituting the first one's args
+         * back into `A[base] = {...}` would annotate the whole row with a
+         * single cell's value. */
+        cmd->type == CMD_SCRATCH_BLOCK_ASSIGN)
         return;
     int flat_idx = replay_annotation_flat_cmd_for_source(cmd_idx);
     if (flat_idx < 0)

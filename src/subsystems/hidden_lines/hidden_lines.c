@@ -227,6 +227,7 @@ static int hidden_lines_cursor_owns_cmd(CmdType type) {
     case CMD_IF_END:
     case CMD_VAR_ASSIGN:
     case CMD_SCRATCH_ASSIGN:
+    case CMD_SCRATCH_BLOCK_ASSIGN:
     /* Drive push/pop attrib through the cursor (with suppress_attrib_gl set
      * below) so its saved frames scope the light-enable / clear-color
      * bookkeeping - including the end-of-prefix unwind - without touching the

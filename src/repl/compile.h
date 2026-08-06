@@ -123,8 +123,10 @@ typedef struct {
 #define MAX_PREDEF_OPS_PER_COMMIT MAX_PREDEF_VARS
 #endif
 
+/* One op per cell written by a single commit. `A[i] = expr;` writes one;
+ * the block form `A[base] = {e0, ..., eN-1}` writes up to a whole array. */
 #ifndef MAX_SCRATCH_OPS_PER_COMMIT
-#define MAX_SCRATCH_OPS_PER_COMMIT 1
+#define MAX_SCRATCH_OPS_PER_COMMIT REPL_SCRATCH_ARRAY_LEN
 #endif
 
 typedef struct ReplCompiledChange_s {

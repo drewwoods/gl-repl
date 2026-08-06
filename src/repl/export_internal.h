@@ -113,6 +113,7 @@ int write_point_parameterfv_as_c89(FILE *f, const char *source_text);
 int write_clip_plane_as_c89(FILE *f, const char *source_text);
 int write_fog_fv_as_c89(FILE *f, const char *source_text);
 int write_mult_matrixf_as_c89(FILE *f, const char *source_text);
+int write_scratch_block_as_c89(FILE *f, const char *source_text);
 int find_export_block_end(int begin_idx);
 int export_uses_tess_commands(void);
 /* `hoist_local_decls` emits every function-scoped declaration in the range

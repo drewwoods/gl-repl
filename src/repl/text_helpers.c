@@ -580,6 +580,95 @@ int split_top_level_args(const char *src, char args[][MAX_LINE_LEN], int max_arg
     return count;
 }
 
+int repl_split_scratch_block_rhs(const char *rhs,
+                                 ReplScratchBlockCell *cells, int max_cells) {
+    const char *p = rhs;
+    const char *close;
+    int count = 0;
+
+    if (!rhs || !cells || max_cells <= 0)
+        return -1;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (*p != '{')
+        return -1;
+    p++;
+
+    /* Find the closing brace first so trailing garbage is rejected before
+     * any cell is handed back - `{1, 2} 3` must not read as two cells.
+     * Nested braces have no meaning in the expression grammar, so a second
+     * `{` is malformed rather than a nesting level. */
+    close = strchr(p, '}');
+    if (!close || strchr(p, '{') != NULL)
+        return -1;
+    {
+        const char *after = close + 1;
+        while (*after && isspace((unsigned char)*after)) after++;
+        if (*after != '\0')
+            return -1;
+    }
+
+    while (p < close) {
+        const char *start;
+        const char *end;
+
+        while (p < close && isspace((unsigned char)*p)) p++;
+        if (p >= close)
+            break;
+        if (count >= max_cells)
+            return -1;
+
+        start = p;
+        p = repl_scan_next_arg_delim(p);
+        if (p > close)
+            p = close;
+
+        end = p;
+        while (end > start && isspace((unsigned char)end[-1])) end--;
+        if (end == start)
+            return -1;      /* empty cell: `{1, , 3}` */
+
+        cells[count].start = start;
+        cells[count].len = (int)(end - start);
+        count++;
+
+        while (p < close && isspace((unsigned char)*p)) p++;
+        if (p < close && *p == ',') {
+            p++;
+            /* A trailing comma before `}` leaves nothing to parse; the
+             * loop's leading skip lands on `close` and falls out, which
+             * would silently accept `{1, 2,}`. Reject it here instead so
+             * the cell count always matches what was written. */
+            {
+                const char *q = p;
+                while (q < close && isspace((unsigned char)*q)) q++;
+                if (q >= close)
+                    return -1;
+            }
+        }
+    }
+
+    return count > 0 ? count : -1;
+}
+
+char *repl_scratch_block_cell_text(const ReplScratchBlockCell *c,
+                                   char *out, int out_sz) {
+    int n;
+
+    if (!out || out_sz <= 0)
+        return out;
+    if (!c || !c->start) {
+        out[0] = '\0';
+        return out;
+    }
+    n = c->len;
+    if (n > out_sz - 1)
+        n = out_sz - 1;
+    memcpy(out, c->start, (size_t)n);
+    out[n] = '\0';
+    return out;
+}
+
 float repl_eval_if_condition_captured(const char *src_text,
                                       const ExprVar *vars, int num_vars,
                                       float fallback,

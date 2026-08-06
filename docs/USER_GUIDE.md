@@ -913,6 +913,42 @@ glVertex3f(A[0], 0, 0);
 Indices truncate to int and must stay in `0..15`. Like variables, scratch
 arrays persist and round-trip through save/load.
 
+#### Writing several cells at once
+
+A braced list fills a contiguous run of cells from one row:
+
+```c
+A[0] = {1, 0, 0, 0};      // writes A[0], A[1], A[2], A[3]
+A[4] = {0, c, s, 0};
+A = {1, 2, 3};            // no subscript means start at cell 0
+```
+
+The cells are ordinary expressions, re-evaluated every frame just like a
+single `A[k] = ...` row, and anything the list does not cover keeps its
+previous value. Four rows of four is how a 4x4 for
+[`glMultMatrixf`](#from-a-scratch-array) is usually written - it reads as the
+matrix it is, and each row stays inside the 256-character line limit that
+sixteen expressions on one line would blow past.
+
+Three limits are worth knowing:
+
+- **The base index must be a plain number**, not an expression. `A[n] = {…}`
+  is rejected; write those cells one at a time with `A[n] = expr;`.
+- **The run must fit**: `A[14] = {1, 2, 3}` runs off the end of the array and
+  is rejected, as is a list of more than sixteen values.
+- **A list needs at least two values.** `A[3] = {5}` is just `A[3] = 5;`
+  written the long way, and is rejected so that the two spellings cannot
+  disagree about which one a saved file comes back as.
+
+The committed row keeps the expressions you typed but standardises the
+separators to `, `, so what you see after committing is what a save and
+reload will give you back.
+
+A block row cannot be plotted. Right-clicking one does nothing, and a
+`// @plot` tag on it is ignored - a single row holding several values has no
+one series to draw. Plot the cell you care about as its own `A[k] = expr;`
+row instead.
+
 ### Arbitrary matrices
 
 `glTranslatef`, `glRotatef`, and `glScalef` cover almost everything, and they
@@ -965,6 +1001,17 @@ A[5] = 1;
 A[10] = 1;
 A[15] = 1;
 glMultMatrixf(A);         // post-multiply the current matrix by A
+```
+
+Or a [block assignment](#writing-several-cells-at-once) per column, which
+lays the matrix out the way it is usually written down:
+
+```c
+A[0]  = {cos(t), sin(t), 0, 0};
+A[4]  = {-sin(t), cos(t), 0, 0};
+A[8]  = {0, 0, 1, 0};
+A[12] = {0, 0, 0, 1};
+glMultMatrixf(A);         // a rotation about z, animated by t
 ```
 
 This form is worth it when the matrix is built up over several lines - in a

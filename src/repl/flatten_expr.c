@@ -261,6 +261,11 @@ void repl_flatten_expr_note_emitted(ReplFlattenExprEngine *engine,
         engine->rebake_ok = 0;
 }
 
+void repl_flatten_expr_forfeit_rebake(ReplFlattenExprEngine *engine) {
+    if (engine)
+        engine->rebake_ok = 0;
+}
+
 ReplExprDepMask repl_flatten_expr_value_deps(
     const ReplFlattenExprEngine *engine) {
     return engine->value_dep_mask;

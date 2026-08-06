@@ -378,6 +378,45 @@ static void test_scratch_assign_is_plotted(void) {
     ASSERT_FLOAT("and start at zero", S0(v).stats.min, 0.0);
 }
 
+/* The block form `A[base] = {…}` is deliberately not plottable: one row, N
+ * values per execution, and a series is identified by its row alone. See the
+ * note on glr_ap_is_assign() in glr_assign_plot_bridge.c. Opening it must
+ * leave the plot closed rather than plot one cell or interleave all of them.
+ */
+static void test_scratch_block_is_not_plotted(void) {
+    static const char *const k_scene[] = {
+        "A[0] = {1, 2, 3, 4};",
+        "A[8] = 7;",
+        NULL
+    };
+    int block_row, scalar_row;
+
+    load_scene(k_scene);
+    block_row = find_row(CMD_SCRATCH_BLOCK_ASSIGN);
+    scalar_row = find_row(CMD_SCRATCH_ASSIGN);
+    ASSERT_TRUE("scene has a block assignment", block_row >= 0);
+    ASSERT_TRUE("scene has a scalar assignment", scalar_row >= 0);
+
+    assign_plot_open(block_row);
+    assign_plot_capture(0.0);
+    ASSERT_INT("block row is not plottable",
+               assign_plot_view().series_count, 0);
+
+    /* The scalar row beside it is still fine, so the refusal is about the
+     * form and not about scratch rows in general. */
+    assign_plot_open(scalar_row);
+    assign_plot_capture(0.0);
+    ASSERT_INT("scalar row beside it still plots",
+               assign_plot_view().series_count, 1);
+
+    /* Adding a block row to an open plot is refused too, and leaves the
+     * existing series alone. */
+    assign_plot_toggle_series(block_row);
+    ASSERT_INT("block row refused as an added series",
+               assign_plot_view().series_count, 1);
+    assign_plot_close();
+}
+
 /* Signed values are the reason this cannot reuse the duration histogram. */
 static void test_negative_values_are_measured_exactly(void) {
     static const char *const k_scene[] = {
@@ -1356,6 +1395,7 @@ int main(void) {
     test_cycle_rate_wraps_both_ways();
     test_mode_flip_clears_the_window();
     test_scratch_assign_is_plotted();
+    test_scratch_block_is_not_plotted();
     test_negative_values_are_measured_exactly();
     test_toggle_and_close();
     test_capture_is_inert_when_closed();

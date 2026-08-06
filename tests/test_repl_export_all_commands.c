@@ -545,10 +545,90 @@ static void test_loop_jump_roundtrip(void) {
     remove(path);
 }
 
+/* `A[base] = {…}` has no C twin, so export lowers it to the run of cell
+ * stores it means and import folds that run back. The interesting parts are
+ * that the run is one C line (which is what makes the fold unambiguous) and
+ * that a neighbouring scalar `A[k] = expr;` row is *not* swept into it. */
+static void test_scratch_block_roundtrip(void) {
+    const char *path = "/tmp/repl_export_scratch_block.c";
+    char *export_text;
+    char *code_before;
+    char *code_after;
+    int diff_line = 0;
+    FILE *f;
+
+    repl_eval_init_predef_vars();
+    glr_ctrl_reset_all();
+    declare_test_vars();
+
+    editor_feed_line("A[0] = {cos(t), sin(t), 0, 0};");
+    editor_feed_line("A[4] = {-sin(t), cos(t), 0, 0};");
+    editor_feed_line("A[8] = {0, 0, 1, 0};");
+    editor_feed_line("A[12] = {0, 0, 0, 1};");
+    /* A lone scalar row next to the blocks: it must survive as itself. */
+    editor_feed_line("B[3] = t * 2;");
+    editor_feed_line("glMultMatrixf(A);");
+
+    ASSERT_TRUE("scratch-block rows committed",
+                repl_state_document_count() == 6);
+
+    code_before = dump_code_panel();
+    repl_export_save_output(path, source_document_view(), NULL);
+
+    f = fopen(path, "r");
+    ASSERT_TRUE("scratch-block export opened", f != NULL);
+    export_text = f ? slurp_stream(f) : NULL;
+    if (f) fclose(f);
+
+    if (export_text) {
+        /* One C line per source row, cells expanded in place. */
+        ASSERT_TRUE("block exports as a cell-store run",
+                    strstr(export_text,
+                           "A[0] = cosf(t); A[1] = sinf(t); A[2] = 0; A[3] = 0;")
+                        != NULL);
+        ASSERT_TRUE("second block keeps its base offset",
+                    strstr(export_text, "A[4] = -sinf(t); A[5] = cosf(t);")
+                        != NULL);
+        /* The REPL brace form itself must never reach the C file. (The
+         * `static float A[16] = {0};` global is a different thing and is
+         * expected, so this looks for a subscripted target.) */
+        ASSERT_TRUE("no block-assign brace form in exported C",
+                    strstr(export_text, "A[0] = {") == NULL &&
+                    strstr(export_text, "A[4] = {") == NULL);
+    }
+
+    glr_ctrl_reset_all();
+    declare_test_vars();
+    ASSERT_TRUE("scratch-block import succeeded",
+                repl_export_load_from_file(path, NULL) == 1);
+
+    ASSERT_TRUE("block rows folded back, not expanded",
+                repl_state_document_count() == 6);
+    ASSERT_TRUE("first row is a block",
+                repl_state_document_cmds()[0].type == CMD_SCRATCH_BLOCK_ASSIGN);
+    ASSERT_TRUE("lone scalar row stayed scalar",
+                repl_state_document_cmds()[4].type == CMD_SCRATCH_ASSIGN);
+
+    code_after = dump_code_panel();
+    ASSERT_TRUE("scratch-block roundtrip is text-exact",
+                compare_text(code_before, code_after, &diff_line));
+    if (code_before && code_after &&
+        !compare_text(code_before, code_after, &diff_line)) {
+        printf("Scratch-block roundtrip mismatch at line %d\nBefore:\n%s\n\nAfter:\n%s\n",
+               diff_line, code_before, code_after);
+    }
+
+    free(export_text);
+    free(code_before);
+    free(code_after);
+    remove(path);
+}
+
 int main(void) {
     test_export_prologue_direct();
     test_auto_normal_marker_roundtrip();
     test_loop_jump_roundtrip();
+    test_scratch_block_roundtrip();
     const char *path1 = "/tmp/repl_export_all_commands_1.c";
     const char *path2 = "/tmp/repl_export_all_commands_2.c";
     int cmd_count_before = 0;

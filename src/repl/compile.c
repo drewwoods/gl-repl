@@ -1706,6 +1706,39 @@ static int compile_rebase_var_assign_slot_after_undeclares(
     return shifted_slot;
 }
 
+/* Does this assignment RHS open a `{...}` cell list? Tested on the raw
+ * text rather than on a successful split so that a malformed list gets the
+ * block form's diagnostic instead of falling through to "undeclared
+ * variable 'A'", which describes nothing the user typed. */
+static int compile_rhs_is_brace_list(const char *rhs) {
+    while (rhs && *rhs && isspace((unsigned char)*rhs)) rhs++;
+    return rhs && *rhs == '{';
+}
+
+/* Parse a scratch block's base index: a bare non-negative decimal
+ * literal, nothing else. Returns 1 and fills `out` on success. */
+static int compile_parse_scratch_base_literal(const char *index_expr, int *out) {
+    const char *p = index_expr;
+    int value = 0;
+    int digits = 0;
+
+    while (*p && isspace((unsigned char)*p)) p++;
+    while (isdigit((unsigned char)*p)) {
+        /* Saturate rather than overflow. An out-of-range base is still a
+         * well-formed literal, so it must reach the caller's range check
+         * and get that diagnostic, not "needs a literal base index". */
+        if (value <= REPL_SCRATCH_ARRAY_LEN)
+            value = value * 10 + (*p - '0');
+        digits++;
+        p++;
+    }
+    while (*p && isspace((unsigned char)*p)) p++;
+    if (!digits || *p != '\0')
+        return 0;
+    *out = value;
+    return 1;
+}
+
 /* CONTRACT: context-pure for document data. The
  * ReplCompileContext snapshot is authoritative for document_cmds /
  * _count / edit_line, and visible-var collection now runs through
@@ -1776,7 +1809,120 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     GLCmd cmd;
     memset(&cmd, 0, sizeof(cmd));
 
-    if (index_expr[0]) {
+    if (compile_rhs_is_brace_list(rhs)) {
+        static const char k_block_usage[] =
+            "Usage: A[base] = {e0, ..., eN} - 2 to 16 values into a scratch "
+            "array (A, B, or C), with base + count <= 16";
+        ReplScratchBlockCell cells[REPL_SCRATCH_ARRAY_LEN];
+        float vals[REPL_SCRATCH_ARRAY_LEN];
+        int scratch_array_idx = repl_eval_scratch_array_index(name);
+        int cell_count = repl_split_scratch_block_rhs(rhs, cells,
+                                                      REPL_SCRATCH_ARRAY_LEN);
+        int base_idx = 0;
+        int has_cell_vars = 0;
+        int k;
+
+        if (scratch_array_idx < 0)
+            return compile_set_err(err, err_size,
+                                   "'%s' is not a scratch array - the {...} form writes A, B, or C",
+                                   name);
+        /* One cell is the scalar form spelled oddly, and it does not survive
+         * a round trip as itself: it exports to `A[4] = e;`, which import
+         * reads back as CMD_SCRATCH_ASSIGN. Reject it rather than ship a
+         * spelling that silently rewrites itself on save/load. */
+        if (cell_count < 2)
+            return compile_set_err(err, err_size, "%s", k_block_usage);
+
+        /* The base is a literal, deliberately: it is what keeps the C this
+         * row exports to a plain `A[4] = ...; A[5] = ...;` run that import
+         * can fold back without a temporary. A computed target is still
+         * reachable one cell at a time through `A[i] = expr;`, and this
+         * restriction can be relaxed later without breaking any scene -
+         * the reverse could not. */
+        if (index_expr[0] &&
+            !compile_parse_scratch_base_literal(index_expr, &base_idx))
+            return compile_set_err(err, err_size,
+                                   "the {...} form needs a literal base index - "
+                                   "use '%s[i] = expr;' for a computed one", name);
+        if (base_idx + cell_count > REPL_SCRATCH_ARRAY_LEN)
+            return compile_set_err(err, err_size,
+                                   "%s[%d] = {...} writes %d values past cell %d - "
+                                   "the array holds %d",
+                                   name, base_idx, cell_count,
+                                   REPL_SCRATCH_ARRAY_LEN - 1,
+                                   REPL_SCRATCH_ARRAY_LEN);
+
+        for (k = 0; k < cell_count; k++) {
+            char cell[MAX_LINE_LEN];
+            repl_scratch_block_cell_text(&cells[k], cell, sizeof(cell));
+            if (!repl_eval_validate_expression_idents(
+                    &(ReplExprIdentValidationConfig){
+                        .src = cell,
+                        .vars = vis_n > 0 ? vis : NULL,
+                        .num_vars = vis_n,
+                        .predef = ctx->predef,
+                        .err = verr,
+                        .errsz = (int)sizeof(verr),
+                    }))
+                return compile_set_err(err, err_size, "%s", verr);
+            {
+                ExprCtx cell_ctx = { cell, vis_n > 0 ? vis : NULL, vis_n, NULL, 0,
+                                     ctx->predef.vars, ctx->predef.count };
+                vals[k] = repl_eval_expr(&cell_ctx);
+            }
+            if (input_has_any_visible_vars(cell, vis_n > 0 ? vis : NULL, vis_n))
+                has_cell_vars = 1;
+        }
+
+        cmd.type = CMD_SCRATCH_BLOCK_ASSIGN;
+        cmd.valid = 1;
+        cmd.args[0] = (float)scratch_array_idx;
+        cmd.args[1] = (float)base_idx;
+        cmd.args[2] = (float)cell_count;
+        cmd.num_args = 3;
+        cmd.has_vars = has_cell_vars;
+        for (k = 0; k < cell_count; k++)
+            cmd.payload.scratch_block.v[k] = vals[k];
+
+        for (k = 0; k < cell_count; k++) {
+            out->scratch_ops[k].array_idx = scratch_array_idx;
+            out->scratch_ops[k].elem_idx = base_idx + k;
+            out->scratch_ops[k].value = vals[k];
+        }
+        out->scratch_op_count = cell_count;
+
+        snprintf(out->commit_message, sizeof(out->commit_message),
+                 "%s[%d..%d] = %d values", name, base_idx,
+                 base_idx + cell_count - 1, cell_count);
+
+        /* Canonicalize the separators before the shared text formatting
+         * below writes `rhs` out verbatim. Import rebuilds the list with
+         * ", " between cells, so a row committed as `{1,2}` would come back
+         * from a save/load as `{1, 2}` and break the text-exact round trip
+         * every scene corpus checks. Only the separators are touched - each
+         * cell expression keeps the text the user typed, exactly as the
+         * scalar `A[i] = expr;` form does. */
+        {
+            char norm[MAX_LINE_LEN];
+            int used = 1;
+            norm[0] = '{';
+            for (k = 0; k < cell_count; k++) {
+                char cell[MAX_LINE_LEN];
+                int wrote;
+                repl_scratch_block_cell_text(&cells[k], cell, sizeof(cell));
+                wrote = snprintf(norm + used, sizeof(norm) - (size_t)used,
+                                 "%s%s", k ? ", " : "", cell);
+                if (wrote < 0 || wrote >= (int)sizeof(norm) - used)
+                    return compile_set_err(err, err_size, "Command too long");
+                used += wrote;
+            }
+            if (used + 2 > (int)sizeof(norm))
+                return compile_set_err(err, err_size, "Command too long");
+            norm[used++] = '}';
+            norm[used] = '\0';
+            repl_copy_string_fits(rhs, sizeof(rhs), norm);
+        }
+    } else if (index_expr[0]) {
         int scratch_array_idx = repl_eval_scratch_array_index(name);
         if (scratch_array_idx < 0)
             return compile_set_err(err, err_size, "unknown array '%s'", name);

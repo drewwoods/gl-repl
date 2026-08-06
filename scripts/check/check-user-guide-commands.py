@@ -46,6 +46,7 @@ EXEMPT_TYPES: dict[str, str] = {
     # Variable and scratch assignment — documented in the Variables section.
     "CMD_VAR_ASSIGN":    "documented in the Variables prose section",
     "CMD_SCRATCH_ASSIGN": "documented in the Variables / scratch-array section",
+    "CMD_SCRATCH_BLOCK_ASSIGN": "documented in the Variables / scratch-array section",
     "CMD_VAR_DECLARE":   "documented in the Variables prose section",
     # Comment and empty line — not a GL command; not listed in bullet form.
     "CMD_COMMENT":    "not a GL command; explained in the language overview",

@@ -895,6 +895,227 @@ static void run_header_replace_route_matrix(void) {
     }
 }
 
+/* Document rows carry their scope indent; the assertions here are about the
+ * text after it. */
+static const char *skip_indent(const char *line) {
+    if (!line) return "";
+    while (*line == ' ' || *line == '\t') line++;
+    return line;
+}
+
+/* Read one scratch cell, or a sentinel the assertions can't mistake for a
+ * legitimate value if the read itself fails. */
+static float scratch_cell(int array_idx, int elem_idx) {
+    float v = -12345.0f;
+    repl_eval_scratch_get(array_idx, elem_idx, &v);
+    return v;
+}
+
+/* Count the flat CMD_SCRATCH_ASSIGN rows writing `array_idx`, and record
+ * the value each cell ended at. */
+static int flat_scratch_writes(int array_idx, float cells[REPL_SCRATCH_ARRAY_LEN]) {
+    FlatProgramView prog = repl_state_flat_program_view();
+    int flat_count = repl_state_flat_program_count();
+    int writes = 0;
+
+    for (int i = 0; i < flat_count; i++) {
+        int elem;
+        if (prog.cmds[i].type != CMD_SCRATCH_ASSIGN ||
+            (int)prog.cmds[i].args[0] != array_idx)
+            continue;
+        elem = (int)prog.cmds[i].args[1];
+        if (elem >= 0 && elem < REPL_SCRATCH_ARRAY_LEN && cells)
+            cells[elem] = prog.cmds[i].args[2];
+        writes++;
+    }
+    return writes;
+}
+
+/* `A[base] = {e0, ..., eN-1}` - the scratch block assignment. */
+static void run_scratch_block_matrix(void) {
+    /* --- Shape of the committed row ---------------------------------- */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("A[4] = {1, 2, 3, 4};");
+    ASSERT_INT("block cmd count", repl_state_document_count(), 1);
+    ASSERT_TRUE("block type",
+                repl_state_document_cmds()[0].type == CMD_SCRATCH_BLOCK_ASSIGN);
+    {
+        const GLCmd *c = &repl_state_document_cmds()[0];
+        ASSERT_INT("block array idx", (int)c->args[0], 0);
+        ASSERT_INT("block base idx", (int)c->args[1], 4);
+        ASSERT_INT("block cell count", (int)c->args[2], 4);
+        ASSERT_INT("block num_args", c->num_args, 3);
+        ASSERT_TRUE("block payload cell 0",
+                    fabsf(c->payload.scratch_block.v[0] - 1.0f) < 1e-6f);
+        ASSERT_TRUE("block payload cell 3",
+                    fabsf(c->payload.scratch_block.v[3] - 4.0f) < 1e-6f);
+        ASSERT_TRUE("constant block has no vars", c->has_vars == 0);
+    }
+    /* The window is written, and only the window. */
+    ASSERT_TRUE("block wrote cell 4", fabsf(scratch_cell(0, 4) - 1.0f) < 1e-6f);
+    ASSERT_TRUE("block wrote cell 7", fabsf(scratch_cell(0, 7) - 4.0f) < 1e-6f);
+    ASSERT_TRUE("block left cell 3 alone", fabsf(scratch_cell(0, 3)) < 1e-6f);
+    ASSERT_TRUE("block left cell 8 alone", fabsf(scratch_cell(0, 8)) < 1e-6f);
+    /* Canonical text keeps the brace form. */
+    ASSERT_TRUE("block canonical text",
+                strstr(editor_buffer_line(0) ? editor_buffer_line(0) : "",
+                       "A[4] = {1, 2, 3, 4};") != NULL);
+
+    /* Separators are normalised to ", " so the committed row is exactly what
+     * a save/load round trip gives back (import rebuilds the list that way).
+     * The cell expressions themselves are left as typed. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("A[0] = {1,2,   3 , 4};");
+    ASSERT_TRUE("block separators normalised",
+                strcmp(skip_indent(editor_buffer_line(0)),
+                       "A[0] = {1, 2, 3, 4};") == 0);
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("A[0] = {max(n, 1), n * 2};");
+    ASSERT_TRUE("cell expressions kept as typed",
+                strcmp(skip_indent(editor_buffer_line(0)),
+                       "A[0] = {max(n, 1), n * 2};") == 0);
+
+    /* --- Bare `A = {...}` is base 0 ---------------------------------- */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("B = {7, 8};");
+    ASSERT_TRUE("bare block type",
+                repl_state_document_cmds()[0].type == CMD_SCRATCH_BLOCK_ASSIGN);
+    ASSERT_INT("bare block array idx",
+               (int)repl_state_document_cmds()[0].args[0], 1);
+    ASSERT_INT("bare block base idx",
+               (int)repl_state_document_cmds()[0].args[1], 0);
+    ASSERT_TRUE("bare block wrote B[0]", fabsf(scratch_cell(1, 0) - 7.0f) < 1e-6f);
+    ASSERT_TRUE("bare block wrote B[1]", fabsf(scratch_cell(1, 1) - 8.0f) < 1e-6f);
+
+    /* A whole array in one row is the intended top end. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("C = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};");
+    ASSERT_TRUE("full-array block type",
+                repl_state_document_cmds()[0].type == CMD_SCRATCH_BLOCK_ASSIGN);
+    ASSERT_INT("full-array block count",
+               (int)repl_state_document_cmds()[0].args[2],
+               REPL_SCRATCH_ARRAY_LEN);
+    ASSERT_TRUE("full-array last cell",
+                fabsf(scratch_cell(2, 15) - 15.0f) < 1e-6f);
+
+    /* --- Rejections -------------------------------------------------- */
+    {
+        static const struct {
+            const char *label;
+            const char *input;
+        } bad[] = {
+            { "not a scratch array",   "n = {1, 2};" },
+            { "single-cell list",      "A[3] = {5};" },
+            { "past the array end",    "A[14] = {1, 2, 3};" },
+            { "base past the array",   "A[16] = {1};" },
+            { "too many values",
+              "A = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};" },
+            { "empty cell",            "A = {1, , 3};" },
+            { "trailing comma",        "A = {1, 2,};" },
+            { "unclosed brace",        "A = {1, 2;" },
+            { "text after brace",      "A = {1, 2} 3;" },
+            { "nested brace",          "A = {1, {2}};" },
+        };
+        for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+            char label[128];
+            glr_ctrl_reset_all(); declare_test_vars();
+            editor_feed_line(bad[i].input);
+            snprintf(label, sizeof(label), "rejected: %s", bad[i].label);
+            ASSERT_INT(label, repl_state_document_count(), 0);
+        }
+    }
+
+    /* A computed base is rejected for the block form specifically - the
+     * same subscript is fine one cell at a time. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("for(i, 0, 2) {");
+    editor_feed_line("A[i] = {1, 2};");
+    ASSERT_INT("computed base rejected", repl_state_document_count(), 2);
+    editor_feed_line("A[i] = 1;");
+    ASSERT_INT("computed base fine for one cell", repl_state_document_count(), 3);
+
+    /* --- Cells are expressions, and they animate --------------------- */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("A[2] = {n * 2, n + 1};");
+    ASSERT_TRUE("expression block type",
+                repl_state_document_cmds()[0].type == CMD_SCRATCH_BLOCK_ASSIGN);
+    ASSERT_TRUE("expression block has vars",
+                repl_state_document_cmds()[0].has_vars == 1);
+
+    /* --- Flatten expands to one CMD_SCRATCH_ASSIGN per cell ---------- */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("A[4] = {10, 11, 12, 13};");
+    repl_flatten_commands(editor_state_edit_line());
+    {
+        float cells[REPL_SCRATCH_ARRAY_LEN];
+        int writes;
+        for (int i = 0; i < REPL_SCRATCH_ARRAY_LEN; i++)
+            cells[i] = -1.0f;
+        writes = flat_scratch_writes(0, cells);
+        ASSERT_INT("block flattens to one write per cell", writes, 4);
+        ASSERT_TRUE("flat cell 4", fabsf(cells[4] - 10.0f) < 1e-6f);
+        ASSERT_TRUE("flat cell 5", fabsf(cells[5] - 11.0f) < 1e-6f);
+        ASSERT_TRUE("flat cell 6", fabsf(cells[6] - 12.0f) < 1e-6f);
+        ASSERT_TRUE("flat cell 7", fabsf(cells[7] - 13.0f) < 1e-6f);
+    }
+    /* CMD_SCRATCH_BLOCK_ASSIGN is source-only: nothing downstream of
+     * flatten should ever see one. */
+    {
+        FlatProgramView prog = repl_state_flat_program_view();
+        int flat_count = repl_state_flat_program_count();
+        int leaked = 0;
+        for (int i = 0; i < flat_count; i++)
+            if (prog.cmds[i].type == CMD_SCRATCH_BLOCK_ASSIGN)
+                leaked++;
+        ASSERT_INT("block type never reaches the flat program", leaked, 0);
+    }
+
+    /* Each cell re-evaluates against its own expression, per frame - the
+     * bug a shared expression ordinal would produce is cell 0's value
+     * written into all of them, so the cells here are deliberately
+     * distinct functions of t. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("A[0] = {t, t * 2, t * 3, t * 4};");
+    {
+        int t_idx = predef_idx("t");
+        float cells[REPL_SCRATCH_ARRAY_LEN];
+        ASSERT_TRUE("t predef exists for block anim", t_idx >= 0);
+        g_predef_vars_mut[t_idx].value = 5.0f;
+        repl_flatten_commands(editor_state_edit_line());
+        for (int i = 0; i < REPL_SCRATCH_ARRAY_LEN; i++)
+            cells[i] = -1.0f;
+        flat_scratch_writes(0, cells);
+        ASSERT_TRUE("animated cell 0", fabsf(cells[0] - 5.0f) < 1e-6f);
+        ASSERT_TRUE("animated cell 1", fabsf(cells[1] - 10.0f) < 1e-6f);
+        ASSERT_TRUE("animated cell 2", fabsf(cells[2] - 15.0f) < 1e-6f);
+        ASSERT_TRUE("animated cell 3", fabsf(cells[3] - 20.0f) < 1e-6f);
+
+        /* Second frame: the warm expression-cache path, which is where a
+         * per-cell ordinal mix-up would show up if the first pass got its
+         * values from the text path. */
+        g_predef_vars_mut[t_idx].value = 7.0f;
+        repl_flatten_commands(editor_state_edit_line());
+        for (int i = 0; i < REPL_SCRATCH_ARRAY_LEN; i++)
+            cells[i] = -1.0f;
+        flat_scratch_writes(0, cells);
+        ASSERT_TRUE("warm cell 0", fabsf(cells[0] - 7.0f) < 1e-6f);
+        ASSERT_TRUE("warm cell 1", fabsf(cells[1] - 14.0f) < 1e-6f);
+        ASSERT_TRUE("warm cell 2", fabsf(cells[2] - 21.0f) < 1e-6f);
+        ASSERT_TRUE("warm cell 3", fabsf(cells[3] - 28.0f) < 1e-6f);
+    }
+
+    /* A var-bearing block forfeits the value-only rebake for the program;
+     * that is what keeps the warm values above honest. */
+    ASSERT_TRUE("var-bearing block forfeits rebake",
+                repl_state_flat_program_rebake_ok() == 0);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("A[0] = {1, 2};");
+    repl_flatten_commands(editor_state_edit_line());
+    ASSERT_TRUE("constant block keeps rebake",
+                repl_state_flat_program_rebake_ok() != 0);
+}
+
 int main(void) {
     repl_eval_init_predef_vars();
 
@@ -905,6 +1126,7 @@ int main(void) {
     run_invalid_commit_atomicity_matrix();
     run_one_line_for_route_matrix();
     run_header_replace_route_matrix();
+    run_scratch_block_matrix();
 
     glr_ctrl_reset_all(); declare_test_vars();
     {

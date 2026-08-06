@@ -73,6 +73,7 @@ typedef enum {
     CMD_EMPTY,
     CMD_VAR_ASSIGN,
     CMD_SCRATCH_ASSIGN,
+    CMD_SCRATCH_BLOCK_ASSIGN,
     CMD_VAR_DECLARE,
     CMD_GLUT_TORUS, CMD_GLUT_CUBE, CMD_GLUT_SPHERE, CMD_GLUT_TEAPOT, CMD_GLUT_CONE,
     CMD_TESS_BEGIN_POLYGON,
@@ -147,6 +148,7 @@ typedef struct {
      *   CMD_VAR_ASSIGN   -> payload.assign
      *   CMD_LABEL        -> payload.label
      *   CMD_MULT_MATRIXF -> payload.matrix
+     *   CMD_SCRATCH_BLOCK_ASSIGN -> payload.scratch_block
      *   anything else    -> zeroed; do not read.
      *
      * Writers must zero/init the relevant member before touching it. */
@@ -188,6 +190,21 @@ typedef struct {
         struct {
             float m[REPL_MATRIX_CELL_COUNT];
         } matrix;
+        /* CMD_SCRATCH_BLOCK_ASSIGN - `A[base] = {e0, ..., eN-1}` writes a
+         * contiguous window of one scratch array in a single source row.
+         * Same reason as payload.matrix: up to REPL_SCRATCH_ARRAY_LEN values
+         * do not fit in args[8].
+         *
+         *   args[0] = scratch array index   args[1] = base element index
+         *   args[2] = cell count            num_args = 3
+         *
+         * Source-only, like CMD_FOR_BEGIN and CMD_CALL: flatten expands the
+         * row into `count` ordinary CMD_SCRATCH_ASSIGN flat commands, so no
+         * consumer downstream of flatten (executor, replay, hidden lines,
+         * the GL-state inspector) ever sees this type. */
+        struct {
+            float v[REPL_SCRATCH_ARRAY_LEN];
+        } scratch_block;
     } payload;
     int      src_cmd_idx;           /* Owning source command for flat->source mapping */
     int      call_src_cmd_idx;      /* Immediate call site that expanded this command */
@@ -199,6 +216,15 @@ typedef struct {
                                      * recursive entries of the same funcN - this counts
                                      * every call frame, so recursion depth is visible. */
 } GLCmd;
+
+/* Both spellings that write scratch cells: `A[i] = expr;` and the block
+ * form `A[base] = {e0, ..., eN-1};`. They share a compile arm and a flatten
+ * dispatch; downstream of flatten only CMD_SCRATCH_ASSIGN survives, so this
+ * predicate belongs to the source side and nothing that walks the flat
+ * program should need it. */
+static inline int repl_cmd_is_scratch_assign(CmdType type) {
+    return (type == CMD_SCRATCH_ASSIGN || type == CMD_SCRATCH_BLOCK_ASSIGN);
+}
 
 static inline int repl_cmd_is_transform(CmdType type) {
     return (type == CMD_TRANSLATE3F || type == CMD_SCALEF  || type == CMD_ROTATEF ||
