@@ -20,6 +20,7 @@
 #include "repl/command_store.h"
 #include "repl/state_owners.h"
 #include "repl/workspace_io.h"  /* recovery-workspace cleanup */
+#include "repl/time.h"
 #include "repl/pipeline.h"
 #include "repl/state_notify.h"
 #include "editor/input.h"
@@ -28,6 +29,7 @@
 #include "app/glr_prof.h"    /* glr_prof_section_is_gpu (summary-row policy) */
 #include "ui/app/layout.h"   /* CODE_PANEL_LAYOUT_* */
 #include "ui/core/metrics.h"
+#include "support/gl_state_cell.h"
 #include "support/test_harness.h"
 #ifdef GL_STUBS
 #include <GL/gl_stub_counts.h>
@@ -48,6 +50,18 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_STR(label, got, exp) \
     TEST_ASSERT_STR(&g_harness, label, got, exp)
+
+/* Value cells compare by value, not by typesetting - see
+ * tests/support/gl_state_cell.h. */
+static void assert_cell_impl(const char *label, const char *got,
+                             const char *exp) {
+    char msg[256];
+    snprintf(msg, sizeof(msg), "%s (got \"%s\", expected \"%s\")",
+             label, got ? got : "(null)", exp ? exp : "(null)");
+    ASSERT_TRUE(msg, gl_state_cell_matches(got, exp));
+}
+
+#define ASSERT_CELL(label, got, exp) assert_cell_impl(label, got, exp)
 
 /* Rename the controller's downstream render delegates so this test can stub
  * them and inspect the per-frame config without a real GL context. */
@@ -2521,9 +2535,9 @@ static void test_shift_right_click_pins_gl_state_comparison_basis(void) {
     }
     ASSERT_TRUE("color row present in compare mode", row != NULL);
     if (row) {
-        ASSERT_STR("color current is the value at the anchor",
+        ASSERT_CELL("color current is the value at the anchor",
                    row->current, "(0, 1, 0, 1)");
-        ASSERT_STR("color basis is the value at the pinned line",
+        ASSERT_CELL("color basis is the value at the pinned line",
                    row->basis_value, "(1, 0, 0, 1)");
         ASSERT_INT("color differs between the probe points",
                    row->differs_from_basis, 1);
@@ -3178,6 +3192,13 @@ static void test_gl_state_popup_source_line_tracks_gutter(void) {
     printf("--- imrepl_ctrl OpenGL-state popup source line vs gutter ---\n");
 
     prepare_code_panel_mouse_fixture();
+    /* Wider than the shared fixture: this case measures the popup growing
+     * with its source column, which only says anything while the table still
+     * has room to grow. At 800px a four-column report is already against the
+     * window cap, and the solver answers by shrinking the value columns - a
+     * correct response that would make the assertion below vacuous. */
+    ui_state_viewport_set_size(1280, 600);
+    glr_ctrl_sync_ui_chrome();
     if (!glr_state_presentation().code_focus)
         glr_ctrl_toggle_code_focus();
 
@@ -3354,6 +3375,109 @@ static void test_gl_state_popup_defers_to_front_overlay(void) {
                    ui_state_gl_state_inspector().scroll_rows,
                    initial_scroll);
     }
+}
+
+/* The popup is a reading surface parked over an animating scene: it stays open
+ * across frames while `t` runs, and every value in it is recomputed each one.
+ * Its geometry must not follow the numbers. Before the report printed in a
+ * fixed field the widest cell changed length several times a second, so the
+ * value column breathed, the columns right of it slid, and the popup - pinned
+ * to the window's right edge - walked sideways under the pointer.
+ *
+ * So: same program, same probe, nine values of `t`, one solved frame each. The
+ * cells have to change (otherwise this proves nothing) and the frame must
+ * not. */
+static void test_gl_state_popup_geometry_is_stable_over_time(void) {
+    UiGlStatePanelView view;
+    UiHit hit;
+    int blank_line;
+    int x = -1, y = -1;
+    int right0 = -1, i, pass;
+    int values_changed = 0;
+    char first_cell[REPL_GL_STATE_VALUE_MAX];
+
+    printf("--- imrepl_ctrl OpenGL-state popup geometry vs time ---\n");
+
+    first_cell[0] = '\0';
+    prepare_code_panel_mouse_fixture();
+    /* Wide enough that the table is sized by its content: against the window
+     * cap the solver pins the popup to the maximum width and nothing can move,
+     * which would make this case pass for the wrong reason. */
+    ui_state_viewport_set_size(1280, 600);
+    glr_ctrl_sync_ui_chrome();
+
+    /* An animated colour and nothing else that writes state. Under "%g" this
+     * cell is the width of the table: its components run through 0.5, then
+     * 0.973848, then 0.146447 - three characters one frame and eight the next,
+     * because %g drops trailing zeros. Deliberately no transform: a modelview
+     * row would print in the matrix's own fixed field and pin the column
+     * width, hiding the very thing under test. */
+    editor_state_edit_line_set(repl_state_document_count());
+    ASSERT_INT("append an animated colour",
+               editor_feed_line("glColor3f(0.5+0.5*sin(t), 0.5*cos(t), 0.25);"),
+               1);
+    blank_line = repl_state_document_count();
+    editor_state_edit_line_set(blank_line);
+    editor_insert_mode_set(0);
+    ASSERT_INT("append committed blank line", editor_feed_line(""), 1);
+
+    ASSERT_TRUE("found empty source row hit",
+                find_code_text_hit_for_line(blank_line, &hit, &x, &y));
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    ASSERT_INT("right-click opens the popup",
+               ui_state_gl_state_inspector().visible, 1);
+
+    /* Both folds. The default one is where the colour cell decides the table
+     * width, so it is the pass that can actually catch a breathing column;
+     * the expanded one brings in the generated setup rows - including the
+     * camera's modelview matrix, whose fixed field is wider than anything the
+     * colour can reach - and holds the width steady for a different reason.
+     * Asserting both is what says the popup is stable in the view the reader
+     * gets by default *and* in the one they expand into. */
+    for (pass = 0; pass < 2; pass++) {
+        if (pass == 1) {
+            ui_state_gl_state_inspector_toggle_details();
+            ui_state_gl_state_inspector_toggle_setup();
+            right0 = -1;
+        }
+        for (i = 0; i < 9; i++) {
+            const ReplGlStateReportRow *row = NULL;
+            int right, j;
+            char label[128];
+
+            repl_set_time((float)i * 0.37f);
+            glr_ctrl_display_frame();
+            view = glr_ctrl_build_gl_state_panel_view(NULL);
+            ASSERT_TRUE("popup still visible while time runs",
+                        view.visible != 0);
+            if (!view.report)
+                return;
+
+            for (j = 0; j < view.report->count; j++)
+                if (strcmp(view.report->rows[j].name, "GL_CURRENT_COLOR") == 0)
+                    row = &view.report->rows[j];
+            ASSERT_TRUE("colour row present", row != NULL);
+            if (row) {
+                if (first_cell[0] == '\0')
+                    snprintf(first_cell, sizeof(first_cell), "%s",
+                             row->current);
+                else if (strcmp(first_cell, row->current) != 0)
+                    values_changed = 1;
+            }
+
+            right = gl_state_popup_rightmost_hit_x(&view);
+            ASSERT_TRUE("popup answers hits", right >= 0);
+            if (right0 < 0)
+                right0 = right;
+            snprintf(label, sizeof(label),
+                     "popup right edge is unmoved at t step %d (fold %d)",
+                     i, pass);
+            ASSERT_INT(label, right, right0);
+        }
+    }
+
+    ASSERT_TRUE("the animated cell really did change", values_changed);
 }
 
 static void test_left_click_code_panel_exits_search_and_places_cursor(void) {
@@ -6299,6 +6423,7 @@ int main(void) {
     test_gl_state_popup_basis_header_sizes_the_chip();
     test_gl_state_popup_setup_fold();
     test_gl_state_popup_source_line_tracks_gutter();
+    test_gl_state_popup_geometry_is_stable_over_time();
     test_editor_input_dismisses_gl_state_report();
     test_gl_state_popup_defers_to_front_overlay();
     test_left_click_code_panel_exits_search_and_places_cursor();

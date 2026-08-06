@@ -1541,14 +1541,20 @@ static void gl_state_report_bool(ReplGlStateReport *out, const char *name,
     row->differs_from_basis = !!current != !!default_value;
 }
 
+#define GL_STATE_NUM_FIELD_W 8
+
 static void gl_state_report_int(ReplGlStateReport *out, const char *name,
                                 int current, int default_value) {
     ReplGlStateReportRow *row = gl_state_report_row(out, name);
     if (!row)
         return;
-    snprintf(row->current, sizeof(row->current), "%d", current);
-    snprintf(row->basis_value, sizeof(row->basis_value), "%d",
-             default_value);
+    /* Same field as the float cells below, so integer and float rows line up
+     * in one column and an animated count (a stencil ref, a stack depth)
+     * cannot resize the table under the reader either. */
+    snprintf(row->current, sizeof(row->current), "%*d",
+             GL_STATE_NUM_FIELD_W, current);
+    snprintf(row->basis_value, sizeof(row->basis_value), "%*d",
+             GL_STATE_NUM_FIELD_W, default_value);
     row->differs_from_basis = current != default_value;
 }
 
@@ -1566,14 +1572,46 @@ static void gl_state_report_hex_mask(ReplGlStateReport *out, const char *name,
     row->differs_from_basis = current != default_value;
 }
 
+/* Every float the report prints goes through here, in one fixed-width field.
+ *
+ * The width is the point. These cells are re-read every frame while `t`
+ * advances, and the popup sizes its columns from the widest value it holds -
+ * so a free-running "%g" (2 characters for "0.5", 11 for "0.523598776")
+ * re-solved the whole table each frame: the value column breathed, the
+ * columns to its right slid, and a right-clamped popup walked sideways with
+ * them. Nothing about the state had changed; the reader could not hold their
+ * place. A constant field makes the layout a function of *which* rows are
+ * shown, never of the numbers in them, and aligns the decimal points down the
+ * column for free.
+ *
+ * Four decimals right-aligned in eight cells is the matrix convention (a full
+ * 4x4 row still fits the panel's 44-character value cap). Magnitudes that
+ * would overflow that fall back to "%.2g", which is at most eight characters
+ * for any finite float (sign + "1.2" + "e+38"), so the field width is an
+ * invariant rather than a usual case - see test_gl_state_value_field_width. */
+static void gl_state_fmt_float(char *buf, size_t n, float v) {
+    char num[32];
+
+    if (!buf || n == 0)
+        return;
+    /* Values that round to zero at this precision print as a clean 0.0000
+     * rather than "-0.0000". */
+    if (fabsf(v) < 0.00005f)
+        v = 0.0f;
+    snprintf(num, sizeof(num), "%.4f", (double)v);
+    if (strlen(num) > (size_t)GL_STATE_NUM_FIELD_W)
+        snprintf(num, sizeof(num), "%.2g", (double)v);
+    snprintf(buf, n, "%*s", GL_STATE_NUM_FIELD_W, num);
+}
+
 static void gl_state_report_float(ReplGlStateReport *out, const char *name,
                                   float current, float default_value) {
     ReplGlStateReportRow *row = gl_state_report_row(out, name);
     if (!row)
         return;
-    snprintf(row->current, sizeof(row->current), "%g", (double)current);
-    snprintf(row->basis_value, sizeof(row->basis_value), "%g",
-             (double)default_value);
+    gl_state_fmt_float(row->current, sizeof(row->current), current);
+    gl_state_fmt_float(row->basis_value, sizeof(row->basis_value),
+                       default_value);
     row->differs_from_basis = !gl_state_float_eq(current, default_value);
 }
 
@@ -1584,9 +1622,12 @@ static void gl_state_format_vec(char *buf, size_t n, const float *v, int count) 
         return;
     buf[0] = '\0';
     used += (size_t)snprintf(buf + used, n - used, "(");
-    for (i = 0; i < count && used < n; i++)
-        used += (size_t)snprintf(buf + used, n - used, "%s%g",
-                                i ? ", " : "", (double)v[i]);
+    for (i = 0; i < count && used < n; i++) {
+        char cell[GL_STATE_NUM_FIELD_W + 1];
+        gl_state_fmt_float(cell, sizeof(cell), v[i]);
+        used += (size_t)snprintf(buf + used, n - used, "%s%s",
+                                i ? ", " : "", cell);
+    }
     if (used < n)
         snprintf(buf + used, n - used, ")");
     else
@@ -1615,15 +1656,13 @@ static void gl_state_format_matrix(char *buf, size_t n, const float m[16]) {
     used += (size_t)snprintf(buf + used, n - used, "[");
     for (row = 0; row < 4 && used < n; row++) {
         for (col = 0; col < 4 && used < n; col++) {
-            float value = m[col * 4 + row];
-            /* Four fixed decimals in an eight-cell field keep all matrix
-             * columns aligned while a complete visual row remains below the
-             * state panel's 44-character value cap. Avoid negative zero for
-             * values that round to 0.0000 at this precision. */
-            if (fabsf(value) < 0.00005f)
-                value = 0.0f;
-            used += (size_t)snprintf(buf + used, n - used, "%s%8.4f",
-                                    col ? " " : "", (double)value);
+            /* Same fixed field as every other value cell, which is what keeps
+             * the four columns aligned and a complete visual row below the
+             * state panel's 44-character value cap. */
+            char cell[GL_STATE_NUM_FIELD_W + 1];
+            gl_state_fmt_float(cell, sizeof(cell), m[col * 4 + row]);
+            used += (size_t)snprintf(buf + used, n - used, "%s%s",
+                                    col ? " " : "", cell);
         }
         if (row < 3 && used < n)
             used += (size_t)snprintf(buf + used, n - used, "; ");

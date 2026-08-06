@@ -26,6 +26,7 @@
 #include "app/glr_defaults.h"    /* CFG_DEFAULT_* macros */
 #include "source_document.h"
 
+#include "support/gl_state_cell.h"
 #include "support/test_harness.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,6 +47,19 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_STR(label, got, exp) do { \
     TEST_ASSERT_STR(&g_harness, label, got, exp); \
 } while (0)
+
+/* Value cells compare by value, not by typesetting - see
+ * tests/support/gl_state_cell.h. The failure message still quotes both cells
+ * verbatim, so a genuine mismatch shows the padding it actually printed. */
+static void assert_cell_impl(const char *label, const char *got,
+                             const char *exp) {
+    char msg[256];
+    snprintf(msg, sizeof(msg), "%s (got \"%s\", expected \"%s\")",
+             label, got ? got : "(null)", exp ? exp : "(null)");
+    ASSERT_TRUE(msg, gl_state_cell_matches(got, exp));
+}
+
+#define ASSERT_CELL(label, got, exp) assert_cell_impl(label, got, exp)
 
 static GLCmd gl_state_test_cmd(CmdType type, int source_line_idx) {
     GLCmd cmd;
@@ -1076,8 +1090,8 @@ static void test_gl_state_report_tracks_explicit_writes_before_checkpoint(void) 
     row = gl_state_test_find_row(&report, "GL_DEPTH_FUNC");
     ASSERT_TRUE("explicit default depth func remains in report", row != NULL);
     if (row) {
-        ASSERT_STR("depth func current", row->current, "GL_LESS");
-        ASSERT_STR("depth func default", row->basis_value, "GL_LESS");
+        ASSERT_CELL("depth func current", row->current, "GL_LESS");
+        ASSERT_CELL("depth func default", row->basis_value, "GL_LESS");
         ASSERT_INT("explicit default depth func marked equal",
                    row->differs_from_basis, 0);
         ASSERT_INT("depth func source is display",
@@ -1088,7 +1102,7 @@ static void test_gl_state_report_tracks_explicit_writes_before_checkpoint(void) 
     row = gl_state_test_find_row(&report, "GL_BLEND");
     ASSERT_TRUE("init blend state precedes display checkpoint", row != NULL);
     if (row) {
-        ASSERT_STR("init blend current", row->current, "GL_TRUE");
+        ASSERT_CELL("init blend current", row->current, "GL_TRUE");
         ASSERT_INT("init blend source is init",
                    row->source.kind, REPL_GL_STATE_SOURCE_INIT);
         ASSERT_INT("init source has no display line",
@@ -1097,7 +1111,7 @@ static void test_gl_state_report_tracks_explicit_writes_before_checkpoint(void) 
     row = gl_state_test_find_row(&report, "GL_COLOR_CLEAR_VALUE");
     ASSERT_TRUE("init clear color is included", row != NULL);
     if (row) {
-        ASSERT_STR("init clear color current", row->current,
+        ASSERT_CELL("init clear color current", row->current,
                    "(0.1, 0.1, 0.1, 1)");
         ASSERT_INT("init clear color source is init",
                    row->source.kind, REPL_GL_STATE_SOURCE_INIT);
@@ -1107,8 +1121,8 @@ static void test_gl_state_report_tracks_explicit_writes_before_checkpoint(void) 
     row = gl_state_test_find_row(&report, "GL_BLEND");
     ASSERT_TRUE("enable before checkpoint is reported", row != NULL);
     if (row) {
-        ASSERT_STR("enabled blend current", row->current, "GL_TRUE");
-        ASSERT_STR("blend default", row->basis_value, "GL_FALSE");
+        ASSERT_CELL("enabled blend current", row->current, "GL_TRUE");
+        ASSERT_CELL("blend default", row->basis_value, "GL_FALSE");
         ASSERT_INT("enabled blend differs", row->differs_from_basis, 1);
         ASSERT_INT("explicit same-value blend write becomes latest source",
                    row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
@@ -1131,7 +1145,7 @@ static void test_gl_state_report_tracks_explicit_writes_before_checkpoint(void) 
     row = gl_state_test_find_row(&report, "GL_MULTISAMPLE");
     ASSERT_TRUE("explicit multisample write is reported", row != NULL);
     if (row) {
-        ASSERT_STR("multisample OpenGL default", row->basis_value, "GL_TRUE");
+        ASSERT_CELL("multisample OpenGL default", row->basis_value, "GL_TRUE");
         ASSERT_INT("enabled multisample equals initial state",
                    row->differs_from_basis, 0);
         ASSERT_INT("multisample source is display",
@@ -1204,8 +1218,8 @@ static void test_gl_state_report_rebase_against_second_probe(void) {
     row = gl_state_test_find_row(&report, "GL_CURRENT_COLOR");
     ASSERT_TRUE("color reported", row != NULL);
     if (row) {
-        ASSERT_STR("color current", row->current, "(0, 1, 0, 1)");
-        ASSERT_STR("color basis is the value at the basis line",
+        ASSERT_CELL("color current", row->current, "(0, 1, 0, 1)");
+        ASSERT_CELL("color basis is the value at the basis line",
                    row->basis_value, "(1, 0, 0, 1)");
         ASSERT_INT("color differs between the probe points",
                    row->differs_from_basis, 1);
@@ -1213,7 +1227,7 @@ static void test_gl_state_report_rebase_against_second_probe(void) {
     row = gl_state_test_find_row(&report, "GL_BLEND");
     ASSERT_TRUE("blend still reported after rebase", row != NULL);
     if (row) {
-        ASSERT_STR("blend basis is the value at the basis line",
+        ASSERT_CELL("blend basis is the value at the basis line",
                    row->basis_value, "GL_TRUE");
         ASSERT_INT("blend set before both probes reads as unchanged",
                    row->differs_from_basis, 0);
@@ -1221,7 +1235,7 @@ static void test_gl_state_report_rebase_against_second_probe(void) {
     row = gl_state_test_find_row(&report, "GL_DEPTH_FUNC");
     ASSERT_TRUE("depth func reported", row != NULL);
     if (row) {
-        ASSERT_STR("untouched-at-basis row keeps the GL default",
+        ASSERT_CELL("untouched-at-basis row keeps the GL default",
                    row->basis_value, "GL_LESS");
         ASSERT_INT("untouched-at-basis row still differs",
                    row->differs_from_basis, 1);
@@ -1242,7 +1256,7 @@ static void test_gl_state_report_rebase_against_second_probe(void) {
     row = gl_state_test_find_row(&report, "GL_CURRENT_COLOR");
     ASSERT_TRUE("backward compare keeps the shared row", row != NULL);
     if (row)
-        ASSERT_STR("backward compare reads the later value as the basis",
+        ASSERT_CELL("backward compare reads the later value as the basis",
                    row->basis_value, "(0, 1, 0, 1)");
 }
 
@@ -1285,29 +1299,29 @@ static void test_gl_state_report_tracks_fog(void) {
     row = gl_state_test_find_row(&report, "GL_FOG");
     ASSERT_TRUE("fog cap reported", row != NULL);
     if (row) {
-        ASSERT_STR("fog cap current", row->current, "GL_TRUE");
-        ASSERT_STR("fog cap default", row->basis_value, "GL_FALSE");
+        ASSERT_CELL("fog cap current", row->current, "GL_TRUE");
+        ASSERT_CELL("fog cap default", row->basis_value, "GL_FALSE");
         ASSERT_INT("fog cap differs", row->differs_from_basis, 1);
     }
     row = gl_state_test_find_row(&report, "GL_FOG_MODE");
     ASSERT_TRUE("fog mode reported", row != NULL);
     if (row) {
-        ASSERT_STR("fog mode current", row->current, "GL_EXP2");
-        ASSERT_STR("fog mode default", row->basis_value, "GL_EXP");
+        ASSERT_CELL("fog mode current", row->current, "GL_EXP2");
+        ASSERT_CELL("fog mode default", row->basis_value, "GL_EXP");
         ASSERT_INT("fog mode differs", row->differs_from_basis, 1);
         ASSERT_INT("fog mode source line", row->source.source_line_idx, 1);
     }
     row = gl_state_test_find_row(&report, "GL_FOG_DENSITY");
     ASSERT_TRUE("fog density reported", row != NULL);
     if (row) {
-        ASSERT_STR("fog density current", row->current, "0.25");
-        ASSERT_STR("fog density default", row->basis_value, "1");
+        ASSERT_CELL("fog density current", row->current, "0.25");
+        ASSERT_CELL("fog density default", row->basis_value, "1");
         ASSERT_INT("fog density differs", row->differs_from_basis, 1);
     }
     row = gl_state_test_find_row(&report, "GL_FOG_COLOR");
     ASSERT_TRUE("fog color reported", row != NULL);
     if (row) {
-        ASSERT_STR("fog color current", row->current, "(0.05, 0.06, 0.08, 1)");
+        ASSERT_CELL("fog color current", row->current, "(0.05, 0.06, 0.08, 1)");
         ASSERT_INT("fog color differs", row->differs_from_basis, 1);
     }
     row = gl_state_test_find_row(&report, "GL_FOG_END");
@@ -1354,14 +1368,14 @@ static void test_gl_state_report_tracks_fog(void) {
         row = gl_state_test_find_row(&report, "GL_FOG_DENSITY");
         ASSERT_TRUE("scoped fog density reported", row != NULL);
         if (row)
-            ASSERT_STR("scoped fog density current", row->current, "0.5");
+            ASSERT_CELL("scoped fog density current", row->current, "0.5");
 
         /* After the pop: restored to the pre-push density, source is the pop. */
         repl_gl_state_report_at_line(program, 4, &report);
         row = gl_state_test_find_row(&report, "GL_FOG_DENSITY");
         ASSERT_TRUE("restored fog density reported", row != NULL);
         if (row) {
-            ASSERT_STR("fog density restored to pre-push value",
+            ASSERT_CELL("fog density restored to pre-push value",
                        row->current, "0.25");
             ASSERT_INT("restored fog density source is the pop line",
                        row->source.source_line_idx, 3);
@@ -1436,8 +1450,8 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
     row = gl_state_test_find_row(&report, "GL_LINE_WIDTH");
     ASSERT_TRUE("generated init line width is reported", row != NULL);
     if (row) {
-        ASSERT_STR("generated init line width current", row->current, "1.5");
-        ASSERT_STR("generated init line width default", row->basis_value, "1");
+        ASSERT_CELL("generated init line width current", row->current, "1.5");
+        ASSERT_CELL("generated init line width default", row->basis_value, "1");
         ASSERT_INT("line width source is init", row->source.kind,
                    REPL_GL_STATE_SOURCE_INIT);
     }
@@ -1445,9 +1459,9 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
     row = gl_state_test_find_row(&report, "GL_LIGHT_MODEL_AMBIENT");
     ASSERT_TRUE("generated global light ambient is reported", row != NULL);
     if (row) {
-        ASSERT_STR("global light ambient current", row->current,
+        ASSERT_CELL("global light ambient current", row->current,
                    "(0.15, 0.15, 0.2, 1)");
-        ASSERT_STR("global light ambient OpenGL default", row->basis_value,
+        ASSERT_CELL("global light ambient OpenGL default", row->basis_value,
                    "(0.2, 0.2, 0.2, 1)");
         ASSERT_INT("global ambient source is init", row->source.kind,
                    REPL_GL_STATE_SOURCE_INIT);
@@ -1456,9 +1470,9 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
     row = gl_state_test_find_row(&report, "GL_LIGHT0_DIFFUSE");
     ASSERT_TRUE("generated light diffuse is reported", row != NULL);
     if (row) {
-        ASSERT_STR("light diffuse current", row->current,
+        ASSERT_CELL("light diffuse current", row->current,
                    "(0.4, 0.5, 0.6, 1)");
-        ASSERT_STR("light0 diffuse OpenGL default", row->basis_value,
+        ASSERT_CELL("light0 diffuse OpenGL default", row->basis_value,
                    "(1, 1, 1, 1)");
         ASSERT_INT("light diffuse source is init", row->source.kind,
                    REPL_GL_STATE_SOURCE_INIT);
@@ -1467,24 +1481,24 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
     row = gl_state_test_find_row(&report, "GL_LIGHT0_AMBIENT");
     ASSERT_TRUE("generated light ambient is reported", row != NULL);
     if (row)
-        ASSERT_STR("light ambient current", row->current,
+        ASSERT_CELL("light ambient current", row->current,
                    "(0.1, 0.2, 0.3, 1)");
 
     row = gl_state_test_find_row(&report, "GL_LIGHT0_SPECULAR");
     ASSERT_TRUE("generated light specular is reported", row != NULL);
     if (row)
-        ASSERT_STR("light specular current", row->current,
+        ASSERT_CELL("light specular current", row->current,
                    "(0.7, 0.8, 0.9, 1)");
 
     row = gl_state_test_find_row(&report, "GL_MODELVIEW_MATRIX");
     ASSERT_TRUE("generated camera modelview is reported", row != NULL);
     if (row) {
-        ASSERT_STR("generated camera modelview current", row->current,
+        ASSERT_CELL("generated camera modelview current", row->current,
                    "[  1.0000   0.0000   0.0000  10.2500; "
                    "  0.0000   1.0000   0.0000   0.0000; "
                    "  0.0000   0.0000   1.0000   0.0000; "
                    "  0.0000   0.0000   0.0000   1.0000]");
-        ASSERT_STR("generated camera modelview aligned default",
+        ASSERT_CELL("generated camera modelview aligned default",
                    row->basis_value,
                    "[  1.0000   0.0000   0.0000   0.0000; "
                    "  0.0000   1.0000   0.0000   0.0000; "
@@ -1499,9 +1513,9 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
     row = gl_state_test_find_row(&report, "GL_LIGHT0_POSITION (eye)");
     ASSERT_TRUE("generated light position is reported", row != NULL);
     if (row) {
-        ASSERT_STR("world light is stored after modelview transform",
+        ASSERT_CELL("world light is stored after modelview transform",
                    row->current, "(11.25, 2, 3, 1)");
-        ASSERT_STR("light position OpenGL default", row->basis_value,
+        ASSERT_CELL("light position OpenGL default", row->basis_value,
                    "(0, 0, 1, 0)");
         ASSERT_INT("light position source is display", row->source.kind,
                    REPL_GL_STATE_SOURCE_DISPLAY);
@@ -1510,9 +1524,9 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
     row = gl_state_test_find_row(&report, "GL_LIGHT0_POSITION (world)");
     ASSERT_TRUE("generated world light position is reported", row != NULL);
     if (row) {
-        ASSERT_STR("world row reverses the camera modelview",
+        ASSERT_CELL("world row reverses the camera modelview",
                    row->current, "(1, 2, 3, 1)");
-        ASSERT_STR("world row converts the OpenGL default",
+        ASSERT_CELL("world row converts the OpenGL default",
                    row->basis_value, "(0, 0, 1, 0)");
         ASSERT_INT("world light position source is display",
                    row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
@@ -1521,8 +1535,8 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
     row = gl_state_test_find_row(&report, "GL_ATTRIB_STACK_DEPTH");
     ASSERT_TRUE("generated display attribute push is reported", row != NULL);
     if (row) {
-        ASSERT_STR("attribute stack depth current", row->current, "1");
-        ASSERT_STR("attribute stack depth default", row->basis_value, "0");
+        ASSERT_CELL("attribute stack depth current", row->current, "1");
+        ASSERT_CELL("attribute stack depth default", row->basis_value, "0");
         ASSERT_INT("attribute stack source is display", row->source.kind,
                    REPL_GL_STATE_SOURCE_DISPLAY);
     }
@@ -1562,11 +1576,11 @@ static void test_gl_state_report_attrib_stack_fold(void) {
     row = gl_state_test_find_row(&report, "GL_DEPTH_FUNC");
     ASSERT_TRUE("scoped depth func reported", row != NULL);
     if (row)
-        ASSERT_STR("scoped depth func current", row->current, "GL_LEQUAL");
+        ASSERT_CELL("scoped depth func current", row->current, "GL_LEQUAL");
     row = gl_state_test_find_row(&report, "GL_ATTRIB_STACK_DEPTH");
     ASSERT_TRUE("attrib depth reported inside user push", row != NULL);
     if (row) {
-        ASSERT_STR("attrib depth = bracket + user push inside scope",
+        ASSERT_CELL("attrib depth = bracket + user push inside scope",
                    row->current, "2");
         ASSERT_INT("attrib depth source is display",
                    row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
@@ -1581,7 +1595,7 @@ static void test_gl_state_report_attrib_stack_fold(void) {
     row = gl_state_test_find_row(&report, "GL_DEPTH_FUNC");
     ASSERT_TRUE("restored depth func reported", row != NULL);
     if (row) {
-        ASSERT_STR("depth func restored to pre-push value",
+        ASSERT_CELL("depth func restored to pre-push value",
                    row->current, "GL_GREATER");
         ASSERT_INT("restored depth func source is display",
                    row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
@@ -1591,7 +1605,7 @@ static void test_gl_state_report_attrib_stack_fold(void) {
     row = gl_state_test_find_row(&report, "GL_ATTRIB_STACK_DEPTH");
     ASSERT_TRUE("balanced pair: depth row back to the bracket", row != NULL);
     if (row) {
-        ASSERT_STR("balanced pair: depth = generated bracket only",
+        ASSERT_CELL("balanced pair: depth = generated bracket only",
                    row->current, "1");
         ASSERT_INT("balanced pair: source is the generated bracket",
                    row->source.source_line_idx, -1);
@@ -1610,7 +1624,7 @@ static void test_gl_state_report_attrib_stack_fold(void) {
     row = gl_state_test_find_row(&report, "GL_ATTRIB_STACK_DEPTH");
     ASSERT_TRUE("nested attrib depth reported", row != NULL);
     if (row) {
-        ASSERT_STR("nested attrib depth = bracket + 2", row->current, "3");
+        ASSERT_CELL("nested attrib depth = bracket + 2", row->current, "3");
         ASSERT_INT("nested attrib depth source is the inner push line",
                    row->source.source_line_idx, 1);
     }
@@ -1620,7 +1634,7 @@ static void test_gl_state_report_attrib_stack_fold(void) {
     row = gl_state_test_find_row(&report, "GL_ATTRIB_STACK_DEPTH");
     ASSERT_TRUE("after inner pop: depth row reported", row != NULL);
     if (row) {
-        ASSERT_STR("after inner pop: depth = bracket + 1", row->current, "2");
+        ASSERT_CELL("after inner pop: depth = bracket + 1", row->current, "2");
         ASSERT_INT("after inner pop: source is the inner pop line",
                    row->source.source_line_idx, 2);
     }
@@ -1635,7 +1649,7 @@ static void test_gl_state_report_attrib_stack_fold(void) {
     row = gl_state_test_find_row(&report, "GL_ATTRIB_STACK_DEPTH");
     ASSERT_TRUE("orphan pop: bracket depth row survives", row != NULL);
     if (row) {
-        ASSERT_STR("orphan pop: depth = generated bracket only",
+        ASSERT_CELL("orphan pop: depth = generated bracket only",
                    row->current, "1");
         ASSERT_INT("orphan pop: source is the generated bracket",
                    row->source.source_line_idx, -1);
@@ -1643,7 +1657,7 @@ static void test_gl_state_report_attrib_stack_fold(void) {
     row = gl_state_test_find_row(&report, "GL_DEPTH_FUNC");
     ASSERT_TRUE("setter after orphan pop still reported", row != NULL);
     if (row)
-        ASSERT_STR("setter after orphan pop current", row->current, "GL_LEQUAL");
+        ASSERT_CELL("setter after orphan pop current", row->current, "GL_LEQUAL");
 
     /* Executor cap boundary: 12 user pushes clamp the user contribution to
      * CAP (8), on top of the generated bracket. */
@@ -1662,7 +1676,7 @@ static void test_gl_state_report_attrib_stack_fold(void) {
         row = gl_state_test_find_row(&report, "GL_ATTRIB_STACK_DEPTH");
         ASSERT_TRUE("past-cap attrib depth reported", row != NULL);
         if (row)
-            ASSERT_STR("past-cap attrib depth = bracket + CAP (8)",
+            ASSERT_CELL("past-cap attrib depth = bracket + CAP (8)",
                        row->current, "9");
     }
 }
@@ -1710,9 +1724,9 @@ static void test_gl_state_report_latches_raster_color(void) {
     row = gl_state_test_find_row(&report, "GL_CURRENT_RASTER_COLOR");
     ASSERT_TRUE("raster color reported after glRasterPos3f", row != NULL);
     if (row) {
-        ASSERT_STR("raster color holds the latched color",
+        ASSERT_CELL("raster color holds the latched color",
                    row->current, "(1, 0, 0, 1)");
-        ASSERT_STR("raster color default is white",
+        ASSERT_CELL("raster color default is white",
                    row->basis_value, "(1, 1, 1, 1)");
         ASSERT_INT("latched red differs from the default",
                    row->differs_from_basis, 1);
@@ -1724,7 +1738,7 @@ static void test_gl_state_report_latches_raster_color(void) {
     row = gl_state_test_find_row(&report, "GL_CURRENT_COLOR");
     ASSERT_TRUE("current color reported", row != NULL);
     if (row)
-        ASSERT_STR("a later glColor3f moves only the current color",
+        ASSERT_CELL("a later glColor3f moves only the current color",
                    row->current, "(0, 1, 0, 1)");
 
     /* Latched under GL_LIGHTING: GL stores the *lit* color, and the fold
@@ -1758,7 +1772,7 @@ static void test_gl_state_report_latches_raster_color(void) {
     row = gl_state_test_find_row(&report, "GL_CURRENT_RASTER_COLOR");
     ASSERT_TRUE("lit latch still reports one raster color row", row != NULL);
     if (row) {
-        ASSERT_STR("lit latch reports the lit color, not the current color",
+        ASSERT_CELL("lit latch reports the lit color, not the current color",
                    row->current, "(0.5, 0.25, 0.125, 1)");
         ASSERT_INT("lit latch source is the glRasterPos3f line",
                    row->source.source_line_idx, 4);
@@ -1766,7 +1780,7 @@ static void test_gl_state_report_latches_raster_color(void) {
     row = gl_state_test_find_row(&report, "GL_CURRENT_COLOR");
     ASSERT_TRUE("current color still reported alongside", row != NULL);
     if (row)
-        ASSERT_STR("current color is untouched by lighting", row->current,
+        ASSERT_CELL("current color is untouched by lighting", row->current,
                    "(0.25, 0.5, 0.75, 1)");
 
     /* The latch clamps to [0,1] - the raster color is a vertex's associated
@@ -1786,12 +1800,12 @@ static void test_gl_state_report_latches_raster_color(void) {
     row = gl_state_test_find_row(&report, "GL_CURRENT_RASTER_COLOR");
     ASSERT_TRUE("out-of-range latch reported", row != NULL);
     if (row)
-        ASSERT_STR("out-of-range color latches clamped", row->current,
+        ASSERT_CELL("out-of-range color latches clamped", row->current,
                    "(1, 0, 0.25, 1)");
     row = gl_state_test_find_row(&report, "GL_CURRENT_COLOR");
     ASSERT_TRUE("current color reported next to it", row != NULL);
     if (row)
-        ASSERT_STR("current color keeps the raw value", row->current,
+        ASSERT_CELL("current color keeps the raw value", row->current,
                    "(1.5, -0.5, 0.25, 1)");
 
     /* GL_CURRENT_BIT covers the latched color, so glPushAttrib/glPopAttrib
@@ -1817,14 +1831,14 @@ static void test_gl_state_report_latches_raster_color(void) {
     row = gl_state_test_find_row(&report, "GL_CURRENT_RASTER_COLOR");
     ASSERT_TRUE("scoped raster color reported", row != NULL);
     if (row)
-        ASSERT_STR("scoped raster color current", row->current,
+        ASSERT_CELL("scoped raster color current", row->current,
                    "(0, 0, 1, 1)");
 
     repl_gl_state_report_at_line(program, 6, &report);
     row = gl_state_test_find_row(&report, "GL_CURRENT_RASTER_COLOR");
     ASSERT_TRUE("restored raster color reported", row != NULL);
     if (row) {
-        ASSERT_STR("raster color restored to the pre-push latch",
+        ASSERT_CELL("raster color restored to the pre-push latch",
                    row->current, "(1, 0, 0, 1)");
         ASSERT_INT("restored raster color source is the pop line",
                    row->source.source_line_idx, 5);
@@ -1865,13 +1879,13 @@ static void test_gl_state_report_converts_eye_light_position_to_world(void) {
     row = gl_state_test_find_row(&report, "GL_LIGHT0_POSITION (eye)");
     ASSERT_TRUE("eye-space light keeps submitted eye position", row != NULL);
     if (row)
-        ASSERT_STR("eye-space light eye value", row->current,
+        ASSERT_CELL("eye-space light eye value", row->current,
                    "(1, 2, 3, 1)");
 
     row = gl_state_test_find_row(&report, "GL_LIGHT0_POSITION (world)");
     ASSERT_TRUE("eye-space light gains derived world position", row != NULL);
     if (row) {
-        ASSERT_STR("eye-space light follows camera into world",
+        ASSERT_CELL("eye-space light follows camera into world",
                    row->current, "(-9.25, 2, 3, 1)");
         ASSERT_INT("derived world position retains display source",
                    row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
@@ -2110,6 +2124,77 @@ static GLCmd gl_state_case_cmd(const GlStateCellCase *c, const float *args,
     return cmd;
 }
 
+/* The popup sizes its columns from the widest value it holds, and re-solves
+ * every frame while `t` advances - so a value whose *width* tracks its
+ * magnitude makes the table breathe, slides the columns right of it, and walks
+ * a right-clamped popup sideways, all without any state having changed. The
+ * fix is a constant field per number, and this is the test that pins it: the
+ * same row printed across nine magnitudes has to come back the same length
+ * every time. The absolute widths are asserted too, since they are what keeps
+ * a full matrix row inside the panel's 44-character value cap. */
+static void test_gl_state_value_field_width(void) {
+    static const float k_values[] = {
+        0.0f, 0.5f, -0.5f, 1.0f / 3.0f, 123.456f,
+        99999.0f, -1.0e12f, 1.0e-9f, -1.0e-30f
+    };
+    const int n_values = (int)(sizeof k_values / sizeof k_values[0]);
+    int scalar_len = -1, vec_len = -1;
+    int i;
+
+    printf("--- repl_state OpenGL state value field width ---\n");
+
+    for (i = 0; i < n_values; i++) {
+        GLCmd cmds[2];
+        FlatProgramView program;
+        ReplGlStateReport report;
+        const ReplGlStateReportRow *row;
+        char label[160];
+
+        cmds[0] = gl_state_test_cmd(CMD_FOG_F, 0);
+        cmds[0].args[0] = (float)GL_FOG_DENSITY;
+        cmds[0].args[1] = k_values[i];
+        cmds[0].num_args = 2;
+        cmds[1] = gl_state_test_cmd(CMD_COLOR4F, 1);
+        cmds[1].args[0] = k_values[i];
+        cmds[1].args[1] = -k_values[i];
+        cmds[1].args[2] = k_values[i];
+        cmds[1].args[3] = 1.0f;
+        cmds[1].num_args = 4;
+        memset(&program, 0, sizeof(program));
+        program.cmds = cmds;
+        program.cmd_count = 2;
+        repl_gl_state_report_at_line(program, 2, &report);
+
+        row = gl_state_test_find_row(&report, "GL_FOG_DENSITY");
+        snprintf(label, sizeof(label), "density row present for value %d", i);
+        ASSERT_TRUE(label, row != NULL);
+        if (row) {
+            if (scalar_len < 0)
+                scalar_len = (int)strlen(row->current);
+            snprintf(label, sizeof(label),
+                     "scalar cell keeps its width at value %d (%s)",
+                     i, row->current);
+            ASSERT_INT(label, (int)strlen(row->current), scalar_len);
+        }
+
+        row = gl_state_test_find_row(&report, "GL_CURRENT_COLOR");
+        snprintf(label, sizeof(label), "color row present for value %d", i);
+        ASSERT_TRUE(label, row != NULL);
+        if (row) {
+            if (vec_len < 0)
+                vec_len = (int)strlen(row->current);
+            snprintf(label, sizeof(label),
+                     "vec4 cell keeps its width at value %d (%s)",
+                     i, row->current);
+            ASSERT_INT(label, (int)strlen(row->current), vec_len);
+        }
+    }
+
+    /* Eight cells per number: "(" + 4 numbers + 3 ", " separators + ")". */
+    ASSERT_INT("scalar cell is one 8-wide field", scalar_len, 8);
+    ASSERT_INT("vec4 cell is four 8-wide fields", vec_len, 1 + 4 * 8 + 3 * 2 + 1);
+}
+
 static void test_gl_state_cell_coverage_sweep(void) {
     const int n_cases = (int)(sizeof k_gl_state_cell_cases /
                               sizeof k_gl_state_cell_cases[0]);
@@ -2144,7 +2229,7 @@ static void test_gl_state_cell_coverage_sweep(void) {
         if (row) {
             snprintf(label, sizeof(label), "%s: row %s reads back the write",
                      cmd_type_name(c->type), c->row);
-            ASSERT_STR(label, row->current, c->expect_v2);
+            ASSERT_CELL(label, row->current, c->expect_v2);
         }
 
         /* 2. scoping: glPushAttrib of the cell's own bit restores it. */
@@ -2166,7 +2251,7 @@ static void test_gl_state_cell_coverage_sweep(void) {
             snprintf(label, sizeof(label),
                      "%s: glPopAttrib restores row %s",
                      cmd_type_name(c->type), c->row);
-            ASSERT_STR(label, row->current, c->expect_v1);
+            ASSERT_CELL(label, row->current, c->expect_v1);
         }
     }
 
@@ -2215,6 +2300,7 @@ int main(void) {
     test_gl_state_report_converts_eye_light_position_to_world();
     test_gl_state_report_partitions_by_author();
     test_gl_state_report_gates_disabled_light_rows();
+    test_gl_state_value_field_width();
     test_gl_state_cell_coverage_sweep();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;

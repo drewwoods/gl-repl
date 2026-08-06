@@ -1207,8 +1207,13 @@ static void test_diff_clip_planes(void) {
     {
         const ReplGlStateReportRow *row =
             diff_row("GL_CLIP_PLANE1_EQUATION (object)");
+        /* Cells print in a fixed-width numeric field - see
+         * test_gl_state_value_field_width - so the padding is part of the
+         * text. */
         ASSERT_TRUE("clip plane row stays in object coordinates",
-                    row && strcmp(row->current, "(0, 1, 0, -0.5)") == 0);
+                    row && strcmp(row->current,
+                                  "(  0.0000,   1.0000,   0.0000,  -0.5000)")
+                               == 0);
     }
 }
 
