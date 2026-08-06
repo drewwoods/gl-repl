@@ -170,7 +170,7 @@ Sets the rasterized width of lines in pixels. Supported widths and granularity d
 
 [command CMD_LINE_STIPPLE]
 title = glLineStipple
-Configures the repeating 16-bit pattern used while GL_LINE_STIPPLE is enabled. factor stretches each pattern bit, and pattern selects which line fragments are drawn.
+Configures the repeating 16-bit pattern used while GL_LINE_STIPPLE is enabled. factor stretches each pattern bit, and pattern selects which line fragments are drawn. The pattern can be written in hex (0xAAAA) and is kept in that form.
 
 [command CMD_POINT_PARAMETER_FV]
 title = glPointParameterfv

@@ -318,7 +318,8 @@ static const ReplFuncCompletion k_func_completions[] = {
     { "glLineWidth(",        "glLineWidth(width)",                                       1, { "width" },
         "Rasterized line width", REPL_HELP_GROUP_STATE },
     { "glLineStipple(",      "glLineStipple(factor, pattern)",                           2, { "factor", "pattern" },
-        "Dashed lines: factor stretches the 16-bit pattern bitmask (e.g. 255 = 0x00FF).\n"
+        "Dashed lines: factor stretches the 16-bit pattern bitmask, written as an\n"
+        "expression or as a 0..65535 decimal or 0xNNNN literal (0xAAAA = dots).\n"
         "Enable with glEnable(GL_LINE_STIPPLE).",
         REPL_HELP_GROUP_STATE },
     { "glClipPlane(",        "glClipPlane(plane, (GLdouble[]){a, b, c, d})",             2, { "plane", "(GLdouble[]){a, b, c, d}" },
@@ -666,6 +667,15 @@ static const ReplEnumCommandSpec k_enum_command_specs[] = {
     { "glLightModeli",   CMD_LIGHT_MODEL_I,  2, "%sglLightModeli(%s, %s);",  0,
         .args = { ENUM_SLOT_TOK(k_light_model_params, "pname: GL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER"),
                   ENUM_SLOT(k_bool_vals, "param: GL_TRUE, GL_FALSE, or integer", REPL_ENUM_SLOT_ENUM_OR_EXPR) } },
+    /* glLineStipple is parsed by a custom branch (num_args -1): both slots
+     * are expressions, but a 0xNNNN pattern has to survive commit as hex,
+     * which the arg-re-rendering std path cannot do. The row carries no
+     * enum tokens - it is here so the name still resolves to its CmdType
+     * (syntax category, state report) like every other spec'd command. */
+    { "glLineStipple",   CMD_LINE_STIPPLE,  -1, NULL,                        0,
+        .args = { { NULL,
+                    "Usage: glLineStipple(factor, pattern) - pattern is an expression, or a decimal or 0xNNNN literal in 0..65535",
+                    REPL_ENUM_SLOT_ENUM_ONLY, NULL } } },
     /* glMaterialf is parsed by a custom branch (num_args -2). args[] is
      * kept only so slot-indexed autocomplete offers the face/pname
      * tokens; the trailing scalar value is handled by the custom parser.
@@ -711,7 +721,6 @@ static const ReplStdCommandSpec k_std_command_specs[] = {
     { "glClearDepth",   CMD_CLEAR_DEPTH,      1, "glClearDepth(%g);",               "Usage: glClearDepth(depth)", 0 },
     { "glColor3f",      CMD_COLOR3F,          3, "glColor3f(%g, %g, %g);",          "Usage: glColor3f(r, g, b)", 0 },
     { "glColor4f",      CMD_COLOR4F,          4, "glColor4f(%g, %g, %g, %g);",      "Usage: glColor4f(r, g, b, a)", 0 },
-    { "glLineStipple",  CMD_LINE_STIPPLE,     2, "glLineStipple(%g, %g);",          "Usage: glLineStipple(factor, pattern)", 0 },
     { "glLineWidth",    CMD_LINE_WIDTH,       1, "glLineWidth(%g);",                "Usage: glLineWidth(width)", 0 },
     { "glNormal3f",     CMD_NORMAL3F,         3, "glNormal3f(%g, %g, %g);",         "Usage: glNormal3f(nx, ny, nz)", 0 },
     { "glPointSize",    CMD_POINT_SIZE,       1, "glPointSize(%g);",                "Usage: glPointSize(size)", 0 },

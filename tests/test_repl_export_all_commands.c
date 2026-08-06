@@ -612,6 +612,9 @@ int main(void) {
     editor_feed_line("glPointSize(5);");
     editor_feed_line("glLineWidth(2);");
     editor_feed_line("glLineStipple(2, 61680);");
+    /* Both pattern spellings: the decimal above and the hex form, which has
+     * to survive export and come back as hex through import. */
+    editor_feed_line("glLineStipple(1, 0xAAAA);");
     editor_feed_line("glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 1, 0, 0.01);");
 
     /* Blend/depth commands */
@@ -709,6 +712,10 @@ int main(void) {
     ASSERT_TRUE("export preserves dynamic stencil expression for C conversion",
                 export_text &&
                 strstr(export_text, "glStencilFunc(GL_EQUAL, x + 0.9") != NULL);
+    ASSERT_TRUE("export writes the stipple pattern as it was written",
+                export_text &&
+                strstr(export_text, "glLineStipple(1, 0xAAAA);") != NULL &&
+                strstr(export_text, "glLineStipple(2, 61680);") != NULL);
     ASSERT_TRUE("export uses C89 block comments",
                 strstr(export_text, "//") == NULL);
     ASSERT_TRUE("export avoids C99 compound GLfloat literals",

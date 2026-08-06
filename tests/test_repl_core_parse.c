@@ -1719,6 +1719,72 @@ int main(void) {
         ASSERT_TRUE("glClearStencil keeps the expression text intact",
                     strstr(cmd_text, "glClearStencil(min(i, 3));") != NULL);
     }
+    /* glLineStipple's pattern is a bit pattern, so the hex spelling has to
+     * survive the commit that re-renders every other argument from its
+     * value - but it stays an expression slot, unlike the stencil masks. */
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glLineStipple hex pattern parses",
+                    parse_cmd_with_text("glLineStipple(2, 0xaaaa)", &cmd,
+                                        cmd_text, sizeof(cmd_text)) == 1);
+        ASSERT_TRUE("glLineStipple type", cmd.type == CMD_LINE_STIPPLE);
+        ASSERT_TRUE("glLineStipple factor", (int)cmd.args[0] == 2);
+        ASSERT_TRUE("glLineStipple hex pattern value", (int)cmd.args[1] == 43690);
+        ASSERT_TRUE("glLineStipple keeps the pattern in hex",
+                    strstr(cmd_text, "glLineStipple(2, 0xAAAA);") != NULL);
+
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glLineStipple short hex pattern parses",
+                    parse_cmd_with_text("glLineStipple(1, 0xFF)", &cmd,
+                                        cmd_text, sizeof(cmd_text)) == 1);
+        ASSERT_TRUE("glLineStipple pads a short hex pattern to four digits",
+                    strstr(cmd_text, "glLineStipple(1, 0x00FF);") != NULL);
+
+        /* A decimal pattern is echoed back as written - the hex form is
+         * preserved, not imposed (glStencilMask canonicalizes because its
+         * slot has no other spelling to preserve). */
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glLineStipple decimal pattern parses",
+                    parse_cmd_with_text("glLineStipple(1, 255)", &cmd,
+                                        cmd_text, sizeof(cmd_text)) == 1);
+        ASSERT_TRUE("glLineStipple decimal pattern value", (int)cmd.args[1] == 255);
+        ASSERT_TRUE("glLineStipple keeps a decimal pattern decimal",
+                    strstr(cmd_text, "glLineStipple(1, 255);") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char cmd_text[MAX_LINE_LEN] = "";
+        ExprVar vars[1] = { { "i", 3.0f } };
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glLineStipple expression pattern parses",
+                    parse_cmd_with_text_and_vars("glLineStipple(i, min(i, 2))",
+                                                 &cmd, cmd_text, sizeof(cmd_text),
+                                                 vars, ARRAY_LEN(vars)) == 1);
+        ASSERT_TRUE("glLineStipple expression is dynamic", cmd.has_vars == 1);
+        ASSERT_TRUE("glLineStipple expression factor evaluates", (int)cmd.args[0] == 3);
+        ASSERT_TRUE("glLineStipple expression pattern evaluates", (int)cmd.args[1] == 2);
+        ASSERT_TRUE("glLineStipple keeps a comma-bearing pattern intact",
+                    strstr(cmd_text, "glLineStipple(i, min(i, 2));") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        ASSERT_TRUE("glLineStipple over-range hex pattern rejected",
+                    parse_for_test("glLineStipple(1, 0x1FFFF)", &cmd) == 0);
+        assert_status_contains("glLineStipple hex range message", "0..65535");
+        ASSERT_TRUE("glLineStipple over-range decimal pattern rejected",
+                    parse_for_test("glLineStipple(1, 70000)", &cmd) == 0);
+        assert_status_contains("glLineStipple decimal range message", "0..65535");
+        ASSERT_TRUE("glLineStipple negative pattern rejected",
+                    parse_for_test("glLineStipple(1, -1)", &cmd) == 0);
+        ASSERT_TRUE("glLineStipple missing pattern rejected",
+                    parse_for_test("glLineStipple(1)", &cmd) == 0);
+    }
     {
         /* The mask slot is literal-only by policy (a mask is not a quantity
          * to animate), so a *valid* expression is still a rejection there -

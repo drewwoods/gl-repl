@@ -527,7 +527,10 @@ numeric argument everywhere is a full math expression.
 - [`glShadeModel(MODE)`](https://docs.gl/gl2/glShadeModel)
 - [`glPointSize(size)`](https://docs.gl/gl2/glPointSize), [`glLineWidth(width)`](https://docs.gl/gl2/glLineWidth)
 - [`glLineStipple(factor, pattern)`](https://docs.gl/gl2/glLineStipple) - repeat
-  a 16-bit line pattern while `GL_LINE_STIPPLE` is enabled
+  a 16-bit line pattern while `GL_LINE_STIPPLE` is enabled. `pattern` is an
+  expression, or a `0..65535` decimal or `0xNNNN` literal; a hex pattern is
+  kept in hex (`0xAAAA` = dots, `0x00FF` = dashes), a decimal one stays
+  decimal
 - [`glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, const, linear, quadratic)`](https://docs.gl/gl2/glPointParameter)
 - [`glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA | GL_ONE)`](https://docs.gl/gl2/glBlendFunc)
 - [`glColorMaterial(face, mode)`](https://docs.gl/gl2/glColorMaterial)

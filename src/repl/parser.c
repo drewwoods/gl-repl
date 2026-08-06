@@ -1497,35 +1497,50 @@ static int parse_fogfv(const char *args, GLCmd *cmd,
     return 1;
 }
 
-static int parse_stencil_value_literal(const char *text, int *out_value,
-                                       const char *usage,
-                                       const ReplParseContext *ctx) {
+/* A bare integer mask literal - decimal or 0x-prefixed - in 0..max_value.
+ * `out_is_hex` (optional) reports which spelling the source used, for the
+ * commands that echo the source form back into their canonical text.
+ *
+ * A NULL `usage` makes the probe silent: glLineStipple asks "is this slot a
+ * hex literal?" and falls through to the expression path when it is not, so
+ * a diagnostic there would fire on every animated pattern. */
+static int parse_mask_value_literal(const char *text, long max_value,
+                                    int *out_value, int *out_is_hex,
+                                    const char *usage,
+                                    const ReplParseContext *ctx) {
     char buf[REPL_ENUM_ARG_MAX];
     char *p = buf;
     char *end;
     long value;
-    int base = 10;
+    int is_hex = 0;
     size_t len;
 
     while (*text && isspace((unsigned char)*text)) text++;
     len = strlen(text);
     while (len > 0 && isspace((unsigned char)text[len - 1])) len--;
     if (len == 0 || len >= sizeof(buf)) {
-        parser_emit_error_static(ctx, usage);
+        if (usage) parser_emit_error_static(ctx, usage);
         return 0;
     }
     memcpy(buf, text, len);
     buf[len] = '\0';
     if (p[0] == '0' && (p[1] == 'x' || p[1] == 'X'))
-        base = 16;
-    value = strtol(p, &end, base);
-    if (end == p || *end != '\0' || value < REPL_STENCIL_VALUE_MIN ||
-        value > REPL_STENCIL_VALUE_MAX) {
-        parser_emit_error_static(ctx, usage);
+        is_hex = 1;
+    value = strtol(p, &end, is_hex ? 16 : 10);
+    if (end == p || *end != '\0' || value < 0 || value > max_value) {
+        if (usage) parser_emit_error_static(ctx, usage);
         return 0;
     }
-    *out_value = (int)value;
+    if (out_value) *out_value = (int)value;
+    if (out_is_hex) *out_is_hex = is_hex;
     return 1;
+}
+
+static int parse_stencil_value_literal(const char *text, int *out_value,
+                                       const char *usage,
+                                       const ReplParseContext *ctx) {
+    return parse_mask_value_literal(text, REPL_STENCIL_VALUE_MAX, out_value,
+                                    NULL, usage, ctx);
 }
 
 /* The 0..255 *quantity* slot shared by glStencilFunc's ref and
@@ -1538,16 +1553,15 @@ static int parse_stencil_value_literal(const char *text, int *out_value,
  * `capture_slot` is the arg index parser_capture_expr_span records, so the
  * compiled-expression cache compiles exactly the span this parse evaluated.
  * Callers own emitting the canonical text, which differs per command. */
-static int parse_stencil_quantity_slot(const char *slot_text, int capture_slot,
-                                       const char *range_msg,
-                                       const char *arity_msg,
-                                       int *out_value, int *out_has_vars,
-                                       float *out_raw,
-                                       const ReplParseContext *ctx) {
+/* Evaluate one expression-valued argument slot. Value policy (range,
+ * truncation) and the expression-span capture belong to the caller, which
+ * is what lets a caller reject an out-of-range literal without leaving a
+ * compiled span behind for a line that never commits. */
+static int parse_expr_arg_slot(const char *slot_text, const char *arity_msg,
+                               float *out_value, int *out_has_vars,
+                               const ReplParseContext *ctx) {
     float parsed[2];
     int parsed_count;
-    int has_vars;
-    int value;
 
     if (!parser_validate_expression_idents(slot_text, ctx->vars, ctx->num_vars, ctx))
         return 0;
@@ -1559,7 +1573,25 @@ static int parse_stencil_quantity_slot(const char *slot_text, int capture_slot,
         parser_emit_error_static(ctx, arity_msg);
         return 0;
     }
-    has_vars = input_has_any_visible_vars(slot_text, ctx->vars, ctx->num_vars);
+    if (out_value) *out_value = parsed[0];
+    if (out_has_vars)
+        *out_has_vars = input_has_any_visible_vars(slot_text, ctx->vars,
+                                                   ctx->num_vars);
+    return 1;
+}
+
+static int parse_stencil_quantity_slot(const char *slot_text, int capture_slot,
+                                       const char *range_msg,
+                                       const char *arity_msg,
+                                       int *out_value, int *out_has_vars,
+                                       float *out_raw,
+                                       const ReplParseContext *ctx) {
+    float parsed[2];
+    int has_vars;
+    int value;
+
+    if (!parse_expr_arg_slot(slot_text, arity_msg, &parsed[0], &has_vars, ctx))
+        return 0;
     if (!has_vars && !repl_stencil_clamp_ref(parsed[0], &value)) {
         parser_emit_error_static(ctx, range_msg);
         return 0;
@@ -1695,6 +1727,97 @@ static int parse_stencil_mask(const char *args, GLCmd *cmd,
     return 1;
 }
 
+/* The stipple pattern is the 16 bits glLineStipple takes as a GLushort. */
+#define REPL_LINE_STIPPLE_PATTERN_MAX 65535
+
+/* glLineStipple(factor, pattern).
+ *
+ * Both slots are expressions (the pattern can animate), so this could be a
+ * k_std_command_specs row - except that the pattern is a *bit pattern*, and
+ * `0xAAAA` says "alternate on/off" in a way `43690` does not. The generic
+ * std path re-renders every argument from its evaluated float, which would
+ * turn that spelling into its decimal value on commit. So the slot is
+ * probed for a bare hex literal first and echoed back as 0xNNNN; anything
+ * else is the ordinary expression path and renders as its value.
+ *
+ * A constant pattern outside 0..65535 is rejected here rather than silently
+ * wrapping in the executor's GLushort cast; an animated one is left alone,
+ * because a per-frame parse error is not a usable failure mode. */
+static int parse_line_stipple(const char *args, GLCmd *cmd,
+                              char *text_out, int text_sz,
+                              const char *indent,
+                              const ReplParseContext *ctx) {
+    static const char *k_usage =
+        "Usage: glLineStipple(factor, pattern) - pattern is an expression, or a decimal or 0xNNNN literal in 0..65535";
+    char slot_raw[MAX_ENUM_ARGS][ENUM_SLOT_TEXT_MAX];
+    char pattern_text[ENUM_SLOT_TEXT_MAX];
+    char factor_buf[REPL_SOURCE_FLOAT_TEXT_MAX];
+    const char *factor_text;
+    float factor = 0.0f;
+    float pattern = 0.0f;
+    int factor_has_vars = 0;
+    int pattern_has_vars = 0;
+    int pattern_bits = 0;
+    int pattern_is_hex = 0;
+
+    if (!split_enum_command_args(args, 2, slot_raw)) {
+        parser_emit_error_static(ctx, k_usage);
+        return 0;
+    }
+    if (!parse_expr_arg_slot(slot_raw[0], k_usage, &factor, &factor_has_vars, ctx))
+        return 0;
+    parser_capture_expr_span(ctx, REPL_EXPR_ROLE_CMD_ARG_LIST_LENIENT,
+                             0, slot_raw[0]);
+
+    if (parse_mask_value_literal(slot_raw[1], REPL_LINE_STIPPLE_PATTERN_MAX,
+                                 &pattern_bits, &pattern_is_hex, NULL, ctx) &&
+        pattern_is_hex) {
+        pattern = (float)pattern_bits;
+        snprintf(pattern_text, sizeof(pattern_text), "0x%04X",
+                 (unsigned)pattern_bits);
+    } else {
+        if (!parse_expr_arg_slot(slot_raw[1], k_usage, &pattern,
+                                 &pattern_has_vars, ctx))
+            return 0;
+        if (!pattern_has_vars &&
+            (pattern < 0.0f || pattern > (float)REPL_LINE_STIPPLE_PATTERN_MAX)) {
+            parser_emit_error_static(ctx, "pattern: must be in the range 0..65535");
+            return 0;
+        }
+        parser_capture_expr_span(ctx, REPL_EXPR_ROLE_CMD_ARG_LIST_LENIENT,
+                                 1, slot_raw[1]);
+        if (pattern_has_vars) {
+            snprintf(pattern_text, sizeof(pattern_text), "%s", slot_raw[1]);
+        } else {
+            char pattern_buf[REPL_SOURCE_FLOAT_TEXT_MAX];
+            snprintf(pattern_text, sizeof(pattern_text), "%s",
+                     fmt_source_float(pattern_buf, pattern));
+        }
+    }
+
+    cmd->type = CMD_LINE_STIPPLE;
+    cmd->valid = 1;
+    cmd->args[0] = factor;
+    cmd->args[1] = pattern;
+    cmd->num_args = 2;
+    cmd->has_vars = (factor_has_vars || pattern_has_vars);
+
+    factor_text = factor_has_vars ? slot_raw[0]
+                                  : fmt_source_float(factor_buf, factor);
+    if (text_out && text_sz > 0) {
+        /* Wider than its source line: a hex pattern is re-rendered padded
+         * to four digits and the interactive `;` path supplies no trailing
+         * semicolon. Reject rather than store a truncated row. */
+        if (!repl_format_fits(text_out, (size_t)text_sz,
+                              "%sglLineStipple(%s, %s);", indent,
+                              factor_text, pattern_text)) {
+            parser_emit_error_static(ctx, "Command too long");
+            return 0;
+        }
+    }
+    return 1;
+}
+
 /* Dispatcher for the custom-branch commands that escape both spec
  * tables. Returns -1 when `func` matches none of them (the caller
  * falls through to the remaining parsers); otherwise the handler's
@@ -1729,6 +1852,8 @@ static int try_parse_custom_arg_command(const char *func, const char *args,
         return parse_fogf(args, cmd, text_out, text_sz, indent, ctx);
     if (strcmp(func, "glFogfv") == 0)
         return parse_fogfv(args, cmd, text_out, text_sz, indent, ctx);
+    if (strcmp(func, "glLineStipple") == 0)
+        return parse_line_stipple(args, cmd, text_out, text_sz, indent, ctx);
     if (strcmp(func, "glClearStencil") == 0)
         return parse_clear_stencil(args, cmd, text_out, text_sz, indent, ctx);
     if (strcmp(func, "glStencilFunc") == 0)
