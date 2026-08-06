@@ -4,7 +4,8 @@
  * Pure renderer + hit-test over a controller-built view: draws the
  * right-click OpenGL-state report as a floating table (state name, current
  * value, and - expanded via the clickable header chip, collapsed by
- * default - the OpenGL 2.1 default and latest change source columns)
+ * default - the comparison basis and latest change source columns; the basis
+ * is the OpenGL 2.1 defaults unless a second probe line is pinned)
  * anchored near the click position, wheel-scrollable when the report is
  * taller than the window (flyout-style right-edge scrollbar hint). The fold
  * itself lives in src/repl/gl_state_inspector.c; open/close/scroll/expand
@@ -42,16 +43,20 @@ typedef struct {
      * controller resolves these because the gutter label counts the derived-C
      * chrome rows that code focus hides, so it is not report-side data. */
     const int *source_gutter_labels;
+    /* Gutter label for report->basis_line_idx, or -1 to fall back to the
+     * document index. Unused when the report carries no pinned basis. */
+    int basis_gutter_label;
     const ReplGlStateReport *report;
 } UiGlStatePanelView;
 
 /* Render the popup table once per frame. No-op when view->visible is 0.
- * Program-authored rows that differ from the OpenGL 2.1 default draw their
- * current value in the warning accent; explicit writes of the default value
- * draw in the OK accent so touched-ness stays visible either way. Generated
- * setup rows keep that distinction in the muted palette rather than the
- * accents - nearly all of them differ from the GL default, so accenting the
- * group would carry no signal. */
+ * Program-authored rows that differ from the comparison basis draw their
+ * current value in the warning accent; rows equal to it draw in the OK accent
+ * so touched-ness stays visible either way. Generated setup rows keep that
+ * distinction in the muted palette rather than the accents - against the GL
+ * defaults nearly all of them differ, so accenting the group would carry no
+ * signal. (Against a pinned basis the group is mostly unchanged instead, but
+ * the muting still holds: it is the harness's state either way.) */
 void ui_gl_state_panel_render(const UiGlStatePanelView *view);
 
 /* Pure hit-test: 1 when (mx, my) - GLUT screen coords, y-down - lands
@@ -61,9 +66,9 @@ void ui_gl_state_panel_render(const UiGlStatePanelView *view);
 int ui_gl_state_panel_hit_test(const UiGlStatePanelView *view,
                                int mx, int my);
 
-/* Pure hit-test for the header's expand/collapse chip ("[+] ..." /
- * "[-] ..."): 1 when (mx, my) - GLUT screen coords, y-down - lands on
- * the chip's header-row cell. The router flips
+/* Pure hit-test for the basis-column header's expand/collapse chip
+ * ("[+] ..." / "[-] ..."): 1 when (mx, my) - GLUT screen coords, y-down -
+ * lands on the chip's header-row cell. The router flips
  * ui_state_gl_state_inspector_toggle_details() on a left press there
  * (the press is already swallowed by the popup's surface hit-test). */
 int ui_gl_state_panel_hit_test_details_toggle(const UiGlStatePanelView *view,

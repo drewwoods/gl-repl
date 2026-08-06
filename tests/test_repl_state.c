@@ -1077,9 +1077,9 @@ static void test_gl_state_report_tracks_explicit_writes_before_checkpoint(void) 
     ASSERT_TRUE("explicit default depth func remains in report", row != NULL);
     if (row) {
         ASSERT_STR("depth func current", row->current, "GL_LESS");
-        ASSERT_STR("depth func default", row->default_value, "GL_LESS");
+        ASSERT_STR("depth func default", row->basis_value, "GL_LESS");
         ASSERT_INT("explicit default depth func marked equal",
-                   row->differs_from_default, 0);
+                   row->differs_from_basis, 0);
         ASSERT_INT("depth func source is display",
                    row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
         ASSERT_INT("depth func source line is retained",
@@ -1108,8 +1108,8 @@ static void test_gl_state_report_tracks_explicit_writes_before_checkpoint(void) 
     ASSERT_TRUE("enable before checkpoint is reported", row != NULL);
     if (row) {
         ASSERT_STR("enabled blend current", row->current, "GL_TRUE");
-        ASSERT_STR("blend default", row->default_value, "GL_FALSE");
-        ASSERT_INT("enabled blend differs", row->differs_from_default, 1);
+        ASSERT_STR("blend default", row->basis_value, "GL_FALSE");
+        ASSERT_INT("enabled blend differs", row->differs_from_basis, 1);
         ASSERT_INT("explicit same-value blend write becomes latest source",
                    row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
         ASSERT_INT("blend display source line", row->source.source_line_idx, 2);
@@ -1120,7 +1120,7 @@ static void test_gl_state_report_tracks_explicit_writes_before_checkpoint(void) 
     ASSERT_TRUE("write restored to default remains reported", row != NULL);
     if (row) {
         ASSERT_INT("disabled blend equals default",
-                   row->differs_from_default, 0);
+                   row->differs_from_basis, 0);
         ASSERT_INT("disabled blend source is display",
                    row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
         ASSERT_INT("disabled blend source line",
@@ -1131,9 +1131,9 @@ static void test_gl_state_report_tracks_explicit_writes_before_checkpoint(void) 
     row = gl_state_test_find_row(&report, "GL_MULTISAMPLE");
     ASSERT_TRUE("explicit multisample write is reported", row != NULL);
     if (row) {
-        ASSERT_STR("multisample OpenGL default", row->default_value, "GL_TRUE");
+        ASSERT_STR("multisample OpenGL default", row->basis_value, "GL_TRUE");
         ASSERT_INT("enabled multisample equals initial state",
-                   row->differs_from_default, 0);
+                   row->differs_from_basis, 0);
         ASSERT_INT("multisample source is display",
                    row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
         ASSERT_INT("multisample source line", row->source.source_line_idx, 4);
@@ -1144,11 +1144,106 @@ static void test_gl_state_report_tracks_explicit_writes_before_checkpoint(void) 
     ASSERT_TRUE("explicit default color is reported", row != NULL);
     if (row) {
         ASSERT_INT("white current color equals default",
-                   row->differs_from_default, 0);
+                   row->differs_from_basis, 0);
         ASSERT_INT("color source is display",
                    row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
         ASSERT_INT("color source line", row->source.source_line_idx, 5);
     }
+}
+
+/* Rebasing a report onto a second probe point: what the popup shows in
+ * compare mode. The three rows below are the three cases the matching rule
+ * has - changed between the probes, unchanged between them (but not from the
+ * GL default, which is the noise the mode exists to drop), and untouched at
+ * the basis line so the GL default is still the honest basis. */
+static void test_gl_state_report_rebase_against_second_probe(void) {
+    GLCmd cmds[4];
+    FlatProgramView program;
+    ReplGlStateReport report;
+    ReplGlStateReport basis;
+    const ReplGlStateReportRow *row;
+
+    printf("--- repl_state OpenGL report rebase ---\n");
+
+    cmds[0] = gl_state_test_cmd(CMD_COLOR4F, 0);
+    cmds[0].args[0] = 1.0f;
+    cmds[0].args[1] = 0.0f;
+    cmds[0].args[2] = 0.0f;
+    cmds[0].args[3] = 1.0f;
+    cmds[0].num_args = 4;
+    cmds[1] = gl_state_test_cmd(CMD_ENABLE, 1);
+    cmds[1].args[0] = (float)GL_BLEND;
+    cmds[1].num_args = 1;
+    cmds[2] = gl_state_test_cmd(CMD_COLOR4F, 2);
+    cmds[2].args[0] = 0.0f;
+    cmds[2].args[1] = 1.0f;
+    cmds[2].args[2] = 0.0f;
+    cmds[2].args[3] = 1.0f;
+    cmds[2].num_args = 4;
+    cmds[3] = gl_state_test_cmd(CMD_DEPTH_FUNC, 3);
+    cmds[3].args[0] = (float)GL_GREATER;
+    cmds[3].num_args = 1;
+
+    memset(&program, 0, sizeof(program));
+    program.cmds = cmds;
+    program.cmd_count = 4;
+
+    repl_gl_state_report_at_line(program, 2, &basis);
+    repl_gl_state_report_at_line(program, 4, &report);
+    ASSERT_INT("report starts on the GL defaults",
+               report.basis_line_idx, -1);
+    row = gl_state_test_find_row(&report, "GL_BLEND");
+    ASSERT_TRUE("blend reported before rebase", row != NULL);
+    if (row)
+        ASSERT_INT("blend differs from the GL default",
+                   row->differs_from_basis, 1);
+
+    repl_gl_state_report_rebase(&basis, &report);
+    ASSERT_INT("rebase records the basis line", report.basis_line_idx, 2);
+
+    row = gl_state_test_find_row(&report, "GL_CURRENT_COLOR");
+    ASSERT_TRUE("color reported", row != NULL);
+    if (row) {
+        ASSERT_STR("color current", row->current, "(0, 1, 0, 1)");
+        ASSERT_STR("color basis is the value at the basis line",
+                   row->basis_value, "(1, 0, 0, 1)");
+        ASSERT_INT("color differs between the probe points",
+                   row->differs_from_basis, 1);
+    }
+    row = gl_state_test_find_row(&report, "GL_BLEND");
+    ASSERT_TRUE("blend still reported after rebase", row != NULL);
+    if (row) {
+        ASSERT_STR("blend basis is the value at the basis line",
+                   row->basis_value, "GL_TRUE");
+        ASSERT_INT("blend set before both probes reads as unchanged",
+                   row->differs_from_basis, 0);
+    }
+    row = gl_state_test_find_row(&report, "GL_DEPTH_FUNC");
+    ASSERT_TRUE("depth func reported", row != NULL);
+    if (row) {
+        ASSERT_STR("untouched-at-basis row keeps the GL default",
+                   row->basis_value, "GL_LESS");
+        ASSERT_INT("untouched-at-basis row still differs",
+                   row->differs_from_basis, 1);
+    }
+    row = gl_state_test_find_row(&report, "GL_COLOR_CLEAR_VALUE");
+    ASSERT_TRUE("generated init row reported", row != NULL);
+    if (row)
+        ASSERT_INT("generated setup is identical at both probes",
+                   row->differs_from_basis, 0);
+
+    /* Basis after the cursor: the simple policy is the intersection, so the
+     * rows only the later fold has are simply absent rather than negated. */
+    repl_gl_state_report_at_line(program, 4, &basis);
+    repl_gl_state_report_at_line(program, 2, &report);
+    repl_gl_state_report_rebase(&basis, &report);
+    ASSERT_TRUE("backward compare drops the later-only row",
+                gl_state_test_find_row(&report, "GL_DEPTH_FUNC") == NULL);
+    row = gl_state_test_find_row(&report, "GL_CURRENT_COLOR");
+    ASSERT_TRUE("backward compare keeps the shared row", row != NULL);
+    if (row)
+        ASSERT_STR("backward compare reads the later value as the basis",
+                   row->basis_value, "(0, 1, 0, 1)");
 }
 
 static void test_gl_state_report_tracks_fog(void) {
@@ -1191,35 +1286,35 @@ static void test_gl_state_report_tracks_fog(void) {
     ASSERT_TRUE("fog cap reported", row != NULL);
     if (row) {
         ASSERT_STR("fog cap current", row->current, "GL_TRUE");
-        ASSERT_STR("fog cap default", row->default_value, "GL_FALSE");
-        ASSERT_INT("fog cap differs", row->differs_from_default, 1);
+        ASSERT_STR("fog cap default", row->basis_value, "GL_FALSE");
+        ASSERT_INT("fog cap differs", row->differs_from_basis, 1);
     }
     row = gl_state_test_find_row(&report, "GL_FOG_MODE");
     ASSERT_TRUE("fog mode reported", row != NULL);
     if (row) {
         ASSERT_STR("fog mode current", row->current, "GL_EXP2");
-        ASSERT_STR("fog mode default", row->default_value, "GL_EXP");
-        ASSERT_INT("fog mode differs", row->differs_from_default, 1);
+        ASSERT_STR("fog mode default", row->basis_value, "GL_EXP");
+        ASSERT_INT("fog mode differs", row->differs_from_basis, 1);
         ASSERT_INT("fog mode source line", row->source.source_line_idx, 1);
     }
     row = gl_state_test_find_row(&report, "GL_FOG_DENSITY");
     ASSERT_TRUE("fog density reported", row != NULL);
     if (row) {
         ASSERT_STR("fog density current", row->current, "0.25");
-        ASSERT_STR("fog density default", row->default_value, "1");
-        ASSERT_INT("fog density differs", row->differs_from_default, 1);
+        ASSERT_STR("fog density default", row->basis_value, "1");
+        ASSERT_INT("fog density differs", row->differs_from_basis, 1);
     }
     row = gl_state_test_find_row(&report, "GL_FOG_COLOR");
     ASSERT_TRUE("fog color reported", row != NULL);
     if (row) {
         ASSERT_STR("fog color current", row->current, "(0.05, 0.06, 0.08, 1)");
-        ASSERT_INT("fog color differs", row->differs_from_default, 1);
+        ASSERT_INT("fog color differs", row->differs_from_basis, 1);
     }
     row = gl_state_test_find_row(&report, "GL_FOG_END");
     ASSERT_TRUE("fog end reported", row != NULL);
     if (row) {
         ASSERT_INT("explicit-default fog end marked equal",
-                   row->differs_from_default, 0);
+                   row->differs_from_basis, 0);
     }
     row = gl_state_test_find_row(&report, "GL_FOG_START");
     ASSERT_TRUE("untouched fog start absent", row == NULL);
@@ -1342,7 +1437,7 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
     ASSERT_TRUE("generated init line width is reported", row != NULL);
     if (row) {
         ASSERT_STR("generated init line width current", row->current, "1.5");
-        ASSERT_STR("generated init line width default", row->default_value, "1");
+        ASSERT_STR("generated init line width default", row->basis_value, "1");
         ASSERT_INT("line width source is init", row->source.kind,
                    REPL_GL_STATE_SOURCE_INIT);
     }
@@ -1352,7 +1447,7 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
     if (row) {
         ASSERT_STR("global light ambient current", row->current,
                    "(0.15, 0.15, 0.2, 1)");
-        ASSERT_STR("global light ambient OpenGL default", row->default_value,
+        ASSERT_STR("global light ambient OpenGL default", row->basis_value,
                    "(0.2, 0.2, 0.2, 1)");
         ASSERT_INT("global ambient source is init", row->source.kind,
                    REPL_GL_STATE_SOURCE_INIT);
@@ -1363,7 +1458,7 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
     if (row) {
         ASSERT_STR("light diffuse current", row->current,
                    "(0.4, 0.5, 0.6, 1)");
-        ASSERT_STR("light0 diffuse OpenGL default", row->default_value,
+        ASSERT_STR("light0 diffuse OpenGL default", row->basis_value,
                    "(1, 1, 1, 1)");
         ASSERT_INT("light diffuse source is init", row->source.kind,
                    REPL_GL_STATE_SOURCE_INIT);
@@ -1390,7 +1485,7 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
                    "  0.0000   0.0000   1.0000   0.0000; "
                    "  0.0000   0.0000   0.0000   1.0000]");
         ASSERT_STR("generated camera modelview aligned default",
-                   row->default_value,
+                   row->basis_value,
                    "[  1.0000   0.0000   0.0000   0.0000; "
                    "  0.0000   1.0000   0.0000   0.0000; "
                    "  0.0000   0.0000   1.0000   0.0000; "
@@ -1406,7 +1501,7 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
     if (row) {
         ASSERT_STR("world light is stored after modelview transform",
                    row->current, "(11.25, 2, 3, 1)");
-        ASSERT_STR("light position OpenGL default", row->default_value,
+        ASSERT_STR("light position OpenGL default", row->basis_value,
                    "(0, 0, 1, 0)");
         ASSERT_INT("light position source is display", row->source.kind,
                    REPL_GL_STATE_SOURCE_DISPLAY);
@@ -1418,7 +1513,7 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
         ASSERT_STR("world row reverses the camera modelview",
                    row->current, "(1, 2, 3, 1)");
         ASSERT_STR("world row converts the OpenGL default",
-                   row->default_value, "(0, 0, 1, 0)");
+                   row->basis_value, "(0, 0, 1, 0)");
         ASSERT_INT("world light position source is display",
                    row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
     }
@@ -1427,7 +1522,7 @@ static void test_gl_state_report_includes_generated_fixed_function_state(void) {
     ASSERT_TRUE("generated display attribute push is reported", row != NULL);
     if (row) {
         ASSERT_STR("attribute stack depth current", row->current, "1");
-        ASSERT_STR("attribute stack depth default", row->default_value, "0");
+        ASSERT_STR("attribute stack depth default", row->basis_value, "0");
         ASSERT_INT("attribute stack source is display", row->source.kind,
                    REPL_GL_STATE_SOURCE_DISPLAY);
     }
@@ -1618,9 +1713,9 @@ static void test_gl_state_report_latches_raster_color(void) {
         ASSERT_STR("raster color holds the latched color",
                    row->current, "(1, 0, 0, 1)");
         ASSERT_STR("raster color default is white",
-                   row->default_value, "(1, 1, 1, 1)");
+                   row->basis_value, "(1, 1, 1, 1)");
         ASSERT_INT("latched red differs from the default",
-                   row->differs_from_default, 1);
+                   row->differs_from_basis, 1);
         ASSERT_INT("raster color source is display",
                    row->source.kind, REPL_GL_STATE_SOURCE_DISPLAY);
         ASSERT_INT("raster color source is the glRasterPos3f line",
@@ -2111,6 +2206,7 @@ int main(void) {
     test_camera_target_decay_override_resets_on_new_ease();
     test_time_dirty_gate_routes_by_dep_masks();
     test_gl_state_report_tracks_explicit_writes_before_checkpoint();
+    test_gl_state_report_rebase_against_second_probe();
     test_gl_state_report_tracks_fog();
     test_gl_state_report_uses_flat_call_provenance();
     test_gl_state_report_includes_generated_fixed_function_state();

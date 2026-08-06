@@ -4,8 +4,11 @@
  * Pure renderer + hit-test: consumes the controller-built
  * UiGlStatePanelView and draws the right-click state report as a table
  * (state name, current value, and - behind the header's expand chip,
- * collapsed by default so the popup stays narrow - the OpenGL 2.1
- * default and latest change source columns) anchored near the click.
+ * collapsed by default so the popup stays narrow - the comparison basis and
+ * latest change source columns) anchored near the click. The basis is the
+ * OpenGL 2.1 defaults, or a second pinned probe line's values when the
+ * report carries one (report->basis_line_idx), which turns the table into
+ * the differential between the two lines.
  * When the report is taller than the window the row window scrolls
  * (wheel, routed by the controller) with a flyout-style right-edge
  * scrollbar hint. Report construction, anchor validation, and
@@ -40,6 +43,13 @@ static const char GLSP_HDR_CUR[]    = "current";
 static const char GLSP_HDR_DEF[]    = "[-] default (GL 2.1)";
 static const char GLSP_HDR_SOURCE[] = "source";
 static const char GLSP_HDR_DETAILS_CLOSED[] = "[+] default/source";
+/* Same two header cells with a comparison basis pinned. The line number is
+ * the whole state display for compare mode - there is no separate mode chip,
+ * because the basis IS a column and its header is where a reader looks to ask
+ * "compared to what?". */
+static const char GLSP_HDR_BASIS_FMT[]         = "[-] value at L%d";
+static const char GLSP_HDR_BASIS_FMT_CLOSED[]  = "[+] L%d/source";
+#define GLSP_HDR_MAX 32
 static const char GLSP_SETUP_CHIP_FMT_CLOSED[] = "[+] %d from setup";
 static const char GLSP_SETUP_CHIP_FMT_OPEN[]   = "[-] %d from setup";
 #define GLSP_SETUP_CHIP_MAX 32
@@ -54,7 +64,12 @@ static const char GLSP_NO_USER_MSG[] =
 typedef struct {
     int px, py;               /* top-left, y-up */
     int popup_w, popup_h;
-    int details;              /* default/source columns expanded */
+    int details;              /* basis/source columns expanded */
+    /* Solved header text for the basis column and its collapsed chip - they
+     * carry the pinned basis line, so render and hit-test must size from the
+     * same strings. */
+    char hdr_basis[GLSP_HDR_MAX];
+    char hdr_details_closed[GLSP_HDR_MAX];
     int name_chars, cur_chars, def_chars, source_chars;
     int col0_x, col1_x, col2_x, col3_x;
     int tog_x0, tog_x1;       /* expand/collapse header chip cell (y-up; */
@@ -216,6 +231,30 @@ static void glsp_setup_chip_text(const GlspLayout *lo, char *buf, int buf_size) 
              lo->setup_count);
 }
 
+/* Header text for the basis column and for its collapsed chip. With no basis
+ * pinned these are the fixed "default (GL 2.1)" labels; with one they name the
+ * pinned line, quoting the code panel's gutter label for the same reason the
+ * source column does (with code focus off the margin counts chrome rows, so
+ * the document index would send the reader to the wrong line). */
+static void glsp_basis_header_text(const UiGlStatePanelView *view,
+                                   GlspLayout *out) {
+    int basis = view->report->basis_line_idx;
+    int label;
+
+    if (basis < 0) {
+        snprintf(out->hdr_basis, sizeof(out->hdr_basis), "%s", GLSP_HDR_DEF);
+        snprintf(out->hdr_details_closed, sizeof(out->hdr_details_closed),
+                 "%s", GLSP_HDR_DETAILS_CLOSED);
+        return;
+    }
+    label = view->basis_gutter_label >= 0 ? view->basis_gutter_label
+                                          : basis + 1;
+    snprintf(out->hdr_basis, sizeof(out->hdr_basis),
+             GLSP_HDR_BASIS_FMT, label);
+    snprintf(out->hdr_details_closed, sizeof(out->hdr_details_closed),
+             GLSP_HDR_BASIS_FMT_CLOSED, label);
+}
+
 /* Solve the popup's frame, columns, and scrolled row window. Returns 0
  * when the view is hidden / degenerate (nothing to draw or hit). */
 static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
@@ -258,13 +297,14 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
     if (out->row_count < 0)             out->row_count = 0;
 
     out->details = view->details_expanded ? 1 : 0;
+    glsp_basis_header_text(view, out);
     cur_floor = (int)strlen(GLSP_HDR_CUR);
     if (!out->details)
         cur_floor += GLSP_COL_GAP_CHARS +
-                     (int)strlen(GLSP_HDR_DETAILS_CLOSED);
+                     (int)strlen(out->hdr_details_closed);
     out->name_chars = (int)strlen(GLSP_HDR_NAME);
     out->cur_chars  = (int)strlen(GLSP_HDR_CUR);
-    out->def_chars  = out->details ? (int)strlen(GLSP_HDR_DEF) : 0;
+    out->def_chars  = out->details ? (int)strlen(out->hdr_basis) : 0;
     out->source_chars = out->details ? (int)strlen(GLSP_HDR_SOURCE) : 0;
     for (i = 0; i < out->row_count; i++) {
         const ReplGlStateReportRow *row = &report->rows[i];
@@ -275,7 +315,7 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
             out->cur_chars = value_chars;
         if (!out->details)
             continue;
-        value_chars = glsp_value_max_chars(row, row->default_value);
+        value_chars = glsp_value_max_chars(row, row->basis_value);
         if (value_chars > out->def_chars)
             out->def_chars = value_chars;
         glsp_source_text(row, glsp_gutter_label(view, i), source_text,
@@ -290,7 +330,7 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
                                        GLSP_VAL_CHARS_MAX);
     if (out->details) {
         out->def_chars  = glsp_clamp_chars(out->def_chars,
-                                           (int)strlen(GLSP_HDR_DEF),
+                                           (int)strlen(out->hdr_basis),
                                            GLSP_VAL_CHARS_MAX);
         out->source_chars = glsp_clamp_chars(out->source_chars,
                                              (int)strlen(GLSP_HDR_SOURCE),
@@ -309,7 +349,7 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
         if (out->cur_chars > cur_floor &&
             out->cur_chars >= out->def_chars)
             out->cur_chars--;
-        else if (out->def_chars > (int)strlen(GLSP_HDR_DEF))
+        else if (out->def_chars > (int)strlen(out->hdr_basis))
             out->def_chars--;
         else if (out->name_chars > (int)strlen(GLSP_HDR_NAME))
             out->name_chars--;
@@ -431,7 +471,7 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
     out->tog_y0 = out->tog_y1 = 0;
     if (out->row_count > 0) {
         if (out->details) {
-            int chip_chars = (int)strlen(GLSP_HDR_DEF);
+            int chip_chars = (int)strlen(out->hdr_basis);
             if (chip_chars > out->def_chars)
                 chip_chars = out->def_chars;
             out->tog_x0 = out->col2_x;
@@ -439,7 +479,7 @@ static int glsp_solve(const UiGlStatePanelView *view, GlspLayout *out) {
         } else {
             out->tog_x1 = out->px + out->popup_w - GLSP_PAD_X;
             out->tog_x0 = out->tog_x1 -
-                          (int)strlen(GLSP_HDR_DETAILS_CLOSED) * FONT_W;
+                          (int)strlen(out->hdr_details_closed) * FONT_W;
         }
         out->tog_y1 = out->py - GLSP_PAD_Y - LINE_H;
         out->tog_y0 = out->tog_y1 - LINE_H;
@@ -553,13 +593,13 @@ void ui_gl_state_panel_render(const UiGlStatePanelView *view) {
     gl2d_draw_string((float)lo.col0_x, (float)ty, GLSP_HDR_NAME, FONT_MONO);
     gl2d_draw_string((float)lo.col1_x, (float)ty, GLSP_HDR_CUR, FONT_MONO);
     if (lo.details) {
-        glsp_clip(clipped, (int)sizeof(clipped), GLSP_HDR_DEF, lo.def_chars);
+        glsp_clip(clipped, (int)sizeof(clipped), lo.hdr_basis, lo.def_chars);
         gl2d_draw_string((float)lo.col2_x, (float)ty, clipped, FONT_MONO);
         gl2d_draw_string((float)lo.col3_x, (float)ty, GLSP_HDR_SOURCE,
                          FONT_MONO);
     } else {
         gl2d_draw_string((float)lo.tog_x0, (float)ty,
-                         GLSP_HDR_DETAILS_CLOSED, FONT_MONO);
+                         lo.hdr_details_closed, FONT_MONO);
     }
 
     ui_clr(UI_TOK_DIVIDER);
@@ -587,13 +627,14 @@ void ui_gl_state_panel_render(const UiGlStatePanelView *view) {
              * precisely because the harness wrote it, so highlighting the
              * whole group says nothing and drowns out the rows that matter.
              * The saturated accents are reserved for state this program
-             * wrote; setup rows keep the touched/default distinction in the
-             * muted palette. */
+             * wrote; setup rows keep the touched/basis distinction in the
+             * muted palette. (A pinned basis inverts which group is mostly
+             * unchanged, but not who owns the row, so the tiers hold.) */
             if (row->source.source_line_idx >= 0)
-                ui_clr(row->differs_from_default ? UI_TOK_STATUS_WARN
+                ui_clr(row->differs_from_basis ? UI_TOK_STATUS_WARN
                                                  : UI_TOK_STATUS_OK);
             else
-                ui_clr(row->differs_from_default ? UI_TOK_TEXT_MUTED
+                ui_clr(row->differs_from_basis ? UI_TOK_TEXT_MUTED
                                                  : UI_TOK_TEXT_SECTION);
             glsp_value_line(row, row->current, line, value_line,
                             (int)sizeof(value_line));
@@ -603,7 +644,7 @@ void ui_gl_state_panel_render(const UiGlStatePanelView *view) {
 
             if (lo.details) {
                 ui_clr(UI_TOK_TEXT_MUTED);
-                glsp_value_line(row, row->default_value, line, value_line,
+                glsp_value_line(row, row->basis_value, line, value_line,
                                 (int)sizeof(value_line));
                 glsp_clip(clipped, (int)sizeof(clipped), value_line,
                           lo.def_chars);

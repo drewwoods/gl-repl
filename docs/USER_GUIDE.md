@@ -455,6 +455,23 @@ number it quotes is the one in the code panel's left margin, so it stays
 right whether or not code focus is hiding the derived C boilerplate (those
 hidden rows are counted in the margin numbering).
 
+#### Comparing two probe points
+
+**Shift+right-click a second blank row** while the popup is open to pin that
+row as the comparison basis. The default column becomes **value at L*n***, and
+every row is then coloured by whether it changed *between the two lines* rather
+than by how far it sits from the OpenGL default - which is the question you
+usually have when a block of drawing code misbehaves. It also quiets the
+report: the generated setup rows are identical at both points, so they stop
+reading as differences. Shift+right-click the pinned row again to go back to
+comparing against the OpenGL defaults; closing the popup clears it too.
+
+The basis is a line, not a snapshot - it is re-evaluated every frame, so the
+comparison stays true while `t` advances. Rows that neither line touched are
+still compared against the OpenGL default, since that is what their value was
+at the basis line. Pinning a basis *after* the anchor row shows only the state
+both lines have in common.
+
 A light's parameter rows appear only while that light can affect the frame -
 that is, while it is enabled, or if your program set one of its parameters
 itself. Four disabled lights would otherwise contribute twenty rows of
@@ -2510,6 +2527,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Right-click `var = expr;` | Toggle the [assignment value plot](#plotting-an-assignments-values) for that row |
 | Shift+right-click `var = expr;` | Add (or remove) that row as an extra series on the open plot |
 | Right-click empty line | Toggle the [OpenGL state inspector](#inspecting-opengl-state) at that point |
+| Shift+right-click empty line | Pin (or unpin) that row as the inspector's [comparison basis](#comparing-two-probe-points) |
 | Esc | Clear input / close overlay |
 
 ### Scene & rendering

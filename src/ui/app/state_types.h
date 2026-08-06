@@ -63,7 +63,13 @@ typedef struct {
  * narrow; toggled by clicking the header chip), and whether the generated
  * setup rows are shown (also collapsed on every open - the popup opens on
  * what the program itself wrote, with the harness's own state one click
- * away behind the title-row chip). */
+ * away behind the title-row chip).
+ *
+ * basis_line_idx is the second probe point the report is compared against
+ * (-1 = the OpenGL 2.1 defaults, the default mode). It is an anchor line like
+ * source_line_idx, not a captured snapshot: the controller re-folds it every
+ * frame, because the fold is a function of `t` and a frozen basis would go
+ * stale one tick into an animation. */
 typedef struct {
     int visible;
     int source_line_idx;
@@ -72,6 +78,7 @@ typedef struct {
     int scroll_rows;
     int details_expanded;
     int setup_expanded;
+    int basis_line_idx;
 } UiGlStateInspectorState;
 
 /* Floating GL-command description popup. Like the state inspector, this

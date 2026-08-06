@@ -1683,8 +1683,16 @@ static void route_right_code_panel_hit(const UiHit *hit, int x, int y) {
     if (glr_ctrl_router_hit_is_blank_gl_state_anchor(hit)) {
         UiGlStateInspectorState inspector = ui_state_gl_state_inspector();
         ui_state_command_description_close();
-        if (inspector.visible &&
-            inspector.source_line_idx == hit->line_idx)
+        /* Shift over a second blank row pins it as the comparison basis, so
+         * the open popup reads as the differential between the two probe
+         * points instead of as a distance from the GL defaults. Same modifier
+         * meaning the assignment plot gives it next door: plain right-click
+         * is "just this one", shift is "and compare it with that one". */
+        if (inspector.visible && glr_ctrl_shift_fine_modifier_active() &&
+            hit->line_idx != inspector.source_line_idx)
+            ui_state_gl_state_inspector_set_basis(hit->line_idx);
+        else if (inspector.visible &&
+                 inspector.source_line_idx == hit->line_idx)
             ui_state_gl_state_inspector_close();
         else
             ui_state_gl_state_inspector_open(hit->line_idx, x, y);
@@ -1747,11 +1755,17 @@ static void route_right_press(int x, int y) {
          * panel claiming this pixel, consume its surface before classifying
          * the code panel / scene behind it. Preserve the anchor row's second
          * right-click toggle even when the solved panel border covers the
-         * original anchor pixel. */
+         * original anchor pixel, and let the shift basis-pin through to any
+         * blank row underneath - the popup hangs down-right of its anchor, so
+         * it covers exactly the later lines a reader wants to compare against
+         * and consuming those clicks would make the gesture unreachable. */
         if (glr_ctrl_router_point_in_gl_state_popup(x, y)) {
+            int reaches_row;
             inspector = ui_state_gl_state_inspector();
-            if (!glr_ctrl_router_hit_is_blank_gl_state_anchor(&hit) ||
-                hit.line_idx != inspector.source_line_idx) {
+            reaches_row = glr_ctrl_router_hit_is_blank_gl_state_anchor(&hit) &&
+                          (hit.line_idx == inspector.source_line_idx ||
+                           glr_ctrl_shift_fine_modifier_active());
+            if (!reaches_row) {
                 editor_request_redraw();
                 return;
             }

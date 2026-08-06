@@ -19,7 +19,8 @@
         .status = { .text = "", .ttl = 0, .kind = UI_STATUS_INFO },   \
         .help = { .visible = 0 },                                     \
         .gl_state_inspector = { .visible = 0, .source_line_idx = -1, \
-                                .anchor_px = -1, .anchor_py = -1 },  \
+                                .anchor_px = -1, .anchor_py = -1,   \
+                                .basis_line_idx = -1 },             \
         .command_description = { .visible = 0, .source_line_idx = -1, \
                                  .anchor_px = -1, .anchor_py = -1 }, \
         .profile_panel = { .mode = PROFILE_PANEL_OFF },               \
@@ -181,6 +182,7 @@ void ui_state_gl_state_inspector_open(int source_line_idx,
     g_ui_state.gl_state_inspector.scroll_rows = 0;
     g_ui_state.gl_state_inspector.details_expanded = 0;
     g_ui_state.gl_state_inspector.setup_expanded = 0;
+    g_ui_state.gl_state_inspector.basis_line_idx = -1;
 }
 
 void ui_state_gl_state_inspector_close(void) {
@@ -191,6 +193,7 @@ void ui_state_gl_state_inspector_close(void) {
     g_ui_state.gl_state_inspector.scroll_rows = 0;
     g_ui_state.gl_state_inspector.details_expanded = 0;
     g_ui_state.gl_state_inspector.setup_expanded = 0;
+    g_ui_state.gl_state_inspector.basis_line_idx = -1;
 }
 
 void ui_state_gl_state_inspector_set_scroll(int scroll_rows) {
@@ -209,6 +212,18 @@ void ui_state_gl_state_inspector_toggle_setup(void) {
 void ui_state_gl_state_inspector_toggle_details(void) {
     g_ui_state.gl_state_inspector.details_expanded =
         !g_ui_state.gl_state_inspector.details_expanded;
+}
+
+void ui_state_gl_state_inspector_set_basis(int source_line_idx) {
+    /* Re-pinning the pinned line clears the comparison, so one gesture both
+     * sets and unsets it - the same toggle the anchor row already has. */
+    if (source_line_idx < 0 ||
+        source_line_idx == g_ui_state.gl_state_inspector.basis_line_idx) {
+        g_ui_state.gl_state_inspector.basis_line_idx = -1;
+        return;
+    }
+    g_ui_state.gl_state_inspector.basis_line_idx = source_line_idx;
+    g_ui_state.gl_state_inspector.details_expanded = 1;
 }
 
 UiCommandDescriptionState ui_state_command_description(void) {

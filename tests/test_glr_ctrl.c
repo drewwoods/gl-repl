@@ -2451,6 +2451,108 @@ static void test_right_click_uncommitted_empty_line_opens_gl_state_report(void) 
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
 }
 
+/* Shift+right-click on a second blank row pins it as the report's comparison
+ * basis, so the popup reads as the differential between the two probe points.
+ * The color rows below bracket the pinned line: unchanged between the probes
+ * on one side, changed on the other. */
+static void test_shift_right_click_pins_gl_state_comparison_basis(void) {
+    UiHit hit;
+    UiGlStatePanelView view;
+    int basis_line, anchor_line;
+    int basis_x = -1, basis_y = -1;
+    int anchor_x = -1, anchor_y = -1;
+    const ReplGlStateReportRow *row = NULL;
+    int i;
+
+    printf("--- imrepl_ctrl OpenGL state report comparison basis ---\n");
+
+    prepare_code_panel_mouse_fixture();
+    editor_input_set_modifier_provider_for_test(simulated_mods_provider);
+    g_simulated_mods = 0;
+    editor_insert_mode_set(0);
+
+    editor_state_edit_line_set(repl_state_document_count());
+    ASSERT_INT("append first color", editor_feed_line("glColor3f(1, 0, 0);"), 1);
+    basis_line = repl_state_document_count();
+    editor_state_edit_line_set(basis_line);
+    ASSERT_INT("append basis blank row", editor_feed_line(""), 1);
+    editor_state_edit_line_set(repl_state_document_count());
+    ASSERT_INT("append second color", editor_feed_line("glColor3f(0, 1, 0);"), 1);
+    anchor_line = repl_state_document_count();
+    editor_state_edit_line_set(anchor_line);
+    ASSERT_INT("append anchor blank row", editor_feed_line(""), 1);
+
+    ASSERT_TRUE("found basis row hit",
+                find_code_text_hit_for_line(basis_line, &hit,
+                                            &basis_x, &basis_y));
+    ASSERT_TRUE("found anchor row hit",
+                find_code_text_hit_for_line(anchor_line, &hit,
+                                            &anchor_x, &anchor_y));
+
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, anchor_x, anchor_y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, anchor_x, anchor_y);
+    ASSERT_INT("plain right-click opens the report",
+               ui_state_gl_state_inspector().visible, 1);
+    ASSERT_INT("report opens on the GL defaults",
+               ui_state_gl_state_inspector().basis_line_idx, -1);
+
+    g_simulated_mods = GLUT_ACTIVE_SHIFT;
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, basis_x, basis_y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, basis_x, basis_y);
+    ASSERT_INT("shift+right-click leaves the popup open",
+               ui_state_gl_state_inspector().visible, 1);
+    ASSERT_INT("shift+right-click keeps the original anchor",
+               ui_state_gl_state_inspector().source_line_idx, anchor_line);
+    ASSERT_INT("shift+right-click pins the basis",
+               ui_state_gl_state_inspector().basis_line_idx, basis_line);
+    ASSERT_INT("pinning a basis reveals the column it lives in",
+               ui_state_gl_state_inspector().details_expanded, 1);
+
+#ifdef GL_STUBS
+    glr_ctrl_display_frame();
+#endif
+    view = glr_ctrl_build_gl_state_panel_view(NULL);
+    ASSERT_INT("compare-mode view visible", view.visible, 1);
+    ASSERT_INT("report carries the basis line",
+               view.report ? view.report->basis_line_idx : -2, basis_line);
+    for (i = 0; view.report && i < view.report->count; i++) {
+        if (strcmp(view.report->rows[i].name, "GL_CURRENT_COLOR") == 0)
+            row = &view.report->rows[i];
+    }
+    ASSERT_TRUE("color row present in compare mode", row != NULL);
+    if (row) {
+        ASSERT_STR("color current is the value at the anchor",
+                   row->current, "(0, 1, 0, 1)");
+        ASSERT_STR("color basis is the value at the pinned line",
+                   row->basis_value, "(1, 0, 0, 1)");
+        ASSERT_INT("color differs between the probe points",
+                   row->differs_from_basis, 1);
+    }
+    /* The generated setup ran before both probes, so compare mode reports it
+     * as unchanged - the point of the mode, since against the GL defaults
+     * every one of those rows differs. */
+    for (i = 0; view.report && i < view.report->count; i++) {
+        const ReplGlStateReportRow *setup = &view.report->rows[i];
+        if (setup->source.kind != REPL_GL_STATE_SOURCE_INIT)
+            continue;
+        ASSERT_INT("generated setup row is unchanged between the probes",
+                   setup->differs_from_basis, 0);
+        break;
+    }
+
+    /* Re-pinning the same line is the clear gesture. */
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, basis_x, basis_y);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, basis_x, basis_y);
+    ASSERT_INT("re-pinning the basis line clears the comparison",
+               ui_state_gl_state_inspector().basis_line_idx, -1);
+    view = glr_ctrl_build_gl_state_panel_view(NULL);
+    ASSERT_INT("cleared report is back on the GL defaults",
+               view.report ? view.report->basis_line_idx : -2, -1);
+
+    g_simulated_mods = 0;
+    editor_input_set_modifier_provider_for_test(NULL);
+}
+
 /* Pure popup-geometry checks: a report taller than the window solves to a
  * scrollable row window, and the hit-test frame matches the solved rect. */
 static void test_gl_state_popup_scroll_geometry(void) {
@@ -2469,9 +2571,9 @@ static void test_gl_state_popup_scroll_geometry(void) {
         snprintf(report.rows[i].name, sizeof(report.rows[i].name),
                  "GL_ROW_%02d", i);
         snprintf(report.rows[i].current, sizeof(report.rows[i].current), "1");
-        snprintf(report.rows[i].default_value,
-                 sizeof(report.rows[i].default_value), "0");
-        report.rows[i].differs_from_default = 1;
+        snprintf(report.rows[i].basis_value,
+                 sizeof(report.rows[i].basis_value), "0");
+        report.rows[i].differs_from_basis = 1;
     }
 
     memset(&view, 0, sizeof(view));
@@ -2495,8 +2597,8 @@ static void test_gl_state_popup_scroll_geometry(void) {
     snprintf(report.rows[report.count - 1].current,
              sizeof(report.rows[report.count - 1].current),
              "[1 0 0 0; 0 1 0 0; 0 0 1 0; 0 0 0 1]");
-    snprintf(report.rows[report.count - 1].default_value,
-             sizeof(report.rows[report.count - 1].default_value),
+    snprintf(report.rows[report.count - 1].basis_value,
+             sizeof(report.rows[report.count - 1].basis_value),
              "[1 0 0 0; 0 1 0 0; 0 0 1 0; 0 0 0 1]");
     matrix_max_scroll = ui_gl_state_panel_max_scroll(&view);
     ASSERT_INT("matrix visual lines reduce the final row viewport",
@@ -2554,8 +2656,8 @@ static void test_gl_state_popup_modelview_uses_four_lines(void) {
              "GL_CURRENT_COLOR");
     snprintf(report.rows[0].current, sizeof(report.rows[0].current),
              "(0.25, 0.5, 0.75, 1)");
-    snprintf(report.rows[0].default_value,
-             sizeof(report.rows[0].default_value), "(1, 1, 1, 1)");
+    snprintf(report.rows[0].basis_value,
+             sizeof(report.rows[0].basis_value), "(1, 1, 1, 1)");
     report.rows[0].source.kind = REPL_GL_STATE_SOURCE_DISPLAY;
 
     memset(&view, 0, sizeof(view));
@@ -2578,8 +2680,8 @@ static void test_gl_state_popup_modelview_uses_four_lines(void) {
     snprintf(report.rows[0].current, sizeof(report.rows[0].current),
              "[0.866025 -0.5 0 1.25; 0.5 0.866025 0 -2.5; "
              "0 0 1 3.75; 0 0 0 1]");
-    snprintf(report.rows[0].default_value,
-             sizeof(report.rows[0].default_value),
+    snprintf(report.rows[0].basis_value,
+             sizeof(report.rows[0].basis_value),
              "[1 0 0 0; 0 1 0 0; 0 0 1 0; 0 0 0 1]");
 
     matrix_height = gl_state_popup_hit_height(&view);
@@ -2695,8 +2797,8 @@ static void test_gl_state_popup_details_toggle(void) {
         snprintf(report.rows[i].name, sizeof(report.rows[i].name),
                  "GL_ROW_%02d", i);
         snprintf(report.rows[i].current, sizeof(report.rows[i].current), "1");
-        snprintf(report.rows[i].default_value,
-                 sizeof(report.rows[i].default_value),
+        snprintf(report.rows[i].basis_value,
+                 sizeof(report.rows[i].basis_value),
                  "(0.123, 0.456, 0.789, 1)");
         report.rows[i].source.kind = REPL_GL_STATE_SOURCE_DISPLAY;
         report.rows[i].source.source_line_idx = 10 + i;
@@ -2773,6 +2875,70 @@ static void test_gl_state_popup_details_toggle(void) {
                ui_state_gl_state_inspector().visible, 1);
 
     ui_state_gl_state_inspector_close();
+}
+
+/* The basis column's header names the pinned line, so it is solved text
+ * rather than a constant. The chip cell is sized from that same string in
+ * both the collapsed and expanded forms - if the two ever diverged the chip
+ * would draw in one place and hit-test in another. */
+static void test_gl_state_popup_basis_header_sizes_the_chip(void) {
+    static ReplGlStateReport report;
+    UiGlStatePanelView view;
+    int x = -1, y = -1;
+    int default_right, basis_right;
+    int i;
+
+    printf("--- imrepl_ctrl OpenGL-state popup basis header ---\n");
+
+    memset(&report, 0, sizeof(report));
+    report.count = 4;
+    report.user_row_count = report.count;
+    report.basis_line_idx = -1;
+    for (i = 0; i < report.count; i++) {
+        snprintf(report.rows[i].name, sizeof(report.rows[i].name),
+                 "GL_ROW_%02d", i);
+        snprintf(report.rows[i].current, sizeof(report.rows[i].current), "1");
+        snprintf(report.rows[i].basis_value,
+                 sizeof(report.rows[i].basis_value), "0");
+        report.rows[i].source.kind = REPL_GL_STATE_SOURCE_DISPLAY;
+        report.rows[i].source.source_line_idx = 10 + i;
+    }
+    memset(&view, 0, sizeof(view));
+    view.visible = 1;
+    view.window_w = 800;
+    view.window_h = 600;
+    view.anchor_px = 40;
+    view.anchor_py = 400;
+    view.report = &report;
+    view.basis_gutter_label = -1;
+
+    ASSERT_TRUE("collapsed default-basis popup has a chip",
+                gl_state_popup_find_details_toggle(&view, &x, &y));
+    default_right = gl_state_popup_rightmost_hit_x(&view);
+    view.details_expanded = 1;
+    ASSERT_TRUE("expanded default-basis popup has a chip",
+                gl_state_popup_find_details_toggle(&view, &x, &y));
+
+    /* Same rows, now compared against a pinned line. Both header forms are
+     * shorter than the "default (GL 2.1)" ones, so the popup narrows - which
+     * is exactly the case a stale constant width would miss. */
+    report.basis_line_idx = 11;
+    view.basis_gutter_label = 12;
+    view.details_expanded = 0;
+    ASSERT_TRUE("collapsed compare-mode popup has a chip",
+                gl_state_popup_find_details_toggle(&view, &x, &y));
+    basis_right = gl_state_popup_rightmost_hit_x(&view);
+    ASSERT_TRUE("compare-mode header resizes the popup",
+                basis_right != default_right);
+    view.details_expanded = 1;
+    ASSERT_TRUE("expanded compare-mode popup has a chip",
+                gl_state_popup_find_details_toggle(&view, &x, &y));
+#ifdef GL_STUBS
+    gl_stub_counts_reset();
+    ui_gl_state_panel_render(&view);
+    ASSERT_TRUE("compare-mode popup renders",
+                gl_stub_counts[GL_STUB_glRasterPos2f] > 0);
+#endif
 }
 
 static void test_editor_input_dismisses_gl_state_report(void) {
@@ -2916,9 +3082,9 @@ static void test_gl_state_popup_setup_fold(void) {
         snprintf(report.rows[i].name, sizeof(report.rows[i].name),
                  "GL_ROW_%02d", i);
         snprintf(report.rows[i].current, sizeof(report.rows[i].current), "1");
-        snprintf(report.rows[i].default_value,
-                 sizeof(report.rows[i].default_value), "0");
-        report.rows[i].differs_from_default = 1;
+        snprintf(report.rows[i].basis_value,
+                 sizeof(report.rows[i].basis_value), "0");
+        report.rows[i].differs_from_basis = 1;
         report.rows[i].source.kind = i < report.user_row_count
             ? REPL_GL_STATE_SOURCE_DISPLAY : REPL_GL_STATE_SOURCE_INIT;
         report.rows[i].source.source_line_idx =
@@ -6126,9 +6292,11 @@ int main(void) {
     test_right_click_empty_line_toggles_gl_state_report();
     test_divider_hover_yields_to_front_panel();
     test_right_click_uncommitted_empty_line_opens_gl_state_report();
+    test_shift_right_click_pins_gl_state_comparison_basis();
     test_gl_state_popup_scroll_geometry();
     test_gl_state_popup_modelview_uses_four_lines();
     test_gl_state_popup_details_toggle();
+    test_gl_state_popup_basis_header_sizes_the_chip();
     test_gl_state_popup_setup_fold();
     test_gl_state_popup_source_line_tracks_gutter();
     test_editor_input_dismisses_gl_state_report();

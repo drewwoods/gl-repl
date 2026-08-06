@@ -1536,9 +1536,9 @@ static void gl_state_report_bool(ReplGlStateReport *out, const char *name,
         return;
     snprintf(row->current, sizeof(row->current), "%s",
              current ? "GL_TRUE" : "GL_FALSE");
-    snprintf(row->default_value, sizeof(row->default_value), "%s",
+    snprintf(row->basis_value, sizeof(row->basis_value), "%s",
              default_value ? "GL_TRUE" : "GL_FALSE");
-    row->differs_from_default = !!current != !!default_value;
+    row->differs_from_basis = !!current != !!default_value;
 }
 
 static void gl_state_report_int(ReplGlStateReport *out, const char *name,
@@ -1547,9 +1547,9 @@ static void gl_state_report_int(ReplGlStateReport *out, const char *name,
     if (!row)
         return;
     snprintf(row->current, sizeof(row->current), "%d", current);
-    snprintf(row->default_value, sizeof(row->default_value), "%d",
+    snprintf(row->basis_value, sizeof(row->basis_value), "%d",
              default_value);
-    row->differs_from_default = current != default_value;
+    row->differs_from_basis = current != default_value;
 }
 
 /* Stencil masks read as bit patterns, not counts, so they print the way the
@@ -1561,9 +1561,9 @@ static void gl_state_report_hex_mask(ReplGlStateReport *out, const char *name,
     if (!row)
         return;
     snprintf(row->current, sizeof(row->current), "0x%02X", current);
-    snprintf(row->default_value, sizeof(row->default_value), "0x%02X",
+    snprintf(row->basis_value, sizeof(row->basis_value), "0x%02X",
              default_value);
-    row->differs_from_default = current != default_value;
+    row->differs_from_basis = current != default_value;
 }
 
 static void gl_state_report_float(ReplGlStateReport *out, const char *name,
@@ -1572,9 +1572,9 @@ static void gl_state_report_float(ReplGlStateReport *out, const char *name,
     if (!row)
         return;
     snprintf(row->current, sizeof(row->current), "%g", (double)current);
-    snprintf(row->default_value, sizeof(row->default_value), "%g",
+    snprintf(row->basis_value, sizeof(row->basis_value), "%g",
              (double)default_value);
-    row->differs_from_default = !gl_state_float_eq(current, default_value);
+    row->differs_from_basis = !gl_state_float_eq(current, default_value);
 }
 
 static void gl_state_format_vec(char *buf, size_t n, const float *v, int count) {
@@ -1600,9 +1600,9 @@ static void gl_state_report_vec(ReplGlStateReport *out, const char *name,
     if (!row)
         return;
     gl_state_format_vec(row->current, sizeof(row->current), current, count);
-    gl_state_format_vec(row->default_value, sizeof(row->default_value),
+    gl_state_format_vec(row->basis_value, sizeof(row->basis_value),
                         default_value, count);
-    row->differs_from_default =
+    row->differs_from_basis =
         !gl_state_float_array_eq(current, default_value, count);
 }
 
@@ -1642,8 +1642,8 @@ static void gl_state_report_matrix(ReplGlStateReport *out, const float current[1
         return;
     gl_state_mat_identity(identity);
     gl_state_format_matrix(row->current, sizeof(row->current), current);
-    gl_state_format_matrix(row->default_value, sizeof(row->default_value), identity);
-    row->differs_from_default = !gl_state_float_array_eq(current, identity, 16);
+    gl_state_format_matrix(row->basis_value, sizeof(row->basis_value), identity);
+    row->differs_from_basis = !gl_state_float_array_eq(current, identity, 16);
 }
 
 static void gl_state_report_enum(ReplGlStateReport *out, const char *name,
@@ -1653,9 +1653,9 @@ static void gl_state_report_enum(ReplGlStateReport *out, const char *name,
     if (!row)
         return;
     gl_state_format_enum(row->current, sizeof(row->current), type, slot, current);
-    gl_state_format_enum(row->default_value, sizeof(row->default_value),
+    gl_state_format_enum(row->basis_value, sizeof(row->basis_value),
                          type, slot, default_value);
-    row->differs_from_default = current != default_value;
+    row->differs_from_basis = current != default_value;
 }
 
 static const char *const gl_state_material_face_names[2] = {
@@ -1868,8 +1868,8 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
         if (row) {
             snprintf(row->current, sizeof(row->current), "0x%04X",
                      s->line_stipple_pattern & 0xFFFFu);
-            snprintf(row->default_value, sizeof(row->default_value), "0xFFFF");
-            row->differs_from_default =
+            snprintf(row->basis_value, sizeof(row->basis_value), "0xFFFF");
+            row->differs_from_basis =
                 (s->line_stipple_pattern & 0xFFFFu) != 0xFFFFu;
             row->source = s->line_stipple_source;
         }
@@ -1938,9 +1938,9 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
                      s->color_mask[1] ? "T" : "F",
                      s->color_mask[2] ? "T" : "F",
                      s->color_mask[3] ? "T" : "F");
-            snprintf(row->default_value, sizeof(row->default_value),
+            snprintf(row->basis_value, sizeof(row->basis_value),
                      "(T, T, T, T)");
-            row->differs_from_default =
+            row->differs_from_basis =
                 !(s->color_mask[0] && s->color_mask[1] &&
                   s->color_mask[2] && s->color_mask[3]);
             row->source = s->color_mask_source;
@@ -2039,6 +2039,7 @@ void repl_gl_state_report_at_line(FlatProgramView program,
         return;
     memset(out, 0, sizeof(*out));
     out->source_line_idx = source_line_idx;
+    out->basis_line_idx = -1;
     gl_state_init(&state);
 
     source.kind = REPL_GL_STATE_SOURCE_INIT;
@@ -2122,4 +2123,28 @@ void repl_gl_state_report_at_line(FlatProgramView program,
     }
 
     gl_state_finish_report(&state, out);
+}
+
+void repl_gl_state_report_rebase(const ReplGlStateReport *base,
+                                 ReplGlStateReport *out) {
+    int i, j;
+
+    if (!out || !base)
+        return;
+    out->basis_line_idx = base->source_line_idx;
+    for (i = 0; i < out->count; i++) {
+        ReplGlStateReportRow *row = &out->rows[i];
+        for (j = 0; j < base->count; j++) {
+            if (strcmp(row->name, base->rows[j].name) != 0)
+                continue;
+            snprintf(row->basis_value, sizeof(row->basis_value), "%s",
+                     base->rows[j].current);
+            break;
+        }
+        /* No counterpart: keep the GL default the row was built with - see
+         * the header. Either way the comparison is over the formatted text,
+         * which is what the popup shows, so a difference the reader cannot
+         * see is never reported. */
+        row->differs_from_basis = strcmp(row->current, row->basis_value) != 0;
+    }
 }

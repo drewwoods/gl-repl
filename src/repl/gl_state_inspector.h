@@ -4,9 +4,10 @@
  * Folds the generated init()/display() setup plus the current flat user
  * program up to a source checkpoint without issuing GL calls. The result
  * contains only state variables that those phases explicitly touched. Current
- * values are paired with the OpenGL 2.1 initial values, and equality is kept
- * separate from touched-ness so an explicit write of a default remains
- * visible.
+ * values are paired with a comparison basis - the OpenGL 2.1 initial values,
+ * or another probe point's report via repl_gl_state_report_rebase() - and
+ * equality is kept separate from touched-ness so an explicit write of a
+ * basis value remains visible.
  */
 #ifndef REPL_GL_STATE_INSPECTOR_H
 #define REPL_GL_STATE_INSPECTOR_H
@@ -28,11 +29,15 @@ typedef struct {
     int source_line_idx;  /* user display row; -1 for a generated phase */
 } ReplGlStateChangeSource;
 
+/* `basis_value` is whatever this row's `current` is being compared against:
+ * the OpenGL 2.1 initial value as built, or the same state's value at another
+ * probe point after repl_gl_state_report_rebase(). `differs_from_basis` is the
+ * comparison of the two formatted strings, which is what the popup accents. */
 typedef struct {
     char name[REPL_GL_STATE_NAME_MAX];
     char current[REPL_GL_STATE_VALUE_MAX];
-    char default_value[REPL_GL_STATE_VALUE_MAX];
-    int  differs_from_default;
+    char basis_value[REPL_GL_STATE_VALUE_MAX];
+    int  differs_from_basis;
     ReplGlStateChangeSource source;
 } ReplGlStateReportRow;
 
@@ -51,6 +56,9 @@ typedef struct {
     int                  count;
     int                  user_row_count;
     int                  source_line_idx;
+    /* Source line the basis values were taken at, or -1 when they are the
+     * OpenGL 2.1 defaults. Set only by repl_gl_state_report_rebase(). */
+    int                  basis_line_idx;
 } ReplGlStateReport;
 
 /* Build the effective generated init() + display() + REPL-authored display
@@ -60,5 +68,24 @@ typedef struct {
 void repl_gl_state_report_at_line(FlatProgramView program,
                                   int source_line_idx,
                                   ReplGlStateReport *out);
+
+/* Re-point `out`'s comparison basis from the OpenGL 2.1 defaults to `base`,
+ * another report of the same program folded to a different line - so the
+ * popup reads as the differential between two probe points rather than as a
+ * distance from the GL defaults. Rows are matched by state name.
+ *
+ * A row of `out` with no counterpart in `base` keeps the default it was built
+ * with, and that is the right answer rather than a fallback: the report omits
+ * untouched state, so absence from `base` means the fold had not written that
+ * state by the basis line, which is exactly when its value there was still the
+ * GL initial one. (Touched-ness is monotone along a fold - glPopAttrib
+ * restores a value but leaves the flag set - so this holds for any basis line.)
+ *
+ * The reverse case is not represented: a row `base` has and `out` lacks means
+ * the basis line comes after `out`'s, and such a row simply has no cell in
+ * `out` to occupy. Comparing backwards therefore shows the intersection, not a
+ * negative diff. */
+void repl_gl_state_report_rebase(const ReplGlStateReport *base,
+                                 ReplGlStateReport *out);
 
 #endif /* REPL_GL_STATE_INSPECTOR_H */

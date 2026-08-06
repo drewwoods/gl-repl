@@ -63,6 +63,12 @@ void ui_state_gl_state_inspector_close(void);
 void ui_state_gl_state_inspector_set_scroll(int scroll_rows);
 void ui_state_gl_state_inspector_toggle_details(void);
 void ui_state_gl_state_inspector_toggle_setup(void);
+/* Pin the second probe point the report is compared against, or clear it back
+ * to the OpenGL 2.1 defaults (source_line_idx < 0, or re-pinning the line
+ * already pinned - the gesture is a toggle, like the anchor's own). Pinning
+ * expands the detail columns: the basis is a column, so a comparison with it
+ * hidden would change only the accent colors. */
+void ui_state_gl_state_inspector_set_basis(int source_line_idx);
 
 /* Floating right-click GL-command description popup. */
 UiCommandDescriptionState ui_state_command_description(void);
