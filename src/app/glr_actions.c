@@ -367,6 +367,8 @@ const GlrConfigItem g_cfg_items[] = {
      * the camera move. */
     { .label = "Focus origin", .key = GLR_CONFIG_FOCUS_ORIGIN,
       .key_code = KM_KEY(GLR_FOCUS_ORIGIN), .modifiers = KM_MODS(GLR_FOCUS_ORIGIN) },
+    /* Menu-only (no keymap slot): head-on view down Z, zoom preserved. */
+    { .label = "Look down Z", .key = GLR_CONFIG_LOOK_DOWN_Z },
     { .label = "Reset camera", .key = GLR_CONFIG_RESET_CAMERA,
       .key_code = KM_KEY(GLR_RESET_CAMERA), .modifiers = KM_MODS(GLR_RESET_CAMERA) },
     { .label = "---", .section_header = 1 },
@@ -1101,6 +1103,11 @@ void glr_cfg_cycle_row(int row, int delta) {
     if (item->key == GLR_CONFIG_FOCUS_ORIGIN) {
         glr_camera_focus_origin();
         repl_set_status("Camera: focus origin");
+        return;
+    }
+    if (item->key == GLR_CONFIG_LOOK_DOWN_Z) {
+        glr_camera_look_down_z();
+        repl_set_status("Camera: look down Z");
         return;
     }
     if (item->key == GLR_CONFIG_RESET_CAMERA) {

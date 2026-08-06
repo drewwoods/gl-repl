@@ -123,7 +123,7 @@ target is untouched (it stays the link-proof `make test-full` and
 
 Inside the full app this is **layer 4** of the ownership map. The controller
 ([`src/app/glr_ctrl.c`](../app/glr_ctrl.c)) builds a [`Render3dRenderConfig`](render_types.h#L139) from REPL runtime state + view
-state each frame, then calls [`glr_camera_load_modelview()`](../app/glr_camera.h#L150) and
+state each frame, then calls [`glr_camera_load_modelview()`](../app/glr_camera.h#L155) and
 [`render3d_draw_scene()`](render.h#L129) once per accumulation-jitter sample (with its own
 [`Render3dState`](render.h#L88)). The geometry callback is the REPL executor
 (`repl_execute_program`), so the user's typed program becomes the rendered

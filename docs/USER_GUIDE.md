@@ -1693,7 +1693,9 @@ taller than the window):
 - **TIME & REPLAY** - Auto time, Replay, Replay mode, Replay expand
 - **SCENE** - Grid, Grid major, Grid extent, Grid brightness, Axes, Backdrop, Light theme,
   Light indicators
-- **CAMERA** - View mode, Projection, Camera rotate, Focus origin, Reset camera
+- **CAMERA** - View mode, Projection, Camera rotate, Focus origin, Look down Z
+  (swings the camera head-on down the Z axis: orbit angles and pan ease back to
+  zero, the current zoom distance is kept), Reset camera
   (returns to the scene's authored `// camera` pose - from a built-in example
   or a loaded file - and to the built-in defaults only when the scene has no
   camera header)

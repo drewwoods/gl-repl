@@ -1640,6 +1640,34 @@ static void test_cfg_cycle_focus_origin_eases_to_origin(void) {
     ASSERT_TRUE("focus_origin preserves ry", fabsf(cam.ry - 30.0f) < 1e-3f);
 }
 
+static void test_cfg_cycle_look_down_z_zeroes_orbit_and_pan(void) {
+    glr_ctrl_reset_all();
+
+    int row = find_cfg_row_for_key(GLR_CONFIG_LOOK_DOWN_Z);
+    ASSERT_TRUE("found look_down_z row", row >= 0);
+    if (row < 0) return;
+
+    /* Orbit, pan and zoom all off the default so each axis is observable. */
+    glr_camera_set(20.0f, 30.0f, 9.0f, 3.0f, 4.0f, 5.0f, 0.0f);
+
+    glr_cfg_cycle_row(row, 1);
+
+    ASSERT_INT("look_down_z starts a camera ease",
+               glr_camera_target_active(), 1);
+    ASSERT_STR("look_down_z status", g_last_status, "Camera: look down Z");
+
+    for (int i = 0; i < 500 && glr_camera_target_active(); i++)
+        glr_camera_tick();
+    GlrCameraState cam = glr_camera();
+    ASSERT_TRUE("look_down_z zeroes rx", fabsf(cam.rx) < 1e-3f);
+    ASSERT_TRUE("look_down_z zeroes ry", fabsf(cam.ry) < 1e-3f);
+    ASSERT_TRUE("look_down_z zeroes tx", fabsf(cam.tx) < 1e-3f);
+    ASSERT_TRUE("look_down_z zeroes ty", fabsf(cam.ty) < 1e-3f);
+    ASSERT_TRUE("look_down_z zeroes tz", fabsf(cam.tz) < 1e-3f);
+    /* Zoom is deliberately kept - that is what separates it from Reset. */
+    ASSERT_TRUE("look_down_z preserves dist", fabsf(cam.dist - 9.0f) < 1e-3f);
+}
+
 static void test_cfg_cycle_reset_camera_eases_to_default(void) {
     glr_ctrl_reset_all();
 
@@ -2608,6 +2636,7 @@ int main(void) {
     test_replay_config_set_uses_lifecycle();
     test_status_set_drops_empty_message();
     test_cfg_cycle_focus_origin_eases_to_origin();
+    test_cfg_cycle_look_down_z_zeroes_orbit_and_pan();
     test_cfg_cycle_reset_camera_eases_to_default();
     test_time_reset_action();
     test_cfg_cycle_panel_hidden_closes_overlays();

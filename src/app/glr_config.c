@@ -239,6 +239,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_PROJECTION:          return NULL; /* enum: see glr_config_set */
     case GLR_CONFIG_CAMERA_ROTATE:       return &glr_camera_mut()->auto_rotate;
     case GLR_CONFIG_FOCUS_ORIGIN:        return NULL; /* action row: no backing state */
+    case GLR_CONFIG_LOOK_DOWN_Z:         return NULL; /* action row: no backing state */
     case GLR_CONFIG_RESET_CAMERA:        return NULL; /* action row: no backing state */
     case GLR_CONFIG_AUTO_NORMALS:        return &glr_state_presentation_mut()->autonormal;
     case GLR_CONFIG_POST_FX_SCOPE:       return NULL; /* derived render fields */
@@ -302,6 +303,7 @@ int glr_config_get(GlrConfigKey key) {
     case GLR_CONFIG_PROJECTION:          return glr_state_presentation().projection_mode;
     case GLR_CONFIG_CAMERA_ROTATE:       return glr_camera().auto_rotate;
     case GLR_CONFIG_FOCUS_ORIGIN:        return 0;
+    case GLR_CONFIG_LOOK_DOWN_Z:         return 0;
     case GLR_CONFIG_RESET_CAMERA:        return 0;
     case GLR_CONFIG_AUTO_NORMALS:        return glr_state_presentation().autonormal;
     case GLR_CONFIG_POST_FX_SCOPE:       return glr_state_presentation().post_fx_scope;

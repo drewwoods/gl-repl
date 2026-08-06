@@ -359,6 +359,14 @@ void glr_camera_focus_origin(void) {
                        0.0f, 0.0f, 0.0f);
 }
 
+void glr_camera_look_down_z(void) {
+    /* Head-on down the Z axis: orbit angles and pan both go to zero, the
+     * zoom the user chose stays. Control mode is deliberately untouched
+     * (as in glr_camera_focus_origin) - the 2D view already holds rx/ry at
+     * zero, so there the action reduces to the pan reset. */
+    glr_camera_ease_to(0.0f, 0.0f, g_camera.dist, 0.0f, 0.0f, 0.0f);
+}
+
 void glr_camera_ease_to_default(void) {
     const GlrCameraState *d = g_scene_camera_default_set
                                   ? &g_scene_camera_default

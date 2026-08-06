@@ -80,6 +80,11 @@ void             glr_camera_reconstruction_end(void);
  * glr_camera_ease_to so it is not an instant jump. */
 void             glr_camera_focus_origin(void);
 
+/* Smoothly swing the camera around to look straight down the Z axis:
+ * orbit angles (rx/ry) and pan (tx/ty/tz) go to zero, the current zoom
+ * distance is kept. Same easing as glr_camera_ease_to. */
+void             glr_camera_look_down_z(void);
+
 /* Smoothly return the camera to its scene default pose (set by example
  * camera blocks), or the built-in default if no scene pose is set.
  * Restores 3D control mode. The eased counterpart of
