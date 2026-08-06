@@ -2,8 +2,9 @@
 
 The power-user reference: command-line flags, environment variables,
 headless rendering, recording, documentation media, app packaging, mesh export,
-scene-file headers, music, and diagnostics. For day-to-day features (editing,
-the language, the panels), see the [User Guide](USER_GUIDE.md).
+scene-file headers, scratch block assignment, music, and diagnostics. For
+day-to-day features (editing, the language, the panels), see the
+[User Guide](USER_GUIDE.md).
 
 ## Synopsis
 
@@ -703,6 +704,68 @@ The symbolic names come straight from the enums in [`src/render3d/themes.h`](../
 shift which value a catalog literal selects. A typo'd or out-of-range
 symbol is dropped with a `repl_cfg: dropping '…' (unknown symbolic value)`
 note on stderr rather than landing at index 0.
+
+## Scratch block assignment
+
+`A[base] = {e0, ..., eN-1};` fills a contiguous run of scratch cells from one
+source row. [USER_GUIDE.md](USER_GUIDE.md#writing-several-cells-at-once)
+introduces the form; this is the rest of the rules.
+
+The reason to reach for it is a 4x4 for `glMultMatrixf`: four rows of four
+read as the matrix they are, and each row stays inside the 256-character
+`MAX_LINE_LEN` budget that sixteen expressions on one line would blow past.
+
+Three limits, each of which buys something concrete:
+
+- **The base index must be a plain number**, not an expression. `A[n] = {…}`
+  is rejected; write those cells one at a time with `A[n] = expr;`. The
+  literal is what keeps the exported C a plain `A[4] = …; A[5] = …;` run on a
+  single line - foldable back on import without a temporary, and with no
+  chance of evaluating a base expression once per cell.
+- **The run must fit.** `A[14] = {1, 2, 3}` runs off the end of the array and
+  is rejected, as is a list of more than sixteen values.
+- **A list needs at least two values.** `A[3] = {5}` is `A[3] = 5;` written
+  the long way. It exports as the scalar form and would come back from a
+  save/load as `CMD_SCRATCH_ASSIGN`, so it is rejected rather than shipped as
+  a spelling that silently rewrites itself.
+
+The committed row keeps the expressions you typed but standardises the
+separators to `, `. Import rebuilds the list that way, so a row committed as
+`{1,2}` would otherwise return from a save/load as `{1, 2}` and break the
+text-exact round trip the scene corpora compare.
+
+### Export shape
+
+An array is not assignable in C, so the row lowers to the cell stores it
+means - one C line per source row:
+
+```c
+A[4] = {c, s, 0, 0};   ->   A[4] = c; A[5] = s; A[6] = 0; A[7] = 0;
+```
+
+Import recognises a run of consecutive literal subscripts on one line and
+folds it back. A lone `A[4] = c;` is left alone, which is what the two-value
+minimum above protects.
+
+The bare spelling `A = {…}` is the one to watch when reading exported C: it
+names its array without a subscript, exactly as `glMultMatrixf(A)` does, so
+the exporter detects the need for the `static float A[16];` global from the
+command rather than from the source text.
+
+### Why a block row cannot be plotted
+
+Right-clicking a block row does nothing, and a `// @plot` tag on one is
+ignored. The [assignment value
+plot](USER_GUIDE.md#plotting-an-assignments-values) identifies a series by its
+document row and nothing else, so a row producing
+N values per execution has no single series to draw - plotting it would
+interleave unrelated cells into one trace and label the result as one row's
+history. Plot the cell you care about as its own `A[k] = expr;` row instead.
+
+Replay annotation declines the row for the same reason: both the Expanded and
+Verbose expansions resolve a source row to one flat command, and annotating a
+block from the first of its N would describe a single cell as though it were
+the whole row. The row renders unannotated rather than misdescribed.
 
 ## Config Variables (`// @config`)
 

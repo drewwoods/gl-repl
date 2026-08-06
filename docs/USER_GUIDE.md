@@ -927,27 +927,11 @@ The cells are ordinary expressions, re-evaluated every frame just like a
 single `A[k] = ...` row, and anything the list does not cover keeps its
 previous value. Four rows of four is how a 4x4 for
 [`glMultMatrixf`](#from-a-scratch-array) is usually written - it reads as the
-matrix it is, and each row stays inside the 256-character line limit that
-sixteen expressions on one line would blow past.
+matrix it is.
 
-Three limits are worth knowing:
-
-- **The base index must be a plain number**, not an expression. `A[n] = {…}`
-  is rejected; write those cells one at a time with `A[n] = expr;`.
-- **The run must fit**: `A[14] = {1, 2, 3}` runs off the end of the array and
-  is rejected, as is a list of more than sixteen values.
-- **A list needs at least two values.** `A[3] = {5}` is just `A[3] = 5;`
-  written the long way, and is rejected so that the two spellings cannot
-  disagree about which one a saved file comes back as.
-
-The committed row keeps the expressions you typed but standardises the
-separators to `, `, so what you see after committing is what a save and
-reload will give you back.
-
-A block row cannot be plotted. Right-clicking one does nothing, and a
-`// @plot` tag on it is ignored - a single row holding several values has no
-one series to draw. Plot the cell you care about as its own `A[k] = expr;`
-row instead.
+The exact rules - what the base index may be, how long a list can get, and
+why a block row is the one assignment the value plot will not take - are in
+[ADVANCED_USAGE.md](ADVANCED_USAGE.md#scratch-block-assignment).
 
 ### Arbitrary matrices
 

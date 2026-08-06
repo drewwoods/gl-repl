@@ -16,7 +16,8 @@ Deep detail lives in the docs - consult them instead of guessing:
   standalone `repl_demo`, rebake/dep-routing model.
 - [`docs/ADVANCED_USAGE.md`](docs/ADVANCED_USAGE.md) - full CLI + env-var
   reference, headless OSMesa builds, screenshot/GIF/video capture, doc-media
-  regeneration, `@cfg` slug list, music/assets, diagnostics, keymap tooling.
+  regeneration, `@cfg` slug list, scratch block assignment, music/assets,
+  diagnostics, keymap tooling.
 - [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) - user-facing command semantics
   (fog, clip planes, blending, materials, labels, …).
 - [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) - guard suite, how to extend
