@@ -2,14 +2,13 @@
 // @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
 // @cfg vertex_points = 0
 // @cfg vertex_outlines = 0
-static float segments = 80;
-static float radius = 1.8;
-static float length = 5.9;
-static float rotations = 2;
+static float segments = 400;
+static float radius = 2;
+static float length = 15;
+static float rotations = 4;
 static float step, angle, z, r, g, b;
-
-glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
-glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
+glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
 glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
