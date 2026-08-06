@@ -15,8 +15,7 @@
 </div>
 
 An interactive interpreter for fixed-function OpenGL. As you type GL, the
-scene renders beside the source that made it. No build step, no shaders, no
-scene files; just geometry and color.
+scene renders beside the source that made it. No build step, just immediate mode, immediately.
 
 <sub>Strictly a Read-Eval-**Render** Loop, but RERL is unpronounceable.</sub>
 
@@ -38,13 +37,14 @@ glEnd();
 
 | | |
 |---|---|
-| **Immediate mode, immediately** | The geometry lives in your code. Edit a `glVertex3f`, see the vertex move. |
+| **Render as you type** | The geometry lives in your code. Edit a `glVertex3f`, see the vertex move. |
 | **Time as a variable** | `Ctrl+T` toggles `t`. Reference it anywhere - animation with no boilerplate. |
-| **AA and motion blur** | Accumulation effects provide edge AA, animation-time blur, and camera blur over 2-16 samples. Stable animations rebake values without rebuilding their command topology, keeping Blur practical-including in the web build. |
-| **See what your code means** | Cursor on a `glRotatef` line? An arc guide shows the rotation in the scene. Vertex labels, normal arrows, and polygon highlights follow your cursor. |
-| **Scope GL state visibly** | `glPushAttrib(mask)` and `glPopAttrib()` save and restore the ten state groups the REPL can change. Use `GL_ALL_ATTRIB_BITS` for all of them; cursor highlights show which setters a push saves or a pop reverts. |
-| **Replay your draws** | `Ctrl+R` steps through the command stream; watch the scene assemble call by call, loop variables substituted live in the code panel. |
+| **A real little language** | Loops, functions with parameters, `if`, variables, scratch arrays, and a math library - and an expression goes anywhere a number does. A `for` loop unrolls into geometry as you type it. |
 | **Live values** | Every `float` gets a slider, every number an inline stepper, every color a swatch with a picker. Drag, and the scene follows. |
+| **See what your code means** | Cursor on a `glRotatef` line? An arc guide shows the rotation in the scene. Vertex labels, normal arrows, and polygon highlights follow your cursor. |
+| **Replay your draws** | `Ctrl+R` steps through the command stream; watch the scene assemble call by call, loop variables substituted live in the code panel. |
+| **AA and motion blur** | Accumulation effects layer 2-16 samples into edge antialiasing, animation-time motion blur, or camera blur - and they work while paused. |
+| **Runs in the browser** | The same app compiles to wasm, with gl4es translating the fixed-function GL to WebGL2 - at parity with native, accumulation blur included. |
 | **Sketch here, ship as C** | `Ctrl+S` exports a standalone, compilable GLUT/OpenGL program that round-trips back into the REPL. `File → Export .ply` exports the geometry as a PLY mesh. |
 
 <br>
@@ -69,19 +69,6 @@ glEnd();
 
 ### Quick start
 
-The screenshots and GIFs under `docs/images/` are stored in **Git LFS**.
-Install it *before* cloning, or the image files arrive as ~130-byte pointer
-text instead of pictures:
-
-```bash
-# macOS: brew install git-lfs
-# Linux: sudo apt install git-lfs
-git lfs install             # one-time, per user
-git lfs pull                # already cloned without it? fetch the real bytes
-```
-
-Nothing in the build or the app depends on those assets - only the docs do.
-
 ```bash
 # macOS: needs cmake (brew install cmake) - builds the vendored freeglut
 # Linux: sudo apt install freeglut3-dev
@@ -91,6 +78,17 @@ make gl-repl
 ./gl-repl --example "Torus knot (animated)"  # or start from a built-in (F12 cycles all 39)
 ./gl-repl output.c         # reload a saved session
 printf 'glutSolidCube(1);\n' | ./gl-repl -  # load a snippet from stdin
+```
+
+**If you want the images**: the screenshots and GIFs under `docs/images/` live
+in **Git LFS** - docs only, nothing in the build needs them. Install it
+*before* cloning, or they arrive as ~130-byte pointer text:
+
+```bash
+# macOS: brew install git-lfs
+# Linux: sudo apt install git-lfs
+git lfs install             # one-time, per user
+git lfs pull                # already cloned without it? fetch the real bytes
 ```
 
 It runs in a browser too. With `emcc` on your `PATH`:
@@ -105,7 +103,7 @@ make web-serve             # serve it at http://localhost:8000/
 Press **F1** in-app for the full command and key reference, and read the
 [**User Guide**](docs/USER_GUIDE.md) for the rest - it is the manual, and the
 best place to go after this page. There are guided tutorials under the
-**Tutorials** menu too; *First Triangle* takes about a minute.
+**Tutorials** menu too, and guided tours of the app itself under **Tours**.
 
 ### The 30-second demo
 
@@ -124,9 +122,9 @@ glutSolidTorus(0.3, 0.9, 24, 48);
 Now press `Ctrl+T`. The torus spins. That's the whole loop - the rotation
 rate is just the scalar in front of `t`, and every line stays editable.
 
-`glClear` is load-bearing and yours to keep: nothing wipes the frame on your
-program's behalf, exactly like the C this exports to. Delete the line and the
-torus smears across its own trail - which is sometimes what you want.
+Anything you build here exports to a standalone C89 program (`Ctrl+S`, or
+`--export-c` headlessly) that compiles and runs on its own against GL/GLUT -
+no REPL, no runtime of ours.
 
 <br>
 
