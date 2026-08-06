@@ -268,6 +268,53 @@ static void test_mid_ease_load_uses_destination(void) {
                 fabsf(fin.pose.dist - 9.0f) < 1e-3f);
 }
 
+/* A scene switched away from before its camera ease finished must hand the
+ * incoming scene its *intended* pose, not the interpolation frame the last
+ * tick happened to produce. glr_ctrl_reset_transients() - which every scene
+ * load runs first - used to cancel the ease in place, so how far the camera
+ * got depended only on how fast the user pressed the key, and a scene with no
+ * `@camera` rows inherited that arbitrary pose verbatim. */
+static void test_quick_scene_switch_settles_outgoing_ease(void) {
+    printf("--- a quick scene switch settles the outgoing ease ---\n");
+    static const char *const body_only[] = {
+        "glBegin(GL_POINTS);",
+        "glVertex3f(1, 1, 1);",
+        "glEnd();",
+        NULL
+    };
+    int i;
+
+    /* reset_all installs the app's real camera bridge; this test needs the
+     * real ease, so no stub goes in after it. */
+    glr_ctrl_reset_all();
+    glr_ctrl_reset_transients();
+    ASSERT_TRUE("the tagged scene loads", repl_load_example_lines(k_tagged_scene) > 0);
+    for (i = 0; i < 2; i++)
+        glr_camera_tick();
+    ASSERT_TRUE("the outgoing scene is genuinely mid-ease",
+                glr_camera_target_active() &&
+                fabsf(glr_camera().dist - 12.0f) > 1.0f);
+
+    /* Switch scenes before the ease lands. */
+    glr_ctrl_reset_transients();
+    ASSERT_TRUE("no ease survives the transition", !glr_camera_target_active());
+    ASSERT_TRUE("the live pose settled on the outgoing scene's target",
+                fabsf(glr_camera().dist - 12.0f) < 1e-3f &&
+                fabsf(glr_camera().rx - 41.0f) < 1e-3f &&
+                fabsf(glr_camera().ry - 52.0f) < 1e-3f &&
+                fabsf(glr_camera().tx - 1.0f) < 1e-3f);
+
+    /* A scene carrying no camera rows inherits the live pose - which is now
+     * the previous scene's intended pose, whatever the switch timing was. */
+    ASSERT_TRUE("the camera-less scene loads", repl_load_example_lines(body_only) > 0);
+    for (i = 0; i < 200; i++)
+        glr_camera_tick();
+    ASSERT_TRUE("the inherited pose is the intended one, not a partway frame",
+                fabsf(glr_camera().dist - 12.0f) < 1e-3f &&
+                fabsf(glr_camera().rx - 41.0f) < 1e-3f &&
+                fabsf(glr_camera().ry - 52.0f) < 1e-3f);
+}
+
 /* The example body cap is a *body* budget. Metadata and camera rows are
  * consumed before a line reaches it, so counting the raw source index would
  * fail a scene merely for carrying @cfg rows. */
@@ -307,6 +354,7 @@ int main(void) {
     test_hand_edited_numbers_survive();
     test_nonzero_g_angle_warns();
     test_mid_ease_load_uses_destination();
+    test_quick_scene_switch_settles_outgoing_ease();
     test_body_budget_excludes_metadata();
     printf("\n=== Results: ");
     return test_harness_report(&g_harness, "camera_apply_modes");

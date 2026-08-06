@@ -151,6 +151,15 @@ Camera is deliberately excluded from that reset: it is inherited unless a
 `// camera` header is present. `restore_user_scene()` restores commands and
 predef vars only.
 
+What gets inherited is the outgoing scene's **intended** pose, not wherever
+its ease had reached: every scene load runs `glr_ctrl_reset_transients()`,
+which settles any in-flight camera ease (`glr_camera_settle_target()`) before
+clearing drag/momentum. Without that, switching scenes faster than an ease
+completes leaves the camera at an arbitrary interpolation frame - which a
+camera-less scene then keeps verbatim, a partial header merges against, and a
+user-scene save persists into the outgoing slot (the save reads
+`glr_camera_destination()`).
+
 ## Files that move together
 
 Built-in examples are file-backed: a scene under `examples/scenes/` plus a

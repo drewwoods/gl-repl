@@ -63,6 +63,16 @@ void             glr_camera_ease_to(float rx, float ry, float dist,
  * Clamped to [0, 1); lower = faster ease. A decay of 0.0f snaps to the
  * target on the next tick (no interpolation). */
 void             glr_camera_set_target_decay(float decay);
+
+/* Finish any in-flight ease *now*: the live pose jumps to the destination
+ * and the ease goes inactive. No-op when no ease is active. This is the
+ * scene-transition counterpart of the cancel glr_camera_controls_reset does
+ * - abandoning an ease mid-flight leaves the camera at an interpolation
+ * frame nobody chose, so a scene switched away from quickly would both
+ * strand the incoming scene's inherited pose and (via
+ * glr_camera_destination(), which a scene save reads) persist that partway
+ * pose into the outgoing scene's slot. */
+void             glr_camera_settle_target(void);
 void             glr_camera_reset_default(void);
 
 /* Scoped deterministic-reconstruction policy used while a tour restores its

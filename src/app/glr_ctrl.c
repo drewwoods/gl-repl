@@ -982,6 +982,16 @@ int glr_ctrl_restore_hidden_code_panel(void) {
  * cross-subsystem cleanup the app-frame paths actually want. */
 void glr_ctrl_reset_transients(void) {
     editor_commit_reset_transients();
+    /* Settle before the reset, not after: an outgoing scene's camera ease is
+     * still in flight when scenes are switched in quick succession, and
+     * glr_camera_controls_reset() would abandon it at whatever interpolation
+     * frame the last tick produced. That partway pose is what the incoming
+     * scene inherits (a scene with no `@camera` rows keeps it verbatim, a
+     * partial header merges against it) and what repl_load_* writes back into
+     * the outgoing user-scene slot, since a scene save reads
+     * glr_camera_destination(). Settling makes the handoff the outgoing
+     * scene's intended pose regardless of switch timing. */
+    glr_camera_settle_target();
     glr_camera_controls_reset();
     glr_camera_clear_scene_default();
     ui_menu_bar_close();

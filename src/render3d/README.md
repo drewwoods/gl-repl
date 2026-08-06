@@ -49,7 +49,7 @@ frame's own clear writes. A caller with no such distinction (the demo) writes
 the same value to both.
 
 The render3d module owns no camera type - the caller picks one. The REPL
-controller uses [`GlrCameraPose`](../app/glr_camera.h#L144) + `glr_camera_load_modelview` from
+controller uses [`GlrCameraPose`](../app/glr_camera.h#L150) + `glr_camera_load_modelview` from
 [`src/app/glr_camera.h`](../app/glr_camera.h); the standalone `render3d_demo` inlines the six
 matrix calls directly (`glLoadIdentity`, `glTranslatef`, two
 `glRotatef`s, `glTranslatef`) so it has no hard dep on [`glr_camera.h`](../app/glr_camera.h).
@@ -123,7 +123,7 @@ target is untouched (it stays the link-proof `make test-full` and
 
 Inside the full app this is **layer 4** of the ownership map. The controller
 ([`src/app/glr_ctrl.c`](../app/glr_ctrl.c)) builds a [`Render3dRenderConfig`](render_types.h#L139) from REPL runtime state + view
-state each frame, then calls [`glr_camera_load_modelview()`](../app/glr_camera.h#L155) and
+state each frame, then calls [`glr_camera_load_modelview()`](../app/glr_camera.h#L165) and
 [`render3d_draw_scene()`](render.h#L129) once per accumulation-jitter sample (with its own
 [`Render3dState`](render.h#L88)). The geometry callback is the REPL executor
 (`repl_execute_program`), so the user's typed program becomes the rendered

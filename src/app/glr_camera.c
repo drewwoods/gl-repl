@@ -283,6 +283,18 @@ void glr_camera_set_target_decay(float decay) {
     g_camera_target_decay = decay;
 }
 
+/* Finish an in-flight ease immediately instead of abandoning it where the
+ * last tick left it. Scene switches use this: the ease destination is the
+ * outgoing scene's *intended* pose, while the live pose is an arbitrary
+ * interpolation frame that depends only on how fast the user pressed the
+ * key. Cancelling instead of settling is what let a quick switch strand the
+ * camera partway - and, because glr_camera_destination() is what a scene
+ * save captures, write that partway pose into the outgoing scene's slot. */
+void glr_camera_settle_target(void) {
+    if (g_camera_target_active)
+        snap_to_target();
+}
+
 void glr_camera_reset_default(void) {
     cancel_target_ease();
     reset_velocities();
