@@ -1168,6 +1168,9 @@ WEB_TEST_RUNNER_CASES = \
 
 TEST_TARGET_NAMES = $(subst _,-,$(TEST_BINS))
 RUN_TEST_TARGETS = $(addprefix run-,$(TEST_TARGET_NAMES))
+# Keep an alias matching the test binary/source filename for callers that do
+# not want the public kebab-case spelling.
+RUN_TEST_FILE_TARGETS = $(addprefix run-,$(TEST_BINS))
 BENCH_TARGET_NAMES = $(subst _,-,$(BENCH_BINS))
 BENCH_OBJS = $(foreach bin,$(BENCH_BINS),$($(bin)_OBJS))
 
@@ -1763,7 +1766,8 @@ TEST_TARGETS = \
 	test-scenes internal-test-scenes \
 	test-web internal-test-suite-web \
 	rebuild-golden internal-test-suite internal-test-case \
-	internal-rebuild-golden gl-tests $(TEST_TARGET_NAMES) $(RUN_TEST_TARGETS)
+	internal-rebuild-golden gl-tests $(TEST_TARGET_NAMES) \
+	$(RUN_TEST_TARGETS) $(RUN_TEST_FILE_TARGETS)
 
 BENCH_TARGETS = \
 	bench bench-csv bench-web bench-web-csv bench-web-gl4es $(BENCH_TARGET_NAMES) \
@@ -2183,6 +2187,10 @@ internal-test-suite: $(addprefix $(BINDIR)/,$(TEST_BINS))
 $(RUN_TEST_TARGETS): run-%:
 	+$(MAKE) --no-print-directory internal-test-case \
 		USE_GL_STUBS=1 TEST_CASE=$(subst -,_,$*)
+
+$(RUN_TEST_FILE_TARGETS): run-%:
+	+$(MAKE) --no-print-directory internal-test-case \
+		USE_GL_STUBS=1 TEST_CASE=$*
 
 internal-test-case: $$(BINDIR)/$$(TEST_CASE)
 	@REPL_EXPORT_CC="$(CC)" \
