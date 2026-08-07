@@ -19,7 +19,42 @@ CHURN_SINCE="2026-05-23"
 CLANGD_BIN="${CLANGD_BIN:-clangd}"
 
 CLANG_TIDY_BIN="${CLANG_TIDY_BIN:-/opt/homebrew/opt/llvm/bin/clang-tidy}"
-CLANG_TIDY_CHECKS="${CLANG_TIDY_CHECKS:-readability-*,bugprone-*,misc-*,-readability-magic-numbers,-readability-identifier-length,-readability-braces-around-statements,-readability-uppercase-literal-suffix,-readability-math-missing-parentheses,-bugprone-easily-swappable-parameters,-misc-include-cleaner}"
+
+# Broad bugprone/misc/readability globs minus the checks that are noise *in this
+# tree*.  Each exclusion is here for one of four reasons:
+#
+#   already covered  - the build or another scan in this script reports it, so a
+#                      second copy is pure duplication.
+#   wrong standard   - the check assumes C11/C23/C++; everything here is -std=c99.
+#   house style      - the check disagrees with a convention used consistently
+#                      across the codebase, so every hit is a false positive.
+#   heuristic        - the check guesses from names/shapes and was wrong on every
+#                      hit when last audited (2026-08-07).
+CLANG_TIDY_CHECKS="${CLANG_TIDY_CHECKS:-bugprone-*,misc-*,readability-*\
+,-bugprone-assignment-in-if-condition\
+,-bugprone-branch-clone\
+,-bugprone-easily-swappable-parameters\
+,-bugprone-float-loop-counter\
+,-bugprone-multi-level-implicit-pointer-conversion\
+,-bugprone-narrowing-conversions\
+,-bugprone-suspicious-missing-comma\
+,-bugprone-switch-missing-default-case\
+,-misc-include-cleaner\
+,-misc-no-recursion\
+,-readability-avoid-nested-conditional-operator\
+,-readability-braces-around-statements\
+,-readability-else-after-return\
+,-readability-function-cognitive-complexity\
+,-readability-identifier-length\
+,-readability-inconsistent-ifelse-braces\
+,-readability-isolate-declaration\
+,-readability-magic-numbers\
+,-readability-math-missing-parentheses\
+,-readability-non-const-parameter\
+,-readability-redundant-declaration\
+,-readability-suspicious-call-argument\
+,-readability-uppercase-literal-suffix\
+,-readability-use-concise-preprocessor-directives}"
 
 PMD_IMAGE="${PMD_IMAGE:-pmdcode/pmd:latest}"
 JOBS="${JOBS:-4}"
@@ -72,14 +107,16 @@ Environment knobs:
   CLANG_TIDY_BIN     clang-tidy executable.
                      Default: /opt/homebrew/opt/llvm/bin/clang-tidy
   CLANG_TIDY_CHECKS  clang-tidy checks (comma-separated).
-                     Default: readability-*,bugprone-*,misc-*
-                       minus: -readability-magic-numbers,
-                       -readability-identifier-length,
-                       -readability-braces-around-statements,
-                       -readability-uppercase-literal-suffix,
-                       -readability-math-missing-parentheses,
-                       -bugprone-easily-swappable-parameters,
-                       -misc-include-cleaner
+                     Default: bugprone-*,misc-*,readability-* minus ~24 checks
+                     that are noise in this tree - ones the build already
+                     reports (narrowing conversions vs -Wfloat-conversion),
+                     ones lizard already covers (cognitive complexity), ones
+                     assuming a newer standard than -std=c99 (concise
+                     preprocessor directives), and ones that disagree with
+                     house style (isolate-declaration, ifelse-braces).
+                     See the comment above the assignment for the full
+                     rationale.  Pass the variable to widen it back out:
+                       CLANG_TIDY_CHECKS='bugprone-*,readability-*' $0 --clang-tidy
 
   MIN_TOKENS         PMD CPD minimum duplicate token count. Default: 80
   PMD_IMAGE          Docker image for PMD. Default: pmdcode/pmd:latest
@@ -288,7 +325,24 @@ EOF
   # validate it before replacing an existing database.
   local tmp_db
   tmp_db="$(mktemp "$ROOT/.compile_commands.XXXXXX.json")"
-  if ! bear --output "$tmp_db" -- make -B gl-repl USE_GL_STUBS=1; then
+
+  # The `gl-repl` make target ends in `ln -sfn $(SAMPLE_BIN) gl-repl`, so a
+  # USE_GL_STUBS=1 build repoints ./gl-repl at the windowless stub binary and
+  # leaves it there.  Anyone who ran a scan and then ran the app would get a
+  # binary that renders nothing.  Snapshot the link and put it back.
+  local prev_link=""
+  [[ -L gl-repl ]] && prev_link="$(readlink gl-repl)"
+
+  local bear_rc=0
+  bear --output "$tmp_db" -- make -B gl-repl USE_GL_STUBS=1 || bear_rc=$?
+
+  if [[ -n "$prev_link" ]]; then
+    ln -sfn "$prev_link" gl-repl
+  elif [[ -L gl-repl ]]; then
+    rm -f gl-repl          # no link before the build; leave none behind
+  fi
+
+  if [[ "$bear_rc" -ne 0 ]]; then
     rm -f "$tmp_db"
     printf 'bear build failed; compile_commands.json not generated\n' >&2
     return 1
@@ -417,9 +471,16 @@ EOF
       rm -f "$tmpfile"
     ' _ {} >> "$tidy_log"
 
-  # A2: Filter vendored-path diagnostics (miniaudio.h, freeglut) from summary
+  # A2: Filter vendored-path diagnostics (miniaudio.h, freeglut) from summary.
+  # A3: Collapse duplicates.  A header is re-diagnosed once per TU that includes
+  # it, and clang-tidy spells the path absolutely or relatively depending on how
+  # the TU reached the file - so strip the repo prefix before sort -u, or the two
+  # spellings of one diagnostic both survive.  On the last full run this took
+  # 2448 lines to 1088.
   grep -E "warning:|error:" "$tidy_log" | \
-    grep -vE 'miniaudio\.h|third_party/freeglut' > "$tidy_diag" || true
+    grep -vE 'miniaudio\.h|third_party/freeglut' | \
+    sed -e "s|^${ROOT}/||" | \
+    sort -u > "$tidy_diag" || true
 
   printf 'wrote %s\n' "$tidy_log"
   printf 'summary %s\n' "$tidy_diag"
