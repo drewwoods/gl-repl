@@ -269,16 +269,37 @@ int main(int argc, char **argv) {
     glr_init_trace("glutInit begin");
     glutInit(&argc, argv);
     glr_init_trace_detail("glutInit done");
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_STENCIL |
-                        GLUT_MULTISAMPLE |
-                        /* AUTO still asks for the accum visual - whether the
-                         * feature is armed is decided post-init from the
-                         * renderer string (glr_ctrl_set_accum), which needs a
-                         * live context and so cannot run this early. Only an
-                         * explicit --no-accum drops the request. */
-                        (opts.use_accum != GLR_CLI_ACCUM_OFF ? GLUT_ACCUM : 0));
-    glutInitWindowSize(opts.window_w, opts.window_h);
-    glutCreateWindow(GLR_WINDOW_TITLE_BASE);
+    {
+        /* AUTO still asks for the accum visual - whether the feature is
+         * armed is decided post-init from the renderer string
+         * (glr_ctrl_set_accum), which needs a live context and so cannot
+         * run this early. Only an explicit --no-accum drops the request.
+         *
+         * But the request can be unsatisfiable: Mesa on modern Intel
+         * advertises no FBConfig that carries accum planes alongside
+         * multisample + stencil, and freeglut answers an impossible mode
+         * by failing fgOpenWindow outright ("FBConfig with necessary
+         * capabilities not found") - the app never opens a window at all.
+         * So probe the mode first and, under AUTO, silently fall back to
+         * the accum-less visual, which is exactly what AUTO would have
+         * settled on anyway once it saw a Mesa renderer string. An
+         * explicit --accum keeps the request and is left to fail loudly
+         * rather than being quietly downgraded. */
+        unsigned int base = GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH |
+                            GLUT_STENCIL | GLUT_MULTISAMPLE;
+        unsigned int mode = base |
+            (opts.use_accum != GLR_CLI_ACCUM_OFF ? GLUT_ACCUM : 0);
+        glutInitDisplayMode(mode);
+        if (opts.use_accum == GLR_CLI_ACCUM_AUTO &&
+            !glutGet(GLUT_DISPLAY_MODE_POSSIBLE)) {
+            glr_init_trace_detail(
+                "no accum-capable visual; retrying without GLUT_ACCUM");
+            mode = base;
+            glutInitDisplayMode(mode);
+        }
+        glutInitWindowSize(opts.window_w, opts.window_h);
+        glutCreateWindow(GLR_WINDOW_TITLE_BASE);
+    }
     glr_init_trace("window created");
 
     glr_ctrl_init_gl();
