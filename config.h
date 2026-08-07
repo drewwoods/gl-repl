@@ -303,17 +303,28 @@
  * zoom velocity then decays by CAM_DECAY_ZOOM each tick.
  *
  * The step is in log space (glr_camera_tick applies dist *= expf(vel)), so
- * a notch is a fixed percentage of the current distance. Total travel per
- * notch is step / (1 - CAM_DECAY_ZOOM) e-folds: 0.02 / 0.18 = 0.111, i.e.
- * ~11.7% of the distance. */
+ * a notch is a fixed percentage of the current distance. The two knobs
+ * split cleanly:
+ *
+ *   step / (1 - CAM_DECAY_ZOOM)  = travel per notch, in e-folds
+ *   1 / (1 - CAM_DECAY_ZOOM)     = glide length, in 16ms ticks
+ *
+ * At 0.022 / 0.90 that is 0.22 e-folds (~25% of the distance) over ~10
+ * ticks (~170ms). Both are sized for a *detent* wheel, which is the only
+ * thing freeglut ever delivers: X11 sends exactly one MouseWheel callback
+ * per physical notch (fg_main_x11.c, ButtonPress 4/5), and even the Cocoa
+ * backend quantizes trackpad momentum into the same magnitude-blind
+ * callbacks. A gesture is therefore a handful of events, not a stream, so
+ * each one has to carry a visible glide of its own. Expect to re-tune per
+ * platform: macOS contributes its own momentum tail on top of this. */
 #ifndef GLR_CAMERA_TARGET_DECAY
 #define GLR_CAMERA_TARGET_DECAY 0.93f
 #endif
 #ifndef GLR_WHEEL_ZOOM_STEP
-#define GLR_WHEEL_ZOOM_STEP 0.02f
+#define GLR_WHEEL_ZOOM_STEP 0.022f
 #endif
 #ifndef CAM_DECAY_ZOOM
-#define CAM_DECAY_ZOOM 0.82f
+#define CAM_DECAY_ZOOM 0.90f
 #endif
 
 /* Standard status message buffer size for the replay visualizer. */
