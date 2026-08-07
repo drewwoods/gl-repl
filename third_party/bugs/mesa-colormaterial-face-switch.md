@@ -29,7 +29,7 @@ glGetMaterialfv(GL_FRONT, GL_AMBIENT, m);
 ```
 
 `mesa-colormaterial-face-switch.c` in this directory runs this in a fresh
-context, plus two controls. Plain GLX, no GLUT:
+context, plus three controls. Plain GLX, no GLUT:
 
 ```sh
 cc -std=c99 -O0 -o mesa-colormaterial-face-switch \
@@ -49,6 +49,10 @@ Case B: retarget to GL_BACK afterwards  [the bug]
 
 Case C: as B, but query before the switch
   [PASS] GL_FRONT holds the color it tracked   got 0.20 0.60 0.30
+  [PASS] GL_BACK picked up the current color   got 0.20 0.60 0.30
+
+Case D: spec p.519 example, ColorMaterial sets the named face
+  [PASS] GL_FRONT ambient = current color      got 0.20 0.60 0.30
 ```
 
 Case A shows the color *does* reach `GL_FRONT`; only the retarget loses it.
@@ -56,18 +60,22 @@ Case A shows the color *does* reach `GL_FRONT`; only the retarget loses it.
 
 ## Expected
 
-`GL_FRONT = 0.20 0.60 0.30` in all three cases.
+`GL_FRONT = 0.20 0.60 0.30` in every case.
 
 ## Spec basis
 
-Normative source: **OpenGL 2.1 specification (December 1, 2006), §2.14.3
-"ColorMaterial", pp. 66–68.**
-<https://registry.khronos.org/OpenGL/specs/gl/glspec21.pdf#page=80>
-(§2.14.3 begins on PDF page 80 = printed page 66; the worked example quoted
-below is on PDF page 82 = printed page 68.)
+Normative source: **OpenGL 4.6 Compatibility Profile (May 5, 2022), §12.2.3
+"ColorMaterial", p. 519.**
+<https://registry.khronos.org/OpenGL/specs/gl/glspec46.compatibility.pdf#page=544>
+(PDF page 544 = printed page 519; both quotes below are on that one page.)
 
-Two sentences decide this. First, p. 66 — the permanence rule, which is
-exhaustive about what may overwrite a tracked value:
+This text is unchanged from OpenGL 2.1 §2.14.3, p. 66
+(<https://registry.khronos.org/OpenGL/specs/gl/glspec21.pdf#page=80>) — the
+wording has carried through verbatim, so the older spec can be cited
+interchangeably if preferred.
+
+Two sentences decide this. First, the permanence rule, which is exhaustive
+about what may overwrite a tracked value:
 
 > "The replacements made to material properties are **permanent**; the replaced
 > values remain until changed by either sending a new color or by setting a new
@@ -80,8 +88,8 @@ The spec lists exactly two ways a replaced material value may change: a new
 Calling `ColorMaterial` to retarget the face is neither. `GL_FRONT`'s value is
 therefore required to persist.
 
-Second, p. 68 — the spec's own worked example, which is the same call shape as
-the one that fails here:
+Second, the spec's own worked example on the same page, which is the same
+call shape as the one that fails here:
 
 > "calling
 >
@@ -96,7 +104,7 @@ isolation (verified). What it gets wrong is the other half: when the call
 retargets *away* from a face, the color that face was already tracking is
 dropped instead of remaining, contradicting the permanence rule above.
 
-Note also §2.14.4 "Lighting State" (p. 68): ColorMaterial state is just "a
+Note also §12.2.5 "Lighting State" (p. 521): ColorMaterial state is just "a
 five-valued variable indicating the current ColorMaterial mode, a bit
 indicating whether or not COLOR_MATERIAL is enabled" — the face/mode selection
 is plain state, with no wording that makes changing it retroactive.
@@ -125,7 +133,7 @@ In particular the relative order of `glEnable(GL_COLOR_MATERIAL)` and the first
 when no retarget follows, and both fail when one does. Enabling before or after
 selecting the face is not the trigger.
 
-Also verified: the spec's own `ColorMaterial(FRONT, AMBIENT)` example (p. 68)
+Also verified: the spec's own `ColorMaterial(FRONT, AMBIENT)` example (p. 519)
 passes on Mesa. Writing the named face works; only the outgoing face is lost.
 
 ## Two traps when reducing this

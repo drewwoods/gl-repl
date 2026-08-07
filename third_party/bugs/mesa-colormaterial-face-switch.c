@@ -23,8 +23,11 @@
  * The last call names GL_BACK and changes no color, yet GL_FRONT loses the
  * value it tracked one call earlier.
  *
- * Spec: OpenGL 2.1 (December 1, 2006), section 2.14.3 "ColorMaterial", p. 66.
- * https://registry.khronos.org/OpenGL/specs/gl/glspec21.pdf#page=80
+ * Spec: OpenGL 4.6 Compatibility Profile (May 5, 2022), section 12.2.3
+ * "ColorMaterial", p. 519.
+ * https://registry.khronos.org/OpenGL/specs/gl/glspec46.compatibility.pdf#page=544
+ * (Identical wording appears in OpenGL 2.1 sec 2.14.3, p. 66 - this text has
+ * not changed since; 4.6 compatibility is cited as the current spec.)
  *
  *   "The replacements made to material properties are permanent; the replaced
  *    values remain until changed by either sending a new color or by setting a
@@ -36,7 +39,7 @@
  * Color*, or a Material* call made while ColorMaterial is disabled. Retargeting
  * the face with ColorMaterial is neither, so GL_FRONT must keep its value.
  *
- * The same section (p. 68) gives the converse case explicitly - "calling
+ * The same section gives the converse case explicitly - "calling
  * ColorMaterial(FRONT, AMBIENT) while COLOR_MATERIAL is enabled sets the front
  * material a_cm to the value of the current color" - and Mesa gets that right.
  * Writing the face being named works; the face being left behind is the bug.
@@ -69,9 +72,14 @@
 #define WANT_B 0.30f
 
 /* Printed with the results so the output is self-contained when pasted into a
- * bug tracker. #page=80 is the PDF page; the spec's own printed page is 66. */
-#define SPEC_CITE "OpenGL 2.1 (2006-12-01), sec 2.14.3 \"ColorMaterial\", p.66"
-#define SPEC_URL  "https://registry.khronos.org/OpenGL/specs/gl/glspec21.pdf#page=80"
+ * bug tracker. #page=544 is the PDF page; the spec's own printed page is 519.
+ * The wording cited below is unchanged from OpenGL 2.1 sec 2.14.3 (p.66). */
+#define SPEC_CITE \
+    "OpenGL 4.6 Compatibility Profile (2022-05-05), sec 12.2.3 " \
+    "\"ColorMaterial\", p.519"
+#define SPEC_URL \
+    "https://registry.khronos.org/OpenGL/specs/gl/" \
+    "glspec46.compatibility.pdf#page=544"
 
 static int g_failures;
 
@@ -184,12 +192,12 @@ int main(void)
     run_case("Case C: as B, but query before the switch",
              1, 1, dpy, vi, win);
 
-    /* The spec's own example from p. 68, as a control: ColorMaterial issued
+    /* The spec's own example from p. 519, as a control: ColorMaterial issued
      * while enabled must set the material of the face it names. Mesa passes
      * this, which localizes the bug to the face being retargeted away from. */
     {
         GLXContext ctx = glXCreateContext(dpy, vi, NULL, True);
-        printf("Case D: spec p.68 example, ColorMaterial sets the named face\n");
+        printf("Case D: spec p.519 example, ColorMaterial sets the named face\n");
         glXMakeCurrent(dpy, win, ctx);
         glEnable(GL_COLOR_MATERIAL);
         glColor3f(WANT_R, WANT_G, WANT_B);
