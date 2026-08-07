@@ -920,9 +920,10 @@ int write_scratch_block_as_c89(FILE *f, const char *source_text) {
     char rhs[MAX_LINE_LEN];
     ReplScratchBlockCell cells[REPL_SCRATCH_ARRAY_LEN];
     char out[MAX_LINE_LEN * 3];
+    char line[MAX_LINE_LEN];
     const char *comment;
     int base = 0;
-    int count, indent, used = 0, k;
+    int count, indent, used = 0, k, line_len;
 
     if (!repl_extract_assignment_target_parts(source_text ? source_text : "",
                                               name, sizeof(name),
@@ -964,8 +965,11 @@ int write_scratch_block_as_c89(FILE *f, const char *source_text) {
     }
 
     comment = repl_line_trailing_comment(source_text);
-    fprintf(f, "%.*s%s%s%s\n", indent, source_text, out,
-            comment ? "  " : "", comment ? comment : "");
+    line_len = snprintf(line, sizeof(line), "%.*s%s%s%s", indent, source_text,
+                        out, comment ? "  " : "", comment ? comment : "");
+    if (line_len < 0 || line_len >= (int)sizeof(line))
+        return 0;
+    export_write_c89_line(f, line);
     return 1;
 }
 

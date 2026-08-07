@@ -1127,6 +1127,12 @@ test_glr_ctrl_OBJS = $(OBJDIR)/$(TEST_DIR)/test_glr_ctrl.o $(filter-out $(OBJDIR
 
 test_repl_executor_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_executor.o $(filter-out $(OBJDIR)/src/repl/executor.o,$(CORE_TEST_OBJS))
 
+# The export test includes export_cmd_writer.c as a unit so it can drive the
+# static per-command writer with one probe for every CmdType. Keep the normal
+# object out of this link or every writer symbol would be defined twice.
+test_repl_export_all_commands_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_export_all_commands.o \
+	$(filter-out $(OBJDIR)/src/repl/export_cmd_writer.o,$(CORE_TEST_OBJS))
+
 test_repl_replay_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_replay.o $(filter-out $(OBJDIR)/src/subsystems/replay/replay.o,$(CORE_TEST_OBJS))
 
 # test_replay_walk includes app/glr_ctrl.c as a translation unit to reach

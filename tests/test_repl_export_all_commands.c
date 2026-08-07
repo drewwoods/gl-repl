@@ -20,6 +20,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Include the writer as a unit so the exhaustive probe below exercises the
+ * same static dispatch used by the real export path. The Makefile filters its
+ * ordinary object out of this test's link line. */
+#include "repl/export_cmd_writer.c"
+
 static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define ASSERT_TRUE(label, cond) do { \
@@ -45,6 +50,357 @@ static int compare_text(const char *text1, const char *text2, int *out_diff_line
         return 0;
     }
     return 1;
+}
+
+/* Keep this switch exhaustive on purpose. The build's -Werror=switch turns a
+ * newly-added CmdType into a compile error here until its C89 probe is added.
+ * The generated and structural arms are still worth probing: they either
+ * emit their own C89 scaffolding or are handled by the surrounding export
+ * range writer rather than by write_canonical_cmd_as_c(). */
+static int make_c89_probe(CmdType type, GLCmd *cmd,
+                          char *line, size_t line_sz) {
+    if (!cmd || !line || line_sz == 0)
+        return 0;
+    memset(cmd, 0, sizeof(*cmd));
+    cmd->type = type;
+    cmd->valid = 1;
+    line[0] = '\0';
+
+    switch (type) {
+    case CMD_BEGIN:
+        snprintf(line, line_sz, "glBegin(GL_POINTS); // c89 probe");
+        break;
+    case CMD_END:
+        snprintf(line, line_sz, "glEnd(); // c89 probe");
+        break;
+    case CMD_VERTEX3F:
+        snprintf(line, line_sz, "glVertex3f(0, 0, 0); // c89 probe");
+        break;
+    case CMD_VERTEX2F:
+        snprintf(line, line_sz, "glVertex2f(0, 0); // c89 probe");
+        break;
+    case CMD_NORMAL3F:
+        snprintf(line, line_sz, "glNormal3f(0, 0, 1); // c89 probe");
+        break;
+    case CMD_COLOR3F:
+        snprintf(line, line_sz, "glColor3f(1, 0, 0); // c89 probe");
+        break;
+    case CMD_COLOR4F:
+        snprintf(line, line_sz, "glColor4f(1, 0, 0, 1); // c89 probe");
+        break;
+    case CMD_ENABLE:
+        snprintf(line, line_sz, "glEnable(GL_DEPTH_TEST); // c89 probe");
+        break;
+    case CMD_DISABLE:
+        snprintf(line, line_sz, "glDisable(GL_DEPTH_TEST); // c89 probe");
+        break;
+    case CMD_SHADE_MODEL:
+        snprintf(line, line_sz, "glShadeModel(GL_SMOOTH); // c89 probe");
+        break;
+    case CMD_TRANSLATE3F:
+        snprintf(line, line_sz, "glTranslatef(1, 2, 3); // c89 probe");
+        break;
+    case CMD_SCALEF:
+        snprintf(line, line_sz, "glScalef(1, 2, 3); // c89 probe");
+        break;
+    case CMD_ROTATEF:
+        snprintf(line, line_sz, "glRotatef(45, 0, 0, 1); // c89 probe");
+        break;
+    case CMD_PUSH_MATRIX:
+        snprintf(line, line_sz, "glPushMatrix(); // c89 probe");
+        break;
+    case CMD_POP_MATRIX:
+        snprintf(line, line_sz, "glPopMatrix(); // c89 probe");
+        break;
+    case CMD_LOAD_IDENTITY:
+        snprintf(line, line_sz, "glLoadIdentity(); // c89 probe");
+        break;
+    case CMD_MULT_MATRIXF:
+        cmd->num_args = 0;
+        snprintf(line, line_sz,
+                 "glMultMatrixf((GLfloat[]){1, 0, 0, 0, 0, 1, 0, 0, "
+                 "0, 0, 1, 0, 0, 0, 0, 1}); // c89 probe");
+        break;
+    case CMD_COLOR_MATERIAL:
+        snprintf(line, line_sz,
+                 "glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE); // c89 probe");
+        break;
+    case CMD_LIGHT_MODEL_I:
+        snprintf(line, line_sz,
+                 "glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_FALSE); // c89 probe");
+        break;
+    case CMD_FRONT_FACE:
+        snprintf(line, line_sz, "glFrontFace(GL_CCW); // c89 probe");
+        break;
+    case CMD_CULL_FACE:
+        snprintf(line, line_sz, "glCullFace(GL_BACK); // c89 probe");
+        break;
+    case CMD_POLYGON_MODE:
+        snprintf(line, line_sz,
+                 "glPolygonMode(GL_FRONT_AND_BACK, GL_FILL); // c89 probe");
+        break;
+    case CMD_POLYGON_OFFSET:
+        snprintf(line, line_sz, "glPolygonOffset(1, 1); // c89 probe");
+        break;
+    case CMD_DEPTH_FUNC:
+        snprintf(line, line_sz, "glDepthFunc(GL_LESS); // c89 probe");
+        break;
+    case CMD_STENCIL_FUNC:
+        snprintf(line, line_sz, "glStencilFunc(GL_ALWAYS, 0, 255); // c89 probe");
+        break;
+    case CMD_STENCIL_OP:
+        snprintf(line, line_sz,
+                 "glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE); // c89 probe");
+        break;
+    case CMD_STENCIL_MASK:
+        snprintf(line, line_sz, "glStencilMask(255); // c89 probe");
+        break;
+    case CMD_FOR_BEGIN:
+        snprintf(line, line_sz, "for(i, 0, 1) { // c89 probe");
+        break;
+    case CMD_FOR_END:
+        snprintf(line, line_sz, "} // c89 probe");
+        break;
+    case CMD_BREAK:
+        snprintf(line, line_sz, "break; // c89 probe");
+        break;
+    case CMD_CONTINUE:
+        snprintf(line, line_sz, "continue; // c89 probe");
+        break;
+    case CMD_FUNC_DEF:
+        snprintf(line, line_sz, "func0() { // c89 probe");
+        break;
+    case CMD_FUNC_END:
+        snprintf(line, line_sz, "} // c89 probe");
+        break;
+    case CMD_CALL:
+        snprintf(line, line_sz, "func0(); // c89 probe");
+        break;
+    case CMD_IF_BEGIN:
+        snprintf(line, line_sz, "if (1) { // c89 probe");
+        break;
+    case CMD_IF_END:
+        snprintf(line, line_sz, "} // c89 probe");
+        break;
+    case CMD_COMMENT:
+        snprintf(line, line_sz, "// c89 probe");
+        break;
+    case CMD_EMPTY:
+        line[0] = '\0';
+        break;
+    case CMD_VAR_ASSIGN:
+        snprintf(line, line_sz, "x = 1; // c89 probe");
+        break;
+    case CMD_SCRATCH_ASSIGN:
+        snprintf(line, line_sz, "A[0] = 1; // c89 probe");
+        break;
+    case CMD_SCRATCH_BLOCK_ASSIGN:
+        snprintf(line, line_sz, "A[0] = {1, 2}; // c89 probe");
+        break;
+    case CMD_VAR_DECLARE:
+        cmd->var_idx = REPL_VAR_IDX_LOCAL;
+        cmd->payload.decl.count = 1;
+        snprintf(cmd->payload.decl.names[0],
+                 sizeof(cmd->payload.decl.names[0]), "x");
+        snprintf(line, line_sz, "float x; // c89 probe");
+        break;
+    case CMD_GLUT_TORUS:
+        snprintf(line, line_sz, "glutSolidTorus(1, 2, 8, 8); // c89 probe");
+        break;
+    case CMD_GLUT_CUBE:
+        snprintf(line, line_sz, "glutSolidCube(1); // c89 probe");
+        break;
+    case CMD_GLUT_SPHERE:
+        snprintf(line, line_sz, "glutSolidSphere(1, 8, 8); // c89 probe");
+        break;
+    case CMD_GLUT_TEAPOT:
+        snprintf(line, line_sz, "glutSolidTeapot(1); // c89 probe");
+        break;
+    case CMD_GLUT_CONE:
+        snprintf(line, line_sz, "glutSolidCone(1, 2, 8, 8); // c89 probe");
+        break;
+    case CMD_TESS_BEGIN_POLYGON:
+        snprintf(line, line_sz, "gluBegin(GLU_POLYGON); // c89 probe");
+        break;
+    case CMD_TESS_BEGIN_CONTOUR:
+        snprintf(line, line_sz, "gluBegin(GLU_CONTOUR); // c89 probe");
+        break;
+    case CMD_TESS_END:
+        snprintf(line, line_sz, "gluEnd(); // c89 probe");
+        break;
+    case CMD_TESS_NORMAL:
+        snprintf(line, line_sz, "gluNormal(0, 0, 1); // c89 probe");
+        break;
+    case CMD_TESS_COLOR:
+        snprintf(line, line_sz, "gluColor(1, 0, 0, 1); // c89 probe");
+        break;
+    case CMD_TESS_VERTEX:
+        snprintf(line, line_sz, "gluVertex(0, 0, 0); // c89 probe");
+        break;
+    case CMD_MATERIALFV:
+        snprintf(line, line_sz,
+                 "glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){1, 1, 1, 1}); // c89 probe");
+        break;
+    case CMD_MATERIALF:
+        snprintf(line, line_sz,
+                 "glMaterialf(GL_FRONT, GL_SHININESS, 1); // c89 probe");
+        break;
+    case CMD_POINT_SIZE:
+        snprintf(line, line_sz, "glPointSize(1); // c89 probe");
+        break;
+    case CMD_LINE_WIDTH:
+        snprintf(line, line_sz, "glLineWidth(1); // c89 probe");
+        break;
+    case CMD_LINE_STIPPLE:
+        snprintf(line, line_sz, "glLineStipple(1, 255); // c89 probe");
+        break;
+    case CMD_POINT_PARAMETER_FV:
+        snprintf(line, line_sz,
+                 "glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){1, 0, 0}); // c89 probe");
+        break;
+    case CMD_BLEND_FUNC:
+        snprintf(line, line_sz,
+                 "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // c89 probe");
+        break;
+    case CMD_CLEAR_COLOR:
+        snprintf(line, line_sz, "glClearColor(0, 0, 0, 1); // c89 probe");
+        break;
+    case CMD_CLEAR_DEPTH:
+        snprintf(line, line_sz, "glClearDepth(1); // c89 probe");
+        break;
+    case CMD_CLEAR_STENCIL:
+        snprintf(line, line_sz, "glClearStencil(0); // c89 probe");
+        break;
+    case CMD_DEPTH_MASK:
+        snprintf(line, line_sz, "glDepthMask(GL_TRUE); // c89 probe");
+        break;
+    case CMD_COLOR_MASK:
+        snprintf(line, line_sz,
+                 "glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // c89 probe");
+        break;
+    case CMD_EDGE_FLAG:
+        snprintf(line, line_sz, "glEdgeFlag(GL_TRUE); // c89 probe");
+        break;
+    case CMD_RASTER_POS3F:
+        snprintf(line, line_sz, "glRasterPos3f(0, 0, 0); // c89 probe");
+        break;
+    case CMD_LABEL:
+        snprintf(line, line_sz, "label(\"probe\", 1); // c89 probe");
+        break;
+    case CMD_ELSE_IF:
+        snprintf(line, line_sz, "} else if (1) { // c89 probe");
+        break;
+    case CMD_ELSE:
+        snprintf(line, line_sz, "} else { // c89 probe");
+        break;
+    case CMD_CLIP_PLANE:
+        snprintf(line, line_sz,
+                 "glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, 1, 0, 0}); // c89 probe");
+        break;
+    case CMD_CLEAR:
+        snprintf(line, line_sz, "glClear(GL_COLOR_BUFFER_BIT); // c89 probe");
+        break;
+    case CMD_FOG_I:
+        snprintf(line, line_sz, "glFogi(GL_FOG_MODE, GL_LINEAR); // c89 probe");
+        break;
+    case CMD_FOG_F:
+        snprintf(line, line_sz, "glFogf(GL_FOG_DENSITY, 1); // c89 probe");
+        break;
+    case CMD_FOG_FV:
+        snprintf(line, line_sz,
+                 "glFogfv(GL_FOG_COLOR, (GLfloat[]){0, 0, 0, 1}); // c89 probe");
+        break;
+    case CMD_PUSH_ATTRIB:
+        snprintf(line, line_sz, "glPushAttrib(GL_ENABLE_BIT); // c89 probe");
+        break;
+    case CMD_POP_ATTRIB:
+        snprintf(line, line_sz, "glPopAttrib(); // c89 probe");
+        break;
+    case CMD_TYPE_COUNT:
+        return 0;
+    }
+    return 1;
+}
+
+static char *slurp_stream(FILE *f);
+
+static int write_c89_probe(FILE *f, CmdType type, const GLCmd *cmd,
+                           const char *source_text) {
+    int tess_depth = 0;
+
+    switch (type) {
+    case CMD_FOR_BEGIN:
+        write_for_begin_as_c(f, cmd, source_text);
+        break;
+    case CMD_FOR_END:
+        write_for_end_as_c(f, source_text);
+        break;
+    case CMD_FUNC_DEF:
+    case CMD_FUNC_END:
+        /* Function rows are consumed by write_func_defs_as_c; check the
+         * source line's standalone C89 comment conversion here. */
+        export_write_c89_line(f, source_text);
+        break;
+    default:
+        write_canonical_cmd_as_c(f, cmd, 0, 0, &tess_depth);
+        break;
+    }
+    return 1;
+}
+
+static void test_every_cmd_type_exports_c89_comments(void) {
+    char source_lines[1][MAX_LINE_LEN];
+    SourceTextView text = { .lines = source_lines, .line_count = 1 };
+    int type;
+
+    repl_eval_init_predef_vars();
+    /* write_canonical_cmd_as_c() resolves source text through the export
+     * document index before dispatching. A one-row synthetic document is
+     * enough for this direct writer probe; no editor mutation is needed. */
+    repl_state_document_count_set(1);
+    export_set_source_text_view(text);
+
+    for (type = 0; type < CMD_TYPE_COUNT; type++) {
+        CmdType cmd_type = (CmdType)type;
+        GLCmd cmd;
+        FILE *f;
+        char *output;
+        char label[128];
+
+        if (!make_c89_probe(cmd_type, &cmd, source_lines[0],
+                            sizeof(source_lines[0])))
+            continue;
+        f = tmpfile();
+        snprintf(label, sizeof(label), "%s emits C89 output",
+                 cmd_type_name(cmd_type));
+        ASSERT_TRUE(label, f != NULL);
+        if (!f)
+            continue;
+
+        ASSERT_TRUE(label, write_c89_probe(f, cmd_type, &cmd, source_lines[0]));
+        output = slurp_stream(f);
+        ASSERT_TRUE(label, output != NULL);
+        if (output) {
+            char comment_label[128];
+            if (cmd_type != CMD_EMPTY) {
+                char emission_label[128];
+                snprintf(emission_label, sizeof(emission_label),
+                         "%s emits a non-empty line", cmd_type_name(cmd_type));
+                ASSERT_TRUE(emission_label, output[0] != '\0');
+            }
+            snprintf(comment_label, sizeof(comment_label),
+                     "%s has no C++ comment in export", cmd_type_name(cmd_type));
+            ASSERT_TRUE(comment_label, strstr(output, "//") == NULL);
+            if (cmd_type == CMD_SCRATCH_BLOCK_ASSIGN) {
+                ASSERT_TRUE("scratch block keeps its converted comment",
+                            strstr(output, "/* c89 probe */") != NULL);
+            }
+        }
+        free(output);
+        fclose(f);
+    }
+    repl_state_document_count_set(0);
+    export_set_source_text_view((SourceTextView){0});
 }
 
 static void declare_test_vars(void) {
@@ -724,6 +1080,7 @@ static void test_scratch_block_export_line_budget(void) {
 }
 
 int main(void) {
+    test_every_cmd_type_exports_c89_comments();
     test_export_prologue_direct();
     test_auto_normal_marker_roundtrip();
     test_loop_jump_roundtrip();
