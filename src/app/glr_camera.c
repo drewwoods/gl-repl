@@ -576,7 +576,13 @@ void glr_camera_tick(void) {
         c->tx += g_vel_tx;
         c->ty += g_vel_ty;
         c->tz += g_vel_tz;
-        c->dist += g_vel_zoom;
+        /* Zoom velocity is log-space, so a notch is a constant *fraction*
+         * of the current distance rather than a constant number of units.
+         * Additive zoom over a 0.5..50 range is unusable at both ends: the
+         * same step is 22% of the range up close and 0.2% far out, which
+         * reads as "the wheel does nothing" exactly where there is the most
+         * room to travel. */
+        c->dist *= expf(g_vel_zoom);
         clamp_camera_distance(c);
     }
 

@@ -192,8 +192,10 @@ void glr_camera_pointer_set(int x, int y);
  * state. */
 void glr_camera_mouse_event(int button, int state, int x, int y, int mods);
 
-/* Add zoom velocity from scroll wheel or keyboard. Accumulates into
- * momentum; applied in glr_camera_tick(). */
+/* Add zoom velocity from the scroll wheel. Accumulates into momentum;
+ * applied in glr_camera_tick(). delta is in *log space* - the tick applies
+ * dist *= expf(vel), so one unit is one e-fold of distance and the same
+ * delta covers the same fraction of the range at any zoom level. */
 void glr_camera_add_zoom_velocity(float delta);
 
 /* Update camera during drag - computes delta from internal pointer

@@ -67,6 +67,32 @@ static void test_camera_distance_bounds(void) {
     ASSERT_FLOAT_NEAR("Tick with negative zoom velocity clamps to CAM_DIST_MIN", glr_camera().dist, 0.5f, 0.001f);
 }
 
+/* Wheel zoom velocity is log space - glr_camera_tick applies
+ * dist *= expf(vel) - so one notch covers the same fraction of the
+ * distance at any zoom level. The additive form it replaced was 22% of the
+ * range at CAM_DIST_MIN and 0.2% at CAM_DIST_MAX, which read as a dead
+ * wheel exactly where there was the most room to travel. */
+static void test_camera_zoom_is_proportional(void) {
+    float near_ratio, far_ratio;
+
+    glr_camera_reset_default();
+    glr_camera_set(0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    glr_camera_add_zoom_velocity(0.1f);
+    glr_camera_tick();
+    near_ratio = glr_camera().dist / 2.0f;
+
+    glr_camera_reset_default();
+    glr_camera_set(0.0f, 0.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    glr_camera_add_zoom_velocity(0.1f);
+    glr_camera_tick();
+    far_ratio = glr_camera().dist / 20.0f;
+
+    ASSERT_FLOAT_NEAR("Zoom velocity is an e-fold of distance",
+                      near_ratio, expf(0.1f), 0.0001f);
+    ASSERT_FLOAT_NEAR("Same velocity is the same ratio 10x further out",
+                      far_ratio, near_ratio, 0.0001f);
+}
+
 static void test_camera_easing_and_decay(void) {
     glr_camera_reset_default();
 
@@ -218,6 +244,7 @@ int main(void) {
 
     test_camera_pitch_bounds();
     test_camera_distance_bounds();
+    test_camera_zoom_is_proportional();
     test_camera_easing_and_decay();
     test_camera_reconstruction_scope();
     test_camera_auto_rotation_and_focus();

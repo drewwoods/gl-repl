@@ -300,7 +300,12 @@
 /* Camera ease/zoom tuning. Target decay is the per-frame damping applied
  * by glr_camera_ease_to: at 0.93, each 16ms tick applies 7% of the
  * remaining target delta. Wheel zoom step injects this amount per notch;
- * zoom velocity then decays by CAM_DECAY_ZOOM each tick. */
+ * zoom velocity then decays by CAM_DECAY_ZOOM each tick.
+ *
+ * The step is in log space (glr_camera_tick applies dist *= expf(vel)), so
+ * a notch is a fixed percentage of the current distance. Total travel per
+ * notch is step / (1 - CAM_DECAY_ZOOM) e-folds: 0.02 / 0.18 = 0.111, i.e.
+ * ~11.7% of the distance. */
 #ifndef GLR_CAMERA_TARGET_DECAY
 #define GLR_CAMERA_TARGET_DECAY 0.93f
 #endif
