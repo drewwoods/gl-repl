@@ -46,13 +46,25 @@ UNAME_S := $(shell uname -s)
 USE_GL_STUBS ?=
 
 # Vendored freeglut (third_party/freeglut), built as a static library with the
-# native macOS Cocoa backend and linked into the GL binaries. macOS-only -
-# Linux keeps the system freeglut path. Re-vendor with scripts/vendor-freeglut.sh;
-# the pinned commit is recorded in third_party/freeglut/VENDORED.txt.
+# native macOS Cocoa backend and linked into the GL binaries. Default on macOS;
+# Linux defaults to the system freeglut path. Re-vendor with
+# scripts/vendor-freeglut.sh; the pinned commit is recorded in
+# third_party/freeglut/VENDORED.txt.
 FREEGLUT_SRC        := third_party/freeglut
 # `make glut` (Apple GLUT framework fallback) passes FREEGLUT_VENDOR=0 to skip
 # building/linking the vendored library.
 FREEGLUT_VENDOR     ?= 1
+
+# FREEGLUT_VENDOR_LINUX=1 opts the *windowed Linux* build into the vendored
+# freeglut (X11/GLX backend) instead of the distro's -lglut. Off by default:
+# system freeglut is the right thing for an ordinary Linux build and needs no
+# cmake. Turn it on when you need the fork's frame-capture support - SIGUSR1
+# snapshots, FREEGLUT_CAPTURE_FRAMES, FREEGLUT_CAPTURE_STREAM - which upstream
+# freeglut does not have, so scripts/docs-assets.sh, record-gif.sh and
+# record-video.sh silently produce nothing against the system library.
+# (The Linux OSMesa build vendors unconditionally; only this windowed path is
+# a choice.) Needs cmake plus the X11/GL dev headers.
+FREEGLUT_VENDOR_LINUX ?= 0
 
 # FREEGLUT_OSMESA=1 builds the vendored freeglut with its headless OSMesa
 # (off-screen software) backend instead of the macOS Cocoa backend, and links
@@ -96,7 +108,14 @@ else
   FREEGLUT_BUILD          := $(FREEGLUT_SRC)/build
   FREEGLUT_STATIC_LIB     := $(FREEGLUT_BUILD)/lib/libglut.a
   FREEGLUT_CMAKE_LAUNCHER :=
-  FREEGLUT_CMAKE_BACKEND  := -DFREEGLUT_COCOA=ON
+  ifeq ($(UNAME_S),Darwin)
+    FREEGLUT_CMAKE_BACKEND := -DFREEGLUT_COCOA=ON
+  else
+    # Linux windowed: the stock X11/GLX backend. Only reached under
+    # FREEGLUT_VENDOR_LINUX=1 (see below) - the default Linux build links
+    # system freeglut and never builds this.
+    FREEGLUT_CMAKE_BACKEND := -DFREEGLUT_COCOA=OFF -DFREEGLUT_GLES=OFF
+  endif
 endif
 
 # FREEGLUT_HEADER_CFLAGS is set per-platform in the Darwin/Linux block below:
@@ -358,15 +377,33 @@ else
     GL_STUB_LDFLAGS = \
       -lm -lpthread -ldl
   else
-    # Linux: system freeglut + GL/GLU. miniaudio dlopen()s pulseaudio/alsa
-    # at runtime, so we only need -ldl (plus the existing -lpthread -lm).
-    # No vendoring on Linux - system <GL/freeglut.h> is on the default include path.
-    FREEGLUT_HEADER_CFLAGS =
-    GLUT_GL_LDFLAGS = \
-      -lglut -lGL -lGLU -lm -lpthread -ldl
+    # Linux: GL/GLU from the system; miniaudio dlopen()s pulseaudio/alsa at
+    # runtime, so we only need -ldl (plus the existing -lpthread -lm).
+    #
+    # freeglut itself is the system one by default (<GL/freeglut.h> is already
+    # on the default include path, no cmake needed). FREEGLUT_VENDOR_LINUX=1
+    # switches to the vendored static X11/GLX build instead - the include dir
+    # goes first so it wins over the system header, and the archive is linked
+    # by path with no -lglut, mirroring the macOS arm. That is the build that
+    # has the fork's frame capture; see the flag's comment up top.
+    ifeq ($(FREEGLUT_VENDOR_LINUX),1)
+      FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_SRC)/include
+      ifeq ($(FREEGLUT_VENDOR),1)
+        FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
+      endif
+      # The vendored static lib does not carry its X11 dependencies, so the
+      # consumer lists them (freeglut's own CMake links exactly these).
+      LINUX_GL_LDFLAGS = \
+        $(FREEGLUT_LIB) -lGL -lGLU -lX11 -lXi -lXrandr -lXxf86vm \
+        -lm -lpthread -ldl
+    else
+      FREEGLUT_HEADER_CFLAGS =
+      LINUX_GL_LDFLAGS = \
+        -lglut -lGL -lGLU -lm -lpthread -ldl
+    endif
 
-    GL_LDFLAGS = \
-      -lglut -lGL -lGLU -lm -lpthread -ldl
+    GLUT_GL_LDFLAGS = $(LINUX_GL_LDFLAGS)
+    GL_LDFLAGS      = $(LINUX_GL_LDFLAGS)
 
     GL_STUB_LDFLAGS = \
       -lm -lpthread -ldl
