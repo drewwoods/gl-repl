@@ -24,6 +24,10 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_TRUE(name, cond) \
     TEST_ASSERT_TRUE(&g_harness, name, cond)
 
+/* Pixel step for the exhaustive hit-test probe below. Kept under the
+ * smallest target it has to land on, so no probe steps over one. */
+#define HIT_PROBE_STEP 4
+
 static int code_panel_text_x(void) {
     int linenum_w = 4 * FONT_W;
     int idx_col_w = 6 * FONT_W;
@@ -574,10 +578,13 @@ int main(void) {
 
             ui_layout_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
             win_h = ui_state_viewport().window_h;
-            for (int my = 0; my < win_h && !found; my++)
+            /* Probe on a HIT_PROBE_STEP grid, not every pixel: the swatch
+             * band is UI_TEXT_PANEL_RIGHT_ACTION_W (12) wide and a code row
+             * is LINE_H (18) tall, so a step of 4 lands inside both. */
+            for (int my = 0; my < win_h && !found; my += HIT_PROBE_STEP)
                 for (int mx = cp_x + cp_w - 1;
                      mx >= cp_x + cp_w - CODE_MARGIN_X - 2 * FONT_W && !found;
-                     mx--) {
+                     mx -= HIT_PROBE_STEP) {
                     UiHit hk = ui_repl_code_panel_hit_test(&snap, mx, my);
                     if (hk.kind == UI_HIT_INLINE_COLOR_SWATCH) {
                         found = 1;

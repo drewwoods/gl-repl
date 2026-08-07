@@ -290,6 +290,13 @@ static int vp_hit_row(int count, int gx, int gy, int *row) {
     return ui_variable_panel_hit_row(&v, gx, gy, row);
 }
 
+/* Pixel step for the two exhaustive code-panel probes below. A code row is
+ * LINE_H (18) tall and a character cell FONT_SMALL_W (8) wide, so a step of 4
+ * cannot straddle either without landing in it. Probing every pixel instead
+ * ran ~100k hit-tests per call - which was most of this binary's runtime,
+ * since ui_panels_hit_test re-solves the overlay layout on every call. */
+#define HIT_PROBE_STEP 4
+
 static int find_hit_point_in_code_panel(int desired_kind, UiHit *out_hit,
                                         int *out_x, int *out_y) {
     UiRenderSnapshot snap;
@@ -302,9 +309,9 @@ static int find_hit_point_in_code_panel(int desired_kind, UiHit *out_hit,
     if (cp_w <= 0 || cp_h <= 0 || win_h <= 0)
         return 0;
 
-    for (int gl_y = cp_y + 1; gl_y < cp_y + cp_h - 1; gl_y++) {
+    for (int gl_y = cp_y + 1; gl_y < cp_y + cp_h - 1; gl_y += HIT_PROBE_STEP) {
         int my = win_h - gl_y;
-        for (int mx = cp_x + 1; mx < cp_x + cp_w - 1; mx++) {
+        for (int mx = cp_x + 1; mx < cp_x + cp_w - 1; mx += HIT_PROBE_STEP) {
             UiHit hit = ui_panels_hit_test(&snap, mx, my,
                                            repl_eval_predef_view().count);
             if (hit.kind == desired_kind &&
@@ -332,9 +339,9 @@ static int find_code_text_hit_for_line(int desired_line_idx, UiHit *out_hit,
     if (cp_w <= 0 || cp_h <= 0 || win_h <= 0)
         return 0;
 
-    for (int gl_y = cp_y + 1; gl_y < cp_y + cp_h - 1; gl_y++) {
+    for (int gl_y = cp_y + 1; gl_y < cp_y + cp_h - 1; gl_y += HIT_PROBE_STEP) {
         int my = win_h - gl_y;
-        for (int mx = cp_x + 1; mx < cp_x + cp_w - 1; mx++) {
+        for (int mx = cp_x + 1; mx < cp_x + cp_w - 1; mx += HIT_PROBE_STEP) {
             UiHit hit = ui_panels_hit_test(&snap, mx, my,
                                            repl_eval_predef_view().count);
             if (hit.kind == UI_HIT_CODE_TEXT &&

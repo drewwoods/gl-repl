@@ -196,14 +196,22 @@ static int replay_pin_mx(void) {
     return right_edge - 10;
 }
 
+/* Pixel step for the exhaustive hit-test probes below. Must stay strictly
+ * below LINE_H (18) so no dropdown row can fall between two probes. */
+#define HIT_PROBE_STEP 4
+
 static int find_dropdown_item_point(int menu_id, int target_item,
                                     int *out_mx, int *out_my) {
     int win_w = ui_state_viewport().window_w;
     int win_h = ui_state_viewport().window_h;
 
     ui_menu_bar_set_open_menu(menu_id, 0.0f);
-    for (int my = 0; my < win_h; my++) {
-        for (int mx = 0; mx < win_w; mx++) {
+    /* Probe on a HIT_PROBE_STEP grid rather than every pixel: a dropdown row
+     * is LINE_H tall and every item is many characters wide, so a step well
+     * under LINE_H cannot step over one. Per-pixel scanning ran 600k
+     * hit-tests per call and was ~90% of this binary's runtime. */
+    for (int my = 0; my < win_h; my += HIT_PROBE_STEP) {
+        for (int mx = 0; mx < win_w; mx += HIT_PROBE_STEP) {
             UiHit hit = ui_menu_bar_hit_test(mx, my);
             if (hit.kind == UI_HIT_MENU_ITEM && hit.item_idx == target_item) {
                 if (out_mx)
