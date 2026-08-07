@@ -88,15 +88,15 @@ Top to bottom:
 - **Code panel** - the live, editable list of GL commands. By default it sits
   above the viewport; cycle its position (Left / Top / Bottom / Hidden) with
   **Ctrl+B** or the *Code panel* config item. When a document is taller than
-  the panel, a scrollbar appears along its right edge: the mouse wheel scrolls
-  as usual, and dragging the thumb - or clicking anywhere on the track, which
-  jumps the thumb there and keeps dragging - moves through a long document in
-  one gesture.
-- **Status bar** - command count, current line, the accumulation indicator
-  (`AA 1x` / `Blur 16x` - the shot above is under motion blur, which is why the
-  torus smears), and clickable controls for undo/redo, copy/cut,
-  resetting the scene to its five display defaults, *focus* ([code
-  focus](#keeping-the-buffer-tidy)), and *F1 help*.
+  the panel, a scrollbar appears along its right edge. The mouse wheel scrolls
+  as usual. Dragging the thumb moves through a long document in one gesture,
+  and clicking anywhere on the track jumps the thumb there and keeps dragging
+  from that point.
+- **Status bar** - command count, current line, and the accumulation indicator
+  (`AA 1x` / `Blur 16x`). The shot above is under motion blur, which is why the
+  torus smears. The bar also carries clickable controls: undo/redo, copy/cut,
+  a reset to the five display defaults, *focus*
+  ([code focus](#keeping-the-buffer-tidy)), and *F1 help*.
 - **3D viewport** - your geometry, rendered every frame. Drag to orbit,
   scroll to zoom.
 - **Variable panel** - bottom-right overlay listing `t` and every program-wide
@@ -182,9 +182,15 @@ settings to defaults first, then applies the example's presets - so examples
 always look as authored, and your camera carries over unless the example
 sets its own.
 
-Editing an example automatically promotes it to a user scene (see
-[Scenes & Workspaces](#scenes--workspaces)) - you never modify the built-ins
-themselves.
+Changing an example's document - typing, deleting, pasting, or any other edit
+that would go on the undo stack - automatically promotes it to a user scene
+(see [Scenes & Workspaces](#scenes--workspaces)), so you never modify the
+built-ins themselves. Moving the camera or flipping a config toggle is not a
+document change and does not promote. Promotion needs a free scene slot: with
+all eight occupied your edit still applies to the working copy, but it has
+nowhere to be parked, so the status line says *All user scene slots full* and
+the document stays unparked until you delete a scene - the next edit retries
+and carries along everything typed in the meantime.
 
 ---
 
@@ -273,11 +279,12 @@ Selection, clipboard (**Ctrl+C / Ctrl+X / Ctrl+V**), and undo/redo
 (**Ctrl+Z / Ctrl+Y**) work like a normal editor. Copy and cut also put the text
 on the **system clipboard**, so it pastes into any other app, and Ctrl+V takes
 text copied from anywhere else - multi-line text arrives as source lines, a
-single line lands in the input row when you are editing one. Right-click a GL command for
-a short description, or an assignment for [a plot of its
-values](#plotting-an-assignments-values). **Ctrl+D** deletes the current line or selection;
-The status-bar trash button clears the scene and restores the [five editable display
-defaults](#display-default-commands).
+single line lands in the input row when you are editing one. Right-click a GL
+command for a short description, or right-click an assignment for [a plot of
+its values](#plotting-an-assignments-values). **Ctrl+D** deletes the current
+line or selection. The status-bar trash button resets the whole scene to the
+[five editable display defaults](#display-default-commands) - it replaces the
+document rather than emptying it.
 
 **Ctrl+F** opens case-insensitive search over the buffer; **Up / Down** move
 to the previous / next match. Press **Enter** for the next match, or **Esc**
@@ -383,10 +390,11 @@ in which they all execute; changing the rows or rate starts a new collection.
 replay has run through each plotted row's executions this frame, with a dot on
 the trace at the value that execution produced and the number printed beside
 it - one row per plotted assignment, in its own color, so stepping the replay
-reads the numbers off directly instead of off the axis. So that the
-rule sits over the values the replay is actually stepping through, the plot
-captures every frame while replay is active regardless of the rate - the rate
-chip greys out to show it is not in force. **once** is the exception: it stays
+reads the numbers off directly instead of off the axis.
+
+The rule has to sit over the values the replay is actually stepping through, so
+while replay is active the plot captures every frame regardless of the rate -
+the rate chip greys out to show it is not in force. **once** is the exception: it stays
 frozen, and a frozen snapshot gets no rule, since the replay is not walking the
 frame it holds. A top-level row plotted against successive captures gets no
 rule either - there is no position within a frame to mark.
@@ -435,8 +443,8 @@ current, still-uncommitted empty input row.
 The popup opens on the state **your program** wrote before that row. The
 generated `init()` and `display()` setup writes far more state than a typical
 scene does - often by a factor of ten - so those rows start folded behind the
-**[+] N from setup** chip on the title row. Click it to fold them in; they draw
-in a muted tone so the two groups stay distinguishable. Explicit writes that
+**[+] N from setup** chip on the title row. Click it to expand them into the
+listing; they draw in a muted tone so the two groups stay distinguishable. Explicit writes that
 happen to match the initial OpenGL default are kept either way, so touched-ness
 stays visible.
 
@@ -474,7 +482,7 @@ report; click elsewhere or send input to the editor to dismiss it.
 |---|---|
 | Ctrl+\ | Reformat all lines (re-indent blocks) |
 | Ctrl+/ | Toggle `//` comment on the selection, the enclosing block, or the current line |
-| Ctrl+Shift+F | Toggle code focus - the first-run view shows just your code; turn it off to show generated C/workspace chrome (also the *focus* keycap) |
+| Ctrl+Shift+F | Toggle code focus - on (the first-run view) shows just your code, off also shows the generated C and workspace chrome (also the *focus* keycap) |
 | Ctrl+B | Cycle code panel layout: Left / Top / Bottom / Hidden |
 | PgUp / PgDn | Scroll the active panel or overlay |
 
@@ -827,7 +835,7 @@ glVertex3f(x, y, z);    // use anywhere a number is expected
   refuse a declaration.
 
 A committed line holds at most **255 characters**. The line you are typing is
-not held to that - the input buffer runs to 1024 - so a long line is rejected
+not held to that - the input buffer is 1024 bytes - so a long line is rejected
 when you commit it, not while you compose it. It is also the one limit an edit
 can hit indirectly: a Replace All that would push any line past it fails the
 whole operation rather than truncating.
@@ -962,10 +970,11 @@ for(i, 0, n, 2) {        // optional step argument; multi-line body
 }
 ```
 
-The parser accepts up to 64 nested blocks. In practice, useful nesting is
-limited first by the flat-command budget and the number of loop-iterator
-variables in scope. Loop bounds can be expressions (and can animate with
-`t`).
+The parser accepts up to 64 nested blocks, counted across every kind that owns
+a brace pair - `for`, `if`, and function bodies alike, not loops alone. In
+practice useful nesting runs out well before that: first against the
+flat-command budget, then against the number of loop-iterator variables in
+scope. Loop bounds can be expressions (and can animate with `t`).
 
 #### Leaving a loop early - `break` and `continue`
 
@@ -1045,8 +1054,9 @@ blade(x0, z0, height) {
   of its loop. Parameters and loop iterators stay read-only either way.
 - `// @tune` and `// @config` need a variable-panel row, so they require a
   program-wide declaration (`static float`).
-- A function's parameters, its locals and its deepest loop nesting share one
-  32-binding frame: `params + locals + deepest loop nesting <= 32`.
+- A function's parameters, its locals, and its loop iterators at the deepest
+  nesting level share one 32-binding frame:
+  `params + locals + deepest loop nesting <= 32`.
 
 A local is not a return value - the caller cannot read it. When the caller does
 need a result, keep that one variable program-wide and let the function write
@@ -1100,8 +1110,8 @@ off the block structure the REPL parsed, so it applies to `for`, `if` /
 pair.
 
 Alternatively you can wrap lines in `if(0) { … }` - the body emits nothing
-but the lines stay visible. This is a bit clunkier in practice because it
-requires adding and later removing the wrapper.
+but the lines stay visible. This is less convenient in practice, since it
+means adding and later removing the wrapper.
 
 ### Comments
 
@@ -1155,7 +1165,9 @@ how the variable is treated:
 
 `t` is the one predefined variable - it exists in every session without a
 declaration, starts at `0`, and while playing advances a fixed 1/60 s per
-rendered frame. Use it in any expression:
+simulation tick. That is *not* the same as per rendered frame: a replay
+backstep, for instance, reconstructs its frame over as many as eight rendered
+frames, and none of them advance `t`. Use it in any expression:
 
 ```c
 glRotatef(t*45, 0, 1, 0);
@@ -1244,7 +1256,8 @@ have no panel row.
   the rate (1.0 units/px), for covering large ranges quickly.
 - **Shift + click drag** is the *slow* scrub: linear deltas at 1/5 speed
   (0.02 units/px), for dialing in a precise value.
-- Toggle the panel with **`** backquote or the *Variable panel* config item.
+- Toggle the panel with **Backquote** (`` ` ``) or the *Variable panel* config
+  item.
 
 Row brightness distinguishes knobs from storage:
 
@@ -1361,7 +1374,7 @@ different transform stacks, so line 54 draws the magenta triangle up top and
 line 60 draws the yellow one spinning at the origin. Park the cursor on either
 call and the highlight, the `v0`/`v1`/`v2` labels, and the vertex outline land
 on *that* call's triangle. This works through function calls and loop
-iterations, not just on literal `glVertex3f` lines, which is what makes it
+iterations, not just on literal `glVertex3f` lines. That is what makes it
 useful for finding out which of forty identical-looking shapes a line is
 responsible for.
 
@@ -1687,9 +1700,9 @@ Four things are worth knowing before you trust what you see:
 
 With Depth view on at the same time, depth wins wherever it paints: it
 replaces the whole rect after the stencil overlay composites, so the stencil
-overlay survives only in the live half of depth's Split. That falls out of the
-compositing order and is left that way deliberately - a menu row that silently
-switched another one off would be the worse surprise.
+overlay survives only in the live half of depth's Split. That is a consequence
+of the compositing order, and it is left that way deliberately: a menu row that
+silently switched another one off would be the more surprising outcome.
 
 The overlay needs a stencil readback, which the web build cannot do; there the
 row refuses with *Stencil view unavailable: WebGL context can't read the
@@ -1890,6 +1903,11 @@ loop-variable values substituted into the displayed text.
 
 The HUD at the bottom of the viewport shows play state, position, and speed.
 When a replay has finished, **Space** restarts it from the beginning.
+
+An open [assignment value plot](#plotting-an-assignments-values) follows the
+replay: it marks how far each plotted row has run this frame and prints the
+value at that point, which is what lets you step a loop and read its numbers
+off directly.
 Two related config items: **Replay mode** (Polygon steps a primitive at a
 time, Vertex steps a vertex at a time) and **Replay expand**. Its middle
 **Expanded** mode annotates every line in place - assignments, loop and
@@ -2522,7 +2540,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | F11 / Shift+F11 | Next / previous tutorial |
 | F12 / Shift+F12 | Next / previous example or scene |
 | F1 | Help overlay |
-| ` | Variable panel |
+| Backquote (`` ` ``) | Variable panel |
 
 ### Camera
 
