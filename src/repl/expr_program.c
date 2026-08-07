@@ -674,6 +674,40 @@ int repl_expr_program_has_scratch_read(const ReplExprCache *cache, int prog) {
 
 /* ---- Evaluator ---------------------------------------------------------- */
 
+/* Operands an instruction pops. Every opcode pushes exactly one result, so
+ * the slot it writes is `sp - expr_op_pops()` and the new depth is that
+ * plus one - which is all the evaluator needs to bounds-check itself.
+ * Deliberately no `default:` arm: a new opcode must state its arity here,
+ * and -Wswitch says so at build time rather than at run time. */
+static int expr_op_pops(const ExprInstr *ins) {
+    switch ((ExprOpcode)ins->op) {
+    case EXPR_OP_CONST:
+    case EXPR_OP_VAR:
+        return 0;
+    case EXPR_OP_SCRATCH:
+    case EXPR_OP_NEG:
+    case EXPR_OP_NOT:
+        return 1;
+    case EXPR_OP_CALL:
+        return ins->a;
+    case EXPR_OP_ADD:
+    case EXPR_OP_SUB:
+    case EXPR_OP_MUL:
+    case EXPR_OP_DIV:
+    case EXPR_OP_MOD:
+    case EXPR_OP_LT:
+    case EXPR_OP_GT:
+    case EXPR_OP_LE:
+    case EXPR_OP_GE:
+    case EXPR_OP_EQ:
+    case EXPR_OP_NE:
+    case EXPR_OP_AND:
+    case EXPR_OP_OR:
+        return 2;
+    }
+    return 2;   /* unreachable for a compiled program; the safe arity */
+}
+
 ReplExprValue repl_expr_program_eval(const ReplExprCache *cache, int prog,
                                      ReplExprEvalEnv *env) {
     ReplExprValue bad = { 0.0f, REPL_EXPR_DEP_ALL };
@@ -690,6 +724,15 @@ ReplExprValue repl_expr_program_eval(const ReplExprCache *cache, int prog,
     end = ins + cache->progs[prog].instr_count;
 
     for (; ins < end; ins++) {
+        /* compiler_emit() already rejects any program whose depth drops
+         * below 1 or whose peak exceeds EXPR_STACK_MAX, so a compiled
+         * program never trips this. Restating the invariant costs one
+         * compare per instruction and bounds the arm below against a
+         * program that did not come from this compiler. */
+        int pops = expr_op_pops(ins);
+        if (sp < pops || sp - pops >= EXPR_STACK_MAX)
+            return bad;
+
         switch ((ExprOpcode)ins->op) {
         case EXPR_OP_CONST:
             stack[sp] = ins->imm;
@@ -825,6 +868,12 @@ ReplExprValue repl_expr_program_eval(const ReplExprCache *cache, int prog,
         }
         }
     }
+
+    /* Same invariant at the other end: a compiled program leaves exactly
+     * its result on the stack, so this only fires for an empty or
+     * externally-built one. */
+    if (sp < 1)
+        return bad;
 
     {
         ReplExprValue out;
