@@ -22,7 +22,7 @@
  * primary call has already set glRasterPos. lights.c and render.c go
  * through render3d_draw_bitmap_text below - they're single-string sites
  * that want the raster_pos set in the same call. */
-void render3d_emit_bitmap_text(void *font, const char *text) {
+static void render3d_emit_bitmap_text(void *font, const char *text) {
     if (!text) return;
     for (const char *c = text; *c; c++)
         glutBitmapCharacter(font, (unsigned char)*c);

@@ -60,17 +60,15 @@
 #include "repl/parser.h"
 #include "repl/executor.h"
 #include "repl/export.h"
-#include "repl/flatten.h"
+#include "repl/flatten.h"            /* repl_flat_clears_stencil */
 #include "repl/flatten_query.h"
 #include "repl/geometry_query.h"
 #include "repl/attrib_bits.h"        /* glPushAttrib per-bit highlight collectors */
 #include "repl/command_spec.h"       /* repl_attrib_bit_entries (token names) */
 #include "repl/command_descriptions.h"
-#include "repl/command_spec.h"
 #include "repl/gl_state_inspector.h"
 #include "repl/help_text.h"
 #include "repl/pipeline.h"
-#include "repl/flatten.h"                  /* repl_flat_clears_stencil */
 #include "subsystems/replay/replay_annotations.h"
 #include "repl/source_scope.h"
 #include "repl/state_owners.h"

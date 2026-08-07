@@ -978,7 +978,7 @@ static int glr_export_cfg_slug_is_scene_subset(const char *slug) {
     return item && cfg_key_in_scene_subset(item->key) ? 1 : 0;
 }
 
-const ReplConfigBridge g_glr_export_cfg_bridge = {
+static const ReplConfigBridge g_glr_export_cfg_bridge = {
     .fill_all          = glr_export_cfg_fill_all,
     .fill_scene_subset = glr_export_cfg_fill_scene_subset,
     .fill_scene_defaults = glr_export_cfg_fill_scene_defaults,

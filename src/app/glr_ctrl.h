@@ -321,6 +321,7 @@ int glr_ctrl_router_handle_time_reset_key(unsigned char key);       /* Ctrl+Shif
 
 int glr_ctrl_router_handle_quit_key(unsigned char key);             /* Ctrl+Q */
 int glr_ctrl_router_handle_config_menu_key(unsigned char key);      /* backtick -> config menu */
+int glr_ctrl_router_handle_audio_key(unsigned char key);            /* Ctrl+Shift+A audio play/pause */
 int glr_ctrl_router_handle_replay_key(unsigned char key);    /* replay key surface excluding config-owned Ctrl+R */
 int glr_ctrl_router_handle_cfg_shortcut_key(unsigned char key);     /* glr_cfg_handle_ascii_shortcut */
 int glr_ctrl_router_handle_accum_samples_key(unsigned char key);    /* Ctrl+= / Ctrl+- */
