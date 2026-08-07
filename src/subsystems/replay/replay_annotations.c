@@ -985,11 +985,22 @@ static int build_replay_for_inline_comment(int cmd_idx, char *out, int out_size)
     if (!have_iter && !have_limit)
         return 0;
 
+    /* snprintf returns the length it *would* have written, so on truncation
+     * a bare `oi +=` walks past the buffer and leaves `out_size - oi`
+     * negative - which converts to a huge size_t at the next call. Clamp
+     * after each append instead. Callers pass MAX_LINE_LEN, so this only
+     * bounds the arithmetic; it changes no output any caller sees. */
     oi = snprintf(out, out_size, " // ");
-    if (have_iter)
-        oi += snprintf(out + oi, out_size - oi, "%s = %g", var_name, iter_val);
+    if (oi < 0 || oi >= out_size)
+        oi = out_size - 1;
+    if (have_iter) {
+        oi += snprintf(out + oi, (size_t)(out_size - oi), "%s = %g",
+                       var_name, iter_val);
+        if (oi < 0 || oi >= out_size)
+            oi = out_size - 1;
+    }
     if (have_limit && oi < out_size - 1)
-        oi += snprintf(out + oi, out_size - oi, "%s%s = %g",
+        (void)snprintf(out + oi, (size_t)(out_size - oi), "%s%s = %g",
                        have_iter ? ", " : "", end_expr, limit_val);
     return 1;
 }
