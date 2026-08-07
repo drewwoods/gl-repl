@@ -1174,7 +1174,6 @@ static void test_gl_state_report_rebase_against_second_probe(void) {
     GLCmd cmds[4];
     FlatProgramView program;
     ReplGlStateReport report;
-    ReplGlStateReport basis;
     const ReplGlStateReportRow *row;
 
     printf("--- repl_state OpenGL report rebase ---\n");
@@ -1202,7 +1201,6 @@ static void test_gl_state_report_rebase_against_second_probe(void) {
     program.cmds = cmds;
     program.cmd_count = 4;
 
-    repl_gl_state_report_at_line(program, 2, &basis);
     repl_gl_state_report_at_line(program, 4, &report);
     ASSERT_INT("report starts on the GL defaults",
                report.basis_line_idx, -1);
@@ -1212,7 +1210,7 @@ static void test_gl_state_report_rebase_against_second_probe(void) {
         ASSERT_INT("blend differs from the GL default",
                    row->differs_from_basis, 1);
 
-    repl_gl_state_report_rebase(&basis, &report);
+    repl_gl_state_report_rebase(program, 2, &report);
     ASSERT_INT("rebase records the basis line", report.basis_line_idx, 2);
 
     row = gl_state_test_find_row(&report, "GL_CURRENT_COLOR");
@@ -1248,9 +1246,8 @@ static void test_gl_state_report_rebase_against_second_probe(void) {
 
     /* Basis after the cursor: the simple policy is the intersection, so the
      * rows only the later fold has are simply absent rather than negated. */
-    repl_gl_state_report_at_line(program, 4, &basis);
     repl_gl_state_report_at_line(program, 2, &report);
-    repl_gl_state_report_rebase(&basis, &report);
+    repl_gl_state_report_rebase(program, 4, &report);
     ASSERT_TRUE("backward compare drops the later-only row",
                 gl_state_test_find_row(&report, "GL_DEPTH_FUNC") == NULL);
     row = gl_state_test_find_row(&report, "GL_CURRENT_COLOR");
@@ -1983,6 +1980,79 @@ static void test_gl_state_report_gates_disabled_light_rows(void) {
     repl_export_install_light_bridge(saved_light_bridge);
 }
 
+/* Compare mode reads a row's absence from the basis report as "the fold had
+ * not written that state yet, so it stood at the GL default there" - which is
+ * sound for touched-ness, because touched-ness only ever goes from 0 to 1
+ * along a fold. The disabled-light gate above is a second reason a row can be
+ * absent, and it is *not* monotone: a light can be switched on and off at any
+ * point. The generated setup writes all four slots and then disables them, so
+ * a scene that turns one on halfway down has parameters that are hidden at a
+ * basis before the glEnable and shown after it - identical values at both
+ * probe points, and nothing changed between them, but the popup accented all
+ * three rows as differences and printed a basis the state never held. */
+static void test_gl_state_rebase_keeps_hidden_light_values(void) {
+    static const ReplExportLightBridge light_bridge = {
+        gl_state_test_fill_light
+    };
+    const ReplExportLightBridge *saved_light_bridge =
+        repl_export_light_bridge();
+    static const char *const k_rows[] = {
+        "GL_LIGHT1_AMBIENT", "GL_LIGHT1_DIFFUSE", "GL_LIGHT1_SPECULAR"
+    };
+    GLCmd cmds[1];
+    FlatProgramView program;
+    ReplGlStateReport basis;
+    ReplGlStateReport report;
+    int i;
+
+    printf("--- repl_state rebase across a light's enable ---\n");
+    repl_export_install_light_bridge(&light_bridge);
+
+    cmds[0] = gl_state_test_cmd(CMD_ENABLE, 0);
+    cmds[0].args[0] = (float)GL_LIGHT1;
+    cmds[0].num_args = 1;
+    memset(&program, 0, sizeof(program));
+    program.cmds = cmds;
+    program.cmd_count = 1;
+
+    /* Basis before the enable (slot 1 hidden), probe after it (slot 1 shown).
+     * The generated writes that set those parameters precede both. */
+    repl_gl_state_report_at_line(program, 0, &basis);
+    ASSERT_TRUE("slot is hidden at the basis line",
+                gl_state_test_find_row(&basis, "GL_LIGHT1_DIFFUSE") == NULL);
+    repl_gl_state_report_at_line(program, 1, &report);
+    repl_gl_state_report_rebase(program, 0, &report);
+
+    for (i = 0; i < (int)(sizeof k_rows / sizeof k_rows[0]); i++) {
+        const ReplGlStateReportRow *row =
+            gl_state_test_find_row(&report, k_rows[i]);
+        char label[160];
+        snprintf(label, sizeof(label), "%s is reported after the enable",
+                 k_rows[i]);
+        ASSERT_TRUE(label, row != NULL);
+        if (!row)
+            continue;
+        snprintf(label, sizeof(label), "%s basis is its value at that line",
+                 k_rows[i]);
+        ASSERT_CELL(label, row->basis_value, row->current);
+        snprintf(label, sizeof(label), "%s is not flagged as a difference",
+                 k_rows[i]);
+        ASSERT_INT(label, row->differs_from_basis, 0);
+    }
+
+    /* The enable itself is a real difference, and still reads as one. */
+    {
+        const ReplGlStateReportRow *row =
+            gl_state_test_find_row(&report, "GL_LIGHT1");
+        ASSERT_TRUE("the enable row is present", row != NULL);
+        if (row)
+            ASSERT_INT("the enable is flagged as a difference",
+                       row->differs_from_basis, 1);
+    }
+
+    repl_export_install_light_bridge(saved_light_bridge);
+}
+
 /* --- state-cell coverage guard -------------------------------------------
  *
  * A tracked state cell is implemented in four places in gl_state_inspector.c:
@@ -2300,6 +2370,7 @@ int main(void) {
     test_gl_state_report_converts_eye_light_position_to_world();
     test_gl_state_report_partitions_by_author();
     test_gl_state_report_gates_disabled_light_rows();
+    test_gl_state_rebase_keeps_hidden_light_values();
     test_gl_state_value_field_width();
     test_gl_state_cell_coverage_sweep();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);

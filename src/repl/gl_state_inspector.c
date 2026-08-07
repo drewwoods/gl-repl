@@ -1706,7 +1706,8 @@ static const char *const gl_state_material_prop_names[5] = {
 };
 
 static void gl_state_append_report(const ReplGlTrackedState *s,
-                                   ReplGlStateReport *out) {
+                                   ReplGlStateReport *out,
+                                   int include_inert_lights) {
     static const float color_default[4] = { 1, 1, 1, 1 };
     static const float normal_default[3] = { 0, 0, 1 };
     static const float point_atten_default[3] = { 1, 0, 0 };
@@ -1794,7 +1795,7 @@ static void gl_state_append_report(const ReplGlTrackedState *s,
         const float *light_color_default = i == 0
             ? light_white_default : light_black_default;
         char name[REPL_GL_STATE_NAME_MAX];
-        if (!gl_state_light_is_interesting(s, i))
+        if (!include_inert_lights && !gl_state_light_is_interesting(s, i))
             continue;
         if (light->ambient_touched) {
             snprintf(name, sizeof(name), "GL_LIGHT%d_AMBIENT", i);
@@ -2060,14 +2061,16 @@ static void gl_state_partition_report_by_author(ReplGlStateReport *out) {
 /* Append + partition. Every exit from repl_gl_state_report_at_line() goes
  * through this, so user_row_count is never left stale at 0. */
 static void gl_state_finish_report(const ReplGlTrackedState *s,
-                                   ReplGlStateReport *out) {
-    gl_state_append_report(s, out);
+                                   ReplGlStateReport *out,
+                                   int include_inert_lights) {
+    gl_state_append_report(s, out, include_inert_lights);
     gl_state_partition_report_by_author(out);
 }
 
-void repl_gl_state_report_at_line(FlatProgramView program,
-                                  int source_line_idx,
-                                  ReplGlStateReport *out) {
+static void gl_state_report_at_line(FlatProgramView program,
+                                    int source_line_idx,
+                                    int include_inert_lights,
+                                    ReplGlStateReport *out) {
     ReplGlTrackedState state;
     ReplGlStateChangeSource source;
     ReplGeneratedStateWrite write;
@@ -2090,7 +2093,7 @@ void repl_gl_state_report_at_line(FlatProgramView program,
     }
 
     if (source_line_idx < 0) {
-        gl_state_finish_report(&state, out);
+        gl_state_finish_report(&state, out, include_inert_lights);
         return;
     }
     source.kind = REPL_GL_STATE_SOURCE_DISPLAY;
@@ -2103,7 +2106,7 @@ void repl_gl_state_report_at_line(FlatProgramView program,
     gl_state_capture_light_world_positions(&state);
 
     if (!program.cmds) {
-        gl_state_finish_report(&state, out);
+        gl_state_finish_report(&state, out, include_inert_lights);
         return;
     }
 
@@ -2161,23 +2164,51 @@ void repl_gl_state_report_at_line(FlatProgramView program,
         state.attrib_stack_depth_source = user_attrib_source;
     }
 
-    gl_state_finish_report(&state, out);
+    gl_state_finish_report(&state, out, include_inert_lights);
 }
 
-void repl_gl_state_report_rebase(const ReplGlStateReport *base,
+/* The reported fold: presentation filters applied, which today means a light
+ * whose parameters cannot reach the frame contributes no rows. */
+void repl_gl_state_report_at_line(FlatProgramView program,
+                                  int source_line_idx,
+                                  ReplGlStateReport *out) {
+    gl_state_report_at_line(program, source_line_idx, 0, out);
+}
+
+void repl_gl_state_report_rebase(FlatProgramView program,
+                                 int basis_line_idx,
                                  ReplGlStateReport *out) {
+    /* The basis fold, built here rather than taken from the caller. It is a
+     * value source, never a display, so it is built with the inert-light rows
+     * included - and that is load-bearing, not incidental. Rebasing reads a
+     * row's absence from the basis as "the fold had not written that state
+     * there", which holds for touched-ness because touched-ness only goes
+     * from 0 to 1 along a fold. The disabled-light gate is a second reason a
+     * row can be absent and it is not monotone: the generated setup writes
+     * all four slots and disables them, so a scene that enables one halfway
+     * down hides those parameters at a basis above the glEnable and shows
+     * them below it. Compared against a gated basis they came back as
+     * differences, quoting a GL default the state never held, when nothing
+     * about them had changed. Owning the basis build is what makes that
+     * unrepresentable - no caller can hand in a filtered one.
+     *
+     * Static because a ReplGlStateReport is ~50 KB and this runs from the
+     * frame path; the popup is single-threaded and consumes the values before
+     * returning. */
+    static ReplGlStateReport basis;
     int i, j;
 
-    if (!out || !base)
+    if (!out)
         return;
-    out->basis_line_idx = base->source_line_idx;
+    gl_state_report_at_line(program, basis_line_idx, 1, &basis);
+    out->basis_line_idx = basis.source_line_idx;
     for (i = 0; i < out->count; i++) {
         ReplGlStateReportRow *row = &out->rows[i];
-        for (j = 0; j < base->count; j++) {
-            if (strcmp(row->name, base->rows[j].name) != 0)
+        for (j = 0; j < basis.count; j++) {
+            if (strcmp(row->name, basis.rows[j].name) != 0)
                 continue;
             snprintf(row->basis_value, sizeof(row->basis_value), "%s",
-                     base->rows[j].current);
+                     basis.rows[j].current);
             break;
         }
         /* No counterpart: keep the GL default the row was built with - see

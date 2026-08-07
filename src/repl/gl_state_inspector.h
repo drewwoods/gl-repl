@@ -69,23 +69,31 @@ void repl_gl_state_report_at_line(FlatProgramView program,
                                   int source_line_idx,
                                   ReplGlStateReport *out);
 
-/* Re-point `out`'s comparison basis from the OpenGL 2.1 defaults to `base`,
- * another report of the same program folded to a different line - so the
- * popup reads as the differential between two probe points rather than as a
- * distance from the GL defaults. Rows are matched by state name.
+/* Re-point `out`'s comparison basis from the OpenGL 2.1 defaults to the same
+ * program folded to `basis_line_idx` - so the popup reads as the differential
+ * between two probe points rather than as a distance from the GL defaults.
+ * Rows are matched by state name.
  *
- * A row of `out` with no counterpart in `base` keeps the default it was built
- * with, and that is the right answer rather than a fallback: the report omits
- * untouched state, so absence from `base` means the fold had not written that
- * state by the basis line, which is exactly when its value there was still the
- * GL initial one. (Touched-ness is monotone along a fold - glPopAttrib
- * restores a value but leaves the flag set - so this holds for any basis line.)
+ * The basis fold is built here rather than supplied, because it is not the
+ * same fold the popup shows: it keeps the rows that are filtered out of a
+ * displayed report (a disabled light's parameters, which cannot reach the
+ * frame). That is what preserves the rule below - see the note on the
+ * definition for the case that made it necessary.
  *
- * The reverse case is not represented: a row `base` has and `out` lacks means
- * the basis line comes after `out`'s, and such a row simply has no cell in
- * `out` to occupy. Comparing backwards therefore shows the intersection, not a
- * negative diff. */
-void repl_gl_state_report_rebase(const ReplGlStateReport *base,
+ * A row of `out` with no counterpart in the basis keeps the default it was
+ * built with, and that is the right answer rather than a fallback: the report
+ * omits untouched state, so absence from the basis means the fold had not
+ * written that state by the basis line, which is exactly when its value there
+ * was still the GL initial one. (Touched-ness is monotone along a fold -
+ * glPopAttrib restores a value but leaves the flag set - so this holds for any
+ * basis line.)
+ *
+ * The reverse case is not represented: a row the basis has and `out` lacks
+ * means the basis line comes after `out`'s, and such a row simply has no cell
+ * in `out` to occupy. Comparing backwards therefore shows the intersection,
+ * not a negative diff. */
+void repl_gl_state_report_rebase(FlatProgramView program,
+                                 int basis_line_idx,
                                  ReplGlStateReport *out);
 
 #endif /* REPL_GL_STATE_INSPECTOR_H */

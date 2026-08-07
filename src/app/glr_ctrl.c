@@ -134,11 +134,6 @@ glr_ctrl_build_command_description_panel_view(void);
 /* Frame-lived storage for the right-click OpenGL-state popup report; the
  * view handed to ui_gl_state_panel_render points here. */
 static ReplGlStateReport g_gl_state_report;
-/* Second fold, live only while a comparison basis is pinned. Re-folded every
- * frame beside the main one rather than captured once: the fold is a function
- * of the flat program at the current `t`, so a snapshot taken when the user
- * pinned it would describe a frame that has since gone. */
-static ReplGlStateReport g_gl_state_basis_report;
 /* Gutter label per g_gl_state_report row, parallel by index (-1 when the row
  * has no user source line, or its line has no code-panel row). */
 static int g_gl_state_gutter_labels[REPL_GL_STATE_REPORT_MAX_ROWS];
@@ -3355,13 +3350,15 @@ UiGlStatePanelView glr_ctrl_build_gl_state_panel_view(const UiRenderSnapshot *sn
         ui_state_gl_state_inspector_set_basis(-1);
         inspector = ui_state_gl_state_inspector();
     }
-    if (inspector.basis_line_idx >= 0) {
-        repl_gl_state_report_at_line(repl_state_flat_program_view(),
-                                     inspector.basis_line_idx,
-                                     &g_gl_state_basis_report);
-        repl_gl_state_report_rebase(&g_gl_state_basis_report,
+    /* Re-folded every frame beside the main one rather than captured when the
+     * user pinned it: the fold is a function of the flat program at the
+     * current `t`, so a snapshot would describe a frame that has since gone.
+     * The basis fold itself belongs to the inspector - it keeps rows a
+     * displayed report filters out - so the report is not built here. */
+    if (inspector.basis_line_idx >= 0)
+        repl_gl_state_report_rebase(repl_state_flat_program_view(),
+                                    inspector.basis_line_idx,
                                     &g_gl_state_report);
-    }
 
     /* Resolve each program-authored row's code-panel gutter label, so the
      * popup's source column cites the number the user can actually see in the
