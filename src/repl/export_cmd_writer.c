@@ -925,7 +925,11 @@ int write_scratch_block_as_c89(FILE *f, const char *source_text) {
     int base = 0;
     int count, indent, used = 0, k, line_len;
 
-    if (!repl_extract_assignment_target_parts(source_text ? source_text : "",
+    /* source_text comes from export_document_text(), which returns "" for
+     * every row it cannot resolve and never NULL - so this dereferences
+     * unconditionally, like the indent scan below and every sibling
+     * write_*_as_c89(). */
+    if (!repl_extract_assignment_target_parts(source_text,
                                               name, sizeof(name),
                                               index_expr, sizeof(index_expr),
                                               rhs, sizeof(rhs)))
