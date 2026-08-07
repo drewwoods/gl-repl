@@ -26,12 +26,16 @@ _gl_repl() {
         '--list-examples[print the built-in examples and exit]' \
         '--list-tours[print the built-in guided tours and exit]' \
         '--examples-dir[load catalog.ini + scenes/ from a directory]:dir:_files -/' \
+        '--lint-scenes[validate every .glr in a directory and exit]:dir:_files -/' \
         '--assets[override the assets directory]:dir:_files -/' \
+        '--export-c[write the session as a standalone C program and exit]:c file:_files -g "*.c"' \
+        '--export-glr[write the session in .glr authoring format and exit]:glr file:_files -g "*.glr"' \
         '--export-ply[export scene geometry to PLY and exit]:ply file:_files -g "*.ply"' \
         '--export-ply-srgb[convert vertex colors to sRGB on PLY export]' \
         '--time[initial animation time t, in seconds]:seconds:' \
         '--window[initial window size]:WxH:(1200x800 1600x1000 2400x1600)' \
-        '--no-accum[disable accumulation-buffer effects]' \
+        '(--no-accum)--accum[force accum effects on even when emulated in software]' \
+        '(--accum)--no-accum[disable accumulation-buffer effects]' \
         '--no-audio[skip audio init]' \
         '--dump-code[print the loaded program and exit]' \
         '--dump-flat[print the flattened program and exit]' \

@@ -9,10 +9,10 @@
 #
 # Kept to bash 3.2 syntax (the /bin/bash macOS ships).
 
-_gl_repl_opts='-h --help --no-accum --no-audio --dump-code --dump-flat
---flat-histogram --dump-state-layout --detailed-prof --export-ply
---export-ply-srgb --assets --example --examples-dir --time --window
---tour --list-examples --list-tours'
+_gl_repl_opts='-h --help --accum --no-accum --no-audio --dump-code --dump-flat
+--flat-histogram --dump-state-layout --detailed-prof --export-c --export-glr
+--export-ply --export-ply-srgb --assets --example --examples-dir --time
+--window --tour --list-examples --list-tours --lint-scenes'
 
 # Catalog names carry spaces, parens and '&', so candidates have to come back
 # shell-escaped (or bare inside an open quote) to survive as one argument.
@@ -77,8 +77,10 @@ _gl_repl_complete() {
     case "$prev" in
         --example)      _gl_repl_names "$cur" --list-examples ; return 0 ;;
         --tour)         _gl_repl_names "$cur" --list-tours    ; return 0 ;;
-        --assets|--examples-dir)
+        --assets|--examples-dir|--lint-scenes)
                         _gl_repl_paths "$cur" ""              ; return 0 ;;
+        --export-c)     _gl_repl_paths "$cur" '*.c'           ; return 0 ;;
+        --export-glr)   _gl_repl_paths "$cur" '*.glr'         ; return 0 ;;
         --export-ply)   _gl_repl_paths "$cur" '*.ply'         ; return 0 ;;
         --window)
             COMPREPLY=( $(compgen -W '1200x800 1600x1000 2400x1600' -- "$cur") )

@@ -2100,6 +2100,9 @@ check-repl-demo-stubs-shrinking: ## Ratchet on tools/repl_demo/stubs.c - must no
 check-include-style: ## Hard guard: project-local headers must use "X.h", not <X.h>.
 	@bash scripts/check/check-include-style.sh
 
+check-completions: ## Hard guard: scripts/completions/ offers exactly the options --help documents.
+	@bash scripts/check/check-completions.sh
+
 check-doc-links: ## Validate local Markdown file links and line anchors.
 	@python3 scripts/check/check-doc-links.py
 

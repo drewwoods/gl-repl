@@ -17,7 +17,7 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--tour name|n]
         [--assets dir] [--examples-dir dir] [--no-audio]
         [--dump-code] [--dump-flat] [--flat-histogram]
         [--dump-state-layout] [--detailed-prof]
-        [--list-examples] [--list-tours]
+        [--list-examples] [--list-tours] [--lint-scenes dir]
 ```
 
 ## Options
@@ -31,6 +31,7 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--tour name|n]
 | `--example` *name*\|*n* | Start on a built-in example (case-insensitive name, or 1-based index). |
 | `--list-examples` | Print the built-in examples and exit. |
 | `--examples-dir` *dir* | Load `catalog.ini` + its scene files from *dir* at runtime instead of the compiled-in examples. The tree ships one such directory: [`tests/scenes/stress/`](../tests/scenes/stress/README.md). |
+| `--lint-scenes` *dir* | Validate every `.glr` in *dir* against the canonical document order and `@camera` tags, print every violation, and exit (no window). See [Scene-file headers](#scene-file-headers). |
 | `--tour` *name*\|*n* | Start and play a built-in guided tour on launch (case-insensitive name, or 1-based index). Space play/pause, arrows step, Esc exit. |
 | `--list-tours` | Print the built-in guided tours and exit. |
 | `--time` *secs* | Initial value of the animation variable `t` (applied after any `--example` load). Overrides `GLR_TIME`. |
@@ -91,11 +92,22 @@ source scripts/completions/_docs-assets.sh
 ```
 
 `gl-repl` completes every flag, example and tour names for `--example` /
-`--tour`, directories for `--examples-dir` / `--assets`, `*.ply` for
-`--export-ply`, common sizes for `--window`, and `*.c` scenes or a workspace
-directory positionally. Catalog names contain spaces and parentheses; they come
+`--tour`, directories for `--examples-dir` / `--assets` / `--lint-scenes`,
+`*.c` for `--export-c`, `*.glr` for `--export-glr`, `*.ply` for `--export-ply`,
+common sizes for `--window`, and `*.c` scenes or a workspace directory
+positionally. Catalog names contain spaces and parentheses; they come
 back correctly escaped (or bare inside an open quote), so
 `--example Par<Tab>` yields a single usable argument.
+
+The flag list is **not** generated, so `make check-completions`
+([`scripts/check/check-completions.sh`](../scripts/check/check-completions.sh),
+also part of `make check-state-ownership`) hard-fails unless four lists hold
+exactly the same options: the `print_usage()` text and the `strcmp(argv[i], …)`
+arms in [`src/app/boot/glr_cli.c`](../src/app/boot/glr_cli.c), the `_arguments`
+spec in `_gl-repl`, and `$_gl_repl_opts` in `gl-repl.bash`. It reads sources,
+never a built binary, so it runs in an unbuilt tree. Adding a flag is four
+edits - five when it takes an argument, since the bash side needs a `case` arm
+for the argument's own candidates.
 
 `docs-assets.sh` completes its flags and asset names, narrows to the category
 already on the line (`--gifs sc-<Tab>` offers only GIF assets), drops names

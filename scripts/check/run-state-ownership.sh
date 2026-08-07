@@ -345,6 +345,10 @@ check_include_style() {
     bash scripts/check/check-include-style.sh
 }
 
+check_completions() {
+    bash scripts/check/check-completions.sh
+}
+
 check_tier_c_function_size() {
     bash scripts/check/check-tier-c-function-size.sh scripts/baselines/tier-c-function-size.txt
 }
@@ -580,6 +584,7 @@ else
     run_check check-app-boot-band check_app_boot_band
     run_check check-module-prefixes check_module_prefixes
     run_check check-include-style check_include_style
+    run_check check-completions check_completions
     run_check check-tier-c-function-size check_tier_c_function_size
     run_check check-no-test-default-output check_no_test_default_output
     run_check check-prof-sections-instrumented check_prof_sections_instrumented
