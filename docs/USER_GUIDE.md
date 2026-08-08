@@ -1644,14 +1644,16 @@ glance.
 
 **Ctrl+G** cycles Off / Wireframe / Hidden-line.
 
-![Wireframe (left) and hidden-line (right) on a torus](images/wireframe-hidden-line.png)
+![Wireframe (left) and hidden-line (right), on a torus (top) and a Sierpinski sponge (bottom)](images/wireframe-hidden-line.png)
 
 Wireframe draws polygon edges over the scene. Hidden-line goes further: it
 draws all edges first in a muted color, seeds the depth buffer with filled
 polygons, then redraws visible edges bright - so the silhouette reads
-clearly while occluded structure stays faint. Tip: vertex outlines/points
-are on by default and draw over the wires; turn them off for a clean
-wireframe look.
+clearly while occluded structure stays faint - handy for visualizing dense,
+recursive meshes like the sponge above, where a plain wireframe collapses
+into an unreadable tangle but hidden-line still lets internal structure show
+through. Tip: vertex outlines/points are on by default and draw over the
+wires; turn them off for a clean wireframe look.
 
 ### Depth view
 

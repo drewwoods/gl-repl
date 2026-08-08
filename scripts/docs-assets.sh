@@ -744,6 +744,75 @@ stage_hidden_line() {
     stage_torus_mesh hidden_line 2
 }
 
+# Same two render modes (wireframe/hidden-line), but on a Sierpinski sponge
+# instead of the torus -- pairs with stage_wireframe/stage_hidden_line in the
+# wireframe-hidden-line 2x2 montage so the reader sees both modes work on a
+# deeply nested recursive mesh, not just a simple primitive.
+stage_sponge_mesh() {
+    local name=$1
+    local mode=$2
+    stage "$name" <<EOF
+/* @cfg wireframe = $mode */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 0 */
+/* @cfg code_panel = 3 */
+/* @cfg variable_panel = 0 */
+/* @cfg light_indicators = 0 */
+// from examples/scenes/sierpinski-sponge-3d-recursion.glr
+sponge(depth, size) {
+  // Base case: one solid cube -- the neon lights do the coloring.
+  if(depth <= 0) {
+    glutSolidCube(size);
+  }
+  // Recursive case: -1..1 on each axis -- half-open bounds, so -1..2.
+  // A cell survives when at least two of its coords are nonzero.
+  if(depth > 0) {
+    for(i, -1, 2) {
+      for(j, -1, 2) {
+        for(k, -1, 2) {
+          if(abs(i) + abs(j) + abs(k) > 1) {
+            glPushMatrix();
+            glTranslatef(i*size/3, j*size/3, k*size/3);
+            sponge(depth - 1, size/3);
+            glPopMatrix();
+          }
+        }
+      }
+    }
+  }
+}
+
+glTranslatef(0.0f, 0.0f, -6.00f);   // @camera dist
+glRotatef(28.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(50.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, -0.0f, 0.0f);   // @camera pan
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){1, 1, 1, 1});
+glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.22, 0.12, 0.4, 1});
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
+glEnable(GL_DEPTH_TEST);
+
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT1);
+glEnable(GL_LIGHT2);
+glEnable(GL_LIGHT3);
+glRotatef(16*t, 0, 1, 0);
+sponge(2, 3);
+EOF
+}
+
+stage_sponge_wireframe() {
+    stage_sponge_mesh sponge-wireframe 1
+}
+
+stage_sponge_hidden_line() {
+    stage_sponge_mesh sponge-hidden-line 2
+}
+
 
 stage_lights() { stage lights <<'EOF'
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
@@ -1633,7 +1702,10 @@ fi
 if want wireframe-hidden-line; then
     still "$WORK/wireframe.png" 16 "$(stage_wireframe)"
     still "$WORK/hidden-line.png" 16 "$(stage_hidden_line)"
-    montage1x2 "$WORK/wf-hl.png" "$WORK/wireframe.png" "$WORK/hidden-line.png"
+    still "$WORK/sponge-wireframe.png" 16 "$(stage_sponge_wireframe)"
+    still "$WORK/sponge-hidden-line.png" 16 "$(stage_sponge_hidden_line)"
+    montage2x2 "$WORK/wf-hl.png" "$WORK/wireframe.png" "$WORK/hidden-line.png" \
+        "$WORK/sponge-wireframe.png" "$WORK/sponge-hidden-line.png"
     write_png "$WORK/wf-hl.png" "$OUT/wireframe-hidden-line.png" -resize "$W"
     echo "docs-assets: wrote $OUT/wireframe-hidden-line.png"
 fi
