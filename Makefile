@@ -1365,9 +1365,9 @@ endif
 # replace the whole per-platform list instead of adding to it.
 EXTRA_LDFLAGS ?=
 
-$(SAMPLE_BIN): $(SAMPLE_OBJS)
+$(SAMPLE_BIN): $(SAMPLE_OBJS) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(SAMPLE_OBJS) $(GL_LDFLAGS) $(EXTRA_LDFLAGS) -o $@
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(SAMPLE_OBJS) $(GL_LDFLAGS) $(EXTRA_LDFLAGS) -o $@
 
 gl-repl: $(SAMPLE_BIN) ## Build the main gl-repl binary using release flags by default.
 	ln -sfn $(SAMPLE_BIN) $@
@@ -1588,9 +1588,9 @@ fetch-music: ## Download the music pack from the GitHub release into MUSIC_DEST 
 RENDER3D_DEMO_OBJS = $(OBJDIR)/tools/render3d_demo/render3d_demo.o \
                    $(addprefix $(OBJDIR)/,$(RENDER3D_DEMO_DEP_SRCS:.c=.o))
 
-$(RENDER3D_DEMO_BIN): $(RENDER3D_DEMO_OBJS)
+$(RENDER3D_DEMO_BIN): $(RENDER3D_DEMO_OBJS) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(RENDER3D_DEMO_OBJS) $(GL_LDFLAGS) -o $@
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(RENDER3D_DEMO_OBJS) $(GL_LDFLAGS) -o $@
 
 render3d-demo: $(RENDER3D_DEMO_BIN) ## Build the standalone scene demo.
 	ln -sfn $(RENDER3D_DEMO_BIN) render3d_demo
@@ -1646,9 +1646,9 @@ $(HOT_OBJDIR)/%.o: %.c | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
 	@bash scripts/compile-report.sh compile "$(COMPILE_REPORT_DIR)" "$<" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) -fPIC $(DEPFLAGS) -c -o $@ $<
 
-$(RENDER3D_HOT_LIB): $(RENDER3D_HOT_OBJS)
+$(RENDER3D_HOT_LIB): $(RENDER3D_HOT_OBJS) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(HOT_SHARED_LDFLAGS) -fPIC $(RENDER3D_HOT_OBJS) -lm -o $@
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(HOT_SHARED_LDFLAGS) -fPIC $(RENDER3D_HOT_OBJS) -lm -o $@
 
 render3d-hot-lib: $(RENDER3D_HOT_LIB) ## Rebuild just the reloadable render3d shared library (invoked by the running hot host).
 
@@ -1661,10 +1661,9 @@ RENDER3D_HOT_DEMO_CFLAGS = -DRENDER3D_HOT_RELOAD=1 \
 	-DRENDER3D_HOT_SRC_DIR='"$(CURDIR)/src/render3d"' \
 	-DRENDER3D_HOT_BUILD_CMD='"cd $(CURDIR) && $(MAKE) --no-print-directory render3d-hot-lib BUILD=$(BUILD)"'
 
-$(RENDER3D_HOT_DEMO_BIN): tools/render3d_demo/render3d_demo.c $(RENDER3D_HOT_LIB)
+$(RENDER3D_HOT_DEMO_BIN): tools/render3d_demo/render3d_demo.c $(RENDER3D_HOT_LIB) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(RENDER3D_HOT_DEMO_CFLAGS) $(DEPFLAGS) \
-		$< $(GL_LDFLAGS) $(HOT_HOST_LDFLAGS) -o $@
+	@bash scripts/compile-report.sh compile "$(COMPILE_REPORT_DIR)" "$<" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(RENDER3D_HOT_DEMO_CFLAGS) $(DEPFLAGS) $< $(GL_LDFLAGS) $(HOT_HOST_LDFLAGS) -o $@
 
 render3d-hot: $(RENDER3D_HOT_DEMO_BIN) ## Build the hot-reloadable render3d demo (dlopen + live rebuild of src/render3d).
 	ln -sfn $(RENDER3D_HOT_DEMO_BIN) render3d_hot_demo
@@ -1678,9 +1677,9 @@ REPL_DEMO_OBJS = $(OBJDIR)/tools/repl_demo/repl_demo.o \
                  $(OBJDIR)/tools/repl_demo/stubs.o \
                  $(addprefix $(OBJDIR)/,$(REPL_DEMO_DEP_SRCS:.c=.o))
 
-$(REPL_DEMO_BIN): $(REPL_DEMO_OBJS)
+$(REPL_DEMO_BIN): $(REPL_DEMO_OBJS) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(REPL_DEMO_OBJS) $(GL_LDFLAGS) -o $@
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(REPL_DEMO_OBJS) $(GL_LDFLAGS) -o $@
 
 repl-demo: $(REPL_DEMO_BIN) ## Build the standalone REPL pipeline demo.
 	ln -sfn $(REPL_DEMO_BIN) repl_demo
@@ -1699,9 +1698,9 @@ EDITOR_DEMO_OBJS = $(OBJDIR)/tools/editor_demo/editor_demo.o \
                    $(OBJDIR)/tools/editor_demo/input.o \
                    $(addprefix $(OBJDIR)/,$(EDITOR_DEMO_DEP_SRCS:.c=.o))
 
-$(EDITOR_DEMO_BIN): $(EDITOR_DEMO_OBJS)
+$(EDITOR_DEMO_BIN): $(EDITOR_DEMO_OBJS) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(EDITOR_DEMO_OBJS) $(GL_LDFLAGS) -o $@
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(EDITOR_DEMO_OBJS) $(GL_LDFLAGS) -o $@
 
 editor-demo: $(EDITOR_DEMO_BIN) ## Build the standalone editor demo.
 	ln -sfn $(EDITOR_DEMO_BIN) editor_demo
@@ -1712,9 +1711,9 @@ editor-demo: $(EDITOR_DEMO_BIN) ## Build the standalone editor demo.
 MEMPROF_DEMO_OBJS = $(OBJDIR)/tools/memprof_demo/memprof_demo.o \
                     $(addprefix $(OBJDIR)/,$(MEMPROF_DEMO_DEP_SRCS:.c=.o))
 
-$(MEMPROF_DEMO_BIN): $(MEMPROF_DEMO_OBJS)
+$(MEMPROF_DEMO_BIN): $(MEMPROF_DEMO_OBJS) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(MEMPROF_DEMO_OBJS) $(GL_LDFLAGS) -o $@
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(MEMPROF_DEMO_OBJS) $(GL_LDFLAGS) -o $@
 
 memprof-demo: $(MEMPROF_DEMO_BIN) ## Build the standalone memory-profiling demo.
 	ln -sfn $(MEMPROF_DEMO_BIN) memprof_demo
@@ -1725,9 +1724,9 @@ memprof-demo: $(MEMPROF_DEMO_BIN) ## Build the standalone memory-profiling demo.
 CPUPROF_DEMO_OBJS = $(OBJDIR)/tools/cpuprof_demo/cpuprof_demo.o \
                     $(addprefix $(OBJDIR)/,$(CPUPROF_DEMO_DEP_SRCS:.c=.o))
 
-$(CPUPROF_DEMO_BIN): $(CPUPROF_DEMO_OBJS)
+$(CPUPROF_DEMO_BIN): $(CPUPROF_DEMO_OBJS) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(CPUPROF_DEMO_OBJS) $(GL_LDFLAGS) -o $@
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(CPUPROF_DEMO_OBJS) $(GL_LDFLAGS) -o $@
 
 cpuprof-demo: $(CPUPROF_DEMO_BIN) ## Build the standalone CPU-profiling demo.
 	ln -sfn $(CPUPROF_DEMO_BIN) cpuprof_demo
@@ -1738,9 +1737,9 @@ cpuprof-demo: $(CPUPROF_DEMO_BIN) ## Build the standalone CPU-profiling demo.
 VARIABLE_PANEL_DEMO_OBJS = $(OBJDIR)/tools/variable_panel_demo/variable_panel_demo.o \
                            $(addprefix $(OBJDIR)/,$(VARIABLE_PANEL_DEMO_DEP_SRCS:.c=.o))
 
-$(VARIABLE_PANEL_DEMO_BIN): $(VARIABLE_PANEL_DEMO_OBJS)
+$(VARIABLE_PANEL_DEMO_BIN): $(VARIABLE_PANEL_DEMO_OBJS) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(VARIABLE_PANEL_DEMO_OBJS) $(GL_LDFLAGS) -o $@
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(VARIABLE_PANEL_DEMO_OBJS) $(GL_LDFLAGS) -o $@
 
 variable-panel-demo: $(VARIABLE_PANEL_DEMO_BIN) ## Build the standalone variable-panel demo.
 	ln -sfn $(VARIABLE_PANEL_DEMO_BIN) variable_panel_demo
@@ -1751,9 +1750,9 @@ variable-panel-demo: $(VARIABLE_PANEL_DEMO_BIN) ## Build the standalone variable
 COLOR_PICKER_DEMO_OBJS = $(OBJDIR)/tools/color_picker_demo/color_picker_demo.o \
                          $(addprefix $(OBJDIR)/,$(COLOR_PICKER_DEMO_DEP_SRCS:.c=.o))
 
-$(COLOR_PICKER_DEMO_BIN): $(COLOR_PICKER_DEMO_OBJS)
+$(COLOR_PICKER_DEMO_BIN): $(COLOR_PICKER_DEMO_OBJS) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(COLOR_PICKER_DEMO_OBJS) $(GL_LDFLAGS) -o $@
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(COLOR_PICKER_DEMO_OBJS) $(GL_LDFLAGS) -o $@
 
 color-picker-demo: $(COLOR_PICKER_DEMO_BIN) ## Build the standalone color-picker demo.
 	ln -sfn $(COLOR_PICKER_DEMO_BIN) color_picker_demo
@@ -1764,9 +1763,9 @@ color-picker-demo: $(COLOR_PICKER_DEMO_BIN) ## Build the standalone color-picker
 ASSIGN_PLOT_DEMO_OBJS = $(OBJDIR)/tools/assign_plot_demo/assign_plot_demo.o \
                         $(addprefix $(OBJDIR)/,$(ASSIGN_PLOT_DEMO_DEP_SRCS:.c=.o))
 
-$(ASSIGN_PLOT_DEMO_BIN): $(ASSIGN_PLOT_DEMO_OBJS)
+$(ASSIGN_PLOT_DEMO_BIN): $(ASSIGN_PLOT_DEMO_OBJS) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(ASSIGN_PLOT_DEMO_OBJS) $(GL_LDFLAGS) -o $@
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(ASSIGN_PLOT_DEMO_OBJS) $(GL_LDFLAGS) -o $@
 
 assign-plot-demo: $(ASSIGN_PLOT_DEMO_BIN) ## Build the standalone assignment-plot demo.
 	ln -sfn $(ASSIGN_PLOT_DEMO_BIN) assign_plot_demo
@@ -1779,9 +1778,9 @@ assign-plot-demo: $(ASSIGN_PLOT_DEMO_BIN) ## Build the standalone assignment-plo
 REPL_LIVE_DEMO_OBJS = $(OBJDIR)/tools/repl_live_demo/repl_live_demo.o \
                       $(addprefix $(OBJDIR)/,$(REPL_LIVE_DEMO_DEP_SRCS:.c=.o))
 
-$(REPL_LIVE_DEMO_BIN): $(REPL_LIVE_DEMO_OBJS)
+$(REPL_LIVE_DEMO_BIN): $(REPL_LIVE_DEMO_OBJS) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(REPL_LIVE_DEMO_OBJS) $(GL_LDFLAGS) -o $@
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(REPL_LIVE_DEMO_OBJS) $(GL_LDFLAGS) -o $@
 
 repl-live-demo: $(REPL_LIVE_DEMO_BIN) ## Build the standalone live REPL (file-watch) demo.
 	ln -sfn $(REPL_LIVE_DEMO_BIN) repl_live_demo
@@ -1802,9 +1801,9 @@ demos: $(COMPILE_REPORT_DEMOS_SUMMARY)
 # `$(test_repl_core_io_OBJS)`, etc. The doubled dollars delay that lookup until
 # the second pass.
 define built_binary
-$(BINDIR)/$(1): $$($(1)_OBJS)
+$(BINDIR)/$(1): $$($(1)_OBJS) | $(COMPILE_REPORT_START)
 	@mkdir -p $$(dir $$@)
-	$$(CC) $$(OBJ_CFLAGS) $$($(1)_OBJS) $$($(1)_LDLIBS) $$(COVERAGE_LDFLAGS) -o $$@
+	@bash scripts/compile-report.sh link "$$(COMPILE_REPORT_DIR)" "$$@" "$$(COMPILE_REPORT_VERBOSE)" -- $$(CC) $$(OBJ_CFLAGS) $$($(1)_OBJS) $$($(1)_LDLIBS) $$(COVERAGE_LDFLAGS) -o $$@
 
 $(subst _,-,$(1)): $$(BINDIR)/$(1)
 endef
@@ -1815,9 +1814,9 @@ endef
 # `make test`.  Tests that need a real context are listed separately in
 # GL_TEST_BINS and run only through `make gl-tests`.
 define built_test_binary
-$(BINDIR)/$(1): $$($(1)_OBJS)
+$(BINDIR)/$(1): $$($(1)_OBJS) | $(COMPILE_REPORT_START)
 	@mkdir -p $$(dir $$@)
-	$$(CC) $$(OBJ_CFLAGS) $$($(1)_OBJS) $$($(1)_LDLIBS) $$(COVERAGE_LDFLAGS) -o $$@
+	@bash scripts/compile-report.sh link "$$(COMPILE_REPORT_DIR)" "$$@" "$$(COMPILE_REPORT_VERBOSE)" -- $$(CC) $$(OBJ_CFLAGS) $$($(1)_OBJS) $$($(1)_LDLIBS) $$(COVERAGE_LDFLAGS) -o $$@
 
 ifeq ($$(USE_GL_STUBS),1)
 $(subst _,-,$(1)): $$(BINDIR)/$(1) $(COMPILE_REPORT_DIR)/$(1)-summary
@@ -1841,35 +1840,35 @@ $(foreach bin,$(BENCH_BINS),$(eval $(call built_binary,$(bin))))
 GL_TEST_BINS = test_ui_gl_state test_scene_underwater_fill_gl test_attrib_bits_gl \
 	test_tour_overlay_feedback test_gl_state_inspector_gl
 
-$(BINDIR)/test_ui_gl_state: $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o
+$(BINDIR)/test_ui_gl_state: $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o $(GL_LDFLAGS) -o $@
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o $(GL_LDFLAGS) -o $@
 
 # Differential oracle: drives one GLCmd program through both the real executor
 # (against a live context) and the pure gl_state_inspector fold, then compares
 # each report row with glGet*. Needs the executor + generated-setup enumeration,
 # so it links CORE_TEST_OBJS against real GL like the tour feedback test.
 $(BINDIR)/test_gl_state_inspector_gl: \
-	$(OBJDIR)/$(TEST_DIR)/test_gl_state_inspector_gl.o $(CORE_TEST_OBJS)
+	$(OBJDIR)/$(TEST_DIR)/test_gl_state_inspector_gl.o $(CORE_TEST_OBJS) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_gl_state_inspector_gl.o $(CORE_TEST_OBJS) $(GL_LDFLAGS) -o $@
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_gl_state_inspector_gl.o $(CORE_TEST_OBJS) $(GL_LDFLAGS) -o $@
 
 # Captures the controlled-tour overlay + HUD passes with GL_FEEDBACK and asserts
 # on the drawn geometry (ring suppression on seek, HUD containment). Needs the
 # whole controller graph, so it links CORE_TEST_OBJS like the stub transport
 # test but against a real GL context.
-$(BINDIR)/test_tour_overlay_feedback: $(OBJDIR)/$(TEST_DIR)/test_tour_overlay_feedback.o $(CORE_TEST_OBJS)
+$(BINDIR)/test_tour_overlay_feedback: $(OBJDIR)/$(TEST_DIR)/test_tour_overlay_feedback.o $(CORE_TEST_OBJS) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_tour_overlay_feedback.o $(CORE_TEST_OBJS) $(GL_LDFLAGS) -o $@
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_tour_overlay_feedback.o $(CORE_TEST_OBJS) $(GL_LDFLAGS) -o $@
 
 # Real-GL oracle: proves the attrib_bits.c cell->bit table matches what the
 # driver's glPushAttrib/glPopAttrib actually save/restore. Links the pure
 # mapping module (attrib_bits) + its spec-table dependency (command_spec); the
 # two collector-only state accessors are stubbed inside the test.
 $(BINDIR)/test_attrib_bits_gl: $(OBJDIR)/$(TEST_DIR)/test_attrib_bits_gl.o \
-	$(OBJDIR)/src/repl/attrib_bits.o $(OBJDIR)/src/repl/command_spec.o
+	$(OBJDIR)/src/repl/attrib_bits.o $(OBJDIR)/src/repl/command_spec.o | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_attrib_bits_gl.o \
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_attrib_bits_gl.o \
 		$(OBJDIR)/src/repl/attrib_bits.o $(OBJDIR)/src/repl/command_spec.o \
 		$(GL_LDFLAGS) -o $@
 
@@ -1877,12 +1876,13 @@ $(BINDIR)/test_attrib_bits_gl: $(OBJDIR)/$(TEST_DIR)/test_attrib_bits_gl.o \
 # nv_fog_distance_supported = 1, then glReadPixels and checks corner
 # pixels. Reproduces the post-fb976f0 underwater-fill regression on
 # drivers that advertise GL_NV_fog_distance.
-$(BINDIR)/test_scene_underwater_fill_gl: $(OBJDIR)/$(TEST_DIR)/test_scene_underwater_fill_gl.o $(OBJDIR)/src/render3d/grid.o
+$(BINDIR)/test_scene_underwater_fill_gl: $(OBJDIR)/$(TEST_DIR)/test_scene_underwater_fill_gl.o $(OBJDIR)/src/render3d/grid.o | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_scene_underwater_fill_gl.o \
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_scene_underwater_fill_gl.o \
 		$(OBJDIR)/src/render3d/grid.o $(GL_LDFLAGS) -o $@
 
 gl-tests: $(addprefix $(BINDIR)/,$(GL_TEST_BINS)) ## Run real-GL UI state tests (needs a display; excluded from `make test`).
+	@bash scripts/compile-report.sh summary "$(COMPILE_REPORT_DIR)"
 	@for b in $(addprefix $(BINDIR)/,$(GL_TEST_BINS)); do \
 	  printf '$(CYAN)==> %s$(NC)\n' "$$b"; "$$b" || exit $$?; \
 	done
@@ -3006,8 +3006,8 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "                 glr_audio_tick() on the caller. Auto-enabled on Emscripten (no\n"
 	@printf "                 -pthread); set =0 to force the thread on. The toggle is contained\n"
 	@printf "                 entirely in src/app/glr_audio.c.\n"
-	@printf "Build output:    concise timed lines per compiled C file plus the longest compile steps.\n"
-	@printf "                 V=1 (or VERBOSE=1) restores each compiler command/output.\n"
+	@printf "Build output:    concise timed lines per compiled/linked file plus the longest build steps.\n"
+	@printf "                 V=1 (or VERBOSE=1) restores each compiler/linker command and its output.\n"
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"
 	@printf "Tests:           make test runs the headless stub suite; set TEST_JOBS=N to limit jobs.\n\n"
 	@printf "Individual tests can be built with make test-eval, or built and run with\n"
