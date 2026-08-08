@@ -51,9 +51,20 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   `GLREPL: +N.NNNs `. `printErr` routes by that tag: `GLREPL:` lines are the
   informational trace and go to `console.log`, everything else on stderr is
   a real diagnostic and keeps `console.error`. **Keep the shell's
-  `GLR_INIT_TRACE_RE` in step with `GLR_LOG_TAG`.** A new one-shot
+  `glrIsTraceLine()` in step with `GLR_LOG_TAG`.** A new one-shot
   capability report should go through `glr_ctrl_init_log()` so it inherits
   the tag rather than reading as an error on every load.
+
+  Carrying the stamp is not a claim of being informational -
+  [`src/app/glr_audio.c`](../../src/app/glr_audio.c) stamps its miniaudio-log
+  and worker-hitch lines so they line up against the startup timeline, and
+  those are diagnostics. They keep their own `repl_audio: ` sub-tag right
+  after the stamp, and `glrIsTraceLine()` reads a lowercase `word: ` there as
+  "diagnostic" (trace messages never open that way - `accum buffer: 16 bits`
+  has a space before its colon). So a stamped line may open with a
+  `module: ` sub-tag only if it really is one.
+  `make check-log-prefix-single-source` keeps the stamp from being
+  hand-rolled somewhere that bypasses all of this.
 - **Audio**: web builds use the browser media stack instead of miniaudio's
   file-backed decoder. `scripts/web-audio-assets.sh` copies MP3s beside the
   built page and writes `assets/music.json`; [`src/app/glr_audio.c`](../../src/app/glr_audio.c) fetches that

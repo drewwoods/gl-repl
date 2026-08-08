@@ -21,6 +21,13 @@
  * go to console.log; anything else on stderr is a real diagnostic and keeps
  * console.error). Change the spelling here and that regex moves with it.
  *
+ * Carrying the stamp is NOT a claim of being informational. glr_audio.c
+ * stamps its miniaudio-log and worker-hitch lines so they can be correlated
+ * against the startup timeline, and those are diagnostics; they keep their
+ * own `repl_audio: ` sub-tag immediately after the prefix, which is what the
+ * shell routes on. So: a message passed to this prefix may begin with a
+ * lowercase `module: ` sub-tag *only* if it really is a diagnostic.
+ *
  * Header-only on purpose. The three callers span bands that have no shared
  * .c to link against - src/app/boot (glr_init_trace.c), src/app
  * (glr_ctrl_init_log) and packaging/web/gl4es_bootstrap.c, which is a

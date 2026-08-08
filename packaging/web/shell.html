@@ -1020,11 +1020,35 @@
       // The informational trace is identified by the GLREPL: tag that
       // src/app/glr_log_prefix.h stamps on it - the web spelling chosen to
       // sit alongside gl4es's own LIBGL: lines. Keep this in step with
-      // GLR_LOG_TAG there. Everything else on stderr is a genuine
-      // diagnostic (`repl_audio: ...`, `gl-repl: bad --window`, parse
-      // failures) and keeps console.error, so a real problem still stands
-      // out instead of being flattened into the trace.
-      const GLR_INIT_TRACE_RE = /^\s*GLREPL: /;
+      // GLR_LOG_TAG there.
+      //
+      // The tag alone is not the whole rule, because carrying the timestamp
+      // is not the same as being informational: glr_audio.c stamps its
+      // miniaudio log and worker-hitch lines so they can be correlated
+      // against the startup timeline, and those are real diagnostics. Such a
+      // line keeps its own `module: ` sub-tag right after the stamp, so a
+      // lowercase `word: ` there means diagnostic and gets console.error.
+      // Trace messages never start that way ("accum buffer: 16 bits" has a
+      // space before the colon and does not match; nor does "GL init done").
+      // Everything untagged on stderr - `gl-repl: bad --window`, parse
+      // failures, emscripten's own runtime output - stays console.error too,
+      // so a real problem still stands out instead of being flattened into
+      // the trace.
+      //
+      // Peeled off in steps rather than as one regex on purpose: written as
+      // `GLREPL: (?:\+[0-9.]+s )?(?![a-z0-9_-]+: )`, backtracking defeats the
+      // rule outright - the optional stamp gives up its match so the negative
+      // lookahead can succeed against the `+` instead, and every stamped
+      // diagnostic reads as trace.
+      const GLR_LOG_TAG = 'GLREPL: ';
+      const GLR_STAMP_RE = /^\+[0-9.]+s /;      // the elapsed suffix, if any
+      const GLR_SUBTAG_RE = /^[a-z0-9_-]+: /;   // `repl_audio: ` and friends
+      const glrIsTraceLine = (text) => {
+        const line = text.replace(/^\s+/, '');
+        if (!line.startsWith(GLR_LOG_TAG)) return false;
+        const body = line.slice(GLR_LOG_TAG.length).replace(GLR_STAMP_RE, '');
+        return !GLR_SUBTAG_RE.test(body);
+      };
 
 #if MODULARIZE && !EXPORT_ES6
       var moduleArgs = {
@@ -1037,7 +1061,7 @@
         },
         printErr(...args) {
           const text = args.join(' ');
-          if (GLR_INIT_TRACE_RE.test(text)) {
+          if (glrIsTraceLine(text)) {
             console.log(...args);
           } else {
             console.error(...args);

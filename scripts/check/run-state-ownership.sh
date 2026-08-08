@@ -353,6 +353,10 @@ check_web_glut_get() {
     python3 scripts/check/check-web-glut-get.py
 }
 
+check_log_prefix_single_source() {
+    bash scripts/check/check-log-prefix-single-source.sh
+}
+
 check_tier_c_function_size() {
     bash scripts/check/check-tier-c-function-size.sh scripts/baselines/tier-c-function-size.txt
 }
@@ -590,6 +594,7 @@ else
     run_check check-include-style check_include_style
     run_check check-completions check_completions
     run_check check-web-glut-get check_web_glut_get
+    run_check check-log-prefix-single-source check_log_prefix_single_source
     run_check check-tier-c-function-size check_tier_c_function_size
     run_check check-no-test-default-output check_no_test_default_output
     run_check check-prof-sections-instrumented check_prof_sections_instrumented

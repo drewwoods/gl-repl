@@ -64,6 +64,7 @@
 #endif
 
 #include "app/glr_paths.h"
+#include "app/glr_log_prefix.h"
 
 #ifndef AUDIO_ASSETS_DIR
 #define AUDIO_ASSETS_DIR "assets"
@@ -1246,8 +1247,11 @@ static void miniaudio_log_stderr(void *user, ma_uint32 level,
     if (!message)
         message = "";
 
-    if (g_hitch_log_elapsed_fn)
-        fprintf(stderr, "[init +%6.3fs] ", g_hitch_log_elapsed_fn());
+    if (g_hitch_log_elapsed_fn) {
+        char prefix[GLR_LOG_PREFIX_MAX];
+        double elapsed = g_hitch_log_elapsed_fn();
+        fputs(glr_log_prefix(prefix, sizeof prefix, &elapsed), stderr);
+    }
     fprintf(stderr, "repl_audio: miniaudio %s: %s",
             ma_log_level_to_string(level), message);
 
@@ -1745,17 +1749,16 @@ static AudioWorkerReq audio_run_request(AudioWorkerReq k, int idx,
     double dt  = worker_now_ms() - t0;
     if (thr > 0.0 && dt >= thr) {
         const char *save_suffix = (save && k != AWR_NONE) ? "+save" : "";
+        char prefix[GLR_LOG_PREFIX_MAX];
+        prefix[0] = '\0';
         if (g_hitch_log_elapsed_fn) {
-            fprintf(stderr,
-                    "[init +%6.3fs] repl_audio: worker hitch: %s%s took %.1f ms "
-                    "(threshold %.0f ms)\n",
-                    g_hitch_log_elapsed_fn(), op, save_suffix, dt, thr);
-        } else {
-            fprintf(stderr,
-                    "repl_audio: worker hitch: %s%s took %.1f ms "
-                    "(threshold %.0f ms)\n",
-                    op, save_suffix, dt, thr);
+            double elapsed = g_hitch_log_elapsed_fn();
+            glr_log_prefix(prefix, sizeof prefix, &elapsed);
         }
+        fprintf(stderr,
+                "%srepl_audio: worker hitch: %s%s took %.1f ms "
+                "(threshold %.0f ms)\n",
+                prefix, op, save_suffix, dt, thr);
     }
     return k;
 }

@@ -2208,6 +2208,9 @@ check-completions: ## Hard guard: scripts/completions/ offers exactly the option
 check-web-glut-get: ## Hard guard: web-reachable glutGet() enums are ones Emscripten's JS GLUT implements (it abort()s on the rest).
 	@python3 scripts/check/check-web-glut-get.py
 
+check-log-prefix-single-source: ## Hard guard: gl-repl's log prefix/tag is spelled only in src/app/glr_log_prefix.h.
+	@bash scripts/check/check-log-prefix-single-source.sh
+
 check-doc-links: ## Validate local Markdown file links and line anchors.
 	@python3 scripts/check/check-doc-links.py
 
