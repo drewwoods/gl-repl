@@ -4021,20 +4021,27 @@ void glr_ctrl_init_gl(void) {
      * accum-bits check above): read one depth pixel and see whether the
      * context objects. WebGL cannot read GL_DEPTH_COMPONENT from the
      * default framebuffer at all - and gl4es may silently no-op instead
-     * of raising an error - so the web build is hard-disabled too. */
+     * of raising an error - so the web build is hard-disabled instead.
+     *
+     * Hard-disabled means the probe must not RUN there either. It answers
+     * nothing (the verdict below is fixed), but it is not free: the depth
+     * read reaches WebGL as a real GL_INVALID_ENUM in the browser console,
+     * and the stencil one is worse - gl4es has no GL_STENCIL_INDEX
+     * conversion, so it falls back to a full synchronous RGBA glReadPixels
+     * (a pipeline drain) and then fails the convert with a four-line
+     * "unsupported pixel format 0x1901 / pixel conversion, anticipated
+     * abort" burst. All of it startup noise that reads like a crash and
+     * buries the real diagnostics. */
+#if defined(__EMSCRIPTEN__)
+    g_depth_readback_supported = 0;
+    g_stencil_readback_supported = 0;
+#else
     {
         GLfloat probe_depth = 0.0f;
         (void)glGetError();
         glReadPixels(0, 0, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &probe_depth);
         g_depth_readback_supported = (glGetError() == GL_NO_ERROR);
     }
-#if defined(__EMSCRIPTEN__)
-    g_depth_readback_supported = 0;
-#endif
-    if (!g_depth_readback_supported)
-        fprintf(stderr, "gl-repl: GL context cannot read the depth buffer; "
-                        "Depth view is disabled\n");
-
     /* A stencil visual can be requested but not supplied by native GLUT, so
      * require both a non-zero queried width and a working readback. */
     {
@@ -4046,9 +4053,10 @@ void glr_ctrl_init_gl(void) {
             glr_state_render().stencil_bits > 0 &&
             glGetError() == GL_NO_ERROR;
     }
-#if defined(__EMSCRIPTEN__)
-    g_stencil_readback_supported = 0;
 #endif
+    if (!g_depth_readback_supported)
+        fprintf(stderr, "gl-repl: GL context cannot read the depth buffer; "
+                        "Depth view is disabled\n");
     if (!g_stencil_readback_supported)
         fprintf(stderr, "gl-repl: GL context cannot read the stencil buffer; "
                         "Stencil view is disabled\n");
