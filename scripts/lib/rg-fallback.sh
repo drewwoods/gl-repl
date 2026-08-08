@@ -16,9 +16,11 @@
 #     need: `rg -n "REGEX" FILE...` -> `file:line:match`.
 #
 # `-n`/`-o`/`-v`/`-w` and the ERE syntax these patterns use (alternation,
-# `\s`, `\(`, `\b`) all mean the same thing across rg, ag, and GNU grep -E,
-# so callers don't need to branch on which tool actually ran. `-H` forces
-# the `file:` prefix even for a single file (callers strip `file:line:`).
+# `\s`, `\(`, `\b`) mean the same thing across rg and GNU grep -E, so
+# callers don't need to branch on which tool actually ran. ag needs flags
+# to get there - it is neither line-oriented nor `file:`-prefixed by
+# default; see the ag tier below. `-H` forces the `file:` prefix even for
+# a single file (callers strip `file:line:`).
 # Caller-side `2>/dev/null || true` still handles non-existent globs
 # exactly as it did with ripgrep.
 #
@@ -54,14 +56,25 @@ rg() {
     local _ag
     _ag="$(type -P ag 2>/dev/null || true)"
     if [ -n "$_ag" ]; then
-        # --nogroup gives the same `file:line:match` shape as rg/grep
-        # instead of ag's default per-file heading + indented matches.
+        # Three ag defaults diverge from rg and all three break callers that
+        # do `... | head -n1` and strip a `file:line:` prefix:
+        #
+        #   --nogroup/--noheading/--nobreak: ag otherwise prints a per-file
+        #     heading plus a blank separator line and omits the `file:`
+        #     prefix on the match lines. `--nogroup` alone does NOT cover
+        #     the single-file case - ag still groups under a heading there,
+        #     so the caller's prefix strip eats the line content.
+        #   --nomultiline: ag matches its PCRE against the whole buffer, so
+        #     the `\s` every caller's pattern uses also matches newlines and
+        #     `^\s*void\s+f\s*\(` reports the *blank line above* the
+        #     declaration as the first hit. rg and grep are line-oriented.
+        local -a ag_flags=(--nogroup --noheading --nobreak --nomultiline)
         if [ "${#exts[@]}" -gt 0 ]; then
             local joined
             joined="$(IFS='|'; echo "${exts[*]}")"
-            "$_ag" --nogroup -G "\\.(${joined})\$" "${rest[@]}"
+            "$_ag" "${ag_flags[@]}" -G "\\.(${joined})\$" "${rest[@]}"
         else
-            "$_ag" --nogroup "${rest[@]}"
+            "$_ag" "${ag_flags[@]}" "${rest[@]}"
         fi
         return
     fi
