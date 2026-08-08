@@ -99,7 +99,7 @@
 #include "app/glr_ctrl_internal.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"
 
-/* GLR_WHEEL_ZOOM_STEP lives with the camera owner in glr_camera.h. */
+/* glr_camera_wheel_zoom_step() lives with the camera owner in glr_camera.h. */
 
 /* ---- Keyboard router helpers ------------------------------------------ */
 
@@ -2425,7 +2425,7 @@ static void route_wheel(int x, int y, int delta) {
             glr_ctrl_router_dismiss_gl_state_for_editor_input();
             editor_input_code_panel_scroll(delta);
         } else {
-            glr_camera_add_zoom_velocity((float)delta * GLR_WHEEL_ZOOM_STEP);
+            glr_camera_add_zoom_velocity((float)delta * glr_camera_wheel_zoom_step());
         }
     }
     editor_request_redraw();

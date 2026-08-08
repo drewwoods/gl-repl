@@ -193,10 +193,32 @@ void glr_camera_pointer_set(int x, int y);
 void glr_camera_mouse_event(int button, int state, int x, int y, int mods);
 
 /* Add zoom velocity from the scroll wheel. Accumulates into momentum;
- * applied in glr_camera_tick(). delta is in *log space* - the tick applies
- * dist *= expf(vel), so one unit is one e-fold of distance and the same
- * delta covers the same fraction of the range at any zoom level. */
+ * applied in glr_camera_tick(). Units depend on the active wheel-zoom
+ * profile (config.h's DETENT vs COCOA; see glr_camera_wheel_zoom_step()):
+ * under DETENT the tick applies dist *= expf(vel), so one unit is one
+ * e-fold of distance and the same delta covers the same fraction of the
+ * range at any zoom level; under COCOA the tick stays additive
+ * (dist += vel), tuned for a dense trackpad event stream. */
 void glr_camera_add_zoom_velocity(float delta);
+
+/* Per-notch wheel zoom step (world/log units fed to
+ * glr_camera_add_zoom_velocity() per wheel callback). Fixed at compile
+ * time (GLR_WHEEL_ZOOM_STEP, config.h) everywhere except Emscripten,
+ * where it tracks whichever profile glr_camera_set_wheel_zoom_profile()
+ * last selected. */
+float glr_camera_wheel_zoom_step(void);
+
+#ifdef __EMSCRIPTEN__
+/* Emscripten builds one wasm binary for every host OS, so the wheel-zoom
+ * curve can't be fixed at compile time the way native macOS/Linux builds
+ * are. Selects the COCOA profile (additive dist += vel, 0.02/0.82) when
+ * cocoa_like is nonzero, else the DETENT profile (log-space
+ * dist *= expf(vel), 0.022/0.90) - see the profile block in config.h.
+ * Called once from packaging/web/gl4es_bootstrap.c using the same
+ * navigator.platform sniff that already drives its wheel-event damping;
+ * defaults to DETENT until that call lands. */
+void glr_camera_set_wheel_zoom_profile(int cocoa_like);
+#endif
 
 /* Update camera during drag - computes delta from internal pointer
  * cache, applies rotation/pan/zoom, then advances the pointer cache. */

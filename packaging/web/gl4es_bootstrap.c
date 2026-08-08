@@ -12,13 +12,17 @@
 #endif
 
 #ifdef __EMSCRIPTEN__
-/* gl-repl provides this. Keep a weak no-op so the bootstrap remains reusable
- * for smaller one-file samples that do not link the REPL controller. */
+/* gl-repl provides these. Keep weak no-ops so the bootstrap remains
+ * reusable for smaller one-file samples that do not link the REPL
+ * controller / camera. */
 __attribute__((weak)) void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
     (void)wheel;
     (void)direction;
     (void)x;
     (void)y;
+}
+__attribute__((weak)) void glr_camera_set_wheel_zoom_profile(int cocoa_like) {
+    (void)cocoa_like;
 }
 #endif
 
@@ -149,6 +153,13 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
             return p.indexOf("mac") >= 0 || p.indexOf("iphone") >= 0 ||
                    p.indexOf("ipad") >= 0;
         })();
+
+        /* glrWheelDampen already tells us whether this host matches native
+         * macOS/Cocoa's dense wheel-event stream vs a discrete-detent
+         * source (X11, Windows) - reuse that same sniff to pick the
+         * camera's wheel-zoom curve (glr_camera_set_wheel_zoom_profile(),
+         * app/glr_camera.h) instead of re-deriving platform separately. */
+        getWasmTableEntry($1)(glrWheelDampen ? 1 : 0);
 
         /* Signed tick count for one event, or null if it carries no whole
          * notch and must go through the accumulator. */
@@ -428,7 +439,7 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
                 if (installInputGuards() || ++guardTries > 200) clearInterval(guardTimer);
             }, 50);
         }
-    }, glr_ctrl_mousewheel);
+    }, glr_ctrl_mousewheel, glr_camera_set_wheel_zoom_profile);
 #endif
 
     initialize_gl4es();

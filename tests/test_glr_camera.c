@@ -67,11 +67,15 @@ static void test_camera_distance_bounds(void) {
     ASSERT_FLOAT_NEAR("Tick with negative zoom velocity clamps to CAM_DIST_MIN", glr_camera().dist, 0.5f, 0.001f);
 }
 
-/* Wheel zoom velocity is log space - glr_camera_tick applies
- * dist *= expf(vel) - so one notch covers the same fraction of the
- * distance at any zoom level. The additive form it replaced was 22% of the
- * range at CAM_DIST_MIN and 0.2% at CAM_DIST_MAX, which read as a dead
- * wheel exactly where there was the most room to travel. */
+#if GLR_WHEEL_ZOOM_LOG_SPACE
+/* Wheel zoom velocity is log space on a discrete-detent wheel source
+ * (X11, Emscripten) - glr_camera_tick applies dist *= expf(vel) - so one
+ * notch covers the same fraction of the distance at any zoom level. The
+ * additive form it replaced was 22% of the range at CAM_DIST_MIN and 0.2%
+ * at CAM_DIST_MAX, which read as a dead wheel exactly where there was the
+ * most room to travel. Native macOS/Cocoa keeps the additive form (see
+ * GLR_WHEEL_ZOOM_LOG_SPACE in config.h), tuned for its dense trackpad
+ * event stream instead. */
 static void test_camera_zoom_is_proportional(void) {
     float near_ratio, far_ratio;
 
@@ -92,6 +96,33 @@ static void test_camera_zoom_is_proportional(void) {
     ASSERT_FLOAT_NEAR("Same velocity is the same ratio 10x further out",
                       far_ratio, near_ratio, 0.0001f);
 }
+#else
+/* Native macOS/Cocoa keeps additive zoom velocity: dist += vel, a fixed
+ * number of units per notch regardless of current distance. */
+static void test_camera_zoom_is_additive(void) {
+    float near_delta, far_delta;
+    float near_dist, far_dist;
+
+    glr_camera_reset_default();
+    glr_camera_set(0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    glr_camera_add_zoom_velocity(0.1f);
+    glr_camera_tick();
+    near_dist = glr_camera().dist;
+    near_delta = near_dist - 2.0f;
+
+    glr_camera_reset_default();
+    glr_camera_set(0.0f, 0.0f, 20.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    glr_camera_add_zoom_velocity(0.1f);
+    glr_camera_tick();
+    far_dist = glr_camera().dist;
+    far_delta = far_dist - 20.0f;
+
+    ASSERT_FLOAT_NEAR("Zoom velocity is a constant unit delta",
+                      near_delta, 0.1f, 0.0001f);
+    ASSERT_FLOAT_NEAR("Same velocity is the same delta 10x further out",
+                      far_delta, near_delta, 0.0001f);
+}
+#endif
 
 static void test_camera_easing_and_decay(void) {
     glr_camera_reset_default();
@@ -244,7 +275,11 @@ int main(void) {
 
     test_camera_pitch_bounds();
     test_camera_distance_bounds();
+#if GLR_WHEEL_ZOOM_LOG_SPACE
     test_camera_zoom_is_proportional();
+#else
+    test_camera_zoom_is_additive();
+#endif
     test_camera_easing_and_decay();
     test_camera_reconstruction_scope();
     test_camera_auto_rotation_and_focus();

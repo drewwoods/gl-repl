@@ -64,6 +64,33 @@
         .auto_rotate = CFG_DEFAULT_CAMERA_ROTATE,   \
     }
 
+#ifdef __EMSCRIPTEN__
+/* One wasm binary runs on every host OS, so the wheel-zoom profile picked
+ * at compile time for native macOS/Linux (GLR_WHEEL_ZOOM_LOG_SPACE et al,
+ * config.h) can't apply here - it's runtime state instead, defaulted to
+ * the DETENT profile and switched to COCOA by
+ * glr_camera_set_wheel_zoom_profile() (see glr_camera.h). */
+static int   g_wheel_zoom_log_space = GLR_WHEEL_ZOOM_LOG_SPACE;
+static float g_wheel_zoom_step      = GLR_WHEEL_ZOOM_STEP;
+static float g_wheel_zoom_decay     = CAM_DECAY_ZOOM;
+
+void glr_camera_set_wheel_zoom_profile(int cocoa_like) {
+    if (cocoa_like) {
+        g_wheel_zoom_log_space = 0;
+        g_wheel_zoom_step = GLR_WHEEL_ZOOM_STEP_COCOA;
+        g_wheel_zoom_decay = CAM_DECAY_ZOOM_COCOA;
+    } else {
+        g_wheel_zoom_log_space = 1;
+        g_wheel_zoom_step = GLR_WHEEL_ZOOM_STEP_DETENT;
+        g_wheel_zoom_decay = CAM_DECAY_ZOOM_DETENT;
+    }
+}
+
+float glr_camera_wheel_zoom_step(void) { return g_wheel_zoom_step; }
+#else
+float glr_camera_wheel_zoom_step(void) { return GLR_WHEEL_ZOOM_STEP; }
+#endif
+
 static GlrCameraState       g_camera          = GLR_CAMERA_INITIAL;
 static const GlrCameraState g_camera_defaults = GLR_CAMERA_INITIAL;
 static GlrCameraState       g_camera_target;
@@ -576,13 +603,24 @@ void glr_camera_tick(void) {
         c->tx += g_vel_tx;
         c->ty += g_vel_ty;
         c->tz += g_vel_tz;
-        /* Zoom velocity is log-space, so a notch is a constant *fraction*
-         * of the current distance rather than a constant number of units.
-         * Additive zoom over a 0.5..50 range is unusable at both ends: the
-         * same step is 22% of the range up close and 0.2% far out, which
-         * reads as "the wheel does nothing" exactly where there is the most
-         * room to travel. */
+        /* Zoom velocity is log-space (dist *= expf(vel)) under the DETENT
+         * profile, so a notch is a constant *fraction* of the current
+         * distance rather than a constant number of units. Additive zoom
+         * over a 0.5..50 range is unusable at both ends: the same step is
+         * 22% of the range up close and 0.2% far out, which reads as "the
+         * wheel does nothing" exactly where there is the most room to
+         * travel. See the profile block in config.h. */
+#ifdef __EMSCRIPTEN__
+        if (g_wheel_zoom_log_space) {
+            c->dist *= expf(g_vel_zoom);
+        } else {
+            c->dist += g_vel_zoom;
+        }
+#elif GLR_WHEEL_ZOOM_LOG_SPACE
         c->dist *= expf(g_vel_zoom);
+#else
+        c->dist += g_vel_zoom;
+#endif
         clamp_camera_distance(c);
     }
 
@@ -591,7 +629,11 @@ void glr_camera_tick(void) {
     g_vel_tx *= CAM_DECAY;
     g_vel_ty *= CAM_DECAY;
     g_vel_tz *= CAM_DECAY;
+#ifdef __EMSCRIPTEN__
+    g_vel_zoom *= g_wheel_zoom_decay;
+#else
     g_vel_zoom *= CAM_DECAY_ZOOM;
+#endif
 
     /* Gizmo lit while pan momentum carries the target. */
     float pan_vel = fabsf(g_vel_tx) + fabsf(g_vel_ty) + fabsf(g_vel_tz);

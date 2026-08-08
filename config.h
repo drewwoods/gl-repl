@@ -302,29 +302,58 @@
  * remaining target delta. Wheel zoom step injects this amount per notch;
  * zoom velocity then decays by CAM_DECAY_ZOOM each tick.
  *
- * The step is in log space (glr_camera_tick applies dist *= expf(vel)), so
- * a notch is a fixed percentage of the current distance. The two knobs
- * split cleanly:
+ * The zoom curve is picked by event source, not just OS: X11 (Linux) and
+ * the Emscripten canvas wheel bridge both deliver exactly one
+ * magnitude-blind callback per physical detent (see
+ * packaging/web/gl4es_bootstrap.c's route_wheel), so glr_camera_tick
+ * applies dist *= expf(vel) there - a notch is a fixed percentage of the
+ * current distance at any zoom level, which is what a discrete-detent
+ * source needs (the DETENT profile below). Native macOS/Cocoa turns a
+ * trackpad flick into tens of precise-delta callbacks plus its own OS
+ * momentum tail, so it keeps the older additive dist += vel form tuned
+ * for that stream (the COCOA profile).
  *
- *   step / (1 - CAM_DECAY_ZOOM)  = travel per notch, in e-folds
- *   1 / (1 - CAM_DECAY_ZOOM)     = glide length, in 16ms ticks
- *
+ * Both profiles are named unconditionally because Emscripten builds one
+ * wasm binary for every host OS and cannot pick between them at compile
+ * time the way native macOS/Linux builds do: glr_camera.c defaults to
+ * DETENT there but switches to COCOA at runtime via
+ * glr_camera_set_wheel_zoom_profile(), called once from
+ * packaging/web/gl4es_bootstrap.c using the same navigator.platform sniff
+ * that already drives that file's wheel-event damping (glrWheelDampen). */
+#define GLR_WHEEL_ZOOM_STEP_COCOA 0.02f
+#define CAM_DECAY_ZOOM_COCOA 0.82f
+
+/* step / (1 - decay) = travel per notch, in e-folds
+ * 1 / (1 - decay)     = glide length, in 16ms ticks
  * At 0.022 / 0.90 that is 0.22 e-folds (~25% of the distance) over ~10
- * ticks (~170ms). Both are sized for a *detent* wheel, which is the only
- * thing freeglut ever delivers: X11 sends exactly one MouseWheel callback
- * per physical notch (fg_main_x11.c, ButtonPress 4/5), and even the Cocoa
- * backend quantizes trackpad momentum into the same magnitude-blind
- * callbacks. A gesture is therefore a handful of events, not a stream, so
- * each one has to carry a visible glide of its own. Expect to re-tune per
- * platform: macOS contributes its own momentum tail on top of this. */
+ * ticks (~170ms) - sized for a detent wheel, where a gesture is a handful
+ * of events rather than a stream, so each one needs a visible glide of
+ * its own. */
+#define GLR_WHEEL_ZOOM_STEP_DETENT 0.022f
+#define CAM_DECAY_ZOOM_DETENT 0.90f
+
+#if defined(__APPLE__) && !defined(__EMSCRIPTEN__)
+#define GLR_WHEEL_ZOOM_LOG_SPACE 0
+#else
+#define GLR_WHEEL_ZOOM_LOG_SPACE 1
+#endif
+
 #ifndef GLR_CAMERA_TARGET_DECAY
 #define GLR_CAMERA_TARGET_DECAY 0.93f
 #endif
 #ifndef GLR_WHEEL_ZOOM_STEP
-#define GLR_WHEEL_ZOOM_STEP 0.022f
+#if GLR_WHEEL_ZOOM_LOG_SPACE
+#define GLR_WHEEL_ZOOM_STEP GLR_WHEEL_ZOOM_STEP_DETENT
+#else
+#define GLR_WHEEL_ZOOM_STEP GLR_WHEEL_ZOOM_STEP_COCOA
+#endif
 #endif
 #ifndef CAM_DECAY_ZOOM
-#define CAM_DECAY_ZOOM 0.90f
+#if GLR_WHEEL_ZOOM_LOG_SPACE
+#define CAM_DECAY_ZOOM CAM_DECAY_ZOOM_DETENT
+#else
+#define CAM_DECAY_ZOOM CAM_DECAY_ZOOM_COCOA
+#endif
 #endif
 
 /* Standard status message buffer size for the replay visualizer. */
