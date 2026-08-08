@@ -1915,7 +1915,7 @@ BENCH_TARGETS = \
 	bench bench-csv bench-web bench-web-csv bench-web-gl4es $(BENCH_TARGET_NAMES) \
 	bench-glut-bitmap bench-glut-bitmap-build bench-glut-bitmap-apple \
 	bench-glut-bitmap-freeglut glut-bitmap-freeglut-lib \
-	bench-code-panel-text bench-code-panel-stencil
+	bench-code-panel-text bench-code-panel-stencil bench-vertex-labels
 
 MAINTENANCE_TARGETS = \
 	check audit-editor-ownership fix-doc-links find-trailing-whitespace \
@@ -2621,6 +2621,46 @@ bench-code-panel-stencil: $(CODE_PANEL_STENCIL_BENCH_BIN) ## Benchmark stencil-r
 else
 bench-code-panel-stencil:
 	@echo "ERROR: bench-code-panel-stencil targets Linux/macOS (needs freeglut)." >&2
+	@exit 1
+endif
+
+# Vertex-number overlay cost benchmark (Linux/macOS). Prices the three things
+# the vertex-label pass does that could each explain the ~14 ms/frame the
+# profile panel charges it on NVIDIA: the full-viewport depth readback behind
+# the occlusion cull, the per-glyph label submission, and the per-vertex
+# glGetFloatv(GL_MODELVIEW_MATRIX) in the walk callback.
+#
+# Standalone rather than linked against edit_overlays.c: the finding is about
+# when the readback is issued (mid-frame, with a vsync-throttled swap queue
+# outstanding) rather than about what the overlay computes, so it needs a
+# harness that can issue the same read both ways. See the source header.
+#
+# Run it twice, plain and with __GL_SYNC_TO_VBLANK=0, and compare.
+VERTEX_LABEL_BENCH_SRC  := bench/bench_vertex_label_readback.c
+VERTEX_LABEL_BENCH_BIN  := build/vertex-label-bench/bench
+VERTEX_LABEL_BENCH_ARGS ?=
+
+ifeq ($(UNAME_S),Darwin)
+$(VERTEX_LABEL_BENCH_BIN): $(VERTEX_LABEL_BENCH_SRC) $(FREEGLUT_STATIC_LIB)
+	@mkdir -p $(dir $@)
+	$(CC) -Wall -Wextra -O2 -std=c99 -D_GNU_SOURCE -DGL_SILENCE_DEPRECATION -DFREEGLUT_STATIC \
+	  -I$(FREEGLUT_SRC)/include $< \
+	  $(FREEGLUT_STATIC_LIB) -lm \
+	  -framework IOKit -framework Cocoa -framework OpenGL -framework CoreVideo -o $@
+
+bench-vertex-labels: $(VERTEX_LABEL_BENCH_BIN) ## Benchmark the vertex-number overlay's depth readback, glyph draw, and matrix reads (Linux/macOS; opens a short-lived window).
+	$(VERTEX_LABEL_BENCH_BIN) $(VERTEX_LABEL_BENCH_ARGS) $(BENCH_ARGS)
+else ifeq ($(UNAME_S),Linux)
+$(VERTEX_LABEL_BENCH_BIN): $(VERTEX_LABEL_BENCH_SRC)
+	@mkdir -p $(dir $@)
+	$(CC) -Wall -Wextra -O2 -std=c99 -D_GNU_SOURCE \
+	  $< -lglut -lGL -lGLU -lm -o $@
+
+bench-vertex-labels: $(VERTEX_LABEL_BENCH_BIN) ## Benchmark the vertex-number overlay's depth readback, glyph draw, and matrix reads (Linux/macOS; opens a short-lived window).
+	$(VERTEX_LABEL_BENCH_BIN) $(VERTEX_LABEL_BENCH_ARGS) $(BENCH_ARGS)
+else
+bench-vertex-labels:
+	@echo "ERROR: bench-vertex-labels targets Linux/macOS (needs freeglut)." >&2
 	@exit 1
 endif
 

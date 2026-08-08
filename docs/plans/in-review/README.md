@@ -6,5 +6,4 @@ or to `../active/` if implementation begins immediately.
 
 | Plan | Topic |
 |---|---|
-
-*(Empty - `block-comment-toggle.md` landed 2026-08-04, see `../done/`.)*
+| [`vertex-label-depth-readback-stall.md`](vertex-label-depth-readback-stall.md) | Move the vertex-label occlusion depth read to the frame's already-drained end-of-frame `glFinish` and consume it one frame later, removing a ~14 ms/frame mid-frame pipeline stall on render-ahead drivers. Drafts the PBO alternative and records why it measured no benefit. |
