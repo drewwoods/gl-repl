@@ -41,7 +41,9 @@ files.
 
 `.c` files should be normal exported C files with `// Snippet start` /
 `// Snippet end` markers. They are useful when an example is easier to keep as
-a complete import fixture than as the shortened REPL form.
+a complete import fixture than as the shortened REPL form. A `@camera`-tagged
+row between those markers is rejected (the snippet is geometry-only) - see
+[`docs/ADVANCED_USAGE.md` → Scene-file headers](../docs/ADVANCED_USAGE.md#scene-file-headers).
 
 Run `make check-examples-catalog` after editing the catalog or scene files. The
 build generates `build/generated/repl_examples_data.inc` from this directory;

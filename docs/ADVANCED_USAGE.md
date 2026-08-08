@@ -574,7 +574,11 @@ syntax wherever it appears. A tagged row in a place the format does not allow
 - inside a function body, inside the geometry snippet, after body code, or out
 of the canonical `dist, rx, ry, spin, pan` order - is **rejected with a
 diagnostic naming the file, the line and the rule**, and is never passed
-through into the document as geometry.
+through into the document as geometry. "Inside the geometry snippet" means
+between the `// Snippet start` / `// Snippet end` markers described in
+[`examples/README.md`](../examples/README.md) - that region is geometry-only,
+so a `@camera` row placed there is dropped and the host's current/default
+camera stands.
 
 `// camera` itself carries no meaning the tags do not already carry: it is an
 ordinary comment, and a file with tags and no marker is fully canonical.
