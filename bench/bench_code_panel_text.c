@@ -29,11 +29,27 @@
  *
  *   plain            - no color segments: one span per row, the panel's
  *                      unhighlighted path (one glutBitmapString per row)
- *   segments-N       - each row split into N-char color segments, i.e. what
- *                      syntax highlighting produces
- *   segments-N mono  - the same segment count, but every segment carries the
- *                      same color, which isolates raster/pixel-store cost from
- *                      GL color-change cost
+ *   sparse-N         - the realistic shape: N-char colored token segments with
+ *                      uncovered gaps between them that the renderer fills in
+ *                      row->color, exactly what repl_code_panel.c emits
+ *   dense-N          - contiguous segments, no gap spans: pure fragmentation
+ *   dense-N mono     - the same span count, but every span carries the same
+ *                      color, which isolates raster/pixel-store cost from GL
+ *                      color-change cost
+ *
+ * The mono rows are the result: identical span counts cost the same as an
+ * unsegmented row (~38ms vs ~36ms at 127 spans) when the color never changes,
+ * against ~233ms when it does. Fragmentation is nearly free; the per-span
+ * color changes are the whole effect.
+ *
+ * Worth recording because it was the first thing tried and it does not work:
+ * skipping *redundant* glColor calls buys nothing, because the gap spans mean
+ * consecutive spans never share a color. Driving the real classifier
+ * (ui_repl_code_panel_classify_syntax) over a dozen representative rows gives
+ * 98 spans and 0 redundant sets - a 0% hit rate. Any real fix has to reduce
+ * the number of color *changes*, not filter repeats: e.g. batching spans by
+ * color across a row, or drawing the row once in the base color and
+ * overdrawing only the colored tokens.
  *
  * Lighting is not configured here on purpose: ui_text_panel_render() brackets
  * itself with gl2d_begin()/gl2d_end(), which glDisable(GL_LIGHTING) under a
@@ -179,11 +195,26 @@ static UiTextPanelColor bench_color(float r, float g, float b)
 /* Build the row array for one case.
  *
  * segment_chars == 0 leaves the rows unsegmented (the unhighlighted panel).
- * Otherwise every row is cut into segment_chars-wide color segments, which is
- * the shape repl_code_panel.c produces for a highlighted row. vary_color picks
- * whether consecutive segments differ, which is what separates GL color-change
- * cost from the per-span raster cost. */
-static void build_rows(int segment_chars, int vary_color)
+ *
+ * Otherwise every row is cut into segment_chars-wide color segments. Real
+ * syntax spans from repl_code_panel.c are *sparse and disjoint* - they cover
+ * the tokens and leave the punctuation/whitespace between them uncovered, and
+ * the renderer fills each of those gaps with row->color. So a highlighted row
+ * actually submits segment, gap, segment, gap, ... and every one of those gap
+ * spans re-sends the identical row color. `sparse` reproduces that by leaving
+ * every other segment slot uncovered; without it the segments are contiguous
+ * and no gap spans exist, which understates the repeat rate badly.
+ *
+ * vary_color picks whether consecutive *segments* differ, which separates GL
+ * color-change cost from the per-span raster cost.
+ *
+ * Note what the sparse shape rules out: because a gap always sits between two
+ * segments, consecutive spans never carry the same color, so filtering
+ * redundant glColor calls has nothing to skip. Measured against the real
+ * classifier over a dozen representative rows, the redundant-set rate is 0%
+ * (see this file's header). A "skip the repeat" cache is therefore not a fix
+ * here - the color changes are all genuine. */
+static void build_rows(int segment_chars, int vary_color, int sparse)
 {
     /* Token-ish colors, so the driver sees the same kind of color churn a
      * highlighted row produces. */
@@ -221,6 +252,12 @@ static void build_rows(int segment_chars, int vary_color)
             if (n > segment_chars)
                 n = segment_chars;
 
+            /* Leave every other slot uncovered so the renderer emits a
+             * row->color gap span between segments, as a real token stream
+             * does. */
+            if (sparse && ((start / segment_chars) & 1))
+                continue;
+
             c = k_colors[vary_color ? (color_index++ & 3) : 1];
             row->color_segments[row->color_segment_count].char_start = start;
             row->color_segments[row->color_segment_count].char_count = n;
@@ -232,17 +269,37 @@ static void build_rows(int segment_chars, int vary_color)
     }
 }
 
-/* Total color segments across all rows, so the report can price a span as well
- * as a glyph. An unsegmented row still submits one span. */
+/* Spans the renderer will actually submit per pass, so the report can price a
+ * span as well as a glyph. This mirrors text_panel_draw_colored_text(): each
+ * segment is one span, and each uncovered gap between (or after) segments is
+ * another span drawn in row->color. An unsegmented row submits exactly one. */
 static size_t spans_per_pass(void)
 {
     size_t total = 0;
     int i;
 
-    for (i = 0; i < BENCH_LINE_COUNT; i++)
-        total += g_rows[i].color_segment_count > 0
-                     ? (size_t)g_rows[i].color_segment_count
-                     : 1u;
+    for (i = 0; i < BENCH_LINE_COUNT; i++) {
+        const UiTextPanelRow *row = &g_rows[i];
+        int len = (int)strlen(row->text);
+        int cursor = 0;
+        int s;
+
+        if (row->color_segment_count <= 0) {
+            total += 1u;
+            continue;
+        }
+
+        for (s = 0; s < row->color_segment_count; s++) {
+            int seg_start = row->color_segments[s].char_start;
+
+            if (cursor < seg_start)
+                total++;               /* gap span in row->color */
+            total++;                   /* the segment itself */
+            cursor = seg_start + row->color_segments[s].char_count;
+        }
+        if (cursor < len)
+            total++;                   /* trailing gap span */
+    }
     return total;
 }
 
@@ -295,7 +352,8 @@ static BitmapSample take_sample(void)
     return sample;
 }
 
-static void report_case(const char *name, int segment_chars, int vary_color)
+static void report_case(const char *name, int segment_chars, int vary_color,
+                        int sparse)
 {
     BitmapSample samples[BENCH_MAX_SAMPLES];
     double submit[BENCH_MAX_SAMPLES];
@@ -307,7 +365,7 @@ static void report_case(const char *name, int segment_chars, int vary_color)
     double complete_median;
     int i;
 
-    build_rows(segment_chars, vary_color);
+    build_rows(segment_chars, vary_color, sparse);
     spans = spans_per_pass();
 
     glyph_count = (double)g_glyphs_per_pass * (double)g_repeats;
@@ -375,7 +433,7 @@ static void benchmark_display(void)
     for (i = 0; i < BENCH_LINE_COUNT; i++)
         g_glyphs_per_pass += strlen(g_lines[i]);
 
-    build_rows(0, 0);
+    build_rows(0, 0, 0);
     build_snapshot();
 
     renderer = glGetString(GL_RENDERER);
@@ -391,12 +449,17 @@ static void benchmark_display(void)
     printf("\n%-22s %6s %10s %10s %10s %12s\n", "case", "spans",
            "submit ms", "ns/glyph", "ns/span", "complete ms");
 
-    report_case("plain (no segments)", 0, 0);
-    report_case("segments-16", 16, 1);
-    report_case("segments-8", 8, 1);
-    report_case("segments-4", 4, 1);
-    report_case("segments-8 mono", 8, 0);
-    report_case("segments-4 mono", 4, 0);
+    /* "sparse" is the realistic shape: tokens colored, gaps between them
+     * falling back to row->color, which is what a real highlighted row
+     * submits. The dense variants keep the segments contiguous (no gap
+     * spans) to show the cost of pure fragmentation on its own. */
+    report_case("plain (no segments)", 0, 0, 0);
+    report_case("sparse-8 (realistic)", 8, 1, 1);
+    report_case("sparse-4 (realistic)", 4, 1, 1);
+    report_case("dense-8", 8, 1, 0);
+    report_case("dense-4", 4, 1, 0);
+    report_case("dense-8 mono", 8, 0, 0);
+    report_case("dense-4 mono", 4, 0, 0);
 
     fflush(stdout);
     exit(0);
