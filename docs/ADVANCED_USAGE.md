@@ -400,6 +400,28 @@ stock MSAA only; raising the pass count would multiply the cost of every
 recorded frame. The `demo-*` stills take none of this: each demo binary opens at
 its own compiled-in size and takes no gl-repl flags.
 
+### Windowed capture on Linux (`FREEGLUT_VENDOR_LINUX=1`)
+
+A default windowed Linux build links the **distro's** `-lglut`, which has none
+of the fork's capture hooks - so `SIGUSR1` screenshots,
+`FREEGLUT_CAPTURE_FRAMES` and `FREEGLUT_CAPTURE_STREAM` silently produce
+nothing there, and `scripts/docs-assets.sh` / `record-gif.sh` /
+`record-video.sh` come back empty. Build against the vendored static
+freeglut (X11/GLX backend) instead:
+
+```bash
+make gl-repl FREEGLUT_VENDOR_LINUX=1
+```
+
+Needs `cmake` plus the X11/GL dev headers (`libx11-dev`, `libxi-dev`,
+`libxrandr-dev`, `libxxf86vm-dev`, `libgl1-mesa-dev`, `libglu1-mesa-dev`).
+GL/GLU/X11 still come from the system; only freeglut is vendored, linked by
+archive path with no `-lglut`. Objects land in a separate
+`build/<cfg>-fgvendor/` tree, so this build and the default one coexist
+without recompiling each other. macOS always vendors and needs no flag; the
+Linux **OSMesa** build (`FREEGLUT_OSMESA=1`) vendors unconditionally, since
+system freeglut has no OSMesa backend.
+
 ### Re-pinning vendored freeglut
 
 The in-tree vendored freeglut already carries the OSMesa backend and the native

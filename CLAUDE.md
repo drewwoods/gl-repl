@@ -95,6 +95,11 @@ gitignored, survives `make clean`).
   `make freeglut-clean`. The pinned tree carries the fork's OSMesa backend
   *and* the SIGUSR1/record capture support on all backends - no re-vendor
   needed for capture work.
+- **Windowed Linux capture**: `make gl-repl FREEGLUT_VENDOR_LINUX=1` links the
+  vendored static freeglut (X11/GLX) instead of the distro's `-lglut`. Needed
+  for capture on Linux - system freeglut has no capture hooks, so SIGUSR1 /
+  `FREEGLUT_CAPTURE_*` and the docs-media scripts silently produce nothing.
+  Separate `build/*-fgvendor/` objdir; needs cmake + X11/GL dev headers.
 - **Headless OSMesa**: `make gl-repl FREEGLUT_OSMESA=1` (after
   `brew install mesa mesa-glu`) renders with no window - for headless
   geometry/feedback tests and captures. Separate `build-osmesa/` dirs, so

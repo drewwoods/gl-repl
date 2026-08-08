@@ -773,7 +773,13 @@ REPL_LIVE_DEMO_DEP_SRCS = $(REPL_DEMO_DEP_SRCS) \
                           src/ui/subsystems/variable_panel.c \
                           src/ui/core/theme.c
 
-OBJDIR = build/$(BUILD)$(if $(filter debug,$(BUILD)),$(DEBUG_SAN_SUFFIX),)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)$(if $(filter 0,$(FREEGLUT_VENDOR)),-glut,)$(if $(filter 1,$(WEB)),-web,)
+# The -fgvendor suffix keeps the opt-in Linux vendored build (FREEGLUT_VENDOR_LINUX=1)
+# from sharing objects with the default system-glut build: the two compile against
+# different <GL/freeglut.h> headers (FREEGLUT_HEADER_CFLAGS differs), so a shared
+# OBJDIR would reuse objects built against the other one. Only meaningful on the
+# native windowed Linux path -- the flag is inert under OSMesa/web/stubs, and those
+# arms already have their own suffix, so it is not applied there.
+OBJDIR = build/$(BUILD)$(if $(filter debug,$(BUILD)),$(DEBUG_SAN_SUFFIX),)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)$(if $(filter 0,$(FREEGLUT_VENDOR)),-glut,)$(if $(filter 1,$(WEB)),-web,)$(if $(filter 1,$(USE_GL_STUBS))$(filter 1,$(FREEGLUT_OSMESA))$(filter 1,$(WEB))$(filter Darwin,$(UNAME_S)),,$(if $(filter 1,$(FREEGLUT_VENDOR_LINUX)),-fgvendor,))
 BINDIR = $(OBJDIR)
 # Each Make process gets its own report directory. Recursive test/build
 # invocations therefore print and summarize only their own source files.
@@ -1933,12 +1939,15 @@ MAINTENANCE_TARGETS = \
 # Link recipes must use their declared object lists rather than `$^`, otherwise
 # this prerequisite duplicates the archive already supplied by GL_LDFLAGS.
 # Vendored freeglut is built on macOS (Cocoa or OSMesa), on Linux for the
-# OSMesa backend (FREEGLUT_OSMESA=1), and for the Emscripten/wasm web target
+# OSMesa backend (FREEGLUT_OSMESA=1) and for the opt-in windowed X11/GLX build
+# (FREEGLUT_VENDOR_LINUX=1), and for the Emscripten/wasm web target
 # (WEB=1, all platforms -- see FREEGLUT_BUILD/FREEGLUT_STATIC_LIB up top);
 # the default native Linux path uses system freeglut and needs no archive
-# prereq.
+# prereq. This condition must cover exactly the arms that put
+# $(FREEGLUT_STATIC_LIB) on the link line via FREEGLUT_LIB, or the archive is
+# linked without ever being built.
 ifeq ($(FREEGLUT_VENDOR),1)
-ifneq ($(filter Darwin,$(UNAME_S))$(filter 1,$(FREEGLUT_OSMESA))$(filter 1,$(WEB)),)
+ifneq ($(filter Darwin,$(UNAME_S))$(filter 1,$(FREEGLUT_OSMESA))$(filter 1,$(WEB))$(filter 1,$(FREEGLUT_VENDOR_LINUX)),)
 ifneq ($(USE_GL_STUBS),1)
 $(SAMPLE_BIN) $(RENDER3D_DEMO_BIN) $(REPL_DEMO_BIN) $(REPL_LIVE_DEMO_BIN) $(EDITOR_DEMO_BIN) \
 $(MEMPROF_DEMO_BIN) $(CPUPROF_DEMO_BIN) $(VARIABLE_PANEL_DEMO_BIN) \
@@ -2974,38 +2983,50 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "GL stubs:        make test (or test-stubs); ordinary individual tests use stubs automatically.\n"
 	@printf "Web build:       make web (or scripts/build-web.sh for a cold start with no\n"
 	@printf "                 emsdk sourced yet), then make web-serve. See packaging/web/README.md.\n"
-	@printf "Runtime env:     GLR_NO_POINT_PARAMETER=1 ./gl-repl forces the no-glPointParameterfv\n"
-	@printf "                 path (camera-distance glPointSize fallback). Support is otherwise\n"
-	@printf "                 auto-detected from the GL context at startup; there is no build\n"
-	@printf "                 flag. See docs/ARCHITECTURE.md > Core Subsystem Features & Integrations > Runtime GL Capability Detection.\n"
-	@printf "                 GLR_NO_GPU_PROF=1 ./gl-repl disables the GPU timer queries behind\n"
-	@printf "                 the profile panel's GPU column (the column reads \"--\"). Otherwise\n"
-	@printf "                 auto-detected at startup: GL_ARB_timer_query / GL 3.3 timestamps\n"
-	@printf "                 preferred (additive), GL_EXT_timer_query elapsed brackets as the\n"
-	@printf "                 fallback (Apple GL 2.1); no build flag. Same doc section.\n"
-	@printf "                 GLR_AUDIO_HITCH_MS=N ./gl-repl sets the audio-worker hitch\n"
-	@printf "                 threshold (default 50ms; 0 disables). --no-audio skips audio\n"
-	@printf "                 init to isolate startup stalls; startup prints an [init +Ns]\n"
-	@printf "                 trace per phase.\n"
-	@printf "                 GLR_DETAILED_PROF=1 ./gl-repl (or --detailed-prof) promotes\n"
-	@printf "                 the optional fine-grained init-trace phases (glutInit split,\n"
-	@printf "                 audio playlist sub-steps, first-two-frames triple); default\n"
-	@printf "                 off. See docs/ARCHITECTURE.md > Core Subsystem Features & Integrations > Startup & Audio-Worker Diagnostics.\n"
-	@printf "Build options:   UI_THEME_DEFAULT=N picks the compile-time UI color scheme\n"
-	@printf "                 (0 green default, 1 warm, 2 cyan, 3 amber, 4 violet, 5 mono),\n"
-	@printf "                 e.g. make gl-repl CFLAGS=-DUI_THEME_DEFAULT=1. Defined in\n"
-	@printf "                 config.h, range-checked in src/ui/core/theme.h. See\n"
-	@printf "                 docs/ARCHITECTURE.md > UI Color Theming.\n"
-	@printf "                 SAN=memory selects MemorySanitizer for debug builds (separate build/debug-msan dir).\n"
-	@printf "                 make debug-msan builds the full target set with SAN=memory CC=$(MSAN_CC).\n"
-	@printf "                 make test-msan runs the stubbed test suite with SAN=memory CC=$(MSAN_CC).\n"
-	@printf "                 NO_SAN=1 (or NOSAN=1/ASAN=0) disables debug-build sanitizers.\n"
-	@printf "                 GLR_AUDIO_NO_THREAD=1 (e.g. make gl-repl CFLAGS=-DGLR_AUDIO_NO_THREAD=1)\n"
-	@printf "                 drops the audio background worker thread: the playlist lifecycle ops\n"
-	@printf "                 (file open/uninit, state save) run synchronously, drained from\n"
-	@printf "                 glr_audio_tick() on the caller. Auto-enabled on Emscripten (no\n"
-	@printf "                 -pthread); set =0 to force the thread on. The toggle is contained\n"
-	@printf "                 entirely in src/app/glr_audio.c.\n"
+	@printf "Runtime env:\n"
+	@printf "  - GLR_NO_POINT_PARAMETER=1 ./gl-repl forces the no-glPointParameterfv\n"
+	@printf "    path (camera-distance glPointSize fallback). Support is otherwise\n"
+	@printf "    auto-detected from the GL context at startup; there is no build\n"
+	@printf "    flag. See docs/ARCHITECTURE.md > Core Subsystem Features & Integrations > Runtime GL Capability Detection.\n"
+	@printf "  - GLR_NO_GPU_PROF=1 ./gl-repl disables the GPU timer queries behind\n"
+	@printf "    the profile panel's GPU column (the column reads \"--\"). Otherwise\n"
+	@printf "    auto-detected at startup: GL_ARB_timer_query / GL 3.3 timestamps\n"
+	@printf "    preferred (additive), GL_EXT_timer_query elapsed brackets as the\n"
+	@printf "    fallback (Apple GL 2.1); no build flag. Same doc section.\n"
+	@printf "  - GLR_AUDIO_HITCH_MS=N ./gl-repl sets the audio-worker hitch\n"
+	@printf "    threshold (default 50ms; 0 disables). --no-audio skips audio\n"
+	@printf "    init to isolate startup stalls; startup prints an [init +Ns]\n"
+	@printf "    trace per phase.\n"
+	@printf "  - GLR_DETAILED_PROF=1 ./gl-repl (or --detailed-prof) promotes\n"
+	@printf "    the optional fine-grained init-trace phases (glutInit split,\n"
+	@printf "    audio playlist sub-steps, first-two-frames triple); default\n"
+	@printf "    off. See docs/ARCHITECTURE.md > Core Subsystem Features & Integrations > Startup & Audio-Worker Diagnostics.\n"
+	@printf "Build options:\n"
+	@printf "  - UI_THEME_DEFAULT=N picks the compile-time UI color scheme\n"
+	@printf "    (0 green default, 1 warm, 2 cyan, 3 amber, 4 violet, 5 mono),\n"
+	@printf "    e.g. make gl-repl CFLAGS=-DUI_THEME_DEFAULT=1. Defined in\n"
+	@printf "    config.h, range-checked in src/ui/core/theme.h. See\n"
+	@printf "    docs/ARCHITECTURE.md > UI Color Theming.\n"
+	@printf "  - SAN=memory selects MemorySanitizer for debug builds (separate build/debug-msan dir).\n"
+	@printf "    make debug-msan builds the full target set with SAN=memory CC=$(MSAN_CC).\n"
+	@printf "    make test-msan runs the stubbed test suite with SAN=memory CC=$(MSAN_CC).\n"
+	@printf "  - NO_SAN=1 (or NOSAN=1/ASAN=0) disables debug-build sanitizers.\n"
+	@printf "  - FREEGLUT_VENDOR_LINUX=1 (Linux, windowed) links the vendored static\n"
+	@printf "    freeglut (X11/GLX) instead of the distro's -lglut, e.g.\n"
+	@printf "    make gl-repl FREEGLUT_VENDOR_LINUX=1. Needed for frame capture:\n"
+	@printf "    system freeglut has no capture hooks, so SIGUSR1 screenshots,\n"
+	@printf "    FREEGLUT_CAPTURE_FRAMES/_STREAM and the docs-assets/record-gif/\n"
+	@printf "    record-video scripts silently produce nothing without it. Needs\n"
+	@printf "    cmake + X11/GL dev headers; separate build/*-fgvendor objdir, so it\n"
+	@printf "    coexists with the default build. macOS always vendors and the Linux\n"
+	@printf "    OSMesa build (FREEGLUT_OSMESA=1) vendors unconditionally; neither\n"
+	@printf "    needs this flag. See docs/ADVANCED_USAGE.md > Windowed capture on Linux.\n"
+	@printf "  - GLR_AUDIO_NO_THREAD=1 (e.g. make gl-repl CFLAGS=-DGLR_AUDIO_NO_THREAD=1)\n"
+	@printf "    drops the audio background worker thread: the playlist lifecycle ops\n"
+	@printf "    (file open/uninit, state save) run synchronously, drained from\n"
+	@printf "    glr_audio_tick() on the caller. Auto-enabled on Emscripten (no\n"
+	@printf "    -pthread); set =0 to force the thread on. The toggle is contained\n"
+	@printf "    entirely in src/app/glr_audio.c.\n"
 	@printf "Build output:    concise timed lines per compiled/linked file plus the longest build steps.\n"
 	@printf "                 V=1 (or VERBOSE=1) restores each compiler/linker command and its output.\n"
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"
