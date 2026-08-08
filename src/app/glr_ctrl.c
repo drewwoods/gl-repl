@@ -4054,12 +4054,17 @@ void glr_ctrl_init_gl(void) {
             glGetError() == GL_NO_ERROR;
     }
 #endif
+    /* Reported through glr_ctrl_init_log, like the accum/stencil width lines
+     * just above and for the same reason: these are one-shot capability
+     * findings, not failures. The tag matters beyond tidiness on the web
+     * build, where the shell classifies stderr by the init-trace stamp - an
+     * untagged line would render as a console error on every single load. */
     if (!g_depth_readback_supported)
-        fprintf(stderr, "gl-repl: GL context cannot read the depth buffer; "
-                        "Depth view is disabled\n");
+        glr_ctrl_init_log("GL context cannot read the depth buffer; "
+                          "Depth view is disabled");
     if (!g_stencil_readback_supported)
-        fprintf(stderr, "gl-repl: GL context cannot read the stencil buffer; "
-                        "Stencil view is disabled\n");
+        glr_ctrl_init_log("GL context cannot read the stencil buffer; "
+                          "Stencil view is disabled");
 
     /* glutInit has run by the time glr_ctrl_init_gl is called.
      * Unlock glutGetModifiers() reads in editor_input so Cmd / Ctrl /

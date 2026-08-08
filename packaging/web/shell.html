@@ -1001,6 +1001,29 @@
         statusElement.innerHTML = text;
       };
 
+      // Both stdout and stderr feed the console drawer. Emscripten routes
+      // fd 1 through Module.print and fd 2 through Module.printErr; leaving
+      // printErr unset does NOT mean "same as print", it means the runtime
+      // default console.error, so stderr both misses the drawer and lands
+      // red with a synthesized stack trace.
+      //
+      // gl-repl's always-on `[init +N.NNNs]` startup trace is on stderr (on
+      // native that keeps stdout clean for --dump-* piping), so the drawer
+      // was missing exactly the output you would open it to read, while the
+      // devtools console showed a wall of red for an ordinary boot.
+      const appendOutputLine = (text) => {
+        if (!outputElement) return;
+        outputElement.value += text + "\n";
+        outputElement.scrollTop = outputElement.scrollHeight;
+      };
+
+      // The informational trace is identified by the two stamps that
+      // glr_init_trace.c and glr_ctrl_init_log() emit. Everything else on
+      // stderr is a genuine diagnostic (`repl_audio: ...`, `gl-repl: bad
+      // --window`, parse failures) and keeps console.error, so a real
+      // problem still stands out instead of being flattened into the trace.
+      const GLR_INIT_TRACE_RE = /^\s*(?:\[init \+|\[gl-repl\])/;
+
 #if MODULARIZE && !EXPORT_ES6
       var moduleArgs = {
 #else
@@ -1008,11 +1031,16 @@
 #endif
         print(...args) {
           console.log(...args);
-          if (outputElement) {
-            var text = args.join(' ');
-            outputElement.value += text + "\n";
-            outputElement.scrollTop = outputElement.scrollHeight;
+          appendOutputLine(args.join(' '));
+        },
+        printErr(...args) {
+          const text = args.join(' ');
+          if (GLR_INIT_TRACE_RE.test(text)) {
+            console.log(...args);
+          } else {
+            console.error(...args);
           }
+          appendOutputLine(text);
         },
         canvas: canvasElement,
         setStatus: setStatus,

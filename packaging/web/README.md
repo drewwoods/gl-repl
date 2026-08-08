@@ -33,6 +33,18 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   which maps `gl*` calls to `gl4es_gl*` over WebGL2. `glGetString` etc. resolve
   through gl4es, so `glutExtensionSupported` above reads the real live
   extension string.
+- **Console output**: `shell.html` overrides **both** `Module.print` (fd 1)
+  and `Module.printErr` (fd 2), and feeds both to the in-page console drawer.
+  Leaving `printErr` unset does not mean "same as print" - it means
+  Emscripten's runtime default `console.error`, so stderr misses the drawer
+  and lands red with a synthesized stack trace. That matters here because
+  gl-repl's always-on `[init +N.NNNs]` trace is a *stderr* trace (on native
+  that keeps stdout clean for `--dump-*` piping), so the drawer was missing
+  exactly the output you would open it to read. `printErr` picks the console
+  channel by the init-trace stamps `[init +` / `[gl-repl]`; everything else
+  on stderr is a real diagnostic and keeps `console.error`. A new one-shot
+  capability report should go through `glr_ctrl_init_log()` so it inherits
+  the stamp rather than reading as an error on every load.
 - **Audio**: web builds use the browser media stack instead of miniaudio's
   file-backed decoder. `scripts/web-audio-assets.sh` copies MP3s beside the
   built page and writes `assets/music.json`; [`src/app/glr_audio.c`](../../src/app/glr_audio.c) fetches that
