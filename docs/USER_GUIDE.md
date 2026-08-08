@@ -458,40 +458,32 @@ hidden rows are counted in the margin numbering).
 #### Comparing two probe points
 
 **Shift+right-click a second blank row** while the popup is open to pin that
-row as the comparison basis. The default column becomes **value at L*n***, and
-every row is then coloured by whether it changed *between the two lines* rather
-than by how far it sits from the OpenGL default - which is the question you
-usually have when a block of drawing code misbehaves. It also quiets the
-report: the generated setup rows are identical at both points, so they stop
-reading as differences. Shift+right-click the pinned row again to go back to
-comparing against the OpenGL defaults; closing the popup clears it too.
+row as the comparison basis: the default column becomes **value at L*n***, and
+rows are coloured by whether they *changed between the two lines* instead of
+how far they sit from the OpenGL default - the question that actually matters
+when a block of drawing code misbehaves, and it quiets the report since
+identical setup rows stop reading as differences. Shift+right-click the
+pinned row again to unpin; closing the popup also clears it.
 
-The basis is a line, not a snapshot - it is re-evaluated every frame, so the
-comparison stays true while `t` advances. Rows that neither line touched are
-still compared against the OpenGL default, since that is what their value was
-at the basis line. Pinning a basis *after* the anchor row shows only the state
-both lines have in common.
+The basis is a live line, not a snapshot, so the comparison stays correct as
+`t` advances. Untouched rows still compare against the OpenGL default. Pinning
+a basis *after* the anchor row shows only the state both lines share.
 
-A light's parameter rows appear only while that light can affect the frame -
-that is, while it is enabled, or if your program set one of its parameters
-itself. Four disabled lights would otherwise contribute twenty rows of
-unreachable state.
+A light's rows appear only while it can affect the frame (enabled, or touched
+by your program) - otherwise four disabled lights alone would add twenty rows
+of unreachable state.
 
-`glRasterPos3f` contributes two rows: the position, and the
-`GL_CURRENT_RASTER_COLOR` it latches from the current color at that line - the
-color `label(...)` then draws with, which a later `glColor3f` no longer moves.
-Neither row appears before the first `glRasterPos3f`, since nothing else writes
-those cells. With lighting on, OpenGL lights the raster position like a vertex
-and stores that result, so the inspector evaluates the lighting equation for
-this row - with `glEnable(GL_LIGHTING)` the value it shows is the lit color your
-text will actually be drawn in, which is generally *not* the `glColor3f` above
-it. (Two caveats it cannot show: a raster position clipped outside the view
-leaves the value undefined in OpenGL, and a few drivers compute this cell
-incorrectly.)
+`glRasterPos3f` contributes two rows - position and the
+`GL_CURRENT_RASTER_COLOR` it latches from the current color, which is what
+`label(...)` actually draws with and a later `glColor3f` can't change. Neither
+row appears before the first `glRasterPos3f`. With lighting on, the raster
+position is lit like a vertex, so the shown color is that lit result, not the
+raw `glColor3f` above it. (Not shown: undefined values from a clipped raster
+position, or the rare driver that computes this cell wrong.)
 
-Modelview matrices use four aligned rows. Light positions are shown in both
-world and eye coordinates when available. Use the mouse wheel for a long
-report; click elsewhere or send input to the editor to dismiss it.
+Modelview matrices use four aligned rows; light positions show in both world
+and eye coordinates when available. Scroll with the mouse wheel; click
+elsewhere or type in the editor to dismiss.
 
 ### Keeping the buffer tidy
 
