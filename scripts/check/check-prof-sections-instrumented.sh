@@ -19,16 +19,25 @@
 # asking about.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
+. scripts/lib/rg-fallback.sh
 
 fail=0
 sections=$(grep -oE '^\s*PROF_[A-Z0-9_]+' prof_sections.h | tr -d ' \t')
+
+# One recursive scan collects every instrumented section name, instead of a
+# fresh tree-wide search per catalog row - the previous O(sections * tree)
+# shape made this the slowest state-ownership guard (~4.7s standalone).
+# `rg`/`ag` (scripts/lib/rg-fallback.sh, preferred over plain grep) cut the
+# cost of the single scan itself too.
+raw="$(rg -o 'prof_(begin|section_record_us)\(\s*PROF_[A-Z0-9_]+' gl_repl.c src/ 2>/dev/null || true)"
+instrumented="$(printf '%s\n' "$raw" | grep -oE 'PROF_[A-Z0-9_]+' | sort -u)"
 
 for s in $sections; do
     case "$s" in
         PROF_SECTION_COUNT) continue ;;          # array size, not a section
         *_LAST) continue ;;                      # range alias
     esac
-    if ! grep -rqE "prof_(begin|section_record_us)\(\s*${s}\s*[,)]" gl_repl.c src/; then
+    if ! printf '%s\n' "$instrumented" | grep -qxF "$s"; then
         echo "ERROR: catalog section ${s} has no prof_begin() or" >&2
         echo "       prof_section_record_us() site (zombie row in the Compute" >&2
         echo "       Profile panel). Instrument it or remove it from" >&2

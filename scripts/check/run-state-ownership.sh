@@ -528,6 +528,14 @@ if [ -n "$1" ]; then
     fi
 else
     PARALLEL_COLLECT=1
+    # The two slowest checks (measured standalone: ~4.7s and ~3.0s, an order
+    # of magnitude past everything else) are dispatched first so they run
+    # concurrently with the fast bulk from the start. Queued in their
+    # original (later) position, bounded concurrency means they don't even
+    # start until most of the fast checks have already finished, so they end
+    # up running alone at the tail and their latency isn't hidden by anything.
+    run_check check-prof-sections-instrumented check_prof_sections_instrumented
+    run_check check-module-prefixes check_module_prefixes
     run_check check-controller-boundaries check_controller_boundaries
     run_check check-render3d-no-repl-state-mut check_render3d_no_repl_state_mut
     run_check check-pure-render3d-no-repl-state check_pure_render3d_no_repl_state
@@ -590,14 +598,12 @@ else
     run_check check-render3d-no-upper-layers check_render3d_no_upper_layers
     run_check check-ui-core-no-upper-layers check_ui_core_no_upper_layers
     run_check check-app-boot-band check_app_boot_band
-    run_check check-module-prefixes check_module_prefixes
     run_check check-include-style check_include_style
     run_check check-completions check_completions
     run_check check-web-glut-get check_web_glut_get
     run_check check-log-prefix-single-source check_log_prefix_single_source
     run_check check-tier-c-function-size check_tier_c_function_size
     run_check check-no-test-default-output check_no_test_default_output
-    run_check check-prof-sections-instrumented check_prof_sections_instrumented
     run_check check-keymap-no-dup check_keymap_no_dup
     run_check check-palette check_palette
     PARALLEL_COLLECT=

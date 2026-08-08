@@ -21,6 +21,12 @@
 
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
+. scripts/lib/rg-fallback.sh
+
+# This guard's two tree-wide sweeps are the slowest state-ownership check
+# after check-prof-sections-instrumented (~3.0s standalone with plain
+# `grep -r`); `rg` (scripts/lib/rg-fallback.sh, rg > ag > grep) cuts that
+# down.
 
 # Whole-word stale names (types, enums, functions) eliminated by the
 # cleanup. Word boundaries keep the new names safe: \bfeed_line\b does
@@ -31,9 +37,9 @@ word_deny='ReplEditorBuffer|ReplEditorInputState|ReplEditorInputView|ReplSelecti
 # Prefix families (no trailing word boundary — the suffix varies).
 prefix_deny='REPL_FILE_ITEM|REPL_MENU_BAR_PIN'
 
-violations=$(grep -rnwE "($word_deny)" --include='*.c' --include='*.h' src 2>/dev/null || true)
+violations=$(rg -n "\\b($word_deny)\\b" src -g '*.c' -g '*.h' 2>/dev/null || true)
 violations="$violations
-$(grep -rnE "\\b($prefix_deny)" --include='*.c' --include='*.h' src 2>/dev/null || true)"
+$(rg -n "\\b($prefix_deny)" src -g '*.c' -g '*.h' 2>/dev/null || true)"
 
 violations=$(printf '%s\n' "$violations" | grep -vE '^[[:space:]]*$' || true)
 
@@ -48,7 +54,7 @@ if [ -n "$violations" ]; then
 fi
 
 # Deny old scene_/Scene/SCENE_ symbols in src/render3d
-stale_scene_hits=$(grep -rnE '\b(scene_[a-z0-9_]+|Scene[A-Za-z0-9]+|SCENE_[A-Z0-9_]+)\b' --include='*.c' --include='*.h' src/render3d 2>/dev/null || true)
+stale_scene_hits=$(rg -n '\b(scene_[a-z0-9_]+|Scene[A-Za-z0-9]+|SCENE_[A-Z0-9_]+)\b' src/render3d -g '*.c' -g '*.h' 2>/dev/null || true)
 if [ -n "$stale_scene_hits" ]; then
     echo "ERROR: stale scene_/Scene/SCENE_ prefix used in src/render3d/:" >&2
     printf '%s\n' "$stale_scene_hits" >&2
