@@ -233,10 +233,11 @@ ifeq ($(NOSAN),1)
 NO_SAN := 1
 endif
 
-# `NO_ASAN=1` is a compatibility spelling for the more precise project-wide
-# `NO_SAN=1`; both select the no-sanitizer debug build.
-NO_ASAN ?=
-ifeq ($(NO_ASAN),1)
+# `ASAN=0` is the positive-polarity spelling of the more precise project-wide
+# `NO_SAN=1`; both select the no-sanitizer debug build. `ASAN=1` is the
+# explicit affirmative (sanitizers on, which is also the default).
+ASAN ?=
+ifeq ($(ASAN),0)
 NO_SAN := 1
 endif
 
@@ -319,10 +320,10 @@ BUILD_REPORT_FLAGS = $(DEBUG_INFO_CFLAGS) \
 
 # Keep the parameter line compact and meaningful: BUILD is always useful,
 # while the remaining entries are shown when the caller selected them. This
-# preserves the spelling used by the caller (`NO_ASAN` versus `NO_SAN`).
+# preserves the spelling used by the caller (`ASAN` versus `NO_SAN`).
 BUILD_REPORT_PARAMS = $(strip \
 	BUILD=$(BUILD) \
-	$(if $(filter command line environment,$(origin NO_ASAN)),NO_ASAN=$(NO_ASAN),) \
+	$(if $(filter command line environment,$(origin ASAN)),ASAN=$(ASAN),) \
 	$(if $(filter command line environment,$(origin NO_SAN)),NO_SAN=$(NO_SAN),) \
 	$(if $(filter command line environment,$(origin NOSAN)),NOSAN=$(NOSAN),) \
 	$(if $(filter command line environment,$(origin SAN)),SAN=$(SAN),) \
@@ -2998,7 +2999,7 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "                 SAN=memory selects MemorySanitizer for debug builds (separate build/debug-msan dir).\n"
 	@printf "                 make debug-msan builds the full target set with SAN=memory CC=$(MSAN_CC).\n"
 	@printf "                 make test-msan runs the stubbed test suite with SAN=memory CC=$(MSAN_CC).\n"
-	@printf "                 NO_SAN=1 (or NOSAN=1/NO_ASAN=1) disables debug-build sanitizers.\n"
+	@printf "                 NO_SAN=1 (or NOSAN=1/ASAN=0) disables debug-build sanitizers.\n"
 	@printf "                 GLR_AUDIO_NO_THREAD=1 (e.g. make gl-repl CFLAGS=-DGLR_AUDIO_NO_THREAD=1)\n"
 	@printf "                 drops the audio background worker thread: the playlist lifecycle ops\n"
 	@printf "                 (file open/uninit, state save) run synchronously, drained from\n"
