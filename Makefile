@@ -1914,7 +1914,8 @@ TEST_TARGETS = \
 BENCH_TARGETS = \
 	bench bench-csv bench-web bench-web-csv bench-web-gl4es $(BENCH_TARGET_NAMES) \
 	bench-glut-bitmap bench-glut-bitmap-build bench-glut-bitmap-apple \
-	bench-glut-bitmap-freeglut glut-bitmap-freeglut-lib
+	bench-glut-bitmap-freeglut glut-bitmap-freeglut-lib \
+	bench-code-panel-text
 
 MAINTENANCE_TARGETS = \
 	check audit-editor-ownership fix-doc-links find-trailing-whitespace \
@@ -1951,7 +1952,7 @@ ifneq ($(filter Darwin,$(UNAME_S))$(filter 1,$(FREEGLUT_OSMESA))$(filter 1,$(WEB
 ifneq ($(USE_GL_STUBS),1)
 $(SAMPLE_BIN) $(RENDER3D_DEMO_BIN) $(REPL_DEMO_BIN) $(REPL_LIVE_DEMO_BIN) $(EDITOR_DEMO_BIN) \
 $(MEMPROF_DEMO_BIN) $(CPUPROF_DEMO_BIN) $(VARIABLE_PANEL_DEMO_BIN) \
-$(COLOR_PICKER_DEMO_BIN) $(ASSIGN_PLOT_DEMO_BIN) \
+$(COLOR_PICKER_DEMO_BIN) $(ASSIGN_PLOT_DEMO_BIN) $(CODE_PANEL_TEXT_BENCH_BIN) \
 $(addprefix $(BINDIR)/,$(TEST_BINS) $(BENCH_BINS) $(GL_TEST_BINS)): $(FREEGLUT_STATIC_LIB)
 endif
 endif
@@ -2537,6 +2538,44 @@ bench-glut-bitmap: bench-glut-bitmap-build ## Compare Apple GLUT with freeglut b
 else
 bench-glut-bitmap-build bench-glut-bitmap-apple bench-glut-bitmap-freeglut bench-glut-bitmap:
 	@echo "ERROR: the Apple GLUT comparison is available only on macOS." >&2
+	@exit 1
+endif
+
+# Code-panel text-submission benchmark (Linux/Mesa). Prices a bitmap draw call
+# against a glyph, which is what syntax highlighting trades: highlighting keeps
+# the glyph count and multiplies the span count.
+#
+# It links the *real* src/ui/core/text_panel.c and calls ui_text_panel_render(),
+# so the benchmark cannot drift from the code it measures. That link set is the
+# one check-ui-text-panel-pure keeps REPL-free, and matches EDITOR_DEMO_DEP_SRCS
+# minus the editor data model. Objects come from the ordinary $(OBJDIR) rules,
+# so the TUs are built with the same flags as gl-repl itself.
+#
+# Uses whichever freeglut the local gl-repl build links, so
+# FREEGLUT_VENDOR_LINUX=1 measures the vendored static X11/GLX build (and is
+# required on a box with no system freeglut).
+CODE_PANEL_TEXT_BENCH_DEP_SRCS = src/ui/core/text_layout.c \
+                                 src/ui/core/text_panel.c \
+                                 src/ui/core/text_search.c \
+                                 src/ui/core/theme.c \
+                                 src/support/cpuprof.c \
+                                 src/support/histogram.c \
+                                 src/support/runstats.c
+CODE_PANEL_TEXT_BENCH_OBJS = $(OBJDIR)/bench/bench_code_panel_text.o \
+                             $(addprefix $(OBJDIR)/,$(CODE_PANEL_TEXT_BENCH_DEP_SRCS:.c=.o))
+CODE_PANEL_TEXT_BENCH_BIN := $(BINDIR)/bench_code_panel_text
+CODE_PANEL_TEXT_BENCH_ARGS ?=
+
+ifeq ($(UNAME_S),Linux)
+$(CODE_PANEL_TEXT_BENCH_BIN): $(CODE_PANEL_TEXT_BENCH_OBJS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OBJ_CFLAGS) $(CODE_PANEL_TEXT_BENCH_OBJS) $(GL_LDFLAGS) -o $@
+
+bench-code-panel-text: $(CODE_PANEL_TEXT_BENCH_BIN) ## Benchmark code-panel text submission vs span fragmentation (Linux/Mesa; opens a short-lived window).
+	$(CODE_PANEL_TEXT_BENCH_BIN) $(CODE_PANEL_TEXT_BENCH_ARGS)
+else
+bench-code-panel-text:
+	@echo "ERROR: bench-code-panel-text targets Linux/Mesa freeglut." >&2
 	@exit 1
 endif
 
