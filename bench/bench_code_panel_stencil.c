@@ -37,11 +37,32 @@
  * (glFlush after each span) restores correct output and costs 83.68 ms/frame
  * against 1.42 ms for the direct per-span glColor path - about 59x slower.
  *
- * So the stencil-routing idea is dead on this driver, for a reason unrelated
- * to overdraw: per-span stencil state cannot be changed cheaply between
- * glBitmap calls. This benchmark therefore VERIFIES ITS OWN OUTPUT before
- * reporting any timing - see verify_stencil_tagging(). A performance number
- * from a path that draws the wrong pixels is worse than no number at all.
+ * The per-span flush is not the only way to make the tags land, though. If the
+ * stencil ref is pinned at 0xFF with GL_REPLACE and each color owns one
+ * stencil BITPLANE, the per-span value moves into glStencilMask - and spans
+ * sharing a color then share a mask, so they can be grouped by color and the
+ * stencil state changed (and flushed) once per color instead of once per span.
+ * That is stencil/grouped, and it is correct: 0/67 mis-tagged, at 2.4x direct
+ * rather than 23x. A real fix to the mechanism, but still a loss, and it caps
+ * at GL_STENCIL_BITS distinct colors (8 here) where a real panel needs 12 - so
+ * the technique cannot express the actual workload even at that price.
+ *
+ * The useful result is the control that grouping suggested: direct/grouped -
+ * same span order regrouped by color, one glColor per color, no stencil at all
+ * - runs at 0.78x with no caveats. That is where the win is.
+ *
+ * Why grouping helps far less than the span counts suggest: holding draw order
+ * fixed and varying only the glColor pattern, the cost is a cliff between one
+ * distinct color (0.40ms) and two (1.32ms), then flat out to 67 distinct
+ * colors (1.41ms). A single color change mid-batch is free (0.37ms). So Mesa
+ * is not charging per color change; a frame that changes color repeatedly
+ * takes a slow path and the number of changes barely matters after that.
+ * Batching therefore cannot reach the single-color floor - which is why
+ * direct/grouped saves ~22% and not the ~3x the floor row hints at.
+ *
+ * This benchmark VERIFIES ITS OWN OUTPUT before reporting any timing - see
+ * verify_stencil_tagging(). A performance number from a path that draws the
+ * wrong pixels is worse than no number at all.
  *
  * Three cases, all producing identical pixels:
  *
@@ -393,6 +414,97 @@ static void stencil_fill_pass(int use_bbox)
     glDisable(GL_STENCIL_TEST);
 }
 
+/* Grouped-bitplane variant.
+ *
+ * Instead of a per-span glStencilFunc ref, the ref is pinned at 0xFF with
+ * GL_REPLACE and the per-span value comes from glStencilMask - each color owns
+ * one stencil bitplane, so writing through mask (1 << c) sets only that
+ * color's bit. The point is that spans sharing a color share a mask, so the
+ * spans can be grouped by color and the stencil state changed once per color
+ * rather than once per span. One flush per color then costs C flushes instead
+ * of N, which is what makes this correct without the 25x per-span flush.
+ *
+ * Costs 8 bitplanes for 8 colors, so it caps at GL_STENCIL_BITS distinct
+ * colors (8 here) - well under the 12 a real panel needs, which is a hard
+ * limit on the technique quite apart from the timings. */
+static void stencil_tag_pass_grouped(void)
+{
+    int c, i;
+
+    glEnable(GL_STENCIL_TEST);
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glStencilFunc(GL_ALWAYS, 0xFF, 0xFF);   /* fixed; never changes */
+    glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+
+    for (c = 0; c < g_color_count && c < (int)g_stencil_bits; c++) {
+        glStencilMask(1u << c);
+        for (i = 0; i < g_span_count; i++)
+            if (g_spans[i].color_id == c)
+                draw_span_text(&g_spans[i]);
+        /* Per color, not per span: this is the whole point of grouping. */
+        glFlush();
+    }
+
+    glStencilMask(0xFF);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+}
+
+/* Fill pass for the bitplane tagging: test the color's own bit. */
+static void stencil_fill_pass_grouped(void)
+{
+    int c;
+
+    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+    for (c = 0; c < g_color_count && c < (int)g_stencil_bits; c++) {
+        if (!g_boxes[c].used)
+            continue;
+        glStencilFunc(GL_EQUAL, 1u << c, 1u << c);
+        glColor3f(g_colors[c][0], g_colors[c][1], g_colors[c][2]);
+        glBegin(GL_QUADS);
+        glVertex2i(g_boxes[c].x0, g_boxes[c].y0);
+        glVertex2i(g_boxes[c].x1, g_boxes[c].y0);
+        glVertex2i(g_boxes[c].x1, g_boxes[c].y1);
+        glVertex2i(g_boxes[c].x0, g_boxes[c].y1);
+        glEnd();
+    }
+    glDisable(GL_STENCIL_TEST);
+}
+
+static void draw_stencil_grouped(void)
+{
+    glClearStencil(0);
+    glClear(GL_STENCIL_BUFFER_BIT);
+    stencil_tag_pass_grouped();
+    stencil_fill_pass_grouped();
+}
+
+/* Group the spans by color and issue one glColor per color - no stencil at
+ * all. The obvious alternative to the whole stencil idea, included so the two
+ * are measured side by side. */
+static void draw_direct_grouped(void)
+{
+    int c, i;
+
+    for (c = 0; c < g_color_count; c++) {
+        glColor3f(g_colors[c][0], g_colors[c][1], g_colors[c][2]);
+        for (i = 0; i < g_span_count; i++)
+            if (g_spans[i].color_id == c)
+                draw_span_text(&g_spans[i]);
+    }
+}
+
+/* Floor: one color for the whole panel. Not a candidate implementation (it
+ * throws the highlighting away) - it is the lower bound any color-batching
+ * scheme is aiming at, and the gap to it is the prize on offer. */
+static void draw_single_color(void)
+{
+    int i;
+
+    glColor3f(g_colors[0][0], g_colors[0][1], g_colors[0][2]);
+    for (i = 0; i < g_span_count; i++)
+        draw_span_text(&g_spans[i]);
+}
+
 static void draw_stencil(int use_bbox, int flush_per_span)
 {
     /* The tag pass needs a clean slate; this is part of the technique's cost
@@ -453,13 +565,56 @@ static int verify_stencil_tagging(int flush_per_span)
     return bad;
 }
 
+/* Same check for the grouped bitplane tagging: each span's pixels must carry
+ * its color's bit and no other. */
+static int verify_stencil_tagging_grouped(void)
+{
+    int bad = 0;
+    int i;
+
+    glClearStencil(0);
+    glClear(GL_STENCIL_BUFFER_BIT);
+    stencil_tag_pass_grouped();
+    glDisable(GL_STENCIL_TEST);
+    glFinish();
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+
+    for (i = 0; i < g_span_count; i++) {
+        const BenchSpan *s = &g_spans[i];
+        GLubyte column[BENCH_FONT_H];
+        int want;
+        int x = span_x(s) + 1;
+        int hit = 0;
+        int row;
+
+        if (s->color_id >= (int)g_stencil_bits)
+            continue;               /* no bitplane for this color */
+        want = 1 << s->color_id;
+
+        glReadPixels(x, span_y(s), 1, BENCH_FONT_H, GL_STENCIL_INDEX,
+                     GL_UNSIGNED_BYTE, column);
+        for (row = 0; row < BENCH_FONT_H; row++) {
+            if (column[row] != 0) {
+                hit = column[row];
+                break;
+            }
+        }
+        if (hit != 0 && hit != want)
+            bad++;
+    }
+    return bad;
+}
+
 /* --- timing ------------------------------------------------------------ */
 
 typedef enum {
     CASE_DIRECT = 0,
     CASE_STENCIL_PANEL,
     CASE_STENCIL_BBOX,
-    CASE_STENCIL_FLUSHED
+    CASE_STENCIL_FLUSHED,
+    CASE_STENCIL_GROUPED,
+    CASE_DIRECT_GROUPED,
+    CASE_SINGLE_COLOR
 } BenchCase;
 
 static void draw_workload(BenchCase which, int repeats)
@@ -468,10 +623,13 @@ static void draw_workload(BenchCase which, int repeats)
 
     for (r = 0; r < repeats; r++) {
         switch (which) {
-        case CASE_DIRECT:          draw_direct();        break;
-        case CASE_STENCIL_PANEL:   draw_stencil(0, 0);   break;
-        case CASE_STENCIL_BBOX:    draw_stencil(1, 0);   break;
-        case CASE_STENCIL_FLUSHED: draw_stencil(1, 1);   break;
+        case CASE_DIRECT:          draw_direct();          break;
+        case CASE_STENCIL_PANEL:   draw_stencil(0, 0);     break;
+        case CASE_STENCIL_BBOX:    draw_stencil(1, 0);     break;
+        case CASE_STENCIL_FLUSHED: draw_stencil(1, 1);     break;
+        case CASE_STENCIL_GROUPED: draw_stencil_grouped(); break;
+        case CASE_DIRECT_GROUPED:  draw_direct_grouped();  break;
+        case CASE_SINGLE_COLOR:    draw_single_color();    break;
         }
     }
 }
@@ -525,6 +683,8 @@ static void run_sweep(int color_count)
     double base;
     int bad_unflushed;
     int bad_flushed;
+    int bad_grouped;
+    int planes_ok;
 
     build_corpus(color_count);
 
@@ -532,20 +692,30 @@ static void run_sweep(int color_count)
      * pixels is not a result. */
     bad_unflushed = verify_stencil_tagging(0);
     bad_flushed = verify_stencil_tagging(1);
+    bad_grouped = verify_stencil_tagging_grouped();
+    planes_ok = g_color_count <= (int)g_stencil_bits;
 
     printf("\ncolors=%d  spans=%d  glyphs=%lu\n", g_color_count, g_span_count,
            (unsigned long)g_glyphs_per_pass);
-    printf("  tag check: unflushed %d/%d spans mis-tagged, flushed %d/%d\n",
-           bad_unflushed, g_span_count, bad_flushed, g_span_count);
+    printf("  tag check: unflushed %d/%d mis-tagged, flushed %d/%d,"
+           " grouped %d/%d\n",
+           bad_unflushed, g_span_count, bad_flushed, g_span_count,
+           bad_grouped, g_span_count);
     printf("  %-18s %10s %12s %10s  %s\n", "case", "submit ms", "complete ms",
            "vs direct", "output");
-    base = report_case("direct", CASE_DIRECT, 0.0, "correct");
+    base = report_case("direct", CASE_DIRECT, 0.0, "correct (today)");
     report_case("stencil/panel", CASE_STENCIL_PANEL, base,
                 bad_unflushed ? "WRONG PIXELS" : "correct");
     report_case("stencil/bbox", CASE_STENCIL_BBOX, base,
                 bad_unflushed ? "WRONG PIXELS" : "correct");
     report_case("stencil/flushed", CASE_STENCIL_FLUSHED, base,
                 bad_flushed ? "WRONG PIXELS" : "correct");
+    report_case("stencil/grouped", CASE_STENCIL_GROUPED, base,
+                !planes_ok ? "NEEDS > STENCIL_BITS PLANES"
+                           : (bad_grouped ? "WRONG PIXELS" : "correct"));
+    report_case("direct/grouped", CASE_DIRECT_GROUPED, base, "correct");
+    report_case("single color (floor)", CASE_SINGLE_COLOR, base,
+                "not a candidate - no highlighting");
 }
 
 static void benchmark_display(void)
