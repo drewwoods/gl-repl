@@ -38,13 +38,22 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   Leaving `printErr` unset does not mean "same as print" - it means
   Emscripten's runtime default `console.error`, so stderr misses the drawer
   and lands red with a synthesized stack trace. That matters here because
-  gl-repl's always-on `[init +N.NNNs]` trace is a *stderr* trace (on native
-  that keeps stdout clean for `--dump-*` piping), so the drawer was missing
-  exactly the output you would open it to read. `printErr` picks the console
-  channel by the init-trace stamps `[init +` / `[gl-repl]`; everything else
-  on stderr is a real diagnostic and keeps `console.error`. A new one-shot
+  gl-repl's always-on startup trace is a *stderr* trace (on native that keeps
+  stdout clean for `--dump-*` piping), so the drawer was missing exactly the
+  output you would open it to read.
+
+  Everything gl-repl prints on this page carries a single `GLREPL: ` tag, to
+  sit alongside gl4es's own `LIBGL: ` lines instead of adding a third and
+  fourth prefix style to one scrolling log. The tag is spelled once, in
+  [`src/app/glr_log_prefix.h`](../../src/app/glr_log_prefix.h) (`GLR_LOG_TAG`),
+  which is where the native/web difference lives - native keeps the
+  historic `[init +N.NNNs]` / `[gl-repl]` stamps, web uses
+  `GLREPL: +N.NNNs `. `printErr` routes by that tag: `GLREPL:` lines are the
+  informational trace and go to `console.log`, everything else on stderr is
+  a real diagnostic and keeps `console.error`. **Keep the shell's
+  `GLR_INIT_TRACE_RE` in step with `GLR_LOG_TAG`.** A new one-shot
   capability report should go through `glr_ctrl_init_log()` so it inherits
-  the stamp rather than reading as an error on every load.
+  the tag rather than reading as an error on every load.
 - **Audio**: web builds use the browser media stack instead of miniaudio's
   file-backed decoder. `scripts/web-audio-assets.sh` copies MP3s beside the
   built page and writes `assets/music.json`; [`src/app/glr_audio.c`](../../src/app/glr_audio.c) fetches that

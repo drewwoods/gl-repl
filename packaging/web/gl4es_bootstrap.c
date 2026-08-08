@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <GL/gl.h>   /* gl4es's header (its -I precedes); maps gl* -> gl4es_gl* */
+#include "app/glr_log_prefix.h"  /* GLR_LOG_TAG - one tag across the console */
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -55,7 +56,7 @@ __attribute__((weak)) void initialize_gl4es(void) {
 // This attribute tells the linker to execute this function
 // before main() is called.
 __attribute__((constructor)) void gl4es_bootstrap(void) {
-    printf("[gl4es_bootstrap] Initializing gl4es configuration...\n");
+    printf(GLR_LOG_TAG "initializing gl4es configuration...\n");
 
     // --- GL4ES Configuration ---
     // These behave just like the environment variables you might set in a shell.
@@ -83,7 +84,7 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
             var gl = Module['ctx'];
             if (!gl || !('drawingBufferColorSpace' in gl)) return false;
             try { gl.drawingBufferColorSpace = 'display-p3'; } catch (e) { return false; }
-            console.log('[gl4es_bootstrap] drawingBufferColorSpace = display-p3');
+            console.log('GLREPL: drawingBufferColorSpace = display-p3');
             return true;
         }
         if (!tagP3()) {
@@ -417,7 +418,7 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
                 if (shouldCancelKey(event)) event.preventDefault();
             }, true);
 
-            console.log('[gl4es_bootstrap] installed canvas input guards');
+            console.log('GLREPL: installed canvas input guards');
             return true;
         }
 
@@ -432,5 +433,5 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
 
     initialize_gl4es();
 
-    printf("[gl4es_bootstrap] Done.\n");
+    printf(GLR_LOG_TAG "gl4es configuration done.\n");
 }

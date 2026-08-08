@@ -22,6 +22,7 @@
 #include "app/glr_completion.h"
 #include "app/glr_compositor.h"      /* whole-frame post-process hook */
 #include "app/glr_defaults.h"        /* CFG_DEFAULT_* */
+#include "app/glr_log_prefix.h"      /* shared init-trace stamp */
 #include "app/glr_state.h"
 #include "app/glr_tour_presence.h"   /* ambient tour-presence phase machine */
 #include "editor/commit.h"
@@ -183,17 +184,21 @@ void glr_ctrl_set_init_log_elapsed_fn(GlrCtrlElapsedSecondsFn fn) {
 }
 
 /* Emit one init-trace line for the one-shot GL-capability probes in
- * glr_ctrl_init_gl. Prefixed with the shared `[init +N.NNNs]` stamp
- * (matching gl_repl.c's boot trace) when an elapsed source is installed,
- * else the plain `[gl-repl]` tag. Runs on the main thread, so the
- * fprintf(stderr) reaches the browser console on the web build. `fmt`
+ * glr_ctrl_init_gl. Carries the shared stamp (matching gl_repl.c's boot
+ * trace) when an elapsed source is installed, else the bare tag - both
+ * spelled by glr_log_prefix.h, which is also what makes these lines read
+ * as trace rather than error in the web build's console. Runs on the main
+ * thread, so the fprintf(stderr) reaches the browser console there. `fmt`
  * must not carry a trailing newline. */
 static void glr_ctrl_init_log(const char *fmt, ...) {
     va_list ap;
-    if (g_init_log_elapsed_fn)
-        fprintf(stderr, "[init +%6.3fs] ", g_init_log_elapsed_fn());
-    else
-        fprintf(stderr, "[gl-repl] ");
+    char prefix[GLR_LOG_PREFIX_MAX];
+    if (g_init_log_elapsed_fn) {
+        double elapsed = g_init_log_elapsed_fn();
+        fputs(glr_log_prefix(prefix, sizeof prefix, &elapsed), stderr);
+    } else {
+        fputs(glr_log_prefix(prefix, sizeof prefix, NULL), stderr);
+    }
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
     va_end(ap);
@@ -3965,9 +3970,9 @@ void glr_ctrl_init_gl(void) {
              * stale hooks fire into a now-disabled gpu_prof. */
             prof_install_section_hooks(NULL, NULL);
             gpu_prof_shutdown();
-            fprintf(stderr,
-                "[gl-repl] GPU profile timing disabled (%s); the profile "
-                "panel's GPU column will read \"--\".\n",
+            glr_ctrl_init_log(
+                "GPU profile timing disabled (%s); the profile "
+                "panel's GPU column will read \"--\".",
                 gpu_prof_forced_off
                     ? "GLR_NO_GPU_PROF set"
                     : gpu_timer_advertised

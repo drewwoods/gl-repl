@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <sys/time.h>
+#include "app/glr_log_prefix.h"
 
 static double g_init_t0 = -1.0;
 static int    g_detailed_prof = 0;
@@ -25,7 +26,10 @@ double glr_init_trace_elapsed_seconds(void) {
 }
 
 void glr_init_trace(const char *phase) {
-    fprintf(stderr, "[init +%6.3fs] %s\n", glr_init_trace_elapsed_seconds(), phase);
+    char prefix[GLR_LOG_PREFIX_MAX];
+    double elapsed = glr_init_trace_elapsed_seconds();
+    fprintf(stderr, "%s%s\n",
+            glr_log_prefix(prefix, sizeof prefix, &elapsed), phase);
 }
 
 void glr_init_trace_detail(const char *phase) {

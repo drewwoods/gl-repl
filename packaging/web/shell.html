@@ -1017,12 +1017,14 @@
         outputElement.scrollTop = outputElement.scrollHeight;
       };
 
-      // The informational trace is identified by the two stamps that
-      // glr_init_trace.c and glr_ctrl_init_log() emit. Everything else on
-      // stderr is a genuine diagnostic (`repl_audio: ...`, `gl-repl: bad
-      // --window`, parse failures) and keeps console.error, so a real
-      // problem still stands out instead of being flattened into the trace.
-      const GLR_INIT_TRACE_RE = /^\s*(?:\[init \+|\[gl-repl\])/;
+      // The informational trace is identified by the GLREPL: tag that
+      // src/app/glr_log_prefix.h stamps on it - the web spelling chosen to
+      // sit alongside gl4es's own LIBGL: lines. Keep this in step with
+      // GLR_LOG_TAG there. Everything else on stderr is a genuine
+      // diagnostic (`repl_audio: ...`, `gl-repl: bad --window`, parse
+      // failures) and keeps console.error, so a real problem still stands
+      // out instead of being flattened into the trace.
+      const GLR_INIT_TRACE_RE = /^\s*GLREPL: /;
 
 #if MODULARIZE && !EXPORT_ES6
       var moduleArgs = {
