@@ -187,10 +187,11 @@ These are make variables or script/test env vars. Pass make variables as
 | `CFLAGS` | Makefile. | Extra user C flags appended to the selected build mode - **the hook for the compile-time defines**, e.g. `make gl-repl CFLAGS=-DUI_THEME_DEFAULT=1` or `CFLAGS=-DGLR_AUDIO_NO_THREAD=1`. |
 | `CPPFLAGS` | Makefile compile rules. | Also honored, for toolchains that inject preprocessor flags through the environment (`emmake` forwards it into the web build). Prefer `CFLAGS` when passing defines by hand; this is a C project and the `CPP` reads as C++. |
 | `BUILD` | Makefile. | Build mode: `release`, `debug`, `coverage`, or `quick` (`-O0 -g0`, no sanitizers). Tests default to debug; app/bench/demo targets default to release. |
+| `V`, `VERBOSE` | Makefile. | `1` restores verbose compiler commands and diagnostics; the default prints one timed line per compiled C file and a longest-step summary. |
 | `DEBUG_INFO_CFLAGS` | Makefile. | Debug-info flags. Defaults to `-ggdb -g3` everywhere except the `WEB=1` release link, which defaults to `-g0`: emcc keeps DWARF inside the `.wasm` and drops to limited binaryen optimizations when it is present (5.4 MB vs 1.8 MB `index.wasm`, with no measurable runtime difference). Override to force either way, e.g. `make web DEBUG_INFO_CFLAGS=-g2` for named frames in a browser profile. |
 | `SAN` | Makefile. | Debug sanitizer selector used by `make debug-msan` / `make test-msan`: `address` (default ASan+UBSan) or `memory` (MSan with origin tracking; uses `build/debug-msan*`). |
 | `MSAN_CC` | Makefile. | Compiler used by `make debug-msan` / `make test-msan`; defaults to `clang`, override for versioned LLVM binaries. |
-| `NO_SAN`, `NOSAN` | Makefile. | Disable debug-build sanitizers. |
+| `NO_SAN`, `NOSAN`, `NO_ASAN` | Makefile. | Disable debug-build sanitizers; `NO_ASAN=1` is a compatibility spelling. |
 | `USE_GL_STUBS` | Makefile. | `1` builds against bundled no-op GL/GLU/GLUT headers for non-rendering tests. |
 | `GLR_AUDIO_NO_DEVICE` | Audio runtime, `make test-msan`. | Any non-empty value initializes miniaudio without opening a host audio device; `test-msan` sets this to avoid uninstrumented system audio backends. |
 | `FREEGLUT_OSMESA` | Makefile. | `1` builds vendored freeglut with the headless OSMesa backend. |

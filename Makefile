@@ -22,6 +22,11 @@ BENCH_DIR := bench
 ZSHRC ?= $(HOME)/.zshrc
 ZSH_COMPLETIONS_DIR := $(PROJECT_ROOT)/scripts/completions
 
+# Concise, timed compile summaries are the default. Set either V=1 or
+# VERBOSE=1 to restore the compiler command and its output for every source.
+V ?=
+VERBOSE ?=
+
 # Parallel builds by default, but not too aggressively
 ifeq ($(filter -j%,$(MAKEFLAGS)),)
   MAKEFLAGS += -j3
@@ -228,6 +233,13 @@ ifeq ($(NOSAN),1)
 NO_SAN := 1
 endif
 
+# `NO_ASAN=1` is a compatibility spelling for the more precise project-wide
+# `NO_SAN=1`; both select the no-sanitizer debug build.
+NO_ASAN ?=
+ifeq ($(NO_ASAN),1)
+NO_SAN := 1
+endif
+
 SAN ?= address
 DEBUG_SAN_SUFFIX =
 
@@ -295,6 +307,31 @@ BUILD_CFLAGS = $(QUICK_CFLAGS)
 else
 BUILD_CFLAGS = $(RELEASE_CFLAGS)
 endif
+
+# The report shows the flags that distinguish this build mode (plus explicit
+# user flags), once at startup. The common warning/include flags are stable
+# across modes and would drown the useful part of the line; DEBUG_INFO_CFLAGS
+# is added back because it is selected by BUILD and is the reason a quick
+# build reports `-g0 -O0`, for example.
+BUILD_REPORT_FLAGS = $(DEBUG_INFO_CFLAGS) \
+	$(filter-out $(COMMON_CFLAGS),$(BUILD_CFLAGS)) \
+	$(CPPFLAGS) $(CFLAGS)
+
+# Keep the parameter line compact and meaningful: BUILD is always useful,
+# while the remaining entries are shown when the caller selected them. This
+# preserves the spelling used by the caller (`NO_ASAN` versus `NO_SAN`).
+BUILD_REPORT_PARAMS = $(strip \
+	BUILD=$(BUILD) \
+	$(if $(filter command line environment,$(origin NO_ASAN)),NO_ASAN=$(NO_ASAN),) \
+	$(if $(filter command line environment,$(origin NO_SAN)),NO_SAN=$(NO_SAN),) \
+	$(if $(filter command line environment,$(origin NOSAN)),NOSAN=$(NOSAN),) \
+	$(if $(filter command line environment,$(origin SAN)),SAN=$(SAN),) \
+	$(if $(filter command line environment,$(origin USE_GL_STUBS)),USE_GL_STUBS=$(USE_GL_STUBS),) \
+	$(if $(filter command line environment,$(origin WEB)),WEB=$(WEB),) \
+	$(if $(filter command line environment,$(origin FREEGLUT_OSMESA)),FREEGLUT_OSMESA=$(FREEGLUT_OSMESA),) \
+	$(if $(filter command line environment,$(origin FREEGLUT_VENDOR)),FREEGLUT_VENDOR=$(FREEGLUT_VENDOR),) \
+	$(if $(filter command line environment,$(origin CC)),CC=$(CC),) \
+	)
 
 ifeq ($(UNAME_S),Darwin)
   ifeq ($(FREEGLUT_OSMESA),1)
@@ -737,6 +774,11 @@ REPL_LIVE_DEMO_DEP_SRCS = $(REPL_DEMO_DEP_SRCS) \
 
 OBJDIR = build/$(BUILD)$(if $(filter debug,$(BUILD)),$(DEBUG_SAN_SUFFIX),)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)$(if $(filter 0,$(FREEGLUT_VENDOR)),-glut,)$(if $(filter 1,$(WEB)),-web,)
 BINDIR = $(OBJDIR)
+# Each Make process gets its own report directory. Recursive test/build
+# invocations therefore print and summarize only their own source files.
+COMPILE_REPORT_DIR := build/.compile-report-$(shell date +%s)-$(shell printf '%s' "$$PPID")-$(MAKELEVEL)
+COMPILE_REPORT_START := $(COMPILE_REPORT_DIR)/start
+COMPILE_REPORT_VERBOSE = $(if $(filter 1 yes true,$(V) $(VERBOSE)),1,0)
 # Fixed web-build bindir, independent of the ambient WEB flag -- lets
 # `make web-serve` find the output without the caller having to repeat
 # WEB=1 (mirrors how `make web` itself re-invokes with WEB=1 internally).
@@ -1220,6 +1262,21 @@ BENCH_OBJS = $(foreach bin,$(BENCH_BINS),$($(bin)_OBJS))
 TEST_JOBS ?=
 TEST_ARGS ?=
 
+COMPILE_REPORT_TEST_SUMMARY := $(COMPILE_REPORT_DIR)/tests-summary
+$(COMPILE_REPORT_TEST_SUMMARY): $(addprefix $(BINDIR)/,$(TEST_BINS))
+	@bash scripts/compile-report.sh summary "$(COMPILE_REPORT_DIR)"
+	@touch $@
+
+COMPILE_REPORT_BENCH_SUMMARY := $(COMPILE_REPORT_DIR)/bench-summary
+$(COMPILE_REPORT_BENCH_SUMMARY): $(addprefix $(BINDIR)/,$(BENCH_BINS))
+	@bash scripts/compile-report.sh summary "$(COMPILE_REPORT_DIR)"
+	@touch $@
+
+COMPILE_REPORT_WEB_TEST_SUMMARY := $(COMPILE_REPORT_DIR)/web-tests-summary
+$(COMPILE_REPORT_WEB_TEST_SUMMARY): $(addprefix $(BINDIR)/,$(WEB_TEST_BINS))
+	@bash scripts/compile-report.sh summary "$(COMPILE_REPORT_DIR)"
+	@touch $@
+
 ALL_OBJS = $(sort $(SAMPLE_OBJS) $(TEST_OBJS) $(BENCH_OBJS))
 
 DEPS = $(ALL_OBJS:.o=.d)
@@ -1244,9 +1301,28 @@ $(GENERATED_COMMAND_DESCRIPTIONS_INC): FORCE scripts/gen_command_descriptions.py
 
 $(OBJDIR)/src/repl/command_descriptions.o: $(GENERATED_COMMAND_DESCRIPTIONS_INC)
 
-$(OBJDIR)/%.o: %.c
+# One startup line replaces the repeated build-mode flags that used to appear
+# on every compiler command. The small shell loop preserves first-seen order
+# while removing duplicate flags.
+$(COMPILE_REPORT_START):
+	@mkdir -p $(COMPILE_REPORT_DIR)
+	@{ \
+		printf '\n  $(ESC)[1;36m%s$(NC)\n' '$(BUILD_REPORT_PARAMS)'; \
+		printf '  $(YELLOW)flags:$(NC)'; \
+		seen=''; \
+		for flag in $(BUILD_REPORT_FLAGS); do \
+			case " $$seen " in \
+				*" $$flag "*) ;; \
+				*) printf ' %s' "$$flag"; seen="$$seen $$flag" ;; \
+			esac; \
+		done; \
+		printf '\n\n'; \
+	}
+	@touch $@
+
+$(OBJDIR)/%.o: %.c | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) $(DEPFLAGS) -c -o $@ $<
+	@bash scripts/compile-report.sh compile "$(COMPILE_REPORT_DIR)" "$<" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(DEPFLAGS) -c -o $@ $<
 
 # Vendored freeglut static library. Built once via CMake into $(FREEGLUT_BUILD),
 # which lives under third_party/ so the top-level `make clean` (rm -rf ./build)
@@ -1294,6 +1370,12 @@ $(SAMPLE_BIN): $(SAMPLE_OBJS)
 
 gl-repl: $(SAMPLE_BIN) ## Build the main gl-repl binary using release flags by default.
 	ln -sfn $(SAMPLE_BIN) $@
+
+COMPILE_REPORT_SAMPLE_SUMMARY := $(COMPILE_REPORT_DIR)/sample-summary
+$(COMPILE_REPORT_SAMPLE_SUMMARY): $(SAMPLE_BIN)
+	@bash scripts/compile-report.sh summary "$(COMPILE_REPORT_DIR)"
+	@touch $@
+gl-repl: $(COMPILE_REPORT_SAMPLE_SUMMARY)
 
 # gl-repl-unchained -- the same app with the capacity ceilings lifted, for
 # EXPERIMENTATION ONLY. It exists because machine-generated documents (a
@@ -1559,9 +1641,9 @@ HOT_OBJDIR            = $(OBJDIR)/hot
 # dir so the static render3d_demo's objects (same sources, no -fPIC) coexist.
 RENDER3D_HOT_OBJS = $(addprefix $(HOT_OBJDIR)/,$(RENDER3D_DEMO_DEP_SRCS:.c=.o))
 
-$(HOT_OBJDIR)/%.o: %.c
+$(HOT_OBJDIR)/%.o: %.c | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	$(CC) $(OBJ_CFLAGS) -fPIC $(DEPFLAGS) -c -o $@ $<
+	@bash scripts/compile-report.sh compile "$(COMPILE_REPORT_DIR)" "$<" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) -fPIC $(DEPFLAGS) -c -o $@ $<
 
 $(RENDER3D_HOT_LIB): $(RENDER3D_HOT_OBJS)
 	@mkdir -p $(dir $@)
@@ -1705,6 +1787,12 @@ repl-live-demo: $(REPL_LIVE_DEMO_BIN) ## Build the standalone live REPL (file-wa
 
 demos: $(DEMO_TARGETS) ## Build all demos.
 
+COMPILE_REPORT_DEMOS_SUMMARY := $(COMPILE_REPORT_DIR)/demos-summary
+$(COMPILE_REPORT_DEMOS_SUMMARY): $(DEMO_TARGETS)
+	@bash scripts/compile-report.sh summary "$(COMPILE_REPORT_DIR)"
+	@touch $@
+demos: $(COMPILE_REPORT_DEMOS_SUMMARY)
+
 .SECONDEXPANSION:
 
 # GNU make normally expands prerequisites before it knows the concrete target.
@@ -1731,11 +1819,15 @@ $(BINDIR)/$(1): $$($(1)_OBJS)
 	$$(CC) $$(OBJ_CFLAGS) $$($(1)_OBJS) $$($(1)_LDLIBS) $$(COVERAGE_LDFLAGS) -o $$@
 
 ifeq ($$(USE_GL_STUBS),1)
-$(subst _,-,$(1)): $$(BINDIR)/$(1)
+$(subst _,-,$(1)): $$(BINDIR)/$(1) $(COMPILE_REPORT_DIR)/$(1)-summary
 else
 $(subst _,-,$(1)):
 	+$$(MAKE) --no-print-directory $$@ USE_GL_STUBS=1
 endif
+
+$(COMPILE_REPORT_DIR)/$(1)-summary: $$(BINDIR)/$(1)
+	@bash scripts/compile-report.sh summary "$$(COMPILE_REPORT_DIR)"
+	@touch $$@
 endef
 
 $(foreach test,$(TEST_BINS),$(eval $(call built_test_binary,$(test))))
@@ -2220,7 +2312,7 @@ test-detailed: ## Run the stubbed suite with verbose example export/compile logg
 	+$(MAKE) --no-print-directory internal-test-suite \
 		USE_GL_STUBS=1 BUILD=$(BUILD) TEST_VERBOSE=1
 
-internal-test-suite: $(addprefix $(BINDIR)/,$(TEST_BINS))
+internal-test-suite: $(addprefix $(BINDIR)/,$(TEST_BINS)) $(COMPILE_REPORT_TEST_SUMMARY)
 	@REPL_EXPORT_VERBOSE=$(if $(filter 1,$(TEST_VERBOSE)),1,0) \
 	REPL_EXPORT_CC="$(CC)" \
 	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
@@ -2242,6 +2334,7 @@ internal-test-case: $$(BINDIR)/$$(TEST_CASE)
 	@REPL_EXPORT_CC="$(CC)" \
 	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
 	$($(TEST_CASE)_RUN) $(TEST_ARGS)
+	@bash scripts/compile-report.sh summary "$(COMPILE_REPORT_DIR)"
 
 # The scene corpora under tests/scenes/ are opt-in: every scene costs an
 # export plus a cc invocation, and unlike examples/scenes (which ships to
@@ -2250,10 +2343,15 @@ internal-test-case: $$(BINDIR)/$$(TEST_CASE)
 # only these two binaries consult it, so only they need rebuilding+running.
 SCENE_CORPUS_TESTS = test_repl_core_examples test_camera_header_parity
 
+COMPILE_REPORT_SCENES_SUMMARY := $(COMPILE_REPORT_DIR)/scenes-summary
+$(COMPILE_REPORT_SCENES_SUMMARY): $(addprefix $(BINDIR)/,$(SCENE_CORPUS_TESTS))
+	@bash scripts/compile-report.sh summary "$(COMPILE_REPORT_DIR)"
+	@touch $@
+
 test-scenes: ## Run the opt-in tests/scenes corpora (stress + general) through export+compile.
 	+$(MAKE) --no-print-directory internal-test-scenes USE_GL_STUBS=1 BUILD=$(BUILD)
 
-internal-test-scenes: $(addprefix $(BINDIR)/,$(SCENE_CORPUS_TESTS))
+internal-test-scenes: $(addprefix $(BINDIR)/,$(SCENE_CORPUS_TESTS)) $(COMPILE_REPORT_SCENES_SUMMARY)
 	@REPL_SCENE_CORPUS=1 \
 	REPL_EXPORT_VERBOSE=$(if $(filter 1,$(TEST_VERBOSE)),1,0) \
 	REPL_EXPORT_CC="$(CC)" \
@@ -2316,7 +2414,7 @@ test-web: require-emcc ## Build and run the test suite as wasm under node (CPU p
 	}
 	+$(MAKE) --no-print-directory internal-test-suite-web WEB=1 USE_GL_STUBS=1
 
-internal-test-suite-web: $(addprefix $(BINDIR)/,$(WEB_TEST_BINS))
+internal-test-suite-web: $(addprefix $(BINDIR)/,$(WEB_TEST_BINS)) $(COMPILE_REPORT_WEB_TEST_SUMMARY)
 	@GLR_AUDIO_NO_DEVICE=1 \
 	REPL_EXPORT_VERBOSE=$(if $(filter 1,$(TEST_VERBOSE)),1,0) \
 	REPL_EXPORT_CC="cc" \
@@ -2430,7 +2528,7 @@ capacity-matrix: ## Print state-scaling matrix: per-tunable bytes-per-unit, curr
 	@$(CC) $(COMMON_CFLAGS) tools/capacity_matrix.c -o build/capacity_matrix
 	@./build/capacity_matrix
 
-bench: $(BENCH_TARGET_NAMES) ## Build and run the REPL runtime benchmarks.
+bench: $(BENCH_TARGET_NAMES) $(COMPILE_REPORT_BENCH_SUMMARY) ## Build and run the REPL runtime benchmarks.
 	@for b in $(BENCH_BINS); do \
 		echo "==> $$b $(BENCH_ARGS)"; \
 		$(BINDIR)/$$b $(BENCH_ARGS) || exit $$?; \
@@ -2900,13 +2998,15 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "                 SAN=memory selects MemorySanitizer for debug builds (separate build/debug-msan dir).\n"
 	@printf "                 make debug-msan builds the full target set with SAN=memory CC=$(MSAN_CC).\n"
 	@printf "                 make test-msan runs the stubbed test suite with SAN=memory CC=$(MSAN_CC).\n"
-	@printf "                 NO_SAN=1 (or NOSAN=1) disables debug-build sanitizers.\n"
+	@printf "                 NO_SAN=1 (or NOSAN=1/NO_ASAN=1) disables debug-build sanitizers.\n"
 	@printf "                 GLR_AUDIO_NO_THREAD=1 (e.g. make gl-repl CFLAGS=-DGLR_AUDIO_NO_THREAD=1)\n"
 	@printf "                 drops the audio background worker thread: the playlist lifecycle ops\n"
 	@printf "                 (file open/uninit, state save) run synchronously, drained from\n"
 	@printf "                 glr_audio_tick() on the caller. Auto-enabled on Emscripten (no\n"
 	@printf "                 -pthread); set =0 to force the thread on. The toggle is contained\n"
 	@printf "                 entirely in src/app/glr_audio.c.\n"
+	@printf "Build output:    concise timed lines per compiled C file plus the longest compile steps.\n"
+	@printf "                 V=1 (or VERBOSE=1) restores each compiler command/output.\n"
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"
 	@printf "Tests:           make test runs the headless stub suite; set TEST_JOBS=N to limit jobs.\n\n"
 	@printf "Individual tests can be built with make test-eval, or built and run with\n"
