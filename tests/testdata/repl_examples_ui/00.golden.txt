@@ -126,8 +126,8 @@ void display(void) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glEnable(GL_COLOR_MATERIAL);
   // Give every exterior face the same near-white material color.
-  glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
   glColor3f(0.92, 0.95, 0.98);
+  glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
   // Route subsequent glColor calls to the back-face material so each interior
   // face can use its own accent color.
   glColorMaterial(GL_BACK, GL_AMBIENT_AND_DIFFUSE);
