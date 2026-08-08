@@ -1,5 +1,5 @@
 /*
- * Stencil-routed code-panel text benchmark (Mesa / Linux freeglut).
+ * Stencil-routed code-panel text benchmark (Linux/macOS vendored freeglut).
  *
  * bench_code_panel_text.c established the problem: a syntax-highlighted row is
  * submitted as a run of colored spans, and the per-span glColor is what costs -
@@ -164,6 +164,7 @@ typedef struct {
 
 static int g_samples = BENCH_DEFAULT_SAMPLES;
 static int g_repeats = BENCH_DEFAULT_REPEATS;
+static int g_run_flushed = 0;  /* --flushed: include the slow glFlush-per-span case */
 
 static BenchSpan g_spans[BENCH_LINE_COUNT * (BENCH_MAX_LINE / BENCH_SEGMENT_CHARS + 2)];
 static int g_span_count;
@@ -236,6 +237,8 @@ static void parse_options(int *argc, char **argv)
             }
             g_repeats = parse_positive_int("--repeats", argv[++read_index],
                                            10000);
+        } else if (strcmp(argv[read_index], "--flushed") == 0) {
+            g_run_flushed = 1;
         } else {
             argv[write_index++] = argv[read_index];
         }
@@ -691,15 +694,24 @@ static void run_sweep(int color_count)
     /* Correctness first: a timing number from a path that draws the wrong
      * pixels is not a result. */
     bad_unflushed = verify_stencil_tagging(0);
-    bad_flushed = verify_stencil_tagging(1);
+    if (g_run_flushed)
+        bad_flushed = verify_stencil_tagging(1);
+    else
+        bad_flushed = 0;
     bad_grouped = verify_stencil_tagging_grouped();
     planes_ok = g_color_count <= (int)g_stencil_bits;
 
+    char flushed_status[32];
+    if (g_run_flushed)
+        sprintf(flushed_status, "%d/%d", bad_flushed, g_span_count);
+    else
+        sprintf(flushed_status, "skipped");
+
     printf("\ncolors=%d  spans=%d  glyphs=%lu\n", g_color_count, g_span_count,
            (unsigned long)g_glyphs_per_pass);
-    printf("  tag check: unflushed %d/%d mis-tagged, flushed %d/%d,"
+    printf("  tag check: unflushed %d/%d mis-tagged, flushed %s,"
            " grouped %d/%d\n",
-           bad_unflushed, g_span_count, bad_flushed, g_span_count,
+           bad_unflushed, g_span_count, flushed_status,
            bad_grouped, g_span_count);
     printf("  %-18s %10s %12s %10s  %s\n", "case", "submit ms", "complete ms",
            "vs direct", "output");
@@ -708,8 +720,9 @@ static void run_sweep(int color_count)
                 bad_unflushed ? "WRONG PIXELS" : "correct");
     report_case("stencil/bbox", CASE_STENCIL_BBOX, base,
                 bad_unflushed ? "WRONG PIXELS" : "correct");
-    report_case("stencil/flushed", CASE_STENCIL_FLUSHED, base,
-                bad_flushed ? "WRONG PIXELS" : "correct");
+    if (g_run_flushed)
+        report_case("stencil/flushed", CASE_STENCIL_FLUSHED, base,
+                    bad_flushed ? "WRONG PIXELS" : "correct");
     report_case("stencil/grouped", CASE_STENCIL_GROUPED, base,
                 !planes_ok ? "NEEDS > STENCIL_BITS PLANES"
                            : (bad_grouped ? "WRONG PIXELS" : "correct"));

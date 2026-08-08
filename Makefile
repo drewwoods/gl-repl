@@ -2566,20 +2566,20 @@ CODE_PANEL_TEXT_BENCH_OBJS = $(OBJDIR)/bench/bench_code_panel_text.o \
 CODE_PANEL_TEXT_BENCH_BIN := $(BINDIR)/bench_code_panel_text
 CODE_PANEL_TEXT_BENCH_ARGS ?=
 
-ifeq ($(UNAME_S),Linux)
+ifneq ($(filter Linux Darwin,$(UNAME_S)),)
 $(CODE_PANEL_TEXT_BENCH_BIN): $(CODE_PANEL_TEXT_BENCH_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OBJ_CFLAGS) $(CODE_PANEL_TEXT_BENCH_OBJS) $(GL_LDFLAGS) -o $@
 
-bench-code-panel-text: $(CODE_PANEL_TEXT_BENCH_BIN) ## Benchmark code-panel text submission vs span fragmentation (Linux/Mesa; opens a short-lived window).
-	$(CODE_PANEL_TEXT_BENCH_BIN) $(CODE_PANEL_TEXT_BENCH_ARGS)
+bench-code-panel-text: $(CODE_PANEL_TEXT_BENCH_BIN) ## Benchmark code-panel text submission vs span fragmentation (Linux/macOS; opens a short-lived window).
+	$(CODE_PANEL_TEXT_BENCH_BIN) $(CODE_PANEL_TEXT_BENCH_ARGS) $(BENCH_ARGS)
 else
 bench-code-panel-text:
-	@echo "ERROR: bench-code-panel-text targets Linux/Mesa freeglut." >&2
+	@echo "ERROR: bench-code-panel-text targets Linux/macOS (needs freeglut)." >&2
 	@exit 1
 endif
 
-# Stencil-routed code-panel text benchmark (Linux/Mesa). Tests whether routing
+# Stencil-routed code-panel text benchmark (Linux/macOS). Tests whether routing
 # glyph color through the stencil buffer - one masked glyph pass that tags
 # pixels, then one gated fill per distinct color - beats the current per-span
 # glColor. Trades N per-span color changes for C full-quad fills plus overdraw,
@@ -2591,7 +2591,17 @@ CODE_PANEL_STENCIL_BENCH_SRC := bench/bench_code_panel_stencil.c
 CODE_PANEL_STENCIL_BENCH_BIN := build/code-panel-stencil-bench/bench
 CODE_PANEL_STENCIL_BENCH_ARGS ?=
 
-ifeq ($(UNAME_S),Linux)
+ifeq ($(UNAME_S),Darwin)
+$(CODE_PANEL_STENCIL_BENCH_BIN): $(CODE_PANEL_STENCIL_BENCH_SRC) $(FREEGLUT_STATIC_LIB)
+	@mkdir -p $(dir $@)
+	$(CC) -Wall -Wextra -O2 -std=c99 -D_GNU_SOURCE -DGL_SILENCE_DEPRECATION -DFREEGLUT_STATIC \
+	  -I$(FREEGLUT_SRC)/include $< \
+	  $(FREEGLUT_STATIC_LIB) -lm \
+	  -framework IOKit -framework Cocoa -framework OpenGL -framework CoreVideo -o $@
+
+bench-code-panel-stencil: $(CODE_PANEL_STENCIL_BENCH_BIN) ## Benchmark stencil-routed vs per-span-glColor code-panel text (Linux/macOS; opens a short-lived window).
+	$(CODE_PANEL_STENCIL_BENCH_BIN) $(CODE_PANEL_STENCIL_BENCH_ARGS) $(BENCH_ARGS)
+else ifeq ($(UNAME_S),Linux)
 ifeq ($(FREEGLUT_VENDOR_LINUX),1)
 $(CODE_PANEL_STENCIL_BENCH_BIN): $(CODE_PANEL_STENCIL_BENCH_SRC) $(FREEGLUT_STATIC_LIB)
 	@mkdir -p $(dir $@)
@@ -2606,11 +2616,11 @@ $(CODE_PANEL_STENCIL_BENCH_BIN): $(CODE_PANEL_STENCIL_BENCH_SRC)
 	  $< -lglut -lGL -lGLU -lm -o $@
 endif
 
-bench-code-panel-stencil: $(CODE_PANEL_STENCIL_BENCH_BIN) ## Benchmark stencil-routed vs per-span-glColor code-panel text (Linux/Mesa; opens a short-lived window).
-	$(CODE_PANEL_STENCIL_BENCH_BIN) $(CODE_PANEL_STENCIL_BENCH_ARGS)
+bench-code-panel-stencil: $(CODE_PANEL_STENCIL_BENCH_BIN) ## Benchmark stencil-routed vs per-span-glColor code-panel text (Linux/macOS; opens a short-lived window).
+	$(CODE_PANEL_STENCIL_BENCH_BIN) $(CODE_PANEL_STENCIL_BENCH_ARGS) $(BENCH_ARGS)
 else
 bench-code-panel-stencil:
-	@echo "ERROR: bench-code-panel-stencil targets Linux/Mesa freeglut." >&2
+	@echo "ERROR: bench-code-panel-stencil targets Linux/macOS (needs freeglut)." >&2
 	@exit 1
 endif
 
