@@ -284,12 +284,20 @@ int main(int argc, char **argv) {
          * the accum-less visual, which is exactly what AUTO would have
          * settled on anyway once it saw a Mesa renderer string. An
          * explicit --accum keeps the request and is left to fail loudly
-         * rather than being quietly downgraded. */
+         * rather than being quietly downgraded.
+         *
+         * The probe is native-only: Emscripten's JS GLUT abort()s on any
+         * glutGet it does not implement, and GLUT_DISPLAY_MODE_POSSIBLE is
+         * one of them - the whole app dies before callMain returns. It has
+         * nothing to answer anyway, since its glutInitDisplayMode only reads
+         * MULTISAMPLE/DEPTH/STENCIL/ALPHA out of the mode and there is no
+         * accumulation buffer in WebGL to request. */
         unsigned int base = GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH |
                             GLUT_STENCIL | GLUT_MULTISAMPLE;
         unsigned int mode = base |
             (opts.use_accum != GLR_CLI_ACCUM_OFF ? GLUT_ACCUM : 0);
         glutInitDisplayMode(mode);
+#if !defined(__EMSCRIPTEN__)
         if (opts.use_accum == GLR_CLI_ACCUM_AUTO &&
             !glutGet(GLUT_DISPLAY_MODE_POSSIBLE)) {
             glr_init_trace_detail(
@@ -297,6 +305,7 @@ int main(int argc, char **argv) {
             mode = base;
             glutInitDisplayMode(mode);
         }
+#endif
         glutInitWindowSize(opts.window_w, opts.window_h);
         glutCreateWindow(GLR_WINDOW_TITLE_BASE);
     }

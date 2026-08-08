@@ -2205,6 +2205,9 @@ check-include-style: ## Hard guard: project-local headers must use "X.h", not <X
 check-completions: ## Hard guard: scripts/completions/ offers exactly the options --help documents.
 	@bash scripts/check/check-completions.sh
 
+check-web-glut-get: ## Hard guard: web-reachable glutGet() enums are ones Emscripten's JS GLUT implements (it abort()s on the rest).
+	@python3 scripts/check/check-web-glut-get.py
+
 check-doc-links: ## Validate local Markdown file links and line anchors.
 	@python3 scripts/check/check-doc-links.py
 

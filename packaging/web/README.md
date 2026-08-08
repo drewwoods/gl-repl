@@ -20,6 +20,15 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   [`include/GL/emscripten_hide_glut.h`](../../third_party/freeglut/include/GL/emscripten_hide_glut.h), so the JS implementation wins and
   freeglut only supplies solids, stroke/bitmap fonts, and the geometry
   primitives gl-repl calls directly.
+  That JS implementation answers a **fixed set of `glutGet` types and
+  `abort()`s on every other one** - not "returns 0", but kills the page with
+  `Aborted(glutGet(N) not implemented yet)` and a bare "Exception thrown"
+  dialog. A probe between `glutInit()` and `glutCreateWindow()` therefore takes
+  the app down before a window ever opens, in every browser (that is what
+  `glutGet(GLUT_DISPLAY_MODE_POSSIBLE)`, a native Mesa accum-visual
+  workaround, did). `make check-web-glut-get` guards the enum set; native-only
+  queries belong in `#if !defined(__EMSCRIPTEN__)`. Nothing else catches this -
+  `make test-web` never calls `main()`.
 - **GL**: every TU force-includes gl4es's `<GL/gl.h>` (`-DUSE_MGL_NAMESPACE`),
   which maps `gl*` calls to `gl4es_gl*` over WebGL2. `glGetString` etc. resolve
   through gl4es, so `glutExtensionSupported` above reads the real live
