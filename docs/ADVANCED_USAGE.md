@@ -152,6 +152,8 @@ A value below 1 is refused with a note on stderr rather than acted on.
 | `GLR_NO_POINT_PARAMETER` | Any non-empty value. | Forces the no-`glPointParameterfv` fallback path even on capable hardware. |
 | `GLR_NO_GPU_PROF` | Any non-empty value. | Disables GPU timer-query profiling; the profile panel GPU column reads `--`. |
 | `GLR_DETAILED_PROF` | Any non-empty value; same as `--detailed-prof`. | Enables the finer init-trace phases and first-two-frame timing triples. |
+| `GLR_PROF_DUMP` | Frame interval; default off. | Prints the profile panel's rows (running averages, ms) to stderr every N frames, for A/B measurement without a window. See [Diagnostics](#diagnostics) for how to read them. |
+| `GLR_PROF_DUMP_MIN_MS` | Milliseconds; default `0.02`. | Row cutoff for `GLR_PROF_DUMP`; `0` prints every section. |
 | `GLR_AUDIO_HITCH_MS` | Milliseconds; default `50`; `0` disables. | Threshold for logging audio-worker lifecycle hitches. |
 | `GLR_MINIAUDIO_LOG` | Default `warning`; `debug`/`all`/`1`, `info`, `error`, `0`/`off`/`none`. | Forwards miniaudio backend logs to stderr, timestamped when the init clock is available. Debug/info are noisy; backend underrun/starvation messages are platform-specific. |
 | `HOME` | User home directory. | Used for the macOS per-user music folder and as fallback for the XDG path. |
@@ -910,6 +912,24 @@ backend audio-device issues:
 - **GPU timer-query override** - `GLR_NO_GPU_PROF=1` leaves the CPU profile
   data on but disables GPU timings, useful when a driver advertises timer
   queries unreliably.
+- **Profile dump to stderr** - `GLR_PROF_DUMP=N` prints the profile panel's
+  rows every `N` frames: the catalog's labels, indented by nesting depth,
+  carrying each section's running average in ms. Same data as the panel, but
+  in a form a shell loop can diff - which is what makes A/B measurement
+  (feature on vs. off, two machines, two drivers) practical without a window,
+  a mouse and a screenshot. `GLR_PROF_DUMP_MIN_MS` sets the row cutoff
+  (default `0.02`; `0` prints the whole catalog).
+
+  **Read a dump as attribution, not as work.** A section containing a
+  synchronous GL readback absorbs whatever pipeline drain the driver owes at
+  that point, and on a render-ahead driver with vsync on that drain is most of
+  a refresh interval. Vertex numbering is the worked example: `vertex nums`
+  reports ~14 ms on NVIDIA, but ~12 ms of it is the driver's swap queue
+  draining into the overlay's depth readback, not overlay work - with labels
+  off the identical wait sits in `Present` instead. When a row's cost lands
+  suspiciously close to the vsync period, re-run with `__GL_SYNC_TO_VBLANK=0`
+  (or `__GL_MaxFramesAllowed=1`) before believing it; `make bench-vertex-labels`
+  reproduces both sides of that comparison in isolation.
 
 In-app, the CPU profiler overlay shows per-frame section timings and the
 memory panel shows RSS history - see

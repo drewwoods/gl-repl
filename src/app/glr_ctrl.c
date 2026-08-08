@@ -2571,6 +2571,8 @@ void glr_frame_work_end(void) {
     prof_end(PROF_FRAME_WORK);
 }
 
+static void glr_ctrl_prof_dump_tick(void);
+
 void glr_frame_ended(void) {
     if (g_frame_open) {
         int work_was_closed = !g_frame_work_open;
@@ -2596,6 +2598,54 @@ void glr_frame_ended(void) {
      * capture mode would make the two modes' frame times incomparable. */
     if (g_tick_per_frame)
         glr_ctrl_tick();
+
+    glr_ctrl_prof_dump_tick();
+}
+
+/* GLR_PROF_DUMP=N: every N frames, print the profile panel's rows to stderr.
+ * The panel is the same data, but reading it needs a window, a mouse and a
+ * screenshot - which makes A/B measurement (feature on vs. off, two machines,
+ * two drivers) impractical. This is that panel in a form a shell loop can
+ * diff. Rows are the catalog's, indented by ProfSectionInfo.depth, carrying
+ * the running average rather than the last frame so the numbers are stable.
+ *
+ * Rows under GLR_PROF_DUMP_MIN_MS (default 0.02 ms) are dropped, so a dump is
+ * the handful of sections that actually cost something instead of the whole
+ * catalog. Set it to 0 to print every row.
+ *
+ * Read the numbers as attribution, not as work: a section containing a
+ * synchronous GL readback absorbs whatever pipeline drain the driver owes,
+ * and on a render-ahead driver that drain is most of a refresh interval. When
+ * a section's cost is suspiciously close to the vsync period, compare against
+ * a run with vsync off before believing it - see docs/ADVANCED_USAGE.md. */
+static void glr_ctrl_prof_dump_tick(void) {
+    static int    dump_every = -1;
+    static double min_us     = 0.0;
+    static long   frames     = 0;
+    int s;
+
+    if (dump_every < 0) {
+        const char *interval = getenv("GLR_PROF_DUMP");
+        const char *floor_ms = getenv("GLR_PROF_DUMP_MIN_MS");
+        dump_every = interval ? atoi(interval) : 0;
+        if (dump_every < 0)
+            dump_every = 0;
+        min_us = floor_ms ? atof(floor_ms) * 1000.0 : 20.0;
+    }
+    if (dump_every <= 0 || ++frames % dump_every != 0)
+        return;
+
+    fprintf(stderr, "[prof] frame %ld (averages, ms)\n", frames);
+    for (s = 0; s < PROF_SECTION_COUNT; s++) {
+        ProfSectionInfo info = prof_section_info((ProfSection)s);
+        double avg_us = prof_section_avg_us((ProfSection)s);
+        int indent = info.depth > 0 ? info.depth * 2 : 0;
+        if (avg_us < min_us)
+            continue;
+        fprintf(stderr, "  %*s%-*s %8.3f\n",
+                indent, "", 40 - indent,
+                info.label ? info.label : "(unnamed)", avg_us / 1000.0);
+    }
 }
 
 void glr_ctrl_run_scripted_input_frame(void) {
