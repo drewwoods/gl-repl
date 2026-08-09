@@ -1277,6 +1277,10 @@ typedef struct {
     float    eased_dy;    /* eased pixel offset the label actually drew at  */
 } VertexLabelSticky;
 
+/* Set by the last edit_overlays_render_vertex_numbers(); read by the
+ * controller's capture gate. See edit_overlays_vertex_labels_wanted_depth(). */
+static int g_vertex_labels_wanted_depth = 0;
+
 static VertexLabelSticky g_label_sticky[MAX_FLAT_COMMANDS];
 static unsigned g_label_sticky_frame = 1; /* starts past 0 so zeroed entries
                                            * never read as incumbents */
@@ -1328,38 +1332,40 @@ typedef struct {
     int   poly_first;
     int   poly_last;
     int   poly_fan_anchor;
-    /* Scene depth buffer (vw*vh, viewport-local, bottom-up) for the occlusion
-     * cull. Read at most once per pass, and *lazily* - the first vertex that
-     * actually reaches the cull triggers it. The readback is a synchronous
-     * full-viewport stall (~ms), so a label mode that is on but has nothing to
-     * label (cursor off a vertex row, scope empty, everything off-screen or
-     * over the label cap) must not pay it. depthbuf stays NULL when the
-     * context can't read depth or the read failed; labels then stay visible. */
-    int    depth_supported;
-    int    depth_tried;
-    int    depth_vp_x, depth_vp_y;
-    float *depthbuf;
+    /* Scene depth for the occlusion cull, captured by the controller at the
+     * end of the PREVIOUS frame - this pass performs no readback of its own.
+     * See OverlayDepthSnapshot in edit_overlays.h for why, and for the
+     * one-frame staleness that follows from it.
+     *
+     * depthbuf stays NULL when there is no usable snapshot (not captured yet,
+     * capture failed, invalidated, or a context that cannot read depth), and
+     * labels then stay visible.
+     *
+     * wanted_depth records whether any vertex actually reached the cull. The
+     * controller's capture gate reads it to decide whether next frame's
+     * snapshot is worth taking, which is what preserves the old lazy read's
+     * property that a label mode with nothing in scope costs nothing. */
+    const float *depthbuf;
+    int    depth_vw, depth_vh;
+    int    wanted_depth;
 } VertexLabelCtx;
 
-/* Lazy one-shot scene-depth snapshot for the occlusion cull; see depthbuf. */
+/* The scene depth to cull against, or NULL if there is none to use.
+ *
+ * Recording that the cull was reached is this function's other job, and it
+ * happens even when the answer is NULL: the controller needs to know the pass
+ * WANTED depth in order to capture some for next frame, and the frame where
+ * labels first come into scope is exactly the frame with no snapshot yet.
+ *
+ * A snapshot whose dimensions disagree with the current viewport is refused
+ * rather than indexed - it describes a differently-shaped scene rect, and
+ * indexing it would read the wrong pixels or run off the end. */
 static const float *vertex_label_depth_snapshot(VertexLabelCtx *ctx) {
-    size_t n;
-
-    if (ctx->depth_tried)
-        return ctx->depthbuf;
-    ctx->depth_tried = 1;
-    if (!ctx->depth_supported || ctx->vw <= 0 || ctx->vh <= 0)
-        return NULL;
-
-    n = (size_t)ctx->vw * (size_t)ctx->vh;
-    ctx->depthbuf = (float *)malloc(n * sizeof(float));
+    ctx->wanted_depth = 1;
     if (!ctx->depthbuf)
         return NULL;
-    /* The label pass runs with GL_DEPTH_TEST disabled and draws only bitmap
-     * text, so nothing between here and the end of the walk writes depth -
-     * reading mid-walk sees exactly what an up-front read would have. */
-    glReadPixels(ctx->depth_vp_x, ctx->depth_vp_y, ctx->vw, ctx->vh,
-                 GL_DEPTH_COMPONENT, GL_FLOAT, ctx->depthbuf);
+    if (ctx->depth_vw != ctx->vw || ctx->depth_vh != ctx->vh)
+        return NULL;
     return ctx->depthbuf;
 }
 
@@ -2021,7 +2027,7 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
                                          int is_ortho,
                                          int scope,
                                          int placement,
-                                         int depth_readback_supported) {
+                                         const OverlayDepthSnapshot *depth) {
     ReplayVertexWalkContext ctx;
     /* Big label store (the all-instances walk can collect a whole looped
      * surface); keep it off the render stack. Render is single-threaded and
@@ -2058,9 +2064,10 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     label_ctx.placement       = placement;
     label_ctx.block_instances = 0;
     label_ctx.labelable_seen  = 0;
-    label_ctx.depth_supported = depth_readback_supported;
-    label_ctx.depth_tried     = 0;
-    label_ctx.depthbuf        = NULL;
+    label_ctx.depthbuf     = (depth && depth->valid) ? depth->pixels : NULL;
+    label_ctx.depth_vw     = depth ? depth->vw : 0;
+    label_ctx.depth_vh     = depth ? depth->vh : 0;
+    label_ctx.wanted_depth = 0;
     label_ctx.poly_valid      = walk_ctx ? walk_ctx->cursor_poly_valid : 0;
     label_ctx.poly_first      = walk_ctx ? walk_ctx->cursor_poly_first : 0;
     label_ctx.poly_last       = walk_ctx ? walk_ctx->cursor_poly_last : 0;
@@ -2073,19 +2080,16 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     glGetIntegerv(GL_VIEWPORT, vp);
     label_ctx.vw = vp[2];
     label_ctx.vh = vp[3];
-    label_ctx.depth_vp_x = vp[0];
-    label_ctx.depth_vp_y = vp[1];
 
-    /* The scene depth buffer feeds the occlusion cull (one readback for the
-     * whole pass, not a per-vertex GL round-trip), taken lazily by
-     * vertex_label_depth_snapshot() when the first vertex reaches the cull -
-     * the scene geometry has already drawn its depths by the time overlays
-     * run, and a pass that labels nothing must not pay the stall. Indexed
+    /* The occlusion cull reads `depth`, captured by the controller after last
+     * frame's glFinish. This pass issues NO glReadPixels - that is the whole
+     * point of the arrangement, and re-adding one here would put a
+     * whole-pipeline sync back in the middle of the frame. Indexed
      * viewport-local (bottom-up), matching project_to_screen. Occlusion
-     * applies in every scope when the context supports this readback. WebGL
-     * forbids reading default-framebuffer depth and gl4es may silently no-op,
-     * so the controller's capability probe gates the read; without a valid
-     * snapshot, labels deliberately remain visible. */
+     * applies in every scope that has a usable snapshot; without one (WebGL
+     * cannot read default-framebuffer depth, gl4es may silently no-op, and the
+     * first frame after labels come into scope has none yet) labels
+     * deliberately remain visible. */
 
     if (mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD ||
         mode == OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE) {
@@ -2105,9 +2109,14 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     if (label_ctx.vw > 0 && label_ctx.vh > 0)
         vertex_labels_layout_and_draw(&label_ctx);
 
-    free(label_ctx.depthbuf);
+    /* The buffer belongs to the controller; nothing to free here. */
     label_ctx.depthbuf = NULL;
+    g_vertex_labels_wanted_depth = label_ctx.wanted_depth;
     glPopAttrib();
+}
+
+int edit_overlays_vertex_labels_wanted_depth(void) {
+    return g_vertex_labels_wanted_depth;
 }
 
 typedef struct ReplayVertexLabelCtx {
@@ -2526,7 +2535,7 @@ void edit_overlays_post_resolve_overlays(void *user_data) {
                                             pack->ortho_mode,
                                             pack->overlay_scope,
                                             pack->vertex_label_placement,
-                                            pack->depth_readback_supported);
+                                            &pack->depth_snapshot);
         prof_accum_end(PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS);
     }
     if (pack->walk.replay_vertex_label) {

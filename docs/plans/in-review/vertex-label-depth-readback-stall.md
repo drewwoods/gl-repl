@@ -1,6 +1,15 @@
 # Vertex-Label Depth Readback: End-of-Frame Lagged Capture
 
-## Status - IN REVIEW (drafted 2026-08-08; review folded in 2026-08-09)
+## Status - IMPLEMENTED on `feat/vertex-label-lagged-depth-capture` (2026-08-09)
+
+Version 1 is built and measured in-app: Frame Work with labels on went
+16.3 -> 3.4 ms on the atoll stress scene, against a 2.1 ms labels-off baseline.
+`vertex nums` now reads 1.25 ms (its layout + glyph cost) and the readback is
+attributed separately as `depth snapshot` at ~1.5-2.1 ms, outside Frame Work.
+Version 2 remains rejected. Kept in `in-review/` rather than moved to `done/`
+because one review item is still open by choice - see **Viewport validation**.
+
+Drafted 2026-08-08; review folded in 2026-08-09.
 
 Review raised four issues. Three are folded into the design below - stale-
 snapshot invalidation and failed-read/allocation behavior (both now specified

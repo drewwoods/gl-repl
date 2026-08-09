@@ -2173,6 +2173,9 @@ check-repl-state-no-glr-state: ## Verify REPL pipeline TUs do not include src/ap
 check-app-boot-band: ## Verify the frame-time controller band (src/app/*) does not include boot headers (src/app/boot/*).
 	@bash scripts/check/check-app-boot-band.sh
 
+check-depth-capture-after-finish: ## Verify gl_repl.c captures the vertex-label depth snapshot after glFinish and before the swap.
+	@bash scripts/check/check-depth-capture-after-finish.sh
+
 check-glr-state-no-repl-mutators: ## Verify src/app/glr_state.c does not call back into REPL state mutators.
 	@bash scripts/check/check-glr-state-no-repl-mutators.sh
 
@@ -2294,6 +2297,7 @@ check-unicode: ## Hard guard: apply configured Unicode replacements in project C
 
 CHECK_TARGETS = \
 	check-trailing-whitespace \
+	check-depth-capture-after-finish \
 	check-unicode \
 	check-doc-links \
 	check-user-guide-keymap \

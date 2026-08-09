@@ -143,6 +143,14 @@ typedef enum {
      * outlives the tour by the length of its exit collapse) and a different
      * cost profile (no bitmap text at all once the card is gone). */
     PROF_TOUR_PRESENCE,
+    /* glr_ctrl_capture_depth_snapshot(): the vertex-label occlusion cull's
+     * scene-depth read, taken from the host after its glFinish and before the
+     * swap. Deliberately its own row rather than folded into the label pass -
+     * it no longer happens during that pass, and it is the one piece of
+     * per-frame work here whose cost is a transfer rather than a draw. Expect
+     * ~2.5 ms at 4x MSAA; if it ever reads near a refresh interval instead,
+     * the frame stopped being drained before it runs. See docs/plans. */
+    PROF_DEPTH_SNAPSHOT,
     /* The three summary rows, in display order. The application owns the frame
      * boundary (glr_frame_begin / glr_frame_ended in gl_repl.c's display
      * callback), and the whole span between them is the frame:

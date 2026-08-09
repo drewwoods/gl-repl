@@ -699,7 +699,7 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
     pack->vertex_label_mode = (OverlayVertexLabelMode)presentation.show_vertex_labels;
     pack->overlay_scope = presentation.overlay_scope;
     pack->vertex_label_placement = presentation.vertex_label_placement;
-    pack->depth_readback_supported = glr_ctrl_depth_readback_is_supported();
+    pack->depth_snapshot = glr_ctrl_depth_snapshot_view();
     pack->ortho_mode = presentation.ortho_mode;
     pack->show_normal_vectors = presentation.show_normal_vectors;
     pack->multisample_enabled = cfg ? cfg->multisample_enabled : 0;
@@ -1327,6 +1327,137 @@ static int glr_ctrl_depth_readback_is_supported(void) {
     return g_depth_readback_supported;
 }
 
+/* ---------------------------------------------------------------------------
+ * Vertex-label occlusion depth snapshot.
+ *
+ * The label pass culls labels whose vertex the scene drew over, which needs
+ * the frame's depth buffer. It used to read that itself, mid-pass. On a driver
+ * that renders ahead (NVIDIA by default) a synchronous glReadPixels blocks
+ * until the whole queued, vsync-throttled pipeline retires, so that read cost
+ * ~14 ms and consumed the entire frame budget - not in transfer (0.7-2.5 ms)
+ * but in drain. See docs/plans/in-review/vertex-label-depth-readback-stall.md
+ * and `make bench-vertex-labels`, which reproduces every variant that does not
+ * work (a different buffer, a different position, a PBO, a PBO plus a fence).
+ *
+ * So the read moved here: the host takes it after the glFinish it already
+ * performs at end of frame, where the queue is drained and the wait is already
+ * paid, and the *next* frame's label pass consumes it. The cull is therefore
+ * one frame stale, which at 60 fps is not perceptible.
+ *
+ * `valid` means "these pixels describe the scene as of the end of last frame".
+ * Only a completed capture sets it. Everything that can make the retained
+ * pixels describe a *different* scene clears it - see
+ * glr_ctrl_invalidate_depth_snapshot() and its callers. Note that the question
+ * "should we capture this frame" and the question "is the buffer we already
+ * hold still usable" are separate; answering only the first is what would let
+ * a label off/on cycle publish the pre-off buffer to the first pass back.
+ * ------------------------------------------------------------------------- */
+typedef struct {
+    float *pixels;      /* vw*vh window depths, viewport-local, bottom-up */
+    int    vx, vy;      /* scene viewport origin the read was taken from  */
+    int    vw, vh;
+    size_t capacity;    /* floats allocated, so a shrink need not realloc  */
+    int    valid;
+} GlrDepthSnapshot;
+
+static GlrDepthSnapshot g_depth_snapshot;
+
+/* Did last frame's label pass actually reach the occlusion cull? The capture
+ * gate reads this so that labels-on-but-nothing-in-scope keeps costing
+ * nothing, which is the property the old lazy read had and the one thing an
+ * end-of-frame capture cannot work out for itself - it runs before the pass
+ * that would need the pixels. The cost is one frame of latency when labels
+ * first come into scope, during which the pass sees no snapshot and draws
+ * every label, which is the same fallback an unsupported context gets. */
+static int g_depth_snapshot_wanted = 0;
+
+void glr_ctrl_invalidate_depth_snapshot(void) {
+    g_depth_snapshot.valid = 0;
+}
+
+/* Cleared here rather than only in the capture gate: on a wholesale document
+ * or view change the *next* frame's pass must not cull against the previous
+ * scene, and it would otherwise be handed a snapshot that is stale rather than
+ * absent. */
+static void glr_ctrl_depth_snapshot_reset(void) {
+    glr_ctrl_invalidate_depth_snapshot();
+    g_depth_snapshot_wanted = 0;
+}
+
+void glr_ctrl_depth_snapshot_free(void) {
+    free(g_depth_snapshot.pixels);
+    g_depth_snapshot.pixels = NULL;
+    g_depth_snapshot.capacity = 0;
+    glr_ctrl_depth_snapshot_reset();
+}
+
+void glr_ctrl_set_depth_snapshot_wanted(int wanted) {
+    g_depth_snapshot_wanted = wanted ? 1 : 0;
+}
+
+/* Published to the label pass through OverlaySnapshotPack. Returns a view with
+ * valid == 0 rather than NULL so the consumer has one shape to handle. */
+OverlayDepthSnapshot glr_ctrl_depth_snapshot_view(void) {
+    OverlayDepthSnapshot view;
+    view.pixels = g_depth_snapshot.valid ? g_depth_snapshot.pixels : NULL;
+    view.vw     = g_depth_snapshot.vw;
+    view.vh     = g_depth_snapshot.vh;
+    view.valid  = g_depth_snapshot.valid && g_depth_snapshot.pixels != NULL;
+    return view;
+}
+
+void glr_ctrl_capture_depth_snapshot(void) {
+    GLint vp[4];
+    size_t needed;
+
+    /* Every early return leaves the snapshot invalid, never merely unrefreshed:
+     * publishing last frame's pixels as this frame's is the failure mode this
+     * whole block is written to avoid. */
+    if (!g_depth_snapshot_wanted || !g_depth_readback_supported) {
+        glr_ctrl_invalidate_depth_snapshot();
+        return;
+    }
+
+    glGetIntegerv(GL_VIEWPORT, vp);
+    if (vp[2] <= 0 || vp[3] <= 0) {
+        glr_ctrl_invalidate_depth_snapshot();
+        return;
+    }
+
+    needed = (size_t)vp[2] * (size_t)vp[3];
+    if (needed > g_depth_snapshot.capacity) {
+        float *grown = (float *)realloc(g_depth_snapshot.pixels,
+                                        needed * sizeof(float));
+        if (!grown) {
+            /* Keep whatever we had allocated - it is still a valid heap block -
+             * but it no longer describes anything, so it must not be published. */
+            glr_ctrl_invalidate_depth_snapshot();
+            return;
+        }
+        g_depth_snapshot.pixels = grown;
+        g_depth_snapshot.capacity = needed;
+    }
+
+    prof_begin(PROF_DEPTH_SNAPSHOT);
+    (void)glGetError();
+    glReadPixels(vp[0], vp[1], vp[2], vp[3], GL_DEPTH_COMPONENT, GL_FLOAT,
+                 g_depth_snapshot.pixels);
+    /* The startup probe reads one pixel and cannot promise that every later
+     * full-viewport read succeeds, so the read is checked per capture. A failed
+     * read leaves the buffer holding indeterminate contents; culling against
+     * those would drop labels at random. */
+    if (glGetError() != GL_NO_ERROR) {
+        glr_ctrl_invalidate_depth_snapshot();
+    } else {
+        g_depth_snapshot.vx = vp[0];
+        g_depth_snapshot.vy = vp[1];
+        g_depth_snapshot.vw = vp[2];
+        g_depth_snapshot.vh = vp[3];
+        g_depth_snapshot.valid = 1;
+    }
+    prof_end(PROF_DEPTH_SNAPSHOT);
+}
+
 /* "The context has an accumulation buffer, but it is a CPU emulation" -
  * probed once in glr_ctrl_init_gl from the renderer string, consumed by
  * glr_ctrl_set_accum's AUTO mode. Distinct from accum_bits == 0 (no accum
@@ -1391,6 +1522,11 @@ static int glr_ctrl_accum_is_software_renderer(void) {
 
 void glr_ctrl_set_depth_readback_supported_for_test(int supported) {
     g_depth_readback_supported = supported ? 1 : 0;
+    /* Losing the capability must drop whatever was already captured, not just
+     * stop future captures - the retained pixels would otherwise keep being
+     * published to a context that is no longer allowed to have them. */
+    if (!g_depth_readback_supported)
+        glr_ctrl_invalidate_depth_snapshot();
 }
 
 void glr_ctrl_set_stencil_readback_supported_for_test(int supported) {
@@ -3098,12 +3234,30 @@ void glr_ctrl_display_frame(void) {
      * motion and interpolate prev<->cur for camera blur. */
     g_prev_frame_pose = g_cur_frame_pose;
     g_prev_frame_pose_valid = 1;
+
+    /* Decide whether the host should capture depth for next frame's labels.
+     * Derived here, once, from what the pass that just ran actually did - the
+     * capture itself runs later (after glFinish) and only consumes this.
+     *
+     * The label-mode test is not redundant with the pass's own flag: when
+     * labels are off the pass returns before touching it, so the flag would
+     * keep reporting whatever the last enabled frame did. Being off is also
+     * what makes the retained snapshot stale, and glr_ctrl_capture_depth_snapshot()
+     * invalidates on a false gate for exactly that reason. */
+    glr_ctrl_set_depth_snapshot_wanted(
+        glr_state_presentation().show_vertex_labels != OVERLAY_VERTEX_LABEL_OFF &&
+        edit_overlays_vertex_labels_wanted_depth());
 }
 
 void glr_ctrl_reshape(int w, int h) {
     if (h < 1) h = 1;
     ui_state_viewport_set_size(w, h);
     g_last_ui_snapshot_valid = 0;
+    /* The scene rect moves with the window, so the retained depth describes a
+     * region that no longer exists. The consumer's size check would catch most
+     * of this, but not a resize that happens to preserve the scene rect's
+     * dimensions, so drop it here as well. */
+    glr_ctrl_invalidate_depth_snapshot();
 }
 
 /* Idempotent app-service installer required for any REPL loading/export path (including CLI). */
@@ -3735,6 +3889,10 @@ static void glr_ctrl_install_app_services(void) {
 /* Full-world reset entry point. Clears REPL, editor, UI, and all peer subsystems. */
 void glr_ctrl_reset_all(void) {
     editor_undo_note_wholesale_replacement();
+    /* The retained depth describes the outgoing scene. Dropping it here (rather
+     * than trusting the next capture to overwrite it) is what stops the first
+     * pass after a reset culling labels against the previous document. */
+    glr_ctrl_depth_snapshot_reset();
     repl_state_reset_program();
     /* Reset presentation, rendering, and camera defaults. */
     glr_state_presentation_reset_defaults();
@@ -4542,6 +4700,7 @@ void glr_ctrl_on_frame_timer(void) {
 }
 
 void glr_shutdown(void) {
+    glr_ctrl_depth_snapshot_free();
     glr_audio_shutdown();
     hidden_lines_destroy_resources();
     repl_executor_destroy_resources();

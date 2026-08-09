@@ -2,6 +2,7 @@
 #define GLR_CTRL_H
 
 #include "app/glr_defaults.h"  /* GlrExampleTagDefault */
+#include "subsystems/edit_overlays/edit_overlays.h"  /* OverlayDepthSnapshot */
 #include "subsystems/buffer_viz/stencil_viz.h"  /* BufferVizStencilHistogram */
 #include "ui/app/gl_state_panel.h"
 #include "ui/app/repl_code_panel.h"
@@ -181,6 +182,23 @@ void glr_ctrl_set_accum(int mode);
  * flag through the _for_test seam (they never run the probe). */
 const char *glr_ctrl_depth_readback_unsupported_reason(void);
 void glr_ctrl_set_depth_readback_supported_for_test(int supported);
+
+/* Vertex-label occlusion depth snapshot (see glr_ctrl.c for the full rationale
+ * and docs/plans/in-review/vertex-label-depth-readback-stall.md for why it is
+ * shaped this way).
+ *
+ * glr_ctrl_capture_depth_snapshot() MUST be called from the host's display
+ * callback AFTER its glFinish and BEFORE glutSwapBuffers. That position is the
+ * entire point: the queue is drained there and the wait is already paid, so the
+ * read costs only its transfer. Called anywhere earlier it becomes a
+ * whole-pipeline sync in the middle of the frame and costs a full refresh
+ * interval on a render-ahead driver. tests/test_glr_ctrl.c asserts the call
+ * order, because nothing else would catch the regression. */
+void glr_ctrl_capture_depth_snapshot(void);
+void glr_ctrl_invalidate_depth_snapshot(void);
+void glr_ctrl_set_depth_snapshot_wanted(int wanted);
+OverlayDepthSnapshot glr_ctrl_depth_snapshot_view(void);
+void glr_ctrl_depth_snapshot_free(void);
 
 /* Stencil-view twin of the depth readback capability gate. A context needs
  * both actual stencil planes and GL_STENCIL_INDEX readback; commands still

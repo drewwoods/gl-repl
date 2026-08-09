@@ -2222,6 +2222,10 @@ static void test_vertex_label_visible_occlusion(void) {
         ctx.vw = 4;
         ctx.vh = 4;
         ctx.depthbuf = depth;
+        /* The snapshot carries its own dimensions now: the consumer refuses one
+         * that disagrees with the live viewport rather than indexing it. */
+        ctx.depth_vw = 4;
+        ctx.depth_vh = 4;
 
         /* Both vertices sit in one block, so no scope drops either on
          * block-selection grounds; only the depth cull can. */
@@ -2523,7 +2527,7 @@ static void test_vertex_numbers_use_source_begin_block(void) {
     edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX, 0,
                                         OVERLAY_SCOPE_ALL_INSTANCES,
                                         OVERLAY_LABEL_PLACEMENT_DECLUTTERED,
-                                        1);
+                                        NULL);
     trace_end(&log);
 
     ASSERT_INT("earlier GL_POINTS vertex 0 not labelled",
@@ -2577,18 +2581,23 @@ static void test_render_via_repl_program(void) {
     edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX_POS, 0,
                                         OVERLAY_SCOPE_ALL_INSTANCES,
                                         OVERLAY_LABEL_PLACEMENT_DECLUTTERED,
-                                        1);
+                                        NULL);
     trace_end(&log);
     ASSERT_INT("vertex-number label at first vertex",
                trace_count_line(&log, "glRasterPos2f 640 576"), 1);
     ASSERT_INT("vertex-number label at second vertex",
                trace_count_line(&log, "glRasterPos2f 384 192"), 1);
 
-    /* The depth readback is the expensive step of this pass (a synchronous
-     * full-viewport glReadPixels), and it is taken lazily: a label mode that
-     * is on but has nothing in scope must not pay it. It used to be read up
-     * front, so every frame with labels enabled carried the stall whether or
-     * not a single vertex got labelled. */
+    /* This pass must issue NO glReadPixels at all: the occlusion depth is
+     * captured by the controller after the previous frame's glFinish and
+     * handed in. A readback here would be a whole-pipeline sync in the middle
+     * of the frame, which is the ~14 ms bug this arrangement removed. */
+    ASSERT_INT("label pass performs no depth readback of its own",
+               trace_count_sym(&log, "glReadPixels"), 0);
+
+    /* A label mode that is on but has nothing in scope must not ask for depth:
+     * that flag is what the controller's capture gate reads, and it is what
+     * preserves the old lazy read's "empty scope costs nothing" property. */
     OverlayWalkCtx empty_walk = walk;
     empty_walk.cursor.cursor_block_begin = 0;
     empty_walk.cursor.cursor_block_end = 0;   /* glNormal3f row: no vertices */
@@ -2596,12 +2605,48 @@ static void test_render_via_repl_program(void) {
     edit_overlays_render_vertex_numbers(&empty_walk, OVERLAY_VERTEX_LABEL_INDEX_POS, 0,
                                         OVERLAY_SCOPE_LAST_INSTANCE,
                                         OVERLAY_LABEL_PLACEMENT_DECLUTTERED,
-                                        1);
+                                        NULL);
     trace_end(&log);
     ASSERT_INT("empty label scope draws no labels",
                trace_count_sym(&log, "glRasterPos2f"), 0);
-    ASSERT_INT("empty label scope skips the depth readback",
+    ASSERT_INT("empty label scope does not request depth",
+               edit_overlays_vertex_labels_wanted_depth(), 0);
+    ASSERT_INT("empty label scope reads no pixels",
                trace_count_sym(&log, "glReadPixels"), 0);
+
+    /* A populated scope does reach the cull, so it asks - even though this
+     * call was handed no snapshot. That is the first frame after labels come
+     * into scope: it draws unculled and tells the controller to capture. */
+    trace_begin();
+    edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX_POS, 0,
+                                        OVERLAY_SCOPE_LAST_INSTANCE,
+                                        OVERLAY_LABEL_PLACEMENT_DECLUTTERED,
+                                        NULL);
+    trace_end(&log);
+    ASSERT_INT("populated scope requests depth for next frame",
+               edit_overlays_vertex_labels_wanted_depth(), 1);
+    ASSERT_INT("no snapshot leaves every label visible",
+               trace_count_sym(&log, "glRasterPos2f") >= 1, 1);
+
+    /* A snapshot whose dimensions disagree with the live viewport describes a
+     * differently-shaped scene rect; indexing it would read wrong pixels or
+     * run off the end, so it must be refused like an absent one. */
+    {
+        static float tiny_depth[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        OverlayDepthSnapshot mismatched;
+        mismatched.pixels = tiny_depth;
+        mismatched.vw = 2;
+        mismatched.vh = 2;
+        mismatched.valid = 1;
+        trace_begin();
+        edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX_POS, 0,
+                                            OVERLAY_SCOPE_LAST_INSTANCE,
+                                            OVERLAY_LABEL_PLACEMENT_DECLUTTERED,
+                                            &mismatched);
+        trace_end(&log);
+        ASSERT_INT("wrongly-sized snapshot is refused, labels stay visible",
+                   trace_count_sym(&log, "glRasterPos2f") >= 1, 1);
+    }
 
     /* Normal vectors: arrow base at each vertex (scale GLR_NORMAL_ARROW_SCALE). */
     trace_begin();
@@ -2650,7 +2695,8 @@ static void test_render_via_repl_program(void) {
     pack.walk.show_vertex_points = 1;
     pack.snapshot.show_guides = 0;
     pack.vertex_label_mode = OVERLAY_VERTEX_LABEL_INDEX;
-    pack.depth_readback_supported = 1;
+    pack.depth_snapshot.pixels = NULL;
+    pack.depth_snapshot.valid = 0;
     pack.show_normal_vectors = 1;
     trace_begin();
     edit_overlays_post_overlays(&pack);
@@ -2668,19 +2714,22 @@ static void test_render_via_repl_program(void) {
     trace_end(&log);
     ASSERT_INT("post_resolve_overlays draws vertex-number labels",
                trace_count_sym(&log, "glRasterPos2f") >= 1, 1);
-    ASSERT_INT("supported label pass snapshots scene depth",
-               trace_count_sym(&log, "glReadPixels"), 1);
+    /* The label pass owns no readback any more - the controller captures it
+     * after the frame's glFinish (see glr_ctrl_capture_depth_snapshot). */
+    ASSERT_INT("post_resolve label pass reads no depth itself",
+               trace_count_sym(&log, "glReadPixels"), 0);
 
-    /* WebGL cannot read the default framebuffer's depth. Its gl4es shim may
-     * silently leave the destination untouched, so unsupported contexts must
-     * skip the read rather than cull against indeterminate heap contents. */
-    pack.depth_readback_supported = 0;
+    /* WebGL cannot read the default framebuffer's depth, so the controller
+     * never captures there and the pass is handed an invalid snapshot. Labels
+     * must stay visible rather than being culled against nothing. */
+    pack.depth_snapshot.valid = 0;
+    pack.depth_snapshot.pixels = NULL;
     trace_begin();
     edit_overlays_post_resolve_overlays(&pack);
     trace_end(&log);
-    ASSERT_INT("unsupported label pass skips depth readback",
+    ASSERT_INT("no-snapshot label pass reads no depth",
                trace_count_sym(&log, "glReadPixels"), 0);
-    ASSERT_INT("unsupported label pass keeps vertex-number labels",
+    ASSERT_INT("no-snapshot label pass keeps vertex-number labels",
                trace_count_sym(&log, "glRasterPos2f") >= 1, 1);
 
     /* NULL pack is a safe no-op. */

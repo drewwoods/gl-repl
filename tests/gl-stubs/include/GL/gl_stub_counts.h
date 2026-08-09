@@ -103,6 +103,7 @@ extern "C" {
     X(glPushAttrib)                    \
     X(glPushMatrix)                    \
     X(glRasterPos2f)                   \
+    X(glReadPixels)                    \
     X(glRasterPos2i)                   \
     X(glRasterPos3f)                   \
     X(glRectf)                         \

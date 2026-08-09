@@ -162,6 +162,14 @@ typedef double GLclampd;
 #define GL_ACCUM_RED_BITS 0x0D58
 #define GL_STENCIL_BITS 0x0D57
 #define GL_NO_ERROR 0
+/* Real error codes, for tests driving the injection seam below. */
+#define GL_INVALID_ENUM      0x0500
+#define GL_INVALID_VALUE     0x0501
+#define GL_INVALID_OPERATION 0x0502
+
+/* See the seam comment above glReadPixels. */
+static int g_gl_stub_pending_error = 0;
+static int g_gl_stub_fail_read_pixels = 0;
 #define GL_NORMALIZE 0x0BA1
 #define GL_POINT_SMOOTH 0x0B10
 #define GL_POLYGON_OFFSET_FILL 0x8037
@@ -296,11 +304,26 @@ static inline void glClearStencil(GLint s) { GL_STUB_TRACE_LINE("glClearStencil 
  * occlusion-style depth reads behave as if every vertex is visible. The fill
  * MUST branch on `type` - a GL_UNSIGNED_BYTE read (stencil) hands us a
  * one-byte-per-pixel buffer, and writing floats into it overruns by 4x. */
+/* Error injection seam, modelled the way real GL works: a failing CALL raises
+ * a pending error that the next glGetError() reports and clears. Setting the
+ * error directly would not survive the customary "(void)glGetError();" that
+ * callers use to drain pending errors before the call they actually check.
+ *
+ * Exists because a driver can fail a call the startup capability probe said
+ * was fine - a one-pixel probe does not promise a full-viewport depth read -
+ * and code that must drop state on such a failure is otherwise untestable. */
 static inline void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height,
                                 GLenum format, GLenum type, void *pixels) {
+    if (g_gl_stub_fail_read_pixels) {
+        GL_STUB_TRACE_LINE("glReadPixels FAIL\n");
+        gl_stub_tick(GL_STUB_glReadPixels);
+        g_gl_stub_pending_error = GL_INVALID_OPERATION;
+        return;
+    }
     GL_STUB_TRACE_LINE("glReadPixels %d %d %d %d %u %u\n",
                        (int)x, (int)y, (int)width, (int)height,
                        (unsigned)format, (unsigned)type);
+    gl_stub_tick(GL_STUB_glReadPixels);
     (void)format;
     if (pixels && width > 0 && height > 0) {
         long n = (long)width * (long)height, i;
@@ -385,6 +408,11 @@ static inline void glGetIntegerv(GLenum pname, GLint *params) {
 static inline GLenum glGetError(void) {
     GL_STUB_TRACE_LINE("glGetError\n");
     gl_stub_tick(GL_STUB_glGetError);
+    if (g_gl_stub_pending_error != 0) {
+        GLenum err = (GLenum)g_gl_stub_pending_error;
+        g_gl_stub_pending_error = 0;
+        return err;
+    }
     return GL_NO_ERROR;
 }
 static inline const GLubyte *glGetString(GLenum name) {

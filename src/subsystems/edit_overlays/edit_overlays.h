@@ -156,13 +156,39 @@ typedef struct OverlayWalkCtx {
     int              cursor_poly_fan_anchor; /* 1 = ordinal 0 (fan center) too */
 } OverlayWalkCtx;
 
+/* Scene depth for the vertex-label occlusion cull, captured by the controller
+ * at the END OF THE PREVIOUS FRAME and handed to this pass read-only.
+ *
+ * The pass used to read this itself with a mid-pass glReadPixels. That is a
+ * synchronous whole-pipeline sync point, and on a render-ahead driver it
+ * blocked for most of a refresh interval - ~14 ms of the label pass's cost was
+ * drain, not pixels. The host now reads it after the glFinish it already does
+ * before swapping, where the queue is drained and the wait is already paid.
+ * See docs/plans/in-review/vertex-label-depth-readback-stall.md.
+ *
+ * Consequence to keep in mind when reading the cull: THESE DEPTHS ARE ONE
+ * FRAME OLD. Under camera motion a label can survive one frame past its vertex
+ * going behind geometry, or appear one frame late. That is deliberate, not a
+ * bug, and at 60 fps it is not perceptible.
+ *
+ * valid == 0 means "no usable snapshot" - not yet captured, capture failed, or
+ * invalidated by something that changed the scene. Labels then stay visible,
+ * which is the same fallback a context that cannot read depth already gets:
+ * showing an unculled label is a far smaller error than culling against
+ * depths belonging to a different scene. */
+typedef struct OverlayDepthSnapshot {
+    const float *pixels;  /* vw*vh window depths, viewport-local, bottom-up */
+    int          vw, vh;
+    int          valid;
+} OverlayDepthSnapshot;
+
 typedef struct OverlaySnapshotPack {
     OverlayWalkCtx walk;
     Render3dGuideSnapshot snapshot;
     OverlayVertexLabelMode vertex_label_mode;
     int overlay_scope;          /* OverlayScope           */
     int vertex_label_placement; /* OverlayLabelPlacement  */
-    int depth_readback_supported;
+    OverlayDepthSnapshot depth_snapshot;
     Render3dViewMode ortho_mode;
     int show_normal_vectors;
     int multisample_enabled;
@@ -180,7 +206,18 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *ctx,
                                          int is_ortho,
                                          int scope,
                                          int placement,
-                                         int depth_readback_supported);
+                                         const OverlayDepthSnapshot *depth);
+
+/* Did the last edit_overlays_render_vertex_numbers() call actually reach the
+ * occlusion cull - i.e. did some vertex project on-screen and need depth?
+ *
+ * The controller's capture gate reads this. The old lazy read meant a label
+ * mode that was on but had nothing in scope paid nothing; an end-of-frame
+ * capture runs BEFORE the pass that would want the pixels, so it cannot work
+ * that out for itself and asks what happened last frame instead. Costs one
+ * frame of latency when labels first come into scope, during which the pass
+ * gets no snapshot and draws every label. */
+int edit_overlays_vertex_labels_wanted_depth(void);
 
 void edit_overlays_render_normal_vectors(const OverlayWalkCtx *ctx);
 

@@ -33,6 +33,7 @@
 #include "support/test_harness.h"
 #ifdef GL_STUBS
 #include <GL/gl_stub_counts.h>
+#include "gl_includes.h"  /* GL_INVALID_OPERATION, stub error seam */
 #endif
 
 void glr_color_picker_install_host(void);
@@ -6390,6 +6391,139 @@ static void test_refresh_window_title(void) {
 #endif  /* !__EMSCRIPTEN__ */
 }
 
+/* ---------------------------------------------------------------------------
+ * Vertex-label depth snapshot: controller-side lifecycle.
+ *
+ * The expensive, stateful half of the label occlusion cull lives here rather
+ * than in the pass (see glr_ctrl_capture_depth_snapshot and
+ * docs/plans/in-review/vertex-label-depth-readback-stall.md), so this is where
+ * it has to be tested. The hazard the design introduces is a RETAINED buffer
+ * that still reads as valid after the scene it describes is gone - so most of
+ * what follows is about invalidation rather than about capture.
+ * ------------------------------------------------------------------------- */
+static void test_depth_snapshot_gate_and_capture(void) {
+    printf("--- depth snapshot: gate and capture ---\n");
+
+    glr_ctrl_set_depth_readback_supported_for_test(1);
+    glr_ctrl_invalidate_depth_snapshot();
+
+    /* Gate closed: no capture, and - the part that matters - nothing left
+     * published either. */
+    glr_ctrl_set_depth_snapshot_wanted(0);
+    gl_stub_counts_reset();
+    glr_ctrl_capture_depth_snapshot();
+    ASSERT_INT("gate closed takes no readback",
+               gl_stub_counts[GL_STUB_glReadPixels], 0);
+    ASSERT_INT("gate closed publishes no snapshot",
+               glr_ctrl_depth_snapshot_view().valid, 0);
+
+    /* Gate open: one readback, and a usable view carrying the viewport size so
+     * the consumer can refuse it if the scene rect changes shape. */
+    glr_ctrl_set_depth_snapshot_wanted(1);
+    gl_stub_counts_reset();
+    glr_ctrl_capture_depth_snapshot();
+    ASSERT_INT("gate open takes exactly one readback",
+               gl_stub_counts[GL_STUB_glReadPixels], 1);
+    {
+        OverlayDepthSnapshot view = glr_ctrl_depth_snapshot_view();
+        ASSERT_INT("captured snapshot is valid", view.valid, 1);
+        ASSERT_TRUE("captured snapshot has pixels", view.pixels != NULL);
+        ASSERT_TRUE("captured snapshot carries its viewport size",
+                    view.vw > 0 && view.vh > 0);
+    }
+
+    /* An unsupported context must neither read nor keep what it read earlier:
+     * losing the capability drops the buffer rather than merely stopping the
+     * refresh. */
+    glr_ctrl_set_depth_readback_supported_for_test(0);
+    ASSERT_INT("losing depth capability drops the retained snapshot",
+               glr_ctrl_depth_snapshot_view().valid, 0);
+    gl_stub_counts_reset();
+    glr_ctrl_capture_depth_snapshot();
+    ASSERT_INT("unsupported context takes no readback",
+               gl_stub_counts[GL_STUB_glReadPixels], 0);
+    glr_ctrl_set_depth_readback_supported_for_test(1);
+}
+
+/* The case review caught: labels off then on again must not hand the first
+ * pass back the pre-off buffer. The capture gate alone does not give this -
+ * "should we capture" and "is what we hold still usable" are different
+ * questions, and answering only the first leaves a stale buffer published. */
+static void test_depth_snapshot_invalidation(void) {
+    printf("--- depth snapshot: invalidation ---\n");
+
+    glr_ctrl_set_depth_readback_supported_for_test(1);
+    glr_ctrl_set_depth_snapshot_wanted(1);
+    glr_ctrl_capture_depth_snapshot();
+    ASSERT_INT("snapshot captured before label-off",
+               glr_ctrl_depth_snapshot_view().valid, 1);
+
+    /* Labels off -> gate closes -> the retained buffer goes with it. */
+    glr_ctrl_set_depth_snapshot_wanted(0);
+    glr_ctrl_capture_depth_snapshot();
+    ASSERT_INT("labels off drops the snapshot",
+               glr_ctrl_depth_snapshot_view().valid, 0);
+
+    /* Labels back on: the first frame must see NO snapshot - it captures at
+     * the END of that frame, for the next one. A stale-publish bug shows up
+     * right here, as a valid view before any capture has run. */
+    glr_ctrl_set_depth_snapshot_wanted(1);
+    ASSERT_INT("first frame after re-enabling has no snapshot yet",
+               glr_ctrl_depth_snapshot_view().valid, 0);
+    glr_ctrl_capture_depth_snapshot();
+    ASSERT_INT("second frame after re-enabling has one",
+               glr_ctrl_depth_snapshot_view().valid, 1);
+
+    /* A reshape moves the scene rect, so the retained depth describes a region
+     * that no longer exists. */
+    glr_ctrl_reshape(900, 700);
+    ASSERT_INT("reshape drops the snapshot",
+               glr_ctrl_depth_snapshot_view().valid, 0);
+
+    /* A wholesale document replacement likewise: those pixels are the old
+     * scene's, and culling the next frame's labels against them would hide
+     * labels behind geometry that no longer exists. */
+    glr_ctrl_set_depth_snapshot_wanted(1);
+    glr_ctrl_capture_depth_snapshot();
+    ASSERT_INT("snapshot captured before reset",
+               glr_ctrl_depth_snapshot_view().valid, 1);
+    glr_ctrl_reset_all();
+    ASSERT_INT("reset_all drops the snapshot",
+               glr_ctrl_depth_snapshot_view().valid, 0);
+}
+
+/* A capture that fails must publish nothing rather than let the previous
+ * buffer stand in as current. The startup capability probe reads a single
+ * pixel and cannot promise every later full-viewport read succeeds. */
+static void test_depth_snapshot_failed_read(void) {
+    printf("--- depth snapshot: failed read ---\n");
+
+    glr_ctrl_set_depth_readback_supported_for_test(1);
+    glr_ctrl_set_depth_snapshot_wanted(1);
+    glr_ctrl_capture_depth_snapshot();
+    ASSERT_INT("good capture is valid", glr_ctrl_depth_snapshot_view().valid, 1);
+
+    /* Make the read itself fail. The buffer then holds indeterminate contents;
+     * culling against those would drop labels at random, so valid must clear
+     * rather than the previous capture standing in as current. */
+    g_gl_stub_fail_read_pixels = 1;
+    glr_ctrl_capture_depth_snapshot();
+    ASSERT_INT("failed read clears the snapshot",
+               glr_ctrl_depth_snapshot_view().valid, 0);
+    g_gl_stub_fail_read_pixels = 0;
+
+    /* ...and recovers on the next good frame. */
+    glr_ctrl_capture_depth_snapshot();
+    ASSERT_INT("capture recovers after a failed read",
+               glr_ctrl_depth_snapshot_view().valid, 1);
+
+    /* Freeing is the shutdown path; ASan/LSan in the debug build is what
+     * actually proves the allocation is released. */
+    glr_ctrl_depth_snapshot_free();
+    ASSERT_INT("freeing drops the snapshot",
+               glr_ctrl_depth_snapshot_view().valid, 0);
+}
+
 int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
@@ -6483,6 +6617,9 @@ int main(void) {
     test_init_gl_requires_loaded_point_parameter_proc();
     test_code_panel_scroll_clamping_and_follow();
     test_refresh_window_title();
+    test_depth_snapshot_gate_and_capture();
+    test_depth_snapshot_invalidation();
+    test_depth_snapshot_failed_read();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_imrepl_ctrl");

@@ -129,6 +129,31 @@ static void display_func(void) {
     glr_frame_work_end();
 
     glFinish(); /* ensure all GL commands are done before we timestamp the swap */
+
+    /* Vertex-label occlusion depth, for NEXT frame's label pass.
+     *
+     * THIS CALL'S POSITION IS LOAD-BEARING and the reason is not local: it must
+     * sit AFTER the glFinish above and BEFORE the swap. glReadPixels of depth
+     * is a synchronous whole-pipeline sync point, so issued anywhere earlier in
+     * the frame it blocks until the driver's queued, vsync-throttled work
+     * retires - ~14 ms on a render-ahead driver like NVIDIA's, which is the
+     * entire frame budget. Here the glFinish has already drained the queue and
+     * that wait is already attributed to Present, so the read costs only its
+     * transfer (~2.5 ms at 4x MSAA) in a span that has slack.
+     *
+     * It follows that the glFinish above is not merely a timestamping nicety
+     * any more - this depends on it. If it is ever removed as an optimization,
+     * this capture silently becomes a mid-frame stall again. tests/test_glr_ctrl.c
+     * asserts the glFinish -> capture -> swap order so that cannot happen
+     * quietly. Full measurements: docs/plans/in-review/
+     * vertex-label-depth-readback-stall.md, and `make bench-vertex-labels`.
+     *
+     * Deliberately outside the Frame Work span closed just above: it is work
+     * for the next frame, paid out of this frame's slack, and it has its own
+     * PROF_DEPTH_SNAPSHOT row so it is attributed rather than inflating
+     * Present. */
+    glr_ctrl_capture_depth_snapshot();
+
     glutSwapBuffers();
     if (trace_this) {
         snprintf(buf, sizeof(buf), "frame %d swap done", frame_num);
