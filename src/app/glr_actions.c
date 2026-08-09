@@ -1764,8 +1764,14 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         }
         if (active && item_idx == tag_count + GLR_TUTORIAL_OFF_RESTART) {
             TutorialRuntimeState tutorial = tutorial_state_view();
-            if (tutorial.tutorial_idx >= 0)
+            if (tutorial.tutorial_idx >= 0) {
+                /* Restart replaces the transient document directly rather
+                 * than taking a scene/workspace load path that bumps the undo
+                 * generation. Do not expose the outgoing lesson's depth to
+                 * the restarted lesson's first label pass. */
+                glr_ctrl_invalidate_depth_snapshot();
                 tutorial_start(tutorial.tutorial_idx);
+            }
             return 1;
         }
         if (active && item_idx == tag_count + GLR_TUTORIAL_OFF_EXIT) {

@@ -1971,6 +1971,11 @@ static int route_submenu_item_hit(const UiHit *hit) {
         return 1;
     }
     if (hit->cmd_idx == GLR_MENU_TUTORIALS) {
+        /* tutorial_start() replaces the transient document without going
+         * through the editor undo-generation contract. The retained label
+         * depth belongs to the outgoing document and must not reach the
+         * tutorial's first frame. */
+        glr_ctrl_invalidate_depth_snapshot();
         tutorial_start(hit->item_idx);
         ui_menu_bar_close();
         editor_request_redraw();

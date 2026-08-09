@@ -1358,13 +1358,13 @@ typedef struct {
     int    vw, vh;
     size_t capacity;    /* floats allocated, so a shrink need not realloc  */
     int    valid;
-    /* Editor undo generation the pixels were captured under. Every path that
-     * replaces the live document wholesale - example load, user scene,
-     * workspace, tutorial teardown, F12 cycling, reset_all - is required to
-     * call editor_undo_note_wholesale_replacement(), which bumps this. Keying
-     * staleness off it covers all of them at once, which enumerating the load
-     * sites does not: the enumeration was already missing several, and the
-     * next one added would have been missed too. */
+    /* Editor undo generation the pixels were captured under. Ordinary
+     * scene/example/workspace replacement paths bump it through
+     * editor_undo_note_wholesale_replacement(), so the read-time comparison
+     * below covers those paths without enumerating them. The two exceptional
+     * replacement families that preserve or restore that generation
+     * (tutorial starts and controlled-tour baseline restore) invalidate the
+     * snapshot explicitly at their app-layer boundaries. */
     unsigned int generation;
 } GlrDepthSnapshot;
 
@@ -1407,10 +1407,10 @@ void glr_ctrl_set_depth_snapshot_wanted(int wanted) {
  * valid == 0 rather than NULL so the consumer has one shape to handle. */
 OverlayDepthSnapshot glr_ctrl_depth_snapshot_view(void) {
     OverlayDepthSnapshot view;
-    /* A document replaced since the capture makes these pixels the OLD
-     * scene's, so refuse them here rather than at each load site. Checked on
-     * read, not on write, because the replacement happens between the capture
-     * and the consumption a frame later. */
+    /* A generation-bumping document replacement since the capture makes these
+     * pixels the OLD scene's, so refuse them here rather than at each ordinary
+     * load site. Checked on read, not on write, because the replacement happens
+     * between the capture and the consumption a frame later. */
     int fresh = g_depth_snapshot.valid &&
                 g_depth_snapshot.generation == editor_undo_generation();
     view.pixels = fresh ? g_depth_snapshot.pixels : NULL;

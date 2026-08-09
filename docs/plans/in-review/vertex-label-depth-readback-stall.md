@@ -299,12 +299,13 @@ a permanently invalid snapshot - the same path as today's unsupported context.
 
 ### The idea
 
-`glReadPixels` into a pixel buffer object returns without a CPU sync; map the
-buffer a frame later, when the GPU has finished with it. Better still, insert a
-`glFenceSync` after the read and poll it non-blocking
-(`glClientWaitSync(..., GL_SYNC_FLUSH_COMMANDS_BIT, 0)`) so a buffer the GPU has
-not finished with is skipped rather than waited on - no call ever blocks. This
-is the textbook answer to a readback stall and is why it was drafted.
+A pixel buffer object lets an implementation enqueue the transfer and lets the
+client map the buffer a frame later, after the GPU has finished with it. Better
+still, insert a `glFenceSync` after a successfully issued read and poll it
+non-blocking (`glClientWaitSync(..., GL_SYNC_FLUSH_COMMANDS_BIT, 0)`) so an
+unfinished buffer is skipped rather than waited on. This is the textbook answer
+to a readback stall and is why it was drafted - but OpenGL does not promise that
+the issuing `glReadPixels` call itself returns without a CPU wait.
 
 ### Why it does not work
 
@@ -341,9 +342,12 @@ So on this driver the synchronous path is specific to reading
 fenced or not. Nothing on the client side defers it.
 
 **Scope that claim carefully.** It is a measurement of one vendor's driver, not
-a property of OpenGL: `glReadPixels` into a PBO is *specified* as asynchronous,
-and the RGBA control shows this driver honours that for colour. Independently
-reproduced on a second machine (`zen3.local`, RTX 5050, driver 610.43.02):
+a property of OpenGL. PBOs permit pipelined/asynchronous readback, but the
+[ARB_pixel_buffer_object specification](https://registry.khronos.org/OpenGL/extensions/ARB/ARB_pixel_buffer_object.txt)
+describes asynchronous transfer as an intended performance opportunity, not a
+wall-clock guarantee that the issuing call cannot block. The RGBA control shows
+this driver takes that opportunity for colour. Independently reproduced on a
+second machine (`zen3.local`, RTX 5050, driver 610.43.02):
 direct depth->PBO 16.442 ms kick, +fence 16.439 ms, 1x1 16.394 ms, RGBA control
 0.007 ms, lagged-after-glFinish Frame Work 0.149 ms against a 0.147 ms baseline.
 Two drivers a major version apart agree, so it is not a one-off - but another

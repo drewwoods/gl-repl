@@ -231,6 +231,37 @@ static void test_capture_does_not_flush_active_scene(void) {
     glr_tour_snapshot_destroy(snap);
 }
 
+/* Tour scripts make ordinary edits, so they can replace the pixels' source
+ * document without advancing the undo generation. Restoring the baseline also
+ * restores that generation by design; generation equality alone therefore
+ * cannot make a tour-era depth capture safe for the baseline document. */
+static void test_restore_invalidates_tour_document_depth(void) {
+    populate_state();
+    GlrTourSnapshot *snap = glr_tour_snapshot_capture();
+    ASSERT_TRUE("depth restore snapshot capture non-NULL", snap != NULL);
+    if (!snap)
+        return;
+
+    unsigned int generation = editor_undo_generation();
+    editor_feed_line("glVertex3f(9, 9, 9)");
+    ASSERT_INT("ordinary tour edit preserves undo generation",
+               (int)editor_undo_generation(), (int)generation);
+
+    glr_ctrl_reshape(1000, 620);
+    glr_ctrl_set_depth_readback_supported_for_test(1);
+    glr_ctrl_set_depth_snapshot_wanted(1);
+    glr_ctrl_capture_depth_snapshot();
+    ASSERT_INT("tour document depth captured",
+               glr_ctrl_depth_snapshot_view().valid, 1);
+
+    ASSERT_INT("tour baseline restore succeeds",
+               glr_tour_snapshot_restore(snap), 1);
+    ASSERT_INT("tour baseline restore drops tour document depth",
+               glr_ctrl_depth_snapshot_view().valid, 0);
+
+    glr_tour_snapshot_destroy(snap);
+}
+
 /* A tour captured while a RETAINED POST-TUTORIAL document is live must
  * restore both halves of that identity together: the scene-runtime origin
  * marker (which rides the ReplCheckpointState) and the tutorial runtime's
@@ -285,6 +316,7 @@ int main(void) {
     test_snapshot_round_trip();
     test_null_restore_is_noop();
     test_capture_does_not_flush_active_scene();
+    test_restore_invalidates_tour_document_depth();
     test_post_tutorial_origin_round_trip();
     printf("%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return g_harness.passed == g_harness.run ? 0 : 1;

@@ -10,6 +10,7 @@
 #include "app/glr_tour_snapshot.h"
 
 #include "app/glr_camera.h"
+#include "app/glr_ctrl.h"            /* depth snapshot invalidation */
 #include "app/glr_ctrl_internal.h"   /* GlrViewTransitionSnapshot + capture */
 #include "app/glr_state.h"
 #include "editor/help_session.h"
@@ -95,6 +96,11 @@ int glr_tour_snapshot_restore(const GlrTourSnapshot *s) {
     editor_state_session_restore(&s->editor);
     /* Undo/redo history. */
     editor_undo_history_restore(s->undo);
+    /* A controlled tour can edit the document without changing the undo
+     * generation, and the history restore above deliberately rewinds that
+     * generation. Explicitly discard any depth captured from the tour's
+     * document before the restored baseline renders again. */
+    glr_ctrl_invalidate_depth_snapshot();
     /* Camera and view transition. */
     glr_camera_runtime_restore(&s->camera);
     glr_ctrl_view_transition_restore(&s->view_transition);

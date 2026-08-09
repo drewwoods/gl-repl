@@ -5748,8 +5748,16 @@ static void test_mouse_routing_and_hit_testing(void) {
     // Test route_submenu_item_hit for tutorials
     hit.cmd_idx = GLR_MENU_TUTORIALS;
     hit.item_idx = 0;
+    glr_ctrl_reshape(1000, 620);
+    glr_ctrl_set_depth_readback_supported_for_test(1);
+    glr_ctrl_set_depth_snapshot_wanted(1);
+    glr_ctrl_capture_depth_snapshot();
+    ASSERT_INT("depth valid before submenu tutorial start",
+               glr_ctrl_depth_snapshot_view().valid, 1);
     rc = route_submenu_item_hit(&hit);
     ASSERT_INT("submenu tutorial item consumed", rc, 1);
+    ASSERT_INT("submenu tutorial start drops outgoing document depth",
+               glr_ctrl_depth_snapshot_view().valid, 0);
 
     // Test route_submenu_item_hit for Audio
     {
@@ -6723,11 +6731,11 @@ static void test_depth_snapshot_uses_scene_rect(void) {
     }
 }
 
-/* Every path that replaces the live document wholesale must invalidate the
- * retained depth - example load, user scene, workspace, tutorial teardown, F12
- * cycling. Enumerating those load sites is what leaked the first time round
- * (only reset_all was covered), so staleness is keyed off the undo generation
- * counter that all of them are already required to bump. */
+/* Generation-bumping paths that replace the live document wholesale must
+ * invalidate retained depth - example load, user scene, workspace, tutorial
+ * teardown, F12 cycling. Staleness is keyed off the undo generation for this
+ * ordinary family; generation-preserving tutorial/tour paths have their own
+ * app-boundary regressions above and in test_glr_tour_snapshot. */
 static void test_depth_snapshot_stale_across_document_replacement(void) {
     printf("--- depth snapshot: document replacement ---\n");
 

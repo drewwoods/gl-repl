@@ -882,11 +882,19 @@ static void test_tutorial_menu_dispatch(void) {
                tutorial_state_view().tutorial_idx, active_before);
 
     /* Restart at tag_count + GLR_TUTORIAL_OFF_RESTART: re-enters step 0. */
+    glr_ctrl_reshape(1000, 620);
+    glr_ctrl_set_depth_readback_supported_for_test(1);
+    glr_ctrl_set_depth_snapshot_wanted(1);
+    glr_ctrl_capture_depth_snapshot();
+    ASSERT_INT("depth valid before tutorial restart",
+               glr_ctrl_depth_snapshot_view().valid, 1);
     ASSERT_INT("Restart row handled",
                glr_action_menu_item_activate(GLR_MENU_TUTORIALS,
                                              tag_count + GLR_TUTORIAL_OFF_RESTART), 1);
     ASSERT_INT("Restart returns step to 0",
                tutorial_state_view().step, 0);
+    ASSERT_INT("tutorial restart drops outgoing document depth",
+               glr_ctrl_depth_snapshot_view().valid, 0);
 
     /* Exit at tag_count + GLR_TUTORIAL_OFF_EXIT: ends the tutorial. */
     ASSERT_INT("Exit row handled",
