@@ -21,12 +21,12 @@
  *   case                                     kick  consume     work    frame
  *   no readback (baseline)                  0.000    0.000    0.150   16.665
  *   control: glFlush where read would go    0.002    0.000    0.152   16.666
- *   depth, mid-frame (today)                0.000   16.478   16.628   16.693
+ *   depth, mid-frame (pre-fix)              0.000   16.478   16.628   16.693
  *   depth, mid-frame after glFinish        13.732    2.736   16.618   16.668
  *   color GL_BACK, mid-frame                0.000   16.378   16.529   16.665
  *   color GL_FRONT, mid-frame               0.000   16.403   16.553   16.664
  *   depth, post-swap (last frame's)         0.000   16.060   16.209   16.664
- *   depth after frame's glFinish (THE FIX)  0.000    2.484    0.149   16.668
+ *   depth after frame's glFinish (implemented) 0.000  2.484    0.149   16.668
  *   control: 1x1 depth into PBO            16.334    0.000   16.484   16.666
  *   depth into PBO, map next frame         16.465    0.001   16.615   16.662
  *   depth into PBO + fence, polled         16.464    0.001   16.615   16.667
@@ -49,7 +49,10 @@
  *   - Not where in the frame the read sits, by itself. Moving it post-swap so
  *     it takes the previous frame's depth still costs 16.47 ms.
  *
- * THE FIX: read after the frame's existing glFinish and consume it next frame.
+ * IMPLEMENTED PATH: read after the frame's existing glFinish and consume it
+ * next frame.
+ * The implementation is documented in
+ * docs/plans/done/vertex-label-depth-readback-stall.md.
  * gl_repl.c already drains at end of frame, outside glr_frame_work_end(), so
  * that wait is paid and attributed to Present regardless. A read issued there
  * costs only its transfer, in a span that has slack - and Frame Work returns
@@ -168,12 +171,12 @@ static void draw_scene(void) {
 enum {
     PH_NONE,        /* baseline: what a frame costs with no read at all      */
     PH_FLUSH,       /* control: a no-op GL call where the read would go      */
-    PH_MID,         /* what edit_overlays.c does today                       */
+    PH_MID,         /* historical pre-fix mid-frame read                    */
     PH_DRAINED,     /* same read, queue paid off first: the transfer cost    */
     PH_BACK,        /* color from the frame's live target                    */
     PH_FRONT,       /* color from an already-presented buffer                */
     PH_POSTSWAP,    /* last frame's depth, read at the top of this one       */
-    PH_POSTFINISH,  /* THE FIX: read after the frame's own glFinish          */
+    PH_POSTFINISH,  /* implemented path: read after frame's own glFinish    */
     PH_PBO1,        /* control: 1x1 depth into a PBO - nothing to transfer   */
     PH_PBO,         /* depth into a PBO, mapped a frame later                */
     PH_FENCE,       /* depth into a PBO + fence, polled non-blocking         */
@@ -184,12 +187,12 @@ enum {
 static const char *k_phase_name[PH_COUNT] = {
     "no readback (baseline)",
     "control: glFlush where read would go",
-    "depth, mid-frame (today)",
+    "depth, mid-frame (pre-fix)",
     "depth, mid-frame after glFinish",
     "color GL_BACK, mid-frame",
     "color GL_FRONT, mid-frame",
     "depth, post-swap (last frame's)",
-    "depth after frame's glFinish (THE FIX)",
+    "depth after frame's glFinish (implemented)",
     "control: 1x1 depth into PBO",
     "depth into PBO, map next frame",
     "depth into PBO + fence, polled",
