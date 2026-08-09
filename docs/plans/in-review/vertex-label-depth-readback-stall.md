@@ -129,6 +129,12 @@ back into frame timing to trigger its own read.
   flag. The pass stops calling `glReadPixels` at all - it becomes a pure
   consumer, which also makes it testable without a GL trace.
 
+**Gating - and the flag must be cleared before every early return.** The pass
+has early exits (labels off, empty program) that run before the walk. Leaving
+the feedback flag alone on those paths makes it sticky: an empty document with
+labels enabled inherits the previous frame's "yes" and the controller keeps
+capturing a depth buffer every frame for labels that cannot exist.
+
 **Gating - the lazy read is the thing being traded away.** Today the read is
 taken lazily, at the first vertex that actually reaches the cull, so a label
 mode that is on but has nothing in scope pays nothing. That is a deliberate
@@ -155,8 +161,15 @@ this design introduces, so invalidation is specified rather than left to
   as invalid, hitting the labels-stay-visible fallback for one frame.
 - **Invalidate (clear `valid`, keep the allocation) on every event that can make
   the retained depth describe a different scene:** labels cycling to `OFF`,
-  `glr_ctrl_reset_all`, example/scene/workspace load, reshape, and the depth
-  capability going false. Without this, disabling labels and re-enabling them
+  reshape, and the depth capability going false. Document replacement -
+  example, user scene, workspace, tutorial teardown, F12 cycling,
+  `glr_ctrl_reset_all` - is handled by comparing `editor_undo_generation()`
+  rather than by invalidating at each load site. Enumerating those sites is
+  what leaked the first time (only `reset_all` was covered), and the next load
+  path added would have been missed too; every one of them is already required
+  to call `editor_undo_note_wholesale_replacement()`, which bumps that counter.
+  The comparison happens on read, not on write, because the replacement lands
+  between the capture and the consumption a frame later. Without this, disabling labels and re-enabling them
   later publishes the *old* snapshot to the first pass - which both contradicts
   the "first frame after enabling has no snapshot" rule below and culls against
   a stale scene and camera. The gate deciding whether to *capture* is not the
@@ -172,6 +185,18 @@ this design introduces, so invalidation is specified rather than left to
   controller-owned-storage free to extend, so this adds one.
 - First frame after enabling labels has no snapshot: labels all visible for one
   frame, which is exactly today's unsupported-context behavior.
+
+**Capture rect - the scene rect, asked for explicitly.** The capture runs after
+the code panel, the HUDs and the compositor have each set the viewport to the
+whole window for their own 2D passes, so ambient `GL_VIEWPORT` there is the
+window, not the scene. Reading it produced a window-sized buffer that the pass
+rejected next frame for disagreeing with its projection rect - a larger readback
+and **no occlusion culling at all**, silently. Nothing about that is visible in
+a profile (the stall is still gone, the labels still draw) which is why it
+survived a round of review; `ui_layout_scene_rect()` is the same source
+`render3d_x/y/w/h` comes from, so capture rect and projection rect now agree by
+construction. Reading the smaller rect is also less data: ~2.1 ms -> ~1.0 ms
+in-app.
 
 **Viewport validation - decided: compare size only, not origin.** The consumer
 checks the snapshot's `w`/`h` against the live scene rect and refuses a
@@ -311,9 +336,25 @@ down what the constraint actually is:
   **color** goes fully async: kick 0.008 ms, Frame Work 0.16 ms against a
   0.15 ms baseline.
 
-So the synchronous path is specific to reading `GL_DEPTH_COMPONENT`, at any
-size, from any framebuffer, into a PBO or not, fenced or not. Nothing on the
-client side can defer it.
+So on this driver the synchronous path is specific to reading
+`GL_DEPTH_COMPONENT`, at any size, from any framebuffer, into a PBO or not,
+fenced or not. Nothing on the client side defers it.
+
+**Scope that claim carefully.** It is a measurement of one vendor's driver, not
+a property of OpenGL: `glReadPixels` into a PBO is *specified* as asynchronous,
+and the RGBA control shows this driver honours that for colour. Independently
+reproduced on a second machine (`zen3.local`, RTX 5050, driver 610.43.02):
+direct depth->PBO 16.442 ms kick, +fence 16.439 ms, 1x1 16.394 ms, RGBA control
+0.007 ms, lagged-after-glFinish Frame Work 0.149 ms against a 0.147 ms baseline.
+Two drivers a major version apart agree, so it is not a one-off - but another
+vendor, or a later NVIDIA release, could differ, and the bench exists so that is
+one command to check rather than an assumption to inherit.
+
+There is a design that could plausibly make an async depth readback work here:
+render depth encoded into a colour attachment and read *that* asynchronously,
+since colour demonstrably goes async. That is a shader plus FBO change to the
+scene pass, not a PBO follow-up, and it buys nothing over version 1 - which
+already costs baseline - so it is noted rather than proposed.
 
 ### Consequence for the design
 

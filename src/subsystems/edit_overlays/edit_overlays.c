@@ -2035,6 +2035,13 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     static VertexLabelCtx label_ctx;
     GLint vp[4];
 
+    /* Cleared BEFORE any early return, not alongside the rest of label_ctx.
+     * The controller's capture gate reads this, so a pass that bails out
+     * without touching it would leave the previous frame's answer standing -
+     * and an empty document with labels enabled would then keep paying for a
+     * depth readback every frame, forever, for labels that cannot exist. */
+    g_vertex_labels_wanted_depth = 0;
+
     if (mode == OVERLAY_VERTEX_LABEL_OFF)
         return;
 

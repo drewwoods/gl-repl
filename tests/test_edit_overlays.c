@@ -2628,6 +2628,39 @@ static void test_render_via_repl_program(void) {
     ASSERT_INT("no snapshot leaves every label visible",
                trace_count_sym(&log, "glRasterPos2f") >= 1, 1);
 
+    /* The feedback flag must be cleared before EVERY early return, not just on
+     * the path that reaches the walk. An empty document with labels enabled
+     * would otherwise inherit the previous frame's "yes" forever and keep the
+     * controller capturing a depth buffer every frame for labels that cannot
+     * exist. Ordering matters here: the populated call above set the flag. */
+    {
+        OverlayWalkCtx empty_program = walk;
+        empty_program.program.cmds = NULL;
+        empty_program.program.cmd_count = 0;
+        edit_overlays_render_vertex_numbers(&empty_program,
+                                            OVERLAY_VERTEX_LABEL_INDEX_POS, 0,
+                                            OVERLAY_SCOPE_LAST_INSTANCE,
+                                            OVERLAY_LABEL_PLACEMENT_DECLUTTERED,
+                                            NULL);
+        ASSERT_INT("empty program clears the depth request",
+                   edit_overlays_vertex_labels_wanted_depth(), 0);
+    }
+
+    /* Labels off likewise: the pass returns before the walk, and a stale "yes"
+     * there would keep the capture alive with the feature switched off. */
+    edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX_POS, 0,
+                                        OVERLAY_SCOPE_LAST_INSTANCE,
+                                        OVERLAY_LABEL_PLACEMENT_DECLUTTERED,
+                                        NULL);
+    ASSERT_INT("populated scope re-requests depth",
+               edit_overlays_vertex_labels_wanted_depth(), 1);
+    edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_OFF, 0,
+                                        OVERLAY_SCOPE_LAST_INSTANCE,
+                                        OVERLAY_LABEL_PLACEMENT_DECLUTTERED,
+                                        NULL);
+    ASSERT_INT("labels off clears the depth request",
+               edit_overlays_vertex_labels_wanted_depth(), 0);
+
     /* A snapshot whose dimensions disagree with the live viewport describes a
      * differently-shaped scene rect; indexing it would read wrong pixels or
      * run off the end, so it must be refused like an absent one. */

@@ -67,7 +67,11 @@
  * insert. The PBO path itself is fine here, which is what the RGBA control
  * proves: the identical full-size read in color goes fully async at 0.015 ms.
  * So the constraint is specific to reading depth, not to PBOs, not to the
- * default framebuffer, and not to MSAA.
+ * default framebuffer, and not to MSAA. Scope it to the driver, though: a PBO
+ * readback is SPECIFIED as asynchronous and the RGBA control shows this driver
+ * honours that for colour, so this is one vendor's behaviour for depth, not an
+ * OpenGL guarantee. Reproduced on two NVIDIA drivers a major version apart
+ * (595.84 and 610.43.02); re-run this before assuming it holds anywhere else.
  *
  * Why NVIDIA in particular: the driver renders ahead by default, so there is a
  * deep queue for that synchronous read to drain. __GL_MaxFramesAllowed=1

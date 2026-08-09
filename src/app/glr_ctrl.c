@@ -1358,6 +1358,14 @@ typedef struct {
     int    vw, vh;
     size_t capacity;    /* floats allocated, so a shrink need not realloc  */
     int    valid;
+    /* Editor undo generation the pixels were captured under. Every path that
+     * replaces the live document wholesale - example load, user scene,
+     * workspace, tutorial teardown, F12 cycling, reset_all - is required to
+     * call editor_undo_note_wholesale_replacement(), which bumps this. Keying
+     * staleness off it covers all of them at once, which enumerating the load
+     * sites does not: the enumeration was already missing several, and the
+     * next one added would have been missed too. */
+    unsigned int generation;
 } GlrDepthSnapshot;
 
 static GlrDepthSnapshot g_depth_snapshot;
@@ -1399,15 +1407,21 @@ void glr_ctrl_set_depth_snapshot_wanted(int wanted) {
  * valid == 0 rather than NULL so the consumer has one shape to handle. */
 OverlayDepthSnapshot glr_ctrl_depth_snapshot_view(void) {
     OverlayDepthSnapshot view;
-    view.pixels = g_depth_snapshot.valid ? g_depth_snapshot.pixels : NULL;
+    /* A document replaced since the capture makes these pixels the OLD
+     * scene's, so refuse them here rather than at each load site. Checked on
+     * read, not on write, because the replacement happens between the capture
+     * and the consumption a frame later. */
+    int fresh = g_depth_snapshot.valid &&
+                g_depth_snapshot.generation == editor_undo_generation();
+    view.pixels = fresh ? g_depth_snapshot.pixels : NULL;
     view.vw     = g_depth_snapshot.vw;
     view.vh     = g_depth_snapshot.vh;
-    view.valid  = g_depth_snapshot.valid && g_depth_snapshot.pixels != NULL;
+    view.valid  = fresh && g_depth_snapshot.pixels != NULL;
     return view;
 }
 
 void glr_ctrl_capture_depth_snapshot(void) {
-    GLint vp[4];
+    int vp[4];
     size_t needed;
 
     /* Every early return leaves the snapshot invalid, never merely unrefreshed:
@@ -1418,7 +1432,21 @@ void glr_ctrl_capture_depth_snapshot(void) {
         return;
     }
 
-    glGetIntegerv(GL_VIEWPORT, vp);
+    /* The SCENE rect, asked for explicitly - NOT the ambient GL_VIEWPORT.
+     *
+     * This runs at the end of the frame, after the code panel, the HUDs and
+     * the compositor have each set the viewport to the whole window for their
+     * own 2D passes. Reading ambient state here captures a window-sized buffer,
+     * which the label pass then rejects next frame because its dimensions
+     * disagree with the scene rect it projects into - so the app pays for a
+     * LARGER readback and gets no occlusion culling at all, silently. The
+     * symptom is invisible in a profile (the stall is still gone) and invisible
+     * on screen unless you are looking for labels showing through geometry.
+     *
+     * ui_layout_scene_rect() is the same source render3d_x/y/w/h comes from in
+     * glr_ctrl_build_scene_config(), so the capture rect is the projection
+     * rect by construction rather than by luck. */
+    ui_layout_scene_rect(&vp[0], &vp[1], &vp[2], &vp[3]);
     if (vp[2] <= 0 || vp[3] <= 0) {
         glr_ctrl_invalidate_depth_snapshot();
         return;
@@ -1453,6 +1481,7 @@ void glr_ctrl_capture_depth_snapshot(void) {
         g_depth_snapshot.vy = vp[1];
         g_depth_snapshot.vw = vp[2];
         g_depth_snapshot.vh = vp[3];
+        g_depth_snapshot.generation = editor_undo_generation();
         g_depth_snapshot.valid = 1;
     }
     prof_end(PROF_DEPTH_SNAPSHOT);

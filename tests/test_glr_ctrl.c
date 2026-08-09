@@ -6404,6 +6404,10 @@ static void test_refresh_window_title(void) {
 static void test_depth_snapshot_gate_and_capture(void) {
     printf("--- depth snapshot: gate and capture ---\n");
 
+    /* The capture reads the scene rect from the layout, so each of these
+     * needs a window of its own rather than whatever the previous test left. */
+    glr_ctrl_reshape(1000, 620);
+
     glr_ctrl_set_depth_readback_supported_for_test(1);
     glr_ctrl_invalidate_depth_snapshot();
 
@@ -6452,6 +6456,10 @@ static void test_depth_snapshot_gate_and_capture(void) {
 static void test_depth_snapshot_invalidation(void) {
     printf("--- depth snapshot: invalidation ---\n");
 
+    /* The capture reads the scene rect from the layout, so each of these
+     * needs a window of its own rather than whatever the previous test left. */
+    glr_ctrl_reshape(1000, 620);
+
     glr_ctrl_set_depth_readback_supported_for_test(1);
     glr_ctrl_set_depth_snapshot_wanted(1);
     glr_ctrl_capture_depth_snapshot();
@@ -6498,6 +6506,10 @@ static void test_depth_snapshot_invalidation(void) {
 static void test_depth_snapshot_failed_read(void) {
     printf("--- depth snapshot: failed read ---\n");
 
+    /* The capture reads the scene rect from the layout, so each of these
+     * needs a window of its own rather than whatever the previous test left. */
+    glr_ctrl_reshape(1000, 620);
+
     glr_ctrl_set_depth_readback_supported_for_test(1);
     glr_ctrl_set_depth_snapshot_wanted(1);
     glr_ctrl_capture_depth_snapshot();
@@ -6522,6 +6534,77 @@ static void test_depth_snapshot_failed_read(void) {
     glr_ctrl_depth_snapshot_free();
     ASSERT_INT("freeing drops the snapshot",
                glr_ctrl_depth_snapshot_view().valid, 0);
+}
+
+/* The capture must read the SCENE rect, not whatever viewport happens to be
+ * current. It runs at end of frame, after the code panel, HUDs and compositor
+ * have each set the viewport to the whole window for their 2D passes - so
+ * ambient GL state there is the window, not the scene.
+ *
+ * This was shipped broken once and neither the profiler nor a screenshot would
+ * have shown it: the stall was gone (the point of the change), the labels still
+ * drew, and the only symptom was that every snapshot got rejected next frame
+ * for disagreeing with the projection rect - so the app paid for a LARGER
+ * readback and silently did no occlusion culling at all. Hence a test that
+ * pins the rect rather than just the absence of a stall.
+ *
+ * The GL stub answers GL_VIEWPORT with a fixed 1024x768 that has nothing to do
+ * with the layout, which is exactly what makes the assertion sharp: reading
+ * ambient state produces that, reading the layout produces the scene rect. */
+static void test_depth_snapshot_uses_scene_rect(void) {
+    printf("--- depth snapshot: captures the scene rect ---\n");
+
+    int sx = 0, sy = 0, sw = 0, sh = 0;
+
+    glr_ctrl_reshape(1000, 620);
+    ui_layout_scene_rect(&sx, &sy, &sw, &sh);
+
+    /* Simulate what the code panel / HUDs / compositor do before the capture
+     * runs: reset the viewport to the whole window for their own 2D passes. */
+    glViewport(0, 0, 1000, 620);
+
+    glr_ctrl_set_depth_readback_supported_for_test(1);
+    glr_ctrl_set_depth_snapshot_wanted(1);
+    glr_ctrl_capture_depth_snapshot();
+
+    {
+        OverlayDepthSnapshot view = glr_ctrl_depth_snapshot_view();
+        ASSERT_INT("capture is valid", view.valid, 1);
+        ASSERT_INT("capture width is the scene rect's", view.vw, sw);
+        ASSERT_INT("capture height is the scene rect's", view.vh, sh);
+        /* Guards the test itself: if the layout ever made the scene rect equal
+         * the stub's ambient viewport, the assertions above would pass for the
+         * wrong reason and the regression would slip through again. */
+        ASSERT_TRUE("scene rect differs from the ambient GL viewport, so the "
+                    "assertion above can actually fail",
+                    !(sw == 1024 && sh == 768));
+    }
+}
+
+/* Every path that replaces the live document wholesale must invalidate the
+ * retained depth - example load, user scene, workspace, tutorial teardown, F12
+ * cycling. Enumerating those load sites is what leaked the first time round
+ * (only reset_all was covered), so staleness is keyed off the undo generation
+ * counter that all of them are already required to bump. */
+static void test_depth_snapshot_stale_across_document_replacement(void) {
+    printf("--- depth snapshot: document replacement ---\n");
+
+    glr_ctrl_reshape(1000, 620);
+    glr_ctrl_set_depth_readback_supported_for_test(1);
+    glr_ctrl_set_depth_snapshot_wanted(1);
+    glr_ctrl_capture_depth_snapshot();
+    ASSERT_INT("snapshot captured before the document changes",
+               glr_ctrl_depth_snapshot_view().valid, 1);
+
+    /* This is what every scene/example/workspace/tutorial load calls. */
+    editor_undo_note_wholesale_replacement();
+    ASSERT_INT("document replacement drops the snapshot",
+               glr_ctrl_depth_snapshot_view().valid, 0);
+
+    /* ...and the next capture under the new document is usable again. */
+    glr_ctrl_capture_depth_snapshot();
+    ASSERT_INT("capture under the new document is valid",
+               glr_ctrl_depth_snapshot_view().valid, 1);
 }
 
 int main(void) {
@@ -6620,6 +6703,8 @@ int main(void) {
     test_depth_snapshot_gate_and_capture();
     test_depth_snapshot_invalidation();
     test_depth_snapshot_failed_read();
+    test_depth_snapshot_uses_scene_rect();
+    test_depth_snapshot_stale_across_document_replacement();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_imrepl_ctrl");
