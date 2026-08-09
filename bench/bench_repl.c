@@ -71,9 +71,10 @@
  *   replay_long       - feed a synthetic large scene and step replay to end
  *   cpuprof_sample    - the profiler's own per-frame cost: bin lookup, full
  *                       histogram record (rotating + dependency-chained),
- *                       live prof_begin/prof_end pair, frame tick, and the
- *                       legend-hover stats readback. The only row here that
- *                       measures instrumentation rather than product work.
+ *                       live prof_begin/prof_end pair, nesting-guard A/B,
+ *                       frame tick, and the legend-hover stats readback. The
+ *                       only row here that measures instrumentation rather
+ *                       than product work.
  *   fade_batches      - drive repl_execute_program() per fade batch with a packed
  *                       batch buffer whose old_pcs sit deep in a long flat
  *                       command stream (exercises the per-batch prefix
@@ -1931,6 +1932,12 @@ static BenchResult bench_reformat_large_doc(int iters) {
  *                         section actually pays in a frame, bookkeeping plus
  *                         two mach_absolute_time/clock_gettime reads. The
  *                         denominator for whether the delta above matters.
+ *   cpuprof_nest_inert / cpuprof_nest_guarded
+ *                         the same pinned-clock child sample with no catalog
+ *                         tree installed, then with its parent open in an
+ *                         installed parent/child tree. Their delta isolates the
+ *                         nesting guard's normal-path parent lookup from the
+ *                         clock reads and from one-sided scheduler noise.
  *   cpuprof_frame_tick    prof_frame_tick(): the PROF_SECTION_COUNT staleness
  *                         sweep, the frame-time histogram record, and the
  *                         three FPS windows. Once per frame, not per section.
@@ -1969,6 +1976,25 @@ enum { PROF_BENCH_INNER = 20000 };
  * binary never runs, so no other row's numbers pass through it. Each case
  * still calls prof_test_reset() when done. */
 #define PROF_BENCH_SECTION PROF_FRAME_TOTAL
+
+/* Adjacent real catalog slots make an unambiguous synthetic tree without
+ * linking bench_repl to the app's display table: each child resolves to the
+ * immediately preceding depth-0 parent, while every other slot is top-level.
+ * Rotate across several children as a real frame rotates across sections; one
+ * repeated histogram would serialize Welford's statistics update and could
+ * hide independent guard instructions behind that dependency chain. Parent
+ * resolution and profiler reset stay outside the timer, so these rows price
+ * only the steady-state sample path. */
+#define PROF_BENCH_NEST_PARENT PROF_RENDER3D
+enum { PROF_BENCH_NEST_CHILD_COUNT = 16 };
+
+static int bench_cpuprof_nesting_depth(ProfSection s) {
+    int section_idx = (int)s;
+    return section_idx > (int)PROF_BENCH_NEST_PARENT &&
+           section_idx <= (int)PROF_BENCH_NEST_PARENT +
+                          PROF_BENCH_NEST_CHILD_COUNT
+               ? 1 : 0;
+}
 
 static BenchResult bench_cpuprof_bin_for_us(int iters) {
     BenchResult r = { .name = "cpuprof_bin_for_us", .unit = "samples",
@@ -2087,6 +2113,78 @@ static BenchResult bench_cpuprof_sample_live(int iters) {
     return r;
 }
 
+/* Run one pinned-clock batch. Pinning makes prof_now_us() a cheap, identical
+ * load in both cases, so the difference is not buried under two platform clock
+ * reads per sample. The parent stays open across the timed child loop in the
+ * guarded case, exercising the overwhelmingly common non-violation branch. */
+static double bench_cpuprof_nesting_iteration(int guard_installed) {
+    double t0;
+    double dt;
+
+    prof_test_reset();
+    prof_test_set_now_us(1.0e9);
+    if (guard_installed)
+        prof_install_section_depth_fn(bench_cpuprof_nesting_depth);
+
+    prof_begin(PROF_BENCH_NEST_PARENT);
+    t0 = now_seconds();
+    for (int k = 0; k < PROF_BENCH_INNER; k++) {
+        ProfSection child = (ProfSection)(
+            (int)PROF_BENCH_NEST_PARENT + 1 +
+            k % PROF_BENCH_NEST_CHILD_COUNT);
+        prof_begin(child);
+        prof_end(child);
+    }
+    dt = now_seconds() - t0;
+    prof_end(PROF_BENCH_NEST_PARENT);
+
+    if (guard_installed && prof_nesting_violations() != 0) {
+        fprintf(stderr,
+                "ERROR: cpuprof nesting benchmark misconfigured: %d "
+                "violation(s)\n",
+                prof_nesting_violations());
+        g_case_missing = 1;
+    }
+    prof_test_reset();
+    return dt;
+}
+
+/* Alternate which case runs first so thermal drift and frequency changes do
+ * not systematically favor the inert or guarded row. Each timed region still
+ * contains PROF_BENCH_INNER samples, keeping the per-span delta measurable even
+ * when it is only a few nanoseconds. */
+static void bench_cpuprof_nesting_pair(int iters,
+                                      BenchResult *inert,
+                                      BenchResult *guarded) {
+    *inert = (BenchResult){ .name = "cpuprof_nest_inert", .unit = "samples",
+                            .min_sec = 1e18 };
+    *guarded = (BenchResult){ .name = "cpuprof_nest_guarded",
+                              .unit = "samples", .min_sec = 1e18 };
+
+    for (int it = 0; it < iters; it++) {
+        double inert_dt;
+        double guarded_dt;
+
+        if ((it & 1) == 0) {
+            inert_dt = bench_cpuprof_nesting_iteration(0);
+            guarded_dt = bench_cpuprof_nesting_iteration(1);
+        } else {
+            guarded_dt = bench_cpuprof_nesting_iteration(1);
+            inert_dt = bench_cpuprof_nesting_iteration(0);
+        }
+
+        inert->total_sec += inert_dt;
+        inert->ops += PROF_BENCH_INNER;
+        inert->iters++;
+        if (inert_dt < inert->min_sec) inert->min_sec = inert_dt;
+
+        guarded->total_sec += guarded_dt;
+        guarded->ops += PROF_BENCH_INNER;
+        guarded->iters++;
+        if (guarded_dt < guarded->min_sec) guarded->min_sec = guarded_dt;
+    }
+}
+
 static BenchResult bench_cpuprof_frame_tick(int iters) {
     BenchResult r = { .name = "cpuprof_frame_tick", .unit = "ticks",
                       .min_sec = 1e18 };
@@ -2153,12 +2251,15 @@ static double prof_bench_min_ns(BenchResult r) {
 }
 
 static void bench_cpuprof_sample(int iters) {
-    BenchResult bins, record, live, tick;
+    BenchResult bins, record, live, nest_inert, nest_guarded, tick;
 
     bins   = bench_cpuprof_bin_for_us(iters);        report(bins);
     record = bench_cpuprof_record_rotating(iters);   report(record);
     report(bench_cpuprof_record_chained(iters));
     live   = bench_cpuprof_sample_live(iters);       report(live);
+    bench_cpuprof_nesting_pair(iters, &nest_inert, &nest_guarded);
+    report(nest_inert);
+    report(nest_guarded);
     tick   = bench_cpuprof_frame_tick(iters);        report(tick);
     report(bench_cpuprof_stats_read(iters));
 
@@ -2170,6 +2271,9 @@ static void bench_cpuprof_sample(int iters) {
         double bins_ns   = prof_bench_min_ns(bins);
         double record_ns = prof_bench_min_ns(record);
         double live_ns   = prof_bench_min_ns(live);
+        double nest_inert_ns = prof_bench_min_ns(nest_inert);
+        double nest_guarded_ns = prof_bench_min_ns(nest_guarded);
+        double nest_delta_ns = nest_guarded_ns - nest_inert_ns;
         double stats_ns  = record_ns - bins_ns;
         double frame_us  = (live_ns * (double)PROF_SECTION_COUNT
                             + prof_bench_min_ns(tick)) / 1000.0;
@@ -2182,6 +2286,9 @@ static void bench_cpuprof_sample(int iters) {
                (int)PROF_SECTION_COUNT, frame_us,
                frame_us / 16666.0 * 100.0,
                stats_ns * (double)PROF_SECTION_COUNT / 1000.0);
+        printf("  # cpuprof: installed-tree nesting lookup %+.1f ns/sample "
+               "(guarded %.1f - inert %.1f)\n",
+               nest_delta_ns, nest_guarded_ns, nest_inert_ns);
     }
 }
 
@@ -2255,7 +2362,7 @@ static void usage(const char *prog) {
         "    cpuprof_sample    profiler instrumentation cost: bin lookup, full\n"
         "                      histogram record (rotating across sections, and\n"
         "                      dependency-chained on one), live begin/end pair,\n"
-        "                      frame tick, stats readback\n"
+        "                      nesting-guard A/B, frame tick, stats readback\n"
         "    fade_batches      replay fade-batch rendering with late old_pcs\n",
         prog);
 }
