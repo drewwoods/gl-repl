@@ -143,15 +143,20 @@ static void display_func(void) {
      *
      * It follows that the glFinish above is not merely a timestamping nicety
      * any more - this depends on it. If it is ever removed as an optimization,
-     * this capture silently becomes a mid-frame stall again. tests/test_glr_ctrl.c
-     * asserts the glFinish -> capture -> swap order so that cannot happen
+     * this capture silently becomes a mid-frame stall again.
+     * `make check-depth-capture-after-finish` asserts the
+     * glFinish -> capture -> swap order so that cannot happen
      * quietly. Full measurements: docs/plans/in-review/
      * vertex-label-depth-readback-stall.md, and `make bench-vertex-labels`.
      *
-     * Deliberately outside the Frame Work span closed just above: it is work
-     * for the next frame, paid out of this frame's slack, and it has its own
-     * PROF_DEPTH_SNAPSHOT row so it is attributed rather than inflating
-     * Present. */
+     * Deliberately outside the Frame Work span closed just above - and outside
+     * PROF_HOST_OVERLAYS, which closed with it: this is work for the next frame,
+     * paid out of this frame's slack. It has its own PROF_DEPTH_SNAPSHOT row,
+     * and glr_frame_ended() subtracts that row out of Present rather than
+     * leaving a pixel transfer inside the row drawn as headroom - so the
+     * summary reads Frame Work + Depth Snapshot + Present = Frame Time. Nesting
+     * it under any span that ends before this line would instead report a 2 ms
+     * child of a microsecond parent. */
     glr_ctrl_capture_depth_snapshot();
 
     glutSwapBuffers();

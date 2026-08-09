@@ -1037,9 +1037,10 @@ static void test_display_frame_profile_coverage(void) {
     }
 }
 
-/* The frame boundary is the application's, and it produces three numbers from
- * two spans: Frame Time (the whole display callback), Frame Work (the same
- * minus the present), and Present as their difference.
+/* The frame boundary is the application's, and it produces four numbers from
+ * three spans: Frame Time (the whole display callback), Frame Work (up to the
+ * present), Depth Snapshot (the post-work occlusion capture, when it ran), and
+ * Present as what is left of the total.
  *
  * Each piece is a regression that happened. The stages gl_repl.c runs on
  * either side of glr_ctrl_display_frame() - scripted input, the post-composite
@@ -1133,14 +1134,62 @@ static void test_frame_spans_host_stages(void) {
     ASSERT_TRUE("unpaired ends leave the present alone",
                 prof_section_last_us(PROF_PRESENT) == 5000.0);
 
+    /* A frame that took the depth snapshot: the capture runs after work_end
+     * (after the glFinish, before the swap), so it is inside Frame Time but
+     * outside Frame Work. Present must not keep it - that row is drawn as
+     * headroom, and a 3 ms pixel transfer is not headroom. */
+    prof_test_set_now_us(100000.0);
+    glr_frame_begin();
+    prof_test_set_now_us(104000.0);   /* ... 4 ms of frame work ... */
+    glr_frame_work_end();
+    prof_test_set_now_us(106000.0);   /* ... 2 ms glFinish drain ... */
+    prof_begin(PROF_DEPTH_SNAPSHOT);  /* ... 3 ms depth readback ... */
+    prof_test_set_now_us(109000.0);
+    prof_end(PROF_DEPTH_SNAPSHOT);
+    prof_test_set_now_us(110000.0);   /* ... 1 ms swap ... */
+    glr_frame_ended();
+
+    ASSERT_TRUE("frame with a capture records the whole callback (10ms)",
+                prof_section_last_us(PROF_FRAME_TOTAL) == 10000.0);
+    ASSERT_TRUE("the capture is outside frame work (4ms)",
+                prof_section_last_us(PROF_FRAME_WORK) == 4000.0);
+    ASSERT_TRUE("the capture measured 3ms",
+                prof_section_last_us(PROF_DEPTH_SNAPSHOT) == 3000.0);
+    ASSERT_TRUE("present excludes the capture (3ms)",
+                prof_section_last_us(PROF_PRESENT) == 3000.0);
+    ASSERT_TRUE("work + capture + present is the frame",
+                prof_section_last_us(PROF_FRAME_WORK)
+                    + prof_section_last_us(PROF_DEPTH_SNAPSHOT)
+                    + prof_section_last_us(PROF_PRESENT)
+                        == prof_section_last_us(PROF_FRAME_TOTAL));
+
+    /* The next frame skips the capture (labels out of scope). Its last_us still
+     * holds the 3 ms above, and subtracting that would hand Present a shortfall
+     * no part of this frame paid for. Freshness, not staleness, is the gate. */
+    prof_test_set_now_us(120000.0);
+    glr_frame_begin();
+    prof_test_set_now_us(124000.0);
+    glr_frame_work_end();
+    prof_test_set_now_us(130000.0);
+    glr_frame_ended();
+
+    ASSERT_TRUE("a skipped capture keeps its previous sample",
+                prof_section_last_us(PROF_DEPTH_SNAPSHOT) == 3000.0);
+    ASSERT_TRUE("a frame without a capture subtracts nothing (6ms present)",
+                prof_section_last_us(PROF_PRESENT) == 6000.0);
+    ASSERT_TRUE("work + present is the frame again",
+                prof_section_last_us(PROF_FRAME_WORK)
+                    + prof_section_last_us(PROF_PRESENT)
+                        == prof_section_last_us(PROF_FRAME_TOTAL));
+
     prof_test_clear_now_us();
 }
 
-/* The three summary rows the panel draws under its divider: the frame total
- * first, then the two parts it decomposes into. Row order is catalog order, so
- * the run PROF_FRAME_TOTAL, PROF_FRAME_WORK, PROF_PRESENT is what puts them
- * under the rule and in that order - and the flags are what make the total read
- * "over budget when long" and Present the reverse. */
+/* The summary rows the panel draws under its divider: the frame total first,
+ * then the parts it decomposes into. Row order is catalog order, so the run
+ * PROF_FRAME_TOTAL, PROF_FRAME_WORK, PROF_DEPTH_SNAPSHOT, PROF_PRESENT is what
+ * puts them under the rule and in that order - and the flags are what make the
+ * total read "over budget when long" and Present the reverse. */
 static void test_summary_row_metadata(void) {
     int section_idx;
     int total_rows = 0, slack_rows = 0;
@@ -1149,8 +1198,17 @@ static void test_summary_row_metadata(void) {
 
     ASSERT_TRUE("frame work is the row after the frame total",
                 (int)PROF_FRAME_WORK == (int)PROF_FRAME_TOTAL + 1);
-    ASSERT_TRUE("present is the row after the frame work",
-                (int)PROF_PRESENT == (int)PROF_FRAME_WORK + 1);
+    /* The capture is a summary row, not a host-overlay one: it is a third part
+     * of the frame total (Work + Depth Snapshot + Present), so it sits inside
+     * the run rather than above the divider. */
+    ASSERT_TRUE("depth snapshot is the row after the frame work",
+                (int)PROF_DEPTH_SNAPSHOT == (int)PROF_FRAME_WORK + 1);
+    ASSERT_TRUE("present is the row after the depth snapshot",
+                (int)PROF_PRESENT == (int)PROF_DEPTH_SNAPSHOT + 1);
+    ASSERT_INT("depth snapshot is not a total row",
+               prof_section_info(PROF_DEPTH_SNAPSHOT).is_total, 0);
+    ASSERT_INT("depth snapshot is not slack",
+               prof_section_info(PROF_DEPTH_SNAPSHOT).is_slack, 0);
     ASSERT_INT("frame total row is the total",
                prof_section_info(PROF_FRAME_TOTAL).is_total, 1);
     ASSERT_INT("frame total row is not slack",
@@ -6403,6 +6461,13 @@ static void test_refresh_window_title(void) {
  * ------------------------------------------------------------------------- */
 static void test_depth_snapshot_gate_and_capture(void) {
     printf("--- depth snapshot: gate and capture ---\n");
+
+    /* The profile row is top-level, not a child of the host-overlay aggregate
+     * it happens to sit beside in the catalog: the capture runs after both
+     * PROF_HOST_OVERLAYS and PROF_FRAME_WORK have closed, so an indented row
+     * would read as a milliseconds-long child of a microseconds-long parent. */
+    ASSERT_INT("depth snapshot is a top-level profile row",
+               prof_section_info(PROF_DEPTH_SNAPSHOT).depth, 0);
 
     /* The capture reads the scene rect from the layout, so each of these
      * needs a window of its own rather than whatever the previous test left. */

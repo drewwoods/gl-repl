@@ -143,27 +143,29 @@ typedef enum {
      * outlives the tour by the length of its exit collapse) and a different
      * cost profile (no bitmap text at all once the card is gone). */
     PROF_TOUR_PRESENCE,
-    /* glr_ctrl_capture_depth_snapshot(): the vertex-label occlusion cull's
-     * scene-depth read, taken from the host after its glFinish and before the
-     * swap. Deliberately its own row rather than folded into the label pass -
-     * it no longer happens during that pass, and it is the one piece of
-     * per-frame work here whose cost is a transfer rather than a draw. Expect
-     * ~2.5 ms at 4x MSAA; if it ever reads near a refresh interval instead,
-     * the frame stopped being drained before it runs. See docs/plans. */
-    PROF_DEPTH_SNAPSHOT,
-    /* The three summary rows, in display order. The application owns the frame
+    /* The summary rows, in display order. The application owns the frame
      * boundary (glr_frame_begin / glr_frame_ended in gl_repl.c's display
      * callback), and the whole span between them is the frame:
      *
-     *   Frame Time  = everything the callback does, present included
-     *   Frame Work  = the same minus the present (closed by glr_frame_work_end)
-     *   Present     = Frame Time - Frame Work, never measured directly
+     *   Frame Time     = everything the callback does, present included
+     *   Frame Work     = up to the present (closed by glr_frame_work_end)
+     *   Depth Snapshot = the post-work capture below, when it ran
+     *   Present        = Frame Time - Frame Work - Depth Snapshot, derived
      *
      * Present is a *subtraction* rather than a bracket around the swap on
      * purpose: bracketing glFinish + glutSwapBuffers leaves anything else
      * between the two boundaries unattributed, whereas the difference sweeps
      * every last microsecond of the frame into the row built to absorb it.
      * (prof_section_record_us is how a derived row lands its sample.)
+     *
+     * The capture is the one measured stage that sits in that stretch, so it is
+     * subtracted out rather than left inside Present: Present is the row the
+     * panel paints as *slack* (is_slack), and 2.5 ms of pixel transfer is not
+     * headroom. It belongs to this group rather than up with the host-overlay
+     * stages it runs beside because that is what the arithmetic says it is - a
+     * third part of Frame Time, not a part of Frame Work. Subtracted only when
+     * it sampled this frame (the capture is gated on labels being in scope);
+     * otherwise Present absorbs the whole remainder as before.
      *
      * With vsync on the present is mostly the wait for the next scan-out - idle
      * time the frame is *given*, not time it spends - so Frame Work is the row
@@ -174,7 +176,18 @@ typedef enum {
      * is the cross-check. */
     PROF_FRAME_TOTAL,   /* whole callback, end to end (the "Frame Time" row) */
     PROF_FRAME_WORK,    /* the same minus the present */
-    PROF_PRESENT,       /* derived: TOTAL - WORK */
+    /* glr_ctrl_capture_depth_snapshot(): the vertex-label occlusion cull's
+     * scene-depth read, taken from the host after its glFinish and before the
+     * swap - so it is outside Frame Work by construction and cannot be moved
+     * inside one (Frame Work carries the GPU timer query, and extending it past
+     * the glFinish would report the queue drain as GPU time). Its own row rather
+     * than folded into the label pass: it no longer happens during that pass,
+     * and it is the one piece of per-frame work here whose cost is a transfer
+     * rather than a draw. Expect ~2.5 ms at 4x MSAA; if it ever reads near a
+     * refresh interval instead, the frame stopped being drained before it runs.
+     * See docs/plans. */
+    PROF_DEPTH_SNAPSHOT,
+    PROF_PRESENT,       /* derived: TOTAL - WORK - DEPTH_SNAPSHOT */
     PROF_SECTION_COUNT
 } ProfSection;
 

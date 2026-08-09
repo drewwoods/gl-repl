@@ -108,14 +108,19 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_HOST_SPLASH]                       = { "splash",          1, 0 },
     [PROF_TOUR_OVERLAY]                      = { "tour overlay",    1, 0 },
     [PROF_TOUR_PRESENCE]                     = { "tour presence",   1, 0 },
-    [PROF_DEPTH_SNAPSHOT]                    = { "depth snapshot",  1, 0 },
-    /* The three summary rows under the divider: the whole frame, then the two
-     * parts it splits into. "Frame Time" carries is_total (the divider above
-     * it and the full-budget thresholds) plus is_frame_total (refresh-boundary
-     * tolerance); "Present" is the vsync wait, colored inversely because a
-     * long one is headroom rather than cost (is_slack). */
+    /* The summary rows under the divider: the whole frame, then the parts it
+     * splits into. "Frame Time" carries is_total (the divider above it and the
+     * full-budget thresholds) plus is_frame_total (refresh-boundary tolerance);
+     * "Present" is the vsync wait, colored inversely because a long one is
+     * headroom rather than cost (is_slack).
+     *
+     * All four are depth 0. "Depth Snapshot" is a *sibling* here, not a child of
+     * anything: its capture runs after both Host Overlays and Frame Work have
+     * closed, so indenting it under either would read as a 2 ms child of a 9 us
+     * row, and Present is derived by subtracting it out. */
     [PROF_FRAME_TOTAL]                       = { "Frame Time",      0, 1, 0, 1 },
     [PROF_FRAME_WORK]                        = { "Frame Work",      0, 0, 0 },
+    [PROF_DEPTH_SNAPSHOT]                    = { "Depth Snapshot",  0, 0 },
     [PROF_PRESENT]                           = { "Present",         0, 0, 1 },
 };
 

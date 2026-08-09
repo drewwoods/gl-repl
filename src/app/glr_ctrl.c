@@ -2746,15 +2746,25 @@ void glr_frame_ended(void) {
         prof_end(PROF_FRAME_TOTAL);
         /* Present is what the frame spent outside its work: the glFinish drain
          * and the swap, plus anything else the callback does after
-         * glr_frame_work_end(). Derived rather than bracketed so nothing in
-         * that stretch can go unattributed - see prof_sections.h. A frame that
-         * never closed its work span leaves the difference at the full total,
-         * which is the honest reading of "none of this was accounted for". */
-        prof_section_record_us(PROF_PRESENT,
-            work_was_closed
-                ? prof_section_last_us(PROF_FRAME_TOTAL)
-                    - prof_section_last_us(PROF_FRAME_WORK)
-                : prof_section_last_us(PROF_FRAME_TOTAL));
+         * glr_frame_work_end() that no row of its own claims. Derived rather
+         * than bracketed so nothing in that stretch can go unattributed - see
+         * prof_sections.h. A frame that never closed its work span leaves the
+         * difference at the full total, which is the honest reading of "none of
+         * this was accounted for".
+         *
+         * The depth-snapshot capture is the one measured stage in that stretch
+         * (host-side, after the glFinish), so it comes out of the difference:
+         * Present is drawn as slack, and a pixel transfer is not headroom. The
+         * three parts then sum to the total exactly. Subtracted only if it
+         * actually ran this frame - the capture is gated, and its last_us
+         * otherwise still holds whatever an earlier frame measured. */
+        double present_us = prof_section_last_us(PROF_FRAME_TOTAL);
+        if (work_was_closed) {
+            present_us -= prof_section_last_us(PROF_FRAME_WORK);
+            if (prof_section_sampled_this_frame(PROF_DEPTH_SNAPSHOT))
+                present_us -= prof_section_last_us(PROF_DEPTH_SNAPSHOT);
+        }
+        prof_section_record_us(PROF_PRESENT, present_us);
     }
     /* In GLR_TICK_PER_FRAME mode this is where the simulation advances, so a
      * captured sequence is t0, t0+dt, ... . Deliberately after the total is

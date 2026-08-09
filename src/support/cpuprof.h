@@ -225,6 +225,16 @@ double prof_section_last_us(ProfSection s);
 double prof_section_avg_us(ProfSection s);
 int    prof_section_is_stale(ProfSection s);
 
+/* Did this section publish a sample since the last prof_frame_tick()?
+ *
+ * The strict twin of prof_section_is_stale(), which answers the display
+ * question ("has it been quiet long enough to draw '--'"). This one answers the
+ * arithmetic question, and a *derived* row needs it: a caller subtracting one
+ * section's time out of another's must not subtract a value an earlier frame
+ * measured. Only meaningful for sections sampled inside the frame it is read
+ * in. */
+int    prof_section_sampled_this_frame(ProfSection s);
+
 /* --- Fixed timing histograms ---
  *
  * One Histogram per section plus one for frame time. The distribution itself -

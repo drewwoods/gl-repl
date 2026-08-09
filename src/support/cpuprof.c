@@ -41,6 +41,7 @@ static int    g_prof_accum_sampled[PROF_SECTION_COUNT]; /* accum_end ran since r
 static Histogram g_prof_hist[PROF_SECTION_COUNT];
 static int    g_prof_initialized = 0;
 
+
 static ProfSectionHookFn g_prof_begin_hook = 0;
 static ProfSectionHookFn g_prof_end_hook   = 0;
 
@@ -283,6 +284,13 @@ double prof_section_avg_us(ProfSection s) {
 int prof_section_is_stale(ProfSection s) {
     if (s < 0 || s >= PROF_SECTION_COUNT) return 1;
     return g_prof_stale[s] >= PROF_STALE_FRAMES;
+}
+
+int prof_section_sampled_this_frame(ProfSection s) {
+    if (s < 0 || s >= PROF_SECTION_COUNT) return 0;
+    /* prof_frame_tick() bumps the counter and every publisher zeroes it, so
+     * zero means "a sample landed since the tick that opened this frame". */
+    return g_prof_stale[s] == 0;
 }
 
 int prof_section_histogram(ProfSection s,
