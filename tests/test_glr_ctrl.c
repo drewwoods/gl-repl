@@ -1227,6 +1227,29 @@ static void test_prof_nesting_guard(void) {
     ASSERT_INT("the guard names the offending child",
                (int)prof_first_nesting_violation(), (int)PROF_TOUR_OVERLAY);
 
+    /* The other half of containment: the child starts inside its parent but
+     * outlives it. Its time is just as misattributed - part of the row lies
+     * outside the total it is drawn under - so checking only the start would
+     * pass this. */
+    prof_test_reset();
+    glr_prof_install_nesting_guard();
+    prof_begin(PROF_HOST_OVERLAYS);
+    prof_begin(PROF_TOUR_OVERLAY);
+    prof_end(PROF_HOST_OVERLAYS);
+    prof_end(PROF_TOUR_OVERLAY);
+    ASSERT_INT("a child that outlives its parent is a violation",
+               prof_nesting_violations(), 1);
+    ASSERT_INT("the overlong child is the one named",
+               (int)prof_first_nesting_violation(), (int)PROF_TOUR_OVERLAY);
+
+    /* Wrong at both ends is still one mis-nested span, not two events. */
+    prof_test_reset();
+    glr_prof_install_nesting_guard();
+    prof_begin(PROF_TOUR_OVERLAY);
+    prof_end(PROF_TOUR_OVERLAY);
+    ASSERT_INT("a span outside its parent at both ends counts once",
+               prof_nesting_violations(), 1);
+
     /* Top-level rows have no parent to be inside of - including the capture,
      * which is exactly why it had to become one. */
     prof_test_reset();

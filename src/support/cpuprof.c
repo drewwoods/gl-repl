@@ -47,7 +47,9 @@ static int    g_prof_initialized = 0;
  * row's span actually runs inside its parent's: the two brackets are usually in
  * different translation units, so no compile-time or source-level check can see
  * the relationship. What *is* knowable here is whether the parent is open at the
- * moment a child begins, which is exactly the claim the indentation makes.
+ * moments the child begins and ends - both, since containment is a claim about
+ * the whole span and a child can just as easily outlive its parent as predate
+ * it.
  *
  * g_prof_parent is derived from the depth column the host installs: a row's
  * parent is the nearest preceding row one level shallower - the same rule the
@@ -62,6 +64,7 @@ static int    g_prof_initialized = 0;
  * around each of their legs, so a child that begins inside one sees an open
  * parent, and one that begins in the gap between legs is a real orphan. */
 static signed char g_prof_open[PROF_SECTION_COUNT];
+static signed char g_prof_flagged[PROF_SECTION_COUNT];
 static short  g_prof_parent[PROF_SECTION_COUNT];
 static int    g_prof_nesting_violations = 0;
 static ProfSection g_prof_first_orphan = (ProfSection)0;
@@ -141,6 +144,7 @@ static void init_if_needed(void) {
         g_prof_accum_pending[section_idx] = 0.0;
         g_prof_accum_sampled[section_idx] = 0;
         g_prof_open[section_idx]          = 0;
+        g_prof_flagged[section_idx]       = 0;
     }
     g_prof_initialized = 1;
     prof_resolve_parents();
@@ -182,6 +186,29 @@ void prof_install_section_hooks(ProfSectionHookFn begin_hook,
     g_prof_end_hook   = end_hook;
 }
 
+/* Nonzero when s claims a parent that is not currently open. Containment needs
+ * this at BOTH ends of the child's span: checking only the start passes
+ * begin(parent) begin(child) end(parent) end(child), where the child outlives
+ * the parent whose total it is supposed to be part of - the same lie as starting
+ * outside it, just from the other side. A parent that closes early is reported
+ * against the child, which is the row that renders wrong. */
+static int prof_parent_is_open(ProfSection s) {
+    int parent = g_prof_parent[s];
+    return parent < 0 || g_prof_open[parent];
+}
+
+/* One violation per mis-nested span, not per event: g_prof_flagged remembers
+ * that the open span already counted, so a child that both begins and ends
+ * outside its parent is one bug rather than two. */
+static void prof_note_orphan(ProfSection s) {
+    g_prof_flagged[s] = 1;
+    g_prof_nesting_violations++;
+    if (!g_prof_have_orphan) {
+        g_prof_first_orphan = s;
+        g_prof_have_orphan = 1;
+    }
+}
+
 void prof_begin(ProfSection s) {
     if (s < 0 || s >= PROF_SECTION_COUNT) return;
     init_if_needed();
@@ -189,16 +216,9 @@ void prof_begin(ProfSection s) {
      * the answer is still knowable. Before the hook and the clock read: the
      * comparison is two array loads, and an orphan is a catalog/call-site bug
      * either way. */
-    {
-        int parent = g_prof_parent[s];
-        if (parent >= 0 && !g_prof_open[parent]) {
-            g_prof_nesting_violations++;
-            if (!g_prof_have_orphan) {
-                g_prof_first_orphan = s;
-                g_prof_have_orphan = 1;
-            }
-        }
-    }
+    g_prof_flagged[s] = 0;
+    if (!prof_parent_is_open(s))
+        prof_note_orphan(s);
     g_prof_open[s] = 1;
     /* Hook fires before the clock read so its cost (e.g. issuing a GPU
      * timer query) is excluded from this section's CPU time. */
@@ -212,6 +232,10 @@ void prof_end(ProfSection s) {
 
     double elapsed = prof_now_us() - g_prof_start[s];
     if (elapsed < 0.0) elapsed = 0.0;
+    /* Still inside the parent? A parent that closed first leaves this span
+     * hanging outside the total it is drawn as part of. */
+    if (!g_prof_flagged[s] && !prof_parent_is_open(s))
+        prof_note_orphan(s);
     g_prof_open[s] = 0;
     if (g_prof_end_hook) g_prof_end_hook(s);
 
@@ -254,6 +278,8 @@ void prof_accum_end(ProfSection s) {
     init_if_needed();
     double elapsed = prof_now_us() - g_prof_start[s];
     if (elapsed < 0.0) elapsed = 0.0;
+    if (!g_prof_flagged[s] && !prof_parent_is_open(s))
+        prof_note_orphan(s);
     g_prof_open[s] = 0;
     if (g_prof_end_hook) g_prof_end_hook(s);
     g_prof_accum_pending[s] += elapsed;
@@ -413,6 +439,7 @@ void prof_test_reset(void) {
         g_prof_accum_pending[section_idx] = 0.0;
         g_prof_accum_sampled[section_idx] = 0;
         g_prof_open[section_idx]          = 0;
+        g_prof_flagged[section_idx]       = 0;
         histogram_clear(&g_prof_hist[section_idx]);
     }
     /* A test that deliberately mis-nests a pair must not leave the count set

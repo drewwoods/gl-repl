@@ -245,9 +245,12 @@ int    prof_section_sampled_this_frame(ProfSection s);
  * renders as a milliseconds-long row indented under a microseconds-long one,
  * and the panel has no way to know it is lying.
  *
- * prof_begin() checks the one thing that *is* knowable at the seam: whether the
- * catalog parent is open at the moment the child starts. Every mis-nesting
- * trips it on the first frame it happens, in whichever binary runs it.
+ * prof_begin()/prof_end() check the one thing that *is* knowable at the seam:
+ * whether the catalog parent is open when the child starts and still open when
+ * it finishes. Both ends, because containment is a claim about the whole span -
+ * a child that begins inside its parent and ends after it closed is misreported
+ * exactly as badly as one that starts outside. Every mis-nesting trips this on
+ * the first frame it happens, in whichever binary runs it.
  *
  * The tree comes from a depth lookup the host installs, not from
  * prof_section_info(): this module is linked by binaries that use the timers
@@ -255,8 +258,11 @@ int    prof_section_sampled_this_frame(ProfSection s);
  * into one unconditionally would make them unlinkable. Nothing installed means
  * no tree is claimed, so there is nothing to check and the guard sits inert.
  *
- * Counts violations since process start (or prof_test_reset()), and reports the
- * first offending *child* section for the diagnostic. A non-zero count is a bug
+ * Counts violations since process start (or prof_test_reset()) - one per
+ * mis-nested span, so a child that both starts and finishes outside its parent
+ * counts once - and reports the first offending *child* section for the
+ * diagnostic. A parent that closes early is reported against the child, since
+ * that is the row whose number reads wrong. A non-zero count is a bug
  * in either the call sites or the catalog's depth column, never in a workload. */
 typedef int (*ProfSectionDepthFn)(ProfSection s);
 void prof_install_section_depth_fn(ProfSectionDepthFn depth_fn);
