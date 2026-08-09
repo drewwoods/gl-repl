@@ -90,6 +90,13 @@
  * pinned to your refresh interval, the run is not throttled and the readback
  * rows mean nothing.
  *
+ * IF IT HANGS WITH NO OUTPUT, CHECK THE MONITOR IS AWAKE: `xset -q | grep
+ * Monitor`, and `xset dpms force on` if it says Off. A DPMS-blanked display
+ * delivers no vblank, so glutSwapBuffers never returns and the first phase
+ * never completes - the benchmark prints its header and then sits there
+ * looking like a deadlock. This is the nastier sibling of the un-throttled
+ * case above: that one prints wrong numbers, this one prints none.
+ *
  * Usage:
  *   bench_vertex_label_readback [--msaa] [--size WxH] [--labels N]
  *                               [--vertices N] [--frames N]
