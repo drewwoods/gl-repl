@@ -220,6 +220,16 @@ static void glr_prof_gpu_end_hook(ProfSection s) {
     if (glr_prof_gpu_capture_allows(s)) gpu_prof_end(s);
 }
 
+/* The depth column, as the lookup cpuprof's nesting guard wants. Same table the
+ * panel indents from, so the guard checks exactly the tree the panel draws. */
+static int glr_prof_section_depth(ProfSection s) {
+    return prof_section_info(s).depth;
+}
+
+void glr_prof_install_nesting_guard(void) {
+    prof_install_section_depth_fn(glr_prof_section_depth);
+}
+
 void glr_prof_install_gpu_section_hooks(void) {
     prof_install_section_hooks(glr_prof_gpu_begin_hook, glr_prof_gpu_end_hook);
 }

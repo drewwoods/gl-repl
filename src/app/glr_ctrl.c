@@ -2737,6 +2737,7 @@ void glr_frame_work_end(void) {
 }
 
 static void glr_ctrl_prof_dump_tick(void);
+static void glr_ctrl_prof_nesting_warn_once(void);
 
 void glr_frame_ended(void) {
     if (g_frame_open) {
@@ -2775,6 +2776,29 @@ void glr_frame_ended(void) {
         glr_ctrl_tick();
 
     glr_ctrl_prof_dump_tick();
+    glr_ctrl_prof_nesting_warn_once();
+}
+
+/* A nested profile row whose span is not inside its parent's makes the panel
+ * lie in a way the panel cannot detect (see prof_nesting_violations): the child
+ * renders indented under a parent that does not contain it, so its time reads
+ * as part of a total it was never in. cpuprof counts those at the seam; this is
+ * the one place in the app that looks at the count, once, on the frame that
+ * first trips it. Warn rather than assert: a mis-attributed row is a diagnostic
+ * defect, not a reason to take down a session someone is drawing in. */
+static void glr_ctrl_prof_nesting_warn_once(void) {
+    static int warned = 0;
+    if (warned || prof_nesting_violations() == 0)
+        return;
+    warned = 1;
+    {
+        ProfSection orphan = prof_first_nesting_violation();
+        fprintf(stderr,
+                "[prof] nested section \"%s\" begins outside its parent's span "
+                "- its row is indented under a total it is not part of "
+                "(see prof_sections.h)\n",
+                prof_section_info(orphan).label);
+    }
 }
 
 /* GLR_PROF_DUMP=N: every N frames, print the profile panel's rows to stderr.
@@ -4184,6 +4208,12 @@ void glr_ctrl_init_gl(void) {
             gl_ver ? gl_ver : "unknown");
     }
     repl_executor_set_point_parameter_supported(point_param_ok);
+
+    /* Hand cpuprof the row tree so its nesting guard can check that every
+     * indented section's span really runs inside its parent's. Unconditional
+     * and ahead of the GPU block below: it depends on no GL capability, only on
+     * this binary's catalog. */
+    glr_prof_install_nesting_guard();
 
     /* GPU timer-query profiling (GL_EXT_timer_query / GL_ARB_timer_query /
      * GL 3.3+). Feeds the profile panel's GPU column: GL_TIME_ELAPSED

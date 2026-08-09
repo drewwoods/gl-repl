@@ -235,6 +235,35 @@ int    prof_section_is_stale(ProfSection s);
  * in. */
 int    prof_section_sampled_this_frame(ProfSection s);
 
+/* --- Nesting guard ---
+ *
+ * A section's `depth` claims it is part of its parent's time: the panel indents
+ * it, and a reader subtracts it from the parent's total. Nothing structural
+ * enforced that, because the two brackets normally live in different
+ * translation units - the parent in the frame's driver, the child inside the
+ * callee that does the work. A child bracketed outside its parent's span then
+ * renders as a milliseconds-long row indented under a microseconds-long one,
+ * and the panel has no way to know it is lying.
+ *
+ * prof_begin() checks the one thing that *is* knowable at the seam: whether the
+ * catalog parent is open at the moment the child starts. Every mis-nesting
+ * trips it on the first frame it happens, in whichever binary runs it.
+ *
+ * The tree comes from a depth lookup the host installs, not from
+ * prof_section_info(): this module is linked by binaries that use the timers
+ * with no section catalog at all (the demos, the render3d tests), and calling
+ * into one unconditionally would make them unlinkable. Nothing installed means
+ * no tree is claimed, so there is nothing to check and the guard sits inert.
+ *
+ * Counts violations since process start (or prof_test_reset()), and reports the
+ * first offending *child* section for the diagnostic. A non-zero count is a bug
+ * in either the call sites or the catalog's depth column, never in a workload. */
+typedef int (*ProfSectionDepthFn)(ProfSection s);
+void prof_install_section_depth_fn(ProfSectionDepthFn depth_fn);
+
+int         prof_nesting_violations(void);
+ProfSection prof_first_nesting_violation(void);
+
 /* --- Fixed timing histograms ---
  *
  * One Histogram per section plus one for frame time. The distribution itself -

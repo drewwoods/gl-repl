@@ -41,6 +41,32 @@ static int    g_prof_accum_sampled[PROF_SECTION_COUNT]; /* accum_end ran since r
 static Histogram g_prof_hist[PROF_SECTION_COUNT];
 static int    g_prof_initialized = 0;
 
+/* --- Nesting guard (see prof_nesting_violations() in the header) ---
+ *
+ * The catalog's depth column claims a tree, but nothing enforced that a nested
+ * row's span actually runs inside its parent's: the two brackets are usually in
+ * different translation units, so no compile-time or source-level check can see
+ * the relationship. What *is* knowable here is whether the parent is open at the
+ * moment a child begins, which is exactly the claim the indentation makes.
+ *
+ * g_prof_parent is derived from the depth column the host installs: a row's
+ * parent is the nearest preceding row one level shallower - the same rule the
+ * panel's branch walk uses. The depth column arrives through
+ * prof_install_section_depth_fn() rather than being read from
+ * prof_section_info() directly, because this TU stays catalog-free: binaries
+ * that link it for the timers alone (the demos, the render3d tests) supply no
+ * section table at all, and calling into one would leave them unlinkable. No
+ * provider installed = no tree claimed = guard inert.
+ *
+ * Accumulated parents (prof_accum_*) need no exemption: they still prof_begin
+ * around each of their legs, so a child that begins inside one sees an open
+ * parent, and one that begins in the gap between legs is a real orphan. */
+static signed char g_prof_open[PROF_SECTION_COUNT];
+static short  g_prof_parent[PROF_SECTION_COUNT];
+static int    g_prof_nesting_violations = 0;
+static ProfSection g_prof_first_orphan = (ProfSection)0;
+static int    g_prof_have_orphan = 0;
+static ProfSectionDepthFn g_prof_depth_fn = 0;
 
 static ProfSectionHookFn g_prof_begin_hook = 0;
 static ProfSectionHookFn g_prof_end_hook   = 0;
@@ -103,6 +129,8 @@ static double prof_now_us(void) {
     return prof_platform_now_us();
 }
 
+static void prof_resolve_parents(void);
+
 static void init_if_needed(void) {
     if (g_prof_initialized) return;
     for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
@@ -112,8 +140,36 @@ static void init_if_needed(void) {
         g_prof_stale[section_idx]         = PROF_STALE_FRAMES; /* treat as stale until first sample */
         g_prof_accum_pending[section_idx] = 0.0;
         g_prof_accum_sampled[section_idx] = 0;
+        g_prof_open[section_idx]          = 0;
     }
     g_prof_initialized = 1;
+    prof_resolve_parents();
+}
+
+/* Resolve each row's parent: the nearest preceding row exactly one level
+ * shallower. A row with no such predecessor (depth 0, or a depth the host left
+ * with no parent above it) keeps -1 and is never checked. */
+static void prof_resolve_parents(void) {
+    for (int section_idx = 0; section_idx < PROF_SECTION_COUNT; section_idx++) {
+        int depth = g_prof_depth_fn ? g_prof_depth_fn((ProfSection)section_idx)
+                                   : 0;
+        g_prof_parent[section_idx] = -1;
+        if (depth <= 0) continue;
+        for (int up = section_idx - 1; up >= 0; up--) {
+            int up_depth = g_prof_depth_fn((ProfSection)up);
+            if (up_depth == depth - 1) {
+                g_prof_parent[section_idx] = (short)up;
+                break;
+            }
+            if (up_depth < depth - 1) break;  /* left the branch */
+        }
+    }
+}
+
+void prof_install_section_depth_fn(ProfSectionDepthFn depth_fn) {
+    init_if_needed();
+    g_prof_depth_fn = depth_fn;
+    prof_resolve_parents();
 }
 
 /* ========================================================================= */
@@ -129,6 +185,21 @@ void prof_install_section_hooks(ProfSectionHookFn begin_hook,
 void prof_begin(ProfSection s) {
     if (s < 0 || s >= PROF_SECTION_COUNT) return;
     init_if_needed();
+    /* The indentation claims this span runs inside its parent's; check it while
+     * the answer is still knowable. Before the hook and the clock read: the
+     * comparison is two array loads, and an orphan is a catalog/call-site bug
+     * either way. */
+    {
+        int parent = g_prof_parent[s];
+        if (parent >= 0 && !g_prof_open[parent]) {
+            g_prof_nesting_violations++;
+            if (!g_prof_have_orphan) {
+                g_prof_first_orphan = s;
+                g_prof_have_orphan = 1;
+            }
+        }
+    }
+    g_prof_open[s] = 1;
     /* Hook fires before the clock read so its cost (e.g. issuing a GPU
      * timer query) is excluded from this section's CPU time. */
     if (g_prof_begin_hook) g_prof_begin_hook(s);
@@ -141,6 +212,7 @@ void prof_end(ProfSection s) {
 
     double elapsed = prof_now_us() - g_prof_start[s];
     if (elapsed < 0.0) elapsed = 0.0;
+    g_prof_open[s] = 0;
     if (g_prof_end_hook) g_prof_end_hook(s);
 
     g_prof_last_us[s] = elapsed;
@@ -182,6 +254,7 @@ void prof_accum_end(ProfSection s) {
     init_if_needed();
     double elapsed = prof_now_us() - g_prof_start[s];
     if (elapsed < 0.0) elapsed = 0.0;
+    g_prof_open[s] = 0;
     if (g_prof_end_hook) g_prof_end_hook(s);
     g_prof_accum_pending[s] += elapsed;
     g_prof_accum_sampled[s] = 1;
@@ -286,6 +359,14 @@ int prof_section_is_stale(ProfSection s) {
     return g_prof_stale[s] >= PROF_STALE_FRAMES;
 }
 
+int prof_nesting_violations(void) {
+    return g_prof_nesting_violations;
+}
+
+ProfSection prof_first_nesting_violation(void) {
+    return g_prof_first_orphan;
+}
+
 int prof_section_sampled_this_frame(ProfSection s) {
     if (s < 0 || s >= PROF_SECTION_COUNT) return 0;
     /* prof_frame_tick() bumps the counter and every publisher zeroes it, so
@@ -331,8 +412,14 @@ void prof_test_reset(void) {
         g_prof_stale[section_idx]         = PROF_STALE_FRAMES;
         g_prof_accum_pending[section_idx] = 0.0;
         g_prof_accum_sampled[section_idx] = 0;
+        g_prof_open[section_idx]          = 0;
         histogram_clear(&g_prof_hist[section_idx]);
     }
+    /* A test that deliberately mis-nests a pair must not leave the count set
+     * for whatever runs next. */
+    g_prof_nesting_violations = 0;
+    g_prof_have_orphan = 0;
+    g_prof_first_orphan = (ProfSection)0;
     for (int win_idx = 0; win_idx < PROF_FPS_WIN_COUNT; win_idx++) {
         g_fps_win[win_idx].head = 0;
         g_fps_win[win_idx].count = 0;
@@ -347,6 +434,9 @@ void prof_test_reset(void) {
     g_prof_initialized = 0;
     g_prof_begin_hook = 0;
     g_prof_end_hook = 0;
+    /* Uninstalled, like the hooks: a reset returns a pristine profiler, and a
+     * test that wants the nesting guard installs the tree after resetting. */
+    g_prof_depth_fn = 0;
     g_prof_test_now_enabled = 0;
     g_prof_test_now_us = 0.0;
 }

@@ -1185,6 +1185,83 @@ static void test_frame_spans_host_stages(void) {
     prof_test_clear_now_us();
 }
 
+/* The nesting guard: a child section bracketed outside its catalog parent's
+ * span. This is the failure the Depth Snapshot row shipped with - a 2.17 ms row
+ * indented under a 9 us "Host Overlays", because the capture moved after that
+ * aggregate closed while the row stayed a child of it. Nothing static can catch
+ * it (parent and child are bracketed in different TUs), and no timing assertion
+ * can either under the stubs, where every span is ~0 us. What is checkable is
+ * the structural claim: at the moment a nested section begins, its parent must
+ * be open.
+ *
+ * Driven on the real catalog with a real parent/child pair, so the test also
+ * pins that the parent lookup resolves the depth column the way the panel's
+ * branch walk does. */
+static void test_prof_nesting_guard(void) {
+    printf("--- imrepl_ctrl profile nesting guard ---\n");
+
+    /* The app installs this from init_gl; do it here too rather than inheriting
+     * whatever earlier tests left, since an uninstalled guard reports zero
+     * violations and would pass every case below. prof_test_reset() uninstalls
+     * it again along with the hooks, so the order matters. */
+    prof_test_reset();
+    glr_prof_install_nesting_guard();
+    ASSERT_INT("a fresh profiler has no violations",
+               prof_nesting_violations(), 0);
+
+    /* Properly nested: parent open across the child. */
+    prof_begin(PROF_HOST_OVERLAYS);
+    prof_begin(PROF_TOUR_OVERLAY);
+    prof_end(PROF_TOUR_OVERLAY);
+    prof_end(PROF_HOST_OVERLAYS);
+    ASSERT_INT("a child inside its parent is not a violation",
+               prof_nesting_violations(), 0);
+
+    /* The regression: same child, begun after the parent closed. */
+    prof_begin(PROF_HOST_OVERLAYS);
+    prof_end(PROF_HOST_OVERLAYS);
+    prof_begin(PROF_TOUR_OVERLAY);
+    prof_end(PROF_TOUR_OVERLAY);
+    ASSERT_INT("a child begun after its parent closed is a violation",
+               prof_nesting_violations(), 1);
+    ASSERT_INT("the guard names the offending child",
+               (int)prof_first_nesting_violation(), (int)PROF_TOUR_OVERLAY);
+
+    /* Top-level rows have no parent to be inside of - including the capture,
+     * which is exactly why it had to become one. */
+    prof_test_reset();
+    glr_prof_install_nesting_guard();
+    prof_begin(PROF_DEPTH_SNAPSHOT);
+    prof_end(PROF_DEPTH_SNAPSHOT);
+    prof_begin(PROF_RENDER3D);
+    prof_end(PROF_RENDER3D);
+    ASSERT_INT("a top-level section is never an orphan",
+               prof_nesting_violations(), 0);
+
+    /* An accumulated parent needs no exemption: it brackets each of its legs,
+     * so a child inside one sees it open. */
+    prof_accum_reset(PROF_ASSIGN_PLOT);
+    prof_begin(PROF_ASSIGN_PLOT);
+    prof_begin(PROF_ASSIGN_PLOT_CAPTURE);
+    prof_end(PROF_ASSIGN_PLOT_CAPTURE);
+    prof_accum_end(PROF_ASSIGN_PLOT);
+    prof_begin(PROF_ASSIGN_PLOT);
+    prof_begin(PROF_ASSIGN_PLOT_PANEL);
+    prof_end(PROF_ASSIGN_PLOT_PANEL);
+    prof_accum_end(PROF_ASSIGN_PLOT);
+    prof_accum_commit(PROF_ASSIGN_PLOT);
+    ASSERT_INT("an accumulated parent's legs nest cleanly",
+               prof_nesting_violations(), 0);
+
+    /* ... and the gap between its legs is still guarded. */
+    prof_begin(PROF_ASSIGN_PLOT_PANEL);
+    prof_end(PROF_ASSIGN_PLOT_PANEL);
+    ASSERT_INT("a child in the gap between accum legs is a violation",
+               prof_nesting_violations(), 1);
+
+    prof_test_reset();
+}
+
 /* The summary rows the panel draws under its divider: the frame total first,
  * then the parts it decomposes into. Row order is catalog order, so the run
  * PROF_FRAME_TOTAL, PROF_FRAME_WORK, PROF_DEPTH_SNAPSHOT, PROF_PRESENT is what
@@ -6685,6 +6762,7 @@ int main(void) {
     test_reshape_clamps_height();
     test_display_frame_profile_coverage();
     test_frame_spans_host_stages();
+    test_prof_nesting_guard();
     test_summary_row_metadata();
     test_variable_panel_motion_routes_through_compile_and_coalesces_undo();
     test_variable_panel_shift_left_drag_uses_fine_scale();

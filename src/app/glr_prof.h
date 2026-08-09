@@ -18,6 +18,13 @@
 /* Nonzero when section s is in the GPU-bracketed subset. */
 int glr_prof_section_is_gpu(ProfSection s);
 
+/* Hand cpuprof this binary's row tree (the display table's depth column) so its
+ * nesting guard can check that a nested section's span really runs inside its
+ * parent's - see prof_nesting_violations() in support/cpuprof.h. Call once at
+ * startup, before the first frame: unlike the GPU hooks this is not conditional
+ * on any capability, since the thing it checks is the catalog's own claim. */
+void glr_prof_install_nesting_guard(void);
+
 /* How much of the GPU subset actually gets queried this frame. Every query
  * boundary has a real cost on some stacks (GL-on-Metal can split command
  * encoders at it), and on tile-deferred GPUs more segments also means more
