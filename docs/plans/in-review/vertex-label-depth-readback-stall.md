@@ -1,6 +1,14 @@
 # Vertex-Label Depth Readback: End-of-Frame Lagged Capture
 
-## Status - IN REVIEW (drafted 2026-08-08)
+## Status - IN REVIEW (drafted 2026-08-08; review folded in 2026-08-09)
+
+Review raised four issues. Three are folded into the design below - stale-
+snapshot invalidation and failed-read/allocation behavior (both now specified
+in **Lifecycle**), and controller-side lifecycle/ordering coverage (now in
+**Tests**). The fourth, validating the snapshot's origin as well as its size,
+is **declined**; the trade and the reachable case that argues against declining
+it are recorded under **Viewport validation** so the decision is not silently
+inherited.
 
 Two staged versions, in the order they should be considered:
 
@@ -100,7 +108,9 @@ controller, not to the subsystem: `src/app/` owns when the frame drains, and
 back into frame timing to trigger its own read.
 
 - New controller-owned snapshot in `src/app/glr_ctrl.c`: a persistent
-  `float *` plus its viewport rect and a validity flag.
+  `float *` plus its viewport rect and a validity flag. `valid` means "these
+  pixels describe the scene as of the end of last frame" - it is set only by a
+  capture that completed, and cleared by everything in Lifecycle below.
 - New entry point called from [`gl_repl.c`](../../../gl_repl.c) between the
   existing `glFinish()` and `glutSwapBuffers()` - the one place where the
   pipeline is known drained and the frame's depth is still intact.
@@ -127,13 +137,47 @@ remainder. Add `PROF_DEPTH_SNAPSHOT` to [`prof_sections.h`](../../../prof_sectio
 and bracket the capture, so the ~2.5 ms is visible and attributed rather than
 silently inflating Present.
 
-**Lifecycle.**
+**Lifecycle.** A stale buffer that still reads as `valid` is the main hazard
+this design introduces, so invalidation is specified rather than left to
+"it self-refreshes":
+
 - Allocate lazily at first capture; reallocate when the scene viewport changes.
 - On a size change, discard rather than scale - a stale-size buffer must read
-  as invalid, hitting the existing labels-stay-visible fallback for one frame.
-- Free on shutdown; `glr_ctrl_reset_all` need not clear it (it self-refreshes).
+  as invalid, hitting the labels-stay-visible fallback for one frame.
+- **Invalidate (clear `valid`, keep the allocation) on every event that can make
+  the retained depth describe a different scene:** labels cycling to `OFF`,
+  `glr_ctrl_reset_all`, example/scene/workspace load, reshape, and the depth
+  capability going false. Without this, disabling labels and re-enabling them
+  later publishes the *old* snapshot to the first pass - which both contradicts
+  the "first frame after enabling has no snapshot" rule below and culls against
+  a stale scene and camera. The gate deciding whether to *capture* is not the
+  same question as whether the retained buffer is still *usable*; conflating
+  them is what produces the stale-publish bug.
+- **A failed capture must clear `valid`, never leave the previous buffer
+  published as current.** That covers a failed `malloc`/`realloc` and a
+  `glReadPixels` that raises an error. The startup capability probe reads a
+  single pixel and does not promise every later full-viewport read succeeds, so
+  the read is checked per capture, not once at init.
+- Free on shutdown. Note that [`glr_shutdown()`](../../../src/app/glr_ctrl.c)
+  currently frees only audio, hidden-line and executor resources - it has no
+  controller-owned-storage free to extend, so this adds one.
 - First frame after enabling labels has no snapshot: labels all visible for one
   frame, which is exactly today's unsupported-context behavior.
+
+**Viewport validation - decided: compare size only, not origin.** The consumer
+checks the snapshot's `w`/`h` against the live scene rect and refuses a
+mismatch. It deliberately does **not** compare `x`/`y`, though a reviewer asked
+for it. Recording the trade because the failing case is real and reachable, not
+hypothetical: `ui_layout_scene_rect()` gives CODE_PANEL_LAYOUT_TOP
+`(0, 0, win_w, win_h - panel_h)` and LAYOUT_BOTTOM
+`(0, panel_h, win_w, win_h - panel_h)` - **identical size, different origin** -
+so toggling the code panel between top and bottom shifts the rect without
+changing its dimensions, and the retained buffer then describes a region
+`panel_h` away. The consequence is bounded at one frame of wrong occlusion
+during a layout switch that is already a visible jump, which is why it is
+accepted. Note for whoever revisits: `x`/`y` have to be stored anyway, because
+the capture needs them to issue `glReadPixels(x, y, w, h)` - so if this ever
+bites, the fix is two extra integer comparisons and costs nothing at runtime.
 
 **Staleness semantics.** The occlusion cull becomes one frame late. Under camera
 motion a label can persist one frame after its vertex goes behind geometry, or
@@ -152,7 +196,8 @@ the pass keeps drawing uncelled labels, unchanged.
 |---|---|
 | [`prof_sections.h`](../../../prof_sections.h) | New `PROF_DEPTH_SNAPSHOT` section |
 | [`src/app/glr_prof.c`](../../../src/app/glr_prof.c) | Its `ProfSectionInfo` label/depth |
-| [`src/app/glr_ctrl.c`](../../../src/app/glr_ctrl.c) | Snapshot storage, capture entry point, realloc/invalidate on viewport change, publish the view into `OverlaySnapshotPack` |
+| [`src/app/glr_ctrl.c`](../../../src/app/glr_ctrl.c) | Snapshot storage, capture entry point, realloc/invalidate on viewport change, invalidate on label-off / reset / scene load / capability loss, clear `valid` on read or allocation failure, publish the view into `OverlaySnapshotPack` |
+| [`src/app/glr_ctrl.c`](../../../src/app/glr_ctrl.c) `glr_shutdown()` | Free the snapshot - it currently frees only audio / hidden-line / executor resources |
 | [`src/app/glr_ctrl.h`](../../../src/app/glr_ctrl.h) | Declare the capture entry point |
 | [`gl_repl.c`](../../../gl_repl.c) | Call it between `glFinish()` and `glutSwapBuffers()` |
 | [`src/subsystems/edit_overlays/edit_overlays.h`](../../../src/subsystems/edit_overlays/edit_overlays.h) | Snapshot view in the pack; `edit_overlays_render_vertex_numbers()` signature |
@@ -171,14 +216,36 @@ because the pass no longer reads:
   reads; move to the controller-side capture.
 - "unsupported label pass skips depth readback" (expects 0) - same relocation.
 
-New coverage worth adding, all of which the refactor makes easy because the
-pass becomes pure over a buffer:
+New **consumer-side** coverage, all of which the refactor makes easy because
+the pass becomes pure over a buffer - no GL trace needed:
 
-- Occlusion culls against a supplied buffer (no GL trace needed).
+- Occlusion culls against a supplied buffer.
 - A `valid = 0` snapshot leaves every label visible (the fallback).
 - A snapshot whose dimensions disagree with the current viewport is refused
   rather than indexed.
-- Capture is skipped when labels are off.
+
+New **controller-side** coverage. This is the part that would otherwise go
+uncovered: the expensive, stateful half of the feature moves out of
+`test_edit_overlays.c`, and a plan that only relocates the three existing
+assertions would leave the whole lifecycle untested. Belongs with the other
+controller tests in [`tests/test_glr_ctrl.c`](../../../tests/test_glr_ctrl.c):
+
+- Capture is skipped when labels are off, and when the capability is false.
+- **First-frame latency**: enabling labels leaves the first pass with no
+  snapshot; the second frame has one.
+- **Stale-publish, the P1 case**: labels on -> off -> on must not hand the pass
+  the pre-`off` buffer. Same for a scene load and for `glr_ctrl_reset_all`
+  between the two captures.
+- **Viewport change** invalidates rather than publishing a wrongly-sized buffer.
+- **Failure paths** clear `valid`: a `glReadPixels` that raises an error, and an
+  allocation that fails, must both leave the consumer with no snapshot rather
+  than the previous one. Needs a seam to force each - the GL stubs can be made
+  to fail the read; the allocation path may need a size that cannot be honoured.
+- **Ordering**: the capture happens after the frame's `glFinish` and before
+  `glutSwapBuffers`. This is the property the whole fix rests on, and it is
+  invisible in any timing-free test unless asserted directly - assert call
+  order from the stub trace.
+- Shutdown frees the buffer (visible under ASan/LSan in the debug test build).
 
 `make test-web` must still pass: the web build never captures, so the pass sees
 a permanently invalid snapshot - the same path as today's unsupported context.
