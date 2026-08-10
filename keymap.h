@@ -32,9 +32,9 @@
  *     one key no longer matters. (Ctrl is dropped from the held set unless
  *     the binding requires it, e.g. the Ctrl+Arrow audio bindings; Shift
  *     is always significant.)
- * A handler that wants a key with-or-without a modifier and branches on it
- * itself (Ctrl+Z vs Ctrl+Shift+Z) matches the bare key via KM_KEY()
- * instead, NOT this matcher.
+ * Modifier variants should be declared as separate bindings and each matched
+ * through this exact matcher; do not rely on dispatch order to disambiguate
+ * them.
  * It reads the live modifiers through the editor's modifier accessor, so
  * it is implemented in src/editor/input.c (next to that accessor) and
  * declared here so every dispatcher - including subsystems that don't
@@ -144,8 +144,9 @@
 #define GLR_CUT              KEY_CTRL_X, 0
 #define GLR_PASTE            KEY_CTRL_V, 0     /* pairs w/ View mode */
 #define GLR_DELETE_LINE      KEY_CTRL_D, 0
-#define GLR_UNDO             KEY_CTRL_Z, 0     /* Shift -> redo (read in handler) */
-#define GLR_REDO             KEY_CTRL_Y, 0     /* pairs w/ Syntax highlight (Ctrl+Shift+Y) */
+#define GLR_UNDO             KEY_CTRL_Z, 0     /* pairs w/ Redo (Ctrl+Shift+Z) */
+#define GLR_REDO             KEY_CTRL_Z, GLUT_ACTIVE_SHIFT
+#define GLR_REDO_ALT         KEY_CTRL_Y, 0     /* alternate redo; pairs w/ Syntax highlight (Ctrl+Shift+Y) */
 #define GLR_REFORMAT         KEY_CTRL_BACKSLASH, 0
 #define GLR_SEARCH           KEY_CTRL_F, 0     /* pairs w/ Code focus (Ctrl+Shift+F) */
 #define GLR_REPLAY_JUMP      KEY_CTRL_K, 0     /* jump replay PC to cursor */

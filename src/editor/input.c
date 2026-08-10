@@ -229,9 +229,8 @@ int editor_input_active_modifiers(void) {
  * control byte carries Ctrl, and on macOS the Cmd/SUPER alias that the
  * accessor mirrors into Ctrl. SUPER is always dropped; Ctrl is dropped
  * unless the binding explicitly requires it (the Ctrl+Arrow audio
- * bindings). A handler that instead wants a key with-or-without a modifier
- * and branches on it itself matches the bare key via KM_KEY() (see the
- * undo/redo route: Ctrl+Z vs Ctrl+Shift+Z). */
+ * bindings). Modifier variants are matched separately through the keymap
+ * pairs, so dispatch order cannot make them alias. */
 int keymap_event_is(int event_key, int binding_key, int binding_mods) {
     if (event_key != binding_key)
         return 0;
@@ -1263,14 +1262,9 @@ static int handle_cursor_endpoint_key_route(unsigned char key) {
 }
 
 static int handle_undo_redo_key_route(unsigned char key) {
-    /* Match the bare key (not keymap_event_is): Ctrl+Z and Ctrl+Shift+Z
-     * both land here and the Shift inspected below picks undo vs redo, so
-     * this route deliberately accepts the key with or without Shift. */
-    if (key == KM_KEY(GLR_UNDO)) {
-        if (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT)
-            editor_undo_do_redo();
-        else
-            editor_undo_pop_snapshot();
+    if (keymap_event_is(key, GLR_REDO) ||
+        keymap_event_is(key, GLR_REDO_ALT)) {
+        editor_undo_do_redo();
         /* keyboard_begin_key already armed scroll-follow; suppress it so
          * undo/redo doesn't yank the view to the restored cursor - the
          * user may be looking at a different region (e.g. color picker). */
@@ -1278,8 +1272,8 @@ static int handle_undo_redo_key_route(unsigned char key) {
         return 1;
     }
 
-    if (keymap_event_is(key, GLR_REDO)) {
-        editor_undo_do_redo();
+    if (keymap_event_is(key, GLR_UNDO)) {
+        editor_undo_pop_snapshot();
         editor_scroll_follow_cursor_set(0);
         return 1;
     }

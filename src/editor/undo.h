@@ -20,7 +20,7 @@
  * Lifecycle: editor_undo_push_snapshot() called before any mutation (delete,
  * paste, reformat, etc.) saves current state to the undo ring and clears the
  * redo ring. Ctrl+Z calls editor_undo_pop_snapshot() to restore the previous
- * snapshot and move current state to redo. Ctrl+Y calls editor_undo_do_redo()
+ * snapshot and move current state to redo. Ctrl+Shift+Z or Ctrl+Y calls editor_undo_do_redo()
  * to restore a redo snapshot and move current state back to undo.
  *
  * Transient auto-promotion hook: editor_undo_push_snapshot() is the entrypoint
@@ -122,7 +122,7 @@ void editor_undo_ring_state_restore(const EditorUndoRingState *state);
  * to the undo ring and clears the redo ring; called before any mutation.
  * editor_undo_pop_snapshot() restores the most recent undo snapshot (Ctrl+Z),
  * moving current state to redo. editor_undo_do_redo() restores the most recent
- * redo snapshot (Ctrl+Y), moving current state back to undo. */
+ * redo snapshot (Ctrl+Shift+Z or Ctrl+Y), moving current state back to undo. */
 void editor_undo_push_snapshot(void);
 void editor_undo_pop_snapshot(void);
 void editor_undo_do_redo(void);

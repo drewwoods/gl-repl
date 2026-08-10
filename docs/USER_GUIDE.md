@@ -276,7 +276,7 @@ parameter hint after the open paren names that definition's parameters.
 ### Editing what's there
 
 Selection, clipboard (**Ctrl+C / Ctrl+X / Ctrl+V**), and undo/redo
-(**Ctrl+Z / Ctrl+Y**) work like a normal editor. Copy and cut also put the text
+(**Ctrl+Z / Ctrl+Shift+Z**, with Ctrl+Y as an alternate) work like a normal editor. Copy and cut also put the text
 on the **system clipboard**, so it pastes into any other app, and Ctrl+V takes
 text copied from anywhere else - multi-line text arrives as source lines, a
 single line lands in the input row when you are editing one. Right-click a GL
@@ -2507,7 +2507,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | End / Ctrl+E | End of line |
 | Shift+Arrows / Home / End | Extend selection |
 | Ctrl+C / Ctrl+X / Ctrl+V | Copy / cut / paste |
-| Ctrl+Z / Ctrl+Y | Undo / redo |
+| Ctrl+Z / Ctrl+Shift+Z (Ctrl+Y alternate) | Undo / redo |
 | Ctrl+D | Delete line or selection |
 | Ctrl+F | Search (seeded from highlighted text) |
 | Tab (find bar) | Cycle find field / replace field / whole-word chip |
