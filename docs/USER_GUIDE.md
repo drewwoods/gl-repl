@@ -1628,7 +1628,7 @@ above.
 
 ### Winding & face diagnosis
 
-**Winding** (Ctrl+Shift+B) re-renders the scene with front-facing polygons
+**Winding** (Ctrl+Shift+W) re-renders the scene with front-facing polygons
 in green and back-facing ones in red (as decided by the active
 `glFrontFace`), so flipped or inside-out faces stand out immediately:
 
@@ -2422,7 +2422,7 @@ the GPU column then reads `--`.
 
 ### Memory, messages, and startup
 
-- **Memory profile** (Ctrl+Shift+W) - a floating panel with the process RSS
+- **Memory profile** (Ctrl+Shift+B) - a floating panel with the process RSS
   history, a session baseline, and the delta since baseline. Useful for
   confirming a long editing session isn't growing without bound.
 - **Message history** - click the button at the right end of the bottom
@@ -2536,7 +2536,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 |---|---|
 | Ctrl+T | Play/pause time |
 | Ctrl+Shift+T | Reset time to 0 |
-| Ctrl+Shift+B | Winding |
+| Ctrl+Shift+W | Winding |
 | Ctrl+R | Start/stop replay (Ctrl+K jump to cursor) |
 | Ctrl+W | Wireframe |
 | Ctrl+Shift+D | Depth view (Off / Linear / Scene / Split) |
@@ -2553,7 +2553,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+P | Vertex points |
 | Ctrl+P | Polygon highlight (Off / On / Clipped & culled) |
 | Ctrl+Shift+K | Open Config menu |
-| Ctrl+G / Ctrl+Shift+W | Compute / memory profile panel |
+| Ctrl+G / Ctrl+Shift+B | Compute / memory profile panel |
 | F2-F10 | Config cycles (Shift steps backward) - see [The Config menu](#the-config-menu) |
 | F11 / Shift+F11 | Next / previous tutorial |
 | F12 / Shift+F12 | Next / previous example or scene |

@@ -165,7 +165,7 @@ void ui_memory_panel_render(const UiMemoryPanelView *view) {
     int tx = panel_x + 8;
     int ty = panel_y + panel_h - MEM_HEADER_H + 2;
 
-    /* No inline hint - the Config menu row carries the Ctrl+Shift+W
+    /* No inline hint - the Config menu row carries the Ctrl+Shift+B
      * shortcut and F1 help duplicates it. Header has just the title. */
     ui_clr(UI_TOK_TEXT_PRIMARY);
     gl2d_draw_string((float)tx, (float)ty, "Memory Profile", FONT_SMALL);

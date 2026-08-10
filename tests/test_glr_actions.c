@@ -707,11 +707,11 @@ static void test_ascii_shortcut_modifiers(void) {
     ASSERT_INT("plain Ctrl+C declined (-> editor copy)",
                glr_cfg_handle_ascii_shortcut(KEY_CTRL_C), 0);
 
-    /* Ctrl+Shift+B toggles Winding view. */
+    /* Ctrl+Shift+W toggles Winding view. */
     g_test_mods = GLUT_ACTIVE_SHIFT;
     int wv0 = glr_config_get(GLR_CONFIG_WINDING_VIEW);
-    ASSERT_INT("Ctrl+Shift+B handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_B), 1);
-    ASSERT_TRUE("Ctrl+Shift+B toggled Winding",
+    ASSERT_INT("Ctrl+Shift+W handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_W), 1);
+    ASSERT_TRUE("Ctrl+Shift+W toggled Winding",
                 glr_config_get(GLR_CONFIG_WINDING_VIEW) != wv0);
 
     /* Ctrl+Shift+T is a controller action, not a shifted fallback to the
@@ -2245,8 +2245,8 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
 /* No two config rows may claim the same keyboard binding. A binding is
  * the triple (key_code, modifiers, is_special): the same key with
  * different modifiers is distinct by design (Ctrl+G = Compute profile,
- * Ctrl+W = Wireframe, and Ctrl+Shift+W = Memory profile; the plain-Ctrl /
- * Ctrl+Shift pairs noted
+ * Ctrl+W = Wireframe, Ctrl+Shift+W = Winding, and Ctrl+Shift+B = Memory
+ * profile; the plain-Ctrl / Ctrl+Shift pairs noted
  * in keymap.h), and an F-key vs a Ctrl byte of equal numeric value are
  * distinct via is_special. Guards against an accidental double-map when a
  * keymap.h binding is reused across two rows. Data-driven over

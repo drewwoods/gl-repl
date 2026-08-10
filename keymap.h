@@ -106,7 +106,7 @@
 #define GLR_BACKDROP         GLUT_KEY_F5, 0
 #define GLR_AXES             GLUT_KEY_F6, 0
 #define GLR_VERTEX_LABELS    GLUT_KEY_F7, 0
-#define GLR_OVERLAY_SCOPE   GLUT_KEY_F8, 0
+#define GLR_OVERLAY_SCOPE    GLUT_KEY_F8, 0
 #define GLR_LIGHT_THEME      GLUT_KEY_F9, 0
 #define GLR_CODE_PANEL       KEY_CTRL_B, 0
 #define GLR_RESET_CAMERA     KEY_CTRL_C, GLUT_ACTIVE_SHIFT  /* plain Ctrl+C = Copy */
@@ -123,14 +123,14 @@
 #define GLR_CAMERA_ROTATE    KEY_CTRL_R, GLUT_ACTIVE_SHIFT  /* plain Ctrl+R = Replay */
 #define GLR_STENCIL_VIZ      KEY_CTRL_S, GLUT_ACTIVE_SHIFT  /* plain Ctrl+S = Save */
 #define GLR_AUTO_TIME        KEY_CTRL_T, 0
-#define GLR_WINDING_VIEW     KEY_CTRL_B, GLUT_ACTIVE_SHIFT
+#define GLR_WINDING_VIEW     KEY_CTRL_W, GLUT_ACTIVE_SHIFT
 #define GLR_MSAA             KEY_CTRL_U, 0
-#define GLR_LINE_SMOOTH     KEY_CTRL_L, GLUT_ACTIVE_SHIFT
+#define GLR_LINE_SMOOTH      KEY_CTRL_L, GLUT_ACTIVE_SHIFT
 #define GLR_ACCUM_EFFECT     KEY_CTRL_U, GLUT_ACTIVE_SHIFT  /* Shift toggles accum-AA (read in handler) */
 #define GLR_VIEW_MODE        KEY_CTRL_V, GLUT_ACTIVE_SHIFT  /* plain Ctrl+V = Paste */
 #define GLR_PROJECTION       KEY_CTRL_E, GLUT_ACTIVE_SHIFT  /* pairs w/ Line end */
 #define GLR_CPU_PROFILE      KEY_CTRL_G, 0     /* compute profile */
-#define GLR_MEMORY_PROFILE   KEY_CTRL_W, GLUT_ACTIVE_SHIFT  /* plain Ctrl+W = Wireframe */
+#define GLR_MEMORY_PROFILE   KEY_CTRL_B, GLUT_ACTIVE_SHIFT  /* plain Ctrl+B = Code panel */
 #define GLR_XFORM_GUIDES     KEY_CTRL_X, GLUT_ACTIVE_SHIFT
 #define GLR_SYNTAX_HL        KEY_CTRL_Y, GLUT_ACTIVE_SHIFT  /* plain Ctrl+Y = Redo */
 #define GLR_VARIABLE_PANEL   '`', 0            /* open variable panel */
