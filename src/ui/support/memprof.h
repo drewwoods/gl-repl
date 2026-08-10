@@ -5,8 +5,8 @@
  * time: RSS natively, Wasm sbrk position in Emscripten.
  * Reads samples + baseline from src/support/memprof.c.
  *
- * Toggle: Config > "Memory profile" and Ctrl+Shift+W (matches the
- * CPU profile panel's Ctrl+W with Shift added).
+ * Toggle: Config > "Memory profile" and Ctrl+Shift+W (separate from
+ * Wireframe's Ctrl+W shortcut).
  */
 #ifndef UI_MEMPROF_H
 #define UI_MEMPROF_H

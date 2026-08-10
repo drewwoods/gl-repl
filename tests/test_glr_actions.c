@@ -2195,10 +2195,10 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
     ASSERT_INT("3D View scope applies the selected effect to the scene",
                (int)glr_state_presentation().post_filter_mode, (int)RENDER3D_POST_FILTER_CHROMATIC_ABERRATION);
 
-    /* Wireframe -> plain Ctrl+G. */
+    /* Wireframe -> plain Ctrl+W. */
     glr_state_presentation_mut()->wireframe = 0;
-    ASSERT_INT("Ctrl+G consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_G), 1);
-    ASSERT_INT("Ctrl+G toggles wireframe", glr_state_presentation().wireframe, 1);
+    ASSERT_INT("Ctrl+W consumed", glr_cfg_handle_ascii_shortcut(KEY_CTRL_W), 1);
+    ASSERT_INT("Ctrl+W toggles wireframe", glr_state_presentation().wireframe, 1);
 
     /* Normal vectors moved to plain Ctrl+N. Vertex outlines remains on
      * Ctrl+Shift+O, covered in test_ascii_shortcut_modifiers. */
@@ -2244,8 +2244,9 @@ static void test_fkey_reassignment_and_alt_shortcuts(void) {
 
 /* No two config rows may claim the same keyboard binding. A binding is
  * the triple (key_code, modifiers, is_special): the same key with
- * different modifiers is distinct by design (Ctrl+W = CPU profile vs
- * Ctrl+Shift+W = Memory profile; the plain-Ctrl / Ctrl+Shift pairs noted
+ * different modifiers is distinct by design (Ctrl+G = Compute profile,
+ * Ctrl+W = Wireframe, and Ctrl+Shift+W = Memory profile; the plain-Ctrl /
+ * Ctrl+Shift pairs noted
  * in keymap.h), and an F-key vs a Ctrl byte of equal numeric value are
  * distinct via is_special. Guards against an accidental double-map when a
  * keymap.h binding is reused across two rows. Data-driven over

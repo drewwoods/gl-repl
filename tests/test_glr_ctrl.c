@@ -3160,7 +3160,7 @@ static void test_editor_input_dismisses_gl_state_report(void) {
                ui_state_gl_state_inspector().visible, 0);
 
     /* Cocoa FreeGLUT emits Ctrl itself as a special-key transition before
-     * delivering Ctrl+W through the keyboard callback. The controller must
+     * delivering Ctrl+G through the keyboard callback. The controller must
      * discard that transition: neither it nor the controller-owned shortcut
      * that follows is editor input, so both must leave the inspector open. */
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, anchor_x, anchor_y);
@@ -3187,10 +3187,10 @@ static void test_editor_input_dismisses_gl_state_report(void) {
     editor_input_set_modifier_provider_for_test(simulated_mods_provider);
     g_simulated_mods = GLUT_ACTIVE_CTRL;
     old_cpu_profile = glr_config_get(GLR_CONFIG_CPU_PROFILE);
-    glr_ctrl_keyboard(KEY_CTRL_W, 0, 0);
-    ASSERT_TRUE("Ctrl+W remains a controller-owned profile shortcut",
+    glr_ctrl_keyboard(KEY_CTRL_G, 0, 0);
+    ASSERT_TRUE("Ctrl+G remains a controller-owned profile shortcut",
                 glr_config_get(GLR_CONFIG_CPU_PROFILE) != old_cpu_profile);
-    ASSERT_INT("controller-owned Ctrl+W preserves state",
+    ASSERT_INT("controller-owned Ctrl+G preserves state",
                ui_state_gl_state_inspector().visible, 1);
     g_simulated_mods = 0;
     editor_input_set_modifier_provider_for_test(NULL);

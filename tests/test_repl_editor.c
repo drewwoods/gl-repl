@@ -686,8 +686,8 @@ int main() {
     {
         glr_ctrl_reset_all();
 
-        /* F2 cycles Grid theme; wireframe moved to the
-         * plain Ctrl+G ascii shortcut. */
+        /* F2 cycles Grid theme; wireframe uses the
+         * plain Ctrl+W ascii shortcut. */
         int grid_before = glr_config_get(GLR_CONFIG_GRID_THEME);
         ASSERT_INT("config special shortcut consumed",
                    glr_cfg_handle_special_shortcut(GLUT_KEY_F2), 1);
@@ -696,8 +696,8 @@ int main() {
 
         glr_state_presentation_mut()->wireframe = 0;
         ASSERT_INT("wireframe ascii shortcut consumed",
-                   glr_cfg_handle_ascii_shortcut(KEY_CTRL_G), 1);
-        ASSERT_INT("Ctrl+G toggles wireframe",
+                   glr_cfg_handle_ascii_shortcut(KEY_CTRL_W), 1);
+        ASSERT_INT("Ctrl+W toggles wireframe",
                    glr_state_presentation().wireframe, 1);
 
         glr_state_presentation_mut()->grid_major_idx = 0;

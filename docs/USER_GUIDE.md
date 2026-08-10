@@ -1640,7 +1640,7 @@ glance.
 
 ### Wireframe & hidden-line
 
-**Ctrl+G** cycles Off / Wireframe / Hidden-line.
+**Ctrl+W** cycles Off / Wireframe / Hidden-line.
 
 ![Wireframe (left) and hidden-line (right), on a torus (top) and a Sierpinski sponge (bottom)](images/wireframe-hidden-line.png)
 
@@ -2362,9 +2362,9 @@ versions.
 When a scene starts feeling heavy, the built-in profilers show where the
 frame goes before you reach for the export.
 
-### The compute profile (Ctrl+W)
+### The compute profile (Ctrl+G)
 
-**Ctrl+W** cycles the compute profile through Off / FPS / Sections /
+**Ctrl+G** cycles the compute profile through Off / FPS / Sections /
 Histogram. *FPS* shows only the frame-rate graph. *Sections* adds the full
 collapsible per-section timing tree. *Histogram* adds the section-distribution
 graph as the final, more expensive diagnostic surface.
@@ -2538,7 +2538,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+T | Reset time to 0 |
 | Ctrl+Shift+B | Winding |
 | Ctrl+R | Start/stop replay (Ctrl+K jump to cursor) |
-| Ctrl+G | Wireframe |
+| Ctrl+W | Wireframe |
 | Ctrl+Shift+D | Depth view (Off / Linear / Scene / Split) |
 | Ctrl+Shift+S | Stencil view (Off / Palette / Ramp / Split) |
 | Ctrl+L | Light indicators |
@@ -2553,7 +2553,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+P | Vertex points |
 | Ctrl+P | Polygon highlight (Off / On / Clipped & culled) |
 | Ctrl+Shift+K | Open Config menu |
-| Ctrl+W / Ctrl+Shift+W | CPU / memory profile panel |
+| Ctrl+G / Ctrl+Shift+W | Compute / memory profile panel |
 | F2-F10 | Config cycles (Shift steps backward) - see [The Config menu](#the-config-menu) |
 | F11 / Shift+F11 | Next / previous tutorial |
 | F12 / Shift+F12 | Next / previous example or scene |

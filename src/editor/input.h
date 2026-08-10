@@ -145,7 +145,7 @@ void editor_navigate_to_line(int target);
 /* Rename-capture predicate. The inline rename overlay is a hard modal:
  * when active, every keystroke must land in the rename buffer ahead of
  * the controller-side router. glr_ctrl_keyboard / _special invoke
- * these BEFORE any other dispatch so backtick / Ctrl+G / F1 / F12 etc.
+ * these BEFORE any other dispatch so backtick / Ctrl+W / F1 / F12 etc.
  * cannot leak out of the rename buffer. */
 int editor_input_rename_capture_key(unsigned char key);
 int editor_input_rename_capture_special(int key);

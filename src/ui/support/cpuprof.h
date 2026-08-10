@@ -18,7 +18,7 @@
  * those measurements and renders them as an overlay (top-left corner by
  * default, position is configurable).
  *
- * Visibility: Panel can be toggled on/off via Ctrl+W or the config menu
+ * Visibility: Panel can be toggled on/off via Ctrl+G or the config menu
  * (GLR_CONFIG_CPU_PROFILE). When off, rendering is a no-op. When on, the
  * overlay appears alongside other floating panels (variable slider, color
  * picker, etc.) without blocking interaction.
@@ -35,7 +35,7 @@
 #include "support/cpuprof.h"     /* ProfSection, prof_section_* readback */
 #include "support/histogram.h"   /* HistogramBin, HISTOGRAM_BIN_COUNT */
 
-/* Compute-profile surfaces (Ctrl+W cycle). Each level adds one floating panel:
+/* Compute-profile surfaces (Ctrl+G cycle). Each level adds one floating panel:
  * FPS shows the frame-rate graph, SECTIONS adds the full collapsible timing
  * tree, and HISTOGRAM adds the section-distribution graph. */
 typedef enum {

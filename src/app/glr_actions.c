@@ -425,8 +425,8 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "Compute profile", .key = GLR_CONFIG_CPU_PROFILE,
       .state_count = PROFILE_PANEL_MODE_COUNT, .state_names = profile_panel_mode_names,
       .key_code = KM_KEY(GLR_CPU_PROFILE), .modifiers = KM_MODS(GLR_CPU_PROFILE) },
-    /* Ctrl+Shift+W mirrors Compute profile's Ctrl+W. Exact ASCII shortcut
-     * matching keeps Ctrl+W on Compute profile and Ctrl+Shift+W here. */
+    /* Ctrl+Shift+W is the memory-profile shortcut; exact ASCII matching
+     * keeps Ctrl+W on Wireframe and Ctrl+Shift+W here. */
     { .label = "Memory profile", .key = GLR_CONFIG_MEMORY_PROFILE,
       .state_count = MEMORY_PANEL_MODE_COUNT, .state_names = memory_panel_mode_names,
       .key_code = KM_KEY(GLR_MEMORY_PROFILE), .modifiers = KM_MODS(GLR_MEMORY_PROFILE) },

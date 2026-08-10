@@ -467,7 +467,7 @@ void ui_profile_panel_render(const UiProfilePanelView *view) {
     int hint_width;
 
     hint = tree_is_collapsed(view->collapsed_sections)
-         ? "Ctrl+W  [+] all" : "Ctrl+W  [-] all";
+         ? "Ctrl+G  [+] all" : "Ctrl+G  [-] all";
     hint_width = FONT_SMALL_W * (int)strlen(hint) + 2;
 
     /* Title */
