@@ -1,11 +1,11 @@
 freeglut vendored into this tree.
 
 upstream: https://github.com/drewwoods/freeglut
-ref:      cocoa-clipboard
-sha:      e1a7d181e135c2e6efde03ca49fc127be61ee0a1
+ref:      high-stroke-count
+sha:      cd7fb16d23d4336c93388ab652925b7b051f69af
 
 Produced by:
-  FREEGLUT_REPO=https://github.com/drewwoods/freeglut scripts/vendor-freeglut.sh cocoa-clipboard
+  FREEGLUT_REPO=https://github.com/drewwoods/freeglut scripts/vendor-freeglut.sh high-stroke-count
 
 Do NOT edit the vendored tree by hand; re-run the command above (with a
 different <ref>, or FREEGLUT_REPO, to update) instead. The Makefile's
