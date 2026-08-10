@@ -142,6 +142,21 @@ void glr_state_presentation_reset_defaults(void);
 void glr_state_presentation_reset_example_defaults(void);
 void glr_state_render_reset_defaults(void);
 
+/* Install the renderer-resolved syntax-highlight default. Every other
+ * presentation default is a CFG_DEFAULT_* constant; this one is not, because
+ * highlighting is only affordable where colored bitmap text is. Mesa
+ * re-validates raster state on every color change, so a highlighted code
+ * panel costs several milliseconds a frame there and its drop shadow renders
+ * wrong - glr_ctrl_init_gl probes GL_RENDERER once and calls this with
+ * SYNTAX_HIGHLIGHT_OFF on a Mesa context.
+ *
+ * Sets both the reset baseline (so glr_state_presentation_reset_defaults
+ * lands on it) and the live value. Never overrides a user or scene choice:
+ * it runs before the initial file/`@cfg` load, and the Config menu row still
+ * cycles freely afterwards. */
+void glr_state_set_default_syntax_highlight(int mode);
+int  glr_state_default_syntax_highlight(void);
+
 /* Copy or restore the full app-side state bundle. Used by whole-app snapshot and
  * reset flows that pair this state with REPL/editor/UI/replay captures. */
 void glr_state_capture(GlrState *snapshot);

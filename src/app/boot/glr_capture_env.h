@@ -9,7 +9,9 @@
  *                                 load), before the main loop starts. Applies
  *                                 the initial-time override plus the pointer-
  *                                 script / splash / tick-per-frame / edit-line /
- *                                 type-keys / accum-pass hooks.
+ *                                 type-keys / accum-pass hooks and the Config-
+ *                                 row overrides (accum effect, code focus,
+ *                                 syntax highlight).
  *
  *   glr_capture_env_frame_hook()  every display callback. Applies the hooks
  *                                 that need a live viewport (popup placement

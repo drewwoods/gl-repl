@@ -8,6 +8,10 @@
  * GLR_ACCUM_PASSES -> glr_config_get(GLR_CONFIG_ACCUM_PASSES),
  * GLR_EDIT_LINE    -> editor_state_edit_line() + follow-scroll request.
  *
+ * The state-named hooks (GLR_SYNTAX_HIGHLIGHT, GLR_ACCUM_EFFECT) share one
+ * matcher against the Config row's own labels, so their cases also pin that a
+ * value naming no state is refused rather than falling through to one.
+ *
  * Line-valued hooks take the code panel's own 1-based numbering and convert at
  * the env boundary, so every expectation here is one lower than what is set.
  *
@@ -56,6 +60,8 @@ static void clear_capture_env(void) {
     unsetenv("GLR_EDIT_LINE");
     unsetenv("GLR_TYPE_KEYS");
     unsetenv("GLR_ACCUM_PASSES");
+    unsetenv("GLR_ACCUM_EFFECT");
+    unsetenv("GLR_SYNTAX_HIGHLIGHT");
     unsetenv("GLR_POINTER_SCRIPT");
     unsetenv("GLR_OPEN_COLOR_PICKER");
     unsetenv("GLR_OPEN_GL_STATE");
@@ -150,6 +156,72 @@ static void test_accum_passes_hook(void) {
     glr_capture_env_apply(NULL);
     ASSERT_INT("empty GLR_ACCUM_PASSES is ignored",
                glr_config_get(GLR_CONFIG_ACCUM_PASSES), seeded);
+
+    clear_capture_env();
+}
+
+/* GLR_SYNTAX_HIGHLIGHT names a Config-row state rather than an integer, so the
+ * variable spells what the menu spells. It exists because the highlight
+ * default is renderer-dependent (off on Mesa) - a capture that wants a
+ * particular look has to be able to say so regardless of the box it runs on,
+ * which is also why the hook runs after the file/@cfg load.
+ *
+ * Every expectation resolves its state index by name through the same
+ * glr_config_state_name table the hook reads, so renumbering the enum or
+ * inserting a state cannot silently pass this. */
+static int syntax_state_index(const char *name) {
+    int n = glr_config_state_count(GLR_CONFIG_SYNTAX_HIGHLIGHT);
+    for (int i = 0; i < n; i++) {
+        const char *s = glr_config_state_name(GLR_CONFIG_SYNTAX_HIGHLIGHT, i);
+        if (s && strcmp(s, name) == 0)
+            return i;
+    }
+    return -1;
+}
+
+static void test_syntax_highlight_hook(void) {
+    clear_capture_env();
+
+    int off = syntax_state_index("Off");
+    int on = syntax_state_index("On");
+    int shadow = syntax_state_index("On+Shadow");
+    ASSERT_TRUE("syntax-highlight states resolve by menu name",
+                off >= 0 && on >= 0 && shadow >= 0);
+
+    /* Seed the opposite of what each case asks for, so a hook that does
+     * nothing cannot pass by landing on a state that was already there. */
+    glr_config_set(GLR_CONFIG_SYNTAX_HIGHLIGHT, off);
+    setenv("GLR_SYNTAX_HIGHLIGHT", "on", 1);
+    glr_capture_env_apply(NULL);
+    ASSERT_INT("GLR_SYNTAX_HIGHLIGHT=on applied",
+               glr_config_get(GLR_CONFIG_SYNTAX_HIGHLIGHT), on);
+
+    /* Labels are user-facing; the variable matches case- and separator-
+     * insensitively so a shell does not have to reproduce "On+Shadow". */
+    setenv("GLR_SYNTAX_HIGHLIGHT", "on+shadow", 1);
+    glr_capture_env_apply(NULL);
+    ASSERT_INT("state names match case-insensitively",
+               glr_config_get(GLR_CONFIG_SYNTAX_HIGHLIGHT), shadow);
+
+    setenv("GLR_SYNTAX_HIGHLIGHT", "OFF", 1);
+    glr_capture_env_apply(NULL);
+    ASSERT_INT("GLR_SYNTAX_HIGHLIGHT=OFF applied",
+               glr_config_get(GLR_CONFIG_SYNTAX_HIGHLIGHT), off);
+
+    /* An unrecognized value is refused rather than falling back to a state:
+     * a capture that mistypes the mode should keep whatever it had (and gets
+     * a stderr line naming the real vocabulary). */
+    glr_config_set(GLR_CONFIG_SYNTAX_HIGHLIGHT, shadow);
+    setenv("GLR_SYNTAX_HIGHLIGHT", "sparkly", 1);
+    glr_capture_env_apply(NULL);
+    ASSERT_INT("an unknown state name leaves the setting alone",
+               glr_config_get(GLR_CONFIG_SYNTAX_HIGHLIGHT), shadow);
+
+    /* Empty is treated as unset, not as the first state. */
+    setenv("GLR_SYNTAX_HIGHLIGHT", "", 1);
+    glr_capture_env_apply(NULL);
+    ASSERT_INT("empty GLR_SYNTAX_HIGHLIGHT is ignored",
+               glr_config_get(GLR_CONFIG_SYNTAX_HIGHLIGHT), shadow);
 
     clear_capture_env();
 }
@@ -290,6 +362,7 @@ int main(void) {
 
     test_apply_is_inert_when_unset();
     test_accum_passes_hook();
+    test_syntax_highlight_hook();
     test_edit_line_hook();
     test_frame_hook_inert_when_unset();
 

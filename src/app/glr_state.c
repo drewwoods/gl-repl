@@ -93,6 +93,15 @@ static const float g_grid_extents[GRID_EXTENT_COUNT] = {
 
 static const GlrState g_glr_state_defaults = GLR_STATE_DEFAULTS_INITIALIZER;
 
+/* The one presentation default that is not a compile-time constant: the
+ * controller probes GL_RENDERER at init and installs a renderer-appropriate
+ * syntax-highlight mode here (see glr_state_set_default_syntax_highlight).
+ * Held separately from g_glr_state_defaults - which stays const, so nothing
+ * else can drift a "default" out from under a reset - and re-applied by
+ * glr_state_presentation_reset_defaults so the verdict survives every later
+ * whole-world reset, not just startup. */
+static int g_default_syntax_highlight = CFG_DEFAULT_SYNTAX_HIGHLIGHT;
+
 static GlrState g_glr_state = GLR_STATE_DEFAULTS_INITIALIZER;
 
 #undef GLR_STATE_DEFAULTS_INITIALIZER
@@ -116,6 +125,21 @@ GlrRenderState *glr_state_render_mut(void) {
 
 void glr_state_presentation_reset_defaults(void) {
     g_glr_state.presentation = g_glr_state_defaults.presentation;
+    g_glr_state.presentation.syntax_highlight = g_default_syntax_highlight;
+}
+
+void glr_state_set_default_syntax_highlight(int mode) {
+    g_default_syntax_highlight = mode;
+    /* Move the live value too. The installer runs once at GL init, before any
+     * file/example `@cfg` is applied, so the current value is by definition
+     * still the compile-time default - assigning it here is what makes the
+     * renderer verdict take effect on the very first frame rather than only
+     * after the next reset. */
+    g_glr_state.presentation.syntax_highlight = mode;
+}
+
+int glr_state_default_syntax_highlight(void) {
+    return g_default_syntax_highlight;
 }
 
 void glr_state_presentation_reset_example_defaults(void) {

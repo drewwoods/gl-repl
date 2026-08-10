@@ -6384,6 +6384,51 @@ static void test_init_gl_requires_loaded_point_parameter_proc(void) {
                 repl_executor_point_parameter_proc() != NULL);
 }
 
+/* Syntax highlighting is the one presentation setting whose default is
+ * resolved at runtime rather than compiled in: glr_ctrl_init_gl turns it off
+ * on a Mesa context, where each colored span forces a raster-state
+ * revalidation. The regression that matters is not the probe (the stub
+ * renderer string is never Mesa) but the *durability* of its verdict - a
+ * default installed only into the live value would be silently undone by the
+ * next whole-world reset, which is exactly what F12 and Ctrl+N do.
+ *
+ * Values here are read back from the installed default rather than compared to
+ * a literal, so retuning CFG_DEFAULT_SYNTAX_HIGHLIGHT cannot break this. */
+static void test_syntax_highlight_default_survives_resets(void) {
+    printf("--- imrepl_ctrl syntax-highlight default ---\n");
+
+    int original = glr_state_default_syntax_highlight();
+    ASSERT_INT("default starts at the compile-time value",
+               original, CFG_DEFAULT_SYNTAX_HIGHLIGHT);
+
+    /* Any state other than the compiled-in one, so a reset that ignores the
+     * installed default lands somewhere visibly different. */
+    int installed = (original == SYNTAX_HIGHLIGHT_OFF) ? SYNTAX_HIGHLIGHT_ON
+                                                       : SYNTAX_HIGHLIGHT_OFF;
+    glr_state_set_default_syntax_highlight(installed);
+    ASSERT_INT("installing the default moves the live value too",
+               glr_state_presentation().syntax_highlight, installed);
+
+    glr_state_presentation_reset_defaults();
+    ASSERT_INT("presentation reset lands on the installed default",
+               glr_state_presentation().syntax_highlight, installed);
+    ASSERT_INT("neighbouring presentation fields still reset to their macros",
+               glr_state_presentation().code_focus, CFG_DEFAULT_CODE_FOCUS);
+
+    glr_ctrl_reset_all();
+    ASSERT_INT("a whole-world reset keeps the installed default",
+               glr_state_presentation().syntax_highlight, installed);
+
+    /* The default is a starting point, not a lock: the Config row still
+     * cycles away from it, and doing so must not rewrite the default. */
+    glr_state_presentation_mut()->syntax_highlight = original;
+    ASSERT_INT("changing the setting leaves the default alone",
+               glr_state_default_syntax_highlight(), installed);
+
+    glr_state_set_default_syntax_highlight(original);
+    glr_state_presentation_reset_defaults();
+}
+
 static void test_code_panel_scroll_clamping_and_follow(void) {
     printf("--- imrepl_ctrl scroll clamping and follow ---\n");
     int follow_doc_line = 0;
@@ -6872,6 +6917,7 @@ int main(void) {
     test_post_filter_key_cycling();
     test_app_lifecycle_bootstrap_shutdown();
     test_init_gl_requires_loaded_point_parameter_proc();
+    test_syntax_highlight_default_survives_resets();
     test_code_panel_scroll_clamping_and_follow();
     test_refresh_window_title();
     test_depth_snapshot_gate_and_capture();

@@ -46,7 +46,7 @@ static int capture_env_line(const char *s, const char *var) {
 
 /* Config state labels are user-facing ("Blur Cam"); an env var should not have
  * to reproduce the capitalization or the space. Compare on letters only. */
-static int accum_effect_name_eq(const char *label, const char *arg) {
+static int cfg_state_name_eq(const char *label, const char *arg) {
     while (*label && *arg) {
         while (*label == ' ' || *label == '_') label++;
         while (*arg   == ' ' || *arg   == '_') arg++;
@@ -58,6 +58,30 @@ static int accum_effect_name_eq(const char *label, const char *arg) {
     while (*label == ' ' || *label == '_') label++;
     while (*arg   == ' ' || *arg   == '_') arg++;
     return *label == 0 && *arg == 0;
+}
+
+/* Set a Config row from an env var naming one of its states, so the variable
+ * spells what the menu spells ("blur cam", "on+shadow"). Unset or empty is a
+ * no-op. The rejection message lists the row's own states rather than a
+ * hand-written hint, which cannot then drift from the state list. */
+static void cfg_apply_state_env(const char *var, GlrConfigKey key) {
+    const char *src = getenv(var);
+    int n, i;
+    if (!src || !*src) return;
+    n = glr_config_state_count(key);
+    for (i = 0; i < n; i++) {
+        const char *name = glr_config_state_name(key, i);
+        if (name && cfg_state_name_eq(name, src)) {
+            glr_config_set(key, i);
+            return;
+        }
+    }
+    fprintf(stderr, "gl-repl: %s=%s ignored (want", var, src);
+    for (i = 0; i < n; i++) {
+        const char *name = glr_config_state_name(key, i);
+        fprintf(stderr, "%s '%s'", i ? " /" : "", name ? name : "?");
+    }
+    fprintf(stderr, ")\n");
 }
 
 /* Capture affordance (doc GIFs), sibling of GLR_TIME / GLR_EDIT_LINE:
@@ -374,29 +398,17 @@ void glr_capture_env_apply(const char *time_arg) {
                 glr_ctrl_toggle_code_focus();
         }
     }
-    /* Accumulation effect: GLR_ACCUM_EFFECT=<state name> picks the Config
-     * row's state by its own label (off/aa/blur/blur cam, case- and
-     * space-insensitive), so the env var spells what the menu spells. Unlike
-     * the pass count this is not scene metadata - no @cfg slug reaches it -
-     * and its keyboard binding carries a Shift the synthetic-key path cannot
-     * deliver, so a capture has no other route to Blur. */
-    {
-        const char *e_src = getenv("GLR_ACCUM_EFFECT");
-        if (e_src && *e_src) {
-            int n = glr_config_state_count(GLR_CONFIG_ACCUM_EFFECT);
-            int found = 0;
-            for (int i = 0; i < n && !found; i++) {
-                const char *name = glr_config_state_name(
-                    GLR_CONFIG_ACCUM_EFFECT, i);
-                if (name && accum_effect_name_eq(name, e_src)) {
-                    glr_config_set(GLR_CONFIG_ACCUM_EFFECT, i);
-                    found = 1;
-                }
-            }
-            if (!found)
-                fprintf(stderr,
-                        "gl-repl: GLR_ACCUM_EFFECT=%s ignored"
-                        " (want off/aa/blur/'blur cam')\n", e_src);
-        }
-    }
+    /* Accumulation effect: GLR_ACCUM_EFFECT=<state name>. Unlike the pass
+     * count this is not scene metadata - no @cfg slug reaches it - and its
+     * keyboard binding carries a Shift the synthetic-key path cannot deliver,
+     * so a capture has no other route to Blur. */
+    cfg_apply_state_env("GLR_ACCUM_EFFECT", GLR_CONFIG_ACCUM_EFFECT);
+
+    /* Syntax highlighting: GLR_SYNTAX_HIGHLIGHT=<state name>. The default is
+     * renderer-dependent (glr_ctrl_init_gl turns it off on Mesa, where the
+     * per-span color changes cost milliseconds a frame), which would silently
+     * change how a doc capture looks depending on the box it ran on. Applied
+     * here, after the file/example load, so it beats both the renderer verdict
+     * and any `@cfg syntax_highlight` the captured scene carries. */
+    cfg_apply_state_env("GLR_SYNTAX_HIGHLIGHT", GLR_CONFIG_SYNTAX_HIGHLIGHT);
 }

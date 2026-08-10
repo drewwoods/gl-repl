@@ -140,9 +140,11 @@ typedef double GLclampd;
 #define GL_PROJECTION_MATRIX 0x0BA7
 #define GL_TEXTURE_MATRIX 0x0BA8
 #define GL_VIEWPORT 0x0BA2
-/* glGetString names - only GL_VERSION is consumed (runtime
- * point-parameter detection in glr_ctrl_init_gl); the rest round out
- * the enum so a real glGetString switch would still compile. */
+/* glGetString names. GL_VERSION feeds runtime point-parameter detection in
+ * glr_ctrl_init_gl; GL_RENDERER/GL_VENDOR feed its renderer-family probe
+ * (accum emulation, syntax-highlight default). The single stub string below
+ * answers all of them and names no renderer family, so a stubbed test sees
+ * the ordinary defaults. GL_EXTENSIONS rounds out the enum. */
 #define GL_VENDOR 0x1F00
 #define GL_RENDERER 0x1F01
 #define GL_VERSION 0x1F02

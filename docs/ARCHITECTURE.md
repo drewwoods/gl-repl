@@ -1835,6 +1835,38 @@ the Max column falls back to plain CPU. When GPU timing ends up off,
 override, a context that advertises timer queries but yields no loadable
 entry points, and a context with no timer-query support at all.
 
+The third case is not a capability at all but a **renderer-family policy**:
+two features that every context reports as supported, yet which Mesa
+implements in a way that makes them a net loss. No probe or extension bit can
+answer that, so `glr_ctrl_init_gl()` matches `GL_RENDERER` / `GL_VENDOR`
+case-insensitively against `mesa`, `llvmpipe`, `softpipe`, `swrast`,
+`lavapipe` (the bare pipe names are needed because a software rasterizer's
+renderer string is just the pipe) and stores one flag, `g_renderer_is_mesa`.
+Its two consumers:
+
+* **Accumulation effects.** Mesa's state tracker implements `glAccum` by
+  mapping the color buffer and adding host-side - on every driver it ships,
+  hardware Intel/AMD/nouveau included - so each pass costs a full-scene
+  re-render *plus* a CPU read/add/write. Distinct from `accum_bits == 0` (no
+  accumulation buffer at all), which is a real probe and forces the feature
+  off even against an explicit `--accum`. The renderer flag only decides
+  `glr_ctrl_set_accum`'s AUTO mode, i.e. what happens with neither
+  `--accum` nor `--no-accum`.
+* **Code-panel syntax highlighting.** Each colored span issues its own
+  `glColor` before `glRasterPos`, and Mesa re-validates raster state on a
+  dirty color, so highlighting costs ~2 ms of a code panel's ~4 ms
+  (`bench/bench_code_panel_text.c`); `On+Shadow`'s offset dark copy also
+  composites wrong there. This one moves a **default**, not the setting -
+  `glr_state_set_default_syntax_highlight()` installs the verdict as the
+  baseline `glr_state_presentation_reset_defaults()` lands on, so it survives
+  every later whole-world reset, while the Config row, a scene's `@cfg`, and
+  `GLR_SYNTAX_HIGHLIGHT` all still win over it.
+
+Both are exempt in the Emscripten build: gl4es owns both paths (a real
+GPU-side FBO for `glAccum`, its own WebGL2 bitmap-text translation), while
+the browser's underlying WebGL renderer string often names Mesa and would
+misfire the match.
+
 #### Dynamic Reshape Projection (export + code panel)
 
 The exported standalone C file's `reshape()` and the live code panel's

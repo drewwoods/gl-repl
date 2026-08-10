@@ -1487,15 +1487,22 @@ void glr_ctrl_capture_depth_snapshot(void) {
     prof_end(PROF_DEPTH_SNAPSHOT);
 }
 
-/* "The context has an accumulation buffer, but it is a CPU emulation" -
- * probed once in glr_ctrl_init_gl from the renderer string, consumed by
- * glr_ctrl_set_accum's AUTO mode. Distinct from accum_bits == 0 (no accum
- * buffer at all): Mesa reports a real width and glAccum genuinely works,
- * it is just implemented by mapping the color buffer and adding with the
- * CPU, which costs more per pass than the extra scene render it is
- * supposed to be smoothing. 0 until detection runs, so paths that never
- * init GL (tests, render3d_demo, dump-only runs) keep accum armed. */
-static int g_accum_is_software = 0;
+/* "This is a Mesa-family renderer" - probed once in glr_ctrl_init_gl from the
+ * renderer/vendor strings. Two consumers, both of them cases where Mesa's
+ * implementation choices make a feature a net loss rather than a capability
+ * question, so no probe or extension bit can answer them:
+ *
+ *   - glr_ctrl_set_accum's AUTO mode. Distinct from accum_bits == 0 (no accum
+ *     buffer at all): Mesa reports a real width and glAccum genuinely works,
+ *     it is just implemented by mapping the color buffer and adding with the
+ *     CPU, which costs more per pass than the extra scene render it is
+ *     supposed to be smoothing.
+ *   - the code panel's syntax-highlight default (see the init_gl call to
+ *     glr_state_set_default_syntax_highlight).
+ *
+ * 0 until detection runs, so paths that never init GL (tests, render3d_demo,
+ * dump-only runs) keep both features armed. */
+static int g_renderer_is_mesa = 0;
 
 /* GL_RENDERER, or a placeholder when the context refuses the query - only
  * ever used for human-readable diagnostics. */
@@ -1504,18 +1511,20 @@ static const char *glr_ctrl_gl_renderer_name(void) {
     return (renderer && renderer[0]) ? renderer : "this renderer";
 }
 
-/* Does this context accumulate on the CPU? Mesa is the whole story in
- * practice: its state tracker implements glAccum by mapping the color
- * buffer and doing the arithmetic host-side, on every driver it ships -
- * hardware Intel/AMD/nouveau included, not just llvmpipe/softpipe/swrast.
- * So the vendor/renderer string, not a capability bit, is the signal. */
+/* Is this a Mesa-family renderer? Every driver Mesa ships behaves the same way
+ * for both consumers above - hardware Intel/AMD/nouveau included, not just
+ * llvmpipe/softpipe/swrast - because the behavior comes from the shared state
+ * tracker, not the backend. So the vendor/renderer string, not a capability
+ * bit, is the signal. */
 #if defined(__EMSCRIPTEN__)
-/* The web build is deliberately exempt: gl4es has no accumulation buffer to
- * emulate badly - packaging/web/patches/gl4es-accum-fbo.patch implements
- * glAccum against a real GPU-side FBO, and the app picks that up through the
- * accum_bits probe - while the browser's underlying WebGL renderer string
- * often names Mesa and would misfire the test below. */
-static int glr_ctrl_accum_is_software_renderer(void) { return 0; }
+/* The web build is deliberately exempt. The browser's underlying WebGL
+ * renderer string often names Mesa, but nothing downstream of it is Mesa's:
+ * gl4es owns both paths the flag drives. It has no accumulation buffer to
+ * emulate badly (packaging/web/patches/gl4es-accum-fbo.patch implements
+ * glAccum against a real GPU-side FBO, which the app picks up through the
+ * accum_bits probe), and it draws bitmap text through its own WebGL2
+ * translation rather than Mesa's raster path. */
+static int glr_ctrl_renderer_is_mesa(void) { return 0; }
 #else
 /* Case-insensitive substring test (no strcasestr: POSIX-only, and the
  * project builds -std=c99). */
@@ -1534,15 +1543,17 @@ static int glr_ctrl_str_contains_ci(const char *hay, const char *needle) {
     return 0;
 }
 
-static int glr_ctrl_accum_is_software_renderer(void) {
+static int glr_ctrl_renderer_is_mesa(void) {
     const char *renderer = (const char *)glGetString(GL_RENDERER);
     const char *vendor = (const char *)glGetString(GL_VENDOR);
-    static const char *const k_software[] = {
+    /* "mesa" alone misses the software rasterizers, whose renderer string is
+     * just the pipe name ("llvmpipe (LLVM 17.0.6, 256 bits)"). */
+    static const char *const k_mesa[] = {
         "mesa", "llvmpipe", "softpipe", "swrast", "lavapipe"
     };
-    for (size_t i = 0; i < ARRAY_LEN(k_software); i++) {
-        if (glr_ctrl_str_contains_ci(renderer, k_software[i]) ||
-            glr_ctrl_str_contains_ci(vendor, k_software[i]))
+    for (size_t i = 0; i < ARRAY_LEN(k_mesa); i++) {
+        if (glr_ctrl_str_contains_ci(renderer, k_mesa[i]) ||
+            glr_ctrl_str_contains_ci(vendor, k_mesa[i]))
             return 1;
     }
     return 0;
@@ -4276,6 +4287,9 @@ void glr_ctrl_init_gl(void) {
     glGetIntegerv(GL_SAMPLES, &samples);
     glr_actions_set_msaa_label((int)samples);
 
+    /* Identify the renderer family once; two features below key off it. */
+    g_renderer_is_mesa = glr_ctrl_renderer_is_mesa();
+
     /* Probe the accumulation buffer depth once. A context without one
      * (Emscripten/WebGL: GL_ACCUM_RED_BITS is not even a valid pname
      * there, so the query errors and leaves the 0) would render every
@@ -4285,10 +4299,38 @@ void glr_ctrl_init_gl(void) {
     glGetIntegerv(GL_ACCUM_RED_BITS, &accum_bits);
     (void)glGetError(); /* clear the GL_INVALID_ENUM a GLES context raises */
     glr_state_render_mut()->accum_bits = (int)accum_bits;
-    g_accum_is_software = glr_ctrl_accum_is_software_renderer();
     glr_ctrl_init_log("accum buffer: %d bits%s", (int)accum_bits,
-                      (accum_bits > 0 && g_accum_is_software)
+                      (accum_bits > 0 && g_renderer_is_mesa)
                           ? " (software emulation)" : "");
+
+    /* Syntax highlighting defaults off on Mesa. Highlighting does not change
+     * the glyph count, it changes how many colored spans those glyphs are
+     * split across, and each span issues its own glColor before glRasterPos -
+     * which Mesa answers by re-validating raster state (glColor+glRasterPos
+     * costs 98.8ns against 61.6ns when the color is unchanged; a whole code
+     * panel runs ~2ms of the ~4ms it spends, measured by
+     * bench/bench_code_panel_text.c). The On+Shadow mode is worse than slow
+     * there: the offset dark copy does not composite correctly.
+     *
+     * The *default* moves, not the setting - the Config > Syntax highlight row
+     * still cycles, a scene's own `@cfg syntax_highlight` still wins (this runs
+     * before the initial load below), and GLR_SYNTAX_HIGHLIGHT overrides it for
+     * a capture. Logged either way so the boot trace says which branch ran. */
+    if (g_renderer_is_mesa) {
+        glr_state_set_default_syntax_highlight(SYNTAX_HIGHLIGHT_OFF);
+        glr_ctrl_init_log(
+            "syntax highlighting off by default: %s re-validates raster state "
+            "per color change, making a highlighted code panel cost several ms "
+            "a frame (Config > Syntax highlight, or GLR_SYNTAX_HIGHLIGHT=on, "
+            "turns it back on).",
+            glr_ctrl_gl_renderer_name());
+    } else {
+        glr_ctrl_init_log("syntax highlighting default: %s (renderer \"%s\").",
+                          glr_config_state_name(
+                              GLR_CONFIG_SYNTAX_HIGHLIGHT,
+                              glr_state_default_syntax_highlight()),
+                          glr_ctrl_gl_renderer_name());
+    }
 
     /* Requesting GLUT_STENCIL is not a promise that a native visual actually
      * has stencil planes. Keep the queried width so the stencil visualizer can
@@ -4425,7 +4467,7 @@ void glr_ctrl_set_accum(int mode) {
      * full-scene re-render plus a CPU-side read/add/write of the color buffer
      * - so AUTO leaves it off there and says how to override. */
     int enabled = (mode != 0);
-    if (mode < 0 && g_accum_is_software) {
+    if (mode < 0 && g_renderer_is_mesa) {
         fprintf(stderr, "accum: %s emulates the accumulation buffer in "
                         "software; accum effects disabled (--accum forces "
                         "them on)\n",

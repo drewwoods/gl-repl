@@ -145,6 +145,7 @@ A value below 1 is refused with a note on stderr rather than acted on.
 | `GLR_ASSIGN_PLOT_RATE` | `once`, `1hz`, `frame`; default `1hz`. | Sets the capture-rate chip (mouse-only otherwise). `frame` is what makes a plotted capture deterministic: at `1hz` the samples land on wall-clock, so the shot depends on how fast the machine renders. |
 | `GLR_ACCUM_PASSES` | `1`, `2`, `4`, `8`, `12`, or `16`; default app setting. | Overrides accumulation-AA sample count, mainly for capture/media generation. |
 | `GLR_ACCUM_EFFECT` | `off`, `aa`, `blur`, `blur cam` (case/space-insensitive); default app setting. | Picks the Config menu's *Accum effect* state by name. Not scene metadata (no `@cfg` slug), and its key binding carries a Shift that `GLR_TYPE_KEYS` cannot deliver, so this is a capture's only route to motion blur. |
+| `GLR_SYNTAX_HIGHLIGHT` | `off`, `on`, `on+shadow` (case/separator-insensitive); default is renderer-dependent (see below). | Picks the Config menu's *Syntax highlight* state by name. Applied after the file/example load, so it beats both the renderer default and a scene's own `@cfg syntax_highlight` - which is what keeps a doc capture looking the same on a Mesa box as on a native one. |
 | `GLR_TICK_PER_FRAME` | Any non-empty value; default off. | Advances the complete fixed-dt simulation once per rendered frame for deterministic offline capture. |
 | `GLR_VIEW_TOGGLE_AT` | Comma-separated capture-clock seconds. | Toggles 2D/3D view mode at deterministic times while recording. |
 | `GLR_POINTER_SCRIPT` | Path to a pointer script; implies `GLR_TICK_PER_FRAME`. | Drives scripted synthetic mouse/keyboard input (menu glides, clicks, highlight rings) with a visible cursor overlay - the video-capture hook behind `scripts/record-video.sh`. Grammar in [`src/app/glr_pointer_script.h`](../src/app/glr_pointer_script.h). |
@@ -685,7 +686,7 @@ which choice it selects:
 | `view_mode` | `RENDER3D_VIEW_3D` `RENDER3D_VIEW_2D` (perspective vs. 2D ortho) |
 | `vertex_labels` | `OVERLAY_VERTEX_LABEL_OFF` `_INDEX` `_INDEX_POS` `_INDEX_WORLD` `_INDEX_WORLD_FINE` |
 | `vertex_outline_style` | `VERTEX_OUTLINE_STYLE_DEFAULT` `_BOLD` `_INVERTED` `_BOLD_INVERTED` |
-| `syntax_highlight` | `SYNTAX_HIGHLIGHT_OFF` `_ON` `_ON_SHADOW` |
+| `syntax_highlight` | `SYNTAX_HIGHLIGHT_OFF` `_ON` `_ON_SHADOW` (default is renderer-dependent - see below) |
 
 **Integer slugs** carry a plain index: the toggles `wireframe`,
 `normal_vectors`, `vertex_outlines`, `vertex_points`, `light_indicators`, `camera_rotate`, `variable_panel`
@@ -698,6 +699,36 @@ now use the symbolic enum names above.
 // @cfg grid_extent = GRID_EXTENT_MID
 // @cfg view_mode = RENDER3D_VIEW_2D
 // @cfg light_indicators = 1
+```
+
+### Renderer-dependent syntax-highlight default
+
+`syntax_highlight` is the one setting whose default is decided at runtime
+rather than compiled in. `glr_ctrl_init_gl` reads `GL_RENDERER` / `GL_VENDOR`
+and installs `SYNTAX_HIGHLIGHT_OFF` on a Mesa-family context (`mesa`,
+`llvmpipe`, `softpipe`, `swrast`, `lavapipe`), because highlighting is
+disproportionately expensive there and its drop shadow renders wrong:
+
+- Highlighting doesn't change the glyph count, it changes how many colored
+  spans those glyphs are split across, and each span issues its own `glColor`
+  before `glRasterPos`. Mesa re-validates raster state on a dirty color -
+  98.8 ns for the pair against 61.6 ns when the color is unchanged - so a
+  code panel spends roughly 2 ms of its ~4 ms on highlighting alone.
+  Measured by [`bench/bench_code_panel_text.c`](../bench/bench_code_panel_text.c)
+  (`make bench-code-panel-text`, Linux + windowed).
+- `On+Shadow` draws an offset dark copy behind each constant span, which does
+  not composite correctly on Mesa.
+
+Only the *default* moves. The **Config > Syntax highlight** row still cycles
+freely, a scene's own `@cfg syntax_highlight` still wins (the probe runs
+before the initial load), and `GLR_SYNTAX_HIGHLIGHT` overrides both for a
+capture. The web build is exempt - gl4es draws bitmap text through its own
+WebGL2 translation, so a browser renderer string that happens to name Mesa is
+not describing the path the glyphs take. The boot trace records which branch
+ran:
+
+```
+[init +0.412s] syntax highlighting off by default: llvmpipe (LLVM 17.0.6, 256 bits) ...
 ```
 
 ### `@cfg` backdrop/grid pairing

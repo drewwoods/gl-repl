@@ -501,6 +501,12 @@ More code-panel toggles live in the Config menu: **Wrap at commas**
 (highlight the matching bracket under the caret, and the span of the
 enclosing parens).
 
+**Syntax highlight** starts at On+Shadow, except on a Mesa renderer (most
+Linux setups, and any software rasterizer) where it starts Off: drawing the
+panel in many colors costs milliseconds a frame there, and the shadow mode
+composites incorrectly. Only the starting point changes - Ctrl+Shift+Y still
+cycles all three, and the choice is saved with the scene.
+
 ---
 
 ## The REPL Language
