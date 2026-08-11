@@ -151,10 +151,11 @@
 #define GLR_SEARCH           KEY_CTRL_F, 0     /* pairs w/ Code focus (Ctrl+Shift+F) */
 #define GLR_REPLAY_JUMP      KEY_CTRL_K, 0     /* jump replay PC to cursor */
 
-/* Not registered here on purpose: the accum-AA sample fine-adjust is a
- * multi-key +/- gesture ('='/'+' up, '-'/Ctrl+- down), not a single named
- * binding - it stays inline in glr_ctrl_router_handle_accum_samples_key.
- * The Accum AA cycle itself is GLR_ACCUM_AA (F2) above. */
+/* Not registered as a binding pair: Accum passes is a multi-key gesture
+ * ('='/'+' up, '-'/Ctrl+- down), so it stays inline in
+ * glr_ctrl_router_handle_accum_samples_key. Keep this marker machine-readable
+ * for scripts/keymap.sh's unassigned-config report:
+ * keymap.sh: assigned GLR_CONFIG_ACCUM_PASSES (Ctrl+= / Ctrl+-) */
 
 /* Match the dispatched event against a binding pair. See the contract in
  * the file banner. Implemented in src/editor/input.c. */

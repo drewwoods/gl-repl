@@ -984,7 +984,7 @@ Shift forms are reported as assignable because a pre-editor route can claim
 the modifier pair, with the tradeoff that it also consumes the corresponding
 Shift+editing-key alias. Ctrl+Shift+H is claimed by Syntax highlight. The
 report also derives the `GlrConfigKey` rows without shortcuts from the config
-descriptor table.
+descriptor table plus the marked multi-key exceptions in `keymap.h`.
 
 ## Files
 

@@ -116,6 +116,14 @@ awk -v mode="$mode" '
 
 if [[ "$mode" == "list" ]]; then
     awk '
+        FNR == NR {
+            if (match($0, /keymap\.sh: assigned GLR_CONFIG_[A-Z0-9_]+/)) {
+                key = substr($0, RSTART, RLENGTH)
+                sub(/^.*assigned /, "", key)
+                assigned_outside_descriptor[key] = 1
+            }
+            next
+        }
         /^const GlrConfigItem g_cfg_items\[\][[:space:]]*=/ {
             in_table = 1
             next
@@ -134,7 +142,8 @@ if [[ "$mode" == "list" ]]; then
             if (match(row, /\.key[[:space:]]*=[[:space:]]*GLR_CONFIG_[A-Z0-9_]+/)) {
                 key = substr(row, RSTART, RLENGTH)
                 sub(/^.*GLR_CONFIG_/, "GLR_CONFIG_", key)
-                if (row !~ /\.key_code[[:space:]]*=/)
+                if (row !~ /\.key_code[[:space:]]*=/ &&
+                    !(key in assigned_outside_descriptor))
                     unassigned[count++] = key
             }
             collecting = 0
@@ -146,5 +155,5 @@ if [[ "$mode" == "list" ]]; then
             for (i = 0; i < count; i++)
                 print "  " unassigned[i]
         }
-    ' src/app/glr_actions.c
+    ' keymap.h src/app/glr_actions.c
 fi
