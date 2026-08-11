@@ -553,6 +553,37 @@ static char *slurp_path(const char *path) {
     return buf;
 }
 
+static void test_export_disables_authored_fp_contraction(void) {
+    const char *path = "/tmp/repl_export_fp_contract.c";
+    char *text;
+    const char *pragma;
+    const char *authored_func;
+
+    glr_ctrl_reset_all();
+    declare_test_vars();
+    editor_feed_line("func0() {");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("glVertex3f(rand(1, 2), 0, 0);");
+
+    ASSERT_TRUE("FP contraction fixture exports",
+                repl_export_save_output(path, source_document_view(), NULL));
+    text = slurp_path(path);
+    pragma = text ? strstr(text, "#pragma STDC FP_CONTRACT OFF") : NULL;
+    authored_func = text ? strstr(text, "static void func0(void)") : NULL;
+
+    ASSERT_TRUE("export explains why FP contraction is disabled",
+                text && strstr(text,
+                    "Match gl-repl's expression evaluator") != NULL);
+    ASSERT_TRUE("export disables FP contraction for authored expressions",
+                pragma != NULL);
+    ASSERT_TRUE("authored functions follow the FP contraction directive",
+                pragma && authored_func && pragma < authored_func);
+
+    free(text);
+    remove(path);
+}
+
 static void test_export_prologue_direct(void) {
     char err_buf[128];
 
@@ -1081,6 +1112,7 @@ static void test_scratch_block_export_line_budget(void) {
 
 int main(void) {
     test_every_cmd_type_exports_c89_comments();
+    test_export_disables_authored_fp_contraction();
     test_export_prologue_direct();
     test_auto_normal_marker_roundtrip();
     test_loop_jump_roundtrip();

@@ -380,6 +380,21 @@ static void emit_export_save_restore_section(FILE *f,
     write_save_restore_helpers(f);
 }
 
+static void emit_export_fp_contract_section(FILE *f,
+                                            const ExportScaffoldContext *ctx) {
+    (void)ctx;
+    fprintf(f,
+        "\n/* Match gl-repl's expression evaluator: every arithmetic operation\n"
+        " * rounds to float before the next one. Without this directive, a compiler\n"
+        " * may contract `a + b * c` into a fused multiply-add with one rounding.\n"
+        " * Even a one-ULP difference can cross an if-condition boundary or be\n"
+        " * amplified by rand(), making the exported scene disagree visibly.\n"
+        " *\n"
+        " * Keep this below the generated math helpers: those bodies mirror helpers\n"
+        " * compiled into gl-repl and must retain the same contraction policy. */\n"
+        "#pragma STDC FP_CONTRACT OFF\n");
+}
+
 static void emit_export_functions_section(FILE *f,
                                           const ExportScaffoldContext *ctx) {
     (void)ctx;
@@ -420,6 +435,7 @@ static const ExportScaffoldSectionSpec EXPORT_SCAFFOLD_SECTIONS[] = {
     { emit_export_label_helper_section       },
     { emit_export_tess_preamble_section      },
     { emit_export_save_restore_section       },
+    { emit_export_fp_contract_section        },
     { emit_export_functions_section          },
     { emit_export_render_helper_section      },
     { emit_export_tune_section               },
