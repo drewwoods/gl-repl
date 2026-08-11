@@ -1,0 +1,77 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+
+static float col;
+
+glTranslatef(0.0f, 0.0f, -10.00f);   // @camera dist
+glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+glRotatef(20.0f * t, 0.0f, 1.0f, 0.0f);
+
+glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+// Turn on lighting baseline
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_DEPTH_TEST);
+
+// Loop that changes and toggles various OpenGL states continuously
+for(x, -3, 4) {
+  for(y, -3, 4) {
+    glPushMatrix();
+    glTranslatef(x * 1.8f, sin(t + x) * 0.5f, y * 1.8f);
+
+    // Toggle lighting dynamically
+    if((x + y) % 2 == 0) {
+      glEnable(GL_LIGHTING);
+      glDisable(GL_COLOR_MATERIAL);
+      glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.2f, 0.8f, 0.4f, 1.0f});
+    } else {
+      glDisable(GL_LIGHTING);
+      glEnable(GL_COLOR_MATERIAL);
+      glColor3f(0.9f, 0.3f, 0.2f);
+    }
+
+    // Toggle depth test dynamically
+    if(x > 0) {
+      glEnable(GL_DEPTH_TEST);
+    } else {
+      glDisable(GL_DEPTH_TEST);
+    }
+
+    // Toggle culling dynamically
+    if(y > 0) {
+      glEnable(GL_CULL_FACE);
+      glCullFace(GL_BACK);
+    } else {
+      glDisable(GL_CULL_FACE);
+    }
+
+    // Toggle blending and draw object
+    if((x - y) % 3 == 0) {
+      glEnable(GL_BLEND);
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+      if((x + y) % 2 == 0) {
+        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.2f, 0.5f, 0.9f, 0.5f});
+      } else {
+        glColor4f(0.2f, 0.5f, 0.9f, 0.5f);
+      }
+      glutSolidSphere(0.6f, 16, 16);
+      glDisable(GL_BLEND);
+    } else {
+      glutSolidCube(0.9f);
+    }
+
+    glPopMatrix();
+  }
+}
+
+// Restore state back to baseline for cleanup
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glDisable(GL_COLOR_MATERIAL);
+glDisable(GL_CULL_FACE);
+glDisable(GL_BLEND);

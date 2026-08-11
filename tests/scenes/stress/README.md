@@ -21,6 +21,9 @@ It is a **runtime `--examples-dir` catalog, not a built-in one**: nothing here i
 | `deep-math-expression-stress.glr` | Deep nested math expressions & complex conditions | Evaluates complex combinations of functions (`smoothstep`, `lerp`, `clamp`, `pow`, `abs`, `sqrt`, `atan2`, `rand`) and nested boolean conditions within loop branches. |
 | `deep-call-chain-shadowing-stress.glr` | Scope shadowing & call stack unrolling | Executes a 5-level deep function call chain (`func0` -> `func1` -> `func2` -> `func3` -> `func4`) with collision of parameter/local names (`x`, `y`, `z`, `a`, `b`) to test lexical scoping. |
 | `scratch-array-lookup-stress.glr` | Scratch block assignments & dynamic indexing | Combines scratch block writes (`A[0] = {...}`) and nested-loop dynamic lookup arithmetic (`C[abs(i+j)%16]`) to build matrices applied via `glMultMatrixf(A)`. |
+| `opengl-state-toggle-stress.glr` | OpenGL state transitions inside loops | Rapidly toggles various OpenGL states (`GL_LIGHTING`, `GL_DEPTH_TEST`, `GL_CULL_FACE`, `GL_BLEND`) dynamically within nested loops on every render pass. |
+| `recursion-depth-limit-stress.glr` | Deep recursion stack boundary | Executes a recursion chain up to 60 levels deep, testing stack frame allocation and limits close to the compile ceiling of 64. |
+| `nested-conditional-chain-stress.glr` | Extensive conditional branching | Exercises over 15 distinct branching paths inside nested conditionals (`if` / `else if` / `else`) to stress compiler decision networks. |
 
 ## Catalog File
 
@@ -51,4 +54,7 @@ Launch `gl-repl` directly on any stress scene:
 ./gl-repl tests/scenes/stress/deep-math-expression-stress.glr
 ./gl-repl tests/scenes/stress/deep-call-chain-shadowing-stress.glr
 ./gl-repl tests/scenes/stress/scratch-array-lookup-stress.glr
+./gl-repl tests/scenes/stress/opengl-state-toggle-stress.glr
+./gl-repl tests/scenes/stress/recursion-depth-limit-stress.glr
+./gl-repl tests/scenes/stress/nested-conditional-chain-stress.glr
 ```
