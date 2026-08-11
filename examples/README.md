@@ -67,11 +67,29 @@ in the Scene menu. A scene written to *exercise* the pipeline rather than to be
 shown belongs in [`tests/scenes/stress/`](../tests/scenes/stress/README.md)
 instead - a runtime `--examples-dir` catalog that is not compiled in.
 
-The tag vocabulary is the mechanical form of that split.
-[`scripts/gen_examples.py`](../scripts/gen_examples.py) maps `tags` onto the
-four `EXAMPLE_TAG_*` bits and rejects anything else, so a scene wanting to
-describe itself as `Scoping` or `AttribStack` cannot be a built-in example; a
-runtime catalog registers arbitrary tag names and can.
+The tag vocabulary is the mechanical form of that split - and it is policy, not
+a storage limit. Tags are stored as names in dynamic
+[`ReplTagNode`](../src/repl/catalog_tags.h#L13) / `ReplItemTagNode` lists, so a
+runtime `--examples-dir` catalog registers whatever names its `catalog.ini`
+uses. The built-in catalog is held to the four labels above by two gates that
+must agree:
+
+- [`scripts/gen_examples.py`](../scripts/gen_examples.py) rejects any `tags`
+  name outside its `BUILTIN_TAGS` allowlist at generation time.
+- `k_default_example_tag_names[]` in [`src/repl/examples.c`](../src/repl/examples.c)
+  seeds the tag registry. Compiled-in entries carry their tags as a
+  `.tag_names` string list matched against registry labels by `strcmp`, so a
+  tag missing from that seed resolves to no index and would be invisible in the
+  Scene menu rather than an error.
+
+So a scene wanting to describe itself as `Scoping` or `AttribStack` cannot be a
+built-in example; a runtime catalog can. Adding a label to the built-in
+vocabulary means editing both places (append to `k_default_example_tag_names[]`
+- ids are assignment-order and the leading entries stay aligned with the
+`REPL_EXAMPLE_TAG_*` enum). The enum itself is needed only for a tag whose
+identity app code must name, which today is `2D` alone, for the
+`GLR_EXAMPLE_TAG_DEFAULTS` grid-theme override in
+[`src/app/glr_defaults.h`](../src/app/glr_defaults.h).
 
 ## Authoring notes
 

@@ -10,12 +10,14 @@ import sys
 from pathlib import Path
 
 
-TAG_MACROS = {
-    "2D": "EXAMPLE_TAG_2D",
-    "3D": "EXAMPLE_TAG_3D",
-    "Polygons": "EXAMPLE_TAG_POLYGONS",
-    "Lines": "EXAMPLE_TAG_LINES",
-}
+# Tag vocabulary the built-in catalog may use. Tag storage is dynamic (names,
+# not bits), so this is a policy allowlist, not a structural limit: a runtime
+# `--examples-dir` catalog registers arbitrary tag names. Adding a name here
+# also needs it appended to k_default_example_tag_names[] in src/repl/examples.c
+# - that list seeds the registry the compiled-in catalog matches against by
+# string, so a tag known only here would resolve to no index and stay invisible.
+# Ordered (not a set) so the rejection message lists the tags the same way twice.
+BUILTIN_TAGS = ("2D", "3D", "Polygons", "Lines")
 
 FORMAT_MACROS = {
     ".glr": "REPL_EXAMPLE_SOURCE_GLR",
@@ -70,8 +72,8 @@ def parse_tags(section: str, value: str) -> list[str]:
     for tag in tags:
         if tag == "All":
             raise ExampleError(f"[{section}] must not list synthetic tag All")
-        if tag not in TAG_MACROS:
-            known = ", ".join(TAG_MACROS)
+        if tag not in BUILTIN_TAGS:
+            known = ", ".join(BUILTIN_TAGS)
             raise ExampleError(
                 f"[{section}] unknown tag {tag!r}; expected one of: {known}"
             )
