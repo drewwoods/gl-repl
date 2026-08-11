@@ -15,6 +15,7 @@
 #include "app/glr_modal.h"
 #include "app/glr_paths.h"
 #include "source_document.h"
+#include "editor/input.h"
 #include "editor/inline_rename.h"
 #include "repl/example_loader.h"
 #include "repl/export.h"
@@ -236,6 +237,41 @@ static void test_save_glr_writes_scene_source(void) {
     free(text);
     unlink(path);
     repl_set_workspace_dir(NULL);
+    rmdir(dir);
+}
+
+/* Camera rows are loader metadata rather than document commands. The two
+ * separator rows around them therefore sit next to each other in the live
+ * document; the writer must split them back across the generated block. */
+static void test_save_glr_splits_camera_boundary_spacing(void) {
+    char tmpl[] = "/tmp/glr_scene_spacing_XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    char path[512];
+    char *text;
+
+    ASSERT_TRUE("spacing mkdtemp", dir != NULL);
+    if (!dir)
+        return;
+
+    reset_fixture();
+    editor_feed_line("static float spacing;");
+    editor_feed_line("");
+    editor_feed_line("");
+    editor_feed_line("glClear(GL_COLOR_BUFFER_BIT);");
+    snprintf(path, sizeof(path), "%s/spacing.glr", dir);
+    ASSERT_TRUE("spacing .glr saves",
+                repl_export_save_glr(path, source_document_view()));
+    text = read_file_text(path);
+    ASSERT_TRUE("spacing .glr can be read", text != NULL);
+    ASSERT_TRUE("blank line follows declarations before camera",
+                text && strstr(text,
+                               "static float spacing;\n\nglTranslatef(") != NULL);
+    ASSERT_TRUE("blank line follows camera before body",
+                text && strstr(text,
+                               "// @camera pan\n\nglClear(") != NULL);
+
+    free(text);
+    unlink(path);
     rmdir(dir);
 }
 
@@ -663,6 +699,7 @@ int main(void) {
     test_rename_scene_guard();
     test_scene_menu_is_selector();
     test_save_glr_writes_scene_source();
+    test_save_glr_splits_camera_boundary_spacing();
     /* Last two: they swap the process-wide example catalog for a runtime one. */
     test_save_glr_writes_back_to_catalog_file();
     test_save_glr_round_trips_through_example_loader();

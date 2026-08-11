@@ -90,13 +90,16 @@ static void glr_scene_write_cfg_overrides(FILE *f) {
  * save - three on the next - and filtering the row back out would resurrect
  * the marker matcher this format deleted. The rows are self-describing,
  * which is the whole argument for tagging them. */
-static void glr_scene_write_camera(FILE *f) {
+static int glr_scene_write_camera(FILE *f, int leading_blank) {
     repl_refresh_camera_lines();
     if (!g_cam_lines[0][0])
-        return;
+        return 0;
+    if (leading_blank)
+        fprintf(f, "\n");
     for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++)
         if (g_cam_lines[i][0])
             glr_scene_write_line(f, g_cam_lines[i]);
+    return 1;
 }
 
 /* Which of the canonical document phases a row belongs to. The .glr format
@@ -125,9 +128,50 @@ static GlrRowPhase glr_row_phase(const GLCmd *cmd, int in_func_body) {
     return GLR_ROW_PHASE_BODY;
 }
 
+/* Camera rows never enter the editor document, so blank rows authored on
+ * either side of them become one leading run on the first body row. Return
+ * the size of that run so the writer can split it back around the camera. */
+static int glr_scene_body_boundary_blanks(void) {
+    const GLCmd *cmds = repl_state_document_cmds();
+    int count = repl_state_document_count();
+    int pending_start = -1;
+    int func_depth = 0;
+
+    for (int cmd_idx = 0; cmd_idx < count; cmd_idx++) {
+        GlrRowPhase phase;
+        int was_in_func;
+
+        if (!cmds[cmd_idx].valid)
+            continue;
+        if (cmds[cmd_idx].type == CMD_COMMENT ||
+            cmds[cmd_idx].type == CMD_EMPTY) {
+            if (pending_start < 0)
+                pending_start = cmd_idx;
+            continue;
+        }
+
+        was_in_func = func_depth > 0;
+        if (cmds[cmd_idx].type == CMD_FUNC_DEF)
+            func_depth++;
+        else if (cmds[cmd_idx].type == CMD_FUNC_END && func_depth > 0)
+            func_depth--;
+        phase = glr_row_phase(&cmds[cmd_idx], was_in_func);
+        if (phase == GLR_ROW_PHASE_BODY) {
+            int blanks = 0;
+            for (int run = pending_start; run >= 0 && run < cmd_idx; run++)
+                if (cmds[run].valid && cmds[run].type == CMD_EMPTY)
+                    blanks++;
+            return blanks;
+        }
+        pending_start = -1;
+    }
+    return 0;
+}
+
 /* Emit every document row whose phase is `want`, carrying each row's leading
  * run of comments and blank lines with it. */
-static void glr_scene_write_phase(FILE *f, GlrRowPhase want) {
+static void glr_scene_write_phase(FILE *f, GlrRowPhase want,
+                                  int skip_leading_blanks) {
     const GLCmd *cmds = repl_state_document_cmds();
     int count = repl_state_document_count();
     int pending_start = -1;   /* first row of the current comment/blank run */
@@ -154,10 +198,18 @@ static void glr_scene_write_phase(FILE *f, GlrRowPhase want) {
 
         phase = glr_row_phase(&cmds[cmd_idx], was_in_func);
         if (phase == want) {
-            for (int run = pending_start; run >= 0 && run < cmd_idx; run++)
-                if (cmds[run].valid)
-                    glr_scene_write_line(f, export_document_text(run));
+            for (int run = pending_start; run >= 0 && run < cmd_idx; run++) {
+                if (!cmds[run].valid)
+                    continue;
+                if (skip_leading_blanks > 0 &&
+                    cmds[run].type == CMD_EMPTY) {
+                    skip_leading_blanks--;
+                    continue;
+                }
+                glr_scene_write_line(f, export_document_text(run));
+            }
             glr_scene_write_line(f, export_document_text(cmd_idx));
+            skip_leading_blanks = 0;
         }
         pending_start = -1;
     }
@@ -176,6 +228,8 @@ int repl_export_save_glr(const char *filename, SourceTextView text) {
     FILE *f;
     int had_error;
     int close_failed;
+    int boundary_blanks;
+    int split_blanks;
 
     if (!filename || !filename[0]) {
         repl_set_status_error("Error: no .glr path");
@@ -190,12 +244,23 @@ int repl_export_save_glr(const char *filename, SourceTextView text) {
     }
 
     export_set_source_text_view(text);
+    boundary_blanks = glr_scene_body_boundary_blanks();
+    split_blanks = boundary_blanks >= 2 ? 2 : 0;
 
     glr_scene_write_cfg_overrides(f);
-    glr_scene_write_phase(f, GLR_ROW_PHASE_DECLS);
-    glr_scene_write_phase(f, GLR_ROW_PHASE_FUNCS);
-    glr_scene_write_camera(f);
-    glr_scene_write_phase(f, GLR_ROW_PHASE_BODY);
+    glr_scene_write_phase(f, GLR_ROW_PHASE_DECLS, 0);
+    glr_scene_write_phase(f, GLR_ROW_PHASE_FUNCS, 0);
+    if (glr_scene_write_camera(f, split_blanks > 0)) {
+        /* Camera rows are consumed by the loader instead of entering the
+         * document, so the blank rows on either side become adjacent there.
+         * Split the first two back around the generated camera block; any
+         * additional authored spacing remains with the body. */
+        if (split_blanks > 0)
+            fprintf(f, "\n");
+        glr_scene_write_phase(f, GLR_ROW_PHASE_BODY, split_blanks);
+    } else {
+        glr_scene_write_phase(f, GLR_ROW_PHASE_BODY, 0);
+    }
 
     had_error = ferror(f);
     close_failed = fclose(f) != 0;
