@@ -28,7 +28,7 @@ scripts/docs-assets.sh --list             # asset names
 | `bezier.png` | `sc-bezier` | Bezier curve with guides (draws its own control points) |
 | `bubble-sort.gif` | `sc-bubble-sort` | Bubble sort (scratch arrays) |
 | `orbit-plot.png` | `sc-orbit-plot` | Annotated orbit plot (labels) |
-| `wave-surface.gif` | `sc-wave-surface` | Animated wave surface (analytic normals) |
+| `wave-surface.gif` | `sc-wave-surface` | Animated wave surface pair (analytic normals shown) |
 | `ringed-planet.gif` | `sc-ringed-planet` | Ringed planet (nebula skies) - replaces the retired "Procedural terrain" |
 | `gl-repl-logo.png` | `sc-gl-repl-logo` | gl-repl Logo |
 | `grass.gif` | `sc-grass` | Swaying grass field (rand + t) |

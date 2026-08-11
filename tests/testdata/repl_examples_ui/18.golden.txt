@@ -9,10 +9,10 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_XZRULER */
+/* @cfg grid = GRID_THEME_CLASSIC */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
-/* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
+/* @cfg grid_brightness = GRID_BRIGHTNESS_DIM */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
@@ -29,7 +29,7 @@
 /* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF */
 /* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED */
 /* @cfg vertex_points = 0 */
-/* @cfg vertex_outlines = 1 */
+/* @cfg vertex_outlines = 0 */
 /* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */
 /* @cfg normal_vectors = 0 */
 /* @cfg polygon_highlight = 1 */
@@ -44,6 +44,8 @@
 /* @cfg paren_scope = 1 */
 /* @cfg audio = -1 */
 --- header_pre ---
+#define y0 _y0
+#define y1 _y1
 #include <stddef.h>
 #if defined(__APPLE__)
 #include <OpenGL/gl.h>
@@ -58,6 +60,8 @@
 #endif
 #include <math.h>
 #include <stdlib.h>
+#undef y0
+#undef y1
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -98,63 +102,44 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float grid = 15; // grid size @tune
-  static float extent = 3; // grid extent @tune
-  static float x, y, z, dydx, dydz, s; // vertex coords, surface slopes, palette mix in [0,1]
-  static float cx, sx, cz, sz; // cached cos/sin(x*freq+t), cos/sin(z*freq+zPhase*t)
-  static float amp = 0.4; // wave amplitude (peak |y|)
-  static float freq = 2.5; // spatial frequency along x and z
-  static float zPhase = 0.7; // z-axis time phase: z evolves slower than x (<1)
+  static float size = 3; // surface width and depth @tune
+  static float steps = 15; // strips across the surface @tune
+  static float amplitude = 0.4; // wave height @tune
+  static float frequency = 2.5; // wave density @tune
+  static float z_phase = 0.7; // z waves animate more slowly @tune
+  static float step_size;
+  static float half;
+  static float x0, x1, z, y0, y1;
+  static float color0, color1;
 
-  // Animated surface: y = sin(freq*x + t) * cos(freq*z + zPhase*t) * amp
-  // Drawn as a triangle strip per row with analytic per-vertex normals.
 
+  // Animated surface built from one triangle strip per x step.
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-  glEnable(GL_COLOR_MATERIAL);
-  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
-
   glEnable(GL_DEPTH_TEST);
-  glEnable(GL_LIGHTING);
-  glEnable(GL_NORMALIZE);
-  glEnable(GL_LIGHT3);
-  glEnable(GL_LIGHT2);
-  glEnable(GL_LIGHT1);
-  glEnable(GL_LIGHT0);
-  glShadeModel(GL_SMOOTH);
-  for(i, 0, grid) {
+
+  step_size = size / steps;
+  half = size * 0.5;
+
+  for(i, 0, steps) {
+    x0 = -half + i * step_size;
+    x1 = x0 + step_size;
+
     glBegin(GL_TRIANGLE_STRIP);
-      for(j, 0, grid+1) {
-        // row i (z fixed), step j across x; emit two vertices per j to feed the strip
-        x = -extent/2 + extent*j/grid;
-        cx = cos(x*freq + t);
-        sx = sin(x*freq + t);
-        z = -extent/2 + extent*i/grid;
-        cz = cos(z*freq + zPhase*t);
-        sz = sin(z*freq + zPhase*t);
-        y = sx*cz*amp;
-        // Analytic slopes dy/dx and dy/dz make the un-normalized surface
-        // normal (-dy/dx, 1, -dy/dz); GL_NORMALIZE rescales it to unit length.
-        dydx = amp*freq*cx*cz;
-        dydz = -amp*freq*sx*sz;
-        glNormal3f(-dydx, 1, -dydz);
-        s = 0.5 + 0.5*y/amp;
-        glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
-        glVertex3f(x, y, z);
-        // second strip vertex: same x (cx/sx unchanged), but z stepped to row i+1
-        z = -extent/2 + extent*(i + 1)/grid;
-        cz = cos(z*freq + zPhase*t);
-        sz = sin(z*freq + zPhase*t);
-        y = sx*cz*amp;
-        dydx = amp*freq*cx*cz;
-        dydz = -amp*freq*sx*sz;
-        glNormal3f(-dydx, 1, -dydz);
-        s = 0.5 + 0.5*y/amp;
-        glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
-        glVertex3f(x, y, z);
+      for(j, 0, steps + 1) {
+        z = -half + j * step_size;
+
+        y0 = amplitude * sin(x0 * frequency + t) * cos(z * frequency + z_phase * t);
+        y1 = amplitude * sin(x1 * frequency + t) * cos(z * frequency + z_phase * t);
+
+        // Emit the high-x edge first so the upward-facing triangles are CCW.
+        color1 = 0.5 + 0.5 * y1 / amplitude;
+        glColor3f(1 - 0.85 * color1, 0.35 + 0.2 * color1, 0.2 + 0.8 * color1); // CORAL -> AZURE
+        glVertex3f(x1, y1, z);
+
+        color0 = 0.5 + 0.5 * y0 / amplitude;
+        glColor3f(1 - 0.85 * color0, 0.35 + 0.2 * color0, 0.2 + 0.8 * color0); // CORAL -> AZURE
+        glVertex3f(x0, y0, z);
       }
     glEnd();
   }

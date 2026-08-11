@@ -149,32 +149,32 @@ The triangle appears as soon as the vertices commit. Now:
 
 ## Built-in Examples
 
-**F12** cycles forward through the 39 built-in examples, then any saved
+**F12** cycles forward through the 40 built-in examples, then any saved
 scenes, wrapping to the start; **Shift+F12** cycles backward. The Scene menu
 lists them grouped by tag. `./gl-repl --list-examples` prints the compiled-in
 set.
 
 ```
- 1  gl-repl logo                                        21  GLU concave arrow
- 2  Rotating cube                                       22  GLU concave arrow cutout
- 3  Animated ring (for + t)                             23  GLU concave arrow extrusion
- 4  Conditional colors (if + t)                         24  Glow sprites (blend + point attenuation)
- 5  Transform stress (translate/rotate/scale guides)    25  Snowfall particles
- 6  Function demo (named func)                          26  Swaying grass field (rand + t)
- 7  Function polygons (args + for)                      27  Clip planes carve solids (glClipPlane)
- 8  Function branching (args + if)                      28  Fog ring tunnel (glFog)
- 9  2D assignment sketch (vars only)                    29  Stencil mask window (glStencilOp)
-10  Animated spirograph curve                           30  Planar shadows (glMultMatrixf)
-11  Traveling ripple ring                               31  Jellyfish (glDepthMask translucency)
-12  Bezier curve with guides                            32  Lantern festival (additive glow + reflections)
-13  Annotated orbit plot (labels)                       33  Whale (particle system + lit model)
-14  Bubble sort (scratch arrays)                        34  Teapot carousel (transform stacks + glow points)
-15  Sierpinski carpet (2D recursion)                    35  Ringed planet (nebula skies)
-16  Sierpinski sponge (3D recursion)                    36  Aurora observatory (dish tracks the sky)
-17  Recursive 3D tree (func + recursion)                37  Orrery (labels track 3D orbits)
-18  Parametric torus (nested for)                       38  Dusk lighthouse atoll (stress test)
-19  Animated wave surface (analytic normals)            39  Pulse bars (easing)
-20  Torus knot (animated)
+ 1  gl-repl logo                                        21  Torus knot (animated)
+ 2  Rotating cube                                       22  GLU concave arrow
+ 3  Animated ring (for + t)                             23  GLU concave arrow cutout
+ 4  Conditional colors (if + t)                         24  GLU concave arrow extrusion
+ 5  Transform stress (translate/rotate/scale guides)    25  Glow sprites (blend + point attenuation)
+ 6  Function demo (named func)                          26  Snowfall particles
+ 7  Function polygons (args + for)                      27  Swaying grass field (rand + t)
+ 8  Function branching (args + if)                      28  Clip planes carve solids (glClipPlane)
+ 9  2D assignment sketch (vars only)                    29  Fog ring tunnel (glFog)
+10  Animated spirograph curve                           30  Stencil mask window (glStencilOp)
+11  Traveling ripple ring                               31  Planar shadows (glMultMatrixf)
+12  Bezier curve with guides                            32  Jellyfish (glDepthMask translucency)
+13  Annotated orbit plot (labels)                       33  Lantern festival (additive glow + reflections)
+14  Bubble sort (scratch arrays)                        34  Whale (particle system + lit model)
+15  Sierpinski carpet (2D recursion)                    35  Teapot carousel (transform stacks + glow points)
+16  Sierpinski sponge (3D recursion)                    36  Ringed planet (nebula skies)
+17  Recursive 3D tree (func + recursion)                37  Aurora observatory (dish tracks the sky)
+18  Parametric torus (nested for)                       38  Orrery (labels track 3D orbits)
+19  Animated wave surface                               39  Dusk lighthouse atoll (stress test)
+20  Animated wave surface (analytic normals)            40  Pulse bars (easing)
 ```
 
 Examples may carry their own presentation presets (grid theme, backdrop,

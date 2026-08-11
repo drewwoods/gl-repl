@@ -110,7 +110,7 @@ same deep ink (the earlier "Dusk" / "Dusk Magenta" sets are kept in
 [`accent_palette.h`](../accent_palette.h) for an easy flip back) - so the set reads as a
 designed family instead of a grab-bag of unrelated primaries. The rollout
 began with the Scene menu "2D" tag and now also covers the line/surface 3D
-scenes: animated ring, animated wave surface, GLU tessellator plus cutout, and
+scenes: animated ring, both animated wave surfaces, GLU tessellator plus cutout, and
 transform stress. Extend it to the rest of the catalog as examples are touched.
 
 Beyond the examples, the palette also anchors the default **XZ Ruler grid

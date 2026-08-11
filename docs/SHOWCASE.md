@@ -245,11 +245,12 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 
 <!-- images/showcase/wave-surface.gif
      scripts/docs-assets.sh sc-wave-surface
-     Intent: the lighting rolling across the wave - normals are the star. -->
+     Intent: compare the base strip mesh with the version whose analytic
+     normals make the lighting roll across the wave. -->
 <img src="images/showcase/wave-surface.gif" alt="Animated wave surface" width="100%">
 
-**[Animated wave surface](../examples/scenes/animated-wave-surface-analytic-normals.glr)**
-<br><sub>analytic per-vertex normals</sub>
+**[Animated wave surface](../examples/scenes/animated-wave-surface.glr)**
+<br><sub>then [add analytic per-vertex normals](../examples/scenes/animated-wave-surface-analytic-normals.glr)</sub>
 
 </td>
 <td width="33%" align="center">
