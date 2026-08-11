@@ -82,7 +82,7 @@ material and the lit vertex.
 
 ## Spec basis
 
-**OpenGL 2.1 (July 30, 2006), §2.13 "Current Raster Position", p. 54.**
+**OpenGL 2.1 (December 1, 2006), §2.13 "Current Raster Position", p. 55.**
 <https://registry.khronos.org/OpenGL/specs/gl/glspec21.pdf>
 (Wording carried through to the 4.6 compatibility profile unchanged.)
 

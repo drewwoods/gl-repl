@@ -22,10 +22,10 @@ comment carries its own build line.
 
 The last three all land on `GL_CURRENT_RASTER_COLOR` and were found by the
 differential oracles in `make gl-tests`, which diff the pure
-`gl_state_inspector` model against a live driver. Each reproducer here is
-standalone (GLUT, no project headers) and checks the driver against **itself**
-rather than against a hardcoded expectation - comparing the raster colour with
-the colour the same driver gives a vertex under identical state, which the spec
-defines to be the same computation. Each exits 0 on the drivers that are
-conformant, so they double as cross-driver probes.
-
+`gl_state_inspector` model against a live driver. Each reproducer is standalone
+(GLUT, no project headers). The two lighting reproducers compare the raster
+colour with the colour the same driver gives a vertex under identical state,
+which the specification defines as the same computation. The unclamped-colour
+probe instead checks the specified [0, 1] range and uses the lit path as a
+control. Each exits 0 when all of its checks pass, so the programs can also be
+used as cross-driver probes.

@@ -64,7 +64,7 @@ Two controls make the failure unambiguous:
 
 ## Spec basis
 
-**OpenGL 2.1 (July 30, 2006), §2.14.6 "Clamping or Masking", p. 70.**
+**OpenGL 2.1 (December 1, 2006), §2.14.6 "Clamping or Masking", p. 70.**
 <https://registry.khronos.org/OpenGL/specs/gl/glspec21.pdf>
 
 > "After lighting (**whether enabled or not**), all components of both primary

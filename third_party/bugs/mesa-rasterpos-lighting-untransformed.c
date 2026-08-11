@@ -1,7 +1,7 @@
 /*
  * Mesa bug repro: the raster position is lit with untransformed inputs.
- * GL_CURRENT_RASTER_COLOR comes out wrong in two independent ways whenever the
- * modelview at the glRasterPos call is not the identity:
+ * GL_CURRENT_RASTER_COLOR comes out wrong in two independent ways under the
+ * transformed modelviews exercised below:
  *
  *   1. the vertex position fed to the lighting equation is the OBJECT-space
  *      position, not the eye-space one, so the vector to a positional light is
@@ -29,7 +29,8 @@
  * Vertex command", so the two are required to agree - and on Mesa the vertex is
  * lit correctly while the raster position is not.
  *
- * Spec: OpenGL 2.1 (July 30, 2006), sec 2.13 "Current Raster Position", p. 54.
+ * Spec: OpenGL 2.1 (December 1, 2006), sec 2.13 "Current Raster Position",
+ * p. 55.
  * https://registry.khronos.org/OpenGL/specs/gl/glspec21.pdf
  * (Wording carried through to the 4.6 compatibility profile unchanged.)
  *
@@ -45,7 +46,7 @@
  *   coordinates."  -> case B: the vertex position entering the light vector is
  *   the eye-space one.
  *
- *   sec 2.12 "Normal Transformation": "Before use in lighting, normals are
+ *   sec 2.11.3 "Normal Transformation": "Before use in lighting, normals are
  *   transformed to eye coordinates by a matrix derived from the model-view
  *   matrix. Rescaling and normalization operations are performed on the
  *   transformed normals to make them unit length prior to use in lighting."
@@ -67,8 +68,8 @@
 #include <stdlib.h>
 
 #define SPEC_CITE \
-    "OpenGL 2.1 (2006-07-30), sec 2.13 " \
-    "\"Current Raster Position\", p.54"
+    "OpenGL 2.1 (2006-12-01), sec 2.13 " \
+    "\"Current Raster Position\", p.55"
 #define SPEC_URL \
     "https://registry.khronos.org/OpenGL/specs/gl/" \
     "glspec21.pdf"

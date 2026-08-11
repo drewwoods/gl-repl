@@ -46,6 +46,7 @@ glEnd();
 | **AA and motion blur** | Accumulation effects layer 2-16 samples into edge antialiasing, animation-time motion blur, or camera blur - and they work while paused. |
 | **Runs in the browser** | The same app compiles to wasm, with gl4es translating the fixed-function GL to WebGL2 - at parity with native, accumulation blur included. |
 | **Sketch here, ship as C** | `Ctrl+S` exports a standalone, compilable GLUT/OpenGL program that round-trips back into the REPL. `File → Export .ply` exports the geometry as a PLY mesh. |
+| **Driver-differential checks** | Selected state-model behavior has been compared row-by-row on Apple, Mesa, and NVIDIA drivers. [How that's tested](docs/USER_GUIDE.md#fidelity-to-opengl) |
 
 <br>
 

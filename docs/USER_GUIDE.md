@@ -54,6 +54,7 @@ internals, [`ARCHITECTURE.md`](ARCHITECTURE.md).
 - [Exporting & Importing](#exporting--importing)
 - [Tunable Variables (`// @tune`)](#tunable-variables--tune)
 - [Performance & Scope](#performance--scope)
+- [Fidelity to OpenGL](#fidelity-to-opengl)
 - [Scope & Current Limitations](#scope--current-limitations)
 - [Profiling & Diagnostics](#profiling--diagnostics)
 - [Music](#music)
@@ -705,6 +706,19 @@ label("Earth phase = %f", t);
   characters and may not contain `//`, `(`, `)`, `,`, or backslashes.
 - This is a REPL convenience, not a real GL call - exported C files include
   a self-contained `label()` helper so they still compile standalone.
+
+With lighting on, the text colour is the *lit* result latched at the
+`glRasterPos` - a later `glColor3f` cannot change it. That path is where
+drivers disagree, and one disagreement bites in practice:
+
+> **macOS:** if `GL_COLOR_MATERIAL` is enabled when the `glRasterPos3f` runs,
+> Apple's GL lights the tracked components as **zero** and the text comes out
+> black. It is a driver deviation, not a REPL one - the same scene is correct
+> on Mesa and NVIDIA, and the exported C behaves identically to the REPL
+> either way. `glDisable(GL_COLOR_MATERIAL);` immediately before the
+> `glRasterPos3f` works around this case: in the tested scene, the text then
+> matches the lit vertex colour. Details:
+> [Fidelity to OpenGL](#fidelity-to-opengl).
 
 ### Math expressions
 
@@ -2319,6 +2333,77 @@ That division of labor is by design: the REPL is a **launchpad, debugging
 aid, and educational environment** - a place to see immediate-mode GL
 respond line by line - not a platform to build a complete application on.
 The export is the product; the REPL is where it is born.
+
+---
+
+## Fidelity to OpenGL
+
+Two things gl-repl shows you are answers *about* OpenGL that it works out
+itself, without asking the driver: the
+[state inspector](#inspecting-opengl-state) re-implements the parts of the GL
+state machine your program can reach - matrix composition, the lighting
+equation, `glPushAttrib` group semantics - and
+[attribute scope](#attribute-scope) decides which state each mask bit covers.
+Both are claims about the spec, so both are tested as claims rather than
+against fixtures. `make gl-tests` runs them as **differential oracles against
+a live driver**:
+
+- One `GLCmd` program is driven through *both* the real executor (against a
+  real context) and the pure state model; then every row the inspector reports
+  is read back with `glGet*` and compared.
+- For each `glPushAttrib` bit, both directions are asserted: state the table
+  says the bit covers is restored by `glPopAttrib`, and state it says the bit
+  does *not* cover is not - so the mapping can be neither too narrow nor too
+  broad.
+
+Running those checks on more than one driver can also expose differences
+between driver implementations. The differences found in this comparison all
+affect `GL_CURRENT_RASTER_COLOR`: the color
+[`label()`](#bitmap-text---label) bitmap text is drawn with, latched at the
+`glRasterPos` and unchangeable by a later `glColor3f`. Three tested driver
+configurations produced these results:
+
+| Deviation | Apple M2 (2.1 Metal) | Mesa 25.2.8 (Intel) | NVIDIA 595.84 |
+|---|---|---|---|
+| `GL_COLOR_MATERIAL` enabled at the `glRasterPos` call | tracked components light as **zero** | correct | correct |
+| Raster position lit from its **object-space** position - wrong light vector under the tested transformed modelview | correct | **wrong** | correct |
+| `GL_NORMALIZE` honoured on that path | correct | **ignored** | correct |
+| Unlit latch clamped to [0, 1] (GL 2.1 §2.14.6) | clamps | stores **raw** | clamps |
+
+Across these four cases, the observed deviations did not overlap between the
+three tested configurations. On each row gl-repl follows the behavior described
+by the specification. The driver-specific behavior was characterized by
+matching the observed values to six decimals, and those values are recorded in
+the test beside the corresponding skip gate. A skip prints in the test output,
+so it remains visible when a driver-specific case is not compared. That is what
+the inspector's note about a driver computing this cell differently is pointing
+at.
+
+These are visible in ordinary scenes, not just in the inspector - lit bitmap
+text is drawn through exactly this path. The sharpest case: on Apple's GL a
+scene that enables `GL_COLOR_MATERIAL` before its `glRasterPos` gets **black
+label text**; see the note under [`label()`](#bitmap-text---label) for the
+one-line workaround.
+
+When a bug turns out to be the driver's, it gets reduced to a standalone
+program that depends on nothing here and written up with its spec citation in
+[`third_party/bugs/`](../third_party/bugs/). The four deviations above are three
+reports there (Mesa's two raster-lighting symptoms share one). The two lighting
+reproducers check the driver against *itself*: they compare the raster colour
+with the colour that same driver gives a vertex under identical state, which
+the specification defines as the same computation. The unclamped-colour probe
+instead checks the specified [0, 1] range and includes the lit path as a
+control. A fourth report was found from a scene rendering differently on Mesa:
+retargeting `glColorMaterial` to another face discards the colour the outgoing
+face was tracking, turning the *glr-logo* example's exterior black on the
+tested Mesa configurations.
+
+The same standard applies to export. The C that `Ctrl+S` writes is compiled
+and *run* in the test suite, and its GL call stream is compared against the
+REPL executor's - call for call and **argument for argument**, over several
+values of `t` run as successive frames. A frozen vertex or a drifted matrix
+cell fails the build; what you see in the REPL is what the standalone program
+draws.
 
 ---
 

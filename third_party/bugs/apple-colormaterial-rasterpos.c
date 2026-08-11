@@ -36,7 +36,8 @@
  * So a failure cannot be blamed on this program's idea of the lighting
  * equation: the driver disagrees with itself.
  *
- * Spec: OpenGL 2.1 (July 30, 2006), sec 2.13 "Current Raster Position", p. 54.
+ * Spec: OpenGL 2.1 (December 1, 2006), sec 2.13 "Current Raster Position",
+ * p. 55.
  * https://registry.khronos.org/OpenGL/specs/gl/glspec21.pdf
  * (Wording carried through to the 4.6 compatibility profile unchanged.)
  *
@@ -79,8 +80,8 @@
 #define WANT_B 0.70f
 
 #define SPEC_CITE \
-    "OpenGL 2.1 (2006-07-30), sec 2.13 " \
-    "\"Current Raster Position\", p.54"
+    "OpenGL 2.1 (2006-12-01), sec 2.13 " \
+    "\"Current Raster Position\", p.55"
 #define SPEC_URL \
     "https://registry.khronos.org/OpenGL/specs/gl/" \
     "glspec21.pdf"

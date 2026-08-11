@@ -12,7 +12,7 @@ ways:
 
 1. the vertex position fed to the lighting equation is the **object-space**
    position rather than the eye-space one, so the vector to a positional light
-   is wrong whenever the modelview is not the identity;
+   is wrong under the rotated-and-translated modelview tested below;
 2. **`GL_NORMALIZE` is ignored** on that path, so a modelview carrying a scale
    lights a non-unit normal.
 
@@ -76,7 +76,7 @@ Raster colour equal to the vertex colour in every case.
 
 ## Spec basis
 
-**OpenGL 2.1 (July 30, 2006).**
+**OpenGL 2.1 (December 1, 2006).**
 <https://registry.khronos.org/OpenGL/specs/gl/glspec21.pdf>
 (Wording carried through to the 4.6 compatibility profile unchanged.)
 
@@ -92,7 +92,7 @@ this purpose:
 
 > "All computations are carried out in eye coordinates."
 
-§2.12 "Normal Transformation" — and one settles case C:
+§2.11.3 "Normal Transformation" — and one settles case C:
 
 > "Before use in lighting, normals are transformed to eye coordinates by a
 > matrix derived from the model-view matrix. Rescaling and normalization

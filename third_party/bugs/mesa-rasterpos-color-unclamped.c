@@ -28,7 +28,8 @@
  *     // expected: 1.00 0.00 0.25   (clamped)
  *     // Mesa:     1.50 -0.50 0.25  (raw)
  *
- * Spec: OpenGL 2.1 (July 30, 2006), sec 2.14.6 "Clamping or Masking", p. 70.
+ * Spec: OpenGL 2.1 (December 1, 2006), sec 2.14.6 "Clamping or Masking",
+ * p. 70.
  * https://registry.khronos.org/OpenGL/specs/gl/glspec21.pdf
  * (Wording carried through to the 4.6 compatibility profile, where
  * CLAMP_VERTEX_COLOR - the state that can switch this off - defaults to TRUE.)
@@ -70,7 +71,7 @@
 #define RAW_B  0.25f
 
 #define SPEC_CITE \
-    "OpenGL 2.1 (2006-07-30), sec 2.14.6 \"Clamping or Masking\", p.70"
+    "OpenGL 2.1 (2006-12-01), sec 2.14.6 \"Clamping or Masking\", p.70"
 #define SPEC_URL \
     "https://registry.khronos.org/OpenGL/specs/gl/glspec21.pdf"
 
@@ -145,8 +146,8 @@ int main(int argc, char **argv) {
 
     /* Case B: the same clamp, reached through lighting instead - emission past
      * 1.0 with no light enabled. This is the half of the sentence every driver
-     * gets right, which localizes the failure above to the "whether enabled or
-     * not" clause rather than to clamping in general. */
+     * gets right on the tested drivers, which localizes the failure above to
+     * the "whether enabled or not" clause rather than to clamping in general. */
     printf("Case B: lit, emission past 1.0                 [control]\n");
     {
         GLfloat zero[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
