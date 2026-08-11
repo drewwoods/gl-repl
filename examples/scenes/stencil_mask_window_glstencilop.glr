@@ -17,13 +17,13 @@ static float spin; // @tune  mask rotation, degrees
 // lives in a func and both passes are guaranteed to agree.
 maskWindow() {
   glPushMatrix();
-  glRotatef(spin, 0, 0, 1);
-  glBegin(GL_QUADS);
-    glVertex3f(-0.75, -0.75, 0);
-    glVertex3f(0.75, -0.75, 0);
-    glVertex3f(0.75, 0.75, 0);
-    glVertex3f(-0.75, 0.75, 0);
-  glEnd();
+    glRotatef(spin, 0, 0, 1);
+    glBegin(GL_QUADS);
+      glVertex3f(-0.75, -0.75, 0);
+      glVertex3f(0.75, -0.75, 0);
+      glVertex3f(0.75, 0.75, 0);
+      glVertex3f(-0.75, 0.75, 0);
+    glEnd();
   glPopMatrix();
 }
 
@@ -66,8 +66,8 @@ glStencilFunc(GL_EQUAL, 1, 255);
 glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
 glColor3f(0.10, 0.95, 0.85);
 glPushMatrix();
-glRotatef(t * 35, 0, 1, 0);
-glutSolidTeapot(0.85);
+  glRotatef(t * 35, 0, 1, 0);
+  glutSolidTeapot(0.85);
 glPopMatrix();
 
 // --- Pass 3: show the window ---------------------------------------

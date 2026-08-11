@@ -37,11 +37,11 @@ limb(depth, len, rad, seed) {
     glColor3f(lerp(0.10, 0.15, w), lerp(0.95, 0.72, w), lerp(0.85, 1.00, w));
     for(j, 0, 3) {
       glPushMatrix();
-      glRotatef(120*j + seed*140, 0, 1, 0);
-      glRotatef(46, 0, 0, 1);
-      glTranslatef(0, rad*2.1, 0);
-      glScalef(1.3, 0.4, 1.3);
-      glutSolidSphere(rad*1.8, 6, 4);
+        glRotatef(120*j + seed*140, 0, 1, 0);
+        glRotatef(46, 0, 0, 1);
+        glTranslatef(0, rad*2.1, 0);
+        glScalef(1.3, 0.4, 1.3);
+        glutSolidSphere(rad*1.8, 6, 4);
       glPopMatrix();
     }
   }
@@ -54,9 +54,9 @@ limb(depth, len, rad, seed) {
       // keeps climbing; 1 and 2 are the side limbs that swing out.
       side = min(i, 1);
       glPushMatrix();
-      glRotatef(137.5*i + seed*95, 0, 1, 0);
-      glRotatef(9 + 26*side + 15*s + (5 - depth)*1.5*sin(t*1.1 + seed*3 + i), 0, 0, 1);
-      limb(depth - 1, len*(0.78 - 0.2*side + 0.1*s), rtop, seed + i*0.37 + 0.11);
+        glRotatef(137.5*i + seed*95, 0, 1, 0);
+        glRotatef(9 + 26*side + 15*s + (5 - depth)*1.5*sin(t*1.1 + seed*3 + i), 0, 0, 1);
+        limb(depth - 1, len*(0.78 - 0.2*side + 0.1*s), rtop, seed + i*0.37 + 0.11);
       glPopMatrix();
     }
   }

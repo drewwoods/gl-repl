@@ -38,12 +38,12 @@ glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 // half. The plane rides the translated frame, so it cuts through the
 // sphere's own equator, not the world origin.
 glPushMatrix();
-glTranslatef(-2.9, 0.75, 0);
-glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, 1, 0, 0});
-glEnable(GL_CLIP_PLANE0);
-glColor3f(0.95, 0.55, 0.30);
-glutSolidSphere(1.15, 28, 20);
-glDisable(GL_CLIP_PLANE0);
+  glTranslatef(-2.9, 0.75, 0);
+  glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, 1, 0, 0});
+  glEnable(GL_CLIP_PLANE0);
+  glColor3f(0.95, 0.55, 0.30);
+  glutSolidSphere(1.15, 28, 20);
+  glDisable(GL_CLIP_PLANE0);
 glPopMatrix();
 
 // 2) Wedge - two planes. Each plane keeps half the sphere; rotating
@@ -51,18 +51,18 @@ glPopMatrix();
 // into a 120-degree orange slice. The slow spin carries the flat cut
 // faces around so you can see both of them.
 glPushMatrix();
-glTranslatef(0, 0.75, 0);
-glRotatef(20*t, 0, 1, 0);
-glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, 0, 1, 0});
-glEnable(GL_CLIP_PLANE0);
-glRotatef(120, 0, 1, 0);
-glClipPlane(GL_CLIP_PLANE1, (GLdouble[]){0, 0, -1, 0});
-glEnable(GL_CLIP_PLANE1);
-glRotatef(-120, 0, 1, 0); // back to the wedge's frame before drawing
-glColor3f(0.40, 0.82, 0.50);
-glutSolidSphere(1.15, 28, 20);
-glDisable(GL_CLIP_PLANE0);
-glDisable(GL_CLIP_PLANE1);
+  glTranslatef(0, 0.75, 0);
+  glRotatef(20*t, 0, 1, 0);
+  glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, 0, 1, 0});
+  glEnable(GL_CLIP_PLANE0);
+  glRotatef(120, 0, 1, 0);
+  glClipPlane(GL_CLIP_PLANE1, (GLdouble[]){0, 0, -1, 0});
+  glEnable(GL_CLIP_PLANE1);
+  glRotatef(-120, 0, 1, 0); // back to the wedge's frame before drawing
+  glColor3f(0.40, 0.82, 0.50);
+  glutSolidSphere(1.15, 28, 20);
+  glDisable(GL_CLIP_PLANE0);
+  glDisable(GL_CLIP_PLANE1);
 glPopMatrix();
 
 // 3) Cutaway - coefficients can animate. {-1, 0, -0.7, d} keeps x <= d,
@@ -70,12 +70,12 @@ glPopMatrix();
 // tube's circular cross-sections.
 d = 1.5*sin(0.7*t);
 glPushMatrix();
-glTranslatef(2.9, 0.75, 0);
-glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){-1, 0, -0.7, d});
-glEnable(GL_CLIP_PLANE0);
-glColor3f(0.42, 0.62, 0.95);
-glutSolidTorus(0.42, 0.85, 20, 28);
-glDisable(GL_CLIP_PLANE0);
+  glTranslatef(2.9, 0.75, 0);
+  glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){-1, 0, -0.7, d});
+  glEnable(GL_CLIP_PLANE0);
+  glColor3f(0.42, 0.62, 0.95);
+  glutSolidTorus(0.42, 0.85, 20, 28);
+  glDisable(GL_CLIP_PLANE0);
 glPopMatrix();
 
 // Captions (lighting off so the text color is not shaded)

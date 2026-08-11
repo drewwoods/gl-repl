@@ -44,9 +44,9 @@ drum(rad, y0, y1, segs) {
 // snow drift: a squashed mound
 drift(x, z, s) {
   glPushMatrix();
-  glTranslatef(x, 0, z);
-  glScalef(s*1.5, s*0.4, s);
-  glutSolidSphere(1, 12, 8);
+    glTranslatef(x, 0, z);
+    glScalef(s*1.5, s*0.4, s);
+    glutSolidSphere(1, 12, 8);
   glPopMatrix();
 }
 
@@ -92,90 +92,90 @@ drift(-3.5, -3.1, 0.55);
 ink = 3.3;
 glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
 glPushMatrix();
-glTranslatef(-2.4, 0, 0.3);
-pad(1.9);
+  glTranslatef(-2.4, 0, 0.3);
+  pad(1.9);
 glPopMatrix();
 glPushMatrix();
-glTranslatef(1.8, 0, 0.5);
-pad(1.6);
+  glTranslatef(1.8, 0, 0.5);
+  pad(1.6);
 glPopMatrix();
 
 // observatory building: drum + slit dome, slit turned toward camera-east
 glPushMatrix();
-glTranslatef(1.8, 0, 0.5);
-ink = 6;
-glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
-drum(1.05, 0, 1.0, 24);
-glTranslatef(0, 1.0, 0);
-glRotatef(-172, 0, 1, 0);
-ink = 8;
-glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
-// dome = the top of a sphere: GL_CLIP_PLANE1 keeps y >= 0, and the
-// observation slit is the gap between two clipped copies of the same
-// sphere -- each draw keeps one side of a vertical plane turned `slit`
-// rad off the slit center (local -z). Clip planes only intersect
-// half-spaces, which is why cutting a slit OUT takes two draws.
-// GL_CLIP_PLANE2 keeps y <= 1.02, opening a round vent at the zenith.
-// The spheres draw rotated 90 deg so a pole sits at the zenith, where
-// the quadric's slices converge -- the vent cuts the densest mesh.
-// The planes are captured in the dome frame BEFORE that rotation, so
-// the cuts stay upright.
-// Shutter cycle: closed at t = 0, `slit` swings open over 2 s, stays
-// open (0.31 rad) until 2/3 of `cycle_length`, swings shut, and rests
-// closed for the last third. The plane equations reference `slit`, so
-// they re-evaluate every frame.
-ph = fmod(t, cycle_length);
-slit = 0.31*clamp(min(ph/2, (2*cycle_length/3 + 2 - ph)/2), 0, 1);
-glClipPlane(GL_CLIP_PLANE1, (GLdouble[]){0, 1, 0, 0});
-glEnable(GL_CLIP_PLANE1);
-glClipPlane(GL_CLIP_PLANE2, (GLdouble[]){0, -1, 0, 1.02});
-glEnable(GL_CLIP_PLANE2);
-glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){cos(slit), 0, sin(slit), 0});
-glEnable(GL_CLIP_PLANE0);
-glPushMatrix();
-glRotatef(-90, 1, 0, 0);
-glutSolidSphere(1.05, 24, 20);
-glPopMatrix();
-glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){-cos(slit), 0, sin(slit), 0});
-glPushMatrix();
-glRotatef(-90, 1, 0, 0);
-glutSolidSphere(1.05, 24, 20);
-glPopMatrix();
-glDisable(GL_CLIP_PLANE0);
-glDisable(GL_CLIP_PLANE1);
-glDisable(GL_CLIP_PLANE2);
+  glTranslatef(1.8, 0, 0.5);
+  ink = 6;
+  glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
+  drum(1.05, 0, 1.0, 24);
+  glTranslatef(0, 1.0, 0);
+  glRotatef(-172, 0, 1, 0);
+  ink = 8;
+  glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
+  // dome = the top of a sphere: GL_CLIP_PLANE1 keeps y >= 0, and the
+  // observation slit is the gap between two clipped copies of the same
+  // sphere -- each draw keeps one side of a vertical plane turned `slit`
+  // rad off the slit center (local -z). Clip planes only intersect
+  // half-spaces, which is why cutting a slit OUT takes two draws.
+  // GL_CLIP_PLANE2 keeps y <= 1.02, opening a round vent at the zenith.
+  // The spheres draw rotated 90 deg so a pole sits at the zenith, where
+  // the quadric's slices converge -- the vent cuts the densest mesh.
+  // The planes are captured in the dome frame BEFORE that rotation, so
+  // the cuts stay upright.
+  // Shutter cycle: closed at t = 0, `slit` swings open over 2 s, stays
+  // open (0.31 rad) until 2/3 of `cycle_length`, swings shut, and rests
+  // closed for the last third. The plane equations reference `slit`, so
+  // they re-evaluate every frame.
+  ph = fmod(t, cycle_length);
+  slit = 0.31*clamp(min(ph/2, (2*cycle_length/3 + 2 - ph)/2), 0, 1);
+  glClipPlane(GL_CLIP_PLANE1, (GLdouble[]){0, 1, 0, 0});
+  glEnable(GL_CLIP_PLANE1);
+  glClipPlane(GL_CLIP_PLANE2, (GLdouble[]){0, -1, 0, 1.02});
+  glEnable(GL_CLIP_PLANE2);
+  glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){cos(slit), 0, sin(slit), 0});
+  glEnable(GL_CLIP_PLANE0);
+  glPushMatrix();
+    glRotatef(-90, 1, 0, 0);
+    glutSolidSphere(1.05, 24, 20);
+  glPopMatrix();
+  glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){-cos(slit), 0, sin(slit), 0});
+  glPushMatrix();
+    glRotatef(-90, 1, 0, 0);
+    glutSolidSphere(1.05, 24, 20);
+  glPopMatrix();
+  glDisable(GL_CLIP_PLANE0);
+  glDisable(GL_CLIP_PLANE1);
+  glDisable(GL_CLIP_PLANE2);
 glPopMatrix();
 
 // radio dish: pylon, yoke, articulated bowl slowly sweeping the sky
 glPushMatrix();
-glTranslatef(-2.4, 0, 0.3);
-ink = 5.2;
-glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
-glPushMatrix();
-glRotatef(-90, 1, 0, 0);
-glutSolidCone(0.42, 1.3, 14, 4);
-glPopMatrix();
-glTranslatef(0, 1.3, 0);
-glutSolidSphere(0.15, 10, 8);
-glRotatef(dishAz, 0, 1, 0);
-glRotatef(-38, 1, 0, 0);
-ink = 7.5;
-glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
-// faint self-glow keeps the bowl's shaded side steel-blue, not black
-glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){0.06, 0.09, 0.13, 1});
-// dish = a shallow cap sliced off a big sphere: a rim of radius 1.25
-// at depth 0.38 needs R = (1.25^2 + 0.38^2)/(2*0.38) ~= 2.246. The
-// plane is captured in the dish frame (before the translate), keeping
-// y <= 0.38, so only the bowl survives -- and it tilts and sweeps with
-// the frame because the equation is re-captured every frame.
-glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, -1, 0, 0.38});
-glEnable(GL_CLIP_PLANE0);
-glPushMatrix();
-glTranslatef(0, 2.246, 0);
-glutSolidSphere(2.246, 28, 32);
-glPopMatrix();
-glDisable(GL_CLIP_PLANE0);
-glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){0, 0, 0, 1});
+  glTranslatef(-2.4, 0, 0.3);
+  ink = 5.2;
+  glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
+  glPushMatrix();
+    glRotatef(-90, 1, 0, 0);
+    glutSolidCone(0.42, 1.3, 14, 4);
+  glPopMatrix();
+  glTranslatef(0, 1.3, 0);
+  glutSolidSphere(0.15, 10, 8);
+  glRotatef(dishAz, 0, 1, 0);
+  glRotatef(-38, 1, 0, 0);
+  ink = 7.5;
+  glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
+  // faint self-glow keeps the bowl's shaded side steel-blue, not black
+  glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){0.06, 0.09, 0.13, 1});
+  // dish = a shallow cap sliced off a big sphere: a rim of radius 1.25
+  // at depth 0.38 needs R = (1.25^2 + 0.38^2)/(2*0.38) ~= 2.246. The
+  // plane is captured in the dish frame (before the translate), keeping
+  // y <= 0.38, so only the bowl survives -- and it tilts and sweeps with
+  // the frame because the equation is re-captured every frame.
+  glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0, -1, 0, 0.38});
+  glEnable(GL_CLIP_PLANE0);
+  glPushMatrix();
+    glTranslatef(0, 2.246, 0);
+    glutSolidSphere(2.246, 28, 32);
+  glPopMatrix();
+  glDisable(GL_CLIP_PLANE0);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){0, 0, 0, 1});
 glPopMatrix();
 
 // ---- unlit glow pass: slit light, windows, mast, beacon, dish pulses ----
@@ -189,42 +189,42 @@ glDepthMask(GL_FALSE);
 // painting a flat panel over it, and a wider/dimmer halo behind the bright
 // core sells "glow" the same way the beacon's two-point halo does below.
 glPushMatrix();
-glTranslatef(1.8, 1.0, 0.5);
-glRotatef(-172, 0, 1, 0);
-glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-glBegin(GL_QUADS);
-  glColor4f(1.0, 0.85, 0.15, 0.35*slit/0.31);
-  glVertex3f(-0.40, 0.00, -0.56);
-  glVertex3f(0.40, 0.00, -0.56);
-  glColor4f(1.0, 0.85, 0.15, 0.08*slit/0.31);
-  glVertex3f(0.24, 0.95, -0.32);
-  glVertex3f(-0.24, 0.95, -0.32);
-glEnd();
-glBegin(GL_QUADS);
-  glColor4f(1.0, 0.85, 0.15, 0.60*slit/0.31);
-  glVertex3f(-0.20, 0.02, -0.45);
-  glVertex3f(0.20, 0.02, -0.45);
-  glColor4f(1.0, 0.85, 0.15, 0.18*slit/0.31);
-  glVertex3f(0.12, 0.90, -0.30);
-  glVertex3f(-0.12, 0.90, -0.30);
-glEnd();
-glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glTranslatef(1.8, 1.0, 0.5);
+  glRotatef(-172, 0, 1, 0);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glBegin(GL_QUADS);
+    glColor4f(1.0, 0.85, 0.15, 0.35*slit/0.31);
+    glVertex3f(-0.40, 0.00, -0.56);
+    glVertex3f(0.40, 0.00, -0.56);
+    glColor4f(1.0, 0.85, 0.15, 0.08*slit/0.31);
+    glVertex3f(0.24, 0.95, -0.32);
+    glVertex3f(-0.24, 0.95, -0.32);
+  glEnd();
+  glBegin(GL_QUADS);
+    glColor4f(1.0, 0.85, 0.15, 0.60*slit/0.31);
+    glVertex3f(-0.20, 0.02, -0.45);
+    glVertex3f(0.20, 0.02, -0.45);
+    glColor4f(1.0, 0.85, 0.15, 0.18*slit/0.31);
+    glVertex3f(0.12, 0.90, -0.30);
+    glVertex3f(-0.12, 0.90, -0.30);
+  glEnd();
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 glPopMatrix();
 
 // two amber windows on the drum's south face
 glPushMatrix();
-glTranslatef(1.8, 0, 0.5);
-glBegin(GL_QUADS);
-  glColor4f(1.0, 0.85, 0.15, 0.85);
-  glVertex3f(-0.42, 0.38, 0.99);
-  glVertex3f(-0.18, 0.38, 1.04);
-  glVertex3f(-0.18, 0.62, 1.04);
-  glVertex3f(-0.42, 0.62, 0.99);
-  glVertex3f(0.16, 0.38, 1.04);
-  glVertex3f(0.40, 0.38, 0.99);
-  glVertex3f(0.40, 0.62, 0.99);
-  glVertex3f(0.16, 0.62, 1.04);
-glEnd();
+  glTranslatef(1.8, 0, 0.5);
+  glBegin(GL_QUADS);
+    glColor4f(1.0, 0.85, 0.15, 0.85);
+    glVertex3f(-0.42, 0.38, 0.99);
+    glVertex3f(-0.18, 0.38, 1.04);
+    glVertex3f(-0.18, 0.62, 1.04);
+    glVertex3f(-0.42, 0.62, 0.99);
+    glVertex3f(0.16, 0.38, 1.04);
+    glVertex3f(0.40, 0.38, 0.99);
+    glVertex3f(0.40, 0.62, 0.99);
+    glVertex3f(0.16, 0.62, 1.04);
+  glEnd();
 glPopMatrix();
 
 // comms mast with guy wires, far right
@@ -261,41 +261,41 @@ glEnd();
 
 // feed struts + expanding teal pulses in the dish frame (additive)
 glPushMatrix();
-glTranslatef(-2.4, 1.3, 0.3);
-glRotatef(dishAz, 0, 1, 0);
-glRotatef(-38, 1, 0, 0);
-glLineWidth(1);
-glBegin(GL_LINES);
-  glColor4f(0.92*ink, 0.95*ink, 0.98*ink, 0.8);
-  glVertex3f(0, 0.38, 1.25);
-  glVertex3f(0, 0.9, 0);
-  glVertex3f(-1.0825, 0.38, -0.625);
-  glVertex3f(0, 0.9, 0);
-  glVertex3f(1.0825, 0.38, -0.625);
-  glVertex3f(0, 0.9, 0);
-glEnd();
-glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-// aurora light catching the dish rim
-glBegin(GL_LINE_LOOP);
-  for(j, 0, 32) {
-    glColor4f(0.10, 0.95, 0.85, 0.55);
-    glVertex3f(1.25*cos(j*TAU/32), 0.38, 1.25*sin(j*TAU/32));
-  }
-glEnd();
-glPointSize(6);
-glBegin(GL_POINTS);
-  glColor4f(0.10, 0.95, 0.85, 0.9);
-  glVertex3f(0, 0.9, 0);
-glEnd();
-for(i, 0, 4) {
-  dd = fmod(0.8*t + i*0.6, 2.4);
+  glTranslatef(-2.4, 1.3, 0.3);
+  glRotatef(dishAz, 0, 1, 0);
+  glRotatef(-38, 1, 0, 0);
+  glLineWidth(1);
+  glBegin(GL_LINES);
+    glColor4f(0.92*ink, 0.95*ink, 0.98*ink, 0.8);
+    glVertex3f(0, 0.38, 1.25);
+    glVertex3f(0, 0.9, 0);
+    glVertex3f(-1.0825, 0.38, -0.625);
+    glVertex3f(0, 0.9, 0);
+    glVertex3f(1.0825, 0.38, -0.625);
+    glVertex3f(0, 0.9, 0);
+  glEnd();
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  // aurora light catching the dish rim
   glBegin(GL_LINE_LOOP);
     for(j, 0, 32) {
-      glColor4f(0.10, 0.95, 0.85, 0.5*(1 - dd/2.4));
-      glVertex3f((0.5 + 0.4*dd)*cos(j*TAU/32), 0.9 + dd, (0.5 + 0.4*dd)*sin(j*TAU/32));
+      glColor4f(0.10, 0.95, 0.85, 0.55);
+      glVertex3f(1.25*cos(j*TAU/32), 0.38, 1.25*sin(j*TAU/32));
     }
   glEnd();
-}
+  glPointSize(6);
+  glBegin(GL_POINTS);
+    glColor4f(0.10, 0.95, 0.85, 0.9);
+    glVertex3f(0, 0.9, 0);
+  glEnd();
+  for(i, 0, 4) {
+    dd = fmod(0.8*t + i*0.6, 2.4);
+    glBegin(GL_LINE_LOOP);
+      for(j, 0, 32) {
+        glColor4f(0.10, 0.95, 0.85, 0.5*(1 - dd/2.4));
+        glVertex3f((0.5 + 0.4*dd)*cos(j*TAU/32), 0.9 + dd, (0.5 + 0.4*dd)*sin(j*TAU/32));
+      }
+    glEnd();
+  }
 glPopMatrix();
 
 // leave shared GL state the way we found it

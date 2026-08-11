@@ -19,8 +19,8 @@ sponge(depth, size) {
         for(k, -1, 2) {
           if(abs(i) + abs(j) + abs(k) > 1) {
             glPushMatrix();
-            glTranslatef(i*size/3, j*size/3, k*size/3);
-            sponge(depth - 1, size/3);
+              glTranslatef(i*size/3, j*size/3, k*size/3);
+              sponge(depth - 1, size/3);
             glPopMatrix();
           }
         }

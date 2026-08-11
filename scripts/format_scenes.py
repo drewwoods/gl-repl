@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """Format OpenGL REPL scene files (.glr) using typical C formatting with indentation of 2,
-plus custom rules where glBegin indents and glEnd unindents.
+plus custom rules for the commands that open a scope without a brace.
+
+The rules mirror the app's own canonical indentation (`source_scope.c`), which
+sums four independent depths - braces (for/func/if), glBegin/glEnd,
+gluBegin/gluEnd and glPushMatrix/glPopMatrix - so a body written by
+`gl-repl --export-glr` is already formatted by this script's definition. The one
+asymmetry the app has is reproduced here: glu (tessellator) commands belong to
+the tessellator scope, not the GL vertex block, so glBegin depth is excluded
+from their indent (`repl_source_scope_view_cmd_tess_indent()`).
 """
 
 from __future__ import annotations
@@ -9,15 +17,47 @@ import argparse
 import sys
 from pathlib import Path
 
+# Scope openers/closers per depth kind. Braces cover for/func/if blocks; the
+# rest are commands that open a scope with no brace of their own. A closer
+# lands at its opener's level (unindent before the line, like `}`).
+BRACE, BEGIN, TESS, MATRIX = 0, 1, 2, 3
+NUM_DEPTHS = 4
 
-def scan_line(line: str, in_block_comment: bool) -> tuple[int, int, bool]:
-    """Scans a line of code to compute indentation changes.
+SCOPE_OPENERS = (("{", BRACE), ("glBegin", BEGIN), ("gluBegin", TESS),
+                 ("glPushMatrix", MATRIX))
+SCOPE_CLOSERS = (("}", BRACE), ("glEnd", BEGIN), ("gluEnd", TESS),
+                 ("glPopMatrix", MATRIX))
+
+
+def word_at(line: str, i: int, word: str) -> bool:
+    """True when `word` occurs at index `i` as a whole identifier."""
+    if not line.startswith(word, i):
+        return False
+    if not word[0].isalpha():          # punctuation ('{', '}') needs no boundary
+        return True
+    if i > 0 and (line[i - 1].isalnum() or line[i - 1] == "_"):
+        return False
+    after = i + len(word)
+    return after >= len(line) or not (line[after].isalnum() or line[after] == "_")
+
+
+def line_counts_begin_depth(stripped: str) -> bool:
+    """False for the lines the app indents without the glBegin depth: the
+    glBegin/glEnd pair itself, and every glu* (tessellator) command."""
+    if stripped.startswith("glBegin") or stripped.startswith("glEnd"):
+        return False
+    return not (stripped.startswith("glu") and not stripped.startswith("glut"))
+
+
+def scan_line(line: str, in_block_comment: bool) -> tuple[list[int], list[int], bool]:
+    """Scans a line of code to compute indentation changes, per depth kind.
 
     Returns:
-        (unindents_before, indents_after, in_block_comment)
+        (unindents_before, indents_after, in_block_comment) - the first two
+        indexed by BRACE/BEGIN/TESS/MATRIX.
     """
-    active_opens = 0
-    unindents_before = 0
+    active_opens = [0] * NUM_DEPTHS
+    unindents_before = [0] * NUM_DEPTHS
     in_string = False
     escape = False
 
@@ -59,43 +99,27 @@ def scan_line(line: str, in_block_comment: bool) -> tuple[int, int, bool]:
             i += 1
             continue
 
-        char = line[i]
-        if char == "{":
-            active_opens += 1
-            i += 1
+        # Scope openers and closers, brace and brace-less alike
+        matched = 0
+        for word, kind in SCOPE_OPENERS:
+            if word_at(line, i, word):
+                active_opens[kind] += 1
+                i += len(word)
+                matched = 1
+                break
+        if matched:
             continue
-        elif char == "}":
-            if active_opens > 0:
-                active_opens -= 1
-            else:
-                unindents_before += 1
-            i += 1
-            continue
-
-        # Check for glBegin / glEnd words
-        if line[i:].startswith("glBegin"):
-            before_ok = i == 0 or not (line[i - 1].isalnum() or line[i - 1] == "_")
-            after_idx = i + len("glBegin")
-            after_ok = after_idx >= n or not (
-                line[after_idx].isalnum() or line[after_idx] == "_"
-            )
-            if before_ok and after_ok:
-                active_opens += 1
-                i += len("glBegin")
-                continue
-        elif line[i:].startswith("glEnd"):
-            before_ok = i == 0 or not (line[i - 1].isalnum() or line[i - 1] == "_")
-            after_idx = i + len("glEnd")
-            after_ok = after_idx >= n or not (
-                line[after_idx].isalnum() or line[after_idx] == "_"
-            )
-            if before_ok and after_ok:
-                if active_opens > 0:
-                    active_opens -= 1
+        for word, kind in SCOPE_CLOSERS:
+            if word_at(line, i, word):
+                if active_opens[kind] > 0:
+                    active_opens[kind] -= 1
                 else:
-                    unindents_before += 1
-                i += len("glEnd")
-                continue
+                    unindents_before[kind] += 1
+                i += len(word)
+                matched = 1
+                break
+        if matched:
+            continue
 
         i += 1
 
@@ -103,10 +127,11 @@ def scan_line(line: str, in_block_comment: bool) -> tuple[int, int, bool]:
 
 
 def format_content(content: str) -> str:
-    """Formats the contents of a .glr file using C 2-space indentation rules + glBegin/glEnd."""
+    """Formats the contents of a .glr file using C 2-space indentation rules plus
+    the brace-less scopes (glBegin, gluBegin, glPushMatrix)."""
     lines = content.splitlines()
     formatted_lines: list[str] = []
-    indent_level = 0
+    depths = [0] * NUM_DEPTHS
     in_block_comment = False
 
     for line in lines:
@@ -139,14 +164,18 @@ def format_content(content: str) -> str:
         )
 
         # Apply unindent before formatting this line
-        indent_level = max(0, indent_level - unindents_before)
+        for kind in range(NUM_DEPTHS):
+            depths[kind] = max(0, depths[kind] - unindents_before[kind])
 
-        # Format and append
-        indent_spaces = "  " * indent_level
-        formatted_lines.append(indent_spaces + stripped)
+        # Format and append - the sum of the depths this line participates in
+        level = depths[BRACE] + depths[TESS] + depths[MATRIX]
+        if line_counts_begin_depth(stripped):
+            level += depths[BEGIN]
+        formatted_lines.append("  " * level + stripped)
 
         # Apply indent after formatting this line
-        indent_level = max(0, indent_level + indents_after)
+        for kind in range(NUM_DEPTHS):
+            depths[kind] = max(0, depths[kind] + indents_after[kind])
 
     # Ensure a trailing newline
     return "\n".join(formatted_lines) + "\n"
