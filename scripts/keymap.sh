@@ -6,8 +6,8 @@
 #                                same (key, mods) — a double-map.
 #   keymap.sh list               Print the current bindings, reserved
 #                                control-key aliases, then the free Ctrl /
-#                                Ctrl+Shift / F-key slots still available
-#                                to assign.
+#                                Ctrl+Shift / F-key slots and config keys
+#                                still available to assign.
 #
 # Comparing the symbolic TEXT of `<key>, <mods>` is exactly right: the same
 # key with different modifiers is distinct by design (KEY_CTRL_C,0 = Copy vs
@@ -78,17 +78,17 @@ awk -v mode="$mode" '
         reserved_reason["M"] = "byte 13 = Carriage Return / Enter"
 
         print ""
-        print "Reserved (not assignable):"
+        print "Reserved plain Ctrl editing-byte aliases:"
         for (ri = 1; ri <= length(reserved); ri++) {
             c = substr(reserved, ri, 1)
-            printf("  Ctrl+%-2s / Ctrl+Shift+%-2s %s\n", c, c, reserved_reason[c])
+            printf("  Ctrl+%-2s  %s\n", c, reserved_reason[c])
         }
 
         print ""
         print "Available (unbound) slots:"
-        # Ctrl+<letter> aliases above arrive as editing keys at the byte
-        # level, so neither their plain nor Shift-modified forms are safe
-        # app shortcuts.
+        # Plain Ctrl aliases arrive as editing keys and stay reserved. Their
+        # Shift variants are assignable because a pre-editor route can claim
+        # the exact modifier pair (while also hijacking Shift+editing-key).
         L = "  Ctrl+        :"
         for (i = 1; i <= 26; i++) {
             c = substr("ABCDEFGHIJKLMNOPQRSTUVWXYZ", i, 1)
@@ -100,7 +100,6 @@ awk -v mode="$mode" '
         L = "  Ctrl+Shift+  :"
         for (i = 1; i <= 26; i++) {
             c = substr("ABCDEFGHIJKLMNOPQRSTUVWXYZ", i, 1)
-            if (index(reserved, c)) continue
             if (("KEY_CTRL_" c ",GLUT_ACTIVE_SHIFT") in owner) continue
             L = L " " c
         }
@@ -114,3 +113,38 @@ awk -v mode="$mode" '
         exit 0
     }
 ' keymap.h
+
+if [[ "$mode" == "list" ]]; then
+    awk '
+        /^const GlrConfigItem g_cfg_items\[\][[:space:]]*=/ {
+            in_table = 1
+            next
+        }
+        in_table && /^};/ {
+            exit
+        }
+        in_table && /^[[:space:]]*\{/ {
+            row = $0
+            collecting = 1
+        }
+        in_table && collecting && !/^[[:space:]]*\{/ {
+            row = row " " $0
+        }
+        in_table && collecting && /},[[:space:]]*$/ {
+            if (match(row, /\.key[[:space:]]*=[[:space:]]*GLR_CONFIG_[A-Z0-9_]+/)) {
+                key = substr(row, RSTART, RLENGTH)
+                sub(/^.*GLR_CONFIG_/, "GLR_CONFIG_", key)
+                if (row !~ /\.key_code[[:space:]]*=/)
+                    unassigned[count++] = key
+            }
+            collecting = 0
+            row = ""
+        }
+        END {
+            print ""
+            printf("Unassigned GlrConfigKey shortcuts (%d):\n", count)
+            for (i = 0; i < count; i++)
+                print "  " unassigned[i]
+        }
+    ' src/app/glr_actions.c
+fi

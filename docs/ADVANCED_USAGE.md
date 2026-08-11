@@ -978,9 +978,13 @@ scripts/keymap.sh list    # show bound, reserved, and available slots
 
 `list` reports the current bindings, the byte-level reserved control aliases,
 and the unbound Ctrl / Ctrl+Shift / F-key slots. `Ctrl+H`, `Ctrl+I`,
-`Ctrl+J`, and `Ctrl+M` are reserved, including their Ctrl+Shift forms, because
-the normal keyboard callback receives them as Backspace, Tab, LF/Enter, and
-CR/Enter rather than distinct app shortcuts.
+`Ctrl+J`, and `Ctrl+M` arrive as Backspace, Tab, LF/Enter, and CR/Enter rather
+than distinct app-shortcut bytes, so their plain forms remain reserved. Their
+Shift forms are reported as assignable because a pre-editor route can claim
+the modifier pair, with the tradeoff that it also consumes the corresponding
+Shift+editing-key alias. Ctrl+Shift+H is claimed by Syntax highlight. The
+report also derives the `GlrConfigKey` rows without shortcuts from the config
+descriptor table.
 
 ## Files
 

@@ -132,7 +132,7 @@
 #define GLR_CPU_PROFILE      KEY_CTRL_G, 0     /* compute profile */
 #define GLR_MEMORY_PROFILE   KEY_CTRL_B, GLUT_ACTIVE_SHIFT  /* plain Ctrl+B = Code panel */
 #define GLR_XFORM_GUIDES     KEY_CTRL_X, GLUT_ACTIVE_SHIFT
-#define GLR_SYNTAX_HL        KEY_CTRL_Y, GLUT_ACTIVE_SHIFT  /* plain Ctrl+Y = Redo */
+#define GLR_SYNTAX_HL        KEY_CTRL_H, GLUT_ACTIVE_SHIFT  /* byte aliases Shift+Backspace; cfg route wins */
 #define GLR_VARIABLE_PANEL   '`', 0            /* open variable panel */
 
 /* ---- Editor text-editing bindings (src/editor/input.c) --------------- *
@@ -146,7 +146,7 @@
 #define GLR_DELETE_LINE      KEY_CTRL_D, 0
 #define GLR_UNDO             KEY_CTRL_Z, 0     /* pairs w/ Redo (Ctrl+Shift+Z) */
 #define GLR_REDO             KEY_CTRL_Z, GLUT_ACTIVE_SHIFT
-#define GLR_REDO_ALT         KEY_CTRL_Y, 0     /* alternate redo; pairs w/ Syntax highlight (Ctrl+Shift+Y) */
+#define GLR_REDO_ALT         KEY_CTRL_Y, 0     /* alternate redo */
 #define GLR_REFORMAT         KEY_CTRL_BACKSLASH, 0
 #define GLR_SEARCH           KEY_CTRL_F, 0     /* pairs w/ Code focus (Ctrl+Shift+F) */
 #define GLR_REPLAY_JUMP      KEY_CTRL_K, 0     /* jump replay PC to cursor */

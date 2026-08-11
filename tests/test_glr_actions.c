@@ -742,9 +742,9 @@ static void test_ascii_shortcut_modifiers(void) {
     ASSERT_INT("Ctrl+Shift+P left Polygon highlight alone",
                glr_config_get(GLR_CONFIG_POLY_HIGHLIGHT), ph1);
 
-    /* Syntax highlight moved from F10 to Ctrl+Shift+Y. Plain Ctrl+Y is
-     * not a g_cfg_items row (Redo owns it in the editor), so it must be
-     * declined here; Ctrl+Shift+Y must cycle Syntax highlight. */
+    /* Plain Ctrl+Y is not a g_cfg_items row (Redo owns it in the editor),
+     * so it must be declined here. Ctrl+Shift+H shares byte 8 with
+     * Shift+Backspace, but the cfg route claims it before the editor. */
     g_test_mods = 0;
     ASSERT_INT("plain Ctrl+Y declined (-> editor redo)",
                glr_cfg_handle_ascii_shortcut(KEY_CTRL_Y), 0);
@@ -754,8 +754,12 @@ static void test_ascii_shortcut_modifiers(void) {
                glr_cfg_handle_ascii_shortcut(KEY_CTRL_A), 0);
 
     int sh0 = glr_config_get(GLR_CONFIG_SYNTAX_HIGHLIGHT);
-    ASSERT_INT("Ctrl+Shift+Y handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_Y), 1);
-    ASSERT_TRUE("Ctrl+Shift+Y cycled Syntax highlight",
+    g_test_mods = 0;
+    ASSERT_INT("plain Ctrl+H declined (-> editor Backspace)",
+               glr_cfg_handle_ascii_shortcut(KEY_CTRL_H), 0);
+    g_test_mods = GLUT_ACTIVE_SHIFT;
+    ASSERT_INT("Ctrl+Shift+H handled", glr_cfg_handle_ascii_shortcut(KEY_CTRL_H), 1);
+    ASSERT_TRUE("Ctrl+Shift+H cycled Syntax highlight",
                 glr_config_get(GLR_CONFIG_SYNTAX_HIGHLIGHT) != sh0);
 
     editor_input_set_modifier_provider_for_test(NULL);
@@ -2340,6 +2344,11 @@ static void test_keymap_binding_to_string(void) {
                                         KM_KEY(GLR_LINE_SMOOTH),
                                         KM_MODS(GLR_LINE_SMOOTH), 0),
                "Ctrl+Shift+L");
+    ASSERT_STR("format claimed Ctrl+Shift control alias",
+               keymap_binding_to_string(buf, (int)sizeof(buf),
+                                        KM_KEY(GLR_SYNTAX_HL),
+                                        KM_MODS(GLR_SYNTAX_HL), 0),
+               "Ctrl+Shift+H");
     ASSERT_STR("format F-key",
                keymap_binding_to_string(buf, (int)sizeof(buf),
                                         KM_KEY(GLR_NEXT_EXAMPLE),

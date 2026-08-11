@@ -2522,7 +2522,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+/ | Toggle comment on the selection / block / line |
 | Ctrl+Shift+F | Toggle code focus |
 | Ctrl+B | Cycle code panel layout |
-| Ctrl+Shift+Y | Cycle syntax highlight |
+| Ctrl+Shift+H | Cycle syntax highlight |
 | Right-click GL command | Show a short description of that command |
 | Right-click `var = expr;` | Toggle the [assignment value plot](#plotting-an-assignments-values) for that row |
 | Shift+right-click `var = expr;` | Add (or remove) that row as an extra series on the open plot |

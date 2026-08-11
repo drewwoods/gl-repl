@@ -26,6 +26,8 @@
 /* Navigation and editing */
 #define KEY_CTRL_A    1    /* jump to line start; Ctrl+Shift+A: toggle audio */
 #define KEY_CTRL_E    5    /* jump to line end */
+#define KEY_CTRL_H    8    /* Ctrl+H aliases Backspace; the Shift chord may be
+                              claimed by a pre-editor shortcut route */
 #define KEY_BACKSPACE 8    /* backspace (some platforms deliver here) */
 #define KEY_DELETE    127  /* delete key (macOS terminal) */
 

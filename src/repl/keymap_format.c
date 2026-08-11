@@ -11,7 +11,17 @@
 
 #include <stdio.h>
 
-static int key_implies_ctrl(int key) {
+/* Reserved control-letter bytes normally display as their editing aliases
+ * (Backspace, Tab, Enter). Once a Shift variant is deliberately claimed as a
+ * binding, however, it denotes that Ctrl+Shift chord in the keymap. The
+ * pre-editor route consumes it before the editing alias can run. */
+static int key_is_claimed_shift_ctrl_alias(int key, int mods) {
+    return key == KEY_CTRL_H && (mods & GLUT_ACTIVE_SHIFT);
+}
+
+static int key_implies_ctrl(int key, int mods) {
+    if (key_is_claimed_shift_ctrl_alias(key, mods))
+        return 1;
     if (key == KEY_CTRL_BACKSLASH || key == KEY_CTRL_DASH)
         return 1;
     if (key < 1 || key > 26)
@@ -44,7 +54,7 @@ static void append_label_part(char *out, int out_size,
         *used += written;
 }
 
-static const char *base_key_name(int key, int is_special,
+static const char *base_key_name(int key, int mods, int is_special,
                                  char *buf, int buf_size) {
     if (is_special) {
         if (key >= GLUT_KEY_F1 && key <= GLUT_KEY_F12) {
@@ -69,6 +79,8 @@ static const char *base_key_name(int key, int is_special,
         }
     }
 
+    if (key_is_claimed_shift_ctrl_alias(key, mods))
+        return "H";
     if (key == KEY_ESC)
         return "Escape";
     if (key == KEY_BACKSPACE)
@@ -110,7 +122,7 @@ const char *keymap_binding_to_string(char *out, int out_size,
 
     out[0] = '\0';
 
-    if ((!is_special && key_implies_ctrl(binding_key)) ||
+    if ((!is_special && key_implies_ctrl(binding_key, binding_mods)) ||
         (binding_mods & GLUT_ACTIVE_CTRL))
         append_label_part(out, out_size, &used, "Ctrl+");
     if (binding_mods & GLUT_ACTIVE_SHIFT)
@@ -118,7 +130,8 @@ const char *keymap_binding_to_string(char *out, int out_size,
     if (binding_mods & GLUT_ACTIVE_ALT)
         append_label_part(out, out_size, &used, "Alt+");
 
-    name = base_key_name(binding_key, is_special, key_buf, (int)sizeof(key_buf));
+    name = base_key_name(binding_key, binding_mods, is_special,
+                         key_buf, (int)sizeof(key_buf));
     append_label_part(out, out_size, &used, name);
     return out;
 }
