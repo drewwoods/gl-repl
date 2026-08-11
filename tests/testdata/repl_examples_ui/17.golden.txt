@@ -12,10 +12,10 @@
 /* @cfg grid = GRID_THEME_XZRULER */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
-/* @cfg grid_brightness = GRID_BRIGHTNESS_DIM */
+/* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
-/* @cfg light_theme = LIGHT_THEME_NEON */
+/* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg light_indicators = 0 */
 /* @cfg view_mode = RENDER3D_VIEW_3D */
 /* @cfg projection = PROJ_PERSPECTIVE */
@@ -26,10 +26,10 @@
 /* @cfg stencil_view = 0 */
 /* @cfg auto_normals = REPL_AUTONORMAL_OFF */
 /* @cfg overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE */
-/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF */
 /* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED */
-/* @cfg vertex_points = 0 */
-/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_points = 1 */
+/* @cfg vertex_outlines = 1 */
 /* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */
 /* @cfg normal_vectors = 0 */
 /* @cfg polygon_highlight = 1 */
@@ -91,55 +91,45 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
-  glRotatef(18.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
+  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(35.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  // Sierpinski sponge: the carpet's rule lifted to 3D. Split the cube
-  // into 3x3x3 cells, drop the 6 face centers and the core, and recurse
-  // into the 20 cells that remain. Two levels deep -> 400 cubes.
-  sponge(depth, size) {
-    // Base case: one solid cube -- the neon lights do the coloring.
-    if(depth <= 0) {
-      glutSolidCube(size);
-    }
-    // Recursive case: -1..1 on each axis -- half-open bounds, so -1..2.
-    // A cell survives when at least two of its coords are nonzero.
-    if(depth > 0) {
-      for(i, -1, 2) {
-        for(j, -1, 2) {
-          for(k, -1, 2) {
-            if(abs(i) + abs(j) + abs(k) > 1) {
-              glPushMatrix();
-                glTranslatef(i*size/3, j*size/3, k*size/3);
-                sponge(depth - 1, size/3);
-              glPopMatrix();
-            }
-          }
-        }
-      }
-    }
-  }
+  static float R = 2; // major radius (ring center to tube center)
+  static float r = 1; // minor radius (tube thickness)
+  static float n = 20; // @config segment count around both u and v
+  static float u, v, s; // current major/minor angles, color mix factor
+  static float tr; // tube-offset radius R + r*cos(v), read twice per vertex line
 
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){1, 1, 1, 1});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.22, 0.12, 0.4, 1});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
   glEnable(GL_DEPTH_TEST);
-
-  glEnable(GL_LIGHTING);
-  glEnable(GL_LIGHT0);
-  glEnable(GL_LIGHT1);
-  glEnable(GL_LIGHT2);
-  glEnable(GL_LIGHT3);
-  glRotatef(16*t, 0, 1, 0);
-  sponge(2, 3);
+  // Flat vertex-colored torus (no lighting): GL_SMOOTH still Gouraud-
+  // interpolates the per-vertex glColor gradient across each quad.
+  glShadeModel(GL_SMOOTH);
+  n = floor(n); // keep n an integer
+  n = clamp(n, 3, 20); // clamp to avoid exceeding cmd limit
+  for(i, 0, n) {
+    glBegin(GL_QUAD_STRIP);
+      for(j, 0, n+1) {
+        // step v across the tube; emit two vertices, one at u=i and one at u=i+1
+        v = j*TAU/n;
+        tr = R + r*cos(v); // tube offset is the same for both vertices below
+        u = i*TAU/n;
+        s = 0.5 + 0.5 * sin(u + v);
+        glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
+        glVertex3f(tr*cos(u), tr*sin(u), r*sin(v));
+        u = (i+1)*TAU/n;
+        s = 0.5 + 0.5 * sin(u + v);
+        glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
+        glVertex3f(tr*cos(u), tr*sin(u), r*sin(v));
+      }
+    glEnd();
+  }
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);

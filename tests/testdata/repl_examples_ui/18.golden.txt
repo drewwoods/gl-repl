@@ -9,9 +9,9 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_SOIL */
+/* @cfg grid = GRID_THEME_XZRULER */
 /* @cfg grid_major = GRID_MAJOR_1 */
-/* @cfg grid_extent = GRID_EXTENT_CLOSE */
+/* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
@@ -26,10 +26,10 @@
 /* @cfg stencil_view = 0 */
 /* @cfg auto_normals = REPL_AUTONORMAL_OFF */
 /* @cfg overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE */
-/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF */
 /* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED */
 /* @cfg vertex_points = 0 */
-/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_outlines = 1 */
 /* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */
 /* @cfg normal_vectors = 0 */
 /* @cfg polygon_highlight = 1 */
@@ -91,89 +91,73 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -10.0000f);   // @camera dist
-  glRotatef(8.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(24.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -3.1000f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -5.0000f);   // @camera dist
+  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  // A 3D recursive tree. One call draws one limb as a tapered pentagonal
-  // tube, caps the joint with a knuckle sphere, walks to the tip, and
-  // forks into three children 120 degrees apart -- so the whole
-  // trunk-to-twig structure is the same few lines applied at five scales.
-  static float depth = 4; // @tune
-  static float len = 2.1; // @tune
-  static float rad = 0.26; // @tune
-  static float randSeed = 0.31; // @tune
+  static float grid = 15; // grid size @tune
+  static float extent = 3; // grid extent @tune
+  static float x, y, z, dydx, dydz, s; // vertex coords, surface slopes, palette mix in [0,1]
+  static float cx, sx, cz, sz; // cached cos/sin(x*freq+t), cos/sin(z*freq+zPhase*t)
+  static float amp = 0.4; // wave amplitude (peak |y|)
+  static float freq = 2.5; // spatial frequency along x and z
+  static float zPhase = 0.7; // z-axis time phase: z evolves slower than x (<1)
 
-  limb(depth, len, rad, seed) {
-    float u, rtop, s, side, w;
-    // Top radius matches the children's base radius, so the joints meet.
-    rtop = rad*0.7;
-    // Bark (a dimmed CORAL) at the trunk, foliage TEAL out at the twigs.
-    u = pow((4 - depth)*0.25, 2.2);
-    glColor3f(lerp(0.26, 0.16, u), lerp(0.13, 0.80, u), lerp(0.09, 0.70, u));
-    glBegin(GL_QUAD_STRIP);
-      for(i, 0, 6) {
-        glNormal3f(cos(i*TAU/5), 0.3, sin(i*TAU/5));
-        glVertex3f(rad*cos(i*TAU/5), 0, rad*sin(i*TAU/5));
-        glVertex3f(rtop*cos(i*TAU/5), len, rtop*sin(i*TAU/5));
-      }
-    glEnd();
-    glTranslatef(0, len, 0);
-    glutSolidSphere(rtop, 6, 4);
-    // Base case vs recursive case as a complementary if pair (an if/else):
-    // depth 0 caps the twig with a leaf cluster, otherwise it forks.
-    if(depth <= 0) {
-      // Three flattened blades per twig, fanned around it. Their tint
-      // slides TEAL -> AZURE with the twig's own rand(), so the canopy
-      // reads as many leaves rather than one repeated one.
-      w = rand(seed + 7, 0);
-      glColor3f(lerp(0.10, 0.15, w), lerp(0.95, 0.72, w), lerp(0.85, 1.00, w));
-      for(j, 0, 3) {
-        glPushMatrix();
-          glRotatef(120*j + seed*140, 0, 1, 0);
-          glRotatef(46, 0, 0, 1);
-          glTranslatef(0, rad*2.1, 0);
-          glScalef(1.3, 0.4, 1.3);
-          glutSolidSphere(rad*1.8, 6, 4);
-        glPopMatrix();
-      }
-    }
-    if(depth > 0) {
-      for(i, 0, 3) {
-        // rand() keeps the three children from being clones: each gets its
-        // own length and spread, stable per limb because the seed is.
-        s = rand(seed + i);
-        // Child 0 is the leader -- near-vertical and long, so the trunk
-        // keeps climbing; 1 and 2 are the side limbs that swing out.
-        side = min(i, 1);
-        glPushMatrix();
-          glRotatef(137.5*i + seed*95, 0, 1, 0);
-          glRotatef(9 + 26*side + 15*s + (5 - depth)*1.5*sin(t*1.1 + seed*3 + i), 0, 0, 1);
-          limb(depth - 1, len*(0.78 - 0.2*side + 0.1*s), rtop, seed + i*0.37 + 0.11);
-        glPopMatrix();
-      }
-    }
-  }
-
+  // Animated surface: y = sin(freq*x + t) * cos(freq*z + zPhase*t) * amp
+  // Drawn as a triangle strip per row with analytic per-vertex normals.
 
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_NORMALIZE);
-  glEnable(GL_LIGHTING);
-  glEnable(GL_LIGHT0);
-  glEnable(GL_LIGHT1);
   glEnable(GL_COLOR_MATERIAL);
-  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.25, 0.3, 0.3, 1});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 18);
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
-  glRotatef(sin(t*0.3)*4, 0, 0, 1);
-  limb(depth, len, rad, randSeed);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_NORMALIZE);
+  glEnable(GL_LIGHT3);
+  glEnable(GL_LIGHT2);
+  glEnable(GL_LIGHT1);
+  glEnable(GL_LIGHT0);
+  glShadeModel(GL_SMOOTH);
+  for(i, 0, grid) {
+    glBegin(GL_TRIANGLE_STRIP);
+      for(j, 0, grid+1) {
+        // row i (z fixed), step j across x; emit two vertices per j to feed the strip
+        x = -extent/2 + extent*j/grid;
+        cx = cos(x*freq + t);
+        sx = sin(x*freq + t);
+        z = -extent/2 + extent*i/grid;
+        cz = cos(z*freq + zPhase*t);
+        sz = sin(z*freq + zPhase*t);
+        y = sx*cz*amp;
+        // Analytic slopes dy/dx and dy/dz make the un-normalized surface
+        // normal (-dy/dx, 1, -dy/dz); GL_NORMALIZE rescales it to unit length.
+        dydx = amp*freq*cx*cz;
+        dydz = -amp*freq*sx*sz;
+        glNormal3f(-dydx, 1, -dydz);
+        s = 0.5 + 0.5*y/amp;
+        glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
+        glVertex3f(x, y, z);
+        // second strip vertex: same x (cx/sx unchanged), but z stepped to row i+1
+        z = -extent/2 + extent*(i + 1)/grid;
+        cz = cos(z*freq + zPhase*t);
+        sz = sin(z*freq + zPhase*t);
+        y = sx*cz*amp;
+        dydx = amp*freq*cx*cz;
+        dydz = -amp*freq*sx*sz;
+        glNormal3f(-dydx, 1, -dydz);
+        s = 0.5 + 0.5*y/amp;
+        glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
+        glVertex3f(x, y, z);
+      }
+    glEnd();
+  }
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);

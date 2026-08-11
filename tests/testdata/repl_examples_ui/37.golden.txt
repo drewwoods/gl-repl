@@ -9,14 +9,14 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_CLASSIC */
+/* @cfg grid = GRID_THEME_OFF */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
-/* @cfg grid_brightness = GRID_BRIGHTNESS_DIM */
+/* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
 /* @cfg axes = AXES_THEME_OFF */
-/* @cfg backdrop = RENDER3D_BACKDROP_OFF */
-/* @cfg light_theme = LIGHT_THEME_HEADLIGHT */
-/* @cfg light_indicators = 0 */
+/* @cfg backdrop = RENDER3D_BACKDROP_STARS */
+/* @cfg light_theme = LIGHT_THEME_DEFAULT */
+/* @cfg light_indicators = 1 */
 /* @cfg view_mode = RENDER3D_VIEW_3D */
 /* @cfg projection = PROJ_PERSPECTIVE */
 /* @cfg camera_rotate = 0 */
@@ -26,7 +26,7 @@
 /* @cfg stencil_view = 0 */
 /* @cfg auto_normals = REPL_AUTONORMAL_OFF */
 /* @cfg overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE */
-/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
 /* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED */
 /* @cfg vertex_points = 0 */
 /* @cfg vertex_outlines = 0 */
@@ -85,113 +85,307 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
-
-static GLfloat *repl_glfloat16(GLfloat m0, GLfloat m1, GLfloat m2, GLfloat m3,
-                   GLfloat m4, GLfloat m5, GLfloat m6, GLfloat m7,
-                   GLfloat m8, GLfloat m9, GLfloat m10, GLfloat m11,
-                   GLfloat m12, GLfloat m13, GLfloat m14, GLfloat m15) {
-  static GLfloat repl_glfloat16_buf[16];
-  repl_glfloat16_buf[0] = m0;   repl_glfloat16_buf[1] = m1;
-  repl_glfloat16_buf[2] = m2;   repl_glfloat16_buf[3] = m3;
-  repl_glfloat16_buf[4] = m4;   repl_glfloat16_buf[5] = m5;
-  repl_glfloat16_buf[6] = m6;   repl_glfloat16_buf[7] = m7;
-  repl_glfloat16_buf[8] = m8;   repl_glfloat16_buf[9] = m9;
-  repl_glfloat16_buf[10] = m10; repl_glfloat16_buf[11] = m11;
-  repl_glfloat16_buf[12] = m12; repl_glfloat16_buf[13] = m13;
-  repl_glfloat16_buf[14] = m14; repl_glfloat16_buf[15] = m15;
-  return repl_glfloat16_buf;
-}
 --- display_header ---
 void display(void) {
   glLoadIdentity();
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
-  // Eye-space light positions, set before the camera transform.
-  glLightfv(GL_LIGHT0, GL_POSITION, repl_glfloat4(0, 0, -1, 1));
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -7.9000f);   // @camera dist
-  glRotatef(24.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(-28.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -1.1500f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -15.0000f);   // @camera dist
+  glRotatef(26.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(-20.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float lx, ly, lz; // orbiting lamp position, read by the matrix and the marker
+  // Top-level scratch for the firefly loop at the bottom of the scene: x/y/z
+  // vertex position, k/s its polar angle/radius. sea() and island() used to
+  // borrow these too; both now name their own function-scoped locals, so
+  // nothing leaks between the three of them.
+  static float x, y, z, k, s;
+  static float fireflies = 44; // @tune
+  static float flyRadius = 2.6; // @tune
+  static float c = 3; // color scaling factor for sea sheet
 
-  // The caster, drawn twice: once squashed by the shadow matrix, once for
-  // real. One definition means the two can never drift apart.
-  caster() {
+  // --- sea(): animated water sheet (nested for + analytic normals) ---
+  // Colored by wave height: deep azure troughs lift to bright azure crests.
+  sea(half, cells, amp) {
+    // Every temporary here is a function-scoped local -- nothing sea() computes
+    // is of any interest outside it. The strip spans two rows, and z depends
+    // only on i, so BOTH rows' cos/sin terms (czA/szA, czB/szB) hoist clear of
+    // the j loop; cx/sx change once per j and are shared by the two vertices.
+    // m is the 0..1 crest mix that the color line reads three times, and
+    // n = 1/|gradient| turns the analytic gradient into a unit normal.
+    float x, y, cx, sx, m, n;
+    float zA, czA, szA;
+    float zB, czB, szB;
+    for(i, 0, cells) {
+      zA = -half + 2*half*i/cells;
+      czA = cos(zA*1.5 + t*0.6);
+      szA = sin(zA*1.5 + t*0.6);
+      zB = -half + 2*half*(i + 1)/cells;
+      czB = cos(zB*1.5 + t*0.6);
+      szB = sin(zB*1.5 + t*0.6);
+      glBegin(GL_TRIANGLE_STRIP);
+        for(j, 0, cells + 1) {
+          x = -half + 2*half*j/cells;
+          cx = cos(x*1.5 + t);
+          sx = sin(x*1.5 + t);
+          y = amp*sx*czA;
+          m = 0.5 + 0.5*y/amp;
+          n = 1.0/sqrt(1 + amp*amp*2.25*(cx*cx*czA*czA + sx*sx*szA*szA));
+          glNormal3f(-amp*1.5*cx*czA*n, n, amp*1.5*sx*szA*n);
+          glColor3f(0.18 + 0.18/c*m, 0.34 + 0.36/c*m, 0.55 + 0.43/c*m);
+          glVertex3f(x, y, zA);
+          y = amp*sx*czB;
+          m = 0.5 + 0.5*y/amp;
+          n = 1.0/sqrt(1 + amp*amp*2.25*(cx*cx*czB*czB + sx*sx*szB*szB));
+          glNormal3f(-amp*1.5*cx*czB*n, n, amp*1.5*sx*szB*n);
+          glColor3f(0.18 + 0.18/c*m, 0.34 + 0.36/c*m, 0.55 + 0.43/c*m);
+          glVertex3f(x, y, zB);
+        }
+      glEnd();
+    }
+  }
+
+  // --- island(): tessellated landmass with a lagoon cutout (GLU tess) ---
+  island(r, lagoon) {
+    float k, x, z; // coastline radius; lagoon vertex position
+    glFrontFace(GL_CW);
+    gluBegin(GLU_POLYGON);
+      // Outer wobbly coastline
+      gluBegin(GLU_CONTOUR);
+        gluNormal(0, 1, 0);
+        for(i, 0, 30) {
+          k = r*(1 + 0.16*sin(i*0.9) + 0.09*cos(i*1.7));
+          gluColor(0.22 + 0.12*sin(i*0.5), 0.40 + 0.10*cos(i*0.7), 0.46 + 0.08*sin(i));
+          gluVertex(k*cos(i*TAU/30), 0, k*sin(i*TAU/30));
+        }
+      gluEnd();
+      // Inner lagoon contour, wound the opposite way (note the -i*TAU/20): under
+      // the tessellator's odd winding rule the reversed contour carves the hole.
+      gluBegin(GLU_CONTOUR);
+        for(i, 0, 20) {
+          x = lagoon*cos(-i*TAU/20) - r*0.35;
+          z = lagoon*sin(-i*TAU/20) + r*0.2;
+          gluColor(0.08, 0.14, 0.2, 1);
+          gluVertex(x, 0, z);
+        }
+      gluEnd();
+    gluEnd();
+    glFrontFace(GL_CCW);
+  }
+
+  // --- lighthouse(): stacked GLUT solids (cone / torus / sphere) ---
+  lighthouse() {
     glPushMatrix();
-      glTranslatef(0, 1.05, 0);
-      glRotatef(26*t, 0, 1, 0);
-      glutSolidTeapot(0.62);
+      // Base rock - cone, apex up
+      glColor3f(0.3, 0.34, 0.42);
+      glPushMatrix();
+        glRotatef(-90, 1, 0, 0);
+        glutSolidCone(0.55, 0.5, 18, 3);
+      glPopMatrix();
+      glTranslatef(0, 0.42, 0);
+      // Tapered tower
+      glColor3f(0.9, 0.93, 0.97);
+      glPushMatrix();
+        glRotatef(-90, 1, 0, 0);
+        glutSolidCone(0.34, 1.5, 22, 1);
+      glPopMatrix();
+      // Coral band wrapping the tower
+      glPushMatrix();
+        glTranslatef(0, 0.62, 0);
+        glRotatef(90, 1, 0, 0);
+        glColor3f(0.98, 0.46, 0.36);
+        glutSolidTorus(0.04, 0.22, 10, 22);
+      glPopMatrix();
+      // Lantern - shiny amber bulb
+      glTranslatef(0, 1.5, 0);
+      glColor3f(0.98, 0.82, 0.45);
+      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 90);
+      glutSolidSphere(0.2, 16, 12);
+      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16);
+      // Violet roof cone
+      glColor3f(0.62, 0.52, 0.95);
+      glPushMatrix();
+        glTranslatef(0, 0.16, 0);
+        glRotatef(-90, 1, 0, 0);
+        glutSolidCone(0.24, 0.32, 14, 1);
+      glPopMatrix();
     glPopMatrix();
   }
 
-  // Translate, rotate and scale cannot flatten a solid onto a plane -- that
-  // takes a matrix of their own. glMultMatrixf posts one onto the modelview
-  // stack: 16 column-major cells, either inline as below or read from a
-  // scratch array with glMultMatrixf(A).
-  //
-  // These cells are the classic planar shadow projection for the ground
-  // plane y = 0 and a point light at (lx, ly, lz). It maps every point to
-  // where the ray from the lamp through it crosses the floor, so drawing
-  // the SAME geometry under it draws the object's shadow. Cells are
-  // ordinary expressions, re-evaluated every frame, so moving the lamp
-  // moves the shadow -- no rebuild of the caster.
+  // --- tree(): recursion with if / else if / else tiered coloring ---
+  tree(depth, len, twist) {
+    if(depth >= 3) {
+      glColor3f(0.4, 0.36, 0.5);
+    } else if(depth >= 1) {
+      glColor3f(0.50 - 0.03*depth, 0.50, 0.92);
+    } else {
+      glColor3f(0.98, 0.74, 0.4);
+    }
+    glLineWidth(depth + 1);
+    glBegin(GL_LINES);
+      glNormal3f(0, 0, 1);
+      glVertex3f(0, 0, 0);
+      glVertex3f(0, len, 0);
+    glEnd();
+    if(depth > 0) {
+      glPushMatrix();
+        glTranslatef(0, len, 0);
+        glRotatef(26 + 7*sin(twist), 0, 0, 1);
+        glScalef(0.74, 0.74, 0.74);
+        tree(depth - 1, len, twist + 0.4);
+      glPopMatrix();
+      glPushMatrix();
+        glTranslatef(0, len, 0);
+        glRotatef(-29 - 6*cos(twist), 0, 0, 1);
+        glScalef(0.7, 0.7, 0.7);
+        tree(depth - 1, len, twist + 0.3);
+      glPopMatrix();
+      glPushMatrix();
+        glTranslatef(0, len*0.92, 0);
+        glRotatef(16 + 5*sin(twist*1.3), 1, 0, 0);
+        glScalef(0.6, 0.6, 0.6);
+        tree(depth - 1, len*0.86, twist + 0.5);
+      glPopMatrix();
+    } else {
+      // Blossom - small lit sphere at the twig tip
+      glColor3f(0.98, 0.55, 0.42);
+      glPushMatrix();
+        glTranslatef(0, len, 0);
+        glutSolidSphere(len*0.55, 8, 6);
+      glPopMatrix();
+    }
+  }
 
   glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  // ===== Dusk lighthouse atoll - a coherent feature tour =====
+  // One scene, many features: a parametric sea, a tessellated island with a
+  // lagoon cutout, a lighthouse of stacked GLUT solids with a sweeping
+  // translucent beam, a recursive tree (if / else if / else), GLUT-solid
+  // rocks, additive-blended firefly points, and a moon with a halo ring.
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_LIGHTING);
-  glEnable(GL_LIGHT0);
   glEnable(GL_NORMALIZE);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT2);
+  glEnable(GL_LIGHT3);
   glShadeModel(GL_SMOOTH);
   glEnable(GL_COLOR_MATERIAL);
   glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16);
 
-  lx = 2.4*cos(0.5*t);
-  ly = 3.4;
-  lz = 2.4*sin(0.5*t);
+  // ===== Scene composition =====
+  glLineWidth(1);
 
-  // Floor first, so the shadow has something to land on.
-  glColor3f(0.92, 0.95, 0.98);
-  glBegin(GL_QUADS);
-    glNormal3f(0, 1, 0);
-    glVertex3f(-3.5, 0, -3.5);
-    glVertex3f(-3.5, 0, 3.5);
-    glVertex3f(3.5, 0, 3.5);
-    glVertex3f(3.5, 0, -3.5);
-  glEnd();
+  // Sea sheet under everything
+  glPushMatrix();
+    glTranslatef(0, -0.62, 0);
+    sea(5.5, 13, 0.16);
+  glPopMatrix();
 
-  // Shadow pass. The projection is singular -- it collapses y to 0 -- so
-  // the result lands exactly on the floor and would z-fight it. Painting
-  // with the depth test off and depth writes masked settles that: the
-  // shadow covers the floor it follows, and the lit pass below still
-  // draws over the shadow.
-  glDisable(GL_DEPTH_TEST);
+  // Island shelf just above the water
+  glPushMatrix();
+    glTranslatef(0, -0.5, 0);
+    island(2.2, 0.45);
+  glPopMatrix();
+
+  // Lighthouse on the island
+  glPushMatrix();
+    glTranslatef(0.5, -0.5, 0.1);
+    lighthouse();
+  glPopMatrix();
+
+  // Sweeping light beams from the lantern (blend + depth-mask off)
+  glPushMatrix();
+    glTranslatef(0.5, 1.42, 0.1);
+    glRotatef(t*55, 0, 1, 0);
+    glDisable(GL_LIGHTING);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    glBegin(GL_TRIANGLES);
+      glColor4f(0.98, 0.82, 0.45, 0.55);
+      glVertex3f(0, 0, 0);
+      glColor4f(0.98, 0.82, 0.45, 0);
+      glVertex3f(7, -0.5, 0.7);
+      glVertex3f(7, 0.5, -0.7);
+      glColor4f(0.98, 0.82, 0.45, 0.55);
+      glVertex3f(0, 0, 0);
+      glColor4f(0.98, 0.82, 0.45, 0);
+      glVertex3f(-7, 0.5, 0.7);
+      glVertex3f(-7, -0.5, -0.7);
+    glEnd();
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+    glEnable(GL_LIGHTING);
+  glPopMatrix();
+
+  // Wind-swayed tree across the island
+  glPushMatrix();
+    glTranslatef(-1.2, -0.5, 0.4);
+    glRotatef(4*sin(t*0.4), 0, 0, 1);
+    tree(3, 0.62, t*0.2);
+  glPopMatrix();
+
+  // Ring of rocks around the shoreline (loop + GLUT solids)
+  for(i, 0, 7) {
+    glPushMatrix();
+      glRotatef(i*360/7 + 20, 0, 1, 0);
+      glTranslatef(2, -0.55, 0);
+      glColor3f(0.28, 0.31, 0.4);
+      glScalef(1, 0.55, 1);
+      glutSolidSphere(0.16 + 0.07*rand(i, 7), 8, 6);
+    glPopMatrix();
+  }
+
+  // Fireflies - additive point sprites drifting over the atoll
+  glDisable(GL_LIGHTING);
   glDepthMask(GL_FALSE);
-  glDisable(GL_LIGHTING);
-  glColor3f(0.05, 0.06, 0.08);
-  glPushMatrix();
-    glMultMatrixf((GLfloat[]){ly, 0, 0, 0, -lx, 0, -lz, -1, 0, 0, ly, 0, 0, 0, 0, ly});
-    caster();
-  glPopMatrix();
-  glEnable(GL_LIGHTING);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glEnable(GL_POINT_SMOOTH);
+  glPointSize(7);
+  glBegin(GL_POINTS);
+    for(i, 0, fireflies) {
+      k = rand(i, 0)*TAU;
+      s = 1.2 + rand(i, 1)*flyRadius;
+      x = cos(k + t*(0.25 + rand(i, 2)*0.4))*s;
+      z = sin(k + t*(0.25 + rand(i, 2)*0.4))*s;
+      y = 0.1 + 1.4*rand(i, 3) + 0.18*sin(t*2 + i);
+      glColor4f(0.98, 0.74 + 0.22*rand(i, 4), 0.42, 0.75);
+      glVertex3f(x, y, z);
+    }
+  glEnd();
+  glDisable(GL_POINT_SMOOTH);
   glDepthMask(GL_TRUE);
-  glEnable(GL_DEPTH_TEST);
+  glDisable(GL_BLEND);
+  glEnable(GL_LIGHTING);
 
-  // The caster itself, in the frame the shadow was cast from.
-  glColor3f(1, 0.35, 0.2);
-  caster();
-
-  // The lamp, so the sweep of the shadow reads as a light moving.
-  glDisable(GL_LIGHTING);
-  glColor3f(1, 0.85, 0.15);
+  // Moon with a violet halo ring, parked in the sky
   glPushMatrix();
-    glTranslatef(lx, ly, lz);
-    glutSolidSphere(0.13, 12, 10);
+    glTranslatef(-3.6, 3, -2);
+    glDisable(GL_LIGHTING);
+    glColor3f(0.92, 0.95, 0.98);
+    glutSolidSphere(0.55, 22, 16);
+    glBegin(GL_LINE_LOOP);
+      for(i, 0, 48) {
+        glColor3f(0.62, 0.52, 0.95);
+        glVertex3f(0.92*cos(i*TAU/48), 0.92*sin(i*TAU/48), 0);
+      }
+    glEnd();
+    glEnable(GL_LIGHTING);
   glPopMatrix();
+
+  // Caption readout (glRasterPos + bitmap label)
+  glDisable(GL_LIGHTING);
+  glColor3f(0.92, 0.95, 0.98);
+  glRasterPos3f(-3.2, 2.2, 0);
+  label("dusk atoll");
   glEnable(GL_LIGHTING);
 --- render_state ---
   glEnable(GL_MULTISAMPLE);

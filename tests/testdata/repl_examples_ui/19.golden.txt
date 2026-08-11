@@ -9,9 +9,9 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_SOIL */
+/* @cfg grid = GRID_THEME_XZRULER */
 /* @cfg grid_major = GRID_MAJOR_1 */
-/* @cfg grid_extent = GRID_EXTENT_CLOSE */
+/* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
@@ -26,7 +26,7 @@
 /* @cfg stencil_view = 0 */
 /* @cfg auto_normals = REPL_AUTONORMAL_OFF */
 /* @cfg overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE */
-/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF */
 /* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED */
 /* @cfg vertex_points = 0 */
 /* @cfg vertex_outlines = 0 */
@@ -34,7 +34,7 @@
 /* @cfg normal_vectors = 0 */
 /* @cfg polygon_highlight = 0 */
 /* @cfg transform_guides = 2 */
-/* @cfg variable_panel = 0 */
+/* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
 /* @cfg memory_profile = 0 */
 /* @cfg code_panel = 1 */
@@ -91,65 +91,39 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
-  glRotatef(5.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(32.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -0.9000f, -0.5000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
+  glRotatef(23.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(52.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float bladeCount = 135; // @tune
-  static float field = 3.65; // half-width @tune
-  static float x, z, h, w, angle, phase, flex;
+  static float n, p, q, ang, rr, x, y, z; // samples, winds, angle, ring radius, coords
+  static float s; // palette mix in [0,1]
 
-  // Seed-slot convention: the caller (below) owns rand slots 0-6 for a
-  // blade's placement/size/angle/phase/flex; blade() uses slots 11+ for
-  // its own jitter/tint so the two RNG streams stay independent. (rand2
-  // is just 2*rand-1, so a shared slot would correlate flex with jitter.)
-  // Every value blade() derives is a function-scoped local: plain `float`
-  // inside the body, one fresh set per call, no variable-panel slot.
-  blade(seed, x0, z0, height, width, ang, ph, stiffness) {
-    float wind, wave, bend, u, cx, cz, halfW, shade;
-    wind = 0.55 + 0.25*sin(t*0.23);
-    wave = sin(t*2.2 + ph + x0*0.35 + z0*0.20) + 0.35*sin(t*4.9 + ph*1.7);
-    bend = (0.65 + 0.35*sin(t*0.75))*wave*stiffness*height*0.26;
-    glBegin(GL_TRIANGLE_STRIP);
-      for(s, 0, 6) {
-        u = s/4;
-        cx = x0 + 0.08*rand2(seed, 11)*u + cos(wind)*bend*u*u;
-        cz = z0 + 0.08*rand2(seed, 12)*u + sin(wind)*bend*u*u;
-        halfW = width*(1 - 0.82*u);
-        shade = 0.65 + 0.45*u;
-        glColor4f((0.08 + 0.07*rand(seed, 13))*shade, (0.38 + 0.32*rand(seed, 14))*shade, (0.06 + 0.07*rand(seed, 15))*shade, 0.95);
-        glVertex3f(cx - cos(ang)*halfW, height*u, cz - sin(ang)*halfW);
-        glVertex3f(cx + cos(ang)*halfW, height*u, cz + sin(ang)*halfW);
-      }
-    glEnd();
-  }
-
-  glClearColor(0.025, 0.055, 0.035, 1);
+  glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glEnable(GL_COLOR_MATERIAL);
   glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
   glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
-  glEnable(GL_DEPTH_TEST);
-  glDisable(GL_LIGHTING);
-  glDisable(GL_CULL_FACE);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-  for(p, 0, bladeCount) {
-    x = (rand(p, 0)*2 - 1)*field;
-    z = (rand(p, 1)*2 - 1)*field;
-    h = 0.28 + rand(p, 2)*0.72;
-    w = 0.018 + rand(p, 3)*0.026;
-    angle = rand(p, 4)*TAU;
-    phase = rand(p, 5)*TAU;
-    flex = 0.55 + rand(p, 6)*1.1;
-    blade(p, x, z, h, w, angle, phase, flex);
-  }
-  glDisable(GL_BLEND);
+  glLineWidth(2);
+  n = 400; // samples around the closed curve
+  p = 2; // turns around the torus axis
+  q = 3; // turns through the torus hole
+  glBegin(GL_LINE_LOOP);
+    for(i, 0, n) {
+      ang = TAU * i/n;
+      rr = 2.0 + cos(q*ang) * (0.8 + 0.4*sin(t)); // lobes breathe in and out
+      x = rr * cos(p*ang);
+      y = rr * sin(p*ang);
+      z = sin(q*ang) + 0.4*sin(4*ang - t*1.5); // a ripple travels along the curve
+      s = 0.5 + 0.5*sin(2.0*ang + t); // palette mix in [0,1], swept along the curve
+      glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
+      glVertex3f(x, y, z);
+    }
+  glEnd();
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);

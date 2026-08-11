@@ -9,7 +9,7 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_XZRULER */
+/* @cfg grid = GRID_THEME_PLANES */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
@@ -17,7 +17,7 @@
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg light_indicators = 0 */
-/* @cfg view_mode = RENDER3D_VIEW_3D */
+/* @cfg view_mode = RENDER3D_VIEW_2D */
 /* @cfg projection = PROJ_PERSPECTIVE */
 /* @cfg camera_rotate = 0 */
 /* @cfg wireframe = WIREFRAME_OFF */
@@ -26,9 +26,9 @@
 /* @cfg stencil_view = 0 */
 /* @cfg auto_normals = REPL_AUTONORMAL_OFF */
 /* @cfg overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE */
-/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
 /* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED */
-/* @cfg vertex_points = 1 */
+/* @cfg vertex_points = 0 */
 /* @cfg vertex_outlines = 1 */
 /* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */
 /* @cfg normal_vectors = 0 */
@@ -91,45 +91,34 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
-  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(35.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0000f, 0.0000f, -3.0000f);   // @camera dist
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float R = 2; // major radius (ring center to tube center)
-  static float r = 1; // minor radius (tube thickness)
-  static float n = 20; // @config segment count around both u and v
-  static float u, v, s; // current major/minor angles, color mix factor
-  static float tr; // tube-offset radius R + r*cos(v), read twice per vertex line
+  triangle() {
+    glBegin(GL_TRIANGLES);
+      glNormal3f(0, 0, 1);
+      glVertex3f(0, 0.8, 0);
+      glVertex3f(-0.7, -0.4, 0);
+      glVertex3f(0.7, -0.4, 0);
+    glEnd();
+  }
 
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   glEnable(GL_DEPTH_TEST);
-  // Flat vertex-colored torus (no lighting): GL_SMOOTH still Gouraud-
-  // interpolates the per-vertex glColor gradient across each quad.
-  glShadeModel(GL_SMOOTH);
-  n = floor(n); // keep n an integer
-  n = clamp(n, 3, 20); // clamp to avoid exceeding cmd limit
-  for(i, 0, n) {
-    glBegin(GL_QUAD_STRIP);
-      for(j, 0, n+1) {
-        // step v across the tube; emit two vertices, one at u=i and one at u=i+1
-        v = j*TAU/n;
-        tr = R + r*cos(v); // tube offset is the same for both vertices below
-        u = i*TAU/n;
-        s = 0.5 + 0.5 * sin(u + v);
-        glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
-        glVertex3f(tr*cos(u), tr*sin(u), r*sin(v));
-        u = (i+1)*TAU/n;
-        s = 0.5 + 0.5 * sin(u + v);
-        glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
-        glVertex3f(tr*cos(u), tr*sin(u), r*sin(v));
-      }
-    glEnd();
-  }
+  glColor3f(1, 0.35, 0.2);
+  triangle();
+  glTranslatef(2, 0, 0);
+  glColor3f(0.1, 0.95, 0.85);
+  triangle();
+  glTranslatef(-4, 0, 0);
+  glColor3f(0.55, 0.3, 1);
+  triangle();
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);

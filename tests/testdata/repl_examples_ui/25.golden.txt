@@ -9,9 +9,9 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_OFF */
+/* @cfg grid = GRID_THEME_SOIL */
 /* @cfg grid_major = GRID_MAJOR_1 */
-/* @cfg grid_extent = GRID_EXTENT_FAR */
+/* @cfg grid_extent = GRID_EXTENT_CLOSE */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
@@ -26,15 +26,15 @@
 /* @cfg stencil_view = 0 */
 /* @cfg auto_normals = REPL_AUTONORMAL_OFF */
 /* @cfg overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE */
-/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
 /* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED */
 /* @cfg vertex_points = 0 */
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */
 /* @cfg normal_vectors = 0 */
-/* @cfg polygon_highlight = 1 */
+/* @cfg polygon_highlight = 0 */
 /* @cfg transform_guides = 2 */
-/* @cfg variable_panel = 1 */
+/* @cfg variable_panel = 0 */
 /* @cfg compute_profile = 0 */
 /* @cfg memory_profile = 0 */
 /* @cfg code_panel = 1 */
@@ -91,150 +91,64 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -7.5000f);   // @camera dist
-  glRotatef(4.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, 0.7000f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
+  glRotatef(5.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(32.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.9000f, -0.5000f);   // @camera pan
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float pulse, bellR, bellH; // breath phase; bell radius/height pulse in opposition
-  static float ang, rad, topY; // frill scratch: segment angle, rim radius, rim height (tentacle() hangs off topY)
-  static float sway; // rim/tentacle sway -- read both at top level (frill) and inside tentacle()
-  static float segs = 26; // bell azimuth segments
-  static float rings = 9; // bell latitude strips
-  static float tentacles = 15; // @tune
-  static float tentLen = 2.4; // @tune
-  static float marineSnow = 110; // @tune
+  static float bladeCount = 135; // @tune
+  static float field = 3.65; // half-width @tune
+  static float x, z, h, w, angle, phase, flex;
 
-  // bell: latitude strips from crown to just past the equator (it curls
-  // under). Everything except the alpha ripple depends only on the latitude
-  // index i, so the whole ring -- geometry AND color -- is hoisted out of the
-  // segment loop into function-scoped locals. u0/u1 are the two rows'
-  // normalized latitudes, computed once instead of six times per vertex pair,
-  // and ca/sa are the segment direction shared by both rows.
-  bellStrips(segs, rings, r, h) {
-    float phi0, phi1, radT, radB, yT, yB;
-    float u0, u1, a, ca, sa;
-    float rT, gT, aT, rB, gB, aB;
-    for(i, 0, rings) {
-      u0 = i/rings;
-      u1 = (i + 1)/rings;
-      phi0 = u0*PI*0.52;
-      phi1 = u1*PI*0.52;
-      radT = r*sin(phi0);
-      yT = h*cos(phi0);
-      radB = r*sin(phi1);
-      yB = h*cos(phi1);
-      rT = 0.10 + 0.30*u0;
-      gT = 0.35 + 0.45*u0;
-      aT = 0.05 + 0.20*u0*u0;
-      rB = 0.10 + 0.30*u1;
-      gB = 0.35 + 0.45*u1;
-      aB = 0.05 + 0.20*u1*u1;
-      glBegin(GL_TRIANGLE_STRIP);
-        for(j, 0, segs+1) {
-          a = j*TAU/segs;
-          ca = cos(a);
-          sa = sin(a);
-          glColor4f(rT, gT, 0.95, aT + 0.04*sin(a*6 - t*2));
-          glVertex3f(radT*ca, yT, radT*sa);
-          glColor4f(rB, gB, 0.95, aB + 0.04*sin(a*6 - t*2));
-          glVertex3f(radB*ca, yB, radB*sa);
-        }
-      glEnd();
-    }
-  }
-
-  // one tentacle: a swaying line strip; alpha fades toward the tip and the
-  // pulse tugs the strand upward (the drop*drop term makes tips lag the bell)
-  tentacle(angAt, attach, len, phase, amp, cr, cg, cb) {
-    float ax, az, drop;
-    ax = cos(angAt)*attach;
-    az = sin(angAt)*attach;
-    glBegin(GL_LINE_STRIP);
-      for(s, 0, 14) {
-        drop = s/13;
-        sway = amp*(sin(t*1.4 + phase + drop*3.5) + 0.4*sin(t*2.3 + phase*1.7 + drop*6))*drop;
-        glColor4f(cr, cg, cb, 0.04 + 0.40*(1 - drop)*(1 - drop));
-        glVertex3f(ax*(1 + 0.2*drop) + sway, topY - drop*len + 0.15*pulse*drop*drop, az*(1 + 0.2*drop) + sway*0.55);
+  // Seed-slot convention: the caller (below) owns rand slots 0-6 for a
+  // blade's placement/size/angle/phase/flex; blade() uses slots 11+ for
+  // its own jitter/tint so the two RNG streams stay independent. (rand2
+  // is just 2*rand-1, so a shared slot would correlate flex with jitter.)
+  // Every value blade() derives is a function-scoped local: plain `float`
+  // inside the body, one fresh set per call, no variable-panel slot.
+  blade(seed, x0, z0, height, width, ang, ph, stiffness) {
+    float wind, wave, bend, u, cx, cz, halfW, shade;
+    wind = 0.55 + 0.25*sin(t*0.23);
+    wave = sin(t*2.2 + ph + x0*0.35 + z0*0.20) + 0.35*sin(t*4.9 + ph*1.7);
+    bend = (0.65 + 0.35*sin(t*0.75))*wave*stiffness*height*0.26;
+    glBegin(GL_TRIANGLE_STRIP);
+      for(s, 0, 6) {
+        u = s/4;
+        cx = x0 + 0.08*rand2(seed, 11)*u + cos(wind)*bend*u*u;
+        cz = z0 + 0.08*rand2(seed, 12)*u + sin(wind)*bend*u*u;
+        halfW = width*(1 - 0.82*u);
+        shade = 0.65 + 0.45*u;
+        glColor4f((0.08 + 0.07*rand(seed, 13))*shade, (0.38 + 0.32*rand(seed, 14))*shade, (0.06 + 0.07*rand(seed, 15))*shade, 0.95);
+        glVertex3f(cx - cos(ang)*halfW, height*u, cz - sin(ang)*halfW);
+        glVertex3f(cx + cos(ang)*halfW, height*u, cz + sin(ang)*halfW);
       }
     glEnd();
   }
 
-  // Everything glows: additive blend with depth WRITES off (reads stay on).
-  // glDepthMask(GL_FALSE) is the classic translucency trick - without it the
-  // bell's far side would z-fight its near side and the tentacles would
-  // punch holes through the bell.
-  glClearColor(0.015, 0.03, 0.07, 1);
+  glClearColor(0.025, 0.055, 0.035, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-  glDisable(GL_LIGHTING);
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
   glEnable(GL_DEPTH_TEST);
+  glDisable(GL_LIGHTING);
+  glDisable(GL_CULL_FACE);
   glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-  glEnable(GL_LINE_SMOOTH);
-  glEnable(GL_POINT_SMOOTH);
-  glDepthMask(GL_FALSE);
-  pulse = sin(t*1.6);
-  bellR = 1.5*(1 + 0.10*pulse);
-  bellH = 1.1*(1 - 0.14*pulse);
-
-  // marine snow: slow upward drift, wrapped with rem() so the field loops
-  glPointSize(7);
-  glBegin(GL_POINTS);
-    for(p, 0, marineSnow) {
-      glColor4f(0.55, 0.75, 0.95, 0.08 + 0.22*rand(p, 4));
-      // rise speed 0.15..0.5 per mote; rem() wraps y into [-3.2, 3.2]
-      glVertex3f(4.5*rand2(p, 0) + 0.2*sin(t*0.4 + p), rem(3.2*rand2(p, 1) + t*(0.15 + 0.35*rand(p, 3)), 6.4), 4.5*rand2(p, 2));
-    }
-  glEnd();
-
-  // gentle bob + tilt for the whole animal
-  glTranslatef(0.2*sin(t*0.4), 0.18*sin(t*0.5), 0);
-  glRotatef(8*sin(t*0.23), 0, 0, 1);
-  // segs/rings shadow the globals of the same name on purpose: the func takes
-  // what it needs as arguments, so it reads without looking outward.
-  bellStrips(segs, rings, bellR, bellH);
-
-  // scalloped frill hanging off the rim
-  rad = bellR*sin(PI*0.52);
-  topY = bellH*cos(PI*0.52);
-  glBegin(GL_TRIANGLE_STRIP);
-    for(j, 0, segs+1) {
-      ang = j*TAU/segs;
-      sway = -0.18 - 0.10*pulse + 0.10*sin(ang*9 + t*2.6);
-      glColor4f(0.45, 0.85, 1, 0.3);
-      glVertex3f(rad*cos(ang), topY, rad*sin(ang));
-      glColor4f(0.45, 0.85, 1, 0.03);
-      glVertex3f(rad*1.04*cos(ang), topY + sway, rad*1.04*sin(ang));
-    }
-  glEnd();
-  glLineWidth(1.6);
-  for(k, 0, tentacles) {
-    tentacle(k*TAU/tentacles + 0.2*rand2(k, 1), bellR*0.85, tentLen*(0.75 + 0.5*rand(k, 2)), rand(k, 3)*TAU, 0.3, 0.35, 0.75, 1.0);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  for(p, 0, bladeCount) {
+    x = (rand(p, 0)*2 - 1)*field;
+    z = (rand(p, 1)*2 - 1)*field;
+    h = 0.28 + rand(p, 2)*0.72;
+    w = 0.018 + rand(p, 3)*0.026;
+    angle = rand(p, 4)*TAU;
+    phase = rand(p, 5)*TAU;
+    flex = 0.55 + rand(p, 6)*1.1;
+    blade(p, x, z, h, w, angle, phase, flex);
   }
-  // four thicker oral arms under the crown
-  glLineWidth(3.2);
-  for(k, 0, 4) {
-    tentacle(k*TAU/4 + 0.4, bellR*0.3, tentLen*1.2, k*1.7, 0.55, 1.0, 0.45, 0.75);
-  }
-  glLineWidth(1);
-
-  // bioluminescent core: two stacked soft points
-  glPointSize(30);
-  glBegin(GL_POINTS);
-    glColor4f(1, 0.55, 0.75, 0.3);
-    glVertex3f(0, bellH*0.3, 0);
-  glEnd();
-  glPointSize(13);
-  glBegin(GL_POINTS);
-    glColor4f(1, 0.8, 0.9, 0.55);
-    glVertex3f(0, bellH*0.32, 0);
-  glEnd();
-
-  // leave shared GL state the way we found it
-  glDepthMask(GL_TRUE);
   glDisable(GL_BLEND);
 --- render_state ---
   glEnable(GL_MULTISAMPLE);

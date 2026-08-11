@@ -12,7 +12,7 @@
 /* @cfg grid = GRID_THEME_PLANES */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
-/* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
+/* @cfg grid_brightness = GRID_BRIGHTNESS_BRIGHT */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
@@ -28,11 +28,11 @@
 /* @cfg overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE */
 /* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
 /* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED */
-/* @cfg vertex_points = 1 */
-/* @cfg vertex_outlines = 1 */
+/* @cfg vertex_points = 0 */
+/* @cfg vertex_outlines = 0 */
 /* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */
 /* @cfg normal_vectors = 0 */
-/* @cfg polygon_highlight = 1 */
+/* @cfg polygon_highlight = 0 */
 /* @cfg transform_guides = 2 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
@@ -91,54 +91,77 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -4.0000f);   // @camera dist
+  glTranslatef(0.0000f, 0.0000f, -3.5000f);   // @camera dist
   glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+  glTranslatef(-1.0000f, -0.5000f, -0.0000f);   // @camera pan
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  shape(scale, phase) {
-    // Two mutually-exclusive guards on the same arg -- an if/else written as
-    // a complementary pair (else/else-if exist too; kept explicit here so each
-    // branch reads as its own self-contained block): big -> quad, small -> tri.
-    if(scale > 1) {
-      glColor3f(1, 0.35, 0.2);
-      glBegin(GL_QUADS);
-        glNormal3f(0, 0, 1);
-        glVertex3f(-0.7*scale, -0.7*scale, 0);
-        glVertex3f(0.7*scale, -0.7*scale, 0);
-        glVertex3f(0.7*scale, 0.7*scale, 0);
-        glVertex3f(-0.7*scale, 0.7*scale, 0);
-      glEnd();
-    }
-    if(scale <= 1) {
-      glColor3f(0.15, 0.55, 1);
-      glBegin(GL_TRIANGLES);
-        glNormal3f(0, 0, 1);
-        glVertex3f(cos(phase)*0.9*scale, sin(phase)*0.9*scale, 0);
-        glVertex3f(cos(phase+TAU/3)*0.9*scale, sin(phase+TAU/3)*0.9*scale, 0);
-        glVertex3f(cos(phase+2*TAU/3)*0.9*scale, sin(phase+2*TAU/3)*0.9*scale, 0);
-      glEnd();
-    }
+  // Quadratic Bezier control points A=(ax,ay), B=(bx,by), C=(cx,cy).
+  // ax/ay/cy are intentionally left at their implicit 0 -> A=(0,0), C=(2,0).
+  static float ax, ay, bx = 1, by = 1, cx = 2, cy;
+  static float x, y; // bezier() output: the curve point at parameter u
+  static float period = 5;
+  static float x_a, x_b, y_a, y_b;
+  // current progress
+  static float t0;
+
+  bezier(u) {
+    x = pow(1-u, 2) * ax + 2 * (1-u)*u * bx + u*u * cx;
+    y = pow(1-u, 2) * ay + 2 * (1-u)*u * by + u*u * cy;
   }
 
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
   glEnable(GL_DEPTH_TEST);
-  glEnable(GL_NORMALIZE);
-  glPushMatrix();
-    glTranslatef(-2.2, 0, 0);
-    shape(0.9, t);
-  glPopMatrix();
-  glPushMatrix();
-    shape(1.4, t*0.5);
-  glPopMatrix();
-  glPushMatrix();
-    glTranslatef(2.2, 0, 0);
-    shape(0.65, -t*0.8);
-  glPopMatrix();
+  glDisable(GL_LIGHTING);
+  glDisable(GL_MULTISAMPLE);
+  glEnable(GL_LINE_SMOOTH);
+  glEnable(GL_POINT_SMOOTH);
+  glEnable(GL_BLEND);
+  glPointSize(8);
+  glColor4f(1, 0.85, 0.15, 0.95);
+  glLineWidth(1.3);
+  t0 = (fmod(t, period)) / period;
+  glBegin(GL_POINTS);
+    glVertex2f(ax, ay);
+    glVertex2f(bx, by);
+    glVertex2f(cx, cy);
+    bezier(t0);
+    glColor3f(1, 0.35, 0.2);
+    glVertex2f(x, y);
+  glEnd();
+  glColor4f(0.92, 0.95, 0.98, 0.95);
+  glBegin(GL_LINE_STRIP);
+    for(u, 0, 1, 0.01) {
+      bezier(u);
+      glVertex2f(x, y);
+    }
+  glEnd();
+  glColor4f(0.55, 0.3, 1, 0.4);
+  // De Casteljau level-1 points: lerp along each control leg (A->B and
+  // B->C) by t0. The "Derived Line" between them (drawn below) is tangent
+  // to the curve, and the curve point at t0 sits on it.
+  x_a = ax*(1-t0) + bx*t0;
+  y_a = ay*(1-t0) + by*t0;
+  x_b = bx*(1-t0) + cx*t0;
+  y_b = by*(1-t0) + cy*t0;
+  glBegin(GL_POINTS);
+    glVertex2f(x_a, y_a);
+    glVertex2f(x_b, y_b);
+  glEnd();
+  glBegin(GL_LINES);
+    // Guide Line 1
+    glVertex2f(ax, ay);
+    glVertex2f(bx, by);
+    // Guide Line 2
+    glVertex2f(bx, by);
+    glVertex2f(cx, cy);
+    // Derived Line
+    glVertex2f(x_a, y_a);
+    glVertex2f(x_b, y_b);
+  glEnd();
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);

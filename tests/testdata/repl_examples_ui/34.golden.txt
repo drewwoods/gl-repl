@@ -9,15 +9,15 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_PLANES */
+/* @cfg grid = GRID_THEME_STARCHART */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
 /* @cfg axes = AXES_THEME_OFF */
-/* @cfg backdrop = RENDER3D_BACKDROP_OFF */
+/* @cfg backdrop = RENDER3D_BACKDROP_NEBULA */
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg light_indicators = 0 */
-/* @cfg view_mode = RENDER3D_VIEW_2D */
+/* @cfg view_mode = RENDER3D_VIEW_3D */
 /* @cfg projection = PROJ_PERSPECTIVE */
 /* @cfg camera_rotate = 0 */
 /* @cfg wireframe = WIREFRAME_OFF */
@@ -25,14 +25,14 @@
 /* @cfg depth_view = 0 */
 /* @cfg stencil_view = 0 */
 /* @cfg auto_normals = REPL_AUTONORMAL_OFF */
-/* @cfg overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE */
-/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF */
-/* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED */
+/* @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
+/* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX */
 /* @cfg vertex_points = 0 */
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */
 /* @cfg normal_vectors = 0 */
-/* @cfg polygon_highlight = 0 */
+/* @cfg polygon_highlight = 1 */
 /* @cfg transform_guides = 2 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
@@ -91,79 +91,130 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
-  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -12.5000f);   // @camera dist
+  glRotatef(16.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(-30.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -1.2000f, -0.0000f);   // @camera pan
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float rate = 45; // compare steps per second @tune
-  static float hold = 1.5; // seconds to rest on the sorted bars @tune
-  static float period, cycle, steps; // seconds per cycle; shuffle index; compares done so far
-  static float tmp; // swap scratch
-  static float x, h, s; // bar center x, bar height, palette mix
-  static float cur; // bar index under the compare marker
+  static float c, a; // color/brightness mix in [0,1] (planet + ring bands); comet orbit angle
 
-  // Bubble sort, scrubbed by t. A[0..15] holds 16 bar heights; the nested
-  // loops below are the classic compare-and-swap, but each compare only
-  // runs once enough time has passed (its overall index p*15 + j must stay
-  // under steps). Every frame re-seeds and re-sorts from scratch, so the
-  // bars freeze mid-algorithm at exactly floor(steps) compares -- drag the
-  // time slider or replay to scrub the sort.
-  glClearColor(0.05, 0.06, 0.08, 1);
+  // ===== Ringed gas giant under nebula skies =====
+  // NOTE: stays well under the 8192 flattened-command budget --
+  // the sphere loop costs stacks*(slices + 1)*10 flat commands.
+
+  // banded gas giant: quad strips over latitude, bands swirled by t
+  planet(rad, stacks, slices) {
+    // latA/latB = latitude angle at row i and i+1; cA/cB = cos(lat), shared by
+    // the normal and the vertex so each cosine is taken once, not three times.
+    // lon/cLon/sLon do the same for the per-column longitude angle.
+    float latA, latB, cA, cB, lon, cLon, sLon;
+    float y;
+    for(i, 0, stacks) {
+      glBegin(GL_QUAD_STRIP);
+        for(j, 0, slices + 1) {
+          latA = -PI/2 + PI*i/stacks;
+          latB = -PI/2 + PI*(i + 1)/stacks;
+          lon = j*TAU/slices;
+          cA = cos(latA);
+          cB = cos(latB);
+          cLon = cos(lon);
+          sLon = sin(lon);
+          y = sin(latA);
+          c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*lon + 0.6*t) + 0.4*t);
+          glColor3f(0.46 + 0.34*c, 0.30 + 0.16*c, 0.62 - 0.20*c);
+          glNormal3f(cA*cLon, y, cA*sLon);
+          glVertex3f(rad*cA*cLon, rad*y, rad*cA*sLon);
+          y = sin(latB);
+          c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*lon + 0.6*t) + 0.4*t);
+          glColor3f(0.46 + 0.34*c, 0.30 + 0.16*c, 0.62 - 0.20*c);
+          glNormal3f(cB*cLon, y, cB*sLon);
+          glVertex3f(rad*cB*cLon, rad*y, rad*cB*sLon);
+        }
+      glEnd();
+    }
+  }
+
+  // moon on a tilted circular orbit; caller sets the color
+  moon(orbit, rad, speed, tilt) {
+    glPushMatrix();
+      glRotatef(tilt, 0, 0, 1);
+      glRotatef(speed*t, 0, 1, 0);
+      glTranslatef(orbit, 0, 0);
+      glutSolidSphere(rad, 16, 12);
+    glPopMatrix();
+  }
+
+  // translucent ring band: bright inner lip fading outward
+  ring(inner, outer, fade) {
+    glBegin(GL_QUAD_STRIP);
+      for(j, 0, 41) {
+        c = 0.75 + 0.25*sin(j*0.9);
+        glColor4f(0.70*c, 0.58*c, 0.88*c, fade);
+        glVertex3f(inner*cos(j*TAU/40), 0, inner*sin(j*TAU/40));
+        glColor4f(0.45*c, 0.50*c, 0.85*c, 0.25*fade);
+        glVertex3f(outer*cos(j*TAU/40), 0, outer*sin(j*TAU/40));
+      }
+    glEnd();
+  }
+
+  glClearColor(0.04, 0.04, 0.1, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
   glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_NORMALIZE);
   glEnable(GL_POINT_SMOOTH);
-  period = 225/rate + hold;
-  cycle = floor(t/period);
-  steps = fmod(t, period)*rate;
-  // A fresh deterministic shuffle each cycle
-  for(i, 0, 16) {
-    A[i] = rand(i, cycle);
-  }
-  // Pass p bubbles the largest unsorted value to the right
-  for(p, 0, 15) {
-    for(j, 0, 15) {
-      if(p*15 + j < steps && A[j] > A[j+1]) {
-        tmp = A[j];
-        A[j] = A[j+1];
-        A[j+1] = tmp;
+  glShadeModel(GL_SMOOTH);
+
+  glPushMatrix();
+    glTranslatef(0, 1.7, 0);
+
+    glPushMatrix();
+      glRotatef(-6*t, 0, 1, 0);
+      planet(1.55, 18, 18);
+    glPopMatrix();
+
+    glColor3f(0.78, 0.72, 0.64);
+    moon(3.9, 0.22, 34, 9);
+    glColor3f(0.55, 0.66, 0.8);
+    moon(5.1, 0.16, -21, -14);
+
+    // translucent passes last: rings over the planet, then the comet
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+    glPushMatrix();
+      glRotatef(26, 1, 0, 0.3);
+      ring(1.95, 2.45, 0.40);
+      ring(2.55, 3.05, 0.20);
+    glPopMatrix();
+
+    // comet: bright head + tail fading along its eccentric orbit
+    glBegin(GL_LINE_STRIP);
+      for(i, 0, 30) {
+        a = 0.7*t - 0.06*i;
+        glColor4f(0.55, 0.85, 1.0, 0.6*(1 - i/30));
+        glVertex3f(5.6*cos(a), 1.1*sin(2*a), 4.2*sin(a));
       }
-    }
-  }
-  // Bars: height and color both follow the value, so sorted reads as a
-  // staircase with a smooth left-to-right gradient
-  glBegin(GL_QUADS);
-    for(i, 0, 16) {
-      s = A[i];
-      glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
-      x = (i - 7.5)*0.42;
-      h = 0.3 + 2.4*s;
-      glVertex3f(x - 0.15, -1.5, 0);
-      glVertex3f(x + 0.15, -1.5, 0);
-      glVertex3f(x + 0.15, -1.5 + h, 0);
-      glVertex3f(x - 0.15, -1.5 + h, 0);
-    }
-  glEnd();
-  if(steps < 225) {
-    // Two dots mark the pair the sort is comparing right now
-    cur = fmod(floor(steps), 15);
-    glPointSize(7);
-    glColor3f(1, 0.85, 0.15);
-    glBegin(GL_POINTS);
-      glVertex3f((cur - 7.5)*0.42, -1.75, 0);
-      glVertex3f((cur - 6.5)*0.42, -1.75, 0);
     glEnd();
-    glColor3f(0.92, 0.95, 0.98);
-    glRasterPos3f(-3.4, 1.7, 0);
-    label("pass %f of 15", floor(steps/15) + 1);
-  } else {
-    glColor3f(0.92, 0.95, 0.98);
-    glRasterPos3f(-3.4, 1.7, 0);
-    label("sorted");
-  }
+    glPointSize(6);
+    glBegin(GL_POINTS);
+      glColor4f(0.85, 0.97, 1, 0.95);
+      glVertex3f(5.6*cos(0.7*t), 1.1*sin(1.4*t), 4.2*sin(0.7*t));
+    glEnd();
+
+    // leave shared GL state the way we found it
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+  glPopMatrix();
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
