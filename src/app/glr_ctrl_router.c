@@ -1845,10 +1845,29 @@ static int route_color_picker_control_hit(int x, int y) {
     return r.consumed;
 }
 
-/* UI_HIT_PIN_BUTTON: Search / Replay pinned right-side button. */
+/* UI_HIT_PIN_BUTTON: Search / Prev / Next / View-mode / Replay pinned
+ * right-side button.
+ *
+ * The steppers are context-sensitive: while a tutorial is running they walk
+ * the lesson catalog (the F11 path), otherwise the example / user-scene
+ * cycle (the F12 path). A finished-but-inactive tutorial deliberately falls
+ * to the scene cycle - the document it left behind is a scene by then, and
+ * F11 remains the way to continue the lesson sequence. */
 static int route_pin_button_hit(const UiHit *hit) {
     ui_menu_bar_close();
     switch (hit->item_idx) {
+    case UI_MENU_BAR_PIN_NEXT:
+        if (tutorial_active())
+            glr_ctrl_tutorial_cycle_next();
+        else
+            glr_ctrl_scene_cycle_next();
+        break;
+    case UI_MENU_BAR_PIN_PREV:
+        if (tutorial_active())
+            glr_ctrl_tutorial_cycle_prev();
+        else
+            glr_ctrl_scene_cycle_prev();
+        break;
     case UI_MENU_BAR_PIN_REPLAY:
         replay_handle_pin_clicked();
         break;

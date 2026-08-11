@@ -154,6 +154,12 @@ scenes, wrapping to the start; **Shift+F12** cycles backward. The Scene menu
 lists them grouped by tag. `./gl-repl --list-examples` prints the compiled-in
 set.
 
+The **&lt; Prev** / **Next &gt;** buttons in the menu bar (left of the 2D/3D
+swatch) do the same stepping with the mouse - and while a tutorial is
+running they step the *lesson* catalog instead, matching F11 / Shift+F11.
+They hide themselves when the code panel is too narrow to fit them
+alongside the menus and the search field.
+
 ```
  1  gl-repl logo                                        21  Torus knot (animated)
  2  Rotating cube                                       22  GLU concave arrow

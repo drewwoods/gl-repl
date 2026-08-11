@@ -5836,6 +5836,42 @@ static void test_mouse_routing_and_hit_testing(void) {
     ASSERT_INT("view-mode pin hit consumed again", rc, 1);
     ASSERT_INT("view mode toggled back to 3D", glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
 
+    /* Prev / Next steppers: the example / user-scene cycle with no tutorial
+     * running, the lesson cycle while one is active. */
+    {
+        int count = repl_example_count();
+        tutorial_stop();
+        repl_load_example(0);
+        hit.kind = UI_HIT_PIN_BUTTON;
+        hit.item_idx = UI_MENU_BAR_PIN_NEXT;
+        rc = route_pin_button_hit(&hit);
+        ASSERT_INT("next pin hit consumed", rc, 1);
+        ASSERT_INT("next pin steps the example catalog",
+                   repl_state_scenes().active_example_idx, count > 1 ? 1 : 0);
+
+        hit.item_idx = UI_MENU_BAR_PIN_PREV;
+        rc = route_pin_button_hit(&hit);
+        ASSERT_INT("prev pin hit consumed", rc, 1);
+        ASSERT_INT("prev pin steps back to the first example",
+                   repl_state_scenes().active_example_idx, 0);
+    }
+    if (repl_tutorial_count() > 1) {
+        tutorial_start(0);
+        ASSERT_TRUE("tutorial active for stepper test", tutorial_active());
+        hit.item_idx = UI_MENU_BAR_PIN_NEXT;
+        rc = route_pin_button_hit(&hit);
+        ASSERT_INT("next pin hit consumed under tutorial", rc, 1);
+        ASSERT_INT("next pin steps the lesson catalog",
+                   tutorial_state_view().tutorial_idx, 1);
+
+        hit.item_idx = UI_MENU_BAR_PIN_PREV;
+        rc = route_pin_button_hit(&hit);
+        ASSERT_INT("prev pin hit consumed under tutorial", rc, 1);
+        ASSERT_INT("prev pin steps back to the first lesson",
+                   tutorial_state_view().tutorial_idx, 0);
+        tutorial_stop();
+    }
+
     // Test route_inline_color_swatch_hit
     prepare_display_fixture();
     glr_color_picker_install_host();

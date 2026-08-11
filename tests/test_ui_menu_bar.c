@@ -353,6 +353,69 @@ static void test_top_level_hits(void) {
     ASSERT_INT_EQ("pin miss in menu region", h_pin_miss.kind == UI_HIT_PIN_BUTTON ? h_pin_miss.item_idx : -1, -1);
 }
 
+/* The Prev / Next catalog steppers sit between the search slot and the
+ * view-mode swatch, and collapse away when the code panel is too narrow to
+ * seat the menus, the search minimum and them - pins beat menu labels in the
+ * hit-test, so a fixed pair of cells would make File/Scene unclickable in a
+ * narrow panel. */
+static void test_stepper_pins(void) {
+    int my, mx = -1, narrow_prev_hits = 0;
+    UiHit h;
+
+    reset_menu_bar_fixture(1600, 900);
+    ui_state_code_panel_mut()->panel_frac = 0.6f;
+    my = menu_bar_center_my();
+
+    ASSERT_TRUE("pin:prev resolves in a wide panel",
+                glr_pointer_script_resolve_target("pin:prev", &mx, &my));
+    h = ui_menu_bar_hit_test(mx, my);
+    ASSERT_INT_EQ("pin:prev lands on the Prev pin",
+                  h.kind == UI_HIT_PIN_BUTTON ? h.item_idx : -1,
+                  UI_MENU_BAR_PIN_PREV);
+
+    ASSERT_TRUE("pin:next resolves in a wide panel",
+                glr_pointer_script_resolve_target("pin:next", &mx, &my));
+    h = ui_menu_bar_hit_test(mx, my);
+    ASSERT_INT_EQ("pin:next lands on the Next pin",
+                  h.kind == UI_HIT_PIN_BUTTON ? h.item_idx : -1,
+                  UI_MENU_BAR_PIN_NEXT);
+
+    /* Prev sits left of Next, which sits left of the view-mode swatch. */
+    {
+        int prev_mx = -1, next_mx = -1, dummy_my = my;
+        glr_pointer_script_resolve_target("pin:prev", &prev_mx, &dummy_my);
+        glr_pointer_script_resolve_target("pin:next", &next_mx, &dummy_my);
+        ASSERT_TRUE("Prev is left of Next", prev_mx < next_mx);
+    }
+
+    /* Narrow panel: the steppers collapse, their targets stop resolving,
+     * and no x in the bar reports one. The File menu stays reachable. */
+    reset_menu_bar_fixture(800, 600);
+    ui_state_code_panel_mut()->panel_frac = 0.5f;
+    my = menu_bar_center_my();
+    ASSERT_TRUE("pin:prev does not resolve in a narrow panel",
+                !glr_pointer_script_resolve_target("pin:prev", &mx, &my));
+    ASSERT_TRUE("pin:next does not resolve in a narrow panel",
+                !glr_pointer_script_resolve_target("pin:next", &mx, &my));
+    {
+        int cp_x, cp_y, cp_w, cp_h;
+        ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+        for (int x = cp_x; x < cp_x + cp_w; x++) {
+            UiHit probe = ui_menu_bar_hit_test(x, my);
+            if (probe.kind == UI_HIT_PIN_BUTTON &&
+                (probe.item_idx == UI_MENU_BAR_PIN_PREV ||
+                 probe.item_idx == UI_MENU_BAR_PIN_NEXT))
+                narrow_prev_hits++;
+        }
+    }
+    ASSERT_INT_EQ("collapsed steppers are unhittable", narrow_prev_hits, 0);
+
+    h = ui_menu_bar_hit_test(file_menu_mx(), my);
+    ASSERT_INT_EQ("File menu still reachable in a narrow panel",
+                  h.kind == UI_HIT_MENU_BUTTON ? h.cmd_idx : -1,
+                  GLR_MENU_FILE);
+}
+
 static void test_dropdown_and_config_press(void) {
     int item_mx = -1;
     int item_my = -1;
@@ -1602,6 +1665,7 @@ int main(void) {
     test_workspace_header_row();
     test_open_close_state();
     test_top_level_hits();
+    test_stepper_pins();
     test_dropdown_and_config_press();
     test_audio_menu_flyout_hits();
     test_config_submenu_right_press();

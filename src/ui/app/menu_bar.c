@@ -67,9 +67,10 @@ static const float k_menubar_bottom_rule[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 /* Right-to-left the pins render from highest index first, so PIN_REPLAY sits
  * at the far right matching the design. PIN_SEARCH fills the gap between the
  * last menu on the left and PIN_REPLAY. */
-enum { PIN_SEARCH = 0, PIN_VIEW_MODE, PIN_REPLAY, NUM_PIN_BTNS };
+enum { PIN_SEARCH = 0, PIN_PREV, PIN_NEXT, PIN_VIEW_MODE, PIN_REPLAY,
+       NUM_PIN_BTNS };
 static const char *g_pin_btn_labels[NUM_PIN_BTNS] = {
-    "search...", "2D/3D", "Replay"
+    "search...", "< Prev", "Next >", "2D/3D", "Replay"
 };
 
 #define PIN_SEARCH_MIN_W 140
@@ -701,12 +702,37 @@ static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
     pin_w[PIN_VIEW_MODE] = ui_view_mode_swatch_label_width();
     pin_x[PIN_VIEW_MODE] = pin_x[PIN_REPLAY] - pin_w[PIN_VIEW_MODE];
 
-    /* PIN_SEARCH - fills the gap between the last menu and PIN_VIEW_MODE. */
+    /* PIN_NEXT / PIN_PREV - catalog steppers, label-width cells left of the
+     * view-mode swatch, in reading order (Prev then Next). Unlike the other
+     * pins these are *optional*: pins win the hit-test over the menu labels
+     * they overlap, so in a narrow code panel a fixed pair of cells would
+     * make top-level menus unclickable. They collapse to zero width - drawn
+     * by nobody, hit by nobody - whenever the bar cannot also seat the menus
+     * and the search field's minimum. Every consumer therefore has to treat
+     * a zero-width pin as absent. */
     int menus_right = x;
-    int search_w = pin_x[PIN_VIEW_MODE] - menus_right;
+    int step_w = ((int)strlen(g_pin_btn_labels[PIN_PREV]) +
+                  (int)strlen(g_pin_btn_labels[PIN_NEXT])) * FONT_SMALL_W +
+                 2 * MENU_LABEL_PAD_X;
+    int steppers_fit =
+        (pin_x[PIN_VIEW_MODE] - menus_right - PIN_SEARCH_MIN_W) >= step_w;
+
+    pin_w[PIN_NEXT] = steppers_fit
+                          ? (int)strlen(g_pin_btn_labels[PIN_NEXT]) *
+                                FONT_SMALL_W + MENU_LABEL_PAD_X
+                          : 0;
+    pin_x[PIN_NEXT] = pin_x[PIN_VIEW_MODE] - pin_w[PIN_NEXT];
+    pin_w[PIN_PREV] = steppers_fit
+                          ? (int)strlen(g_pin_btn_labels[PIN_PREV]) *
+                                FONT_SMALL_W + MENU_LABEL_PAD_X
+                          : 0;
+    pin_x[PIN_PREV] = pin_x[PIN_NEXT] - pin_w[PIN_PREV];
+
+    /* PIN_SEARCH - fills the gap between the last menu and PIN_PREV. */
+    int search_w = pin_x[PIN_PREV] - menus_right;
     if (search_w < PIN_SEARCH_MIN_W) search_w = PIN_SEARCH_MIN_W;
     pin_w[PIN_SEARCH] = search_w;
-    pin_x[PIN_SEARCH] = pin_x[PIN_VIEW_MODE] - search_w;
+    pin_x[PIN_SEARCH] = pin_x[PIN_PREV] - search_w;
 }
 
 static int ui_menu_bar_menu_hit(int gx, int gy) {
@@ -734,8 +760,10 @@ static int ui_menu_bar_pin_hit(int gx, int gy) {
     int ry = ui_state_viewport().window_h - gy;
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
     if (ry < by || ry >= by + bh) return -1;
-    for (int i = 0; i < NUM_PIN_BTNS; i++)
+    for (int i = 0; i < NUM_PIN_BTNS; i++) {
+        if (pin_w[i] <= 0) continue;   /* collapsed stepper - not present */
         if (gx >= pin_x[i] && gx < pin_x[i] + pin_w[i]) return i;
+    }
     return -1;
 }
 
@@ -1408,11 +1436,18 @@ int ui_menu_bar_target_pin(const char *name, int *mx, int *my) {
     int by, bh;
     int pin = -1;
     if (target_label_matches("search", name))      pin = PIN_SEARCH;
+    /* The rendered labels carry direction glyphs ("< Prev"), so the
+     * targets match the bare words instead. */
+    else if (target_label_matches("prev", name))   pin = PIN_PREV;
+    else if (target_label_matches("next", name))   pin = PIN_NEXT;
     else if (target_label_matches("view", name))   pin = PIN_VIEW_MODE;
     else if (target_label_matches("replay", name)) pin = PIN_REPLAY;
     if (pin < 0)
         return 0;
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
+    /* A collapsed stepper has no point to aim at (see menubar_rects). */
+    if (pin_w[pin] <= 0)
+        return 0;
     if (mx) *mx = pin_x[pin] + pin_w[pin] / 2;
     if (my) *my = target_mouse_y(by + bh / 2);
     return 1;
@@ -2625,7 +2660,9 @@ static void paint_pin_buttons(const UiRenderSnapshot *snap,
                               ReplayRuntimeState replay) {
     int i;
     for (i = 0; i < NUM_PIN_BTNS; i++) {
-        int hover = (hover_pin == i);
+        int hover;
+        if (pin_w[i] <= 0) continue;   /* collapsed stepper - not present */
+        hover = (hover_pin == i);
         int active = (i == PIN_REPLAY && replay.active);
         if (hover) {
             ui_clr(UI_TOK_MENU_LABEL_HOVER_BG);
