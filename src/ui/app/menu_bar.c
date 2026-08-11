@@ -2696,7 +2696,10 @@ static void paint_pin_buttons(const UiRenderSnapshot *snap,
         } else if (i == PIN_REPLAY) {
             const char *label = "Replay";
             int icon_x = pin_x[i] + 10;
-            int icon_cy = by + bh / 2;
+            /* Center the state icon on the *label*, not the bar. The glyph
+             * row sits low in the bar (baseline at MENUBAR_TEXT_BASE_Y), so
+             * a bar-centered icon floats above the word it belongs to. */
+            int icon_cy = by + MENUBAR_TEXT_BASE_Y + MENUBAR_CAP_H / 2;
             int icon_sz = 8;
             int tx;
             if (replay.state == REPLAY_PLAYING) label = "Replaying";

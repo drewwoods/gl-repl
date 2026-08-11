@@ -40,6 +40,13 @@
 /* Baseline y-offset for text within the menu bar row. */
 #define MENUBAR_TEXT_BASE_Y 3
 
+/* Cap height of the menu bar's FONT_SMALL (the X11 8x13 cell): how far an
+ * uppercase glyph reaches above the baseline. Icons drawn beside a label
+ * center on MENUBAR_TEXT_BASE_Y + MENUBAR_CAP_H / 2, which is the label's
+ * optical center - the bar's own center sits higher than the low-set
+ * glyph row. */
+#define MENUBAR_CAP_H 9
+
 /* Horizontal padding for a top-level menu label (half each side). */
 #define MENU_LABEL_PAD_X 18
 
