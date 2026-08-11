@@ -2731,10 +2731,15 @@ static void paint_pin_buttons(const UiRenderSnapshot *snap,
             tx = icon_x + 12 + 6;
             gl2d_draw_string((float)tx, (float)(by + MENUBAR_TEXT_BASE_Y), label, FONT_SMALL);
         } else {
-            if (hover || active)
-                ui_clr(UI_TOK_TEXT_ON_HILITE);
-            else
-                ui_clr(UI_TOK_TEXT_PRIMARY);
+            /* The pin band right of the search slot is drawn in the accent
+             * (view-mode swatch, Replay icon + label); UI_TOK_TEXT_PRIMARY is
+             * the *menu label* color on the left. A stepper is a control, not
+             * a menu, so it takes the band's color - otherwise Prev / Next
+             * read as two more dropdowns that never open. Hover is carried by
+             * the cell background alone, again like its neighbours: only the
+             * menu labels swap to UI_TOK_TEXT_ON_HILITE, and a stepper that
+             * did so would blink white against a band that never does. */
+            ui_clr(UI_TOK_ACCENT);
             {
                 int tx = pin_x[i] + MENU_LABEL_PAD_X / 2;
                 gl2d_draw_string((float)tx, (float)(by + MENUBAR_TEXT_BASE_Y),
