@@ -1,2 +1,0 @@
- - AUDIO issues on linux pulse ubuntu 24.04 (zen3). Audio stutters and causes frame drops (TODO verify if "fix(audio): move blocking file I/O off the render thread" parent:6b977bebb2d9a8bf35c4b287a3de1b699d2f5c02, resolves this)
- - The Menus can go off screen if they dont fit -- this is particularly a problem if the code panel is on the bottom (less verticle space)
