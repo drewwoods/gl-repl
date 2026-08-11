@@ -1,0 +1,56 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+
+glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+// Note: gl-repl automatically clears the stencil buffer each frame, but we explicit it here
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_STENCIL_TEST);
+
+// Pass 1: Draw the stencil mask (a floating quad window)
+// Disable color/depth writes so the window itself is invisible
+glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+glDepthMask(GL_FALSE);
+
+// Set stencil to always pass, and replace stencil buffer with 1 where drawn
+glStencilFunc(GL_ALWAYS, 1, 0xFF);
+glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+glStencilMask(0xFF);
+
+// Draw the window (a quad panning back and forth)
+glPushMatrix();
+glTranslatef(sin(t)*2.0f, 0.0f, 0.0f);
+glBegin(GL_QUADS);
+  glVertex3f(-1.5f, -1.5f, 2.0f);
+  glVertex3f( 1.5f, -1.5f, 2.0f);
+  glVertex3f( 1.5f,  1.5f, 2.0f);
+  glVertex3f(-1.5f,  1.5f, 2.0f);
+glEnd();
+glPopMatrix();
+
+// Pass 2: Draw the scene only where stencil == 1
+// Re-enable color and depth writes
+glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+glDepthMask(GL_TRUE);
+
+// Set stencil func to EQUAL 1, and don't modify stencil buffer further
+glStencilFunc(GL_EQUAL, 1, 0xFF);
+glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+// Draw an animated object behind the window (so it appears masked)
+glPushMatrix();
+glRotatef(t*40.0f, 1.0f, 1.0f, 0.0f);
+glColor3f(1.00f, 0.35f, 0.20f); // CORAL
+glutSolidTorus(0.6f, 1.2f, 16, 32);
+glPopMatrix();
+
+// Clean up stencil state to not bleed into the UI or subsequent passes
+glStencilFunc(GL_ALWAYS, 0, 0xFF);
+glStencilMask(0);
+glDisable(GL_STENCIL_TEST);

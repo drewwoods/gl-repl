@@ -34,6 +34,25 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 | `aurora-borealis-curtain.glr` | 3D, Curves & surfaces, Blending | Animated layered ribbons of waving auroras with green/cyan/magenta gradients and stars. |
 | `atom-electron-orbits.glr` | 3D, Hierarchical, Lighting | Bohr model atom featuring a glowing nucleus and five electrons orbiting along tilted orbital rings. |
 | `kaleidoscope-mandala.glr` | 3D, Polygons, Animation | An 8-fold symmetric rotating mandala with pulsing triangle fans, outer petals, and vibrant color cycles. |
+| `basic-shapes.glr` | General, Basics, 3D | Rotating neon teal cube and amber sphere. |
+| `helix-spiral.glr` | General, Math, Lines | 3D helix spiral via `for` loop with a teal-to-magenta color sweep. |
+| `translucent-blend.glr` | General, Blending, 3D | Two overlapping translucent quads using `GL_BLEND`. |
+| `line-stipple-patterns.glr` | General, Stipple, Lines | Four stipple masks with different factors via `glLineStipple`. |
+| `fog-depth-range.glr` | General, Fog, 3D | Linear fog (`GL_LINEAR`) with a retreating row of spheres. |
+| `material-properties.glr` | General, Lighting, 3D | Specular/shininess on a teapot under `GL_LIGHT0`. |
+| `polygon-modes.glr` | General, PolygonMode, 3D | Three solids side-by-side in `GL_FILL`, `GL_LINE`, and `GL_POINT`. |
+| `depth-mask-layers.glr` | General, DepthMask, Blending | Opaque cube + translucent sphere shell using `glDepthMask`. |
+| `recursive-sierpinski-2d.glr` | General, Recursion, 2D | Recursive Sierpinski triangle (2D) using a function body. |
+| `parametric-wave-grid.glr` | General, Math, Loops, 3D | Animated wave surface with per-quad color from nested `for` loops. |
+| `clip-plane-slice.glr` | General, ClipPlane, 3D | `glClipPlane` bisects a torus, with a disc drawn at the cut face. |
+| `shade-model-flat-smooth.glr` | General, Shading, 3D | Side-by-side comparison of `GL_FLAT` vs `GL_SMOOTH` shading. |
+| `color-mask-channels.glr` | General, ColorMask, State | Channel-selective rendering (`glColorMask`) for Red, Green, and Blue. |
+| `nested-transform-solar.glr` | General, Transforms, 3D | Hierarchical matrix transform propagation (Sun -> Planet -> Moon). |
+| `polygon-offset-overlay.glr` | General, PolygonOffset, 3D | Wireframe overlay on filled solid without z-fighting via `glPolygonOffset`. |
+| `multi-light-rig.glr` | General, Lighting, 3D | Multiple positional lights (`GL_LIGHT0`, `GL_LIGHT1`) with distinct colors. |
+| `stencil-mask-window.glr` | General, Stencil, State | Passing rendering exclusively inside a `glStencilFunc`-masked quad. |
+| `vertex-normals-lighting.glr` | General, Normals, Lighting | Explicit per-vertex `glNormal3f` assignments on custom geometry. |
+| `fog-exponential.glr` | General, Fog, 3D | Exponential squared fog (`GL_EXP2`) against a deep perspective grid. |
 
 
 ## How to Run & Validate
@@ -72,4 +91,24 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 ./gl-repl tests/scenes/general/aurora-borealis-curtain.glr
 ./gl-repl tests/scenes/general/atom-electron-orbits.glr
 ./gl-repl tests/scenes/general/kaleidoscope-mandala.glr
+./gl-repl tests/scenes/general/basic-shapes.glr
+./gl-repl tests/scenes/general/helix-spiral.glr
+./gl-repl tests/scenes/general/translucent-blend.glr
+./gl-repl tests/scenes/general/line-stipple-patterns.glr
+./gl-repl tests/scenes/general/fog-depth-range.glr
+./gl-repl tests/scenes/general/material-properties.glr
+./gl-repl tests/scenes/general/polygon-modes.glr
+./gl-repl tests/scenes/general/depth-mask-layers.glr
+./gl-repl tests/scenes/general/recursive-sierpinski-2d.glr
+./gl-repl tests/scenes/general/parametric-wave-grid.glr
+./gl-repl tests/scenes/general/clip-plane-slice.glr
+./gl-repl tests/scenes/general/shade-model-flat-smooth.glr
+./gl-repl tests/scenes/general/color-mask-channels.glr
+./gl-repl tests/scenes/general/nested-transform-solar.glr
+./gl-repl tests/scenes/general/polygon-offset-overlay.glr
+./gl-repl tests/scenes/general/multi-light-rig.glr
+./gl-repl tests/scenes/general/stencil-mask-window.glr
+./gl-repl tests/scenes/general/vertex-normals-lighting.glr
+./gl-repl tests/scenes/general/fog-exponential.glr
+
 ```

@@ -1,0 +1,36 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+
+glTranslatef(0.0f, -1.0f, -5.00f);   // @camera dist
+glRotatef(15.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+// Bright misty sky background
+glClearColor(0.85f, 0.90f, 0.95f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+// Enable fog and set mode to GL_EXP2 (exponential squared)
+glEnable(GL_FOG);
+glFogi(GL_FOG_MODE, GL_EXP2);
+
+// Match fog color to the sky/background
+glFogfv(GL_FOG_COLOR, (GLfloat[]){0.85f, 0.90f, 0.95f, 1.0f});
+
+// Set fog density (higher = thicker fog, cuts off faster)
+glFogf(GL_FOG_DENSITY, 0.06f);
+
+// Draw a grid of spheres extending far into the distance
+glColor3f(0.15f, 0.55f, 1.00f); // AZURE
+
+for(x, -6, 7) {
+  for(z, 0, 20) {
+    glPushMatrix();
+    // Offset them in a wave pattern
+    glTranslatef(x * 1.5f, sin(x * 0.5f + z * 0.4f + t * 2.0f), -z * 1.5f);
+    glutSolidSphere(0.4f, 12, 12);
+    glPopMatrix();
+  }
+}

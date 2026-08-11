@@ -1,0 +1,55 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+
+glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
+glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(t * 30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_NORMALIZE);
+glShadeModel(GL_FLAT);
+
+// Position a bright white light slightly above and to the right
+glLightfv(GL_LIGHT0, GL_POSITION, (GLfloat[]){3.0f, 4.0f, 5.0f, 0.0f});
+
+// Set a base material color
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+glColor3f(1.00f, 0.85f, 0.15f); // AMBER
+
+// Draw a custom 3D pyramid, explicitly providing surface normals.
+// For FLAT shading, only the provoking vertex's normal matters.
+glBegin(GL_TRIANGLES);
+
+  // Front Face
+  glNormal3f(0.0f, 0.5f, 0.866f);
+  glVertex3f( 0.0f,  1.5f,  0.0f);
+  glVertex3f(-1.5f, -1.5f,  1.5f);
+  glVertex3f( 1.5f, -1.5f,  1.5f);
+
+  // Right Face
+  glNormal3f(0.866f, 0.5f, 0.0f);
+  glVertex3f( 0.0f,  1.5f,  0.0f);
+  glVertex3f( 1.5f, -1.5f,  1.5f);
+  glVertex3f( 0.0f, -1.5f, -1.5f);
+
+  // Left/Back Face
+  glNormal3f(-0.866f, 0.5f, -0.866f);
+  glVertex3f( 0.0f,  1.5f,  0.0f);
+  glVertex3f( 0.0f, -1.5f, -1.5f);
+  glVertex3f(-1.5f, -1.5f,  1.5f);
+
+  // Bottom Face
+  glNormal3f(0.0f, -1.0f, 0.0f);
+  glVertex3f(-1.5f, -1.5f,  1.5f);
+  glVertex3f( 0.0f, -1.5f, -1.5f);
+  glVertex3f( 1.5f, -1.5f,  1.5f);
+
+glEnd();

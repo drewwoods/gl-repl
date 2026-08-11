@@ -1,0 +1,38 @@
+// @cfg view_mode = RENDER3D_VIEW_2D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+
+// Recursive Sierpinski triangle: each call draws its own triangle then
+// recurses into three sub-triangles at half the size.
+sierpinski(x, y, size, depth) {
+  float hx, hy, lx, ly, rx, ry;
+  if(depth <= 0) {
+    hx = x;
+    hy = y + size;
+    lx = x - size * 0.866f;
+    ly = y - size * 0.5f;
+    rx = x + size * 0.866f;
+    ry = y - size * 0.5f;
+    glBegin(GL_TRIANGLES);
+      glVertex3f(hx, hy, 0.0f);
+      glVertex3f(lx, ly, 0.0f);
+      glVertex3f(rx, ry, 0.0f);
+    glEnd();
+  } else {
+    sierpinski(x,                  y + size * 0.5f,  size * 0.5f, depth - 1);
+    sierpinski(x - size * 0.433f,  y - size * 0.25f, size * 0.5f, depth - 1);
+    sierpinski(x + size * 0.433f,  y - size * 0.25f, size * 0.5f, depth - 1);
+  }
+}
+
+glTranslatef(0.0f, 0.0f, -5.50f);   // @camera dist
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, -0.5f, 0.0f);   // @camera pan
+
+glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+// Pulse the color slowly between CORAL and VIOLET
+glColor3f(1.00f - 0.45f * sin(t * 0.5f), 0.35f - 0.05f * sin(t * 0.5f), 0.20f + 0.75f * sin(t * 0.5f));
+sierpinski(0.0f, 0.0f, 2.2f, 4);

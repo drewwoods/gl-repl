@@ -1,0 +1,34 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+
+glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
+glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+glRotatef(25.0f * t, 0.0f, 1.0f, 0.0f);
+
+// Clip plane 0: slice off the left half (x >= 0 face only)
+// Equation: 1*x + 0*y + 0*z + 0 >= 0  ->  keeps x >= 0
+glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){1.0, 0.0, 0.0, 0.0});
+glEnable(GL_CLIP_PLANE0);
+
+// AMBER solid torus, cut in half by the clip plane
+glColor3f(1.00f, 0.85f, 0.15f);
+glutSolidTorus(0.35f, 1.2f, 20, 36);
+
+glDisable(GL_CLIP_PLANE0);
+
+// Draw a thin TEAL disc at the cut face (filled circle in the XZ plane)
+glColor3f(0.10f, 0.95f, 0.85f);
+glBegin(GL_TRIANGLE_FAN);
+  glVertex3f(0.0f, 0.0f, 0.0f);
+  for(i, 0, 37) {
+    glVertex3f(0.0f, cos(i * TAU / 36) * 1.55f, sin(i * TAU / 36) * 1.55f);
+  }
+glEnd();
