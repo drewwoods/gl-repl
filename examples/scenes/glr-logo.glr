@@ -1,14 +1,14 @@
+// @cfg grid = GRID_THEME_CLASSIC
+// @cfg grid_extent = GRID_EXTENT_CLOSE
 // @cfg grid_brightness = GRID_BRIGHTNESS_DIM
-// @cfg vertex_points = 0
-// @cfg projection = PROJ_ORTHO
 // @cfg light_theme = LIGHT_THEME_HEADLIGHT
-// @cfg accum_passes = 2
-// @cfg grid = GRID_THEME_OFF
+// @cfg projection = PROJ_ORTHO
+// @cfg vertex_points = 0
 // @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD_INVERTED
-glTranslatef(0.0f, 0.0f, -6.50f);   // @camera dist
-glRotatef(35.25f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(45.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+glTranslatef(0.0000f, 0.0000f, -6.5000f);   // @camera dist
+glRotatef(35.2500f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(45.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 //
 // gl-repl Logo
 // An open cube rendered with two-sided lighting.
@@ -18,7 +18,7 @@ glEnable(GL_DEPTH_TEST);
 
 // --- Model Transform ----------------
 // Move the cube up by one unit so its bottom rests on the grid plane (Y=0).
-glTranslatef(0.0f, 1.0f, 0.0f);
+glTranslatef(0, 1, 0);
 
 // --- Lighting -----------------------
 // The headlight theme provides four lights; light 0 moves with the camera.

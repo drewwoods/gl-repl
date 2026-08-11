@@ -9,9 +9,9 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_OFF */
+/* @cfg grid = GRID_THEME_CLASSIC */
 /* @cfg grid_major = GRID_MAJOR_1 */
-/* @cfg grid_extent = GRID_EXTENT_FAR */
+/* @cfg grid_extent = GRID_EXTENT_CLOSE */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_DIM */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */

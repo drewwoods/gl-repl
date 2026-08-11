@@ -9,9 +9,9 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_XZRULER */
+/* @cfg grid = GRID_THEME_SKETCH */
 /* @cfg grid_major = GRID_MAJOR_1 */
-/* @cfg grid_extent = GRID_EXTENT_FAR */
+/* @cfg grid_extent = GRID_EXTENT_CLOSE */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
@@ -91,10 +91,10 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -5.5000f);   // @camera dist
-  glRotatef(18.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(32.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -7.6741f);   // @camera dist
+  glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.5000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -1.3500f, -0.0000f);   // @camera pan
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
