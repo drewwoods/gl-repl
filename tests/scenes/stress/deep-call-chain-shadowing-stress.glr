@@ -1,0 +1,78 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+
+func4(x, y, z) {
+  float a;
+  float b;
+  a = x + y;
+  b = y + z;
+  glPushMatrix();
+  glTranslatef(x * 0.2f, y * 0.2f, z * 0.2f);
+  glColor3f(clamp(sin(a + t), 0.2f, 0.8f), clamp(cos(b - t), 0.2f, 0.8f), 0.9f);
+  glutSolidSphere(0.18f, 8, 8);
+  glPopMatrix();
+}
+
+func3(x, y, z) {
+  float a;
+  float b;
+  a = x * 0.9f;
+  b = y * 0.9f;
+  glPushMatrix();
+  glRotatef(z * 15.0f, 0.0f, 0.0f, 1.0f);
+  func4(a, b, z * 0.9f);
+  glPopMatrix();
+}
+
+func2(x, y, z) {
+  float a;
+  float b;
+  a = x - y;
+  b = y - z;
+  glPushMatrix();
+  glRotatef(a * 20.0f, 0.0f, 1.0f, 0.0f);
+  func3(x, y, z);
+  glPopMatrix();
+}
+
+func1(x, y, z) {
+  float a;
+  float b;
+  a = x + z;
+  b = y + z;
+  glPushMatrix();
+  glRotatef(a * 25.0f, 1.0f, 0.0f, 0.0f);
+  func2(x, y, z);
+  glPopMatrix();
+}
+
+func0(x, y, z) {
+  float a;
+  float b;
+  a = x * 1.1f;
+  b = y * 1.1f;
+  glPushMatrix();
+  glTranslatef(0.0f, sin(t + (x + y + z)) * 0.4f, 0.0f);
+  func1(a, b, z * 1.1f);
+  glPopMatrix();
+}
+
+glTranslatef(0.0f, 0.0f, -10.00f);   // @camera dist
+glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+glRotatef(15.0f * t, 0.0f, 1.0f, 0.0f);
+
+glClearColor(0.06f, 0.04f, 0.06f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+for(u, -2, 3) {
+  for(v, -2, 3) {
+    glPushMatrix();
+    glTranslatef(u * 1.8f, 0.0f, v * 1.8f);
+    func0(u, sin(t + u * v) * 0.5f, v);
+    glPopMatrix();
+  }
+}

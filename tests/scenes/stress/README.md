@@ -18,6 +18,9 @@ It is a **runtime `--examples-dir` catalog, not a built-in one**: nothing here i
 | `loop-break-continue-stress.glr` | Loop control flow boundaries | Exercises nested loops up to 3 levels deep with dynamic loop boundaries, dynamic loop steps, conditional `break` statements, and conditional `continue` statements to test control flow correctness. |
 | `scratch-array-stress.glr` | Scratch arrays & custom matrix transforms | Tests reading and writing to scratch arrays (`A` & `B`), variable array indexing under loops, and composing custom affine transformations via `glMultMatrixf(A)`. |
 | `mutual-recursion-stress.glr` | Mutual recursion & function call stack | Establishes a mutual recursion chain (`func1` -> `func2` -> `func1`) with local variables shadowing, parameter stack push/pop overhead, and depth exit condition checking. |
+| `deep-math-expression-stress.glr` | Deep nested math expressions & complex conditions | Evaluates complex combinations of functions (`smoothstep`, `lerp`, `clamp`, `pow`, `abs`, `sqrt`, `atan2`, `rand`) and nested boolean conditions within loop branches. |
+| `deep-call-chain-shadowing-stress.glr` | Scope shadowing & call stack unrolling | Executes a 5-level deep function call chain (`func0` -> `func1` -> `func2` -> `func3` -> `func4`) with collision of parameter/local names (`x`, `y`, `z`, `a`, `b`) to test lexical scoping. |
+| `scratch-array-lookup-stress.glr` | Scratch block assignments & dynamic indexing | Combines scratch block writes (`A[0] = {...}`) and nested-loop dynamic lookup arithmetic (`C[abs(i+j)%16]`) to build matrices applied via `glMultMatrixf(A)`. |
 
 ## Catalog File
 
@@ -45,4 +48,7 @@ Launch `gl-repl` directly on any stress scene:
 ./gl-repl tests/scenes/stress/loop-break-continue-stress.glr
 ./gl-repl tests/scenes/stress/scratch-array-stress.glr
 ./gl-repl tests/scenes/stress/mutual-recursion-stress.glr
+./gl-repl tests/scenes/stress/deep-math-expression-stress.glr
+./gl-repl tests/scenes/stress/deep-call-chain-shadowing-stress.glr
+./gl-repl tests/scenes/stress/scratch-array-lookup-stress.glr
 ```

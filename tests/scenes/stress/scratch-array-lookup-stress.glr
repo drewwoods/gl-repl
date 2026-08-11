@@ -1,0 +1,66 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+
+static float r;
+static float g;
+static float b;
+
+glTranslatef(0.0f, 0.0f, -12.00f);   // @camera dist
+glRotatef(25.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+glRotatef(20.0f * t, 0.0f, 1.0f, 0.0f);
+
+glClearColor(0.03f, 0.03f, 0.05f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+// Initialize array A with baseline identity matrix
+A[0] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+
+// Setup array B with coordinate scales and values
+B[0] = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.0f, 1.1f, 1.2f, 1.3f, 1.4f, 1.5f, 1.6f};
+
+// Setup array C with dynamic sin/cos time offsets
+for(k, 0, 16) {
+  C[k] = sin(t * 1.5f + k * 0.4f) * 0.6f;
+}
+
+// Perform complex lookup and assignment arithmetic between A, B, and C
+for(i, -3, 4) {
+  for(j, -3, 4) {
+    glPushMatrix();
+
+    // Dynamically build a custom transform matrix in A based on indices and C/B values
+    // Column 1: translation in A[12]..A[14]
+    A[12] = i * 1.5f + C[abs(i + 3)];
+    A[13] = C[abs(i + j) % 16] * 1.2f;
+    A[14] = j * 1.5f + C[abs(j + 3)];
+
+    // Apply shear/rotation parameters inside columns using B and C
+    A[1] = C[0] * 0.3f;
+    A[4] = B[abs(i - j) % 16] * 0.2f;
+    A[6] = C[8] * 0.4f;
+    A[9] = B[abs(i + j) % 16] * 0.1f;
+
+    // Apply the matrix A
+    glMultMatrixf(A);
+
+    // Dynamic color from lookups
+    r = clamp(B[abs(i + 3)] * 0.6f, 0.1f, 0.9f);
+    g = clamp(abs(C[abs(j + 3)]), 0.2f, 0.8f);
+    b = clamp(1.0f - B[abs(i + j) % 16] * 0.5f, 0.3f, 0.9f);
+
+    glColor3f(r, g, b);
+
+    // Mix solid cubes and spheres
+    if((i + j) % 2 == 0) {
+      glutSolidCube(0.5f + C[abs(i + 3)] * 0.3f);
+    } else {
+      glutSolidSphere(0.35f, 12, 12);
+    }
+
+    glPopMatrix();
+  }
+}

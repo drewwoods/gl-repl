@@ -1,0 +1,54 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+
+static float r_val;
+static float g_val;
+static float b_val;
+static float x_val;
+static float y_val;
+static float dist;
+static float angle;
+static float factor;
+static float height;
+static float step_mod;
+static float noise;
+
+glTranslatef(0.0f, 0.0f, -10.00f);   // @camera dist
+glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+glRotatef(12.0f * t, 0.0f, 1.0f, 0.0f);
+
+glClearColor(0.05f, 0.05f, 0.07f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+for(u, -8, 9) {
+  for(v, -8, 9) {
+    x_val = u * 0.5f;
+    y_val = v * 0.5f;
+    dist = sqrt(pow(x_val, 2.0f) + pow(y_val, 2.0f));
+    angle = atan2(y_val, x_val);
+
+    // Deep mathematical expression: smoothstep, lerp, pow, sin, cos, clamp
+    factor = smoothstep(0.0f, 4.0f, dist);
+    height = lerp(-1.5f, 1.5f, factor) * sin(dist * 2.0f - t * 3.0f);
+    step_mod = sign(height) * (floor(abs(height) * 3.0f) / 3.0f);
+    noise = rand(u * 12.3f + v * 4.5f) * 0.15f;
+
+    // Complex boolean condition stress check
+    if(((u % 2 == 0 && v % 2 == 0) || (abs(u) > 5 && abs(v) > 5)) && (dist < 4.0f || sin(angle * 4.0f) > 0.0f)) {
+      glPushMatrix();
+      glTranslatef(x_val, height + noise, y_val);
+
+      r_val = clamp(sin(angle * 3.0f + t), 0.1f, 0.9f);
+      g_val = clamp(cos(dist - t), 0.1f, 0.9f);
+      b_val = clamp(smoothstep(0.1f, 0.8f, abs(step_mod)), 0.2f, 1.0f);
+
+      glColor3f(r_val, g_val, b_val);
+      glutSolidCube(0.2f + abs(step_mod) * 0.15f);
+      glPopMatrix();
+    }
+  }
+}
