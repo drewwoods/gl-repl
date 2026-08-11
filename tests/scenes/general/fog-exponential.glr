@@ -2,10 +2,10 @@
 // @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_CLASSIC
 
-glTranslatef(0.0f, -1.0f, -5.00f);   // @camera dist
+glTranslatef(0.0f, 0.0f, -5.00f);   // @camera dist
 glRotatef(15.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+glTranslatef(0.0f, -1.0f, 0.0f);   // @camera pan
 
 // Bright misty sky background
 glClearColor(0.85f, 0.90f, 0.95f, 1.0f);

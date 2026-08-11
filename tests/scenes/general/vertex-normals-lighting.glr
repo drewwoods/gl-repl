@@ -16,9 +16,6 @@ glEnable(GL_LIGHT0);
 glEnable(GL_NORMALIZE);
 glShadeModel(GL_FLAT);
 
-// Position a bright white light slightly above and to the right
-glLightfv(GL_LIGHT0, GL_POSITION, (GLfloat[]){3.0f, 4.0f, 5.0f, 0.0f});
-
 // Set a base material color
 glEnable(GL_COLOR_MATERIAL);
 glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
