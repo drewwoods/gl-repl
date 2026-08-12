@@ -932,6 +932,101 @@ static const TutorialStep g_tutorial_normals_steps[] = {
     STEP_SENTINEL,
 };
 
+/* The HEADLIGHT theme is load-bearing, not decoration. The lesson's whole
+ * claim is "the normal points straight AT the light and the face is still
+ * dark", and only a lamp on the view axis makes that literally true: light 0
+ * rides eye space one unit in front of the eye, so a quad in the z = 0 plane
+ * carrying glNormal3f(0, 0, 1) has n.l = 1 - full diffuse - the moment its
+ * winding is right. Under the DEFAULT theme the key light is the world
+ * directional (2, 4, 5), n.l = 0.74, and "directly in light" would be a lie.
+ * The other slots stay unenabled, so the shadowed side falls to ambient
+ * (light 0's 0.10 plus the 0.15 global term) and reads as near-black without
+ * disappearing.
+ *
+ * The camera keeps yaw 0 - the quad must read as a rectangle so the on-screen
+ * vertex order is unambiguously clockwise - and takes a small 12-degree pitch
+ * only so the sheet sits in space rather than looking like a 2D fill. Pitch is
+ * safe here for the same reason it is in the Normals lesson (the normal has
+ * n.y = 0), and with an eye-space lamp the pose cannot change the answer at
+ * all: orbit does not "fix" the bug, the glFrontFace step does. */
+static const char *const g_tutorial_two_sided_cfg[] = {
+    "// @cfg light_theme = LIGHT_THEME_HEADLIGHT",
+    NULL,
+};
+
+static const char *const g_tutorial_two_sided_setup[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -8.00f);",
+    "glRotatef(12.0f, 1.0f, 0.0f, 0.0f);",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "// Lighting scaffold for the two-sided lighting lesson.",
+    "glEnable(GL_DEPTH_TEST)",
+    "glEnable(GL_LIGHTING)",
+    "glEnable(GL_LIGHT0)",
+    "glEnable(GL_COLOR_MATERIAL)",
+    "glColor3f(0.75, 0.78, 0.85)",
+    NULL,
+};
+
+/* "Two-Sided Lighting" - the classic winding-vs-normal trap.
+ *
+ * GL_LIGHT_MODEL_TWO_SIDE tells GL to light back-facing polygons with the
+ * back material and the REVERSED normal. Which side is "back" comes from
+ * window-space winding under the active glFrontFace, never from the normal -
+ * so a quad wound clockwise while glFrontFace is still the default GL_CCW is
+ * a back face, GL flips its (0, 0, 1) normal to (0, 0, -1), and the light
+ * aimed dead-on at the sheet is applied to the side facing away from the eye.
+ * The visible face collapses to ambient while the far side takes the full
+ * diffuse term: light hitting the surface lit the OPPOSITE face.
+ *
+ * Two-sided lighting is what makes the mistake visible at all - with the
+ * default GL_FALSE the back face would be lit through the unflipped normal
+ * and look perfectly correct, which is the closing note.
+ *
+ * The winding overlay is the evidence step, but it replaces the program's own
+ * shading with its green/red fill, so it is switched back off before the fix:
+ * the payoff of the STEP_AT is the brightness change, and an overlay covering
+ * the geometry would hide exactly that. */
+static const TutorialStep g_tutorial_two_sided_steps[] = {
+    STEP_APPEND(NULL,
+        "// Light both sides of every polygon - back faces get the reversed normal.",
+        "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE)"),
+    STEP_APPEND("quad_begin",
+        "// Open a quad batch for one flat sheet, square to the camera.",
+        "glBegin(GL_QUADS)"),
+    STEP_APPEND(NULL,
+        "// Aim the normal straight out of the screen, directly at the light.",
+        "glNormal3f(0, 0, 1)"),
+    STEP_APPEND(NULL,
+        "// Now walk the corners CLOCKWISE on screen: bottom-left, up, right, down.",
+        "glVertex3f(-1.8, -1.8, 0)"),
+    STEP_CMD(NULL, "glVertex3f(-1.8, 1.8, 0)"),
+    STEP_CMD(NULL, "glVertex3f(1.8, 1.8, 0)"),
+    STEP_CMD(NULL, "glVertex3f(1.8, -1.8, 0)"),
+    STEP_CMD(NULL, "glEnd()"),
+    STEP_NOTE(
+        "// The normal points right at the lamp, yet the sheet is nearly black - only ambient reaches it."),
+    STEP_SET(NULL,
+        "// Turn on the winding overlay to ask GL which side of this quad it thinks you are looking at.",
+        "winding", 1),
+    STEP_NOTE(
+        "// Red: back-facing. glFrontFace is still GL_CCW, so clockwise vertices make this the BACK side."),
+    STEP_NOTE(
+        "// Two-sided lighting flipped the normal to -Z for that back face, so the light landed on the far side."),
+    STEP_SET_QUIET("winding", 0),
+    STEP_AT(NULL,
+        "// Go back above the quad and declare clockwise vertices to be the front face.",
+        "glFrontFace(GL_CW)", "quad_begin"),
+    STEP_NOTE(
+        "// Same vertices, same normal, same lamp - the visible side is the front face now, and it takes the full diffuse term."),
+    STEP_NOTE(
+        "// Winding picks which side GL lights; the normal only says where that side is pointing."),
+    STEP_NOTE(
+        "// Without GL_LIGHT_MODEL_TWO_SIDE the back face would have been lit through the unflipped normal - the bug would have looked correct."),
+    STEP_SENTINEL,
+};
+
 /* Camera-only scaffold: the whole lesson is "compare these two triangles", and
  * the shared pose's 30-degree yaw pushed the right-hand one further from the
  * eye, so two identical triangles rendered visibly different sizes. Yaw 0
@@ -1283,6 +1378,14 @@ static const TutorialEntry g_tutorials[] = {
         .steps      = g_tutorial_normals_steps,
         .setup      = g_tutorial_normals_setup,
         .tag_names  = (const char *const []){ "Depth & Lighting", NULL },
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Two-Sided Lighting",
+        .steps      = g_tutorial_two_sided_steps,
+        .setup      = g_tutorial_two_sided_setup,
+        .cfg        = g_tutorial_two_sided_cfg,
+        .tag_names  = (const char *const []){ "Depth & Lighting", "Geometry", NULL },
         .subheading = "Intermediate",
     },
     {

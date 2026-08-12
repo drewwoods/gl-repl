@@ -1197,6 +1197,10 @@ static void test_catalog_cfg_lines(void) {
                      strcmp(name, "Clip Planes") == 0 ||
                      strcmp(name, "Materials & Shininess") == 0 ||
                      strcmp(name, "Flat & Smooth Shading") == 0 ||
+                     /* Two-Sided Lighting pins the HEADLIGHT theme: the
+                      * lesson's "normal points straight at the light" only
+                      * holds for a lamp on the view axis. */
+                     strcmp(name, "Two-Sided Lighting") == 0 ||
                      strcmp(name, "Functions") == 0 ||
                      strcmp(name, "Scratch Arrays") == 0))
             continue;
@@ -2260,6 +2264,7 @@ static void test_phase_c_catalog_full_walk(void) {
         "Materials & Shininess",
         "Flat & Smooth Shading",
         "Normals",
+        "Two-Sided Lighting",
         "Culling & Winding",
         "Bitmap Text",
         "Functions",
@@ -2267,10 +2272,10 @@ static void test_phase_c_catalog_full_walk(void) {
         "Scratch Arrays",
     };
 
-    /* The catalog contains 24 entries after "Normals & Shade Model" split
-     * into "Flat & Smooth Shading" and "Normals". */
-    ASSERT_INT("catalog contains 24 tutorials",
-               repl_tutorial_count(), 24);
+    /* The catalog contains 25 entries: the "Normals & Shade Model" split
+     * into "Flat & Smooth Shading" + "Normals", plus "Two-Sided Lighting". */
+    ASSERT_INT("catalog contains 25 tutorials",
+               repl_tutorial_count(), 25);
 
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         char label[160];
