@@ -486,7 +486,7 @@ Boot / lifecycle band (`src/app/boot/`, reached only from `gl_repl`):
 
 | Module | Role |
 |--------|------|
-| `boot/glr_cli` | argv → [`GlrCliOptions`](../src/app/boot/glr_cli.h#L32) bag; usage/`--list-*` exit paths, `--examples-dir` load, fail-fast name→index resolution for `--example` / `--tutorial` / `--tour` |
+| `boot/glr_cli` | argv → [`GlrCliOptions`](../src/app/boot/glr_cli.h#L33) bag; usage/`--list-*` exit paths, `--examples-dir` load, fail-fast name→index resolution for `--example` / `--tutorial` / `--tour` |
 | `boot/glr_boot_dumps` | The GL-free `--dump-*` / `--flat-histogram` path: bootstrap, dump, exit. Drives the `glr_debug` formatters |
 | `boot/glr_init_trace` | Startup-stall diagnostic (`[init +N.NNNs] <phase>`), with an elapsed clock shared with audio + controller |
 | `boot/glr_capture_env` | Headless-capture `GLR_*` env hooks, split into a bootstrap `_apply` and a per-frame `_frame_hook` |

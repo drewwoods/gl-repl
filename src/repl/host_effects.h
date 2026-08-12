@@ -95,6 +95,17 @@ typedef struct {
     void (*edit_line_set)(int line);
     /* Decoupled editor/completion mutations and reads for subsystems. */
     void (*host_cursor_park)(int line, int insert_mode);
+    /* Put the cursor ON an existing committed row: park it there AND load
+     * that row's text into the input buffer, the way arrowing onto the line
+     * does, then follow-scroll it into view. host_cursor_park alone is not
+     * this - it leaves the input buffer empty, and the code panel renders
+     * that empty buffer in place of the row (insert mode adds a blank line
+     * above it; overwrite mode blanks the row itself). The tutorial runner's
+     * LOOK step needs the row visible with the cursor on it, so that
+     * cursor-scoped overlays describe that row. Callers must
+     * repl_dispatch_input_reset() when they leave, or the loaded text
+     * follows the cursor to wherever it parks next. */
+    void (*host_focus_line)(int line);
     void (*completion_clear)(void);
     void (*completion_update)(void);
     const char *(*host_input_get)(void);
@@ -115,6 +126,7 @@ void        repl_dispatch_tutorial_teardown(void);
 int         repl_dispatch_edit_line_get(void);
 void        repl_dispatch_edit_line_set(int line);
 void        repl_dispatch_host_cursor_park(int line, int insert_mode);
+void        repl_dispatch_host_focus_line(int line);
 void        repl_dispatch_completion_clear(void);
 void        repl_dispatch_completion_update(void);
 const char *repl_dispatch_host_input_get(void);

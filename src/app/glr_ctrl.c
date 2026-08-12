@@ -2130,7 +2130,9 @@ static void glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *snap) {
     if (in.cursor_pos < 0 || !in.input || !in.input[0]) return;
     if (editor_state_autocomplete()->match_count > 0) return;
     if (editor_inline_rename_active()) return;
-    if (tutorial_active() && tutorial_reject_noncommand_commit_with_hint()) return;
+    /* Pure predicate on purpose - this runs every frame, and the
+     * status-setting twin would stomp the active step's message. */
+    if (tutorial_step_rejects_commit()) return;
 
     d = repl_eval_numeric_arg_at_cursor(in.input, in.cursor_pos);
     if (!d.found) return;
@@ -3887,6 +3889,7 @@ static const ReplHostEffects g_glr_host_effects = {
     .edit_line_get               = editor_state_edit_line,
     .edit_line_set               = editor_state_edit_line_set,
     .host_cursor_park            = glr_ctrl_host_editor_cursor_park,
+    .host_focus_line             = glr_ctrl_set_edit_line,
     .completion_clear            = glr_ctrl_host_completion_clear,
     .completion_update           = glr_ctrl_host_completion_update,
     .host_input_get              = glr_ctrl_host_editor_input_get,

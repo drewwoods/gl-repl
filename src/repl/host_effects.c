@@ -78,6 +78,11 @@ void repl_dispatch_host_cursor_park(int line, int insert_mode) {
         g_host_effects->host_cursor_park(line, insert_mode);
 }
 
+void repl_dispatch_host_focus_line(int line) {
+    if (g_host_effects && g_host_effects->host_focus_line)
+        g_host_effects->host_focus_line(line);
+}
+
 void repl_dispatch_completion_clear(void) {
     if (g_host_effects && g_host_effects->completion_clear)
         g_host_effects->completion_clear();

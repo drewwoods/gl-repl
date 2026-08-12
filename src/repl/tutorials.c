@@ -47,25 +47,29 @@
       .cfg_value = 0, .cfg_value_name = NULL, .var_name = NULL, \
       .var_target = 0.0f }
 
-/* Label-placed NOTE: splice the narration above an EARLIER labeled row
- * and park the cursor on that row, with nothing to type. This is how a
- * lesson sends the learner back to inspect a line it already wrote -
+/* Look-here step: park the cursor on an EARLIER labeled row, wait for
+ * the ack key, and write NOTHING into the document - `c` goes to the
+ * status line instead of becoming a comment row. This is how a lesson
+ * sends the learner back to inspect a line it already wrote:
  * cursor-scoped overlays (normal arrows, edit guides, polygon
  * highlight) follow the cursor, so parking it on a row is what makes
  * them describe that row.
  *
- * Nothing in the runner is kind-specific about placement: the label
+ * Nothing in the runner is kind-specific about placement - the label
  * resolves through the same tutorial_step_instruction_line() walk
- * STEP_AT uses, and NOTE's own park (instruction_line + 1) then lands
- * on the labeled row itself, one below the comment just spliced in.
- * Ordering is what makes it work - the park belongs to the step being
- * ENTERED, so an APPEND step after this one moves the cursor back to
- * the document tail. Turn a cursor-scoped overlay on BEFORE the
- * NOTE_AT, never after. */
-#define STEP_NOTE_AT(c, target) \
+ * STEP_AT uses. What LOOK adds over a label-placed NOTE is the absence
+ * of the splice: a transient aside ("check this line") permanently
+ * wedged into the middle of a batch is clutter the learner then reads
+ * forever. Keep `c` short - the status bar has one line for it.
+ *
+ * Ordering is load-bearing: the park belongs to the step being ENTERED,
+ * so an APPEND step after this one moves the cursor back to the document
+ * tail. Turn a cursor-scoped overlay on BEFORE the LOOK_AT, never
+ * after. */
+#define STEP_LOOK_AT(c, target) \
     { .label = NULL, .comment = (c), .expected = NULL, \
       .placement = TUTORIAL_STEP_LABEL, .target_label = (target), \
-      .kind = TUTORIAL_STEP_KIND_NOTE, .cfg_slug = NULL, \
+      .kind = TUTORIAL_STEP_KIND_LOOK, .cfg_slug = NULL, \
       .cfg_value = 0, .cfg_value_name = NULL, .var_name = NULL, \
       .var_target = 0.0f }
 
@@ -1008,11 +1012,14 @@ static const char *const g_tutorial_two_sided_setup[] = {
  *
  * The middle of the lesson is a diagnosis in the order a learner would
  * actually try it: a dark lit surface looks like a normal problem, so the
- * normal is checked FIRST and cleared. That check is a STEP_NOTE_AT - the
+ * normal is checked FIRST and cleared. That check is a STEP_LOOK_AT - the
  * normal-arrow overlay goes on, then the cursor parks back on the
  * glNormal3f row. Parking is what produces the evidence: the cursor guide
  * prints that row's `n=(0.00, 0.00, 1.00)` at the vertex, and the overlay
- * adds an arrow at every corner of the face. The overlay step has to come first: each
+ * adds an arrow at every corner of the face. LOOK rather than a label-placed
+ * NOTE because the observation is about this moment, not about the finished
+ * program - the quad batch keeps the four lines the learner typed and
+ * nothing else. The overlay step has to come first: each
  * step parks the cursor as it is entered, so a REQUIRE_KEY after the NOTE_AT
  * would drag the cursor back to the document tail. Only once the normal is
  * exonerated does the winding overlay name the real culprit.
@@ -1048,8 +1055,8 @@ static const TutorialStep g_tutorial_two_sided_steps[] = {
         "// First suspect is the normal. Press %s to draw it as an arrow.",
         "normal_vectors", 1,
         KM_KEY(GLR_NORMAL_VECTORS), KM_MODS(GLR_NORMAL_VECTORS), 0),
-    STEP_NOTE_AT(
-        "// Back at the normal: the guide reads n=(0, 0, 1), pointing at the lamp - so the normal is not the bug.",
+    STEP_LOOK_AT(
+        "// The guide reads n=(0, 0, 1) - aimed at the lamp, so the normal is not the bug.",
         "normal_row"),
     STEP_REQUIRE_KEY(NULL,
         "// Press %s to ask GL, via the winding overlay, which side of this quad it thinks you are looking at.",
@@ -2046,22 +2053,70 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
             } else if (depth == 0) {
                 saw_topline_nonfunc = 1;
             }
-        } else if (step->kind == TUTORIAL_STEP_KIND_NOTE) {
+        } else if (step->kind == TUTORIAL_STEP_KIND_NOTE ||
+                   step->kind == TUTORIAL_STEP_KIND_LOOK) {
+            const char *kind_name =
+                step->kind == TUTORIAL_STEP_KIND_LOOK ? "LOOK" : "NOTE";
             if (step->expected) {
                 if (err_size > 0)
                     snprintf(err, (size_t)err_size,
-                             "tutorial '%s' step %d NOTE must leave "
+                             "tutorial '%s' step %d %s must leave "
                              "expected NULL",
-                             entry->name ? entry->name : "?", i);
+                             entry->name ? entry->name : "?", i, kind_name);
                 return 0;
             }
             if (label_is_empty(step->comment)) {
                 if (err_size > 0)
                     snprintf(err, (size_t)err_size,
-                             "tutorial '%s' step %d NOTE needs non-empty "
+                             "tutorial '%s' step %d %s needs non-empty "
                              "comment",
-                             entry->name ? entry->name : "?", i);
+                             entry->name ? entry->name : "?", i, kind_name);
                 return 0;
+            }
+            if (step->kind == TUTORIAL_STEP_KIND_LOOK) {
+                if (step->cfg_slug) {
+                    if (err_size > 0)
+                        snprintf(err, (size_t)err_size,
+                                 "tutorial '%s' step %d LOOK must leave "
+                                 "cfg_slug NULL",
+                                 entry->name ? entry->name : "?", i);
+                    return 0;
+                }
+                /* An appended LOOK would park where the cursor already is
+                 * and point at nothing. The whole kind is "go look at THAT
+                 * row", so the target is not optional. */
+                if (step->placement != TUTORIAL_STEP_LABEL) {
+                    if (err_size > 0)
+                        snprintf(err, (size_t)err_size,
+                                 "tutorial '%s' step %d LOOK needs label "
+                                 "placement (it exists to park on a row)",
+                                 entry->name ? entry->name : "?", i);
+                    return 0;
+                }
+            }
+            /* The park lands on the target's committed COMMAND row. A
+             * comment-only kind (NOTE / LOOK / SET / REQUIRE /
+             * REQUIRE_VAR) contributes no such row, so targeting one
+             * would park on whatever happens to sit next to its comment.
+             * Setup `@anchor` targets are fine - the anchor marks a row
+             * of preloaded code - and are resolved further down. */
+            if (step->placement == TUTORIAL_STEP_LABEL &&
+                !label_is_empty(step->target_label)) {
+                for (int j = 0; j < i; j++) {
+                    if (label_is_empty(entry->steps[j].label) ||
+                        strcmp(entry->steps[j].label, step->target_label) != 0)
+                        continue;
+                    if (entry->steps[j].kind != TUTORIAL_STEP_KIND_COMMAND) {
+                        if (err_size > 0)
+                            snprintf(err, (size_t)err_size,
+                                     "tutorial '%s' step %d %s targets step "
+                                     "%d, which commits no command row",
+                                     entry->name ? entry->name : "?", i,
+                                     kind_name, j);
+                        return 0;
+                    }
+                    break;
+                }
             }
         } else if (step->kind == TUTORIAL_STEP_KIND_SET ||
                    step->kind == TUTORIAL_STEP_KIND_REQUIRE) {

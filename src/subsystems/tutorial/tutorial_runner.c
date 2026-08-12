@@ -365,6 +365,35 @@ static void tutorial_set_status_ack_set(void) {
     repl_set_status(msg);
 }
 
+/* LOOK's narration: the step writes no comment row, so its text has to
+ * ride the status line together with the ack prompt. The catalog keeps
+ * these short (see STEP_LOOK_AT) - the status bar is one line, and
+ * snprintf truncation is the only backstop.
+ *
+ * Formatting is split out because the status has to be RE-EMITTED: status
+ * messages expire on a TTL, and for every other kind that is cosmetic (the
+ * instruction is a comment row that stays on screen) while for LOOK it is
+ * the whole instruction. tutorial_status_hint() hands this same text back
+ * to the controller's per-frame persistence pass. */
+static void tutorial_format_look_status(const char *note, char *out, size_t out_size) {
+    char prefix[TUTORIAL_STATUS_MAX];
+    const char *text = note ? note : "";
+    /* Catalog comments are written as source comments (`// ...`) because
+     * every other kind splices them into the document. Strip the marker
+     * for the status line, which is prose, not code. */
+    while (*text == '/') text++;
+    while (*text == ' ') text++;
+    get_tutorial_prefix(prefix, sizeof(prefix));
+    snprintf(out, out_size, "%.*s%s  (Enter / Tab / Space)",
+             TUTORIAL_PREFIX_CLIP, prefix, text);
+}
+
+static void tutorial_set_status_look(const char *note) {
+    char msg[TUTORIAL_STATUS_MAX];
+    tutorial_format_look_status(note, msg, sizeof(msg));
+    repl_set_status(msg);
+}
+
 static void tutorial_set_status_require(const char *slug, int target) {
     char prefix[TUTORIAL_STATUS_MAX];
     char msg[TUTORIAL_STATUS_MAX];
@@ -1070,6 +1099,16 @@ int tutorial_status_hint(char *out, size_t out_size) {
     if (!tutorial_active())
         return 0;
     state = tutorial_state_view();
+    /* LOOK keeps its narration here rather than in a comment row, so it is
+     * the one kind whose status must survive the TTL - hand it to the
+     * caller's re-emit pass. */
+    if (repl_tutorial_step_kind(state.tutorial_idx, state.step) ==
+        TUTORIAL_STEP_KIND_LOOK) {
+        tutorial_format_look_status(
+            repl_tutorial_step_comment(state.tutorial_idx, state.step),
+            out, out_size);
+        return 1;
+    }
     if (repl_tutorial_step_kind(state.tutorial_idx, state.step) !=
         TUTORIAL_STEP_KIND_COMMAND)
         return 0;
@@ -1126,17 +1165,67 @@ static TutorialStepResult tutorial_enter_step_command(int idx, int step, int com
     return TUTORIAL_STEP_PAUSED;
 }
 
-static TutorialStepResult tutorial_enter_step_note(int park_line, TutorialRuntimeState *state) {
+/* Where a NOTE / LOOK step parks its cursor.
+ *
+ * An APPEND note parks one row past the comment it just wrote. A
+ * LABEL-placed one has no command to type - the park IS the step, sending
+ * the learner back to the row the label names so cursor-scoped overlays
+ * describe it - and the row it wants is the target's committed COMMAND:
+ *
+ *     splice row  ->  [this step's comment, if it wrote one]
+ *                     [the target step's own comment, if it had one]
+ *                     the target's command        <- park here
+ *
+ * `pair_row` is that middle row. Only a COMMAND target can have one (the
+ * comment-only kinds commit nothing, which is why the validator refuses
+ * them as targets). A setup `@anchor` target (label_target_step < 0)
+ * resolves to the anchor comment, and the code it marks is the row below
+ * it - the same shape, so it counts too. */
+static int tutorial_note_park_line(int idx, int step, int instruction_line,
+                                   int label_target_step, int emitted_comment) {
+    int park = instruction_line + (emitted_comment ? 1 : 0);
+    if (repl_tutorial_step_placement(idx, step) != TUTORIAL_STEP_LABEL)
+        return park;
+    if (label_target_step < 0)
+        return park + 1;               /* @anchor row -> the code below it */
+    {
+        const char *pair_row = repl_tutorial_step_comment(idx, label_target_step);
+        return park + ((pair_row && pair_row[0]) ? 1 : 0);
+    }
+}
+
+static TutorialStepResult tutorial_enter_step_note(int park_line,
+                                                   const char *status_note,
+                                                   TutorialRuntimeState *state) {
     /* Comment-only showcase: the instruction comment was already
      * emitted; wait for an ack key (Enter/Tab/Space). Same frozen-
      * document, park-past-the-comment flow as SET, minus the cfg
      * write. The caller picks the park row - one past the comment for
-     * an append note, the labeled command row for a label-placed one. */
+     * an append note, the labeled command row for a label-placed one -
+     * and passes `status_note` for a LOOK step, whose narration has no
+     * document row to live on and belongs in the status line instead.
+     *
+     * How they park differs, because they park for opposite reasons. A NOTE
+     * parks on the blank row past the comment it just wrote and wants the
+     * insert row there. A LOOK parks ON an existing command row, and a bare
+     * cursor park would hide it: the code panel renders the (empty) input
+     * buffer at the cursor, so insert mode opens a blank line above the row
+     * and overwrite mode blanks the row itself - either way the cursor reads
+     * as pointing at nothing. Focusing the line loads it into the input
+     * buffer the way arrowing onto it does, so the row stays on screen with
+     * the cursor in it. tutorial_handle_ack_key resets the input when the
+     * step is acked, so the loaded text does not follow the cursor onward. */
     state->expected_commit_line = -1;
-    repl_dispatch_host_cursor_park(park_line,
-                                   park_line <
-                                   repl_state_document_count());
-    tutorial_set_status_ack_set();
+    if (status_note)
+        repl_dispatch_host_focus_line(park_line);
+    else
+        repl_dispatch_host_cursor_park(park_line,
+                                       park_line <
+                                       repl_state_document_count());
+    if (status_note && status_note[0])
+        tutorial_set_status_look(status_note);
+    else
+        tutorial_set_status_ack_set();
     repl_dispatch_completion_update();
     return TUTORIAL_STEP_PAUSED;
 }
@@ -1334,9 +1423,13 @@ static TutorialStepResult tutorial_enter_step(int step) {
 
     /* Comment-less COMMAND steps (have_comment == 0) emit nothing: the
      * expected command commits directly at instruction_line, taught by
-     * the autocomplete ghost + status hint alone. The validator
-     * guarantees every non-COMMAND kind carries a non-empty comment. */
-    if (!declare_step && have_comment &&
+     * the autocomplete ghost + status hint alone. LOOK never emits
+     * either - not writing to the document is the point of the kind, and
+     * its comment goes to the status line. The validator guarantees every
+     * other non-COMMAND kind carries a non-empty comment. */
+    int emitted_comment = (!declare_step && have_comment &&
+                           kind != TUTORIAL_STEP_KIND_LOOK);
+    if (emitted_comment &&
         !tutorial_emit_instruction_comment(comment, instruction_line)) {
         tutorial_teardown();
         return TUTORIAL_STEP_TERMINAL;
@@ -1350,24 +1443,15 @@ static TutorialStepResult tutorial_enter_step(int step) {
                                            instruction_line +
                                            (have_comment ? 1 : 0),
                                            state);
-    case TUTORIAL_STEP_KIND_NOTE: {
-        /* An append note parks one row past its own comment. A LABEL-placed
-         * note has no command to type - the park IS the step, sending the
-         * learner back to the row the label names so cursor-scoped overlays
-         * describe it. The splice lands above the target's whole
-         * (instruction, command) pair, so the labeled command sits one row
-         * further down whenever that step emitted a comment of its own. An
-         * `@anchor` target (label_target_step < 0) resolves to the anchor
-         * comment itself and needs no such adjustment. */
-        int park = instruction_line + 1;
-        if (label_target_step >= 0) {
-            const char *target_comment =
-                repl_tutorial_step_comment(idx, label_target_step);
-            if (target_comment && target_comment[0])
-                park++;
-        }
-        return tutorial_enter_step_note(park, state);
-    }
+    case TUTORIAL_STEP_KIND_NOTE:
+    case TUTORIAL_STEP_KIND_LOOK:
+        /* NOTE and LOOK differ only in whether they wrote a comment row;
+         * both then wait on the same ack key, so they share the park. */
+        return tutorial_enter_step_note(
+            tutorial_note_park_line(idx, step, instruction_line,
+                                    label_target_step, emitted_comment),
+            kind == TUTORIAL_STEP_KIND_LOOK ? comment : NULL,
+            state);
     case TUTORIAL_STEP_KIND_SET:
         return tutorial_enter_step_set(idx, step, instruction_line, state);
     case TUTORIAL_STEP_KIND_SET_QUIET:
@@ -1447,19 +1531,34 @@ int tutorial_handle_ack_key(unsigned char key) {
     if (!tutorial_active())
         return 0;
     TutorialStepKind k = tutorial_current_step_kind();
-    if (k != TUTORIAL_STEP_KIND_SET && k != TUTORIAL_STEP_KIND_NOTE)
+    if (k != TUTORIAL_STEP_KIND_SET && k != TUTORIAL_STEP_KIND_NOTE &&
+        k != TUTORIAL_STEP_KIND_LOOK)
         return 0;
     if (key != '\r' && key != '\n' && key != '\t' && key != ' ')
         return 0;
+    /* A LOOK step left the row it pointed at loaded in the input buffer
+     * (see tutorial_enter_step_note). Drop it before the next step parks,
+     * or that text rides along to the row the cursor lands on. */
+    if (k == TUTORIAL_STEP_KIND_LOOK)
+        repl_dispatch_input_reset();
     tutorial_advance_step(tutorial_state_mut());
     return 1;
+}
+
+int tutorial_step_rejects_commit(void) {
+    if (!tutorial_active())
+        return 0;
+    TutorialStepKind k = tutorial_current_step_kind();
+    return k == TUTORIAL_STEP_KIND_SET || k == TUTORIAL_STEP_KIND_NOTE ||
+           k == TUTORIAL_STEP_KIND_LOOK || k == TUTORIAL_STEP_KIND_REQUIRE;
 }
 
 int tutorial_reject_noncommand_commit_with_hint(void) {
     if (!tutorial_active())
         return 0;
     TutorialStepKind k = tutorial_current_step_kind();
-    if (k == TUTORIAL_STEP_KIND_SET || k == TUTORIAL_STEP_KIND_NOTE) {
+    if (k == TUTORIAL_STEP_KIND_SET || k == TUTORIAL_STEP_KIND_NOTE ||
+        k == TUTORIAL_STEP_KIND_LOOK) {
         tutorial_set_status_ack_set();
         return 1;
     }

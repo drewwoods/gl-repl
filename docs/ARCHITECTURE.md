@@ -1007,7 +1007,7 @@ before code-panel/camera wheel handlers so scroll does not leak behind menus.
 is `src/repl/tutorials.{c,h}`. Each tutorial entry declares a null-terminated
 `tag_names` string list; the synthetic `ALL` tag (index 0) is returned as a
 member of every entry unconditionally, so catalog literals only name real
-domain tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L345)
+domain tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L371)
 hides unused tags), followed by `Restart Tutorial` / `Exit Tutorial` rows while
 a tutorial is active. Tag rows are inert hover-only parents; selecting a flyout
 tutorial routes through the controller to `tutorial_start(index)` and dismisses
@@ -1905,7 +1905,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L129) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L281) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L284) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame - here a 2D/3D switch would let row-count see one
@@ -2781,7 +2781,7 @@ checklist above (its steps 1-2), a structured command touches:
 
 ### Adding A New Tutorial Step Kind
 
-Tutorial step kinds ([`TutorialStepKind`](../src/repl/tutorials.h#L127) in [`src/repl/tutorials.h`](../src/repl/tutorials.h)) name the
+Tutorial step kinds ([`TutorialStepKind`](../src/repl/tutorials.h#L144) in [`src/repl/tutorials.h`](../src/repl/tutorials.h)) name the
 contract between a catalog entry and the runtime: what extra fields the
 step carries, what UI it shows, what user action advances it, and which
 guard rails apply. Current kinds are:
@@ -2790,6 +2790,7 @@ guard rails apply. Current kinds are:
 |---------------|-----------------------------|-------------------------------------------|
 | `COMMAND`     | `expected` (`comment` optional) | User commits a line matching `expected`. A NULL/empty `comment` emits no locked instruction row - the command commits at the insertion row itself, taught by the autocomplete ghost + status hint; after the commit the committed row is recorded as the step's label anchor and locked (`tutorial_note_expected_commit_applied`). |
 | `NOTE`        | `comment` only              | Ack key (Enter / Tab / Space) - SET's showcase flow without the cfg write; the document stays frozen while it waits. |
+| `LOOK`        | `comment` + `target_label`  | Ack key (Enter / Tab / Space). NOTE's document-free twin: writes no row at all, parks the cursor ON the labeled command row (loading it into the input buffer, the way arrowing onto it does) so cursor-scoped overlays describe that row, and carries its narration in the status line. Label placement is mandatory, and the target must be a COMMAND step or a setup `@anchor` - the comment-only kinds commit no row to park on. Because the narration has no document row, `tutorial_status_hint()` re-emits it every frame; a plain status message would expire on its TTL and take the instruction with it. |
 | `SET`         | `cfg_slug`, `cfg_value` (`_name`) | Ack key (Enter / Tab / Space) after auto-apply. |
 | `REQUIRE`     | `cfg_slug`, `cfg_value` (`_name`) | Live cfg slug matches target (notify from `glr_config_set`). |
 | `REQUIRE_VAR` | `var_name`, `var_target`    | Live predef variable matches target (notify at the tail of the predef-writeback commit, after editor post-effects). |
@@ -2815,7 +2816,7 @@ drops them and no `CmdType` or parser grammar is involved. See
 
 **Start-of-tutorial view reset.** `tutorial_start` opens a fresh
 transient scene, so it must not inherit the previous scene's view.
-`tutorial_baseline_apply` calls [`repl_dispatch_tutorial_presentation_reset()`](../src/repl/host_effects.h#L110)
+`tutorial_baseline_apply` calls [`repl_dispatch_tutorial_presentation_reset()`](../src/repl/host_effects.h#L121)
 (host effect, implemented by `glr_ctrl_reset_tutorial_chrome`), which runs
 the example chrome reset with no tag mask and then overrides what an
 example load deliberately inherits: the camera eases back to the built-in
@@ -2904,8 +2905,8 @@ land in roughly the order below.
 
 #### 1. Catalog layer (`src/repl/tutorials.{h,c}`)
 
-- Add the new enum value to [`TutorialStepKind`](../src/repl/tutorials.h#L127).
-- Add any extra fields to [`TutorialStep`](../src/repl/tutorials.h#L155). **Place new fields AFTER all
+- Add the new enum value to [`TutorialStepKind`](../src/repl/tutorials.h#L144).
+- Add any extra fields to [`TutorialStep`](../src/repl/tutorials.h#L144). **Place new fields AFTER all
   existing ones** so positional initializers in `STEP_APPEND` / `STEP_AT`
   / `STEP_SET` / `STEP_REQUIRE` / `STEP_SENTINEL` keep zero-initializing
   to the new defaults - adding fields mid-struct silently shifts other
@@ -2961,7 +2962,7 @@ land in roughly the order below.
   the commit-side advance must stay a no-op for it: the notify hook is
   the authoritative advance. The mechanism is `tutorial_advance_if_commit_ok`
   (in [`src/editor/input.c`](../src/editor/input.c)), which advances ONLY when
-  [`tutorial_note_expected_commit_applied()`](../src/subsystems/tutorial/tutorial.h#L158) returns 1 - i.e. a pending
+  [`tutorial_note_expected_commit_applied()`](../src/subsystems/tutorial/tutorial.h#L169) returns 1 - i.e. a pending
   COMMAND expected-command attempt was in flight. A free-form REQUIRE_VAR
   commit sets no pending record, so it returns 0 and the commit path does
   not advance. This is load-bearing: the REQUIRE_VAR notify fires *inside*

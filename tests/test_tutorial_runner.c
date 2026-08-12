@@ -1577,6 +1577,68 @@ static void test_validate_rejects_forward_reference(void) {
     ASSERT_TRUE("forward reference rejected", !ok);
 }
 
+/* LOOK exists to park the cursor on a labeled row, so the catalog rules that
+ * keep it pointing at a real code row are part of the kind:
+ *   - append placement has no row to point at;
+ *   - a target that commits nothing (SET / REQUIRE / NOTE / LOOK) leaves the
+ *     park to land on whatever sits next to that step's comment - the bug
+ *     this rule exists to prevent. Same rule for a label-placed NOTE. */
+static void test_validate_look_step_rules(void) {
+    char err[200];
+
+    static const TutorialStep append_look[] = {
+        { NULL, "// nothing to look at", NULL,
+          TUTORIAL_STEP_APPEND, NULL, TUTORIAL_STEP_KIND_LOOK },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry entry_append = { .name = "append_look", .steps = append_look };
+    err[0] = '\0';
+    ASSERT_TRUE("appended LOOK rejected",
+                !repl_tutorial_validate_entry(&entry_append, err, sizeof(err)));
+    ASSERT_TRUE("appended LOOK diagnostic mentions label placement",
+                strstr(err, "label placement") != NULL);
+
+    static const TutorialStep look_at_set[] = {
+        { "the_set", "// a showcase step", NULL,
+          TUTORIAL_STEP_APPEND, NULL, TUTORIAL_STEP_KIND_SET, "winding", 1 },
+        { NULL, "// look at a step that committed nothing", NULL,
+          TUTORIAL_STEP_LABEL, "the_set", TUTORIAL_STEP_KIND_LOOK },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry entry_set = { .name = "look_at_set", .steps = look_at_set };
+    err[0] = '\0';
+    ASSERT_TRUE("LOOK targeting a SET step rejected",
+                !repl_tutorial_validate_entry(&entry_set, err, sizeof(err)));
+    ASSERT_TRUE("diagnostic explains the target commits no command row",
+                strstr(err, "commits no command row") != NULL);
+
+    /* Same rule applies to a label-placed NOTE. */
+    static const TutorialStep note_at_note[] = {
+        { "the_note", "// narration", NULL,
+          TUTORIAL_STEP_APPEND, NULL, TUTORIAL_STEP_KIND_NOTE },
+        { NULL, "// splice above narration", NULL,
+          TUTORIAL_STEP_LABEL, "the_note", TUTORIAL_STEP_KIND_NOTE },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry entry_note = { .name = "note_at_note", .steps = note_at_note };
+    err[0] = '\0';
+    ASSERT_TRUE("label-placed NOTE targeting a NOTE rejected",
+                !repl_tutorial_validate_entry(&entry_note, err, sizeof(err)));
+
+    /* A COMMAND target is the supported case and must still pass. */
+    static const TutorialStep look_at_cmd[] = {
+        { "the_cmd", "// type this", "glPointSize(1)",
+          TUTORIAL_STEP_APPEND, NULL, TUTORIAL_STEP_KIND_COMMAND },
+        { NULL, "// now go look at it", NULL,
+          TUTORIAL_STEP_LABEL, "the_cmd", TUTORIAL_STEP_KIND_LOOK },
+        { NULL, NULL, NULL, TUTORIAL_STEP_APPEND, NULL },
+    };
+    TutorialEntry entry_cmd = { .name = "look_at_cmd", .steps = look_at_cmd };
+    err[0] = '\0';
+    ASSERT_TRUE("LOOK targeting a COMMAND step accepted",
+                repl_tutorial_validate_entry(&entry_cmd, err, sizeof(err)));
+}
+
 static void test_validate_rejects_multi_row_expected(void) {
     /* Semicolons inside `expected` are interpreted as statement
      * separators and would expand the catalog row into multiple
@@ -2270,6 +2332,7 @@ static int phase_c_complete_current_step(void) {
         set_input_text(step->expected);
         editor_handle_key(';', 0, 0);
     } else if (step->kind == TUTORIAL_STEP_KIND_NOTE ||
+               step->kind == TUTORIAL_STEP_KIND_LOOK ||
                step->kind == TUTORIAL_STEP_KIND_SET) {
         glr_ctrl_keyboard('\r', 0, 0);
     } else if (step->kind == TUTORIAL_STEP_KIND_REQUIRE) {
@@ -2298,14 +2361,15 @@ static int phase_c_complete_current_step(void) {
            tutorial_state_view().step != before.step;
 }
 
-/* A label-placed NOTE has no command to type - the cursor park IS the step.
- * Walk Two-Sided Lighting up to its STEP_NOTE_AT and assert the cursor lands
- * on the glNormal3f row the label names, with the narration spliced directly
- * above it. That park is the only reason the cursor-scoped normal-arrow
- * overlay describes that row instead of wherever the previous step left the
- * cursor, so an append-style park here would silently gut the lesson while
- * every structural check still passed. */
-static void test_label_placed_note_parks_cursor_on_labeled_row(void) {
+/* A LOOK step has no command to type and writes nothing - the cursor park IS
+ * the step. Walk Two-Sided Lighting up to its STEP_LOOK_AT and assert the
+ * cursor lands on the glNormal3f row the label names, that the row above it
+ * is still that row's own instruction (nothing was spliced), and that the
+ * document did not grow. The park is the only reason the cursor-scoped
+ * normal-arrow overlay describes that row rather than wherever the previous
+ * step left the cursor, so an append-style park would silently gut the lesson
+ * while every structural check still passed. */
+static void test_look_step_parks_cursor_without_touching_document(void) {
     int idx = find_tutorial_idx("Two-Sided Lighting");
     ASSERT_TRUE("Two-Sided Lighting present in catalog", idx >= 0);
     if (idx < 0)
@@ -2316,38 +2380,70 @@ static void test_label_placed_note_parks_cursor_on_labeled_row(void) {
 
     int guard = 0;
     int limit = repl_tutorial_step_count(idx) + 4;
+    int rows_before = -1;
     while (tutorial_active() && guard++ < limit) {
         const TutorialStep *step =
             repl_tutorial_step_get(idx, tutorial_state_view().step);
-        if (step && step->kind == TUTORIAL_STEP_KIND_NOTE &&
-            step->placement == TUTORIAL_STEP_LABEL)
+        if (step && step->kind == TUTORIAL_STEP_KIND_LOOK)
             break;
+        rows_before = repl_state_document_count();
         if (!phase_c_complete_current_step())
             break;
     }
 
     const TutorialStep *at =
         repl_tutorial_step_get(idx, tutorial_state_view().step);
-    ASSERT_TRUE("walk reached the label-placed NOTE",
-                at && at->kind == TUTORIAL_STEP_KIND_NOTE &&
+    ASSERT_TRUE("walk reached the LOOK step",
+                at && at->kind == TUTORIAL_STEP_KIND_LOOK &&
                 at->placement == TUTORIAL_STEP_LABEL);
     if (!at)
         return;
 
-    /* The splice lands above the target's whole (instruction, command) pair,
-     * so the narration is two rows up, not one - and the park has to clear
-     * both rows to reach the command. */
+    /* Entering the LOOK step is what parked the cursor; the step before it
+     * (a REQUIRE_KEY) added its own instruction row, so compare against the
+     * count taken after that row landed. */
+    ASSERT_INT("LOOK wrote no row into the document",
+               repl_state_document_count(), rows_before);
+
     SourceTextView doc = source_document_view();
     int cursor = editor_state_edit_line();
     const char *cursor_row = source_text_line(doc, cursor);
-    const char *pair_row   = source_text_line(doc, cursor - 1);
-    const char *note_row   = source_text_line(doc, cursor - 2);
+    const char *above      = source_text_line(doc, cursor - 1);
     ASSERT_TRUE("cursor parked on the labeled row",
                 cursor_row && strstr(cursor_row, "glNormal3f(0, 0, 1)") != NULL);
-    ASSERT_TRUE("labeled row keeps its own instruction comment directly above",
-                pair_row && strstr(pair_row, "Aim the normal") != NULL);
-    ASSERT_TRUE("narration spliced above the pair",
-                note_row && strstr(note_row, "not the bug") != NULL);
+    ASSERT_TRUE("labeled row keeps its own instruction directly above it",
+                above && strstr(above, "Aim the normal") != NULL);
+
+    /* Parking is not enough - the code panel draws the input buffer at the
+     * cursor, so the row is only ON SCREEN under the cursor if the step
+     * loaded it (insert mode would open a blank line above it instead;
+     * an empty overwrite buffer would blank the row itself). */
+    ASSERT_TRUE("LOOK leaves insert mode off", editor_insert_mode() == 0);
+    ASSERT_STR("LOOK loads the labeled row into the input buffer",
+               editor_input_text(), "glNormal3f(0, 0, 1)");
+
+    /* The narration has no document row, so it must be the live status -
+     * and status messages expire on a TTL, so it must ALSO be what
+     * tutorial_status_hint() hands the controller's per-frame re-emit pass.
+     * Without that second half the instruction just vanishes mid-step. */
+    ASSERT_TRUE("status carries the LOOK narration",
+                strstr(status_text(), "not the bug") != NULL);
+    {
+        char hint[REPL_STATUS_TEXT_MAX] = "";
+        ASSERT_TRUE("LOOK offers a persistent status hint",
+                    tutorial_status_hint(hint, sizeof hint));
+        ASSERT_TRUE("persistent hint repeats the narration",
+                    strstr(hint, "not the bug") != NULL);
+        ASSERT_TRUE("persistent hint names the ack keys",
+                    strstr(hint, "Enter") != NULL);
+        ASSERT_TRUE("persistent hint drops the source-comment marker",
+                    strstr(hint, "//") == NULL);
+    }
+
+    /* Acking drops the loaded text, or it would ride along to whatever row
+     * the next step parks on. */
+    glr_ctrl_keyboard('\r', 0, 0);
+    ASSERT_STR("ack clears the borrowed input buffer", editor_input_text(), "");
 }
 
 static void test_phase_c_catalog_full_walk(void) {
@@ -4997,7 +5093,7 @@ int main(void) {
     test_catalog_tag_metadata();
     test_catalog_subheading_metadata();
     test_catalog_validation_passes_for_all_tutorials();
-    test_label_placed_note_parks_cursor_on_labeled_row();
+    test_look_step_parks_cursor_without_touching_document();
     test_phase_c_catalog_full_walk();
     test_block_open_commit_locks_header_and_parks_in_block();
     test_block_body_commit_shifts_locked_close();
@@ -5010,6 +5106,7 @@ int main(void) {
     test_validate_rejects_duplicate_label();
     test_validate_rejects_missing_target_label();
     test_validate_rejects_forward_reference();
+    test_validate_look_step_rules();
     test_validate_rejects_multi_row_expected();
     test_validate_accepts_well_formed_label_tutorial();
     test_append_first_expected_commit_line_is_trailing_row();
