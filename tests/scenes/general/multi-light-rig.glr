@@ -2,9 +2,14 @@
 // @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_CLASSIC
 
+// Dual-light teapot using the app-owned light slots. Program-side glLightfv
+// is not in the language yet (see docs/plans/not-started/repl-capability-gaps.md
+// section 3), so LIGHT0/LIGHT1 keep the theme positions/colours and the spheres are
+// only visual markers of where those slots typically sit.
+
 glTranslatef(0.0f, 0.0f, -10.00f);   // @camera dist
 glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(t * 20.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glRotatef(30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
 glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
 glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
@@ -17,32 +22,25 @@ glEnable(GL_LIGHT1);
 glEnable(GL_NORMALIZE);
 glShadeModel(GL_SMOOTH);
 
-// Light 0 (Warm / Coral) from the top-right
-glLightfv(GL_LIGHT0, GL_POSITION, (GLfloat[]){3.0f, 3.0f, 3.0f, 1.0f});
-glLightfv(GL_LIGHT0, GL_DIFFUSE, (GLfloat[]){1.0f, 0.35f, 0.20f, 1.0f});
-
-// Light 1 (Cool / Azure) from the bottom-left
-glLightfv(GL_LIGHT1, GL_POSITION, (GLfloat[]){-3.0f, -3.0f, -3.0f, 1.0f});
-glLightfv(GL_LIGHT1, GL_DIFFUSE, (GLfloat[]){0.15f, 0.55f, 1.00f, 1.0f});
-
 // Draw a neutral white/gray teapot in the center to catch both lights
 glEnable(GL_COLOR_MATERIAL);
 glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 glColor3f(0.9f, 0.9f, 0.9f); // Neutral base color
 
+glPushMatrix();
+glRotatef(t * 20.0f, 0.0f, 1.0f, 0.0f);
 glutSolidTeapot(1.5f);
+glPopMatrix();
 
-// Draw visual markers for the lights (unlit)
+// Unlit markers for the approximate LIGHT0 / LIGHT1 directions
 glDisable(GL_LIGHTING);
 
-// Visual marker for Light 0
 glPushMatrix();
 glTranslatef(3.0f, 3.0f, 3.0f);
 glColor3f(1.0f, 0.35f, 0.20f);
 glutSolidSphere(0.2f, 10, 10);
 glPopMatrix();
 
-// Visual marker for Light 1
 glPushMatrix();
 glTranslatef(-3.0f, -3.0f, -3.0f);
 glColor3f(0.15f, 0.55f, 1.00f);
