@@ -290,7 +290,6 @@ const ReplEnumEntry *repl_point_param_pname_entries(void);
 const ReplEnumEntry *repl_clip_plane_entries(void);
 const ReplEnumEntry *repl_fog_f_pname_entries(void);
 const ReplEnumEntry *repl_fog_color_pname_entries(void);
-const ReplEnumEntry *repl_fog_mode_entries(void);
 
 /* The 10 GL_*_BIT attribute groups glPushAttrib()/glPopAttrib() support, in
  * canonical order (ascending GL value). Shared source of truth for the
