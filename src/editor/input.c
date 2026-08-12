@@ -373,14 +373,33 @@ void editor_reset_for_new_scene(void) {
 }
 
 void editor_load_line_to_input(int idx) {
+    if (idx >= 0 && idx < repl_state_document_count() &&
+        tutorial_line_is_locked(idx)) {
+        /* User navigation onto a tutorial-locked row: refuse to hand its
+         * text to the editable input buffer, and say why. The row goes
+         * blank while the cursor sits on it - the code panel draws the
+         * input buffer at the cursor - which is the read-only signal.
+         * A tutorial parking its OWN cursor for inspection wants the row
+         * on screen instead, and calls the _readonly twin below. */
+        editor_input_clear();
+        editor_cursor_pos_set(0);
+        repl_set_status_error("Tutorial line is read-only");
+        return;
+    }
+    editor_load_line_to_input_readonly(idx);
+}
+
+/* Load `idx` into the input buffer even when the tutorial runtime has the
+ * row locked. Read-only is the CALLER's job here: the tutorial parks its
+ * cursor on a row to point at it (label-placed NOTE), and the step it does
+ * that from freezes the document anyway - commits are rejected by
+ * tutorial_guard_source_change and the ack clears the buffer again. Going
+ * through the guarded entry point instead would clear the buffer, and since
+ * the code panel renders the input buffer at the cursor row, the row the
+ * step is pointing at would render blank. */
+void editor_load_line_to_input_readonly(int idx) {
     EditorInputState *inp = editor_state_input_mut();
     if (idx >= 0 && idx < repl_state_document_count()) {
-        if (tutorial_line_is_locked(idx)) {
-            editor_input_clear();
-            editor_cursor_pos_set(0);
-            repl_set_status_error("Tutorial line is read-only");
-            return;
-        }
 
         /* A label row needs no special case: `name:` is the only spelling,
          * it is what the row already holds, and the canonical view below

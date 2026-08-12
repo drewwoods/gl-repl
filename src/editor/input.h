@@ -178,8 +178,16 @@ void editor_reset_for_new_scene(void);
 
 /* Sync the input buffer to the source line at `idx` (strips trailing
  * `;` and whitespace). Used by the editor when navigating to an
- * existing line and by reformat/scene-switch paths. */
+ * existing line and by reformat/scene-switch paths.
+ *
+ * A tutorial-locked row is REFUSED here: the buffer is cleared and a
+ * read-only status is set, so the row renders blank under the cursor
+ * (the code panel draws the input buffer at the cursor row). That is the
+ * right answer for user navigation and the wrong one for a tutorial
+ * parking its own cursor to point AT a row - which is what the
+ * `_readonly` twin is for, and why the two entry points exist. */
 void editor_load_line_to_input(int idx);
+void editor_load_line_to_input_readonly(int idx);
 
 /* Programmatic entry point equivalent to typing `line` and pressing
  * `;`. Used by tests, the clipboard paste path, and editor-side

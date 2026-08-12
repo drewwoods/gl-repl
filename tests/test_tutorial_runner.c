@@ -2397,25 +2397,30 @@ static void test_label_placed_note_parks_cursor_in_labeled_row(void) {
     if (!at)
         return;
 
-    /* The splice lands above the target's whole (instruction, command)
-     * pair, so the narration is two rows above the command - and the park
-     * has to clear both to reach it. */
+    /* The labeled step carries no comment of its own (the catalog splits the
+     * instruction into its own NOTE), so the splice lands directly above the
+     * command row and the narration reads in lesson order. */
     SourceTextView doc = source_document_view();
     int cursor = editor_state_edit_line();
     const char *cursor_row = source_text_line(doc, cursor);
-    const char *pair_row   = source_text_line(doc, cursor - 1);
-    const char *note_row   = source_text_line(doc, cursor - 2);
+    const char *note_row   = source_text_line(doc, cursor - 1);
+    const char *instr_row  = source_text_line(doc, cursor - 2);
     ASSERT_TRUE("cursor parked on the labeled row",
                 cursor_row && strstr(cursor_row, "glNormal3f(0, 0, 1)") != NULL);
-    ASSERT_TRUE("labeled row keeps its own instruction directly above it",
-                pair_row && strstr(pair_row, "Aim the normal") != NULL);
-    ASSERT_TRUE("narration spliced above the pair, inline with the code",
+    ASSERT_TRUE("narration spliced directly above the labeled row",
                 note_row && strstr(note_row, "not the bug") != NULL);
+    ASSERT_TRUE("the row's original instruction stays above the narration",
+                instr_row && strstr(instr_row, "Aim the normal") != NULL);
 
     /* Parking is not enough - the code panel draws the input buffer at the
      * cursor, so the row is only ON SCREEN under the cursor if the step
-     * loaded it (insert mode would open a blank line above it instead;
-     * an empty overwrite buffer would blank the row itself). */
+     * loaded it (insert mode would open a blank line above it instead; an
+     * empty overwrite buffer would blank the row itself). A comment-less
+     * labeled step makes its command row the tutorial's locked line, so this
+     * also pins that the park loads a LOCKED row rather than being refused
+     * by editor_load_line_to_input's read-only guard. */
+    ASSERT_TRUE("the parked row is one the tutorial has locked",
+                tutorial_line_is_locked(cursor));
     ASSERT_TRUE("label-placed NOTE leaves insert mode off",
                 editor_insert_mode() == 0);
     ASSERT_STR("label-placed NOTE loads the labeled row into the input buffer",

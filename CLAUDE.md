@@ -377,9 +377,9 @@ execute-time re-eval.
 
 - **Interactive `;` key**: the input buffer does **not** contain the `;` -
   handlers must accept input without a trailing `;`.
-- **[`editor_feed_line()`](src/editor/input.h#L188)** (file/example loading): copies the full line
+- **[`editor_feed_line()`](src/editor/input.h#L196)** (file/example loading): copies the full line
   *including* `;`, then runs the same chain.
-- Enter may or may not have `;`. [`editor_load_line_to_input()`](src/editor/input.h#L182) strips the
+- Enter may or may not have `;`. [`editor_load_line_to_input()`](src/editor/input.h#L189) strips the
   trailing `;`, so re-committing an existing line takes the no-semicolon
   path - handlers checking for `;` must also accept end-of-string.
 
@@ -489,7 +489,7 @@ Export ([`src/repl/export.c`](src/repl/export.c)) writes standalone C:
 header directives (`@cfg`, `@scene-name`, `@workspace-dir`), camera as raw
 transforms, predefs + scratch arrays as globals, funcs, `display()` body.
 Import ([`src/repl/import.c`](src/repl/import.c)) reverses it line-by-line,
-feeding geometry through [`editor_feed_line()`](src/editor/input.h#L188). The `IMPORT_EXPORT_STATE`
+feeding geometry through [`editor_feed_line()`](src/editor/input.h#L196). The `IMPORT_EXPORT_STATE`
 macro block is deliberately duplicated verbatim across the two TUs.
 `repl_cfg_get_int`/`_set_int` etc. go through the installed config bridge
 only (`check-repl-export-via-bridge`).

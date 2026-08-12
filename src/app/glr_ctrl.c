@@ -3860,6 +3860,24 @@ static void glr_ctrl_host_editor_cursor_park(int line, int insert_mode) {
     editor_insert_mode_set(insert_mode);
 }
 
+/* Put the cursor IN a committed row: park it, load the row's text (even
+ * when the tutorial has that row locked - see
+ * editor_load_line_to_input_readonly), drop insert mode so no blank line
+ * opens above it, and follow-scroll it into view. glr_ctrl_set_edit_line is
+ * deliberately not reused: that is the capture/user-navigation entry point,
+ * and it refuses locked rows, which is exactly the case a tutorial park
+ * hits whenever the target step committed its row without a comment above
+ * it (the row itself is then the step's locked line). */
+static void glr_ctrl_host_focus_line(int line) {
+    int count = repl_state_document_count();
+    if (line < 0 || count <= 0) return;
+    if (line >= count) line = count - 1;
+    editor_state_edit_line_set(line);
+    editor_load_line_to_input_readonly(line);
+    editor_insert_mode_set(0);
+    editor_scroll_follow_cursor_set(1);
+}
+
 static void glr_ctrl_host_completion_clear(void) {
     editor_completion_clear();
 }
@@ -3889,7 +3907,7 @@ static const ReplHostEffects g_glr_host_effects = {
     .edit_line_get               = editor_state_edit_line,
     .edit_line_set               = editor_state_edit_line_set,
     .host_cursor_park            = glr_ctrl_host_editor_cursor_park,
-    .host_focus_line             = glr_ctrl_set_edit_line,
+    .host_focus_line             = glr_ctrl_host_focus_line,
     .completion_clear            = glr_ctrl_host_completion_clear,
     .completion_update           = glr_ctrl_host_completion_update,
     .host_input_get              = glr_ctrl_host_editor_input_get,

@@ -1034,8 +1034,9 @@ static const TutorialStep g_tutorial_two_sided_steps[] = {
     STEP_APPEND("quad_begin",
         "// Open a quad batch for one flat sheet, square to the camera.",
         "glBegin(GL_QUADS)"),
-    STEP_APPEND("normal_row",
-        "// Aim the normal straight out of the screen, directly at the light.",
+    STEP_NOTE(
+            "// Aim the normal straight out of the screen, directly at the light."),
+    STEP_CMD("normal_row",
         "glNormal3f(0, 0, 1)"),
     STEP_APPEND(NULL,
         "// Now walk the corners CLOCKWISE on screen: bottom-left, up, right, down.",
