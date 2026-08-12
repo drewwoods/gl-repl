@@ -7,23 +7,23 @@
  *
  * glr_cli_parse is the whole argv surface of the binary: it fills a
  * GlrCliOptions bag, handles the print-and-exit flags itself, and runs the
- * fail-fast resolvers (--example / --tour name->index) before any window
- * opens. The return value is the run/exit decision main() keys off, so every
- * case here asserts (return, exit_code, opts) together.
+ * fail-fast resolvers (--example / --tutorial / --tour name->index) before
+ * any window opens. The return value is the run/exit decision main() keys off,
+ * so every case here asserts (return, exit_code, opts) together.
  *
  * Parses are run with stdout/stderr redirected to /dev/null: the help and
  * list paths print by design, and the unknown-name paths dump the catalog to
  * stderr. Silencing keeps the suite output readable without weakening the
  * assertions.
  *
- * Links CORE_TEST_OBJS - the resolvers read the compiled-in example and tour
- * catalogs (glr_scene_example_*, glr_tours_*). Nothing here opens a window or
- * calls GL.
+ * Links CORE_TEST_OBJS - the resolvers read the compiled-in example, tutorial,
+ * and tour catalogs. Nothing here opens a window or calls GL.
  */
 #include "app/boot/glr_cli.h"
 #include "app/glr_actions.h"   /* glr_scene_example_count / _name */
 #include "app/boot/glr_boot_dumps.h" /* glr_boot_run_dumps */
 #include "app/glr_tours.h"     /* glr_tours_count / _name */
+#include "repl/tutorials.h"    /* repl_tutorial_count / _name */
 
 #include "support/test_harness.h"
 
@@ -92,6 +92,7 @@ static void test_defaults(void) {
     ASSERT_INT("default window width", o.window_w, 1200);
     ASSERT_INT("default window height", o.window_h, 800);
     ASSERT_INT("no example selected", o.example_index, -1);
+    ASSERT_INT("no tutorial selected", o.tutorial_index, -1);
     ASSERT_INT("no tour selected", o.tour_index, -1);
 }
 
@@ -252,6 +253,10 @@ static void test_help_and_list_exit_paths(void) {
     ASSERT_INT("--list-tours exits", parse_v(&o, &code, av4), 0);
     ASSERT_INT("--list-tours exit code is success", code, 0);
 
+    char *av4b[] = { "gl-repl", "--list-tutorials", NULL };
+    ASSERT_INT("--list-tutorials exits", parse_v(&o, &code, av4b), 0);
+    ASSERT_INT("--list-tutorials exit code is success", code, 0);
+
     /* --help wins over anything that would otherwise fail the parse. */
     char *av5[] = { "gl-repl", "--window", "bogus", "--help", NULL };
     ASSERT_INT("--help after bad flag still exits", parse_v(&o, &code, av5), 0);
@@ -317,6 +322,57 @@ static void test_example_resolution(void) {
     ASSERT_TRUE("substring resolves example index", o.example_index >= 0);
 }
 
+static void test_tutorial_resolution(void) {
+    GlrCliOptions o;
+    int code = 0;
+    int n = repl_tutorial_count();
+
+    ASSERT_TRUE("tutorial catalog is non-empty", n > 0);
+    if (n <= 0) return;
+
+    char *av1[] = { "gl-repl", "--tutorial", "1", NULL };
+    ASSERT_INT("--tutorial 1 proceeds", parse_v(&o, &code, av1), 1);
+    ASSERT_INT("--tutorial 1 resolves to index 0", o.tutorial_index, 0);
+
+    char *av2[] = { "gl-repl", "--tutorial", "9999", NULL };
+    ASSERT_INT("out-of-range --tutorial exits", parse_v(&o, &code, av2), 0);
+    ASSERT_INT("out-of-range --tutorial exit code", code, 1);
+
+    char name[160];
+    const char *first = repl_tutorial_name(0);
+    ASSERT_TRUE("first tutorial has a name", first != NULL && first[0] != '\0');
+    if (!first || !first[0]) return;
+    snprintf(name, sizeof(name), "%s", first);
+
+    char *av3[] = { "gl-repl", "--tutorial", name, NULL };
+    ASSERT_INT("--tutorial by name proceeds", parse_v(&o, &code, av3), 1);
+    ASSERT_INT("--tutorial by name resolves", o.tutorial_index, 0);
+
+    char upper[160];
+    snprintf(upper, sizeof(upper), "%s", first);
+    for (char *p = upper; *p; p++)
+        *p = (char)toupper((unsigned char)*p);
+    char *av4[] = { "gl-repl", "--tutorial", upper, NULL };
+    ASSERT_INT("--tutorial name is case-insensitive", parse_v(&o, &code, av4), 1);
+    ASSERT_INT("case-folded tutorial resolves", o.tutorial_index, 0);
+
+    char *av5[] = { "gl-repl", "--tutorial", "zzz-no-such-tutorial", NULL };
+    ASSERT_INT("unknown --tutorial exits", parse_v(&o, &code, av5), 0);
+    ASSERT_INT("unknown --tutorial exit code", code, 1);
+
+    char sub[4];
+    if (strlen(first) >= 3) {
+        strncpy(sub, first + 1, 2);
+        sub[2] = '\0';
+    } else {
+        strncpy(sub, first, 1);
+        sub[1] = '\0';
+    }
+    char *av6[] = { "gl-repl", "--tutorial", sub, NULL };
+    ASSERT_INT("--tutorial substring proceeds", parse_v(&o, &code, av6), 1);
+    ASSERT_TRUE("substring resolves tutorial index", o.tutorial_index >= 0);
+}
+
 
 static void test_tour_resolution(void) {
     GlrCliOptions o;
@@ -378,6 +434,7 @@ static void test_combined_arguments(void) {
     ASSERT_STR("combined: time", o.time_arg, "3");
     /* Untouched fields keep their defaults. */
     ASSERT_INT("combined: accum still default", o.use_accum, GLR_CLI_ACCUM_AUTO);
+    ASSERT_INT("combined: no tutorial", o.tutorial_index, -1);
     ASSERT_INT("combined: no tour", o.tour_index, -1);
 }
 
@@ -417,6 +474,7 @@ static void test_dump_dispatch(void) {
 
     memset(&o, 0, sizeof(o));
     o.example_index = -1;
+    o.tutorial_index = -1;
     o.tour_index = -1;
 
     /* No dump flag: the caller must be told to proceed to the windowed run,
@@ -490,6 +548,7 @@ int main(void) {
     test_window_size();
     test_help_and_list_exit_paths();
     test_example_resolution();
+    test_tutorial_resolution();
     test_tour_resolution();
     test_combined_arguments();
     test_bad_examples_dir();

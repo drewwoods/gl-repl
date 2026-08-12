@@ -2927,6 +2927,13 @@ int glr_ctrl_start_tour(int tour_idx) {
     return glr_tours_start(tour_idx);
 }
 
+void glr_ctrl_start_tutorial(int tutorial_idx) {
+    glr_ctrl_reset_transients();
+    editor_undo_note_wholesale_replacement();
+    glr_ctrl_invalidate_depth_snapshot();
+    tutorial_start(tutorial_idx);
+}
+
 void glr_ctrl_display_frame(void) {
     int saved_flat_count;
     float live_predef_vals[MAX_PREDEF_VARS];

@@ -9,7 +9,8 @@ day-to-day features (editing, the language, the panels), see the
 ## Synopsis
 
 ```
-gl-repl [file.c | workspace/ | -] [--example name|n] [--tour name|n]
+gl-repl [file.c | workspace/ | -] [--example name|n] [--tutorial name|n]
+        [--tour name|n]
         [--time secs] [--window WxH]
         [--export-c out.c] [--export-glr out.glr]
         [--export-ply out.ply [--export-ply-srgb]]
@@ -17,7 +18,8 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--tour name|n]
         [--assets dir] [--examples-dir dir] [--no-audio]
         [--dump-code] [--dump-flat] [--flat-histogram]
         [--dump-state-layout] [--detailed-prof]
-        [--list-examples] [--list-tours] [--lint-scenes dir]
+        [--list-examples] [--list-tutorials] [--list-tours]
+        [--lint-scenes dir]
 ```
 
 ## Options
@@ -30,6 +32,8 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--tour name|n]
 | `-h`, `--help` | Print the full flag + environment reference and exit. |
 | `--example` *name*\|*n* | Start on a built-in example (case-insensitive name, or 1-based index). |
 | `--list-examples` | Print the built-in examples and exit. |
+| `--tutorial` *name*\|*n* | Start a built-in interactive tutorial on launch (case-insensitive name, or 1-based index). |
+| `--list-tutorials` | Print the built-in tutorials and exit. |
 | `--examples-dir` *dir* | Load `catalog.ini` + its scene files from *dir* at runtime instead of the compiled-in examples. The tree ships one such directory: [`tests/scenes/stress/`](../tests/scenes/stress/README.md). |
 | `--lint-scenes` *dir* | Validate every `.glr` in *dir* against the canonical document order and `@camera` tags, print every violation, and exit (no window). See [Scene-file headers](#scene-file-headers). |
 | `--tour` *name*\|*n* | Start and play a built-in guided tour on launch (case-insensitive name, or 1-based index). Space play/pause, arrows step, Esc exit. |
@@ -59,11 +63,12 @@ authoritative list; the completions in
 
 `scripts/completions/` carries bash and zsh completions for `gl-repl` and for
 `scripts/docs-assets.sh`. Nothing needs generating or regenerating: the
-candidate lists come from the commands' own `--list-examples`, `--list-tours`
-and `--list` output, so the example/tour catalogs and the doc-asset arrays stay
-the single source of truth. All three list paths print and exit before any GL,
-window, audio, or `magick`/`ffmpeg` work, so completion is instant and works on
-a headless machine with no capture tools installed.
+candidate lists come from the commands' own `--list-examples`,
+`--list-tutorials`, `--list-tours`
+and `--list` output, so the example/tutorial/tour catalogs and the doc-asset
+arrays stay the single source of truth. These list paths print and exit before
+any GL, window, audio, or `magick`/`ffmpeg` work, so completion is instant and
+works on a headless machine with no capture tools installed.
 
 To add both zsh completions to `~/.zshrc` (without duplicating them on later
 runs):
@@ -91,8 +96,9 @@ source scripts/completions/_gl-repl
 source scripts/completions/_docs-assets.sh
 ```
 
-`gl-repl` completes every flag, example and tour names for `--example` /
-`--tour`, directories for `--examples-dir` / `--assets` / `--lint-scenes`,
+`gl-repl` completes every flag and catalog names for `--example` /
+`--tutorial` / `--tour`, directories for `--examples-dir` / `--assets` /
+`--lint-scenes`,
 `*.c` for `--export-c`, `*.glr` for `--export-glr`, `*.ply` for `--export-ply`,
 common sizes for `--window`, and `*.c` scenes or a workspace directory
 positionally. Catalog names contain spaces and parentheses; they come

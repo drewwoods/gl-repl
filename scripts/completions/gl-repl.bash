@@ -2,17 +2,17 @@
 #
 #   source scripts/completions/gl-repl.bash
 #
-# Example and tour names come from the binary's own --list-examples /
-# --list-tours, so the catalogs stay the single source of truth. Both list
-# paths print and exit before any GL, window, or audio init, so completion is
-# instant and works headless.
+# Example, tutorial, and tour names come from the binary's own --list-examples,
+# --list-tutorials, and --list-tours, so the catalogs stay the single source
+# of truth. All list paths print and exit before any GL, window, or audio init,
+# so completion is instant and works headless.
 #
 # Kept to bash 3.2 syntax (the /bin/bash macOS ships).
 
 _gl_repl_opts='-h --help --accum --no-accum --no-audio --dump-code --dump-flat
 --flat-histogram --dump-state-layout --detailed-prof --export-c --export-glr
 --export-ply --export-ply-srgb --assets --example --examples-dir --time
---window --tour --list-examples --list-tours --lint-scenes'
+--window --tutorial --tour --list-examples --list-tutorials --list-tours --lint-scenes'
 
 # Catalog names carry spaces, parens and '&', so candidates have to come back
 # shell-escaped (or bare inside an open quote) to survive as one argument.
@@ -76,6 +76,7 @@ _gl_repl_complete() {
 
     case "$prev" in
         --example)      _gl_repl_names "$cur" --list-examples ; return 0 ;;
+        --tutorial)     _gl_repl_names "$cur" --list-tutorials ; return 0 ;;
         --tour)         _gl_repl_names "$cur" --list-tours    ; return 0 ;;
         --assets|--examples-dir|--lint-scenes)
                         _gl_repl_paths "$cur" ""              ; return 0 ;;

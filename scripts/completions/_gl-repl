@@ -5,10 +5,10 @@
 #   fpath=(.../scripts/completions $fpath)   # before compinit — autoloaded
 #   source .../scripts/completions/_gl-repl  # any time after compinit
 #
-# Example and tour names come from the binary's own --list-examples /
-# --list-tours, so the catalogs stay the single source of truth. Both list
-# paths print and exit before any GL, window, or audio init, so completion is
-# instant and works headless.
+# Example, tutorial, and tour names come from the binary's own --list-examples,
+# --list-tutorials, and --list-tours, so the catalogs stay the single source
+# of truth. All list paths print and exit before any GL, window, or audio init,
+# so completion is instant and works headless.
 
 # Catalog lines are "%4d  <name>"; the numbered-line match drops the header.
 _gl_repl_catalog() {
@@ -22,8 +22,10 @@ _gl_repl() {
     _arguments -s -S \
         '(-h --help)'{-h,--help}'[show help and exit]' \
         '--example[start with a built-in example]:example:->examples' \
+        '--tutorial[start with an interactive tutorial]:tutorial:->tutorials' \
         '--tour[play a guided tour on launch]:tour:->tours' \
         '--list-examples[print the built-in examples and exit]' \
+        '--list-tutorials[print the built-in tutorials and exit]' \
         '--list-tours[print the built-in guided tours and exit]' \
         '--examples-dir[load catalog.ini + scenes/ from a directory]:dir:_files -/' \
         '--lint-scenes[validate every .glr in a directory and exit]:dir:_files -/' \
@@ -49,6 +51,11 @@ _gl_repl() {
             local -a examples
             examples=( ${(f)"$(_gl_repl_catalog --list-examples)"} )
             _describe -t examples example examples
+            ;;
+        tutorials)
+            local -a tutorials
+            tutorials=( ${(f)"$(_gl_repl_catalog --list-tutorials)"} )
+            _describe -t tutorials tutorial tutorials
             ;;
         tours)
             local -a tours

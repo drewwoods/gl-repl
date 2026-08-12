@@ -211,6 +211,9 @@ each step either asks you to type a command (autocomplete ghost text shows
 the expected call), acknowledge a short note, change a setting, or drag a
 variable slider to a target.
 
+Run `./gl-repl --list-tutorials` to print the catalog, or start one directly
+with `./gl-repl --tutorial "First Triangle"` (a 1-based index also works).
+
 - Tutorials are grouped by tag (hover a tag row for its flyout); flyouts
   group entries under difficulty subheadings.
 - While a tutorial is active, the menu gains **Restart Tutorial** and
@@ -2556,6 +2559,8 @@ runs.
 
 --example <name|idx>   start on a built-in example (case-insensitive name or 1-based index)
 --list-examples        print the built-in examples and exit
+--tutorial <name|idx>  start an interactive tutorial (case-insensitive name or 1-based index)
+--list-tutorials       print the built-in tutorials and exit
 --time <secs>          initial animation time t (also GLR_TIME; --time wins)
 --window <WxH>         initial window size (default 1200x800)
 --export-c <path>      write the session out as standalone C, then exit (no window)

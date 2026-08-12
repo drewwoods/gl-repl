@@ -2,9 +2,10 @@
  * glr_cli.h - Command-line surface for the gl-repl binary.
  *
  * Parses argv into a plain GlrCliOptions bag and handles the self-contained
- * exit paths (-h/--help, --list-examples, --list-tours) plus the fail-fast
- * resolvers (--examples-dir load, --example / --tour name->index) that must
- * validate before a window opens. Everything here is policy-free plumbing:
+ * exit paths (-h/--help, --list-examples, --list-tutorials, --list-tours)
+ * plus the fail-fast resolvers (--examples-dir load, --example / --tutorial /
+ * --tour name->index) that must validate before a window opens. Everything
+ * here is policy-free plumbing:
  * no GL, no window, no controller state.
  *
  * main() owns the run sequence; glr_cli only tells it whether to proceed and,
@@ -52,12 +53,13 @@ typedef struct GlrCliOptions {
     int window_h;                  /* --window WxH (default 800)                */
 
     int example_index;             /* resolved --example, else -1               */
+    int tutorial_index;            /* resolved --tutorial, else -1              */
     int tour_index;                /* resolved --tour, else -1                  */
 } GlrCliOptions;
 
 /* Parse argv into *out (zeroed then populated with defaults). Handles the
- * print-and-exit flags itself and resolves --examples-dir/--example/--tour up
- * front so a bad argument fails before any window opens.
+ * print-and-exit flags itself and resolves --examples-dir/--example/
+ * --tutorial/--tour up front so a bad argument fails before any window opens.
  *
  * Returns 1 if the caller should proceed with *out; returns 0 if the caller
  * should exit immediately with *exit_code (help/list printed, or an error

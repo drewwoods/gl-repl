@@ -2,7 +2,7 @@
  * glr_cli.c - argv parsing + print-and-exit paths for the gl-repl binary.
  *
  * See glr_cli.h for the contract. All lookups here are pure reads over the
- * example/tour catalogs; nothing touches GL or controller state.
+ * example/tutorial/tour catalogs; nothing touches GL or controller state.
  */
 #include "app/boot/glr_cli.h"
 
@@ -10,6 +10,7 @@
 #include "app/glr_actions.h"   /* glr_scene_example_count / _name */
 #include "app/glr_tours.h"     /* glr_tours_count / _name */
 #include "repl/examples.h"     /* repl_examples_load_dir */
+#include "repl/tutorials.h"    /* repl_tutorial_count / _name */
 
 #include <ctype.h>
 #include <stdio.h>
@@ -52,6 +53,10 @@ static void print_usage(const char *prog) {
             "  --examples-dir <dir>  Load example catalog.ini from <dir> at\n"
             "               runtime instead of compiled-in examples\n"
             "  --list-examples  Print the built-in examples and exit\n"
+            "  --tutorial <name|idx>  Start a built-in interactive tutorial\n"
+            "               on launch (name is case-insensitive; or a 1-based\n"
+            "               index)\n"
+            "  --list-tutorials  Print the built-in tutorials and exit\n"
             "  --lint-scenes <dir>  Validate every .glr in <dir> against the\n"
             "               canonical document order and @camera tags, print\n"
             "               every violation, and exit (no window)\n"
@@ -138,8 +143,8 @@ static void print_usage(const char *prog) {
 }
 
 /* Case-insensitive full compare / substring test (keeps this TU free of a
- * <strings.h> / strcasecmp dependency). Shared by --example and --tour name
- * resolution. */
+ * <strings.h> / strcasecmp dependency). Shared by --example, --tutorial, and
+ * --tour name resolution. */
 static int arg_ci_equal(const char *a, const char *b) {
     for (; *a && *b; a++, b++)
         if (tolower((unsigned char)*a) != tolower((unsigned char)*b))
@@ -191,6 +196,37 @@ static int resolve_example_index(const char *arg) {
     return substr;
 }
 
+static void list_tutorials(FILE *out) {
+    int n = repl_tutorial_count();
+    fprintf(out, "Built-in tutorials (%d):\n", n);
+    for (int i = 0; i < n; i++)
+        fprintf(out, "  %2d  %s\n", i + 1, repl_tutorial_name(i));
+}
+
+/* Resolve --tutorial <arg> using the same 1-based-index / case-insensitive
+ * exact-or-substring rules as --example and --tour. */
+static int resolve_tutorial_index(const char *arg) {
+    int n = repl_tutorial_count();
+    if (n <= 0 || !arg || !arg[0]) return -1;
+
+    int all_digits = 1;
+    for (const char *p = arg; *p; p++)
+        if (!isdigit((unsigned char)*p)) { all_digits = 0; break; }
+    if (all_digits) {
+        int idx = atoi(arg) - 1;
+        return (idx >= 0 && idx < n) ? idx : -1;
+    }
+
+    int substr = -1;
+    for (int i = 0; i < n; i++) {
+        const char *name = repl_tutorial_name(i);
+        if (!name) continue;
+        if (arg_ci_equal(name, arg)) return i;
+        if (substr < 0 && arg_ci_contains(name, arg)) substr = i;
+    }
+    return substr;
+}
+
 static void list_tours(FILE *out) {
     int n = glr_tours_count();
     fprintf(out, "Built-in tours (%d):\n", n);
@@ -227,9 +263,11 @@ static int resolve_tour_index(const char *arg) {
 int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
     const char *prog = (argc > 0) ? argv[0] : NULL;
     const char *example_arg = NULL;       /* --example NAME|IDX (unresolved) */
+    const char *tutorial_arg = NULL;      /* --tutorial NAME|IDX (unresolved) */
     const char *tour_arg = NULL;          /* --tour NAME|IDX (unresolved)    */
     const char *lint_scenes_dir = NULL;
     int list_examples_flag = 0;
+    int list_tutorials_flag = 0;
     int list_tours_flag = 0;
 
     memset(out, 0, sizeof(*out));
@@ -237,6 +275,7 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
     out->window_w = 1200;
     out->window_h = 800;
     out->example_index = -1;
+    out->tutorial_index = -1;
     out->tour_index = -1;
 
     for (int i = 1; i < argc; i++) {
@@ -294,6 +333,11 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
         else if (strcmp(argv[i], "--list-examples") == 0) {
             list_examples_flag = 1;
         }
+        else if (strcmp(argv[i], "--tutorial") == 0 && i + 1 < argc)
+            tutorial_arg = argv[++i];
+        else if (strcmp(argv[i], "--list-tutorials") == 0) {
+            list_tutorials_flag = 1;
+        }
         else if (strcmp(argv[i], "--lint-scenes") == 0 && i + 1 < argc) {
             lint_scenes_dir = argv[++i];
         }
@@ -328,6 +372,11 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
         *exit_code = 0;
         return 0;
     }
+    if (list_tutorials_flag) {
+        list_tutorials(stdout);
+        *exit_code = 0;
+        return 0;
+    }
     if (list_tours_flag) {
         list_tours(stdout);
         *exit_code = 0;
@@ -341,6 +390,18 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
         if (out->example_index < 0) {
             fprintf(stderr, "gl-repl: unknown example \"%s\"\n", example_arg);
             list_examples(stderr);
+            *exit_code = 1;
+            return 0;
+        }
+    }
+
+    /* Resolve --tutorial before opening a window. Starting it is deferred
+     * until controller bootstrap has installed the tutorial host bridges. */
+    if (tutorial_arg) {
+        out->tutorial_index = resolve_tutorial_index(tutorial_arg);
+        if (out->tutorial_index < 0) {
+            fprintf(stderr, "gl-repl: unknown tutorial \"%s\"\n", tutorial_arg);
+            list_tutorials(stderr);
             *exit_code = 1;
             return 0;
         }

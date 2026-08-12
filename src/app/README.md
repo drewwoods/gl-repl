@@ -150,7 +150,7 @@ here too - see [`../../docs/MODULES.md`](../../docs/MODULES.md) for the full ros
 
 | File | Responsibility |
 |---|---|
-| [`boot/glr_cli.c`](boot/glr_cli.c) / `.h` | argv → [`GlrCliOptions`](boot/glr_cli.h#L32) bag; `print_usage`, `--list-*`/`-h` exit paths, `--example`/`--tour` name→index resolve |
+| [`boot/glr_cli.c`](boot/glr_cli.c) / `.h` | argv → [`GlrCliOptions`](boot/glr_cli.h#L32) bag; `print_usage`, `--list-*`/`-h` exit paths, `--example`/`--tutorial`/`--tour` name→index resolve |
 | [`boot/glr_boot_dumps.c`](boot/glr_boot_dumps.c) / `.h` | `--dump-*` / `--flat-histogram` GL-free bootstrap-dump-and-exit path (drives `glr_debug` formatters) |
 | [`boot/glr_init_trace.c`](boot/glr_init_trace.c) / `.h` | Startup stall diagnostic (`[init +N.NNNs] <phase>`); baseline + `--detailed-prof` phases |
 | [`boot/glr_capture_env.c`](boot/glr_capture_env.c) / `.h` | Headless-capture `GLR_*` env hooks: `_apply` (bootstrap) + `_frame_hook` (per-frame overlays) |

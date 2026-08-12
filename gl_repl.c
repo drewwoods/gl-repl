@@ -273,8 +273,9 @@ int main(int argc, char **argv) {
     }
 
     /* Parse the command line: glr_cli handles -h/--list-* itself and resolves
-     * --examples-dir / --example / --tour up front (fail-fast before a window
-     * opens). A 0 return means "exit now with exit_code" (help/list/error). */
+     * --examples-dir / --example / --tutorial / --tour up front (fail-fast
+     * before a window opens). A 0 return means "exit now with exit_code"
+     * (help/list/error). */
     if (!glr_cli_parse(argc, argv, &opts, &exit_code))
         return exit_code;
     if (opts.detailed_prof)
@@ -347,10 +348,18 @@ int main(int argc, char **argv) {
     glr_ctrl_bootstrap_repl(opts.input_file);
     if (opts.example_index >= 0)
         glr_scene_load_example(opts.example_index);
+    /* --tutorial <name|idx>: replace the loaded document with the interactive
+     * lesson once bootstrap has installed its host bridges. Do this before
+     * capture-env posing so hooks such as GLR_EDIT_LINE address the tutorial
+     * document, just as they address a selected example. */
+    if (opts.tutorial_index >= 0) {
+        splash_skip();
+        glr_ctrl_start_tutorial(opts.tutorial_index);
+    }
     /* Headless-capture env hooks applied at bootstrap (after the file/example
-     * load, before the main loop): initial-time override, pointer script,
-     * splash skip, tick-per-frame resolve, edit-line / type-keys pose, accum
-     * passes. Ordering inside is load-bearing - see glr_capture_env.c. */
+     * or tutorial load, before the main loop): initial-time override, pointer
+     * script, splash skip, tick-per-frame resolve, edit-line / type-keys pose,
+     * accum passes. Ordering inside is load-bearing - see glr_capture_env.c. */
     glr_capture_env_apply(opts.time_arg);
     /* --tour <name|idx>: start a built-in guided tour on launch. Deferred to
      * here so it runs after every capture/env resolve above - in particular
