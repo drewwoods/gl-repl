@@ -57,6 +57,7 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 | `stencil-shadow-volume.glr` | General, Stencil, Shadows, Lighting | True stencil shadow volume: the cube's silhouette from a moving point light is extruded into a closed hull, and z-pass INCR/DECR stencil counting shadows the floor and both walls in one pass. |
 | `stencil-shadow-volume-zfail.glr` | General, Stencil, Shadows, Lighting | The z-fail (Carmack's reverse) twin of the above: identical hull, counting moved to the depth-fail slot, so the light can orbit fully and the shadow stays correct even when the camera is inside the volume. |
 | `stencil-shadow-volumes-multi.glr` | General, Stencil, Shadows, Lighting | Three differently-sized, independently-spinning cubes casting into one stencil tally, showing that z-fail counting generalises to N occluders and that overlapping shadows stay a single shade. |
+| `stencil-shadow-volumes-infinite.glr` | General, Stencil, Shadows, glVertex4f | The multi-occluder scene with the extrusion done in homogeneous coordinates: `glVertex4f(p - light, 0)` sends each silhouette vertex to infinity, deleting the extrusion-length knob and every local in the two hull helpers. |
 
 
 ## How to Run & Validate
@@ -118,5 +119,6 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 ./gl-repl tests/scenes/general/stencil-shadow-volume.glr
 ./gl-repl tests/scenes/general/stencil-shadow-volume-zfail.glr
 ./gl-repl tests/scenes/general/stencil-shadow-volumes-multi.glr
+./gl-repl tests/scenes/general/stencil-shadow-volumes-infinite.glr
 
 ```
