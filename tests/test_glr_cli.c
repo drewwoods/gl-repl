@@ -23,12 +23,14 @@
 #include "app/glr_actions.h"   /* glr_scene_example_count / _name */
 #include "app/boot/glr_boot_dumps.h" /* glr_boot_run_dumps */
 #include "app/glr_tours.h"     /* glr_tours_count / _name */
+#include "repl/state_owners.h" /* repl_state_variables - dump-path --time */
 #include "repl/tutorials.h"    /* repl_tutorial_count / _name */
 
 #include "support/test_harness.h"
 
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -523,6 +525,60 @@ static void test_dump_dispatch(void) {
     o.example_index = -1;
 }
 
+/* --time / GLR_TIME must apply on the GL-free dump path too. The scene-
+ * authoring recipe diffs --dump-flat at several --time values; if the dump
+ * boot path never sets t, every sample silently dumps t = 0. */
+static void test_dump_path_applies_time(void) {
+    const char *path = "/tmp/glr_cli_dump_time.glr";
+    GlrCliOptions o;
+    static char buf[4096];
+    FILE *f;
+
+    f = fopen(path, "w");
+    ASSERT_TRUE("write dump-time fixture", f != NULL);
+    if (!f)
+        return;
+    fputs("glClear(GL_COLOR_BUFFER_BIT);\n"
+          "glTranslatef(t, 0, 0);\n", f);
+    fclose(f);
+
+    memset(&o, 0, sizeof(o));
+    o.example_index = -1;
+    o.tutorial_index = -1;
+    o.tour_index = -1;
+    o.input_file = path;
+    o.dump_flat = 1;
+    o.time_arg = "3.5";
+
+    unsetenv("GLR_TIME");
+    ASSERT_INT("--dump-flat with --time dispatches",
+               run_dumps_capture(&o, buf, sizeof(buf)), 1);
+    ASSERT_TRUE("dump path applies --time to anim_time",
+                (float)repl_state_variables().anim_time == 3.5f);
+    /* Flat args bake the predef values: t must land in the translate row,
+     * not stay at the post-load zero that the dump path used to leave. */
+    ASSERT_TRUE("dump-flat bakes --time into flattened args",
+                strstr(buf, "glTranslatef(t, 0, 0)") != NULL &&
+                strstr(buf, "0x1.cp+1") != NULL); /* 3.5f hex float */
+
+    /* GLR_TIME alone (no --time) is the other documented entry point. */
+    memset(&o, 0, sizeof(o));
+    o.example_index = -1;
+    o.tutorial_index = -1;
+    o.tour_index = -1;
+    o.input_file = path;
+    o.dump_flat = 1;
+    o.time_arg = NULL;
+    setenv("GLR_TIME", "7.25", 1);
+    ASSERT_INT("--dump-flat with GLR_TIME dispatches",
+               run_dumps_capture(&o, buf, sizeof(buf)), 1);
+    ASSERT_TRUE("dump path applies GLR_TIME to anim_time",
+                (float)repl_state_variables().anim_time == 7.25f);
+    unsetenv("GLR_TIME");
+
+    remove(path);
+}
+
 static void test_prog_name_fallback(void) {
     GlrCliOptions o;
     int code = -999;
@@ -557,6 +613,7 @@ int main(void) {
     test_combined_arguments();
     test_bad_examples_dir();
     test_dump_dispatch();
+    test_dump_path_applies_time();
     test_prog_name_fallback();
 
     return test_harness_report(&g_harness, "glr_cli");

@@ -6,10 +6,11 @@
  * so status messages are silent.
  */
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "app/boot/glr_boot_dumps.h"
 #include "app/glr_debug.h"    /* glr_debug_dump_current_* (downward call) */
-#include "app/glr_ctrl.h"     /* glr_ctrl_bootstrap_repl */
+#include "app/glr_ctrl.h"     /* glr_ctrl_bootstrap_repl / glr_ctrl_set_time */
 #include "app/glr_ctrl_export.h" /* glr_ctrl_fill_export_layout */
 #include "app/glr_actions.h"  /* glr_scene_load_example */
 #include "repl/export.h"      /* repl_export_save_output / _save_glr */
@@ -22,11 +23,22 @@
  * export-config bridge) at its top so @cfg in imported files is applied
  * here too. --example works the same way: the loader chain (reset
  * transients, undo note, repl_load_example) is GL-free, so built-ins can be
- * inspected - or exported - without a window. */
+ * inspected - or exported - without a window.
+ *
+ * --time / GLR_TIME are applied here rather than only in
+ * glr_capture_env_apply: the dump/export path never reaches that hook, and
+ * example/file load resets t to 0, so the override has to land after the
+ * load. Same precedence as capture_env (--time wins over GLR_TIME). */
 static void glr_boot_load_session(const GlrCliOptions *opts) {
+    const char *t_src;
+
     glr_ctrl_bootstrap_repl(opts->input_file);
     if (opts->example_index >= 0)
         glr_scene_load_example(opts->example_index);
+
+    t_src = opts->time_arg ? opts->time_arg : getenv("GLR_TIME");
+    if (t_src && *t_src)
+        glr_ctrl_set_time((float)atof(t_src));
 }
 
 int glr_boot_run_dumps(const GlrCliOptions *opts, FILE *out) {
