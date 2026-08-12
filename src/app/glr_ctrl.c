@@ -4767,7 +4767,16 @@ void glr_ctrl_tick(void) {
     }
 
     if (!tour_reconstructing) {
-        glr_ctrl_tick_view_transition(GLR_FRAME_DT_SECS);
+        /* An example camera apply defers its saved-3D snapshot update until
+         * the next display frame loads the camera modelview. Do not let the
+         * view transition consume the older snapshot first: on a rapid
+         * 2D-example -> 3D-example switch the projection can still be at its
+         * perspective endpoint, so one timer tick would otherwise start the
+         * camera-to-3D leg immediately and restore the outgoing 2D orbit.
+         * The display drains the pending pose at its documented frame-safe
+         * point; the following timer tick can then advance from fresh state. */
+        if (!glr_camera_export_has_pending_3d_pose())
+            glr_ctrl_tick_view_transition(GLR_FRAME_DT_SECS);
         glr_camera_tick();
     }
     glr_ctrl_tick_overlay_xn();

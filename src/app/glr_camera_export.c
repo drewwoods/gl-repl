@@ -73,6 +73,10 @@ static void cam_capture_pose(ReplCameraPose *out) {
 static int   g_pending_3d_record;
 static float g_pending_3d_rx, g_pending_3d_ry, g_pending_3d_tz;
 
+int glr_camera_export_has_pending_3d_pose(void) {
+    return g_pending_3d_record;
+}
+
 int glr_camera_export_take_pending_3d_pose(float *rx, float *ry, float *tz) {
     if (!g_pending_3d_record)
         return 0;

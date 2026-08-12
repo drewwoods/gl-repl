@@ -1,6 +1,7 @@
 #define _DEFAULT_SOURCE  /* mkdtemp() */
 #include "editor/state.h"
 #include "app/glr_camera.h"
+#include "app/glr_camera_export.h"
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
 #include "app/glr_defaults.h"
@@ -4328,6 +4329,85 @@ static void test_view_mode_3d_restore_tracks_example_loaded_midblend(void) {
                 fabsf(cam.dist - 2.0f) < 0.05f);
 }
 
+/* Carpet -> sponge can switch before the 3D->2D camera leg has finished,
+ * while projection_mix is therefore still 1. The sponge camera bridge queues
+ * its authored 3D orbit for the next display frame. A timer tick in between
+ * must not see the already-perspective projection, immediately consume the
+ * carpet's saved orbit, and make the later sponge record too late to apply. */
+static void test_view_mode_quick_2d_to_3d_waits_for_pending_example_pose(void) {
+    static const char *const carpet[] = {
+        "// @cfg view_mode = RENDER3D_VIEW_2D",
+        "",
+        "glTranslatef(0.0f, 0.0f, -6.0f);   // @camera dist",
+        "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
+        "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry",
+        "glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan",
+        "",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(0, 0, 0);",
+        "glEnd();",
+        NULL
+    };
+    static const char *const sponge[] = {
+        "glTranslatef(0.0f, 0.0f, -9.0f);   // @camera dist",
+        "glRotatef(18.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
+        "glRotatef(30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry",
+        "glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan",
+        "",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(0, 0, 0);",
+        "glEnd();",
+        NULL
+    };
+    GlrCameraState cam;
+
+    printf("--- imrepl_ctrl quick carpet-to-sponge camera handoff ---\n");
+    prepare_display_fixture();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+    glr_ctrl_display_frame();
+
+    glr_ctrl_reset_transients();
+    ASSERT_TRUE("2D carpet fixture loads", repl_load_example_lines(carpet) > 0);
+    /* Drain the carpet record, then let one timer tick enter CAMERA_TO_2D.
+     * Its projection leg has not begun, so the mix remains perspective. */
+    glr_ctrl_display_frame();
+    glr_ctrl_tick();
+    glr_ctrl_display_frame();
+    ASSERT_TRUE("carpet camera flatten is still active",
+                glr_camera_target_active());
+    ASSERT_FLOAT("projection is still at the perspective endpoint",
+                 g_last_scene_config.projection_mix, 1.0f);
+
+    glr_ctrl_reset_transients();
+    ASSERT_TRUE("3D sponge fixture loads", repl_load_example_lines(sponge) > 0);
+    ASSERT_TRUE("sponge 3D pose is pending the display-frame handoff",
+                glr_camera_export_has_pending_3d_pose());
+
+    /* Reproduce the problematic callback ordering: timer before display. */
+    glr_ctrl_tick();
+    glr_ctrl_display_frame();
+    ASSERT_TRUE("display consumed the sponge pose",
+                !glr_camera_export_has_pending_3d_pose());
+
+    for (int i = 0; i < 400; i++) {
+        glr_ctrl_tick();
+        glr_ctrl_display_frame();
+        if (g_last_scene_config.projection_mix == 1.0f &&
+            !glr_camera_target_active() &&
+            !glr_ctrl_view_transition_active())
+            break;
+    }
+
+    cam = glr_camera();
+    ASSERT_TRUE("sponge rx wins over the carpet's flat orbit",
+                fabsf(cam.rx - 18.0f) < 0.05f);
+    ASSERT_TRUE("sponge ry wins over the carpet's flat orbit",
+                fabsf(cam.ry - 30.0f) < 0.05f);
+    ASSERT_TRUE("sponge distance reaches its authored target",
+                fabsf(cam.dist - 9.0f) < 0.05f);
+}
+
 /* In 3D mode the live camera is authoritative, so an external 3D-pose
  * report (a stale callback firing outside the ortho window) must not
  * smear the saved snapshot. */
@@ -6946,6 +7026,7 @@ int main(void) {
     test_import_camera_block_becomes_scene_default();
     test_import_without_camera_block_keeps_global_default();
     test_view_mode_3d_restore_tracks_example_loaded_midblend();
+    test_view_mode_quick_2d_to_3d_waits_for_pending_example_pose();
     test_view_record_external_3d_pose_tracks_in_ortho();
     test_view_record_external_3d_pose_noop_in_perspective();
     test_quit_recovery_file();

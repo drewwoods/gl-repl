@@ -17,8 +17,11 @@ void glr_camera_export_install_bridge(void);
  * a specific point in the display frame, after the camera modelview is loaded.
  * An example-mode pose apply therefore only *enqueues* the record; the
  * controller drains it at that point via the take-pending call below, which
- * returns 1 (and clears the pending flag) when a record was waiting. */
+ * returns 1 (and clears the pending flag) when a record was waiting. The
+ * non-consuming query lets the animation timer defer a view transition until
+ * that newer pose reaches its frame-safe drain point. */
 void glr_ctrl_view_record_external_3d_pose(float rx, float ry, float tz);
+int  glr_camera_export_has_pending_3d_pose(void);
 int  glr_camera_export_take_pending_3d_pose(float *rx, float *ry, float *tz);
 
 #endif /* GLR_CAMERA_EXPORT_H */
