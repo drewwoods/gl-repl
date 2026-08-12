@@ -113,7 +113,6 @@ int repl_example_visible_tag_count(void);
 int repl_example_visible_tag_at(int dense_idx);
 
 /* Dynamic Tag Linked List Helpers */
-const ReplTagNode *repl_example_find_or_register_tag(const char *name);
 int repl_example_attach_tag(ReplItemTagNode **item_tags_head, const ReplTagNode *tag);
 void repl_example_free_item_tags(ReplItemTagNode *item_tags_head);
 
