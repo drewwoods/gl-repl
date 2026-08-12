@@ -51,6 +51,7 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 | `polygon-offset-overlay.glr` | General, PolygonOffset, 3D | Wireframe overlay on filled solid without z-fighting via `glPolygonOffset`. |
 | `multi-light-rig.glr` | General, Lighting, 3D | Multiple positional lights (`GL_LIGHT0`, `GL_LIGHT1`) with distinct colors. |
 | `stencil-mask-window.glr` | General, Stencil, State | Passing rendering exclusively inside a `glStencilFunc`-masked quad. |
+| `multiple-planar-shadow-projections.glr` | General, Stencil, Shadows, Lighting | Moving virtual-light planar projections from a cube onto the floor, back wall, and left wall, combined through stencil. |
 | `vertex-normals-lighting.glr` | General, Normals, Lighting | Explicit per-vertex `glNormal3f` assignments on custom geometry. |
 | `fog-exponential.glr` | General, Fog, 3D | Exponential squared fog (`GL_EXP2`) against a deep perspective grid. |
 
@@ -108,6 +109,7 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 ./gl-repl tests/scenes/general/polygon-offset-overlay.glr
 ./gl-repl tests/scenes/general/multi-light-rig.glr
 ./gl-repl tests/scenes/general/stencil-mask-window.glr
+./gl-repl tests/scenes/general/multiple-planar-shadow-projections.glr
 ./gl-repl tests/scenes/general/vertex-normals-lighting.glr
 ./gl-repl tests/scenes/general/fog-exponential.glr
 
