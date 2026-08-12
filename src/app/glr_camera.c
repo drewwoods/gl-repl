@@ -277,7 +277,9 @@ void glr_camera_set_distance(float dist) {
     g_camera.dist = dist;
 }
 
-void glr_camera_set_motion_glow(float mg)        { g_camera.motion_glow = mg; }
+void glr_camera_set_motion_glow(float motion_glow) {
+    g_camera.motion_glow = motion_glow;
+}
 
 void glr_camera_ease_to(float rx, float ry, float dist,
                         float tx, float ty, float tz) {
