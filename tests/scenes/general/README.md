@@ -55,6 +55,7 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 | `vertex-normals-lighting.glr` | General, Normals, Lighting | Explicit per-vertex `glNormal3f` assignments on custom geometry. |
 | `fog-exponential.glr` | General, Fog, 3D | Exponential squared fog (`GL_EXP2`) against a deep perspective grid. |
 | `stencil-shadow-volume.glr` | General, Stencil, Shadows, Lighting | True stencil shadow volume: the cube's silhouette from a moving point light is extruded into a closed hull, and z-pass INCR/DECR stencil counting shadows the floor and both walls in one pass. |
+| `stencil-shadow-volume-zfail.glr` | General, Stencil, Shadows, Lighting | The z-fail (Carmack's reverse) twin of the above: identical hull, counting moved to the depth-fail slot, so the light can orbit fully and the shadow stays correct even when the camera is inside the volume. |
 
 
 ## How to Run & Validate
@@ -114,5 +115,6 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 ./gl-repl tests/scenes/general/vertex-normals-lighting.glr
 ./gl-repl tests/scenes/general/fog-exponential.glr
 ./gl-repl tests/scenes/general/stencil-shadow-volume.glr
+./gl-repl tests/scenes/general/stencil-shadow-volume-zfail.glr
 
 ```

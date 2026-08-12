@@ -1,0 +1,382 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_OFF
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+static float h = 1; // occluder half-size @tune
+static float ext = 10; // silhouette extrusion length, in edge-to-light units @tune
+static float showVolume = 1; // draw the extruded hull itself @tune
+static float lx, ly, lz; // virtual point light, world space
+static float ox, oy, oz; // the same light in the occluder's own frame
+static float spin, ca, sa;
+
+// Carmack's reverse: the z-fail twin of stencil-shadow-volume.glr. Same hull,
+// same silhouette extraction - only the counting changes, and with it the one
+// restriction that made the other scene stage its light so carefully.
+//
+// z-pass counts hull faces that pass the depth test, which is a count of what
+// lies between the eye and the surface. That reading is only true when the eye
+// itself is outside the hull; walk the camera into the shadow and every pixel
+// reads one crossing short, so lit and shadowed swap wholesale. z-fail counts
+// from the other end instead - back faces INCR where they fail depth, front
+// faces DECR - measuring from beyond the scene inward, which never depends on
+// where the eye sits. So this scene lets the light swing a full circle at the cube's own
+// height, sweeping the shadow across the camera about once per orbit.
+//
+// Two things z-fail demands that z-pass got away without. The hull must really
+// be closed, because the caps are now load-bearing rather than cancelling out.
+// And the far cap must stay inside the far clip plane - the usual fix is an
+// infinite projection matrix, which the REPL has no glMatrixMode to reach, so
+// `ext` is bounded instead. At far-Z 200 against an extrusion under 80 there is
+// room to spare.
+
+// Three receiver planes at three angles, so the shadow has to bend across
+// them. `k` scales the whole room: the shadowed pass and the lit pass draw
+// the identical geometry at two brightnesses, and the per-face tints only
+// keep floor and walls apart to the eye - the walls are the teal anchor at
+// 0.70 and 0.50. No lighting is enabled anywhere.
+room(k) {
+  glBegin(GL_QUADS);
+    // Floor, y = 0.
+    glColor3f(k*0.10, k*0.95, k*0.85);
+    glNormal3f(0, 1, 0);
+    glVertex3f(-4, 0, 4);
+    glVertex3f(4, 0, 4);
+    glVertex3f(4, 0, -4);
+    glVertex3f(-4, 0, -4);
+
+    // Back wall, z = -4.
+    glColor3f(k*0.070, k*0.665, k*0.595);
+    glNormal3f(0, 0, 1);
+    glVertex3f(-4, 0, -4);
+    glVertex3f(4, 0, -4);
+    glVertex3f(4, 5, -4);
+    glVertex3f(-4, 5, -4);
+
+    // Left wall, x = -4.
+    glColor3f(k*0.050, k*0.475, k*0.425);
+    glNormal3f(1, 0, 0);
+    glVertex3f(-4, 0, 4);
+    glVertex3f(-4, 0, -4);
+    glVertex3f(-4, 5, -4);
+    glVertex3f(-4, 5, 4);
+  glEnd();
+}
+
+// The occluder, resting on the floor and turning about its own axis. Every
+// face is wound counter-clockwise seen from outside, which is what makes the
+// silhouette test below a plain sign test on the object-space light.
+cube() {
+  glPushMatrix();
+    glTranslatef(0, h, 0);
+    glRotatef(spin, 0, 1, 0);
+    glBegin(GL_QUADS);
+      glNormal3f(1, 0, 0);
+      glVertex3f(h, -h, h);
+      glVertex3f(h, -h, -h);
+      glVertex3f(h, h, -h);
+      glVertex3f(h, h, h);
+
+      glNormal3f(-1, 0, 0);
+      glVertex3f(-h, -h, -h);
+      glVertex3f(-h, -h, h);
+      glVertex3f(-h, h, h);
+      glVertex3f(-h, h, -h);
+
+      glNormal3f(0, 1, 0);
+      glVertex3f(-h, h, h);
+      glVertex3f(h, h, h);
+      glVertex3f(h, h, -h);
+      glVertex3f(-h, h, -h);
+
+      glNormal3f(0, -1, 0);
+      glVertex3f(-h, -h, -h);
+      glVertex3f(h, -h, -h);
+      glVertex3f(h, -h, h);
+      glVertex3f(-h, -h, h);
+
+      glNormal3f(0, 0, 1);
+      glVertex3f(-h, -h, h);
+      glVertex3f(h, -h, h);
+      glVertex3f(h, h, h);
+      glVertex3f(-h, h, h);
+
+      glNormal3f(0, 0, -1);
+      glVertex3f(h, -h, -h);
+      glVertex3f(-h, -h, -h);
+      glVertex3f(-h, h, -h);
+      glVertex3f(h, h, -h);
+    glEnd();
+  glPopMatrix();
+}
+
+// One silhouette edge, extruded into a hull side. The edge arrives in the
+// winding order of the light-facing face it came from; emitting a -> a' ->
+// b' -> b is what puts the quad's normal on the outside of the hull, so the
+// front/back face split the stencil passes rely on stays consistent.
+sideQuad(ax, ay, az, bx, by, bz) {
+  float apx, apy, apz;
+  float bpx, bpy, bpz;
+  apx = ax + ext*(ax - ox);
+  apy = ay + ext*(ay - oy);
+  apz = az + ext*(az - oz);
+  bpx = bx + ext*(bx - ox);
+  bpy = by + ext*(by - oy);
+  bpz = bz + ext*(bz - oz);
+  glBegin(GL_QUADS);
+    glVertex3f(ax, ay, az);
+    glVertex3f(apx, apy, apz);
+    glVertex3f(bpx, bpy, bpz);
+    glVertex3f(bx, by, bz);
+  glEnd();
+}
+
+// The two caps that close one light-facing face's share of the hull: the
+// face itself in front, the same face pushed down the light rays behind.
+// The far cap is emitted in reverse order so both caps face outward. Under
+// z-fail these are not optional - a hull left open at either end counts
+// wrong the moment a receiver sits behind the opening.
+caps(x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3) {
+  float e0x, e0y, e0z, e1x, e1y, e1z;
+  float e2x, e2y, e2z, e3x, e3y, e3z;
+  e0x = x0 + ext*(x0 - ox);
+  e0y = y0 + ext*(y0 - oy);
+  e0z = z0 + ext*(z0 - oz);
+  e1x = x1 + ext*(x1 - ox);
+  e1y = y1 + ext*(y1 - oy);
+  e1z = z1 + ext*(z1 - oz);
+  e2x = x2 + ext*(x2 - ox);
+  e2y = y2 + ext*(y2 - oy);
+  e2z = z2 + ext*(z2 - oz);
+  e3x = x3 + ext*(x3 - ox);
+  e3y = y3 + ext*(y3 - oy);
+  e3z = z3 + ext*(z3 - oz);
+  glBegin(GL_QUADS);
+    glVertex3f(x0, y0, z0);
+    glVertex3f(x1, y1, z1);
+    glVertex3f(x2, y2, z2);
+    glVertex3f(x3, y3, z3);
+  glEnd();
+  glBegin(GL_QUADS);
+    glVertex3f(e3x, e3y, e3z);
+    glVertex3f(e2x, e2y, e2z);
+    glVertex3f(e1x, e1y, e1z);
+    glVertex3f(e0x, e0y, e0z);
+  glEnd();
+}
+
+// The hull, rebuilt from scratch every frame in the cube's own frame - which
+// is why the light is transformed into that frame instead of the geometry
+// into the world. A face is light-facing when the light lies past its plane,
+// and an edge is on the silhouette when exactly one of its two faces is - so each
+// of the four tests below is the complement of a neighbour's face test and
+// every silhouette edge gets emitted exactly once.
+volume() {
+  glPushMatrix();
+    glTranslatef(0, h, 0);
+    glRotatef(spin, 0, 1, 0);
+
+    // +x face.
+    if(ox > h) {
+      caps(h, -h, h, h, -h, -h, h, h, -h, h, h, h);
+      if(oy >= -h) {
+        sideQuad(h, -h, h, h, -h, -h);
+      }
+      if(oz >= -h) {
+        sideQuad(h, -h, -h, h, h, -h);
+      }
+      if(oy <= h) {
+        sideQuad(h, h, -h, h, h, h);
+      }
+      if(oz <= h) {
+        sideQuad(h, h, h, h, -h, h);
+      }
+    }
+
+    // -x face.
+    if(ox < -h) {
+      caps(-h, -h, -h, -h, -h, h, -h, h, h, -h, h, -h);
+      if(oy >= -h) {
+        sideQuad(-h, -h, -h, -h, -h, h);
+      }
+      if(oz <= h) {
+        sideQuad(-h, -h, h, -h, h, h);
+      }
+      if(oy <= h) {
+        sideQuad(-h, h, h, -h, h, -h);
+      }
+      if(oz >= -h) {
+        sideQuad(-h, h, -h, -h, -h, -h);
+      }
+    }
+
+    // +y face.
+    if(oy > h) {
+      caps(-h, h, h, h, h, h, h, h, -h, -h, h, -h);
+      if(oz <= h) {
+        sideQuad(-h, h, h, h, h, h);
+      }
+      if(ox <= h) {
+        sideQuad(h, h, h, h, h, -h);
+      }
+      if(oz >= -h) {
+        sideQuad(h, h, -h, -h, h, -h);
+      }
+      if(ox >= -h) {
+        sideQuad(-h, h, -h, -h, h, h);
+      }
+    }
+
+    // -y face.
+    if(oy < -h) {
+      caps(-h, -h, -h, h, -h, -h, h, -h, h, -h, -h, h);
+      if(oz >= -h) {
+        sideQuad(-h, -h, -h, h, -h, -h);
+      }
+      if(ox <= h) {
+        sideQuad(h, -h, -h, h, -h, h);
+      }
+      if(oz <= h) {
+        sideQuad(h, -h, h, -h, -h, h);
+      }
+      if(ox >= -h) {
+        sideQuad(-h, -h, h, -h, -h, -h);
+      }
+    }
+
+    // +z face.
+    if(oz > h) {
+      caps(-h, -h, h, h, -h, h, h, h, h, -h, h, h);
+      if(oy >= -h) {
+        sideQuad(-h, -h, h, h, -h, h);
+      }
+      if(ox <= h) {
+        sideQuad(h, -h, h, h, h, h);
+      }
+      if(oy <= h) {
+        sideQuad(h, h, h, -h, h, h);
+      }
+      if(ox >= -h) {
+        sideQuad(-h, h, h, -h, -h, h);
+      }
+    }
+
+    // -z face.
+    if(oz < -h) {
+      caps(h, -h, -h, -h, -h, -h, -h, h, -h, h, h, -h);
+      if(oy >= -h) {
+        sideQuad(h, -h, -h, -h, -h, -h);
+      }
+      if(ox >= -h) {
+        sideQuad(-h, -h, -h, -h, h, -h);
+      }
+      if(oy <= h) {
+        sideQuad(-h, h, -h, h, h, -h);
+      }
+      if(ox <= h) {
+        sideQuad(h, h, -h, h, -h, -h);
+      }
+    }
+  glPopMatrix();
+}
+
+glTranslatef(0, 0, -12); // @camera dist
+glRotatef(4, 1, 0, 0); // @camera rx
+glRotatef(-34, 0, 1, 0); // @camera ry
+glTranslatef(0, -1.3, 0); // @camera pan
+
+glClearColor(0.05, 0.06, 0.08, 1);
+glClearStencil(0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glDepthFunc(GL_LESS);
+glShadeModel(GL_SMOOTH);
+glFrontFace(GL_CCW);
+
+// A full circle at roughly the cube's own mid-height, so the shadow lies down
+// flat and sweeps the room rather than pooling under the occluder. Once per
+// orbit the light passes behind the cube from the camera's side and the eye
+// ends up inside the hull - the case z-pass cannot survive.
+lx = 3.8*cos(0.55*t);
+ly = 1.5 + 0.35*sin(0.37*t);
+lz = 3.8*sin(0.55*t);
+spin = 24*t;
+
+// The same light in the cube's frame: undo the spin about y, which is the
+// only rotation between the two. Now a face's light-facing test is one
+// comparison per axis instead of a dot product per face.
+ca = cos(spin*PI/180);
+sa = sin(spin*PI/180);
+ox = ca*lx - sa*lz;
+oy = ly - h;
+oz = sa*lx + ca*lz;
+
+// Pass 1: shadowed everywhere. This lays down the depth buffer the stencil
+// pass tests against, so it has to draw every surface the shadow can fall on.
+glDisable(GL_STENCIL_TEST);
+glDisable(GL_LIGHTING);
+glDepthMask(GL_TRUE);
+room(0.24);
+glColor3f(0.24*1.00, 0.24*0.35, 0.24*0.20);
+cube();
+
+// Pass 2: count from behind. Back hull faces that fail the depth test add,
+// front hull faces that fail subtract, so the tally counts hull boundaries
+// lying beyond the nearest surface rather than in front of it - a quantity
+// that does not care where the eye is. Note the ops move from the dppass
+// slot to the dpfail slot, and the cull faces swap along with them.
+glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+glDepthMask(GL_FALSE);
+glEnable(GL_STENCIL_TEST);
+glStencilMask(0xFF);
+glStencilFunc(GL_ALWAYS, 0, 0xFF);
+glEnable(GL_CULL_FACE);
+glCullFace(GL_FRONT);
+glStencilOp(GL_KEEP, GL_INCR, GL_KEEP);
+volume();
+glCullFace(GL_BACK);
+glStencilOp(GL_KEEP, GL_DECR, GL_KEEP);
+volume();
+glDisable(GL_CULL_FACE);
+glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+glDepthMask(GL_TRUE);
+
+// Pass 3: repaint the lit version only where the count came back to zero.
+// Depth-equal against pass 1 keeps it to exactly the pixels already drawn.
+glStencilFunc(GL_EQUAL, 0, 0xFF);
+glDepthFunc(GL_EQUAL);
+glDepthMask(GL_FALSE);
+room(1);
+glColor3f(1.00, 0.35, 0.20);
+cube();
+glDepthMask(GL_TRUE);
+glDepthFunc(GL_LESS);
+glDisable(GL_STENCIL_TEST);
+
+// The hull itself, drawn translucent so the counted volume is visible rather
+// than inferred. When the orbit carries the light behind the cube this wash
+// closes over the whole frame, which is the eye crossing into the hull made
+// literal - and the shadow underneath it stays correct throughout.
+if(showVolume > 0.5) {
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glDepthMask(GL_FALSE);
+  glColor4f(1.00, 0.85, 0.15, 0.045);
+  volume();
+  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  glLineWidth(1);
+  glColor4f(1.00, 0.85, 0.15, 0.14);
+  volume();
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  glDepthMask(GL_TRUE);
+  glDisable(GL_BLEND);
+}
+
+// The lamp, so the silhouette's response to it reads as cause and effect.
+glColor3f(1.00, 0.85, 0.15);
+glPushMatrix();
+  glTranslatef(lx, ly, lz);
+  glutSolidSphere(0.13, 12, 10);
+glPopMatrix();
