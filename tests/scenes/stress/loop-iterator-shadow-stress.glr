@@ -1,0 +1,77 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+// Loop iterators shadow function locals and top-level globals; innermost
+// binding wins. After a loop, the outer local/global must still hold.
+
+static float x;
+static float y;
+
+layer(base) {
+  float x;
+  float y;
+  float i;
+  x = base;
+  y = base * 0.5f;
+  // Iterator i shadows the local i declaration (local still exists but is
+  // not the binder); nested loop reuses x as iterator over the local x.
+  for(i, 0, 4) {
+    for(x, -1, 2) {
+      glPushMatrix();
+        glTranslatef(base + x * 0.7f, y + i * 0.55f, i * 0.1f);
+        glColor3f(clamp(0.2f + i * 0.2f, 0.1f, 0.95f), clamp(0.4f + x * 0.2f, 0.2f, 0.9f), 0.85f);
+        glutSolidCube(0.35f);
+      glPopMatrix();
+    }
+  }
+  // Local x/y must survive the loops (not stuck at final iterator values)
+  glPushMatrix();
+    glTranslatef(x, y + 2.4f, 0.0f);
+    glColor3f(1.00f, 0.85f, 0.15f);
+    glutSolidSphere(0.25f, 10, 10);
+  glPopMatrix();
+}
+
+glTranslatef(0.0f, 0.0f, -10.00f);   // @camera dist
+glRotatef(18.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+glRotatef(12.0f * t, 0.0f, 1.0f, 0.0f);
+
+glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+x = 3.0f;
+y = -2.0f;
+
+layer(-2.0f);
+layer(1.5f);
+
+// Global x/y must be untouched by layer's locals and iterators
+glPushMatrix();
+  glTranslatef(0.0f, y, 0.0f);
+  glColor3f(1.00f, 0.35f, 0.20f);
+  // x=3 scales the sphere; if clobbered this collapses
+  glutSolidSphere(0.08f * x, 12, 12);
+glPopMatrix();
+
+// Top-level loop reusing global names as iterators, then globals restored
+for(x, -2, 3) {
+  for(y, 0, 2) {
+    glPushMatrix();
+      glTranslatef(x * 0.9f, -2.5f + y * 0.5f, 0.0f);
+      glColor3f(0.15f, 0.55f, 1.00f);
+      glutSolidCube(0.3f);
+    glPopMatrix();
+  }
+}
+
+// Re-assign globals after iterator reuse
+x = 3.0f;
+y = -2.0f;
+glPushMatrix();
+  glTranslatef(2.5f, 2.0f, 0.0f);
+  glColor3f(0.95f, 0.25f, 1.00f);
+  glutSolidCube(0.2f * x);
+glPopMatrix();

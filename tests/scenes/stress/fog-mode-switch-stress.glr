@@ -1,0 +1,81 @@
+// @cfg grid = GRID_THEME_CLASSIC
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+glTranslatef(0.0000f, 0.0000f, -14.0000f);   // @camera dist
+glRotatef(12.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+// Fog mode transitions mid-frame: LINEAR, EXP, EXP2 with density/start/end
+// rewrites, fog color changes, and enable/disable around geometry groups.
+
+glRotatef(10.0 * t, 0.0, 1.0, 0.0);
+
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_FOG);
+
+// Phase 1: linear fog, cool mist
+glFogi(GL_FOG_MODE, GL_LINEAR);
+glFogfv(GL_FOG_COLOR, (GLfloat[]){0.05, 0.06, 0.08, 1});
+glFogf(GL_FOG_START, 4);
+glFogf(GL_FOG_END, 16);
+
+for(i, 0, 6) {
+  glPushMatrix();
+    glTranslatef(-4.0 + i * 1.6, 0.0, -i * 1.2);
+    glColor3f(1, 0.35, 0.2);
+    glutSolidCube(0.8);
+  glPopMatrix();
+}
+
+// Phase 2: exponential fog, warmer density
+glFogi(GL_FOG_MODE, GL_EXP);
+glFogfv(GL_FOG_COLOR, (GLfloat[]){0.15, 0.08, 0.06, 1});
+glFogf(GL_FOG_DENSITY, 0.12 + 0.04 * sin(t));
+
+for(i, 0, 6) {
+  glPushMatrix();
+    glTranslatef(-4.0 + i * 1.6, 1.4, -i * 1.2);
+    glColor3f(0.1, 0.95, 0.85);
+    glutSolidSphere(0.45, 12, 12);
+  glPopMatrix();
+}
+
+// Phase 3: EXP2 with denser falloff
+glFogi(GL_FOG_MODE, GL_EXP2);
+glFogfv(GL_FOG_COLOR, (GLfloat[]){0.08, 0.05, 0.12, 1});
+glFogf(GL_FOG_DENSITY, 0.08 + 0.03 * cos(t * 1.2));
+
+for(i, 0, 6) {
+  glPushMatrix();
+    glTranslatef(-4.0 + i * 1.6, -1.4, -i * 1.2);
+    glColor3f(0.15, 0.55, 1);
+    glutSolidTorus(0.15, 0.4, 10, 16);
+  glPopMatrix();
+}
+
+// Fog disabled for a near marker that must stay sharp
+glDisable(GL_FOG);
+glPushMatrix();
+  glTranslatef(0, 0, 2);
+  glColor3f(1, 0.85, 0.15);
+  glutSolidCube(0.35);
+glPopMatrix();
+
+// Re-enable LINEAR for a back row
+glEnable(GL_FOG);
+glFogi(GL_FOG_MODE, GL_LINEAR);
+glFogf(GL_FOG_START, 6);
+glFogf(GL_FOG_END, 18);
+glFogfv(GL_FOG_COLOR, (GLfloat[]){0.05, 0.06, 0.08, 1});
+
+for(i, 0, 5) {
+  glPushMatrix();
+    glTranslatef(-3.0 + i * 1.5, 0.0, -8.0 - i);
+    glColor3f(0.55, 0.3, 1);
+    glutSolidCube(0.6);
+  glPopMatrix();
+}
+
+glDisable(GL_FOG);

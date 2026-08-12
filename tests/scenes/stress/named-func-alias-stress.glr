@@ -1,0 +1,73 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+// Named function aliases (NAME(params) instead of funcN) with nested calls
+// and parameter/local name reuse across aliases. Named defs consume func
+// slots in definition order - do not also open func0.. when aliases fill them.
+
+leaf(x, y, z, s) {
+  float r;
+  float g;
+  float b;
+  r = clamp(0.5f + 0.4f * sin(t + x), 0.1f, 0.95f);
+  g = clamp(0.5f + 0.4f * cos(t + y), 0.2f, 0.9f);
+  b = clamp(0.5f + 0.3f * sin(t + z), 0.2f, 0.9f);
+  glPushMatrix();
+    glTranslatef(x, y, z);
+    glColor3f(r, g, b);
+    glutSolidCube(s);
+  glPopMatrix();
+}
+
+branch(x, y, z, s, depth) {
+  float nx;
+  float ny;
+  float nz;
+  nx = x;
+  ny = y;
+  nz = z;
+  leaf(nx, ny, nz, s);
+  if(depth > 0) {
+    glPushMatrix();
+      glTranslatef(nx, ny, nz);
+      glRotatef(25.0f + 10.0f * sin(t), 0.0f, 0.0f, 1.0f);
+      branch(s * 1.4f, s * 0.3f, 0.0f, s * 0.72f, depth - 1);
+      glRotatef(-50.0f - 10.0f * sin(t), 0.0f, 0.0f, 1.0f);
+      branch(s * 1.4f, s * 0.3f, 0.0f, s * 0.72f, depth - 1);
+    glPopMatrix();
+  }
+}
+
+hub(scale) {
+  float i;
+  float ang;
+  for(i, 0, 6) {
+    ang = i * 60.0f + t * 20.0f;
+    glPushMatrix();
+      glRotatef(ang, 0.0f, 1.0f, 0.0f);
+      glTranslatef(scale, 0.0f, 0.0f);
+      branch(0.0f, 0.0f, 0.0f, 0.35f, 3);
+    glPopMatrix();
+  }
+}
+
+// Fourth named alias (slot 3) - side markers without clashing numbered slots
+beacon(x) {
+  float y;
+  y = sin(t + x) * 0.5f;
+  leaf(x, y + 2.0f, 0.0f, 0.3f);
+}
+
+glTranslatef(0.0f, 0.0f, -11.00f);   // @camera dist
+glRotatef(28.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+glRotatef(14.0f * t, 0.0f, 1.0f, 0.0f);
+
+glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+hub(1.2f);
+beacon(-2.5f);
+beacon(2.5f);

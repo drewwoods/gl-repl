@@ -1,0 +1,81 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+// Function scope near MAX_EXPR_VARS (32): many parameters + locals + a
+// loop iterator. packPose uses 12 params + 18 locals + 1 iterator = 31.
+// Appearance args live in drawBody so the pose func can spend its budget
+// on intermediates. Draw temps reuse s0..s6 after the pose math is done.
+
+drawBody(px, py, pz, rad, cr, cg, cb) {
+  glPushMatrix();
+    glTranslatef(px, py, pz);
+    glColor3f(cr, cg, cb);
+    glutSolidSphere(rad, 12, 10);
+  glPopMatrix();
+}
+
+// 12 params + 18 locals + 1 loop iter = 31 of 32
+packPose(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11) {
+  float s0;
+  float s1;
+  float s2;
+  float s3;
+  float s4;
+  float s5;
+  float s6;
+  float s7;
+  float s8;
+  float s9;
+  float s10;
+  float s11;
+  float s12;
+  float s13;
+  float s14;
+  float s15;
+  float s16;
+  float s17;
+
+  s0 = a0 + a1 * 0.1f;
+  s1 = a2 + a3 * 0.1f;
+  s2 = a4 + a5 * 0.1f;
+  s3 = a6 + a7 * 0.1f;
+  s4 = a8 + a9 * 0.1f;
+  s5 = a10 + a11 * 0.1f;
+  s6 = sin(t + s0);
+  s7 = cos(t + s1);
+  s8 = sin(t * 0.7f + s2);
+  s9 = cos(t * 1.1f + s3);
+  s10 = lerp(s0, s1, 0.5f);
+  s11 = clamp(s2, -2.0f, 2.0f);
+  s12 = s6 * s10;
+  s13 = s7 * s11;
+  s14 = s8 * 0.8f;
+  s15 = s9 * 0.6f;
+  s16 = atan2(s13, s12 + 0.001f);
+  s17 = sqrt(abs(s12 * s12 + s13 * s13));
+
+  for(k, 0, 4) {
+    // Reuse s0..s6 as draw temps (pose results live in s12..s17)
+    s0 = s12 + cos(s16 + k * 1.57f) * s17 * 0.35f;
+    s1 = s14 + sin(t + k) * 0.2f;
+    s2 = s13 + sin(s16 + k * 1.57f) * s17 * 0.35f;
+    s3 = 0.18f + k * 0.04f;
+    s4 = clamp(0.3f + k * 0.15f + a0 * 0.05f, 0.1f, 0.95f);
+    s5 = clamp(0.5f + s15 * 0.3f, 0.2f, 0.9f);
+    s6 = clamp(0.7f - k * 0.1f, 0.2f, 0.9f);
+    drawBody(s0, s1, s2, s3, s4, s5, s6);
+  }
+}
+
+glTranslatef(0.0f, 0.0f, -10.00f);   // @camera dist
+glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+glRotatef(16.0f * t, 0.0f, 1.0f, 0.0f);
+
+glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+packPose(1.0f, 2.0f, 0.5f, -0.5f, 1.2f, 0.3f, -1.0f, 0.8f, 0.2f, 1.5f, -0.3f, 0.9f);
+packPose(-1.0f, 0.5f, 1.5f, 0.2f, -0.8f, 1.1f, 0.4f, -0.6f, 1.3f, -0.2f, 0.7f, 0.1f);
