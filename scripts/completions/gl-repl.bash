@@ -49,7 +49,8 @@ _gl_repl_names() {
 }
 
 _gl_repl_paths() {
-    local cur=$1 pat=$2 quote="" d
+    local cur=$1 quote="" d pat
+    shift
     case "$cur" in
         \"*) quote='"'; cur=${cur#\"} ;;
         \'*) quote="'"; cur=${cur#\'} ;;
@@ -58,9 +59,10 @@ _gl_repl_paths() {
 
     local IFS=$'\n'
     local matches=()
-    if [[ -n "$pat" ]]; then
-        matches=( $(compgen -f -X "!$pat" -- "$cur") )
-    fi
+    for pat in "$@"; do
+        [[ -n "$pat" ]] || continue
+        matches+=( $(compgen -f -X "!$pat" -- "$cur") )
+    done
     # Directories are always offered: to descend, and as a workspace argument.
     for d in $(compgen -d -- "$cur"); do
         matches[${#matches[@]}]="$d/"
@@ -95,8 +97,8 @@ _gl_repl_complete() {
         return 0
     fi
 
-    # Positional: a saved scene (*.c) or a workspace directory.
-    _gl_repl_paths "$cur" '*.c'
+    # Positional: a saved scene (*.c or *.glr) or a workspace directory.
+    _gl_repl_paths "$cur" '*.c' '*.glr'
     return 0
 }
 

@@ -45,7 +45,7 @@ _gl_repl() {
         '--flat-histogram[print flat-command statistics and exit]' \
         '--dump-state-layout[print the state layout and exit]' \
         '--detailed-prof[enable detailed profiling sections]' \
-        '*:scene file or workspace dir:_files -g "*.c"'
+        '*:scene file or workspace dir:_files -g "*.(c|glr)"'
 
     case $state in
         examples)
