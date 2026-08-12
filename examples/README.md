@@ -26,7 +26,7 @@ group = Basics
 - `tags` must use the existing labels: `2D`, `3D`, `Polygons`, `Lines`.
   Do not list `All`; it is synthetic.
 - `group` is the Scene menu flyout subheading returned by
-  [`repl_example_subheading()`](../src/repl/examples.h#L126).
+  [`repl_example_subheading()`](../src/repl/examples.h#L125).
 - Section order is the F12 / `--example <idx>` order.
 
 `.glr` files are plain REPL source lines. They may start with leading
