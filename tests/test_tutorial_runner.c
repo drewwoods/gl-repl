@@ -1214,6 +1214,53 @@ static void test_catalog_cfg_lines(void) {
                 repl_tutorial_cfg_lines(-1) == NULL);
 }
 
+/* A setup-scaffold transform row without an `// @camera <role>` tag is not a
+ * camera pose - it is a model transform preloaded into the document, silently
+ * moving the geometry instead of the eye. The leading `// camera` comment row
+ * is only a comment and does not tag anything; several scaffolds shipped that
+ * way and merely looked right because a translate on the scene resembles a
+ * translate on the camera.
+ *
+ * Scope is the scaffold's LEADING run - comments and transforms up to the
+ * first line that is neither. That is exactly the region a camera pose can
+ * occupy, so an untagged transform there is always the bug. Transforms past
+ * that point are ordinary preloaded geometry (Fog's ring loop translates each
+ * torus) and are left alone. Steps are unaffected either way - the
+ * transform-teaching tutorials type theirs as COMMAND steps. */
+static void test_catalog_setup_transforms_are_camera_tagged(void) {
+    static const char *const transforms[] = {
+        "glTranslatef(", "glRotatef(", "glScalef(",
+    };
+
+    for (int i = 0; i < repl_tutorial_count(); i++) {
+        const char *const *setup = repl_tutorial_setup_lines(i);
+        if (!setup)
+            continue;
+        for (int line = 0; setup[line]; line++) {
+            const char *text = setup[line];
+            int is_transform = 0;
+
+            while (*text == ' ' || *text == '\t')
+                text++;
+            if (strncmp(text, "//", 2) == 0)
+                continue;               /* comments stay inside the header run */
+            for (size_t k = 0; k < sizeof(transforms) / sizeof(transforms[0]); k++)
+                is_transform |= strncmp(text, transforms[k],
+                                        strlen(transforms[k])) == 0;
+            if (!is_transform)
+                break;                  /* header run over - body from here on */
+
+            {
+                char label[220];
+                snprintf(label, sizeof(label),
+                         "%s setup line %d is @camera-tagged: %s",
+                         repl_tutorial_name(i), line, setup[line]);
+                ASSERT_TRUE(label, strstr(text, "@camera") != NULL);
+            }
+        }
+    }
+}
+
 /* Mirror of test_example_tag_metadata in tests/test_repl_core_examples.c.
  * Sanity-checks the tutorial tag system end-to-end: tag count, label table,
  * has_tag/count_for_tag/index_for_tag mutual agreement, bounds, the
@@ -4894,6 +4941,7 @@ int main(void) {
     test_start_rejects_out_of_range_idx();
     test_catalog_starter_steps_are_append();
     test_catalog_cfg_lines();
+    test_catalog_setup_transforms_are_camera_tagged();
     test_catalog_tag_metadata();
     test_catalog_subheading_metadata();
     test_catalog_validation_passes_for_all_tutorials();

@@ -556,10 +556,10 @@ static const TutorialStep g_tutorial_points_lines_steps[] = {
  * window size. */
 static const char *const g_tutorial_glut_solids_setup[] = {
     "// camera",
-    "glTranslatef(0.0f, 0.0f, -11.00f);",
-    "glRotatef(16.0f, 1.0f, 0.0f, 0.0f);",
-    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
-    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, -11.00f); // @camera dist",
+    "glRotatef(16.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f); // @camera ry",
+    "glTranslatef(0.0f, 0.0f, 0.0f); // @camera pan",
     "// Lighting scaffold shared by every solid in this tour.",
     "glEnable(GL_DEPTH_TEST)",
     "glEnable(GL_LIGHTING)",
@@ -739,10 +739,10 @@ static const char *const g_tutorial_fog_cfg[] = {
  * instead of showing them as a receding row. */
 static const char *const g_tutorial_fog_setup[] = {
     "// camera",
-    "glTranslatef(0.0f, 0.0f, -11.00f);",
-    "glRotatef(10.0f, 1.0f, 0.0f, 0.0f);",
-    "glRotatef(22.0f, 0.0f, 1.0f, 0.0f);",
-    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, -11.00f); // @camera dist",
+    "glRotatef(10.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
+    "glRotatef(22.0f, 0.0f, 1.0f, 0.0f); // @camera ry",
+    "glTranslatef(0.0f, 0.0f, 0.0f); // @camera pan",
     "// Depth testing so the near rings occlude the ones behind them.",
     "glEnable(GL_DEPTH_TEST)",
     "// A locked row of toruses receding away from the camera.",
@@ -855,10 +855,10 @@ static const TutorialStep g_tutorial_shade_model_steps[] = {
 
 static const char *const g_tutorial_normals_setup[] = {
     "// camera",
-    "glTranslatef(0.0f, 0.0f, -9.00f);",
-    "glRotatef(25.0f, 1.0f, 0.0f, 0.0f);",
-    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
-    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, -9.00f); // @camera dist",
+    "glRotatef(25.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f); // @camera ry",
+    "glTranslatef(0.0f, 0.0f, 0.0f); // @camera pan",
     "// Lighting scaffold for the surface-normal demonstration.",
     "glEnable(GL_DEPTH_TEST)",
     "glEnable(GL_LIGHTING)",
@@ -956,10 +956,10 @@ static const char *const g_tutorial_two_sided_cfg[] = {
 
 static const char *const g_tutorial_two_sided_setup[] = {
     "// camera",
-    "glTranslatef(0.0f, 0.0f, -8.00f);",
-    "glRotatef(12.0f, 1.0f, 0.0f, 0.0f);",
-    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
-    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, -8.00f); // @camera dist",
+    "glRotatef(12.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f); // @camera ry",
+    "glTranslatef(0.0f, 0.0f, 0.0f); // @camera pan",
     "// Lighting scaffold for the two-sided lighting lesson.",
     "glEnable(GL_DEPTH_TEST)",
     "glEnable(GL_LIGHTING)",
@@ -1033,10 +1033,10 @@ static const TutorialStep g_tutorial_two_sided_steps[] = {
  * makes the pair symmetric on screen; nothing is preloaded into the document. */
 static const char *const g_tutorial_culling_setup[] = {
     "// camera",
-    "glTranslatef(0.0f, 0.0f, -9.00f);",
-    "glRotatef(20.0f, 1.0f, 0.0f, 0.0f);",
-    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
-    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, -9.00f); // @camera dist",
+    "glRotatef(20.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f); // @camera ry",
+    "glTranslatef(0.0f, 0.0f, 0.0f); // @camera pan",
     NULL,
 };
 
@@ -1159,10 +1159,10 @@ static const TutorialStep g_tutorial_conditionals_steps[] = {
  * as even - exactly what the shared pose's yaw destroys. */
 static const char *const g_tutorial_scratch_arrays_setup[] = {
     "// camera",
-    "glTranslatef(0.0f, 0.0f, -10.00f);",
-    "glRotatef(18.0f, 1.0f, 0.0f, 0.0f);",
-    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);",
-    "glTranslatef(0.0f, 0.0f, 0.0f);",
+    "glTranslatef(0.0f, 0.0f, -10.00f); // @camera dist",
+    "glRotatef(18.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f); // @camera ry",
+    "glTranslatef(0.0f, 0.0f, 0.0f); // @camera pan",
     NULL,
 };
 
