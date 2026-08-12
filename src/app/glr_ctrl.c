@@ -642,7 +642,6 @@ static int glr_ctrl_current_begin_block_source_extent(int edit_line,
                                                       int *out_start,
                                                       int *out_end);
 
-static int glr_ctrl_depth_readback_is_supported(void);
 static OverlaySnapshotPack g_overlay_pack;
 
 static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3dRenderConfig *cfg) {
@@ -1324,10 +1323,6 @@ static int g_nv_fog_distance_supported = 0;
 static int g_depth_readback_supported = 1;
 static int g_stencil_readback_supported = 1;
 static int g_stencil_clear_warning_active = 0;
-
-static int glr_ctrl_depth_readback_is_supported(void) {
-    return g_depth_readback_supported;
-}
 
 /* ---------------------------------------------------------------------------
  * Vertex-label occlusion depth snapshot.
