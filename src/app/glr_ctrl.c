@@ -4770,11 +4770,10 @@ void glr_ctrl_tick(void) {
      * as eight rendered frames. Those transport frames are not simulation
      * time: advancing t, REPL replay, a view transition, or camera easing here
      * would make the reconstructed boundary depend on prefix length. */
-    if (!tour_reconstructing)
-        repl_advance_time(GLR_FRAME_DT_SECS);
-
     if (!tour_reconstructing) {
         ReplayRuntimeState *replay = replay_state_mut();
+
+        repl_advance_time(GLR_FRAME_DT_SECS);
 
         if (replay->active)
             replay_tick_fade_batches(GLR_FRAME_DT_SECS);
@@ -4788,9 +4787,7 @@ void glr_ctrl_tick(void) {
                 replay_advance(flat_program);
             }
         }
-    }
 
-    if (!tour_reconstructing) {
         /* An example camera apply defers its saved-3D snapshot update until
          * the next display frame loads the camera modelview. Do not let the
          * view transition consume the older snapshot first: on a rapid
