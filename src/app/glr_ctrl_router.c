@@ -732,6 +732,13 @@ static void cycle_example_or_user_scene_dir(int direction) {
     }
 }
 
+/* A completed tutorial is inactive but retains its index so the lesson
+ * steppers continue from it. Explicit exit clears the index. Keep this
+ * predicate shared by click routing and tooltip prediction. */
+static int tutorial_cycle_selected(void) {
+    return tutorial_active() || tutorial_state_view().tutorial_idx >= 0;
+}
+
 /* Where a step in `direction` would land, for the menu bar's stepper
  * tooltip. This mirrors the *first candidate* each cycle above picks; the
  * cycles then skip destinations that fail to load, so a broken catalog entry
@@ -746,8 +753,10 @@ GlrCycleTarget glr_ctrl_cycle_peek(int direction) {
     if (direction == 0)
         return target;
 
-    /* Same rule the stepper click uses: an active tutorial steps lessons. */
-    if (tutorial_active()) {
+    /* Same rule the stepper click uses: an active or completed tutorial with
+     * a retained index steps lessons. Explicit exit clears the index and
+     * falls through to the scene cycle. */
+    if (tutorial_cycle_selected()) {
         int count = repl_tutorial_count();
         int cur, idx;
         if (count <= 0)
@@ -1930,22 +1939,21 @@ static int route_color_picker_control_hit(int x, int y) {
 /* UI_HIT_PIN_BUTTON: Search / Prev / Next / View-mode / Replay pinned
  * right-side button.
  *
- * The steppers are context-sensitive: while a tutorial is running they walk
- * the lesson catalog (the F11 path), otherwise the example / user-scene
- * cycle (the F12 path). A finished-but-inactive tutorial deliberately falls
- * to the scene cycle - the document it left behind is a scene by then, and
- * F11 remains the way to continue the lesson sequence. */
+ * The steppers are context-sensitive: while a tutorial is running, or after
+ * a tutorial completes and retains its index, they walk the lesson catalog
+ * (the F11 path). An explicit tutorial exit clears the index and falls back
+ * to the example / user-scene cycle (the F12 path). */
 static int route_pin_button_hit(const UiHit *hit) {
     ui_menu_bar_close();
     switch (hit->item_idx) {
     case UI_MENU_BAR_PIN_NEXT:
-        if (tutorial_active())
+        if (tutorial_cycle_selected())
             glr_ctrl_tutorial_cycle_next();
         else
             glr_ctrl_scene_cycle_next();
         break;
     case UI_MENU_BAR_PIN_PREV:
-        if (tutorial_active())
+        if (tutorial_cycle_selected())
             glr_ctrl_tutorial_cycle_prev();
         else
             glr_ctrl_scene_cycle_prev();

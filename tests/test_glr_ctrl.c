@@ -5980,6 +5980,58 @@ static void test_mouse_routing_and_hit_testing(void) {
         ASSERT_INT("prev pin steps back to the first lesson",
                    tutorial_state_view().tutorial_idx, 0);
         tutorial_stop();
+
+        /* A completed tutorial is inactive but retains its index so F11 can
+         * continue the lesson catalog. The mouse steppers must make the same
+         * choice, including both directions. */
+        tutorial_start(0);
+        for (int step = 0; step < repl_tutorial_step_count(0); step++) {
+            TutorialMatchResult match;
+            const char *expected = tutorial_current_expected_text();
+            ASSERT_TRUE("completed-pin step has expected input", expected != NULL);
+            ASSERT_TRUE("completed-pin step matches",
+                        tutorial_handle_commit_attempt(expected, &match));
+            tutorial_advance_after_successful_commit();
+        }
+        ASSERT_TRUE("tutorial inactive after completed-pin setup",
+                    !tutorial_active());
+        ASSERT_INT("completed-pin setup retains lesson index",
+                   tutorial_state_view().tutorial_idx, 0);
+        {
+            GlrCycleTarget next_peek = glr_ctrl_cycle_peek(1);
+            GlrCycleTarget prev_peek = glr_ctrl_cycle_peek(-1);
+            ASSERT_INT("completed-pin next peek is a lesson",
+                       next_peek.kind, GLR_CYCLE_TARGET_TUTORIAL);
+            ASSERT_INT("completed-pin prev peek is a lesson",
+                       prev_peek.kind, GLR_CYCLE_TARGET_TUTORIAL);
+        }
+        hit.item_idx = UI_MENU_BAR_PIN_NEXT;
+        rc = route_pin_button_hit(&hit);
+        ASSERT_INT("next pin after completion hit consumed", rc, 1);
+        ASSERT_INT("next pin after completion steps lesson",
+                   tutorial_state_view().tutorial_idx, 1);
+        tutorial_stop();
+
+        /* Re-complete lesson 0 to exercise the opposite direction from the
+         * same inactive-but-retained state. */
+        tutorial_start(0);
+        for (int step = 0; step < repl_tutorial_step_count(0); step++) {
+            TutorialMatchResult match;
+            const char *expected = tutorial_current_expected_text();
+            ASSERT_TRUE("completed-prev step has expected input", expected != NULL);
+            ASSERT_TRUE("completed-prev step matches",
+                        tutorial_handle_commit_attempt(expected, &match));
+            tutorial_advance_after_successful_commit();
+        }
+        ASSERT_TRUE("tutorial inactive before completed prev pin",
+                    !tutorial_active());
+        hit.item_idx = UI_MENU_BAR_PIN_PREV;
+        rc = route_pin_button_hit(&hit);
+        ASSERT_INT("prev pin after completion hit consumed", rc, 1);
+        ASSERT_INT("prev pin after completion steps lesson",
+                   tutorial_state_view().tutorial_idx,
+                   repl_tutorial_count() - 1);
+        tutorial_stop();
     }
 
     // Test route_inline_color_swatch_hit
