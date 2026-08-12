@@ -54,6 +54,7 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 | `multiple-planar-shadow-projections.glr` | General, Stencil, Shadows, Lighting | Moving virtual-light planar projections from a cube onto the floor, back wall, and left wall, combined through stencil. |
 | `vertex-normals-lighting.glr` | General, Normals, Lighting | Explicit per-vertex `glNormal3f` assignments on custom geometry. |
 | `fog-exponential.glr` | General, Fog, 3D | Exponential squared fog (`GL_EXP2`) against a deep perspective grid. |
+| `stencil-shadow-volume.glr` | General, Stencil, Shadows, Lighting | True stencil shadow volume: the cube's silhouette from a moving point light is extruded into a closed hull, and z-pass INCR/DECR stencil counting shadows the floor and both walls in one pass. |
 
 
 ## How to Run & Validate
@@ -112,5 +113,6 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 ./gl-repl tests/scenes/general/multiple-planar-shadow-projections.glr
 ./gl-repl tests/scenes/general/vertex-normals-lighting.glr
 ./gl-repl tests/scenes/general/fog-exponential.glr
+./gl-repl tests/scenes/general/stencil-shadow-volume.glr
 
 ```
