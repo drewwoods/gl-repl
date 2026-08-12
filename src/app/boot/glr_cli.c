@@ -8,6 +8,7 @@
 
 #include "app/boot/glr_lint_scenes.h" /* --lint-scenes */
 #include "app/glr_actions.h"   /* glr_scene_example_count / _name */
+#include "app/glr_config.h"     /* config descriptor table + slug validation */
 #include "app/glr_tours.h"     /* glr_tours_count / _name */
 #include "repl/examples.h"     /* repl_examples_load_dir */
 #include "repl/tutorials.h"    /* repl_tutorial_count / _name */
@@ -64,6 +65,7 @@ static void print_usage(const char *prog) {
             "               launch (name is case-insensitive; or a 1-based\n"
             "               index). Space play/pause, arrows step, Esc exit.\n"
             "  --list-tours  Print the built-in guided tours and exit\n"
+            "  --list-config  Print config labels and stable @cfg slugs and exit\n"
             "  --time <secs>  Set the initial animation time t at startup\n"
             "               (else GLR_TIME; --time wins). Start animations later.\n"
             "  --window <WxH>  Initial window size (default 1200x800). Headless\n"
@@ -234,6 +236,32 @@ static void list_tours(FILE *out) {
         fprintf(out, "  %2d  %s\n", i + 1, glr_tours_name(i));
 }
 
+static int list_config(FILE *out) {
+    char err[256];
+    int n;
+    const GlrConfigItem *items;
+
+    if (!glr_config_validate(err, sizeof(err))) {
+        fprintf(stderr, "gl-repl: invalid config descriptor table: %s\n", err);
+        return 0;
+    }
+
+    items = glr_config_items(&n);
+    /* Deliberately tab-separated: readable in a terminal, but also stable for
+     * a tiny shell/Python check that needs to compare @cfg slugs with this
+     * descriptor table. Do not decorate this output with widths or prose. */
+    fprintf(out, "slug\tlabel\tstates\n");
+    for (int i = 0; i < n; i++) {
+        const GlrConfigItem *item = &items[i];
+        const char *slug = glr_config_item_slug(item);
+        if (!slug)
+            continue;
+        fprintf(out, "%s\t%s\t%d\n", slug,
+                glr_config_item_display_label(item), item->state_count);
+    }
+    return 1;
+}
+
 /* Resolve --tour <arg> to a built-in tour index, same rules as
  * resolve_example_index: all-digits is a 1-based index, otherwise a
  * case-insensitive name (exact match preferred, else first substring match).
@@ -269,6 +297,7 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
     int list_examples_flag = 0;
     int list_tutorials_flag = 0;
     int list_tours_flag = 0;
+    int list_config_flag = 0;
 
     memset(out, 0, sizeof(*out));
     out->use_accum = GLR_CLI_ACCUM_AUTO;
@@ -346,6 +375,9 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
         else if (strcmp(argv[i], "--list-tours") == 0) {
             list_tours_flag = 1;
         }
+        else if (strcmp(argv[i], "--list-config") == 0) {
+            list_config_flag = 1;
+        }
         else if (!out->input_file)
             out->input_file = argv[i];
     }
@@ -380,6 +412,10 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
     if (list_tours_flag) {
         list_tours(stdout);
         *exit_code = 0;
+        return 0;
+    }
+    if (list_config_flag) {
+        *exit_code = list_config(stdout) ? 0 : 1;
         return 0;
     }
 

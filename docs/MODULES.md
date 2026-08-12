@@ -464,7 +464,7 @@ The application shell bootstrap, event routing, frame/snapshot coordination, and
 | `src/app/glr_actions` | Menu/action dispatch and the `g_cfg_items[]` config-descriptor table: scene + workspace load/save flows, rename, example/scene switching, config-row cycling. Translates menu ids + item indices into app operations |
 | `src/app/glr_modal` | App-level text prompts and delete confirmation. Owns modal state/key capture; delegates commits to `glr_actions` so filesystem mutations retain one controller |
 | `src/app/glr_workspaces` | Sorted catalog of managed workspaces under the resolved app workspace root, plus exclusive named-workspace creation |
-| `src/app/glr_config` | The keyed config vocabulary ([`GlrConfigKey`](../src/app/glr_config.h#L29)) and get/set/cycle API over those descriptors; `@cfg` persistence goes by key name, not table index, so reordering rows stays safe. `glr_config_set` tails into the tutorial runner's state-change notify |
+| `src/app/glr_config` | The keyed config vocabulary ([`GlrConfigKey`](../src/app/glr_config.h#L31)) and get/set/cycle API over those descriptors; `@cfg` persistence goes by key name, not table index, so reordering rows stays safe. `glr_config_set` tails into the tutorial runner's state-change notify |
 | `src/app/glr_color_picker_bridge` | Installs the [`ColorPickerHostBridge`](../src/subsystems/color_picker/color_picker_state.h#L116) (document read/write + viewport + code-panel rect) the color-picker peer reads through, so that peer links standalone in `color_picker_demo` |
 | `src/app/glr_assign_plot_bridge` | Installs the [`AssignPlotHostBridge`](../src/subsystems/assign_plot/assign_plot.h) the assignment plot reads through: the flat program as an execution trace (indices in the same space as replay's exec limit) plus the document-row assignment test. The only place the plot's `CMD_VAR_ASSIGN` / `CMD_SCRATCH_ASSIGN` arg-slot knowledge lives, so that peer links standalone in `assign_plot_demo` |
 | `src/app/glr_prof` | Profile-section policy: the display table behind [`prof_section_info()`](../src/support/cpuprof.h#L172) plus which sections get GPU timer queries bracketed around them (GL-free sections stay CPU-only) |
@@ -486,7 +486,7 @@ Boot / lifecycle band (`src/app/boot/`, reached only from `gl_repl`):
 
 | Module | Role |
 |--------|------|
-| `boot/glr_cli` | argv → [`GlrCliOptions`](../src/app/boot/glr_cli.h#L33) bag; usage/`--list-*` exit paths, `--examples-dir` load, fail-fast name→index resolution for `--example` / `--tutorial` / `--tour` |
+| `boot/glr_cli` | argv → [`GlrCliOptions`](../src/app/boot/glr_cli.h#L34) bag; usage/`--list-*` exit paths (including tab-separated config slug discovery), `--examples-dir` load, fail-fast name→index resolution for `--example` / `--tutorial` / `--tour` |
 | `boot/glr_boot_dumps` | The GL-free `--dump-*` / `--flat-histogram` path: bootstrap, dump, exit. Drives the `glr_debug` formatters |
 | `boot/glr_init_trace` | Startup-stall diagnostic (`[init +N.NNNs] <phase>`), with an elapsed clock shared with audio + controller |
 | `boot/glr_capture_env` | Headless-capture `GLR_*` env hooks, split into a bootstrap `_apply` and a per-frame `_frame_hook` |

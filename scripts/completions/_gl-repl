@@ -27,6 +27,7 @@ _gl_repl() {
         '--list-examples[print the built-in examples and exit]' \
         '--list-tutorials[print the built-in tutorials and exit]' \
         '--list-tours[print the built-in guided tours and exit]' \
+        '--list-config[print config labels and stable @cfg slugs and exit]' \
         '--examples-dir[load catalog.ini + scenes/ from a directory]:dir:_files -/' \
         '--lint-scenes[validate every .glr in a directory and exit]:dir:_files -/' \
         '--assets[override the assets directory]:dir:_files -/' \

@@ -15,10 +15,12 @@
  *
  * When adding an item, extend GlrConfigKey and add the matching
  * GlrConfigItem row in glr_actions.c. Keep the descriptor table as the
- * single source of truth for labels, shortcuts, and state names.
+ * single source of truth for slugs, labels, shortcuts, and state names.
  */
 #ifndef GLR_CONFIG_H
 #define GLR_CONFIG_H
+
+#include <stddef.h>
 
 #include "render3d/themes.h"
 
@@ -86,6 +88,10 @@ typedef enum GlrConfigKey {
  * Registered in g_cfg_items[] in glr_actions.c; count auto-computes via sizeof. */
 typedef struct {
     const char  *label;
+    /* Stable persistence/tooling identifier. Keep this independent of the
+     * presentation label: labels may be retitled without changing @cfg
+     * headers in saved scenes, tutorials, or workspaces. */
+    const char  *slug;
     int          key_code;      /* ASCII ctrl key or GLUT_KEY_* */
     int          is_special;     /* 1 for GLUT special keys */
     /* GLUT_ACTIVE_* modifier bitmask the binding requires (0 = none).
@@ -97,10 +103,9 @@ typedef struct {
     int          state_count;    /* 2 = toggle; >2 = cycle */
     const char **state_names;
     int          section_header; /* 1 for separator/header rows */
-    /* Optional runtime-owned label slot used only for display. The
-     * authored `label` stays stable for slug generation and section
-     * header parsing; callers that render user-facing text should go
-     * through glr_config_item_display_label(). */
+    /* Optional runtime-owned label slot used only for display. Callers that
+     * render user-facing text should go through
+     * glr_config_item_display_label(). */
     const char **display_label_override;
 } GlrConfigItem;
 
@@ -146,10 +151,15 @@ const GlrConfigItem *glr_config_item_at(int idx);
  * the row has a runtime override (currently the MSAA row). */
 const char *glr_config_item_display_label(const GlrConfigItem *item);
 
-/* Stable export/import slug for an actionable item. Derived once from
- * the authored label and unaffected by any runtime display-label
- * override. Returns NULL for NULL or non-action rows. */
+/* Stable export/import slug for an actionable item. Returns the explicit
+ * descriptor slug, or NULL for NULL/non-action rows. */
 const char *glr_config_item_slug(const GlrConfigItem *item);
+
+/* Validate the descriptor table's persistence identifiers. Returns 1 when
+ * every actionable row has a unique, bounded lowercase [a-z0-9_] slug and
+ * structural rows have no slug. On failure, writes one concise diagnostic to
+ * `err` when supplied. */
+int glr_config_validate(char *err, size_t err_sz);
 
 /* Get the current state value of a config item. Returns 0/1 for toggles, 0-N
  * for cycles (index into state_names[]). Used by rendering (to highlight the

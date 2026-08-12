@@ -7,9 +7,12 @@ description: Add or change a gl-repl config toggle / GlrConfigKey - the g_cfg_it
 
 ## The one required edit
 
-Append a `ReplConfigItem` descriptor to `g_cfg_items[]` in
+Append a `GlrConfigItem` descriptor to `g_cfg_items[]` in
 `src/app/glr_actions.c`, under the right `### ` section marker. The count
 auto-computes and flyout membership is automatic - do not hand-maintain either.
+Give every actionable row an explicit lowercase `slug` (for example,
+`.slug = "auto_normals"`). Slugs are serialized identifiers and must remain
+stable when a menu label changes; they are not derived from `.label`.
 
 `### ` rows define sections. Each becomes one parent menu row plus a synthetic
 trailing **All** row, with hover-opening flyouts (generic engine in
@@ -54,10 +57,13 @@ edits in `src/app/glr_actions.c`:
    enum has no list macro yet, add one where the enum lives - that is the
    pattern every other multi-state key follows.
 
-2. A `strcmp` arm in `cfg_symbol_table_for_slug()` keyed on the **slug**, which
-   `cfg_slug_from_label()` derives from `.label` (lowercased, non-alnum runs →
-   `_`): "Auto-normals" → `auto_normals`. Old files keep loading - the reader
-   falls back to an integer literal when the text matches no symbol.
+2. A `strcmp` arm in `cfg_symbol_table_for_slug()` keyed on the explicit
+   **slug**: "Auto-normals" uses `auto_normals`. Old files keep loading - the
+   reader falls back to an integer literal when the text matches no symbol.
+
+Use `make config-list` to inspect the authoritative tab-separated slug table,
+and `make check-config-slugs` to verify scene/example `@cfg` headers against
+it.
 
 ## Golden-fixture consequence (the step people miss)
 

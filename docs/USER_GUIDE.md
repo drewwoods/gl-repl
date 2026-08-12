@@ -2566,6 +2566,7 @@ runs.
 --list-examples        print the built-in examples and exit
 --tutorial <name|idx>  start an interactive tutorial (case-insensitive name or 1-based index)
 --list-tutorials       print the built-in tutorials and exit
+--list-config           print config labels and stable @cfg slugs and exit
 --time <secs>          initial animation time t (also GLR_TIME; --time wins)
 --window <WxH>         initial window size (default 1200x800)
 --export-c <path>      write the session out as standalone C, then exit (no window)

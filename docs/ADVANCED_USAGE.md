@@ -18,7 +18,7 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--tutorial name|n]
         [--assets dir] [--examples-dir dir] [--no-audio]
         [--dump-code] [--dump-flat] [--flat-histogram]
         [--dump-state-layout] [--detailed-prof]
-        [--list-examples] [--list-tutorials] [--list-tours]
+        [--list-examples] [--list-tutorials] [--list-tours] [--list-config]
         [--lint-scenes dir]
 ```
 
@@ -38,6 +38,7 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--tutorial name|n]
 | `--lint-scenes` *dir* | Validate every `.glr` in *dir* against the canonical document order and `@camera` tags, print every violation, and exit (no window). See [Scene-file headers](#scene-file-headers). |
 | `--tour` *name*\|*n* | Start and play a built-in guided tour on launch (case-insensitive name, or 1-based index). Space play/pause, arrows step, Esc exit. |
 | `--list-tours` | Print the built-in guided tours and exit. |
+| `--list-config` | Print the tab-separated config labels and stable `@cfg` slugs and exit. |
 | `--time` *secs* | Initial value of the animation variable `t` (applied after any `--example` load). Overrides `GLR_TIME`. |
 | `--window` *WxH* | Initial window size (default 1200x800). |
 | `--export-c` *out*.c | Load the session, write it out as a standalone C program (the same file Ctrl+S / File → Save writes), then exit. Runs GL-free - no window, no display - so it works over ssh and in CI. Honors `--example`, a positional session file, and `--window` (which sets the exported program's window size). |
@@ -670,11 +671,14 @@ GL-state corner cases, tagged by the corner case each one probes:
 ### `@cfg` scene-presentation slugs
 
 A scene file (and a built-in example) carries one `// @cfg <slug> = <value>`
-line per scene-presentation setting it overrides. The slug is the Config-menu
-row label, lowercased with spaces → underscores (`Grid extent` → `grid_extent`).
-Settings outside this scene subset (accumulation/MSAA, profiling panels, code
-layout, syntax theme) are *not* scene metadata and don't round-trip through a
-scene file.
+line per scene-presentation setting it overrides. Slugs are explicit stable
+fields on the Config-menu descriptors; they are not generated from labels, so
+a UI relabel does not rewrite saved scenes. `./gl-repl --list-config` (or
+`make config-list`) prints the authoritative tab-separated slug/label/state
+table. `make check-config-slugs` consumes that table and checks every `.glr`
+under `examples/scenes/` and `tests/scenes/` for unknown slugs. Settings outside
+this scene subset (accumulation/MSAA, profiling panels, code layout, syntax
+theme) are *not* scene metadata and don't round-trip through a scene file.
 
 **Enum slugs** take a symbolic value name; the bare integer index still loads
 (legacy files), but the symbolic form is canonical on save and self-documents

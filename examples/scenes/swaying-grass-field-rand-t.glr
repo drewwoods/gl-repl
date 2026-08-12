@@ -1,7 +1,7 @@
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
 // @cfg light_indicators = 0
-// @cfg poly_highlight = 0
+// @cfg polygon_highlight = 0
 // @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX
 // @cfg grid = GRID_THEME_SOIL
 // @cfg grid_extent = GRID_EXTENT_CLOSE

@@ -1,7 +1,7 @@
 #include "app/glr_config.h"
 #include "app/glr_actions.h"
 #include "c_compat.h"                /* ARRAY_LEN */
-#include <ctype.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "app/glr_audio.h"
@@ -143,34 +143,6 @@ static void accum_passes_set_cycle(int value) {
     glr_state_render_mut()->accum_passes = k_accum_pass_steps[value];
 }
 
-static void cfg_slug_from_label(const char *label, char *out, size_t out_sz) {
-    size_t out_idx = 0;
-    int last_was_underscore = 0;
-
-    for (size_t i = 0; label[i] && out_idx + 1 < out_sz; i++) {
-        unsigned char c = (unsigned char)label[i];
-        if (c == ' ' || c == '\t' || c == '-' || c == '/') {
-            if (!last_was_underscore) {
-                out[out_idx++] = '_';
-                last_was_underscore = 1;
-            }
-        } else if (isalnum(c)) {
-            out[out_idx++] = (char)tolower(c);
-            last_was_underscore = 0;
-        } else if (c == '_') {
-            if (!last_was_underscore) {
-                out[out_idx++] = '_';
-                last_was_underscore = 1;
-            }
-        }
-    }
-    if (out_idx > 0 && out[out_idx - 1] == '_') {
-        out_idx--;
-    }
-    if (out_sz > 0)
-        out[out_idx] = '\0';
-}
-
 const GlrConfigItem *glr_config_items(int *count) {
     if (count)
         *count = CFG_ITEM_COUNT;
@@ -192,17 +164,61 @@ const char *glr_config_item_display_label(const GlrConfigItem *item) {
 }
 
 const char *glr_config_item_slug(const GlrConfigItem *item) {
-    static char slug_cache[GLR_CONFIG_COUNT][REPL_CFG_KEY_MAX];
-    static unsigned char slug_ready[GLR_CONFIG_COUNT];
-
-    if (!item || item->key <= GLR_CONFIG_NONE || item->key >= GLR_CONFIG_COUNT)
+    if (!item || item->section_header || item->key <= GLR_CONFIG_NONE ||
+        item->key >= GLR_CONFIG_COUNT || !item->slug || !item->slug[0])
         return NULL;
-    if (!slug_ready[item->key]) {
-        cfg_slug_from_label(item->label, slug_cache[item->key],
-                            sizeof(slug_cache[item->key]));
-        slug_ready[item->key] = 1;
+    return item->slug;
+}
+
+static int config_validation_error(char *err, size_t err_sz,
+                                   const char *fmt, const char *arg) {
+    if (err && err_sz > 0)
+        snprintf(err, err_sz, fmt, arg);
+    return 0;
+}
+
+int glr_config_validate(char *err, size_t err_sz) {
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const GlrConfigItem *item = &g_cfg_items[i];
+        int structural = item->section_header || item->key == GLR_CONFIG_NONE;
+
+        if (structural) {
+            if (item->slug && item->slug[0])
+                return config_validation_error(
+                    err, err_sz, "config row %s is structural but has a slug",
+                    item->label ? item->label : "<unnamed>");
+            continue;
+        }
+
+        if (item->key <= GLR_CONFIG_NONE || item->key >= GLR_CONFIG_COUNT)
+            return config_validation_error(err, err_sz,
+                                           "config row %s has an invalid key",
+                                           item->label ? item->label : "<unnamed>");
+        if (!item->slug || !item->slug[0])
+            return config_validation_error(err, err_sz,
+                                           "config row %s has no slug",
+                                           item->label ? item->label : "<unnamed>");
+        if (strlen(item->slug) >= REPL_CFG_KEY_MAX)
+            return config_validation_error(err, err_sz,
+                                           "config slug is too long: %s", item->slug);
+        for (const char *p = item->slug; *p; p++) {
+            if (!( (*p >= 'a' && *p <= 'z') ||
+                   (*p >= '0' && *p <= '9') || *p == '_' ))
+                return config_validation_error(
+                    err, err_sz, "config slug has invalid characters: %s",
+                    item->slug);
+        }
+        for (int j = 0; j < i; j++) {
+            const GlrConfigItem *prior = &g_cfg_items[j];
+            if (!prior->section_header && prior->key != GLR_CONFIG_NONE &&
+                prior->slug && strcmp(prior->slug, item->slug) == 0)
+                return config_validation_error(
+                    err, err_sz, "duplicate config slug: %s", item->slug);
+        }
     }
-    return slug_cache[item->key];
+    if (err && err_sz > 0)
+        err[0] = '\0';
+    return 1;
 }
 
 /* The key -> backing-storage map: where each config value actually

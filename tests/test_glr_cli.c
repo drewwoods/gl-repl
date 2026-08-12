@@ -257,6 +257,10 @@ static void test_help_and_list_exit_paths(void) {
     ASSERT_INT("--list-tutorials exits", parse_v(&o, &code, av4b), 0);
     ASSERT_INT("--list-tutorials exit code is success", code, 0);
 
+    char *av4c[] = { "gl-repl", "--list-config", NULL };
+    ASSERT_INT("--list-config exits", parse_v(&o, &code, av4c), 0);
+    ASSERT_INT("--list-config exit code is success", code, 0);
+
     /* --help wins over anything that would otherwise fail the parse. */
     char *av5[] = { "gl-repl", "--window", "bogus", "--help", NULL };
     ASSERT_INT("--help after bad flag still exits", parse_v(&o, &code, av5), 0);

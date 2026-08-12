@@ -12,7 +12,7 @@
 _gl_repl_opts='-h --help --accum --no-accum --no-audio --dump-code --dump-flat
 --flat-histogram --dump-state-layout --detailed-prof --export-c --export-glr
 --export-ply --export-ply-srgb --assets --example --examples-dir --time
---window --tutorial --tour --list-examples --list-tutorials --list-tours --lint-scenes'
+--window --tutorial --tour --list-examples --list-tutorials --list-tours --list-config --lint-scenes'
 
 # Catalog names carry spaces, parens and '&', so candidates have to come back
 # shell-escaped (or bare inside an open quote) to survive as one argument.

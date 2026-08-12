@@ -3,7 +3,7 @@
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
 // @cfg light_indicators = 0
-// @cfg poly_highlight = 0
+// @cfg polygon_highlight = 0
 // @cfg msaa = 0
 // @cfg line_smooth = 1
 // Quadratic Bezier control points A=(ax,ay), B=(bx,by), C=(cx,cy).

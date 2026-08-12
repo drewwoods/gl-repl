@@ -1322,8 +1322,15 @@ static void test_msaa_display_label_override(void) {
     ASSERT_STR("MSAA display label resets", glr_config_item_display_label(item), "MSAA");
 }
 
+static void test_config_slug_table(void) {
+    char err[256];
+    ASSERT_INT("config slug table validates",
+               glr_config_validate(err, sizeof(err)), 1);
+    ASSERT_STR("config slug validation has no error", err, "");
+}
+
 /* Depth view row: a 4-state cycle (Off / Linear / Scene / Split) bound
- * to Ctrl+Shift+D, with the @cfg slug auto-derived from the label. */
+ * to Ctrl+Shift+D, with an explicit stable @cfg slug. */
 static void test_depth_viz_row_metadata(void) {
     const GlrConfigItem *item = NULL;
 
@@ -2643,6 +2650,7 @@ int main(void) {
     test_audio_config_direct_set();
     test_audio_menu_actions();
     test_scene_menu_cycle_actions();
+    test_config_slug_table();
     test_msaa_display_label_override();
     test_depth_viz_row_metadata();
     test_stencil_viz_row_metadata();

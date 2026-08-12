@@ -1919,7 +1919,7 @@ BENCH_TARGETS = \
 
 MAINTENANCE_TARGETS = \
 	check audit-editor-ownership fix-doc-links find-trailing-whitespace \
-	keymap-list palette-list unicode-count fix-unicode capacity-matrix lines lines-test coverage analyze \
+	keymap-list config-list check-config-slugs palette-list unicode-count fix-unicode capacity-matrix lines lines-test coverage analyze \
 	clean distclean freeglut-clean install-hooks install-completions \
 	render3d-hot-lib require-emcc \
 	callgraph-static callgraph-static-entry callgraph-profile \
@@ -2235,6 +2235,22 @@ check-keymap-no-dup: ## Hard guard: no two keymap.h bindings share a (key, mods)
 
 keymap-list: ## Print current key bindings + the free Ctrl / Ctrl+Shift / F-key slots.
 	@bash scripts/keymap.sh list
+
+config-list: gl-repl ## Print config labels and their stable @cfg slugs.
+	@set -o pipefail; \
+	sort_config() { \
+		IFS= read -r header || return 1; \
+		printf '%s\n' "$$header"; \
+		LC_ALL=C sort -t "$$(printf '\t')" -k1,1; \
+	}; \
+	if command -v column >/dev/null 2>&1; then \
+		./gl-repl --list-config | sort_config | column -t -s "$$(printf '\t')"; \
+	else \
+		./gl-repl --list-config | sort_config; \
+	fi
+
+check-config-slugs: gl-repl ## Check scene @cfg headers against the config table.
+	@python3 scripts/check/check-config-slugs.py ./gl-repl examples/scenes tests/scenes
 
 check-palette: ## Hard guard: covered scenes + README table stay on the active accent palette (accent_palette.h).
 	@python3 scripts/check/check-palette.py

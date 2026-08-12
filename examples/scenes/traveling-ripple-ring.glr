@@ -1,5 +1,4 @@
 // @cfg view_mode = RENDER3D_VIEW_2D
-// @cfg fit_frame = 1.15
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
 // Traveling ripple ring: for + fmod + conditional deformation

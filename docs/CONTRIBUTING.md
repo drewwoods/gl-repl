@@ -110,9 +110,12 @@ The most common contributions, recipe-style:
    *attributed to* at a source position, not which color a clear wrote into
    framebuffer channels, so a clear-affecting command touches it too.
 
-**A new config toggle** - append a [`ReplConfigItem`](../src/repl/cfg_baseline.h#L29) descriptor to
-`g_cfg_items[]` in [`src/app/glr_actions.c`](../src/app/glr_actions.c) under the right `### ` section.
-The count auto-computes and the item joins its section's flyout menu.
+**A new config toggle** - append a [`GlrConfigItem`](../src/app/glr_config.h#L110)
+descriptor to `g_cfg_items[]` in [`src/app/glr_actions.c`](../src/app/glr_actions.c)
+under the right `### ` section, including an explicit stable lowercase `.slug`.
+The count auto-computes and the item joins its section's flyout menu. Use
+`make config-list` to inspect slugs and `make check-config-slugs` to validate
+scene headers.
 
 **A new built-in example** - add a scene under [`examples/scenes/`](../examples/scenes/)
 and a matching entry in [`examples/catalog.ini`](../examples/catalog.ini).

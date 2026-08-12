@@ -1,4 +1,4 @@
-// @cfg poly_highlight = 0
+// @cfg polygon_highlight = 0
 // @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
 // @cfg vertex_outlines = 0
 // @cfg vertex_points = 0

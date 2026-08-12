@@ -793,7 +793,7 @@ GL pipeline rasterize the wireframe itself. The actual `glutSolid*` call
 goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L312) (shared with the live
 render loop in [`src/repl/executor.c`](../src/repl/executor.c), so the dispatch stays in one place
 and the GLUT-symbol call site stays inside the executor TU). The
-membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L334) in [`src/repl/command.h`](../src/repl/command.h)
+membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L335) in [`src/repl/command.h`](../src/repl/command.h)
 - the single source that also feeds `repl_cmd_starts_geometry_emit` and
 `repl_cmd_consumes_current_color` (a new `glutSolid*` [`CmdType`](../src/repl/command.h#L44) joins all
 three at once; `test_is_glut_solid_predicate` in [`tests/test_replay_walk.c`](../tests/test_replay_walk.c)
@@ -1246,7 +1246,7 @@ note) used to initialize `g_ui_theme`. It is `#ifndef`-guarded and
 build-overridable, e.g. `make gl-repl CFLAGS=-DUI_THEME_DEFAULT=1`;
 [`theme.h`](../src/ui/core/theme.h) `STATIC_ASSERT`s the value is in range against the [`UiTheme`](../src/ui/core/theme.h#L75)
 enum. The [`ui_theme_select()`](../src/ui/core/theme.h#L132) / [`ui_theme_active()`](../src/ui/core/theme.h#L133) seam keeps call
-sites stable for a future runtime switcher (e.g. a [`GlrConfigKey`](../src/app/glr_config.h#L29)
+sites stable for a future runtime switcher (e.g. a [`GlrConfigKey`](../src/app/glr_config.h#L31)
 cycle) that would relocate the active index into one `.c` TU.
 [`tests/test_ui_theme.c`](../tests/test_ui_theme.c) (header-only) guards table integrity: no
 zeroed token, neutral tokens stable across rows, green accent ==
