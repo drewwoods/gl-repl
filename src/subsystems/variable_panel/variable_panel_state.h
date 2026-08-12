@@ -88,7 +88,6 @@ void variable_panel_set_visible(int visible);
  * are unavailable while collapsed). Mouse-only - toggled by clicking the
  * title bar's chip, no keymap binding. */
 int  variable_panel_collapsed(void);
-void variable_panel_set_collapsed(int collapsed);
 void variable_panel_toggle_collapsed(void);
 
 /* --- Drag transaction handler API ---

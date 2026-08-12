@@ -58,10 +58,6 @@ int variable_panel_collapsed(void) {
     return g_variable_panel.view.collapsed;
 }
 
-void variable_panel_set_collapsed(int collapsed) {
-    g_variable_panel.view.collapsed = collapsed ? 1 : 0;
-}
-
 void variable_panel_toggle_collapsed(void) {
     g_variable_panel.view.collapsed = !g_variable_panel.view.collapsed;
 }
