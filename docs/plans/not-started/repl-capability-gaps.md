@@ -3,9 +3,14 @@
 ## Status - NOT STARTED (2026-08-12)
 
 Nothing here has been implemented. This document is a **prioritized index**,
-not a fourth copy of designs that already exist: two of the five items below
+not a fourth copy of designs that already exist: three of the six items below
 already have a design of record elsewhere, and this plan's job is to say what
 each unlocks, what it costs, and which order they are worth doing in.
+
+**Revised 2026-08-12** after three follow-up scenes landed (`8f9573d0`,
+`b485c1f3`, `8b6a3290`). They turned several entries from argued into
+measured, added item 6, and rewrote §8's evidence without changing its
+conclusion.
 
 ## Why this list exists
 
@@ -28,6 +33,21 @@ the REPL cannot express:
 Each bullet maps to one item below. The scene is the acceptance test: when an
 item lands, a specific part of that file should get shorter or disappear.
 
+Three follow-ups have since landed and sharpen the evidence:
+
+- `stencil-shadow-volume-zfail.glr` (`8f9573d0`) - z-fail, which §8 predicted
+  would be a scene follow-up of about ten lines. It was six, and the prediction
+  holds.
+- `stencil-shadow-volumes-multi.glr` (`b485c1f3`) - three casters into one
+  stencil tally. Its caster list is spelled **twice**, in `occluderCubes()` and
+  in `hulls()`, because a list of anything has nowhere to live (items 1 and 4).
+  It also has to issue every `GL_INCR` before any `GL_DECR` because the
+  wrapping ops are missing (item 2).
+- `stencil-shadow-volumes-infinite.glr` (`8b6a3290`) - `glVertex4f` with
+  `w = 0`. Deleting the extrusion arithmetic cut the scene from 1789 flat
+  commands to 705 with staging held constant, a 61% reduction, and produced the
+  measurements now in §8.
+
 ## Summary
 
 | # | Feature | Unlocks | Effort | Design of record |
@@ -36,10 +56,12 @@ item lands, a specific part of that file should get shorter or disappear.
 | 2 | `glStencilOpSeparate` / `glStencilFuncSeparate` + `GL_INCR_WRAP` / `GL_DECR_WRAP` | One-pass shadow volumes; correct counting under deep overlap | **2-3 dev-days**, ~250 LOC | `done/stencil-buffer-support.md` §"Phase 3" |
 | 3 | `glLightfv` / `glLightf` (program-movable lights) | Real lighting response; unbreaks one corpus scene, unbends two others | **3-5 dev-days**, ~350 LOC - *ownership decision required first* | none - §3 below |
 | 4 | Larger scratch storage (`REPL_SCRATCH_ARRAY_*`) | Data-driven geometry, per-particle state, meshes above 16 floats | **1-2 dev-days** for the knob; more if `D`-`H` are added | `done/add-fixed-array-support.md`, `done/bounded-global-arrays.md` |
-| 5 | Defect fixes (`--time` on the dump path; two broken corpus scenes) | Makes the documented authoring-verification recipe actually work | **0.5 dev-days** | §5 below |
+| 5 | Defect fixes (`--time` on the dump path; stub build; comment round-trip; two broken corpus scenes) | Makes the documented authoring-verification recipe actually work | **1 dev-day** | §5 below |
+| 6 | `GL_DEPTH_CLAMP` | Infinite (`w = 0`) extrusion paired with z-fail, without handing programs the projection matrix | **1-2 dev-days**, ~60 LOC - *runtime-gated; web support unverified* | none - §6 below |
 
-Recommended order is **5 → 2 → 1 → 3 → 4**, argued in §6. It is deliberately
-not the order of the table, which is ranked by impact rather than by sequence.
+Recommended order is **5 → 2 → 6 → 1 → 3 → 4**, argued in §7. It is
+deliberately not the order of the table, which is ranked by impact rather than
+by sequence.
 
 ---
 
@@ -127,6 +149,16 @@ applies to any two-sided stencil technique (CSG, mirrors, portal counting).
 convenience: `GL_INCR`/`GL_DECR` **saturate**, so a pixel behind many nested
 shadow casters clamps at 255 or 0 and stops cancelling. Fine for one caster,
 silently wrong for many.
+
+The multi-occluder scene shows the cost of not having them even at three
+casters. It is forced to issue **every increment before any decrement** - one
+whole sweep of back faces across all three hulls, then one whole sweep of front
+faces - rather than counting each caster in turn, because a per-caster
+interleave could decrement a pixel already at zero and clamp, silently losing a
+crossing. So the missing `_WRAP` ops do not merely cap how many casters work;
+they dictate the *batching order*, and they rule out the per-object batching an
+engine would naturally want. Landing `_WRAP` removes that constraint, which is
+a second, less obvious thing item 2 unlocks.
 
 ### Why the existing deferral no longer holds
 
@@ -278,10 +310,16 @@ over a face table. The language already supports computed indexing -
 so a stride convention (vertex *j* at base `3*j`) would work today if there were
 room for it. This is a capacity problem, not an expressiveness problem.
 
+The multi-occluder scene adds a smaller but sharper symptom than a mesh: it
+needs to store **three tuples of four floats** - the caster list - and cannot,
+so the list is written out twice, once in `occluderCubes()` and once in
+`hulls()`. Twelve floats. Either item 1 or item 4 fixes it, which is worth
+noting because it is the only place the two overlap.
+
 ### Why it is ranked last despite being the hardest ceiling
 
-Only **6 of 101** scenes in `examples/scenes` + `tests/scenes` touch `A`/`B`/`C`
-at all. Nearly every scene is a pure function of `(t, loop index)`, and ships
+Only **6 of 114** scenes in `examples/scenes` + `tests/scenes` touch `A`/`B`/`C`
+at all (the denominator has grown; the numerator has not). Nearly every scene is a pure function of `(t, loop index)`, and ships
 fine. So this is an absolute wall that is rarely walked into - the opposite
 profile from item 1, which everybody pays a little.
 
@@ -340,11 +378,95 @@ assertions in `make test-scenes` / `test_camera_header_parity`:
 - `shade-model-flat-smooth.glr` - puts two commands on one line
   (`glColor3f(…); glVertex3f(…);`). Mechanical split.
 
-**~0.5 dev-days total.**
+**Two comment round-trip defects.** Comment text is being run through
+expression-identifier processing on the export/import path. Minimal repro - a
+four-line `.glr` through `--export-glr`:
+
+```
+// the word infinity and inf in a comment   ->  // the word INFINITY and INFINITY in a comment
+// also a trailing semicolon here;          ->  // also a trailing semicolon here
+```
+
+`infinity` and `inf` are evaluator constant aliases (`src/repl/eval.c:1956-1958`,
+`:2238-2240`) and the alias canonicalization is reaching comment bodies;
+separately a trailing `;` is stripped from a comment. Neither is caught by the
+corpus tests, which do not compare comment text on that path. Both were worked
+around by rewording while authoring the shadow-volume scenes, which is the wrong
+fix. **~20 LOC** plus a round-trip assertion that actually compares comments.
+
+**`make gl-repl USE_GL_STUBS=1` does not build.** `gl_repl.c:333` references
+`GLUT_DISPLAY_MODE_POSSIBLE`, which the bundled GLUT stub header does not
+define. This matters more than a broken build target: the scene-authoring skill
+tells authors to build with stubs specifically to get a `--dump-flat` without GL
+libraries, so the documented measurement path for the flat-command budget is
+unavailable on a machine without GL. **~5 LOC** in `tests/gl-stubs/include/`.
+
+**`@cfg grid` / `axes` appear not to apply to scenes loaded via a runtime
+`--examples-dir` catalog.** Observed while capturing the shadow-volume scenes:
+`grid = GRID_THEME_OFF` and `axes = AXES_THEME_OFF` are honoured in neither the
+new scenes nor the pre-existing `multiple-planar-shadow-projections.glr`, which
+carries the same headers. Recorded as **observed but not diagnosed** - it may be
+the runtime-catalog load path, the capture environment, or an incorrect
+expectation about which settings the presentation reset covers. Worth half an
+hour to confirm before anyone trusts a `@cfg` header in that corpus.
+
+**~1 dev-day total.**
 
 ---
 
-## 6. Recommended sequencing
+## 6. `GL_DEPTH_CLAMP`
+
+### What is missing
+
+Absent from the whole tree - not in `k_enable_caps`, not in the GL stub
+headers, not referenced anywhere in `src/` or the vendored freeglut. With it
+enabled, geometry beyond the far plane is depth-clamped rather than clipped.
+
+### What it unlocks
+
+The one thing §8 declines to unlock by way of the projection matrix, and it
+does so without touching the projection at all. `stencil-shadow-volumes-infinite.glr`
+extrudes silhouettes to infinity with `glVertex4f(p - light, 0)`, which deletes
+the extrusion-length knob and 61% of the scene's flat commands - but it is
+pinned to z-pass, because a `w = 0` vertex lands fractionally past `ndc.z = 1`
+under a finite far plane and GL clips the far cap that z-fail counts (measured
+in §8). Depth clamping keeps that geometry, and the infinite-extrusion / z-fail
+pairing - the textbook-robust form - becomes expressible.
+
+It is also the smallest item in this document: one row in `k_enable_caps`, one
+row in the stub headers, and an executor gate. There is no new command shape,
+no parser branch, no export bridge; `glEnable`/`glDisable` already carry it.
+
+### Effort
+
+**1-2 dev-days, ~60 LOC**, almost all of it the runtime gate rather than the
+feature. `GL_ARB_depth_clamp` is core since GL 3.2, but this app runs a
+compatibility context, so availability must be probed rather than assumed - the
+established pattern is `glutExtensionSupported` at `src/app/glr_ctrl.c:4229`,
+with the gate on the **executor** and the spec entry unconditional, exactly as
+item 2 argues for the `*Separate` entry points. Probe both `GL_ARB_depth_clamp`
+and `GL_NV_depth_clamp`.
+
+**Web risk, and it is the real one.** Depth clamp is not in WebGL2 core; it
+exists only as a recent `EXT_depth_clamp` extension. `make test-web` links no
+GL and cannot answer this. A scene relying on depth clamp would therefore
+render *differently* in the browser rather than failing loudly - which is worse
+than the `glPointParameterfv` precedent, where the fallback is a visible
+approximation rather than a silently wrong shadow. Decide whether that is
+acceptable before shipping, and consider whether the executor should refuse
+z-fail-shaped usage rather than degrade it.
+
+### Why it is not simply better than a bounded extrusion
+
+Honest accounting: a bounded extrusion already works today, costs nothing, and
+is what all three shipped z-fail scenes use. Depth clamp does not fix a broken
+scene - it removes a *knob* and a class of authoring mistake ("is my extrusion
+long enough?") that silently produces truncated shadows. That is a real but
+modest benefit, which is why it sits below items 2 and 5 in the sequencing.
+
+---
+
+## 7. Recommended sequencing
 
 1. **§5 defects first.** Half a day, and one of them is actively misleading
    anyone verifying scene work.
@@ -352,14 +474,17 @@ assertions in `make test-scenes` / `test_camera_header_parity`:
    record, and its deferral rationale is now explicitly falsified. Its first
    step (`ENUM_THEN_INTS`) is a refactor that pays down debt the stencil plan
    already flagged as coming due.
-3. **§1 float-returning functions.** Biggest payoff, and the only item that
+3. **§6 `GL_DEPTH_CLAMP`.** Cheapest item here and it shares §2's runtime-gate
+   machinery, so doing it directly after §2 reuses that work while it is fresh.
+   Resolve the WebGL2 question first - it is the only open risk.
+4. **§1 float-returning functions.** Biggest payoff, and the only item that
    improves scenes that are already written. Needs the refresh in §1 first.
-4. **§3 `glLightfv`.** Gated on an architecture decision, so it wants a design
+5. **§3 `glLightfv`.** Gated on an architecture decision, so it wants a design
    pass before an implementation pass. Unblocks a broken scene.
-5. **§4 scratch capacity.** Do it when a scene actually wants it. Bump the
+6. **§4 scratch capacity.** Do it when a scene actually wants it. Bump the
    constant; do not build `bounded-global-arrays.md`.
 
-## 7. Explicitly out of scope
+## 8. Explicitly out of scope
 
 **`glMatrixMode` / `glLoadMatrixf`.** Both absent, and they should stay absent.
 The controller owns camera and projection (`glr_ctrl_display_frame()` loads the
@@ -367,22 +492,65 @@ camera; `render3d` sets projection; the export projection bridge at
 `glr_ctrl.c:3509` mirrors it into exported C). Handing the program the
 projection matrix punches straight through that ownership boundary.
 
-The one technique that wants it is z-fail shadow volumes ("Carmack's reverse"),
-which conventionally uses an infinite far plane so the far cap cannot be
-clipped. That is not a good enough reason: `RENDER3D_DEFAULT_FAR_Z` is 200, a
-bounded extrusion stays well inside it, and z-fail is otherwise reachable today
-by swapping which stencil slot updates. If z-fail is wanted, it is a **scene**
-follow-up on `stencil-shadow-volume.glr` (~10 lines, lifting that scene's
-"keep the light in front of the cube" restriction), not a language feature.
+The conclusion is unchanged from the first draft of this document. The evidence
+behind it is not, so it is restated here in measured form.
 
-## 8. Acceptance
+The technique that wants an addressable projection is z-fail shadow volumes
+("Carmack's reverse") extruded to infinity, which conventionally pairs with an
+infinite far plane so the far cap cannot be clipped. Both halves are now
+expressible in the REPL - z-fail landed as a scene (`8f9573d0`), and `w = 0`
+extrusion became possible when `glVertex4f` shipped (`a4056e54`) - so the
+pairing can be tried, and it fails. Rendered against a long-but-finite
+reference extrusion (`ext = 25`, ample yet still inside the far plane), with a
+deliberately-too-short extrusion carried as a sensitivity control:
 
-Each item should be able to point at a diff in
-`tests/scenes/general/stencil-shadow-volume.glr`:
-
-| Item | Expected effect on that scene |
+| Configuration | Deviation from reference |
 |---|---|
-| §1 returns | `caps()` loses ~8 of its 12 params; the twelve `p + ext*(p - o)` lines collapse to a reusable helper |
-| §2 separate stencil | Pass 2 draws `volume()` once instead of twice; `glCullFace` flipping disappears |
-| §3 `glLightfv` | The ambient/lit two-pass fake can become real lighting; the light marker becomes an actual light |
-| §4 scratch capacity | `volume()`'s 96 unrolled lines become a loop over a face table |
+| `w = 0` + **z-fail** | **2.2% and 4.6%** of viewport at two of four sampled times |
+| finite `ext = 10` + z-fail | matches at all four |
+| `w = 0` + **z-pass** | within **0.001%** at all eight sampled times (control: 0.41%-0.74%) |
+
+Two findings make this precise rather than anecdotal:
+
+- **The cause is the far plane, not homogeneous coordinates.** An ordinary
+  finite `glVertex3f` extrusion long enough to overshoot the far plane
+  (`ext = 200`) is clipped identically and diverges by the same 2.2% and 4.6%
+  at the same times, agreeing with the `w = 0` render to 0.000%. Infinity is
+  just the limiting case of too far.
+- **The failure is one-directional.** 100.0% of divergent pixels are shadow
+  *lost*, none gained, at both times - the signature of a deleted exit surface,
+  since clipping can only remove hull crossings.
+
+That is a sharper argument *for* the boundary, not against it: the failure is
+real, but it is bounded, diagnosable, and has two independent workarounds that
+do not require the projection - a bounded extrusion (used by all three shipped
+z-fail scenes) or `GL_DEPTH_CLAMP` (§6). A single technique needing a
+robustness feature is not worth inverting the ownership model for when a
+`glEnable` capability buys the same thing.
+
+**One caveat worth recording**, since it is the case that would reopen this: a
+bounded extrusion is only safe while the extrusion clears every receiver *and*
+stays inside the far plane. That window is wide today (`RENDER3D_DEFAULT_FAR_Z`
+is 200 against room-scale geometry) but it is a window, and it has to be
+re-checked by hand per scene. If scene scale ever grows enough to close it,
+§6 becomes the answer rather than a convenience.
+
+## 9. Acceptance
+
+Each item should be able to point at a diff in one of the four shadow-volume
+scenes under `tests/scenes/general/`. They are a graded acceptance suite: one
+occluder z-pass, one z-fail, three occluders, and infinite extrusion.
+
+| Item | Expected effect | Scene to measure it on |
+|---|---|---|
+| §1 returns | `caps()` loses ~8 of its 12 params; the extrusion lines collapse to a reusable helper. The caster list stops being written twice | `stencil-shadow-volume.glr`; duplication in `-multi.glr` |
+| §2 separate stencil | Pass 2 draws the hulls once instead of twice; `glCullFace` flipping disappears. Worth **3x** here, since the multi scene sweeps three hulls per pass | `-multi.glr` |
+| §2 `_WRAP` ops | The all-INCRs-before-all-DECRs batching constraint lifts; casters can be counted one at a time | `-multi.glr` |
+| §3 `glLightfv` | The ambient/lit two-pass fake becomes real lighting; the light marker becomes an actual light | any of the four |
+| §4 scratch capacity | `volume()`'s 96 unrolled lines become a loop over a face table; the caster list becomes data | `-multi.glr` |
+| §6 `GL_DEPTH_CLAMP` | `-infinite.glr` can switch from z-pass to z-fail and keep the light orbiting freely, with no bounded extrusion anywhere | `-infinite.glr` |
+
+Note the last row is the only acceptance test in this document that is
+currently **falsifiable in both directions**: the §8 measurements say exactly
+what that scene does today, so a depth-clamp implementation either moves those
+numbers to zero or it did not work.
