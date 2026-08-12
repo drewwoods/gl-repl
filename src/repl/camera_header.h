@@ -206,8 +206,6 @@ ReplCameraLineResult repl_camera_header_offer(ReplCameraHeader *hdr,
 ReplCameraFinish repl_camera_header_finish(ReplCameraHeader *hdr,
                                            ReplCameraApplyMode mode);
 
-const ReplCameraDiag *repl_camera_header_diags(const ReplCameraHeader *hdr);
-
 /* Record a diagnostic the reader could not have seen itself (the
  * importer's non-zero `g_angle` initializer warning). */
 void repl_camera_header_record(ReplCameraHeader *hdr, ReplCameraRole role,
