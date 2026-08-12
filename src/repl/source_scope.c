@@ -103,10 +103,10 @@ ReplSourceScopeLiveView repl_source_scope_live_view(void) {
 }
 
 int repl_source_scope_view_in_begin_block_at(const ReplSourceScopeView *view,
-                                             int pos) {
+                                             int line_idx) {
     if (!view || !view->built) return 0;
-    pos = source_scope_clamp_pos(view, pos);
-    return view->begin_depth_prefix[pos] > 0;
+    line_idx = source_scope_clamp_pos(view, line_idx);
+    return view->begin_depth_prefix[line_idx] > 0;
 }
 
 int repl_source_scope_view_block_depth_at(const ReplSourceScopeView *view,
@@ -130,8 +130,9 @@ int repl_source_scope_view_matrix_scope_depth_at(const ReplSourceScopeView *view
     return view->matrix_depth_prefix[pos];
 }
 
-int repl_source_scope_in_begin_block_at(int pos) {
-    return repl_source_scope_view_in_begin_block_at(live_source_scope_view(), pos);
+int repl_source_scope_in_begin_block_at(int line_idx) {
+    return repl_source_scope_view_in_begin_block_at(live_source_scope_view(),
+                                                    line_idx);
 }
 
 int repl_source_scope_in_begin_block(void) {
