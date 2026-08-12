@@ -506,7 +506,7 @@ void display(void) {
 
   // Asteroid belt (see asteroidBelt() above)
   glDisable(GL_LIGHTING);
-  //glEnable(GL_POINT_SMOOTH)
+  //glEnable(GL_POINT_SMOOTH);
   glPointSize(8);
   asteroidBelt(ASTEROIDS);
 

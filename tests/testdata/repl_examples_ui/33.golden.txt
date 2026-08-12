@@ -117,7 +117,7 @@ void display(void) {
     // Velocity is linear in age: currentVelY = gravityY*ageSeconds + launchVelY.
     // Position is its integral:
     //   (gravityY/2)*ageSeconds^2 + launchVelY*ageSeconds + launchY
-    // currentVelY is computed for illustration (the velocity term above)
+    // currentVelY is computed for illustration (the velocity term above);
     // only particleY is read by the caller.
     currentVelY = launchVelY + gravityY*ageSeconds;
     particleY = launchY + gravityY/2 * ageSeconds * ageSeconds + launchVelY * ageSeconds;

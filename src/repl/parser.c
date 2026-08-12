@@ -2026,7 +2026,8 @@ static void strip_trailing_comment(char *p) {
  * Deliberately one flat dispatcher - each command match is independent,
  * so the high branch count is breadth, not depth. The order is:
  *
- *   1. trim + strip trailing ';'; empty line / `// comment` short-circuit
+ *   1. trim; `// comment` short-circuit (before stripping `;` - a comment
+ *      may end with `;` as prose); then strip trailing `;` / empty line
  *   2. split `func(args)` and reject trailing garbage after the ')'
  *   3. table-driven enum commands (glEnable, glDepthFunc, ...) via
  *      try_parse_table_driven_enum_command
@@ -2094,6 +2095,29 @@ static int parse_keyword_statement(const char *p, GLCmd *cmd,
     return -1;
 }
 
+/* Full-line comments are source rows, not statements. Keep their prose
+ * outside the terminator stripping and expression parsing in parse_command,
+ * while retaining the parser's canonical scope indentation. */
+static int parse_full_line_comment(char *p, GLCmd *cmd,
+                                   char *text_out, int text_sz,
+                                   const ReplParseContext *ctx,
+                                   int source_line_idx) {
+    int len = (int)strlen(p);
+
+    while (len > 0 && isspace((unsigned char)p[len - 1]))
+        p[--len] = '\0';
+    cmd->type = CMD_COMMENT;
+    cmd->valid = 1;
+    cmd->is_auto = 0;
+    cmd->num_args = 0;
+    {
+        char indent[REPL_INDENT_TEXT_MAX];
+        parser_scope_cmd_indent(ctx, source_line_idx, indent, sizeof(indent));
+        write_text(text_out, text_sz, "%s%s", indent, p);
+    }
+    return 1;
+}
+
 static int parse_command(const char *line, GLCmd *cmd,
                          char *text_out, int text_sz,
                          const ReplParseContext *ctx) {
@@ -2121,30 +2145,29 @@ static int parse_command(const char *line, GLCmd *cmd,
     while (*p && isspace((unsigned char)*p)) p++;
 
     int len = (int)strlen(p);
-    while (len > 0 && (p[len - 1] == ';' || isspace((unsigned char)p[len - 1])))
-        p[--len] = '\0';
 
     cmd->valid = 0;
     cmd->num_args = 0;
     if (text_out && text_sz > 0) text_out[0] = '\0';
+
+    /* Comment short-circuit runs before the statement-terminator `;` strip.
+     * A full-line comment may end with `;` as prose ("// note ends here;")
+     * and that character is part of the comment body, not a terminator. Only
+     * trailing whitespace is shed so the stored text stays what the author
+     * wrote. */
+    if (len > 0 && p[0] == '/' && p[1] == '/') {
+        return parse_full_line_comment(p, cmd, text_out, text_sz, ctx,
+                                       source_line_idx);
+    }
+
+    while (len > 0 && (p[len - 1] == ';' || isspace((unsigned char)p[len - 1])))
+        p[--len] = '\0';
 
     if (len == 0) {
         cmd->type = CMD_EMPTY;
         cmd->valid = 1;
         cmd->is_auto = 0;
         cmd->num_args = 0;
-        return 1;
-    }
-
-    /* Comment: line starts with // */
-    if (p[0] == '/' && p[1] == '/') {
-        cmd->type = CMD_COMMENT;
-        cmd->valid = 1;
-        cmd->is_auto = 0;
-        cmd->num_args = 0;
-        char indent[REPL_INDENT_TEXT_MAX];
-        parser_scope_cmd_indent(ctx, source_line_idx, indent, sizeof(indent));
-        WRITE_TEXT("%s%s", indent, p);
         return 1;
     }
 

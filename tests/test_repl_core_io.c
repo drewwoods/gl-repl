@@ -2498,6 +2498,97 @@ int main(void) {
         remove(cmt_path);
     }
 
+    /* --- Full-line comment bodies must not be rewritten ----------------
+     * Repro from docs/plans/not-started/repl-capability-gaps.md §5: a .glr
+     * loaded and re-exported via --export-glr was rewriting evaluator
+     * constant aliases inside comments (`inf`/`infinity` -> `INFINITY`) and
+     * stripping a trailing `;` from a comment line. Neither belongs to
+     * expression canonicalization. */
+    {
+        const char *glr_path = "/tmp/repl_core_comment_body_roundtrip.glr";
+        const char *out_path = "/tmp/repl_core_comment_body_roundtrip_out.glr";
+        char file_buf[2048];
+        SourceTextView doc;
+        FILE *f;
+        int inf_row = -1;
+        int semi_row = -1;
+        int i;
+
+        f = fopen(glr_path, "w");
+        ASSERT_TRUE("write comment-body fixture", f != NULL);
+        if (f) {
+            fputs("// the word infinity and inf in a comment\n"
+                  "// also a trailing semicolon here;\n"
+                  "glClear(GL_COLOR_BUFFER_BIT);\n", f);
+            fclose(f);
+
+            glr_ctrl_reset_all();
+            declare_test_vars();
+            ASSERT_TRUE("comment-body .glr loads",
+                        repl_export_load_from_file(glr_path, NULL) == 1);
+            doc = source_document_view();
+            for (i = 0; i < repl_state_document_count(); i++) {
+                const char *ln = source_text_line(doc, i);
+                if (!ln)
+                    continue;
+                if (strstr(ln, "word infinity") || strstr(ln, "word INFINITY"))
+                    inf_row = i;
+                if (strstr(ln, "trailing semicolon"))
+                    semi_row = i;
+            }
+            ASSERT_TRUE("comment-body: found infinity row", inf_row >= 0);
+            ASSERT_TRUE("comment-body: found semicolon row", semi_row >= 0);
+            if (inf_row >= 0) {
+                const char *ln = source_text_line(doc, inf_row);
+                ASSERT_TRUE("comment-body: 'infinity' stays lowercase",
+                            strstr(ln, "infinity") != NULL);
+                ASSERT_TRUE("comment-body: 'inf' stays lowercase",
+                            strstr(ln, " inf ") != NULL ||
+                            strstr(ln, " and inf ") != NULL);
+                ASSERT_TRUE("comment-body: no INFINITY rewrite in comment",
+                            strstr(ln, "INFINITY") == NULL);
+            }
+            if (semi_row >= 0) {
+                const char *ln = source_text_line(doc, semi_row);
+                ASSERT_TRUE("comment-body: trailing ';' on comment survives load",
+                            strstr(ln, "here;") != NULL);
+            }
+
+            /* The same shape through the .glr writer the CLI --export-glr uses. */
+            ASSERT_TRUE("comment-body: export-glr writes",
+                        repl_export_save_glr(out_path, source_document_view()) == 1);
+            read_text_file(out_path, file_buf, sizeof(file_buf));
+            ASSERT_TRUE("export-glr keeps 'infinity' in comment",
+                        strstr(file_buf, "infinity") != NULL);
+            ASSERT_TRUE("export-glr keeps 'inf' in comment",
+                        strstr(file_buf, " inf ") != NULL ||
+                        strstr(file_buf, " and inf ") != NULL);
+            ASSERT_TRUE("export-glr does not emit INFINITY for comment words",
+                        strstr(file_buf, "INFINITY") == NULL);
+            ASSERT_TRUE("export-glr keeps trailing ';' on comment line",
+                        strstr(file_buf, "here;") != NULL);
+
+            /* Commit path too: parse_command used to strip ';' before the
+             * comment short-circuit, so interactive entry of a comment ending
+             * in ';' lost it even without import. */
+            glr_ctrl_reset_all();
+            declare_test_vars();
+            editor_feed_line("// also a trailing semicolon here;");
+            editor_feed_line("// the word infinity and inf in a comment");
+            doc = source_document_view();
+            ASSERT_INT("comment-body commit: two rows",
+                       repl_state_document_count(), 2);
+            ASSERT_TRUE("comment-body commit: trailing ';' survives",
+                        strstr(source_text_line(doc, 0), "here;") != NULL);
+            ASSERT_TRUE("comment-body commit: infinity/inf untouched",
+                        strstr(source_text_line(doc, 1), "infinity") != NULL &&
+                        strstr(source_text_line(doc, 1), "INFINITY") == NULL);
+
+            remove(glr_path);
+            remove(out_path);
+        }
+    }
+
     /* --- C89 loop marker tokens in user comments must not be dropped --- */
     {
         glr_ctrl_reset_all(); declare_test_vars();

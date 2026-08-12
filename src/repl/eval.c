@@ -2180,6 +2180,11 @@ void repl_eval_expr_to_c(const char *in, char *out, int out_sz) {
  * then scratch-array subscripts return to A/B/C[] form. fmodf is left
  * as-is - the REPL grammar accepts it as the fmod builtin.
  *
+ * As with repl_eval_expr_to_c, a trailing `// ...` comment (or a full-line
+ * comment whose only content is that `//`) is split off first and re-
+ * attached raw: comment prose is not expression text, so alias rewrites
+ * like `inf`/`infinity` -> `INFINITY` must not touch it.
+ *
  * The cast-free `(2*M_PI)` / bare `M_PI` spellings stay in the table
  * because files exported before the constants became float-cast still
  * import; they only ever appear on the way in. */
@@ -2193,13 +2198,26 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
         { "((float)M_E)",       "e"   },
         { "(2*M_PI)",           "TAU" },  /* pre-float-cast exports */
     };
+    const char *expr_end;
+    size_t code_len;
 
     if (!in || !out || out_sz <= 0)
         return;
 
+    /* Translate only the code; a trailing (or whole-line) `// ...` comment
+     * is re-attached raw at the end so the rewrite passes never mangle
+     * words inside it. */
+    expr_end = repl_line_trailing_comment(in);
+    if (!expr_end)
+        expr_end = in + strlen(in);
+    code_len = (size_t)(expr_end - in);
+
     /* First pass: substring replacement for the parenthesized constants. */
     char tmp[MAX_LINE_LEN];
-    snprintf(tmp, sizeof(tmp), "%s", in);
+    if (code_len >= sizeof(tmp))
+        code_len = sizeof(tmp) - 1;
+    memcpy(tmp, in, code_len);
+    tmp[code_len] = '\0';
 
     {
         char buf[MAX_LINE_LEN];
@@ -2309,6 +2327,14 @@ void repl_eval_c_expr_to_repl(const char *in, char *out, int out_sz) {
         char scratch_buf[MAX_LINE_LEN];
         expr_rewrite_scratch_subscripts_to_repl(out, scratch_buf, sizeof(scratch_buf));
         snprintf(out, (size_t)out_sz, "%s", scratch_buf);
+    }
+
+    /* Re-attach the raw trailing comment (untouched by the passes above). */
+    if (expr_end < in + strlen(in)) {
+        size_t n = strnlen(out, (size_t)out_sz);
+        while (n > 0 && isspace((unsigned char)out[n - 1]))
+            out[--n] = '\0';
+        repl_append_trailing_comment(out, (size_t)out_sz, in);
     }
 }
 
