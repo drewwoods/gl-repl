@@ -1,9 +1,10 @@
 # REPL Capability Gaps - Roadmap
 
-## Status - NOT STARTED (2026-08-12)
+## Status - PARTIAL (2026-08-12)
 
-Nothing here has been implemented. This document is a **prioritized index**,
-not a fourth copy of designs that already exist: three of the six items below
+**§5 defects are done** (`4d9ababb`, `27d5336d`, `794d4a94`, `dd9d22f7`).
+Items 1–4 and 6 are still open. This document is a **prioritized index**,
+not a fourth copy of designs that already exist: three of the open items
 already have a design of record elsewhere, and this plan's job is to say what
 each unlocks, what it costs, and which order they are worth doing in.
 
@@ -54,14 +55,14 @@ Three follow-ups have since landed and sharpen the evidence:
 |---|---|---|---|---|
 | 1 | Float-returning functions (`return expr;`) | Helpers that compute instead of only draw; removes the global-slot tax on every scene | **7-10 dev-days**, ~825 LOC | `not-started/float-returning-repl-functions.md` (needs a refresh - see §1) |
 | 2 | `glStencilOpSeparate` / `glStencilFuncSeparate` + `GL_INCR_WRAP` / `GL_DECR_WRAP` | One-pass shadow volumes; correct counting under deep overlap | **2-3 dev-days**, ~250 LOC | `done/stencil-buffer-support.md` §"Phase 3" |
-| 3 | `glLightfv` / `glLightf` (program-movable lights) | Real lighting response; unbreaks one corpus scene, unbends two others | **3-5 dev-days**, ~350 LOC - *ownership decision required first* | none - §3 below |
+| 3 | `glLightfv` / `glLightf` (program-movable lights) | Real lighting response; unbends two contorted scenes (corpus scene rewritten to fixed lights as interim) | **3-5 dev-days**, ~350 LOC - *ownership decision required first* | none - §3 below |
 | 4 | Larger scratch storage (`REPL_SCRATCH_ARRAY_*`) | Data-driven geometry, per-particle state, meshes above 16 floats | **1-2 dev-days** for the knob; more if `D`-`H` are added | `done/add-fixed-array-support.md`, `done/bounded-global-arrays.md` |
-| 5 | Defect fixes (`--time` on the dump path; stub build; comment round-trip; two broken corpus scenes) | Makes the documented authoring-verification recipe actually work | **1 dev-day** | §5 below |
+| 5 | Defect fixes (`--time` on the dump path; comment round-trip; two broken corpus scenes) | Makes the documented authoring-verification recipe actually work | **DONE** (`4d9ababb` … `dd9d22f7`) | §5 below |
 | 6 | `GL_DEPTH_CLAMP` | Infinite (`w = 0`) extrusion paired with z-fail, without handing programs the projection matrix | **1-2 dev-days**, ~60 LOC - *runtime-gated; web support unverified* | none - §6 below |
 
-Recommended order is **5 → 2 → 6 → 1 → 3 → 4**, argued in §7. It is
-deliberately not the order of the table, which is ranked by impact rather than
-by sequence.
+Recommended remaining order is **2 → 6 → 1 → 3 → 4** (§5 already shipped),
+argued in §7. It is deliberately not the order of the table, which is ranked
+by impact rather than by sequence.
 
 ---
 
@@ -239,16 +240,16 @@ program state: `Render3dLight lights[MAX_LIGHTS]` (`MAX_LIGHTS` = 4) lives in
 Genuine lighting response - and it is the gap with the most existing evidence
 of demand in the tree:
 
-- `tests/scenes/general/multi-light-rig.glr` **does not load**. It was written
-  against `glLightfv` and fails with a parse error at body line 21; it is one
-  of the pre-existing `make test-scenes` failures. Someone already wrote the
-  scene this feature is for.
+- `tests/scenes/general/multi-light-rig.glr` was written against `glLightfv`
+  and failed to load until §5 rewrote it to the fixed-light idiom
+  (`dd9d22f7`). It still wants real program-movable lights - the markers are
+  decorative, not the theme slots.
 - `tests/scenes/general/multiple-planar-shadow-projections.glr` carries a
   header comment explaining that it renders unlit because *"The REPL's
   configured GL light position is fixed, so the bright pass below is unlit."*
 - `stencil-shadow-volume.glr` fakes the same way, for the same reason.
 
-Three scenes, two of them contorted and one of them broken.
+Three scenes, all of them contorted until this lands.
 
 ### The ownership decision that must come first
 
@@ -355,62 +356,25 @@ solve a capacity problem that a constant bump solves.
 
 ---
 
-## 5. Defects found alongside
+## 5. Defects found alongside - DONE (2026-08-12)
 
-Small, unrelated to each other, and worth clearing first because two of them
-make verification lie to you.
+Small, unrelated defects that made verification lie. Landed as four commits;
+`make test-scenes` is green again on the general corpus.
 
-**`--time` / `GLR_TIME` is not applied on the `--dump-*` boot path.** The time
-override is handled in `glr_capture_env.c:312-317`, which runs only on the
-windowed/capture path; `glr_boot_run_dumps()` (`src/app/boot/glr_boot_dumps.c`)
-loads the session and dumps without it. The scene-authoring skill instructs
-authors to "diff `--dump-flat` at several `--time` values to see the real blast
-radius" - that recipe silently dumps `t = 0` every time. This cost real
-verification effort on the shadow-volume scene, which had to be checked with
-time-shifted scene variants instead. **~30 LOC**; the fix is to apply the time
-override inside `glr_boot_load_session()`.
+| Defect | Resolution | Commit |
+|---|---|---|
+| `--time` / `GLR_TIME` ignored on `--dump-*` / `--export-*` | Applied in `glr_boot_load_session()` after file/example load (same precedence as `glr_capture_env_apply`). Covered by `test_dump_path_applies_time` in `test_glr_cli`. | `4d9ababb` |
+| Comment bodies rewritten (`inf`/`infinity` → `INFINITY`; trailing `;` stripped) | Comment short-circuit before the statement `;` strip in `parse_command`; `repl_eval_c_expr_to_repl` splits trailing/whole-line comments like `expr_to_c` already did. Covered by the comment-body block in `test_repl_core_io`; whale/orrery goldens refreshed to the source-faithful form. | `27d5336d` |
+| `shade-model-flat-smooth.glr` did not load | Split `glColor3f` / `glVertex3f` onto separate lines (one command per line). | `794d4a94` |
+| `multi-light-rig.glr` did not load (`glLightfv`) | Rewrote to the fixed-light idiom (app-owned LIGHT0/LIGHT1 + marker spheres). Real `glLightfv` remains §3. | `dd9d22f7` |
 
-**Two `tests/scenes/general` scenes do not load**, and are the 6 failing
-assertions in `make test-scenes` / `test_camera_header_parity`:
+**Already fine when audited:** `make gl-repl USE_GL_STUBS=1` builds -
+`GLUT_DISPLAY_MODE_POSSIBLE` is defined in `tests/gl-stubs/include/GL/freeglut.h`.
 
-- `multi-light-rig.glr` - uses `glLightfv` (see §3). Either fix by landing §3,
-  or rewrite the scene to the fixed-light idiom in the meantime.
-- `shade-model-flat-smooth.glr` - puts two commands on one line
-  (`glColor3f(…); glVertex3f(…);`). Mechanical split.
-
-**Two comment round-trip defects.** Comment text is being run through
-expression-identifier processing on the export/import path. Minimal repro - a
-four-line `.glr` through `--export-glr`:
-
-```
-// the word infinity and inf in a comment   ->  // the word INFINITY and INFINITY in a comment
-// also a trailing semicolon here;          ->  // also a trailing semicolon here
-```
-
-`infinity` and `inf` are evaluator constant aliases (`src/repl/eval.c:1956-1958`,
-`:2238-2240`) and the alias canonicalization is reaching comment bodies;
-separately a trailing `;` is stripped from a comment. Neither is caught by the
-corpus tests, which do not compare comment text on that path. Both were worked
-around by rewording while authoring the shadow-volume scenes, which is the wrong
-fix. **~20 LOC** plus a round-trip assertion that actually compares comments.
-
-**`make gl-repl USE_GL_STUBS=1` does not build.** `gl_repl.c:333` references
-`GLUT_DISPLAY_MODE_POSSIBLE`, which the bundled GLUT stub header does not
-define. This matters more than a broken build target: the scene-authoring skill
-tells authors to build with stubs specifically to get a `--dump-flat` without GL
-libraries, so the documented measurement path for the flat-command budget is
-unavailable on a machine without GL. **~5 LOC** in `tests/gl-stubs/include/`.
-
-**`@cfg grid` / `axes` appear not to apply to scenes loaded via a runtime
-`--examples-dir` catalog.** Observed while capturing the shadow-volume scenes:
-`grid = GRID_THEME_OFF` and `axes = AXES_THEME_OFF` are honoured in neither the
-new scenes nor the pre-existing `multiple-planar-shadow-projections.glr`, which
-carries the same headers. Recorded as **observed but not diagnosed** - it may be
-the runtime-catalog load path, the capture environment, or an incorrect
-expectation about which settings the presentation reset covers. Worth half an
-hour to confirm before anyone trusts a `@cfg` header in that corpus.
-
-**~1 dev-day total.**
+**Diagnosed not a load-path bug:** `@cfg grid` / `axes` on a runtime
+`--examples-dir` catalog apply the same as a direct file load (`--dump-code`
+shows `GRID_THEME_OFF` / `AXES_THEME_OFF`). The capture-time observation was
+not reproduced as a cfg application failure.
 
 ---
 
@@ -468,19 +432,21 @@ modest benefit, which is why it sits below items 2 and 5 in the sequencing.
 
 ## 7. Recommended sequencing
 
-1. **§5 defects first.** Half a day, and one of them is actively misleading
-   anyone verifying scene work.
+1. **§5 defects first.** **Done** (`4d9ababb` … `dd9d22f7`). Dump-path
+   `--time`, comment round-trip, and the two broken general-corpus scenes are
+   cleared; remaining order below is unchanged.
 2. **§2 separate stencil.** Smallest real feature, has a written design of
    record, and its deferral rationale is now explicitly falsified. Its first
    step (`ENUM_THEN_INTS`) is a refactor that pays down debt the stencil plan
-   already flagged as coming due.
-3. **§6 `GL_DEPTH_CLAMP`.** Cheapest item here and it shares §2's runtime-gate
-   machinery, so doing it directly after §2 reuses that work while it is fresh.
-   Resolve the WebGL2 question first - it is the only open risk.
+   already flagged as coming due. **Next.**
+3. **§6 `GL_DEPTH_CLAMP`.** Cheapest remaining item and it shares §2's
+   runtime-gate machinery, so doing it directly after §2 reuses that work while
+   it is fresh. Resolve the WebGL2 question first - it is the only open risk.
 4. **§1 float-returning functions.** Biggest payoff, and the only item that
    improves scenes that are already written. Needs the refresh in §1 first.
 5. **§3 `glLightfv`.** Gated on an architecture decision, so it wants a design
-   pass before an implementation pass. Unblocks a broken scene.
+   pass before an implementation pass. The corpus scene loads again via the
+   fixed-light rewrite; this still unbends the contorted lighting workarounds.
 6. **§4 scratch capacity.** Do it when a scene actually wants it. Bump the
    constant; do not build `bounded-global-arrays.md`.
 
