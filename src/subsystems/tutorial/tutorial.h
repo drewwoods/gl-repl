@@ -131,14 +131,15 @@ int                  tutorial_handle_ack_key(unsigned char key);
 int                  tutorial_reject_noncommand_commit_with_hint(void);
 
 /* Pure predicate twin of the above: 1 when the current step is waiting on
- * something other than a typed command (SET / NOTE / LOOK / REQUIRE), 0 for
+ * something other than a typed command (SET / NOTE / REQUIRE), 0 for
  * COMMAND / REQUIRE_VAR / inactive. Sets no status.
  *
  * Render and snapshot paths must use THIS one. The _with_hint variant is an
  * editor precheck that writes a status message as a side effect, so calling
- * it once per frame overwrites whatever the current step put there - which
- * is exactly what happened to LOOK's narration, the first kind that parks
- * with a loaded input buffer and so reaches those guards at all. */
+ * it once per frame overwrites whatever the current step put there. A
+ * label-placed NOTE is what exposed the difference: it is the one park that
+ * leaves a row loaded in the input buffer with insert mode off, which is
+ * what those guards test for before they fire. */
 int                  tutorial_step_rejects_commit(void);
 
 /* The source row the next user commit should land on. -1 when no

@@ -15,19 +15,19 @@
  * tutorials can teach "draw first, then insert setup before the batch".
  *
  * Placement is independent of kind. A label-targeted COMMAND step is the
- * "insert setup above the batch" case; a label-targeted LOOK (no command
- * to type, no splice) instead parks the cursor on the labeled row, which
- * is how a lesson sends the learner back to inspect a line it already
- * wrote - cursor-scoped overlays follow the cursor. The park belongs to
- * the step being entered, so any later append step moves the cursor back
- * to the document tail.
+ * "insert setup above the batch" case; a label-targeted NOTE (no command
+ * to type) splices its narration above the labeled row and then parks the
+ * cursor IN that row, which is how a lesson sends the learner back to
+ * inspect a line it already wrote - cursor-scoped overlays follow the
+ * cursor. The park belongs to the step being entered, so any later append
+ * step moves the cursor back to the document tail.
  *
- * A label-targeted NOTE / LOOK must name a COMMAND step (or a setup
- * `@anchor`): those are the only targets with a code row to park on. The
- * comment-only kinds contribute no such row, and the validator rejects
- * them as targets rather than let the park land on a neighbour.
+ * A label-targeted step must name a COMMAND step (or a setup `@anchor`):
+ * those are the only targets with a code row to park on. The comment-only
+ * kinds contribute no such row, and the validator rejects them as targets
+ * rather than let the park land on a neighbour.
  *
- * Seven step kinds exist (TutorialStepKind):
+ * Six step kinds exist (TutorialStepKind):
  *   COMMAND      the original "type the expected GL call" step.
  *                `comment` is OPTIONAL: NULL (or empty) commits the
  *                expected command with no locked instruction row above
@@ -41,19 +41,10 @@
  *   NOTE         a comment-only step: reveal the instruction comment,
  *                wait for an ack key (Enter/Tab/Space), advance. The
  *                showcase flow of SET without a cfg write. `expected`
- *                MUST be NULL and `comment` MUST be non-empty.
- *   LOOK         NOTE's document-free twin: park the cursor on the
- *                labeled row and wait for the same ack key, writing
- *                NOTHING into the document - the narration goes to the
- *                status line instead of a spliced comment. For pointing
- *                the learner at a line already on screen when a
- *                permanent annotation would be clutter (the note is
- *                about this moment, not about the finished program).
- *                Label placement is mandatory - an appended LOOK would
- *                park where the cursor already is and say nothing about
- *                any row. `expected` and `cfg_slug` MUST be NULL,
- *                `comment` MUST be non-empty, and it competes for the
- *                status bar's width, so keep it short.
+ *                MUST be NULL and `comment` MUST be non-empty. Under
+ *                label placement it doubles as "go look at that row":
+ *                the comment splices in above the labeled row and the
+ *                cursor parks in the row itself.
  *   SET          apply `cfg_slug = cfg_value` on entry so the user sees
  *                the result; advance on Enter/Tab/Space. `expected` MUST
  *                be NULL.
@@ -169,15 +160,6 @@ typedef enum {
      * be applied at tutorial start; this kind is for staging that has to
      * happen partway through a lesson. */
     TUTORIAL_STEP_KIND_SET_QUIET,
-    /* Look-here - park the cursor on the labeled row and wait for the
-     * ack key, writing nothing into the document. NOTE's twin for
-     * narration that belongs to the moment rather than to the finished
-     * program: the text goes to the status line, so the row the learner
-     * is being pointed at stays exactly as they typed it. Placement MUST
-     * be TUTORIAL_STEP_LABEL (an appended LOOK would park where the
-     * cursor already is), the target must be a COMMAND step or a setup
-     * `@anchor`, and `comment` MUST be non-empty. */
-    TUTORIAL_STEP_KIND_LOOK,
 } TutorialStepKind;
 
 typedef struct {
@@ -434,9 +416,7 @@ int repl_tutorial_expected_is_func_open(const char *expected);
  *     (decl relocation / free-line commits don't mix with an open
  *     block).
  *   - NOTE steps require a non-empty comment and expected == NULL.
- *   - LOOK steps require a non-empty comment, expected == NULL,
- *     cfg_slug == NULL and TUTORIAL_STEP_LABEL placement.
- *   - A label-targeted NOTE / LOOK must name a COMMAND step or a setup
+ *   - A label-targeted step must name a COMMAND step or a setup
  *     `@anchor` - a comment-only kind contributes no code row for the
  *     cursor to park on.
  *   - SET / REQUIRE steps require non-empty comment and cfg_slug,
