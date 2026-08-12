@@ -106,7 +106,7 @@ enum {
 
 int repl_example_tag_count(void);
 const char *repl_example_tag_label(int tag_idx);
-int repl_example_has_tag(int example_idx, int tag_idx);
+int repl_example_has_tag(int entry_idx, int tag_idx);
 int repl_example_count_for_tag(int tag_idx);
 int repl_example_index_for_tag(int tag_idx, int ordinal);
 int repl_example_visible_tag_count(void);
