@@ -956,25 +956,14 @@ static const TutorialStep g_tutorial_normals_steps[] = {
     STEP_SENTINEL,
 };
 
-/* The HEADLIGHT theme is load-bearing, not decoration. The lesson's whole
- * claim is "the normal points straight AT the light and the face is still
- * dark", and only a lamp on the view axis makes that literally true: light 0
- * rides eye space one unit in front of the eye, so a quad in the z = 0 plane
- * carrying glNormal3f(0, 0, 1) has n.l = 1 - full diffuse - the moment its
- * winding is right. Under the DEFAULT theme the key light is the world
- * directional (2, 4, 5), n.l = 0.74, and "directly in light" would be a lie.
- * The other slots stay unenabled, so the shadowed side falls to ambient
- * (light 0's 0.10 plus the 0.15 global term) and reads as near-black without
- * disappearing.
- *
- * The camera keeps yaw 0 - the quad must read as a rectangle so the on-screen
- * vertex order is unambiguously clockwise - and takes a small 12-degree pitch
- * only so the sheet sits in space rather than looking like a 2D fill. Pitch is
- * safe here for the same reason it is in the Normals lesson (the normal has
- * n.y = 0), and with an eye-space lamp the pose cannot change the answer at
- * all: orbit does not "fix" the bug, the glFrontFace step does. */
+/* The DEFAULT theme is load-bearing, not decoration. Its GL_LIGHT0 key is
+ * directional, from the +Z side of the scene (the theme stores direction
+ * (2, 4, 5, 0)), so the authored +Z normal faces the light but is not
+ * perfectly aligned with it. The clockwise quad is classified as back-facing;
+ * two-sided lighting reverses its normal to -Z, which removes the diffuse
+ * term and leaves only ambient light on the visible face. */
 static const char *const g_tutorial_two_sided_cfg[] = {
-    "// @cfg light_theme = LIGHT_THEME_HEADLIGHT",
+    "// @cfg light_theme = LIGHT_THEME_DEFAULT",
     NULL,
 };
 
@@ -996,13 +985,13 @@ static const char *const g_tutorial_two_sided_setup[] = {
 /* "Two-Sided Lighting" - the classic winding-vs-normal trap.
  *
  * GL_LIGHT_MODEL_TWO_SIDE tells GL to light back-facing polygons with the
- * back material and the REVERSED normal. Which side is "back" comes from
+ * back material and a reversed normal. Which side is "back" comes from
  * window-space winding under the active glFrontFace, never from the normal -
- * so a quad wound clockwise while glFrontFace is still the default GL_CCW is
- * a back face, GL flips its (0, 0, 1) normal to (0, 0, -1), and the light
- * aimed dead-on at the sheet is applied to the side facing away from the eye.
- * The visible face collapses to ambient while the far side takes the full
- * diffuse term: light hitting the surface lit the OPPOSITE face.
+ * so this quad, wound clockwise while glFrontFace is still the default
+ * GL_CCW, is back-facing. The DEFAULT theme's directional key light comes
+ * from the (2, 4, 5) direction; reversing the authored +Z normal to -Z makes
+ * its diffuse dot product negative, leaving only ambient light on the visible
+ * face.
  *
  * Two-sided lighting is what makes the mistake visible at all - with the
  * default GL_FALSE the back face would be lit through the unflipped normal
@@ -1010,14 +999,13 @@ static const char *const g_tutorial_two_sided_setup[] = {
  *
  * The middle of the lesson is a diagnosis in the order a learner would
  * actually try it: a dark lit surface looks like a normal problem, so the
- * normal is checked FIRST and cleared. That check is a STEP_NOTE_AT - the
- * normal-arrow overlay goes on, then the cursor parks back on the
- * glNormal3f row. Parking is what produces the evidence: the cursor guide
- * prints that row's `n=(0.00, 0.00, 1.00)` at the vertex, and the overlay
- * adds an arrow at every corner of the face. The overlay step has to come first: each
- * step parks the cursor as it is entered, so a REQUIRE_KEY after the NOTE_AT
- * would drag the cursor back to the document tail. Only once the normal is
- * exonerated does the winding overlay name the real culprit.
+ * normal is checked FIRST and cleared. That check is a STEP_NOTE_AT: it
+ * parks the cursor back on the glNormal3f row, so the focused normal guide
+ * prints that row's `n=(0.00, 0.00, 1.00)` at the vertex and draws the arrow.
+ * The guide step has to come before the light and winding REQUIRE_KEY steps:
+ * each of those appends its instruction at the document tail and moves the
+ * cursor there. Only once the normal is exonerated does the winding overlay
+ * name the real culprit.
  *
  * Both overlays are REQUIRE_KEY rather than SET so the learner presses the
  * binding themselves, and the comments interpolate it from keymap.h instead
@@ -1032,10 +1020,10 @@ static const TutorialStep g_tutorial_two_sided_steps[] = {
         "// Light both sides of every polygon - back faces get the reversed normal.",
         "glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE)"),
     STEP_APPEND("quad_begin",
-        "// Open a quad batch for one flat sheet, square to the camera.",
+        "// Open a quad batch for a square sheet near the center of the view.",
         "glBegin(GL_QUADS)"),
     STEP_NOTE(
-            "// Aim the normal straight out of the screen, directly at the light."),
+            "// Give the sheet a +Z normal, facing the default key light."),
     STEP_CMD("normal_row",
         "glNormal3f(0, 0, 1)"),
     STEP_APPEND(NULL,
@@ -1046,32 +1034,38 @@ static const TutorialStep g_tutorial_two_sided_steps[] = {
     STEP_CMD(NULL, "glVertex3f(1.8, -1.8, 0)"),
     STEP_CMD(NULL, "glEnd()"),
     STEP_NOTE(
-        "// The normal points right at the lamp, yet the sheet is nearly black - only ambient reaches it."),
-    STEP_REQUIRE_KEY(NULL,
-        "// First suspect is the normal. Press %s to draw it as an arrow.",
-        "normal_vectors", 1,
-        KM_KEY(GLR_NORMAL_VECTORS), KM_MODS(GLR_NORMAL_VECTORS), 0),
+        "// Weird, the +Z normal faces the key light, yet the sheet receives no diffuse light - only ambient reaches it."),
+    STEP_NOTE("// First suspect is the normal. Let's inspect the focused normal guide by placing the cursor on the glNormal3f row."),
     STEP_NOTE_AT(
-        "// The guide reads n=(0, 0, 1) - aimed at the lamp, so the normal is not the bug.",
+        "// The guide reads n=(0.00, 0.00, 1.00) - the authored normal faces the key light, so it is not the problem.",
         "normal_row"),
     STEP_REQUIRE_KEY(NULL,
-        "// Press %s to ask GL, via the winding overlay, which side of this quad it thinks you are looking at.",
+        "// Okay, the normal is right; let's verify the key-light direction. Press %s to show the light indicators.",
+        "light_indicators", 1,
+        KM_KEY(GLR_LIGHT_INDICATORS), KM_MODS(GLR_LIGHT_INDICATORS), 0),
+    STEP_REQUIRE_KEY(NULL,
+        "// The key-light direction looks right; let's inspect GL's front/back classification. Press %s to show the winding overlay.",
         "winding", 1,
         KM_KEY(GLR_WINDING_VIEW), KM_MODS(GLR_WINDING_VIEW), 0),
     STEP_NOTE(
-        "// Red: back-facing. glFrontFace is still GL_CCW, so clockwise vertices make this the BACK side."),
+        "// Ah, red means back-facing. With the default GL_CCW rule, clockwise vertices make this the back face."),
     STEP_NOTE(
-        "// Two-sided lighting flipped the normal to -Z for that back face, so the light landed on the far side."),
-    STEP_SET_QUIET("winding", 0),
+        "// Two-sided lighting reverses the back-face normal to -Z, opposite the key-light direction, so the diffuse term is zero."),
+    STEP_REQUIRE_KEY(NULL,
+        "// Let's turn the winding view off. Press %s to hide the winding overlay.",
+        "winding", 0,
+        KM_KEY(GLR_WINDING_VIEW), KM_MODS(GLR_WINDING_VIEW), 0),
+    STEP_NOTE(
+        "// From the other side, the same clockwise order appears counter-clockwise, so GL classifies it as front-facing and uses the authored +Z normal."),
     STEP_AT(NULL,
-        "// Go back above the quad and declare clockwise vertices to be the front face.",
+        "// Go back above the quad and tell GL that clockwise winding is front-facing.",
         "glFrontFace(GL_CW)", "quad_begin"),
     STEP_NOTE(
-        "// Same vertices, same normal, same lamp - the visible side is the front face now, and it takes the full diffuse term."),
+        "// Same vertices, same normal, same key light - the visible face is front-facing now, so it receives the diffuse contribution."),
     STEP_NOTE(
-        "// Winding picks which side GL lights; the normal only says where that side is pointing."),
+        "// Winding determines front/back classification; the normal supplies the lighting direction."),
     STEP_NOTE(
-        "// Without GL_LIGHT_MODEL_TWO_SIDE the back face would have been lit through the unflipped normal - the bug would have looked correct."),
+        "// Without GL_LIGHT_MODEL_TWO_SIDE, GL would use the authored +Z normal even for this back face, so the winding mistake would appear lit."),
     STEP_SENTINEL,
 };
 

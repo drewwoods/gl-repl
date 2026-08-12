@@ -2408,9 +2408,9 @@ static void test_label_placed_note_parks_cursor_in_labeled_row(void) {
     ASSERT_TRUE("cursor parked on the labeled row",
                 cursor_row && strstr(cursor_row, "glNormal3f(0, 0, 1)") != NULL);
     ASSERT_TRUE("narration spliced directly above the labeled row",
-                note_row && strstr(note_row, "not the bug") != NULL);
+                note_row && strstr(note_row, "not the problem") != NULL);
     ASSERT_TRUE("the row's original instruction stays above the narration",
-                instr_row && strstr(instr_row, "Aim the normal") != NULL);
+                instr_row && strstr(instr_row, "Give the sheet a +Z normal") != NULL);
 
     /* Parking is not enough - the code panel draws the input buffer at the
      * cursor, so the row is only ON SCREEN under the cursor if the step
