@@ -79,6 +79,9 @@ static int make_c89_probe(CmdType type, GLCmd *cmd,
     case CMD_VERTEX2F:
         snprintf(line, line_sz, "glVertex2f(0, 0); // c89 probe");
         break;
+    case CMD_VERTEX4F:
+        snprintf(line, line_sz, "glVertex4f(0, 0, 0, 1); // c89 probe");
+        break;
     case CMD_NORMAL3F:
         snprintf(line, line_sz, "glNormal3f(0, 0, 1); // c89 probe");
         break;
@@ -417,6 +420,7 @@ static const CmdType expected_commands[] = {
     CMD_END,
     CMD_VERTEX3F,
     CMD_VERTEX2F,
+    CMD_VERTEX4F,
     CMD_NORMAL3F,
     CMD_COLOR3F,
     CMD_COLOR4F,
@@ -1140,6 +1144,7 @@ int main(void) {
     editor_feed_line("glBegin(GL_TRIANGLES);");
     editor_feed_line("glVertex3f(0, 0, 0);");
     editor_feed_line("glVertex2f(1, 1);");
+    editor_feed_line("glVertex4f(0, 0, 0, 1);");
     editor_feed_line("glNormal3f(0, 0, 1);");
     editor_feed_line("glColor3f(1, 0, 0);");
     editor_feed_line("glColor4f(0, 1, 0, 0.5);");

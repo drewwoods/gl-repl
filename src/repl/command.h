@@ -43,7 +43,7 @@
  * rather than reordering existing entries. CMD_TYPE_COUNT stays last. */
 typedef enum {
     CMD_BEGIN, CMD_END,
-    CMD_VERTEX3F, CMD_VERTEX2F,
+    CMD_VERTEX3F, CMD_VERTEX2F, CMD_VERTEX4F,
     CMD_NORMAL3F,
     CMD_COLOR3F, CMD_COLOR4F,
     CMD_ENABLE, CMD_DISABLE,
@@ -268,7 +268,7 @@ static inline int repl_cmd_mult_matrix_from_array(const GLCmd *cmd) {
 }
 
 /* True for every command type that contributes a per-vertex position to
- * GL: glVertex3f, glVertex2f (implicit z=0), and gluVertex (the tess
+ * GL: glVertex3f, glVertex2f (implicit z=0), glVertex4f, and gluVertex (the tess
  * variant). Use this anywhere the question is "does this cmd emit a
  * vertex?". For tess-vs-immediate-mode distinctions (e.g. choosing
  * between CMD_NORMAL3F and CMD_TESS_NORMAL as the feeding state cmd),
@@ -277,6 +277,7 @@ static inline int repl_cmd_mult_matrix_from_array(const GLCmd *cmd) {
 static inline int repl_cmd_emits_vertex(CmdType type) {
     return (type == CMD_VERTEX3F ||
             type == CMD_VERTEX2F ||
+            type == CMD_VERTEX4F ||
             type == CMD_TESS_VERTEX);
 }
 
@@ -347,7 +348,8 @@ static inline int repl_cmd_is_glut_solid(CmdType type) {
  * shouldn't factor into the cursor-line guide".
  *
  * Distinct from repl_cmd_emits_vertex: that predicate names commands
- * that *contribute a vertex* (glVertex3f / glVertex2f / gluVertex);
+ * that *contribute a vertex* (glVertex3f / glVertex2f / glVertex4f /
+ * gluVertex);
  * this one names commands that *anchor* a draw using the current
  * matrix. A glutSolidSphere emits no vertex from the REPL model's
  * perspective (it dispatches inside GLU) but does freeze the current

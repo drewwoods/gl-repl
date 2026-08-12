@@ -614,8 +614,8 @@ void repl_recompute_autonormals(int autonormal_mode,
              * normal feeder (CMD_TESS_NORMAL). glVertex2f sets args[2]
              * to 0 (parser default), so its cross product folds into
              * the same (x, y, 0) plane as a 3D vertex with z=0. */
-            if (repl_state_document_cmds()[j].type == CMD_VERTEX3F ||
-                repl_state_document_cmds()[j].type == CMD_VERTEX2F) {
+            if (repl_cmd_emits_vertex(repl_state_document_cmds()[j].type) &&
+                repl_state_document_cmds()[j].type != CMD_TESS_VERTEX) {
                 vi[nv++] = j;
                 if (repl_state_document_cmds()[j].has_vars)
                     any_vertex_has_vars = 1;
@@ -739,7 +739,7 @@ static int find_feeding_state_cmd(int line_idx, int want_normal) {
      *                    their own normals but draw under the current
      *                    GL color via glColorMaterial / lighting. */
     CmdType target = repl_state_document_cmds()[line_idx].type;
-    int is_gl_vtx = (target == CMD_VERTEX3F || target == CMD_VERTEX2F);
+    int is_gl_vtx = repl_cmd_emits_vertex(target) && target != CMD_TESS_VERTEX;
     int is_tess_vtx = (target == CMD_TESS_VERTEX);
     int is_glut_solid = (!is_gl_vtx && !is_tess_vtx &&
                          repl_cmd_consumes_current_color(target));

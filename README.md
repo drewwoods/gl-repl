@@ -24,6 +24,7 @@ glBegin(GL_TRIANGLES);
 glVertex3f(0, 1, 0);
 glVertex3f(-1, -1, 0);
 glVertex3f(sin(t), -1, 0);   // expressions everywhere; t animates
+// glVertex4f(x, y, z, w) also accepts homogeneous coordinates
 glEnd();
 ```
 
@@ -37,7 +38,7 @@ glEnd();
 
 | | |
 |---|---|
-| **Render as you type** | The geometry lives in your code. Edit a `glVertex3f`, see the vertex move. |
+| **Render as you type** | The geometry lives in your code. Edit a `glVertex3f` or `glVertex4f`, see the vertex move. |
 | **Time as a variable** | `Ctrl+T` toggles `t`. Reference it anywhere - animation with no boilerplate. |
 | **A real little language** | Loops, functions with parameters, `if`, variables, scratch arrays, and a math library - and an expression goes anywhere a number does. A `for` loop unrolls into geometry as you type it. |
 | **Live values** | Every `float` gets a slider, every number an inline stepper, every color a swatch with a picker. Drag, and the scene follows. |

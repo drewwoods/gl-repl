@@ -168,13 +168,16 @@ static const Render3dColorToken k_guide_line_clr[3] = {
 };
 
 /* Recognize whether the partial input line is a vertex command. Returns
- * 1 for glVertex3f / glVertex2f / gluVertex (with at least one char past
- * the open paren), 0 otherwise. Sets *is_vertex2f for the glVertex2f
- * form, whose two args already pin a complete 2D vertex at z=0. */
+ * 1 for glVertex3f / glVertex4f / glVertex2f / gluVertex (with at least
+ * one char past the open paren), 0 otherwise. Sets *is_vertex2f for the
+ * glVertex2f form, whose two args already pin a complete 2D vertex at z=0. */
 static int input_is_vertex_kind(const Render3dGuideSnapshot *snapshot,
                                 int *is_vertex2f) {
     *is_vertex2f = 0;
     if (strncmp(snapshot->input, "glVertex3f(", 11) == 0 &&
+        snapshot->input_len > 11)
+        return 1;
+    if (strncmp(snapshot->input, "glVertex4f(", 11) == 0 &&
         snapshot->input_len > 11)
         return 1;
     if (strncmp(snapshot->input, "glVertex2f(", 11) == 0 &&

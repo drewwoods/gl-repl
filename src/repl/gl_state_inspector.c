@@ -1388,6 +1388,7 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
     case CMD_END:
     case CMD_VERTEX3F:
     case CMD_VERTEX2F:
+    case CMD_VERTEX4F:
     case CMD_GLUT_TORUS:
     case CMD_GLUT_CUBE:
     case CMD_GLUT_SPHERE:

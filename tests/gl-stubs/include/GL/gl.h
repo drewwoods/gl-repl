@@ -504,6 +504,7 @@ static inline void glVertex2i(GLint x, GLint y) { GL_STUB_TRACE_LINE("glVertex2i
 static inline void glVertex3dv(const GLdouble *v) { GL_STUB_TRACE_LINE("glVertex3dv\n"); gl_stub_tick(GL_STUB_glVertex3dv); (void)v; }
 static inline void glVertex3f(GLfloat x, GLfloat y, GLfloat z) { GL_STUB_TRACE_LINE("glVertex3f %g %g %g\n", (double)x, (double)y, (double)z); gl_stub_tick(GL_STUB_glVertex3f); }
 static inline void glVertex3fv(const GLfloat *v) { GL_STUB_TRACE_LINE("glVertex3fv\n"); gl_stub_tick(GL_STUB_glVertex3fv); (void)v; }
+static inline void glVertex4f(GLfloat x, GLfloat y, GLfloat z, GLfloat w) { GL_STUB_TRACE_LINE("glVertex4f %g %g %g %g\n", (double)x, (double)y, (double)z, (double)w); gl_stub_tick(GL_STUB_glVertex4f); }
 static inline void glViewport(GLint x, GLint y, GLsizei width, GLsizei height) { GL_STUB_TRACE_LINE("glViewport %d %d %d %d\n", (int)x, (int)y, (int)width, (int)height); gl_stub_tick(GL_STUB_glViewport); }
 
 #ifdef __cplusplus

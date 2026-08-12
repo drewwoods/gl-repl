@@ -379,8 +379,8 @@ ReplCursorPolygon repl_flatten_cursor_polygon(int edit_line_idx) {
      * address the same primitive in every copy. */
     for (int i = begin + 1; i < end; i++) {
         if (!flat_cmds[i].valid) continue;
-        if (flat_cmds[i].type != CMD_VERTEX3F &&
-            flat_cmds[i].type != CMD_VERTEX2F)
+        if (!repl_cmd_emits_vertex(flat_cmds[i].type) ||
+            flat_cmds[i].type == CMD_TESS_VERTEX)
             continue;
         if (cursor_ord < 0 && flat_cmds[i].src_cmd_idx >= edit_line_idx)
             cursor_ord = vtx_count;
@@ -489,7 +489,7 @@ int repl_flat_cmd_matches_cursor(int flat_idx, int edit_line_idx) {
          * vertices have their own state line (CMD_TESS_COLOR) handled
          * by a sibling case below, so CMD_TESS_VERTEX is intentionally
          * excluded here. */
-        if (cmd->type == CMD_VERTEX3F || cmd->type == CMD_VERTEX2F) {
+        if (repl_cmd_emits_vertex(cmd->type) && cmd->type != CMD_TESS_VERTEX) {
             int last_color_src = -1;
             for (int i = 0; i <= flat_idx; i++) {
                 if (!flat_cmds[i].valid) continue;
@@ -507,7 +507,7 @@ int repl_flat_cmd_matches_cursor(int flat_idx, int edit_line_idx) {
          * have their own state line (CMD_TESS_NORMAL) handled by a
          * sibling case below, so CMD_TESS_VERTEX is intentionally
          * excluded here. */
-        if (cmd->type == CMD_VERTEX3F || cmd->type == CMD_VERTEX2F) {
+        if (repl_cmd_emits_vertex(cmd->type) && cmd->type != CMD_TESS_VERTEX) {
             int last_normal_src = -1;
             for (int i = 0; i <= flat_idx; i++) {
                 if (!flat_cmds[i].valid) continue;

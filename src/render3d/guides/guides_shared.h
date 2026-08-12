@@ -80,7 +80,7 @@ typedef struct Render3dGuideSnapshot {
      * `glVertex3f(1, t*2, `) using its live program variables and writes
      * the floats here so the renderer can draw guides without evaluating
      * expressions. vertex_n_filled = 0 when the input doesn't look like
-     * glVertex2f / glVertex3f / gluVertex(. raster_pos_n_filled < 3 means
+     * glVertex2f / glVertex3f / glVertex4f / gluVertex(. raster_pos_n_filled < 3 means
      * "don't draw a raster-position marker". normal_n_filled < 3 means
      * "don't draw a normal guide". */
     float vertex_args[3];

@@ -120,6 +120,7 @@ extern "C" {
     X(glVertex3dv)                     \
     X(glVertex3f)                      \
     X(glVertex3fv)                     \
+    X(glVertex4f)                      \
     X(glViewport)                      \
     X(gluLookAt)                       \
     X(gluNewQuadric)                   \

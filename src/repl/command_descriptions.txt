@@ -20,6 +20,10 @@ Submits a 3D vertex at (x, y, z). The current color, normal, and other per-verte
 title = glVertex2f
 Submits a 2D vertex at (x, y), with z implicitly zero. It otherwise behaves like glVertex3f and captures the current per-vertex attributes.
 
+[command CMD_VERTEX4F]
+title = glVertex4f
+Submits a homogeneous vertex at (x, y, z, w). The w component is retained through the OpenGL transform pipeline for perspective division, while the current color, normal, and other per-vertex attributes are captured with it.
+
 [command CMD_NORMAL3F]
 title = glNormal3f
 Sets the current surface normal used by later vertices. Lighting uses this direction after the normal matrix transform; enable GL_NORMALIZE when transforms can change its length.

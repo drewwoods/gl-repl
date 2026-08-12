@@ -466,6 +466,8 @@ static void fill_guide_arg_slots(Render3dGuideSnapshot *snapshot,
     const char *vertex_args = NULL;
     if (strncmp(input, "glVertex3f(", 11) == 0 && input_len > 11) {
         vertex_args = input + 11;
+    } else if (strncmp(input, "glVertex4f(", 11) == 0 && input_len > 11) {
+        vertex_args = input + 11;
     } else if (strncmp(input, "glVertex2f(", 11) == 0 && input_len > 11) {
         vertex_args = input + 11;
     } else if (strncmp(input, "gluVertex(", 10) == 0 && input_len > 10) {

@@ -278,7 +278,8 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
             state.tess_normal[2] = cmd->args[2];
             break;
         case CMD_VERTEX2F:
-        case CMD_VERTEX3F: {
+        case CMD_VERTEX3F:
+        case CMD_VERTEX4F: {
             int visit = selected_block_only
                 ? (state.in_block && state.block_selected)
                 : 1;

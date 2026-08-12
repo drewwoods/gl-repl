@@ -397,6 +397,31 @@ static void test_enum_arg_end_to_end_trace(void) {
                 strstr(buf, want) != NULL);
 }
 
+static void test_vertex4f_end_to_end_trace(void) {
+    const char *path = "/tmp/test_repl_executor_vertex4f.txt";
+    char buf[1024] = "";
+
+    repl_executor_init_resources();
+    glr_ctrl_reset_all();
+    gl_stub_trace_open(path);
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex4f(1, 2, 3, 0.5);");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(editor_state_edit_line());
+    repl_execute_commands();
+    gl_stub_trace_close();
+
+    FILE *f = fopen(path, "r");
+    ASSERT_TRUE("glVertex4f trace file opened", f != NULL);
+    if (f) {
+        size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+        buf[n] = '\0';
+        fclose(f);
+    }
+    ASSERT_TRUE("glVertex4f reaches GL with w intact",
+                strstr(buf, "glVertex4f 1 2 3 0.5\n") != NULL);
+}
+
 static void test_execute_edge_cases(void) {
     repl_execute_program(NULL);
 
@@ -1771,6 +1796,7 @@ int main(void) {
     test_apply_state_cmd_edge_cases();
     test_enum_arg_gl_trace();
     test_enum_arg_end_to_end_trace();
+    test_vertex4f_end_to_end_trace();
     test_execute_edge_cases();
     test_exec_cursor_step_tracks_state();
     test_exec_cursor_advance_skips_without_state();

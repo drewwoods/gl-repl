@@ -1169,6 +1169,7 @@ static const char *eval_fmt_for_type(CmdType type, int *nargs_out) {
     switch (type) {
     case CMD_VERTEX3F:         *nargs_out = 3; return "glVertex3f(%g, %g, %g);";
     case CMD_VERTEX2F:         *nargs_out = 2; return "glVertex2f(%g, %g);";
+    case CMD_VERTEX4F:         *nargs_out = 4; return "glVertex4f(%g, %g, %g, %g);";
     case CMD_NORMAL3F:         *nargs_out = 3; return "glNormal3f(%g, %g, %g);";
     case CMD_COLOR3F:          *nargs_out = 3; return "glColor3f(%g, %g, %g);";
     case CMD_COLOR4F:          *nargs_out = 4; return "glColor4f(%g, %g, %g, %g);";

@@ -23,7 +23,7 @@ source text ──parse──▶ command/AST ──compile/validate──▶ IR 
 
 `src/repl` is exactly that pipeline for a small domain-specific language.
 The "language" is a friendly subset of **immediate-mode OpenGL** -
-`glBegin`/`glVertex3f`/`glColor3f`/`glRotatef`/… - plus light control flow
+`glBegin`/`glVertex3f`/`glVertex4f`/`glColor3f`/`glRotatef`/… - plus light control flow
 (`for`, `if`, `func0..func9`), scalar variables, and fixed scratch arrays.
 The "effects" are live GL calls that draw geometry.
 

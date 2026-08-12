@@ -731,6 +731,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
         switch (cmd->type) {
         case CMD_VERTEX3F:
         case CMD_VERTEX2F:
+        case CMD_VERTEX4F:
         case CMD_GLUT_TORUS:
         case CMD_GLUT_CUBE:
         case CMD_GLUT_SPHERE:
@@ -777,6 +778,16 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
                 glTexCoord3f(nw[0], nw[1], nw[2]);
             }
             glVertex3f(cmd->args[0], cmd->args[1], cmd->args[2]);
+        }
+        break;
+    case CMD_VERTEX4F:
+        if (cursor->in_begin) {
+            if (cursor->encode_normals) {
+                float nw[3];
+                exec_normal_to_world(cursor->begin_mv, cursor->cur_normal, nw);
+                glTexCoord3f(nw[0], nw[1], nw[2]);
+            }
+            glVertex4f(cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
         }
         break;
     case CMD_NORMAL3F:

@@ -770,13 +770,17 @@ static void render_single_polygon_highlight(const OverlayWalkCtx *ctx,
     for (int i = begin_idx + 1; i < cmd_count; i++) {
         if (!cmds[i].valid) continue;
         if (cmds[i].type == CMD_END) break;
-        if (cmds[i].type != CMD_VERTEX3F && cmds[i].type != CMD_VERTEX2F)
+        if (!repl_cmd_emits_vertex(cmds[i].type) ||
+            cmds[i].type == CMD_TESS_VERTEX)
             continue;
         if (cursor_poly_contains_ordinal(ctx, ord)) {
             if (cmds[i].type == CMD_VERTEX3F)
                 glVertex3f(cmds[i].args[0], cmds[i].args[1], cmds[i].args[2]);
-            else
+            else if (cmds[i].type == CMD_VERTEX2F)
                 glVertex2f(cmds[i].args[0], cmds[i].args[1]);
+            else
+                glVertex4f(cmds[i].args[0], cmds[i].args[1], cmds[i].args[2],
+                           cmds[i].args[3]);
         }
         ord++;
     }
@@ -874,6 +878,11 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
         case CMD_VERTEX2F:
             if (in_begin && (block_is_current || ctx->show_vertex_outlines))
                 glVertex2f(cmds[i].args[0], cmds[i].args[1]);
+            break;
+        case CMD_VERTEX4F:
+            if (in_begin && (block_is_current || ctx->show_vertex_outlines))
+                glVertex4f(cmds[i].args[0], cmds[i].args[1], cmds[i].args[2],
+                           cmds[i].args[3]);
             break;
         default:
             break;

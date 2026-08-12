@@ -154,7 +154,8 @@ typedef struct ReplayVertexWalkCallbacks {
      * executor's tolerated trailing glEnd cleanup. */
     void (*on_end)(const ReplayVertexWalkState *state, void *user_data);
 
-    /* Fires for every CMD_VERTEX2F / CMD_VERTEX3F / CMD_TESS_VERTEX hit
+    /* Fires for every CMD_VERTEX2F / CMD_VERTEX3F / CMD_VERTEX4F /
+     * CMD_TESS_VERTEX hit
      * during the walk, with (vx, vy, vz) extracted from the cmd's args. */
     void (*on_vertex)(const ReplayVertexWalkState *state,
                       float vx, float vy, float vz,

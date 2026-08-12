@@ -275,6 +275,7 @@ static int replay_next_vertex_limit(int start, int *fade_begin, int *fade_end) {
         }
         case CMD_VERTEX3F:
         case CMD_VERTEX2F:
+        case CMD_VERTEX4F:
             if (fade_begin) *fade_begin = (open_begin >= 0) ? open_begin : start;
             if (fade_end) *fade_end = flat_idx;
             return flat_idx + 1;

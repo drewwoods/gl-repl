@@ -201,6 +201,19 @@ int main(void) {
     }
 
     {
+        GLCmd cmd;
+        char text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text("glVertex4f(1, 2, 3, 0.5)", &cmd,
+                                     text, sizeof(text));
+        ASSERT_TRUE("glVertex4f parses", ok == 1);
+        ASSERT_TRUE("glVertex4f command type", cmd.type == CMD_VERTEX4F);
+        ASSERT_TRUE("glVertex4f argument count", cmd.num_args == 4);
+        ASSERT_TRUE("glVertex4f preserves w", fabsf(cmd.args[3] - 0.5f) < 1e-6f);
+        ASSERT_TRUE("glVertex4f canonical text", strstr(text, "glVertex4f") != NULL);
+    }
+
+    {
         ExprVar vars[1] = { { "radius", 2.0f } };
         GLCmd cmd;
         memset(&cmd, 0, sizeof(cmd));

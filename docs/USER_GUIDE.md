@@ -531,7 +531,8 @@ numeric argument everywhere is a full math expression.
 ### Supported GL commands
 
 - [`glBegin(MODE)`](https://docs.gl/gl2/glBegin), [`glEnd()`](https://docs.gl/gl2/glEnd)
-- [`glVertex3f(x,y,z)`](https://docs.gl/gl2/glVertex), [`glVertex2f(x,y)`](https://docs.gl/gl2/glVertex)
+- [`glVertex3f(x,y,z)`](https://docs.gl/gl2/glVertex), [`glVertex4f(x,y,z,w)`](https://docs.gl/gl2/glVertex), [`glVertex2f(x,y)`](https://docs.gl/gl2/glVertex)
+  - `glVertex4f` submits homogeneous coordinates; OpenGL retains `w` for perspective division.
 - [`glNormal3f(x,y,z)`](https://docs.gl/gl2/glNormal)
 - [`glColor3f(r,g,b)`](https://docs.gl/gl2/glColor), [`glColor4f(r,g,b,a)`](https://docs.gl/gl2/glColor)
 - [`glClearColor(r,g,b,a)`](https://docs.gl/gl2/glClearColor) - background clear color; channels
@@ -1369,7 +1370,7 @@ the whole scene to answer one question.
 
 ### Vertex entry guides
 
-While a `glVertex3f(` line is still being typed, the scene shows where the
+While a `glVertex3f(` or `glVertex4f(` line is still being typed, the scene shows where the
 vertex *could* still land given what you have entered so far. Each coordinate
 you type removes a degree of freedom, and the guide collapses to match - a
 surface, then a line, then a point:
@@ -1400,6 +1401,10 @@ why the sheet changes color between the first and last panels.
 the guide to a line. Guides follow the cursor's transform context - inside a
 `glPushMatrix`/`glTranslatef` frame the sheet and line render in that frame,
 matching where the vertex will actually land.
+
+`glVertex4f` uses its first three coordinates for the same editing guide as a
+3D vertex; the fourth coordinate is passed through to OpenGL as the homogeneous
+`w` value.
 
 ### Cursor guides & vertex overlays
 
