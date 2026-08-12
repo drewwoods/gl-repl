@@ -732,6 +732,88 @@ static void cycle_example_or_user_scene_dir(int direction) {
     }
 }
 
+/* Where a step in `direction` would land, for the menu bar's stepper
+ * tooltip. This mirrors the *first candidate* each cycle above picks; the
+ * cycles then skip destinations that fail to load, so a broken catalog entry
+ * can make the real landing differ from the prediction. That is the error
+ * path, and it announces itself in the status bar - a tooltip that opened
+ * the scene file to find out would cost a load per hovered frame. */
+GlrCycleTarget glr_ctrl_cycle_peek(int direction) {
+    GlrCycleTarget target;
+    target.kind = GLR_CYCLE_TARGET_NONE;
+    target.name = NULL;
+
+    if (direction == 0)
+        return target;
+
+    /* Same rule the stepper click uses: an active tutorial steps lessons. */
+    if (tutorial_active()) {
+        int count = repl_tutorial_count();
+        int cur, idx;
+        if (count <= 0)
+            return target;
+        cur = tutorial_state_view().tutorial_idx;
+        idx = (cur >= 0) ? (cur + direction + count) % count
+                         : ((direction > 0) ? 0 : count - 1);
+        target.kind = GLR_CYCLE_TARGET_TUTORIAL;
+        target.name = repl_tutorial_name(idx);
+        return target;
+    }
+
+    {
+        int count = repl_example_count();
+        int active_scene = repl_active_user_scene();
+        int active_example = repl_state_scenes().active_example_idx;
+        int end = (direction > 0) ? MAX_USER_SCENES : -1;
+        int start, i;
+
+        if (active_scene >= 0) {
+            /* In the user scenes: the next used slot, else back out to the
+             * catalog at the parked example place. */
+            for (i = active_scene + direction; i != end; i += direction) {
+                if (repl_user_scene_slot_used(i)) {
+                    target.kind = GLR_CYCLE_TARGET_SCENE;
+                    target.name = repl_user_scene_name(i);
+                    return target;
+                }
+            }
+            if (count > 0) {
+                int place = repl_state_scenes().example_place_idx;
+                int idx = (place >= 0 && place < count)
+                              ? (place + direction + count) % count
+                              : ((direction > 0) ? 0 : count - 1);
+                target.kind = GLR_CYCLE_TARGET_EXAMPLE;
+                target.name = repl_example_name(idx);
+            }
+            return target;
+        }
+
+        /* In the catalog (or transient): the adjacent example while one is
+         * left, then the user scenes, then the catalog wrap. */
+        if (count > 0) {
+            int next = active_example + direction;
+            if (next >= 0 && next < count) {
+                target.kind = GLR_CYCLE_TARGET_EXAMPLE;
+                target.name = repl_example_name(next);
+                return target;
+            }
+        }
+        start = (direction > 0) ? 0 : MAX_USER_SCENES - 1;
+        for (i = start; i != end; i += direction) {
+            if (repl_user_scene_slot_used(i)) {
+                target.kind = GLR_CYCLE_TARGET_SCENE;
+                target.name = repl_user_scene_name(i);
+                return target;
+            }
+        }
+        if (count > 0) {
+            target.kind = GLR_CYCLE_TARGET_EXAMPLE;
+            target.name = repl_example_name((direction > 0) ? 0 : count - 1);
+        }
+    }
+    return target;
+}
+
 /* Public scene-cycle entry points: the F12 / Shift+F12 key path and the
  * Scene-menu "Next" / "Previous" rows both funnel through these. */
 void glr_ctrl_scene_cycle_next(void) {

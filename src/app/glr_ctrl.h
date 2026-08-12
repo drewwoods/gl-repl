@@ -370,6 +370,25 @@ int glr_ctrl_router_handle_tutorial_cycle_special(int key);         /* F11 */
 void glr_ctrl_tutorial_cycle_next(void);                            /* F11 / Tutorials-menu "Next" */
 void glr_ctrl_tutorial_cycle_prev(void);                            /* Shift+F11 / Tutorials-menu "Previous" */
 
+/* Where a step would land, for the menu bar's Prev/Next stepper tooltip.
+ * `kind` says which catalog answered (an active tutorial steps lessons, the
+ * same rule the stepper click uses); `name` points at catalog-owned storage,
+ * valid until the catalog changes, and is NULL for _NONE. A prediction of the
+ * first candidate only - see the definition. */
+typedef enum {
+    GLR_CYCLE_TARGET_NONE = 0,
+    GLR_CYCLE_TARGET_EXAMPLE,
+    GLR_CYCLE_TARGET_SCENE,
+    GLR_CYCLE_TARGET_TUTORIAL
+} GlrCycleTargetKind;
+
+typedef struct {
+    GlrCycleTargetKind kind;
+    const char        *name;
+} GlrCycleTarget;
+
+GlrCycleTarget glr_ctrl_cycle_peek(int direction);
+
 int glr_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int x, int y);
 int glr_ctrl_router_handle_variable_panel_drag_release(int state);
 int glr_ctrl_router_handle_scene_press(int button, int state, int x, int y);

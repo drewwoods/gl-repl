@@ -2458,6 +2458,44 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->example_visible_tag_count = repl_example_visible_tag_count();
     snap->user_scene_count = repl_user_scene_count();
 
+    /* Menu-bar stepper tooltips: resolve both destinations here, where the
+     * catalogs live, so the UI layer only formats what it is handed. */
+    for (int i = 0; i < 2; i++) {
+        int back = (i == 0);
+        GlrCycleTarget target = glr_ctrl_cycle_peek(back ? -1 : 1);
+        int tutorial = (target.kind == GLR_CYCLE_TARGET_TUTORIAL);
+        const char *noun = NULL;
+        int key = tutorial
+                      ? (back ? KM_KEY(GLR_PREV_TUTORIAL)
+                              : KM_KEY(GLR_NEXT_TUTORIAL))
+                      : (back ? KM_KEY(GLR_PREV_EXAMPLE)
+                              : KM_KEY(GLR_NEXT_EXAMPLE));
+        int mods = tutorial
+                       ? (back ? KM_MODS(GLR_PREV_TUTORIAL)
+                               : KM_MODS(GLR_NEXT_TUTORIAL))
+                       : (back ? KM_MODS(GLR_PREV_EXAMPLE)
+                               : KM_MODS(GLR_NEXT_EXAMPLE));
+        switch (target.kind) {
+        case GLR_CYCLE_TARGET_EXAMPLE:  noun = "Example"; break;
+        case GLR_CYCLE_TARGET_SCENE:    noun = "Scene";   break;
+        case GLR_CYCLE_TARGET_TUTORIAL: noun = "Lesson";  break;
+        case GLR_CYCLE_TARGET_NONE:     break;
+        }
+        snap->step_target[i].name[0] = '\0';
+        snap->step_target[i].noun[0] = '\0';
+        snap->step_target[i].shortcut[0] = '\0';
+        if (!noun || !target.name)
+            continue;
+        snprintf(snap->step_target[i].name,
+                 sizeof snap->step_target[i].name, "%s", target.name);
+        snprintf(snap->step_target[i].noun,
+                 sizeof snap->step_target[i].noun, "%s", noun);
+        /* Both cycles are bound to GLUT special keys (F11 / F12). */
+        keymap_binding_to_string(snap->step_target[i].shortcut,
+                                 (int)sizeof snap->step_target[i].shortcut,
+                                 key, mods, 1);
+    }
+
     {
         int lc = repl_export_lights_pre_camera_line_count();
         if (lc < 0) lc = 0;

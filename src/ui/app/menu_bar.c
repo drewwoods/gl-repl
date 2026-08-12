@@ -75,6 +75,10 @@ static const char *g_pin_btn_labels[NUM_PIN_BTNS] = {
 
 #define PIN_SEARCH_MIN_W 140
 
+/* Field separator inside the stepper tooltip - the same 8x13 vertical-rule
+ * glyph the statusbar chip tooltips use. */
+#define MENUBAR_TOOLTIP_VRULE_GLYPH 0x19
+
 /* File-menu workspace header row. The dropdown sizes itself to its widest
  * raw label, so the workspace name is truncated rather than allowed to
  * stretch the whole File menu to a 63-char name's width. */
@@ -2749,6 +2753,53 @@ static void paint_pin_buttons(const UiRenderSnapshot *snap,
     }
 }
 
+/* Hover tooltip for the Prev / Next steppers, hanging under the bar: names
+ * where the step lands ("Next Example <vrule> Rotating cube <vrule> F12").
+ * Same box as the statusbar chip tooltips (RAISED fill, BORDER outline) so
+ * the two read as one affordance; the destination strings are resolved by
+ * the controller (snapshot `step_target`), since only it knows the cycle
+ * order. Suppressed when that step has nowhere to go. */
+static void paint_stepper_tooltip(const UiRenderSnapshot *snap,
+                                  const int *pin_x, const int *pin_w,
+                                  int by, int hover_pin, int cp_x, int cp_w) {
+    char text[UI_STEP_TARGET_NAME_MAX + KEYMAP_SHORTCUT_LABEL_MAX + 32];
+    int slot = (hover_pin == PIN_PREV) ? 0 : 1;
+    int tw, th = FONT_SMALL_H + 8;
+    int tx, ty = by - (FONT_SMALL_H + 8) - 4;
+    int min_x = cp_x + 4, max_x;
+
+    if (hover_pin != PIN_PREV && hover_pin != PIN_NEXT)
+        return;
+    if (!snap->step_target[slot].name[0])
+        return;
+
+    snprintf(text, sizeof text, "%s %s %c %s %c %s",
+             (hover_pin == PIN_PREV) ? "Prev" : "Next",
+             snap->step_target[slot].noun,
+             MENUBAR_TOOLTIP_VRULE_GLYPH, snap->step_target[slot].name,
+             MENUBAR_TOOLTIP_VRULE_GLYPH, snap->step_target[slot].shortcut);
+
+    tw = (int)strlen(text) * FONT_SMALL_W + 12;
+    tx = pin_x[hover_pin] + (pin_w[hover_pin] - tw) / 2;
+    max_x = cp_x + cp_w - tw - 4;
+    if (max_x < min_x)
+        return;                       /* panel narrower than the tooltip */
+    if (tx < min_x) tx = min_x;
+    if (tx > max_x) tx = max_x;
+
+    ui_clr_a(UI_TOK_RAISED, 0.98f);
+    glRectf((float)tx, (float)ty, (float)(tx + tw), (float)(ty + th));
+    ui_clr(UI_TOK_BORDER);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f((float)tx + 0.5f,          (float)ty + 0.5f);
+    glVertex2f((float)(tx + tw) - 0.5f,   (float)ty + 0.5f);
+    glVertex2f((float)(tx + tw) - 0.5f,   (float)(ty + th) - 0.5f);
+    glVertex2f((float)tx + 0.5f,          (float)(ty + th) - 0.5f);
+    glEnd();
+    ui_clr(UI_TOK_TEXT_PRIMARY);
+    gl2d_draw_string((float)(tx + 6), (float)(ty + 4), text, FONT_SMALL);
+}
+
 void ui_menu_bar_render(const UiRenderSnapshot *snap) {
     int cp_x, cp_y, cp_w, cp_h;
     int menu_x[NUM_MENUS], menu_w[NUM_MENUS];
@@ -2783,6 +2834,7 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap) {
 
     prof_begin(PROF_CODE_PANEL_OVERLAY_MENU_PINS);
     paint_pin_buttons(snap, pin_x, pin_w, by, bh, hover_pin, snap->replay);
+    paint_stepper_tooltip(snap, pin_x, pin_w, by, hover_pin, cp_x, cp_w);
     prof_end(PROF_CODE_PANEL_OVERLAY_MENU_PINS);
 
     glColor4fv(k_menubar_bottom_rule);

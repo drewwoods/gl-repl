@@ -65,6 +65,10 @@ enum { UI_GL_VECTOR_HELPER_MAX = 49 };
  * locally for UI-layer purity, like UI_SCENE_TAB_NAME_MAX above; glr_ctrl.c
  * STATIC_ASSERTs the equivalence. */
 enum { UI_WORKSPACE_NAME_MAX = 64 };   /* == WORKSPACE_IO_NAME_MAX */
+
+/* Destination name a menu-bar stepper tooltip shows. Wide enough for the
+ * longest example / scene / tutorial title; the controller truncates. */
+enum { UI_STEP_TARGET_NAME_MAX = 64 };
 typedef struct {
     char name[UI_WORKSPACE_NAME_MAX];
 } UiWorkspaceBinding;
@@ -260,6 +264,18 @@ typedef struct UiRenderSnapshot {
     }                           tutorial;
     int                         example_visible_tag_count;
     int                         user_scene_count;
+
+    /* Menu-bar Prev/Next steppers: the hover tooltip names where a step
+     * would land. The controller resolves all three strings - the catalogs,
+     * the cycle order and the keymap action that matches the destination
+     * (F12 family for scenes, F11 for lessons) are app-layer knowledge - so
+     * the renderer only composes them. Empty `name` means the step has
+     * nowhere to go and the tooltip is suppressed. */
+    struct {
+        char name[UI_STEP_TARGET_NAME_MAX];
+        char noun[16];                        /* "Example" / "Scene" / "Lesson" */
+        char shortcut[KEYMAP_SHORTCUT_LABEL_MAX];
+    }                           step_target[2];   /* [0] = prev, [1] = next */
 
     /* View-mode swatch (2D/3D toggle, left of the Replay pin). ortho_mode
      * is the committed target (Render3dViewMode); projection_mix is the live

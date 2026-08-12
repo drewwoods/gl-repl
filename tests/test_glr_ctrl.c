@@ -5849,7 +5849,29 @@ static void test_mouse_routing_and_hit_testing(void) {
         ASSERT_INT("next pin steps the example catalog",
                    repl_state_scenes().active_example_idx, count > 1 ? 1 : 0);
 
+        /* The stepper tooltip predicts each destination by name; on the
+         * first example the back leg has no earlier entry, so it reports
+         * where the cycle actually wraps to (a user scene if one exists,
+         * else the last example). */
+        {
+            GlrCycleTarget fwd, back;
+            repl_load_example(0);
+            fwd = glr_ctrl_cycle_peek(1);
+            back = glr_ctrl_cycle_peek(-1);
+            if (count > 1) {
+                ASSERT_INT("peek forward reports an example",
+                           fwd.kind, GLR_CYCLE_TARGET_EXAMPLE);
+                ASSERT_STR("peek forward names the next example",
+                           fwd.name ? fwd.name : "", repl_example_name(1));
+            }
+            ASSERT_TRUE("peek backward from the first example has a target",
+                        back.kind != GLR_CYCLE_TARGET_NONE);
+            ASSERT_INT("peek of a zero direction is empty",
+                       glr_ctrl_cycle_peek(0).kind, GLR_CYCLE_TARGET_NONE);
+        }
+
         hit.item_idx = UI_MENU_BAR_PIN_PREV;
+        repl_load_example(count > 1 ? 1 : 0);
         rc = route_pin_button_hit(&hit);
         ASSERT_INT("prev pin hit consumed", rc, 1);
         ASSERT_INT("prev pin steps back to the first example",
@@ -5867,6 +5889,14 @@ static void test_mouse_routing_and_hit_testing(void) {
         hit.item_idx = UI_MENU_BAR_PIN_PREV;
         rc = route_pin_button_hit(&hit);
         ASSERT_INT("prev pin hit consumed under tutorial", rc, 1);
+        /* The tooltip's prediction follows the same rule the click does. */
+        {
+            GlrCycleTarget peek = glr_ctrl_cycle_peek(1);
+            ASSERT_INT("peek under tutorial reports a lesson",
+                       peek.kind, GLR_CYCLE_TARGET_TUTORIAL);
+            ASSERT_STR("peek names the lesson the click lands on",
+                       peek.name ? peek.name : "", repl_tutorial_name(1));
+        }
         ASSERT_INT("prev pin steps back to the first lesson",
                    tutorial_state_view().tutorial_idx, 0);
         tutorial_stop();

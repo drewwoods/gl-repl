@@ -157,6 +157,8 @@ set.
 The **&lt; Prev** / **Next &gt;** buttons in the menu bar (left of the 2D/3D
 swatch) do the same stepping with the mouse - and while a tutorial is
 running they step the *lesson* catalog instead, matching F11 / Shift+F11.
+Hovering either one names where it lands - `Next Example | Torus knot
+(animated) | F12` - so you can see what is one click away before taking it.
 They hide themselves when the code panel is too narrow to fit them
 alongside the menus and the search field.
 

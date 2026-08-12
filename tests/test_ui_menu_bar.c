@@ -1064,6 +1064,42 @@ static void test_render_paths_with_stubs(void) {
     ui_menu_bar_render(&snap);
     ASSERT_TRUE("menu bar render covers replay done", gl_stub_counts[GL_STUB_glRectf] > 0);
 
+    /* Hovering a stepper adds its destination tooltip; an empty destination
+     * (nothing to step to) draws nothing extra. Compared against the same
+     * bar with the pointer parked off the pins, so this counts the tooltip
+     * rather than the bar's own text. */
+    {
+        int mx = -1, my = -1;
+        int baseline, hovered, empty;
+
+        snap.pointer.mouse_x = 0;
+        snap.pointer.mouse_y = 0;
+        gl_stub_counts_reset();
+        ui_menu_bar_render(&snap);
+        baseline = gl_stub_counts[GL_STUB_glRasterPos2f];
+
+        ASSERT_TRUE("pin:next resolves for the tooltip render",
+                    glr_pointer_script_resolve_target("pin:next", &mx, &my));
+        snap.pointer.mouse_x = mx;
+        snap.pointer.mouse_y = my;
+        snprintf(snap.step_target[1].name, sizeof snap.step_target[1].name,
+                 "%s", "Rotating cube");
+        snprintf(snap.step_target[1].noun, sizeof snap.step_target[1].noun,
+                 "%s", "Example");
+        snprintf(snap.step_target[1].shortcut,
+                 sizeof snap.step_target[1].shortcut, "%s", "F12");
+        gl_stub_counts_reset();
+        ui_menu_bar_render(&snap);
+        hovered = gl_stub_counts[GL_STUB_glRasterPos2f];
+        ASSERT_TRUE("hovering Next draws its tooltip", hovered > baseline);
+
+        snap.step_target[1].name[0] = '\0';
+        gl_stub_counts_reset();
+        ui_menu_bar_render(&snap);
+        empty = gl_stub_counts[GL_STUB_glRasterPos2f];
+        ASSERT_INT_EQ("no destination draws no tooltip", empty, baseline);
+    }
+
     ASSERT_TRUE("found file dropdown point for render",
                 find_dropdown_item_point(GLR_MENU_FILE, GLR_FILE_ITEM_NEW_SCENE,
                                          &item_mx, &item_my));

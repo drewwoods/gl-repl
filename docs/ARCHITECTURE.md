@@ -898,14 +898,14 @@ Responsibilities:
 * profile HUD
 * status banners and other screen-space overlays
 
-UI renderers draw from a single per-frame [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L85) (defined in
+UI renderers draw from a single per-frame [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L89) (defined in
 [`src/ui/app/snapshot.h`](../src/ui/app/snapshot.h)) that the controller builds once via
 [`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L137) and passes to every `ui_*_render*()`
 entry point. Render code does not call `repl_state_*()` directly. The
 `check-ui-no-repl-state-read` Makefile guard enforces the snapshot-shaped
 signature for audited renderers.
 
-[`UiRenderSnapshot`](../src/ui/app/snapshot.h#L85) carries:
+[`UiRenderSnapshot`](../src/ui/app/snapshot.h#L89) carries:
 
 * by-value value-type slices (code_panel, replay, search, autocomplete,
   status, …) - small structs cheap to copy. Scene-presentation policy
@@ -1912,7 +1912,7 @@ that frame - here a 2D/3D switch would let row-count see one
 `gluPerspective(...)` line while render emits two `glOrtho(...)` lines,
 skewing scroll-follow and row hit mapping. "Deterministic within a
 frame" is *not* sufficient - the inputs themselves change mid-frame at
-the render3d-render boundary. This is just [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L85)'s existing
+the render3d-render boundary. This is just [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L89)'s existing
 contract ("UI render code reads only from the snapshot") restated for
 the case where the value is computed rather than copied.
 
