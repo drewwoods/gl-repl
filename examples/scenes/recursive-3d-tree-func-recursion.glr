@@ -1,5 +1,7 @@
 // @cfg grid = GRID_THEME_SOIL
 // @cfg grid_extent = GRID_EXTENT_CLOSE
+// @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
 // @cfg vertex_points = 0
 // @cfg vertex_outlines = 0
 // A 3D recursive tree. One call draws one limb as a tapered pentagonal
@@ -63,8 +65,8 @@ limb(depth, len, rad, seed) {
 }
 
 glTranslatef(0.0000f, 0.0000f, -10.0000f);   // @camera dist
-glRotatef(8.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(24.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glRotatef(8.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(24.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
 glTranslatef(-0.0000f, -3.1000f, -0.0000f);   // @camera pan
 
 glClearColor(0.05, 0.06, 0.08, 1);
