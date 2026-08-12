@@ -2464,11 +2464,10 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
         GlrCycleTarget target = glr_ctrl_cycle_peek(back ? -1 : 1);
         int tutorial = (target.kind == GLR_CYCLE_TARGET_TUTORIAL);
         const char *noun = NULL;
-        int key = tutorial
-                      ? (back ? KM_KEY(GLR_PREV_TUTORIAL)
-                              : KM_KEY(GLR_NEXT_TUTORIAL))
-                      : (back ? KM_KEY(GLR_PREV_EXAMPLE)
-                              : KM_KEY(GLR_NEXT_EXAMPLE));
+        /* Prev/next share the same key (F11 tutorials, F12 examples);
+         * only the modifiers differ by direction. */
+        int key = tutorial ? KM_KEY(GLR_NEXT_TUTORIAL)
+                           : KM_KEY(GLR_NEXT_EXAMPLE);
         int mods = tutorial
                        ? (back ? KM_MODS(GLR_PREV_TUTORIAL)
                                : KM_MODS(GLR_NEXT_TUTORIAL))
