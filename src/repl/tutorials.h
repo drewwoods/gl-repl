@@ -347,7 +347,7 @@ const char *const        *repl_tutorial_setup_lines(int idx);
  * `tag_count` includes the synthetic ALL at index 0. */
 int                       repl_tutorial_tag_count(void);
 const char               *repl_tutorial_tag_label(int tag_idx);
-int                       repl_tutorial_has_tag(int tutorial_idx, int tag_idx);
+int                       repl_tutorial_has_tag(int entry_idx, int tag_idx);
 int                       repl_tutorial_count_for_tag(int tag_idx);
 int                       repl_tutorial_index_for_tag(int tag_idx, int ordinal);
 int                       repl_tutorial_visible_tag_count(void);
