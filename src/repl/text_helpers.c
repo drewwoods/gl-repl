@@ -15,30 +15,6 @@ void trim_in_place(char *s) {
     s[len - start] = '\0';
 }
 
-int repl_comment_alpha_payload_equals(const char *line, const char *word) {
-    const char *p = line;
-
-    if (!p || !word)
-        return 0;
-    while (*p && isspace((unsigned char)*p))
-        p++;
-    if (p[0] != '/' || p[1] != '/')
-        return 0;
-    p += 2;
-
-    while (*p) {
-        unsigned char c = (unsigned char)*p++;
-
-        if (!isalpha(c))
-            continue;
-        if (*word == '\0' ||
-            tolower(c) != tolower((unsigned char)*word))
-            return 0;
-        word++;
-    }
-    return *word == '\0';
-}
-
 void repl_canonical_input_view(const char *src,
                                const char **out_start,
                                int *out_len) {
