@@ -751,11 +751,13 @@ print_summary() {
   printf '\nDone.\n'
 }
 
-[[ "$RUN_CLANGD" -eq 1 ]] && run_clangd
-[[ "$RUN_CLANG_TIDY" -eq 1 ]] && run_clang_tidy
-[[ "$RUN_LIZARD" -eq 1 ]] && run_lizard
-[[ "$RUN_CPPCHECK" -eq 1 ]] && run_cppcheck
-[[ "$RUN_CPD" -eq 1 ]] && run_cpd
-[[ "$RUN_CHURN" -eq 1 ]] && run_churn
+# Each runner is independent: a failed compile-db / docker probe must not
+# abort later checks under set -e (the previous `&& run_foo` form did).
+if [[ "$RUN_CLANGD" -eq 1 ]]; then run_clangd || true; fi
+if [[ "$RUN_CLANG_TIDY" -eq 1 ]]; then run_clang_tidy || true; fi
+if [[ "$RUN_LIZARD" -eq 1 ]]; then run_lizard || true; fi
+if [[ "$RUN_CPPCHECK" -eq 1 ]]; then run_cppcheck || true; fi
+if [[ "$RUN_CPD" -eq 1 ]]; then run_cpd || true; fi
+if [[ "$RUN_CHURN" -eq 1 ]]; then run_churn || true; fi
 
 print_summary
