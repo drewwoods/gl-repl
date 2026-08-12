@@ -968,10 +968,6 @@ const ReplEnumEntry *repl_fog_color_pname_entries(void) {
     return k_fog_color_pnames;
 }
 
-const ReplEnumEntry *repl_fog_mode_entries(void) {
-    return k_fog_modes;
-}
-
 const ReplEnumEntry *repl_clip_plane_entries(void) {
     return k_clip_planes;
 }

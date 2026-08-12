@@ -106,14 +106,13 @@ enum {
 
 int repl_example_tag_count(void);
 const char *repl_example_tag_label(int tag_idx);
-int repl_example_has_tag(int example_idx, int tag_idx);
+int repl_example_has_tag(int entry_idx, int tag_idx);
 int repl_example_count_for_tag(int tag_idx);
 int repl_example_index_for_tag(int tag_idx, int ordinal);
 int repl_example_visible_tag_count(void);
 int repl_example_visible_tag_at(int dense_idx);
 
 /* Dynamic Tag Linked List Helpers */
-const ReplTagNode *repl_example_find_or_register_tag(const char *name);
 int repl_example_attach_tag(ReplItemTagNode **item_tags_head, const ReplTagNode *tag);
 void repl_example_free_item_tags(ReplItemTagNode *item_tags_head);
 

@@ -15,8 +15,6 @@ int         glr_paths_user_workspace_dir(char *buf, size_t buflen);
 int         glr_paths_workspaces_root(char *buf, size_t buflen);
 int         glr_paths_workspace_dir_for_name(const char *name,
                                               char *buf, size_t buflen);
-int         glr_paths_resolve_output_path(const char *leaf,
-                                           char *buf, size_t buflen);
 int         glr_paths_app_state_path(const char *leaf,
                                       char *buf, size_t buflen);
 int         glr_paths_same_dir(const char *a, const char *b);

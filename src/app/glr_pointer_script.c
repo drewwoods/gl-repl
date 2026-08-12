@@ -798,12 +798,17 @@ static void ps_ensure_view_mode(int view_mode) {
 
 /* Feed paced-typing characters up to index `upto` (exclusive). */
 static void ps_type_send(int upto) {
-    while (g_type_text[g_type_sent] && g_type_sent < upto) {
+    /* Bound the index first: g_type_text is a fixed buffer, and flush
+     * passes sizeof(g_type_text) as upto. Index-then-limit would read
+     * one past the array if the payload were ever non-NUL-terminated. */
+    while (g_type_sent < upto &&
+           g_type_sent < (int)sizeof(g_type_text) &&
+           g_type_text[g_type_sent]) {
         glr_ctrl_scripted_keyboard((unsigned char)g_type_text[g_type_sent++],
                                    (int)(g_px + 0.5f),
                                    (int)(g_py + 0.5f));
     }
-    if (!g_type_text[g_type_sent])
+    if (g_type_sent >= (int)sizeof(g_type_text) || !g_type_text[g_type_sent])
         g_type_active = 0;
 }
 

@@ -390,190 +390,194 @@ static void update_selected_autocomplete_preview(void) {
     }
 }
 
-static void update_autocomplete(void) {
-    EditorInputView inp = editor_state_input();
-    EditorAutocompleteState *ac = editor_state_autocomplete_mut();
-    const char *raw_input = inp.input;
-    int raw_input_len = inp.input_len;
-
-    editor_state_autocomplete_clear();
-    reset_ac_statics();
-
-    /* While a tutorial is active AND the cursor sits on the expected
-     * commit line, autocomplete matches/hints would compete with the
-     * tutorial UI. Suppress normal completion and emit the
-     * expected-command shadow text as the ghost suffix instead - the
-     * active-input renderer already draws ghost in dimmed color
-     * after the cursor. Empty input + tutorial active yields the
-     * full expected line as the ghost. On any other line the user
-     * is editing unrelated code, so fall through to the normal
-     * autocomplete path.
-     *
-     * REQUIRE_VAR has no expected_commit_line (the user is free to
-     * type the satisfying `name = expr;` anywhere), so the cursor
-     * check above doesn't gate it. Show the synthesized ghost on any
-     * row while a REQUIRE_VAR step is active - tutorial_shadow_suffix
-     * builds the `name = target` string for that case. */
+/* While a tutorial is active AND the cursor sits on the expected
+ * commit line, autocomplete matches/hints would compete with the
+ * tutorial UI. Suppress normal completion and emit the
+ * expected-command shadow text as the ghost suffix instead - the
+ * active-input renderer already draws ghost in dimmed color
+ * after the cursor. Empty input + tutorial active yields the
+ * full expected line as the ghost. On any other line the user
+ * is editing unrelated code, so fall through to the normal
+ * autocomplete path.
+ *
+ * REQUIRE_VAR has no expected_commit_line (the user is free to
+ * type the satisfying `name = expr;` anywhere), so the cursor
+ * check above doesn't gate it. Show the synthesized ghost on any
+ * row while a REQUIRE_VAR step is active - tutorial_shadow_suffix
+ * builds the `name = target` string for that case.
+ *
+ * Returns 1 when the ghost was installed and normal completion
+ * should stop. */
+static int ac_try_tutorial_ghost(const char *raw_input,
+                                 EditorAutocompleteState *ac) {
     int show_tutorial_ghost = 0;
-    if (tutorial_active()) {
-        if (editor_state_edit_line() == tutorial_expected_commit_line())
-            show_tutorial_ghost = 1;
-        else if (tutorial_current_step_kind() == TUTORIAL_STEP_KIND_REQUIRE_VAR)
-            show_tutorial_ghost = 1;
-    }
-    if (show_tutorial_ghost) {
-        tutorial_shadow_suffix(raw_input, ac->ghost, sizeof(ac->ghost));
-        /* Sibling of the shadow suffix: when the typed input fully
-         * matches the expected command, refresh the status bar with a
-         * "press Enter or ';' to commit" reminder so the user knows the
-         * line is ready. No-op while still typing or off the COMMAND
-         * step. */
-        tutorial_refresh_input_hint(raw_input);
-        return;
-    }
 
-    if (raw_input_len == 0) return;
+    if (!tutorial_active())
+        return 0;
+    if (editor_state_edit_line() == tutorial_expected_commit_line())
+        show_tutorial_ghost = 1;
+    else if (tutorial_current_step_kind() == TUTORIAL_STEP_KIND_REQUIRE_VAR)
+        show_tutorial_ghost = 1;
+    if (!show_tutorial_ghost)
+        return 0;
 
-    /* Completions historically fire only with the cursor at the end of
-     * input. One relaxation: the enum-slot modes also fire mid-line
-     * when the cursor sits at the end of the token being completed and
-     * everything after it is only trailing call arguments (e.g.
-     * `glColorMaterial(GL_FR|, GL_DIFFUSE);` offers GL_FRONT). The
-     * other modes (function names, param hints) keep the historic
-     * end-of-input-only behavior - `interior` gates them off below. */
-    int cursor = editor_cursor_pos();
-    int interior = (cursor != raw_input_len);
-    if (interior) {
-        if (cursor <= 0) return;
-        if (!tail_is_only_trailing_args(raw_input + cursor)) return;
+    tutorial_shadow_suffix(raw_input, ac->ghost, sizeof(ac->ghost));
+    /* Sibling of the shadow suffix: when the typed input fully
+     * matches the expected command, refresh the status bar with a
+     * "press Enter or ';' to commit" reminder so the user knows the
+     * line is ready. No-op while still typing or off the COMMAND
+     * step. */
+    tutorial_refresh_input_hint(raw_input);
+    return 1;
+}
+
+/* Skip past a leading `... = ` so the matcher works on the RHS
+ * rather than the whole line. Examples:
+ *   "x = rand"        -> RHS = "rand"
+ *   "float x = sin"   -> RHS = "sin"
+ *   "A[0] = glC"      -> RHS = "glC"
+ * Distinguishes assignment `=` from `==`/`<=`/`>=`/`!=` so a
+ * partial conditional doesn't get treated as an assignment.
+ *
+ * Mid-line, only an `=` before the cursor can establish the
+ * RHS-prefix context for the token being completed; scanning
+ * past it would push g_ac_input_offset beyond the cursor and
+ * break the offset math below. */
+static void ac_resolve_rhs_context(const char *raw_input, int scan_len) {
+    int last_eq = -1;
+
+    for (int i = 0; i < scan_len; i++) {
+        if (raw_input[i] != '=') continue;
+        /* skip both chars of '==' so it isn't read as assignment */
+        if (i + 1 < scan_len && raw_input[i + 1] == '=') { i++; continue; }
+        if (i > 0 && (raw_input[i - 1] == '<' ||
+                      raw_input[i - 1] == '>' ||
+                      raw_input[i - 1] == '!' ||
+                      raw_input[i - 1] == '=')) continue;
+        last_eq = i;
     }
+    if (last_eq >= 0) {
+        int o = last_eq + 1;
+        while (o < scan_len && isspace((unsigned char)raw_input[o])) o++;
+        g_ac_input_offset = o;
+    }
+}
 
-    /* Skip past a leading `... = ` so the matcher works on the RHS
-     * rather than the whole line. Examples:
-     *   "x = rand"        -> RHS = "rand"
-     *   "float x = sin"   -> RHS = "sin"
-     *   "A[0] = glC"      -> RHS = "glC"
-     * Distinguishes assignment `=` from `==`/`<=`/`>=`/`!=` so a
-     * partial conditional doesn't get treated as an assignment. */
+/* glPointParameterfv enum completion (custom: 1 enum + 3 floats).
+ * Returns 1 when matches were installed and the preview updated. */
+static int ac_try_point_param_completion(const char *raw_input,
+                                         const char *input, int input_len,
+                                         int interior, int cursor,
+                                         EditorAutocompleteState *ac) {
+    static const char prefix[] = "glPointParameterfv(";
+    const ReplEnumEntry *point_param_pnames = repl_point_param_pname_entries();
+    int plen = (int)sizeof(prefix) - 1;
+    /* Completion stops at the cursor: mid-line the pname token ends
+     * there and trailing `, const, linear, quadratic)` text is kept;
+     * at end-of-input effective_len is the whole (post-`=`) input,
+     * matching the historic behavior. Only the pname slot completes,
+     * so any comma before the cursor disqualifies. */
+    int effective_len = interior ? (cursor - g_ac_input_offset) : input_len;
+    int alen = effective_len - plen;
+
+    if (strncmp(input, prefix, plen) != 0 || input_len <= plen ||
+        alen < 0 || memchr(input + plen, ',', (size_t)alen) != NULL)
+        return 0;
+
     {
-        /* Mid-line, only an `=` before the cursor can establish the
-         * RHS-prefix context for the token being completed; scanning
-         * past it would push g_ac_input_offset beyond the cursor and
-         * break the offset math below. */
-        int scan_len = interior ? cursor : raw_input_len;
-        int last_eq = -1;
-        for (int i = 0; i < scan_len; i++) {
-            if (raw_input[i] != '=') continue;
-            /* skip both chars of '==' so it isn't read as assignment */
-            if (i + 1 < scan_len && raw_input[i + 1] == '=') { i++; continue; }
-            if (i > 0 && (raw_input[i - 1] == '<' ||
-                          raw_input[i - 1] == '>' ||
-                          raw_input[i - 1] == '!' ||
-                          raw_input[i - 1] == '=')) continue;
-            last_eq = i;
-        }
-        if (last_eq >= 0) {
-            int o = last_eq + 1;
-            while (o < scan_len && isspace((unsigned char)raw_input[o])) o++;
-            g_ac_input_offset = o;
-        }
-    }
-
-    const char *input = raw_input + g_ac_input_offset;
-    int input_len = raw_input_len - g_ac_input_offset;
-    if (input_len <= 0) return;
-
-    /* glPointParameterfv enum completion (custom: 1 enum + 3 floats). */
-    {
-        static const char prefix[] = "glPointParameterfv(";
-        const ReplEnumEntry *point_param_pnames = repl_point_param_pname_entries();
-        int plen = (int)sizeof(prefix) - 1;
-        /* Completion stops at the cursor: mid-line the pname token ends
-         * there and trailing `, const, linear, quadratic)` text is kept;
-         * at end-of-input effective_len is the whole (post-`=`) input,
-         * matching the historic behavior. Only the pname slot completes,
-         * so any comma before the cursor disqualifies. */
-        int effective_len = interior ? (cursor - g_ac_input_offset) : input_len;
-        int alen = effective_len - plen;
-        if (strncmp(input, prefix, plen) == 0 && input_len > plen &&
-            alen >= 0 && memchr(input + plen, ',', (size_t)alen) == NULL) {
-            const char *after = input + plen;
-            for (int j = 0; point_param_pnames[j].name && ac->match_count < MAX_AC_MATCHES; j++) {
-                if (ac_prefix_match_ci(point_param_pnames[j].name, after, alen) &&
-                    (int)strlen(point_param_pnames[j].name) > alen) {
-                    ac->matches[ac->match_count] = point_param_pnames[j].name;
-                    ac->insert_matches[ac->match_count] = point_param_pnames[j].name;
-                    g_ac_func_matches[ac->match_count] = NULL;
-                    ac->match_count++;
-                }
-            }
-            if (ac->match_count > 0) {
-                g_ac_mode = AC_MODE_POINT_PARAM;
-                g_ac_token_len = alen;
-                g_ac_token_start = (int)(after - raw_input);
-                snprintf(g_ac_suffix, sizeof(g_ac_suffix), "%s",
-                         interior ? "" : ", ");
-                sort_autocomplete_matches(ac);
-                update_selected_autocomplete_preview();
-                return;
+        const char *after = input + plen;
+        for (int j = 0; point_param_pnames[j].name && ac->match_count < MAX_AC_MATCHES; j++) {
+            if (ac_prefix_match_ci(point_param_pnames[j].name, after, alen) &&
+                (int)strlen(point_param_pnames[j].name) > alen) {
+                ac->matches[ac->match_count] = point_param_pnames[j].name;
+                ac->insert_matches[ac->match_count] = point_param_pnames[j].name;
+                g_ac_func_matches[ac->match_count] = NULL;
+                ac->match_count++;
             }
         }
     }
+    if (ac->match_count <= 0)
+        return 0;
 
-    /* Enum-based commands completion (slot-indexed).
-     *
-     * One path for every positional enum slot: the active slot is the
-     * count of top-level commas between '(' and the cursor; the token
-     * being completed is the segment after the last such comma, ending
-     * at the cursor (== end of input in the historic case; mid-line the
-     * trailing `, args...)` text is left alone and the accept path
-     * splices at the cursor). Matches come from def->args[slot].enums plus
-     * an optional bitfield-all alias.
-     * the accept suffix is ")" for the last enum slot, ", " otherwise,
-     * and "" mid-line (the trailing text already has the separator).
-     * abs(num_args) is the slot count so the custom glMaterialfv row
-     * (num_args -2) still offers face/param completion even though the
-     * parser skips it. */
+    g_ac_mode = AC_MODE_POINT_PARAM;
+    g_ac_token_len = alen;
+    g_ac_token_start = (int)((input + plen) - raw_input);
+    snprintf(g_ac_suffix, sizeof(g_ac_suffix), "%s",
+             interior ? "" : ", ");
+    sort_autocomplete_matches(ac);
+    update_selected_autocomplete_preview();
+    return 1;
+}
+
+/* Enum-based commands completion (slot-indexed).
+ *
+ * One path for every positional enum slot: the active slot is the
+ * count of top-level commas between '(' and the cursor; the token
+ * being completed is the segment after the last such comma, ending
+ * at the cursor (== end of input in the historic case; mid-line the
+ * trailing `, args...)` text is left alone and the accept path
+ * splices at the cursor). Matches come from def->args[slot].enums plus
+ * an optional bitfield-all alias.
+ * the accept suffix is ")" for the last enum slot, ", " otherwise,
+ * and "" mid-line (the trailing text already has the separator).
+ * abs(num_args) is the slot count so the custom glMaterialfv row
+ * (num_args -2) still offers face/param completion even though the
+ * parser skips it.
+ *
+ * Returns 1 when a command prefix matched (even with zero matches):
+ * the caller must not fall through to function-name completion. */
+static int ac_try_enum_slot_completion(const char *raw_input,
+                                       const char *input, int input_len,
+                                       int interior, int cursor,
+                                       EditorAutocompleteState *ac) {
     const ReplEnumCommandSpec *enum_cmds = repl_enum_command_specs();
+
     for (int i = 0; enum_cmds[i].name; i++) {
         char prefix[64];
+        int plen;
+        int nargs;
+        int effective_len;
+        const char *after;
+        const char *end;
+        int slot = 0;
+        const char *seg;
+        int depth = 0;
+        int seg_len;
+        const ReplEnumEntry *tbl;
+
         snprintf(prefix, sizeof(prefix), "%s(", enum_cmds[i].name);
-        int plen = (int)strlen(prefix);
+        plen = (int)strlen(prefix);
 
         if (strncmp(input, prefix, plen) != 0 || input_len <= plen)
             continue;
 
-        int nargs = abs(enum_cmds[i].num_args);
+        nargs = abs(enum_cmds[i].num_args);
         if (nargs < 1)
-            return; /* command matched but declares no enum slots */
+            return 1; /* command matched but declares no enum slots */
         if (nargs > MAX_ENUM_ARGS)
             nargs = MAX_ENUM_ARGS;
 
-        int effective_len = interior ? (cursor - g_ac_input_offset) : input_len;
+        effective_len = interior ? (cursor - g_ac_input_offset) : input_len;
         if (effective_len < plen)
-            return; /* cursor inside the command name - nothing to complete */
+            return 1; /* cursor inside the command name - nothing to complete */
 
         /* Depth-aware top-level comma scan up to the cursor, mirroring
          * build_param_hint_text: commas inside nested (), {}, [] (a
          * compound literal, `cos(a, b)`) must not advance the slot. */
-        const char *after = input + plen;
-        const char *end = input + effective_len;
-        int slot = 0;
-        const char *seg = after;
-        {
-            int depth = 0;
-            for (const char *q = after; q < end; q++) {
-                char ch = *q;
-                if (depth == 0 && ch == ',') { slot++; seg = q + 1; continue; }
-                /* A `|` starts a new term inside the *same* slot: the
-                 * bitfield slot (glClear) is the only place it can
-                 * appear, and completion there should offer the mask
-                 * tokens again rather than treat `A | GL_D` as one
-                 * unmatchable prefix. */
-                if (depth == 0 && ch == '|') { seg = q + 1; continue; }
-                if (ch == '(' || ch == '{' || ch == '[')      depth++;
-                else if ((ch == ')' || ch == '}' || ch == ']') && depth > 0) depth--;
-            }
+        after = input + plen;
+        end = input + effective_len;
+        seg = after;
+        for (const char *q = after; q < end; q++) {
+            char ch = *q;
+            if (depth == 0 && ch == ',') { slot++; seg = q + 1; continue; }
+            /* A `|` starts a new term inside the *same* slot: the
+             * bitfield slot (glClear) is the only place it can
+             * appear, and completion there should offer the mask
+             * tokens again rather than treat `A | GL_D` as one
+             * unmatchable prefix. */
+            if (depth == 0 && ch == '|') { seg = q + 1; continue; }
+            if (ch == '(' || ch == '{' || ch == '[')      depth++;
+            else if ((ch == ')' || ch == '}' || ch == ']') && depth > 0) depth--;
         }
         if (slot >= nargs) {
             /* Past the last enum slot. For positive num_args the call
@@ -584,13 +588,13 @@ static void update_autocomplete(void) {
              * still shows the compound-literal hint. */
             if (enum_cmds[i].num_args < 0)
                 update_input_param_hint();
-            return;
+            return 1;
         }
         while (seg < end && *seg == ' ') seg++;
-        int seg_len = (int)(end - seg);
+        seg_len = (int)(end - seg);
         if (seg_len < 0) seg_len = 0;
 
-        const ReplEnumEntry *tbl = enum_cmds[i].args[slot].enums;
+        tbl = enum_cmds[i].args[slot].enums;
         for (int j = 0; tbl && tbl[j].name && ac->match_count < MAX_AC_MATCHES; j++) {
             if (ac_prefix_match_ci(tbl[j].name, seg, seg_len) &&
                 (int)strlen(tbl[j].name) > seg_len) {
@@ -635,8 +639,57 @@ static void update_autocomplete(void) {
             sort_autocomplete_matches(ac);
             update_selected_autocomplete_preview();
         }
-        return;
+        return 1;
     }
+    return 0;
+}
+
+static void update_autocomplete(void) {
+    EditorInputView inp = editor_state_input();
+    EditorAutocompleteState *ac = editor_state_autocomplete_mut();
+    const char *raw_input = inp.input;
+    int raw_input_len = inp.input_len;
+    int cursor;
+    int interior;
+    const char *input;
+    int input_len;
+    const ReplFuncCompletion *completions;
+
+    editor_state_autocomplete_clear();
+    reset_ac_statics();
+
+    if (ac_try_tutorial_ghost(raw_input, ac))
+        return;
+
+    if (raw_input_len == 0) return;
+
+    /* Completions historically fire only with the cursor at the end of
+     * input. One relaxation: the enum-slot modes also fire mid-line
+     * when the cursor sits at the end of the token being completed and
+     * everything after it is only trailing call arguments (e.g.
+     * `glColorMaterial(GL_FR|, GL_DIFFUSE);` offers GL_FRONT). The
+     * other modes (function names, param hints) keep the historic
+     * end-of-input-only behavior - `interior` gates them off below. */
+    cursor = editor_cursor_pos();
+    interior = (cursor != raw_input_len);
+    if (interior) {
+        if (cursor <= 0) return;
+        if (!tail_is_only_trailing_args(raw_input + cursor)) return;
+    }
+
+    ac_resolve_rhs_context(raw_input, interior ? cursor : raw_input_len);
+
+    input = raw_input + g_ac_input_offset;
+    input_len = raw_input_len - g_ac_input_offset;
+    if (input_len <= 0) return;
+
+    if (ac_try_point_param_completion(raw_input, input, input_len,
+                                      interior, cursor, ac))
+        return;
+
+    if (ac_try_enum_slot_completion(raw_input, input, input_len,
+                                    interior, cursor, ac))
+        return;
 
     /* Mid-line completion is enum-slot-only: function-name completion
      * and the param hint keep their end-of-input-only behavior (their
@@ -645,7 +698,7 @@ static void update_autocomplete(void) {
         return;
 
     /* Complete function names. */
-    const ReplFuncCompletion *completions = repl_func_completions();
+    completions = repl_func_completions();
     for (int i = 0; completions[i].insert_text && ac->match_count < MAX_AC_MATCHES; i++) {
         if (ac_prefix_match_ci(completions[i].insert_text, input, input_len) &&
             (int)strlen(completions[i].insert_text) > input_len) {

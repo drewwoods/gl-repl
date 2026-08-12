@@ -1352,18 +1352,18 @@ static void format_and_set_seek_status(const char *action_name) {
     ui_state_status_set_music(msg);
 }
 
-int glr_action_open_workspace_path(const char *dir) {
+int glr_action_open_workspace_path(const char *path) {
     ReplExportLayout layout;
     const char *current = repl_workspace_dir();
     char old_workspace[REPL_WORKSPACE_DIR_MAX];
     snprintf(old_workspace, sizeof(old_workspace), "%s", current ? current : "");
     glr_ctrl_fill_export_layout(&layout);
 
-    if (!dir || !dir[0]) {
+    if (!path || !path[0]) {
         repl_set_status_error("Open workspace: no folder provided");
         return 0;
     }
-    if (old_workspace[0] && glr_paths_same_dir(old_workspace, dir)) {
+    if (old_workspace[0] && glr_paths_same_dir(old_workspace, path)) {
         repl_set_status("Workspace is already open");
         return 1;
     }
@@ -1391,7 +1391,7 @@ int glr_action_open_workspace_path(const char *dir) {
         repl_set_workspace_dir(old_workspace);
     }
 
-    ReplWorkspaceLoadResult loaded = repl_load_workspace_ex(dir);
+    ReplWorkspaceLoadResult loaded = repl_load_workspace_ex(path);
     if (!loaded.ok)
         return 0;
     editor_undo_note_wholesale_replacement();

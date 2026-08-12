@@ -99,14 +99,6 @@ static int init_default_tag_registry(ReplTagNode **head, int *count) {
     return 1;
 }
 
-const ReplTagNode *repl_example_find_or_register_tag(const char *name) {
-    if (!name || !*name)
-        return NULL;
-    ensure_default_tags_initialized();
-    return find_or_register_tag_in_registry(
-        &g_example_tags_head, &g_example_tag_count, name);
-}
-
 /* Lazily seed the live registry with the built-in tag names so the
  * REPL_EXAMPLE_TAG_* enum values app-layer code passes (glr_defaults.h's
  * tag-default table) keep matching ids 0..4. A non-empty head means the

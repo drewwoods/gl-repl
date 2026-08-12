@@ -218,10 +218,6 @@ void repl_camera_header_record(ReplCameraHeader *hdr, ReplCameraRole role,
     cam_diag(hdr, role, rule, line_no);
 }
 
-const ReplCameraDiag *repl_camera_header_diags(const ReplCameraHeader *hdr) {
-    return hdr ? hdr->diags : NULL;
-}
-
 /* ----- Per-role call parsing -------------------------------------------- */
 
 static const char *cam_skip_ws(const char *p) {

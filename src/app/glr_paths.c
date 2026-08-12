@@ -155,19 +155,6 @@ int glr_paths_workspace_dir_for_name(const char *name,
     return n >= 0 && n < (int)buflen;
 }
 
-int glr_paths_resolve_output_path(const char *leaf,
-                                  char *buf, size_t buflen) {
-    if (!leaf || !leaf[0] || !buf || buflen == 0)
-        return 0;
-    if (glr_paths_cwd_supports_relative_saves()) {
-        int n = snprintf(buf, buflen, "%s", leaf);
-        return n >= 0 && n < (int)buflen;
-    }
-    const char *dir = glr_paths_default_workspace_dir();
-    int n = snprintf(buf, buflen, "%s/%s", dir, leaf);
-    return n >= 0 && n < (int)buflen;
-}
-
 int glr_paths_app_state_path(const char *leaf, char *buf, size_t buflen) {
     char data[GLR_PATH_MAX];
     if (!leaf || !leaf[0] || !buf || buflen == 0)

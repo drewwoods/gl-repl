@@ -9,11 +9,6 @@
 
 void trim_in_place(char *s);
 
-/* Return non-zero when `line` is a // comment whose complete alphabetic
- * payload equals `word`, case-insensitively. Punctuation, digits, and
- * whitespace are ignored; any additional letter rejects the match. */
-int repl_comment_alpha_payload_equals(const char *line, const char *word);
-
 /* Return the canonical view of `src`: the [start, start+len) substring
  * after skipping leading whitespace and dropping trailing whitespace
  * plus any trailing ';' characters. `*out_start` aliases src (no

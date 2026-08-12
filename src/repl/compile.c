@@ -1739,6 +1739,352 @@ static int compile_parse_scratch_base_literal(const char *index_expr, int *out) 
     return 1;
 }
 
+/* A[base] = {e0, ..., eN} - 2..16 cells into a scratch array.
+ * Fills *cmd, out->scratch_ops / commit_message, and rewrites *rhs to
+ * the canonical ", "-separated form. Shared text formatting is still
+ * done by the caller. */
+static ReplCompileResult compile_var_assign_block_scratch(
+        const char *name, const char *index_expr, char *rhs, size_t rhs_sz,
+        const char *comment, int insert_idx,
+        const ReplCompileContext *ctx,
+        ExprVar *vis, int vis_n,
+        GLCmd *cmd, ReplCompiledChange *out,
+        char *err, int err_size) {
+    static const char k_block_usage[] =
+        "Usage: A[base] = {e0, ..., eN} - 2 to 16 values into a scratch "
+        "array (A, B, or C), with base + count <= 16";
+    ReplScratchBlockCell cells[REPL_SCRATCH_ARRAY_LEN];
+    float vals[REPL_SCRATCH_ARRAY_LEN];
+    int scratch_array_idx = repl_eval_scratch_array_index(name);
+    int cell_count = repl_split_scratch_block_rhs(rhs, cells,
+                                                  REPL_SCRATCH_ARRAY_LEN);
+    int base_idx = 0;
+    int has_cell_vars = 0;
+    int k;
+    char verr[REPL_DIAG_TEXT_MAX];
+
+    if (scratch_array_idx < 0)
+        return compile_set_err(err, err_size,
+                               "'%s' is not a scratch array - the {...} form writes A, B, or C",
+                               name);
+    /* The target cell is required. A bare `A = {...}` would be the only
+     * place in the language where an array name is itself assignable -
+     * `A = 5;` is an error everywhere else - and it is a spelling export
+     * cannot preserve, since it writes `A[0] = ...` for either form and
+     * import can only fold back to the subscripted one. One spelling per
+     * row, and the subscript is the one that lines up when four of these
+     * stack into a 4x4. */
+    if (!index_expr[0])
+        return compile_set_err(err, err_size,
+                               "scratch block needs a target cell - write '%s[0] = {...}'; "
+                               "the array name alone is not assignable",
+                               name);
+    /* One cell is the scalar form spelled oddly, and it does not survive
+     * a round trip as itself: it exports to `A[4] = e;`, which import
+     * reads back as CMD_SCRATCH_ASSIGN. Reject it rather than ship a
+     * spelling that silently rewrites itself on save/load. */
+    if (cell_count < 2)
+        return compile_set_err(err, err_size, "%s", k_block_usage);
+
+    /* The base is a literal, deliberately: it is what keeps the C this
+     * row exports to a plain `A[4] = ...; A[5] = ...;` run that import
+     * can fold back without a temporary. A computed target is still
+     * reachable one cell at a time through `A[i] = expr;`, and this
+     * restriction can be relaxed later without breaking any scene -
+     * the reverse could not. */
+    if (!compile_parse_scratch_base_literal(index_expr, &base_idx))
+        return compile_set_err(err, err_size,
+                               "the {...} form needs a literal base index - "
+                               "use '%s[i] = expr;' for a computed one", name);
+    if (base_idx + cell_count > REPL_SCRATCH_ARRAY_LEN)
+        return compile_set_err(err, err_size,
+                               "%s[%d] = {...} writes %d values past cell %d - "
+                               "the array holds %d",
+                               name, base_idx, cell_count,
+                               REPL_SCRATCH_ARRAY_LEN - 1,
+                               REPL_SCRATCH_ARRAY_LEN);
+
+    for (k = 0; k < cell_count; k++) {
+        char cell[MAX_LINE_LEN];
+        repl_scratch_block_cell_text(&cells[k], cell, sizeof(cell));
+        if (!repl_eval_validate_expression_idents(
+                &(ReplExprIdentValidationConfig){
+                    .src = cell,
+                    .vars = vis_n > 0 ? vis : NULL,
+                    .num_vars = vis_n,
+                    .predef = ctx->predef,
+                    .err = verr,
+                    .errsz = (int)sizeof(verr),
+                }))
+            return compile_set_err(err, err_size, "%s", verr);
+        {
+            ExprCtx cell_ctx = { cell, vis_n > 0 ? vis : NULL, vis_n, NULL, 0,
+                                 ctx->predef.vars, ctx->predef.count };
+            vals[k] = repl_eval_expr(&cell_ctx);
+        }
+        if (input_has_any_visible_vars(cell, vis_n > 0 ? vis : NULL, vis_n))
+            has_cell_vars = 1;
+    }
+
+    /* Reject a block whose exported C would not fit one physical line.
+     *
+     * The row itself is short - it is the *expansion* that is long.
+     * Export lowers `A[0] = {TAU, ...}` to `A[0] = …; A[1] = …;`, one
+     * store per cell, and each `TAU` becomes a parenthesised float
+     * cast several times its source width; sixteen of them reach ~440
+     * characters. Import reads physical lines into a MAX_LINE_LEN
+     * buffer and rejects anything longer outright ("Import failed:
+     * line too long"), so such a row exports to a file the importer
+     * will not take back.
+     *
+     * Checked here rather than at export because export has no way to
+     * refuse: the alternatives there are wrapping the run (each
+     * fragment ends in `;` at depth 0, so the importer's accumulator
+     * flushes them as separate rows and the fold produces N blocks
+     * instead of one) or exceeding the logical-statement budget, which
+     * is the same MAX_LINE_LEN. Rejecting at commit is the only point
+     * where the user can still do something about it - and what they
+     * do is the documented idiom anyway: split the run across rows,
+     * four cells at a time. */
+    {
+        char block_indent[REPL_INDENT_TEXT_MAX];
+        int exported;
+
+        compile_scope_cmd_indent(ctx, insert_idx,
+                                 block_indent, sizeof(block_indent));
+        /* Mirrors write_scratch_block_as_c89's output exactly: per cell
+         * `NAME[IDX] = EXPR;` joined by one space, then the trailing
+         * comment behind two. test_scratch_block_export_line_budget
+         * pins the two together so a change to either is caught. */
+        exported = (int)strlen(block_indent);
+        for (k = 0; k < cell_count; k++) {
+            char cell[MAX_LINE_LEN];
+            char c_cell[MAX_LINE_LEN];
+            int idx = base_idx + k;
+
+            repl_scratch_block_cell_text(&cells[k], cell, sizeof(cell));
+            repl_eval_expr_to_c(cell, c_cell, sizeof(c_cell));
+            exported += (k ? 1 : 0)                 /* joining space   */
+                      + (int)strlen(name)           /* A               */
+                      + 1                           /* [               */
+                      + (idx >= 10 ? 2 : 1)         /* index digits    */
+                      + 4                           /* ] = _           */
+                      + (int)strlen(c_cell)         /* the expression  */
+                      + 1;                          /* ;               */
+        }
+        if (comment[0])
+            exported += 2 + (int)strlen(comment);
+        if (exported >= MAX_LINE_LEN)
+            return compile_set_err(err, err_size,
+                "block is too long to export - it expands to %d chars of C "
+                "and the line limit is %d; split it across rows",
+                exported, MAX_LINE_LEN - 1);
+    }
+
+    cmd->type = CMD_SCRATCH_BLOCK_ASSIGN;
+    cmd->valid = 1;
+    cmd->args[0] = (float)scratch_array_idx;
+    cmd->args[1] = (float)base_idx;
+    cmd->args[2] = (float)cell_count;
+    cmd->num_args = 3;
+    cmd->has_vars = has_cell_vars;
+    for (k = 0; k < cell_count; k++)
+        cmd->payload.scratch_block.v[k] = vals[k];
+
+    for (k = 0; k < cell_count; k++) {
+        out->scratch_ops[k].array_idx = scratch_array_idx;
+        out->scratch_ops[k].elem_idx = base_idx + k;
+        out->scratch_ops[k].value = vals[k];
+    }
+    out->scratch_op_count = cell_count;
+
+    snprintf(out->commit_message, sizeof(out->commit_message),
+             "%s[%d..%d] = %d values", name, base_idx,
+             base_idx + cell_count - 1, cell_count);
+
+    /* Canonicalize the separators before the shared text formatting
+     * below writes `rhs` out verbatim. Import rebuilds the list with
+     * ", " between cells, so a row committed as `{1,2}` would come back
+     * from a save/load as `{1, 2}` and break the text-exact round trip
+     * every scene corpus checks. Only the separators are touched - each
+     * cell expression keeps the text the user typed, exactly as the
+     * scalar `A[i] = expr;` form does. */
+    {
+        char norm[MAX_LINE_LEN];
+        int used = 1;
+        norm[0] = '{';
+        for (k = 0; k < cell_count; k++) {
+            char cell[MAX_LINE_LEN];
+            int wrote;
+            repl_scratch_block_cell_text(&cells[k], cell, sizeof(cell));
+            wrote = snprintf(norm + used, sizeof(norm) - (size_t)used,
+                             "%s%s", k ? ", " : "", cell);
+            if (wrote < 0 || wrote >= (int)sizeof(norm) - used)
+                return compile_set_err(err, err_size, "Command too long");
+            used += wrote;
+        }
+        if (used + 2 > (int)sizeof(norm))
+            return compile_set_err(err, err_size, "Command too long");
+        norm[used++] = '}';
+        norm[used] = '\0';
+        repl_copy_string_fits(rhs, rhs_sz, norm);
+    }
+    return REPL_COMPILE_OK;
+}
+
+/* A[i] = expr - single-cell scratch assignment. */
+static ReplCompileResult compile_var_assign_indexed_scratch(
+        const char *name, const char *index_expr, const char *rhs,
+        const ReplCompileContext *ctx,
+        ExprVar *vis, int vis_n,
+        GLCmd *cmd, ReplCompiledChange *out,
+        char *err, int err_size) {
+    char verr[REPL_DIAG_TEXT_MAX];
+    int scratch_array_idx = repl_eval_scratch_array_index(name);
+    ExprCtx idx_ctx;
+    ExprCtx rhs_ctx;
+    int elem_idx;
+    float val;
+    int has_index_vars;
+    int has_rhs_vars;
+
+    if (scratch_array_idx < 0)
+        return compile_set_err(err, err_size, "unknown array '%s'", name);
+
+    if (!repl_eval_validate_expression_idents(
+            &(ReplExprIdentValidationConfig){
+                .src = index_expr,
+                .vars = vis_n > 0 ? vis : NULL,
+                .num_vars = vis_n,
+                .predef = ctx->predef,
+                .err = verr,
+                .errsz = (int)sizeof(verr),
+            }))
+        return compile_set_err(err, err_size, "%s", verr);
+    if (!repl_eval_validate_expression_idents(
+            &(ReplExprIdentValidationConfig){
+                .src = rhs,
+                .vars = vis_n > 0 ? vis : NULL,
+                .num_vars = vis_n,
+                .predef = ctx->predef,
+                .err = verr,
+                .errsz = (int)sizeof(verr),
+            }))
+        return compile_set_err(err, err_size, "%s", verr);
+
+    idx_ctx = (ExprCtx){ index_expr, vis_n > 0 ? vis : NULL, vis_n, NULL, 0,
+                         ctx->predef.vars, ctx->predef.count };
+    rhs_ctx = (ExprCtx){ rhs, vis_n > 0 ? vis : NULL, vis_n, NULL, 0,
+                         ctx->predef.vars, ctx->predef.count };
+    elem_idx = (int)repl_eval_expr(&idx_ctx);
+    if (elem_idx < 0 || elem_idx >= REPL_SCRATCH_ARRAY_LEN)
+        return compile_set_err(err, err_size,
+                               "scratch array index out of range: %d", elem_idx);
+
+    val = repl_eval_expr(&rhs_ctx);
+    has_index_vars = input_has_any_visible_vars(index_expr,
+                                                vis_n > 0 ? vis : NULL, vis_n);
+    has_rhs_vars = input_has_any_visible_vars(rhs,
+                                              vis_n > 0 ? vis : NULL, vis_n);
+
+    cmd->type = CMD_SCRATCH_ASSIGN;
+    cmd->valid = 1;
+    cmd->args[0] = (float)scratch_array_idx;
+    cmd->args[1] = (float)elem_idx;
+    cmd->args[2] = val;
+    cmd->num_args = 3;
+    cmd->has_vars = has_index_vars || has_rhs_vars;
+
+    out->scratch_ops[0].array_idx = scratch_array_idx;
+    out->scratch_ops[0].elem_idx = elem_idx;
+    out->scratch_ops[0].value = val;
+    out->scratch_op_count = 1;
+
+    snprintf(out->commit_message, sizeof(out->commit_message),
+             "%s[%d] = %g", name, elem_idx, (double)val);
+    return REPL_COMPILE_OK;
+}
+
+/* name = expr - predef or function-scoped local assignment. */
+static ReplCompileResult compile_var_assign_scalar(
+        const char *name, const char *rhs,
+        const ReplCompileContext *ctx,
+        const CompileScopeBindings *bind,
+        ExprVar *vis, int vis_n,
+        GLCmd *cmd, ReplCompiledChange *out,
+        char *err, int err_size) {
+    char verr[REPL_DIAG_TEXT_MAX];
+    /* Lexical target resolution. The innermost binding decides, and a
+     * matching PARAM/LOOP is never skipped in search of an outer
+     * LOCAL - a shadowed outer binding is simply not reachable from
+     * here, exactly as in C. Only when nothing scoped matches does
+     * the target fall through to a predef slot. */
+    int bind_slot = compile_bindings_find(bind, name);
+    int var_idx;
+    ExprCtx eval_ctx;
+    float val;
+    int has_rhs_vars;
+
+    if (bind_slot >= 0 && bind->kinds[bind_slot] == REPL_VISIBLE_VAR_PARAM)
+        return compile_set_err(err, err_size,
+                               "cannot assign to function parameter '%s' - function parameters are constant",
+                               name);
+    if (bind_slot >= 0 && bind->kinds[bind_slot] == REPL_VISIBLE_VAR_LOOP)
+        return compile_set_err(err, err_size,
+                               "cannot assign to loop variable '%s' - loop variables are constant",
+                               name);
+
+    if (bind_slot >= 0) {
+        var_idx = REPL_VAR_IDX_LOCAL;
+    } else {
+        var_idx = repl_eval_find_predef_var_idx_in(ctx->predef.vars,
+                                                   ctx->predef.count, name);
+        if (var_idx < 0)
+            return compile_set_err(err, err_size,
+                "undeclared variable '%s' - use 'float %s;' first", name, name);
+    }
+
+    if (!repl_eval_validate_expression_idents(
+            &(ReplExprIdentValidationConfig){
+                .src = rhs,
+                .vars = vis_n > 0 ? vis : NULL,
+                .num_vars = vis_n,
+                .predef = ctx->predef,
+                .err = verr,
+                .errsz = (int)sizeof(verr),
+            }))
+        return compile_set_err(err, err_size, "%s", verr);
+
+    eval_ctx = (ExprCtx){ rhs, vis_n > 0 ? vis : NULL, vis_n, NULL, 0,
+                          ctx->predef.vars, ctx->predef.count };
+    val = repl_eval_expr(&eval_ctx);
+    has_rhs_vars = input_has_any_visible_vars(rhs,
+                                              vis_n > 0 ? vis : NULL, vis_n);
+
+    cmd->type     = CMD_VAR_ASSIGN;
+    cmd->valid    = 1;
+    cmd->args[0]  = val;
+    cmd->num_args = 1;       /* args[0] holds the assigned value */
+    cmd->var_idx  = var_idx; /* predef slot the executor will write, or
+                              * REPL_VAR_IDX_LOCAL for a scoped target */
+    cmd->has_vars = has_rhs_vars;
+
+    /* A local has no slot to set: its value exists only inside a call
+     * frame, so flatten writes it and the executor skips the row. */
+    if (var_idx >= 0 && out->predef_op_count < MAX_PREDEF_OPS_PER_COMMIT) {
+        out->predef_ops[out->predef_op_count].kind = REPL_PREDEF_OP_SET_VALUE;
+        repl_copy_string_fits(out->predef_ops[out->predef_op_count].name,
+                              sizeof(out->predef_ops[out->predef_op_count].name), name);
+        out->predef_ops[out->predef_op_count].value = val;
+        out->predef_ops[out->predef_op_count].has_value = 1;
+        out->predef_op_count++;
+    }
+
+    snprintf(out->commit_message, sizeof(out->commit_message),
+             "%s = %g", name, (double)val);
+    return REPL_COMPILE_OK;
+}
+
 /* CONTRACT: context-pure for document data. The
  * ReplCompileContext snapshot is authoritative for document_cmds /
  * _count / edit_line, and visible-var collection now runs through
@@ -1761,6 +2107,7 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     char index_expr[MAX_LINE_LEN];
     char rhs[MAX_LINE_LEN];
     char comment[MAX_LINE_LEN];
+    ReplCompileResult arm_rc;
 
     /* Bail out before extraction when the input itself can't fit in a
      * source line. Otherwise repl_extract_assignment_target_parts would
@@ -1805,312 +2152,24 @@ ReplCompileResult repl_compile_var_assign(const char *input,
     compile_collect_bindings(ctx, insert_idx, &bind);
     ExprVar *vis = bind.vars;
     int vis_n = bind.count;
-    char verr[REPL_DIAG_TEXT_MAX];
     GLCmd cmd;
     memset(&cmd, 0, sizeof(cmd));
 
     if (compile_rhs_is_brace_list(rhs)) {
-        static const char k_block_usage[] =
-            "Usage: A[base] = {e0, ..., eN} - 2 to 16 values into a scratch "
-            "array (A, B, or C), with base + count <= 16";
-        ReplScratchBlockCell cells[REPL_SCRATCH_ARRAY_LEN];
-        float vals[REPL_SCRATCH_ARRAY_LEN];
-        int scratch_array_idx = repl_eval_scratch_array_index(name);
-        int cell_count = repl_split_scratch_block_rhs(rhs, cells,
-                                                      REPL_SCRATCH_ARRAY_LEN);
-        int base_idx = 0;
-        int has_cell_vars = 0;
-        int k;
-
-        if (scratch_array_idx < 0)
-            return compile_set_err(err, err_size,
-                                   "'%s' is not a scratch array - the {...} form writes A, B, or C",
-                                   name);
-        /* The target cell is required. A bare `A = {...}` would be the only
-         * place in the language where an array name is itself assignable -
-         * `A = 5;` is an error everywhere else - and it is a spelling export
-         * cannot preserve, since it writes `A[0] = ...` for either form and
-         * import can only fold back to the subscripted one. One spelling per
-         * row, and the subscript is the one that lines up when four of these
-         * stack into a 4x4. */
-        if (!index_expr[0])
-            return compile_set_err(err, err_size,
-                                   "scratch block needs a target cell - write '%s[0] = {...}'; "
-                                   "the array name alone is not assignable",
-                                   name);
-        /* One cell is the scalar form spelled oddly, and it does not survive
-         * a round trip as itself: it exports to `A[4] = e;`, which import
-         * reads back as CMD_SCRATCH_ASSIGN. Reject it rather than ship a
-         * spelling that silently rewrites itself on save/load. */
-        if (cell_count < 2)
-            return compile_set_err(err, err_size, "%s", k_block_usage);
-
-        /* The base is a literal, deliberately: it is what keeps the C this
-         * row exports to a plain `A[4] = ...; A[5] = ...;` run that import
-         * can fold back without a temporary. A computed target is still
-         * reachable one cell at a time through `A[i] = expr;`, and this
-         * restriction can be relaxed later without breaking any scene -
-         * the reverse could not. */
-        if (!compile_parse_scratch_base_literal(index_expr, &base_idx))
-            return compile_set_err(err, err_size,
-                                   "the {...} form needs a literal base index - "
-                                   "use '%s[i] = expr;' for a computed one", name);
-        if (base_idx + cell_count > REPL_SCRATCH_ARRAY_LEN)
-            return compile_set_err(err, err_size,
-                                   "%s[%d] = {...} writes %d values past cell %d - "
-                                   "the array holds %d",
-                                   name, base_idx, cell_count,
-                                   REPL_SCRATCH_ARRAY_LEN - 1,
-                                   REPL_SCRATCH_ARRAY_LEN);
-
-        for (k = 0; k < cell_count; k++) {
-            char cell[MAX_LINE_LEN];
-            repl_scratch_block_cell_text(&cells[k], cell, sizeof(cell));
-            if (!repl_eval_validate_expression_idents(
-                    &(ReplExprIdentValidationConfig){
-                        .src = cell,
-                        .vars = vis_n > 0 ? vis : NULL,
-                        .num_vars = vis_n,
-                        .predef = ctx->predef,
-                        .err = verr,
-                        .errsz = (int)sizeof(verr),
-                    }))
-                return compile_set_err(err, err_size, "%s", verr);
-            {
-                ExprCtx cell_ctx = { cell, vis_n > 0 ? vis : NULL, vis_n, NULL, 0,
-                                     ctx->predef.vars, ctx->predef.count };
-                vals[k] = repl_eval_expr(&cell_ctx);
-            }
-            if (input_has_any_visible_vars(cell, vis_n > 0 ? vis : NULL, vis_n))
-                has_cell_vars = 1;
-        }
-
-        /* Reject a block whose exported C would not fit one physical line.
-         *
-         * The row itself is short - it is the *expansion* that is long.
-         * Export lowers `A[0] = {TAU, ...}` to `A[0] = …; A[1] = …;`, one
-         * store per cell, and each `TAU` becomes a parenthesised float
-         * cast several times its source width; sixteen of them reach ~440
-         * characters. Import reads physical lines into a MAX_LINE_LEN
-         * buffer and rejects anything longer outright ("Import failed:
-         * line too long"), so such a row exports to a file the importer
-         * will not take back.
-         *
-         * Checked here rather than at export because export has no way to
-         * refuse: the alternatives there are wrapping the run (each
-         * fragment ends in `;` at depth 0, so the importer's accumulator
-         * flushes them as separate rows and the fold produces N blocks
-         * instead of one) or exceeding the logical-statement budget, which
-         * is the same MAX_LINE_LEN. Rejecting at commit is the only point
-         * where the user can still do something about it - and what they
-         * do is the documented idiom anyway: split the run across rows,
-         * four cells at a time. */
-        {
-            char block_indent[REPL_INDENT_TEXT_MAX];
-            int exported;
-
-            compile_scope_cmd_indent(ctx, insert_idx,
-                                     block_indent, sizeof(block_indent));
-            /* Mirrors write_scratch_block_as_c89's output exactly: per cell
-             * `NAME[IDX] = EXPR;` joined by one space, then the trailing
-             * comment behind two. test_scratch_block_export_line_budget
-             * pins the two together so a change to either is caught. */
-            exported = (int)strlen(block_indent);
-            for (k = 0; k < cell_count; k++) {
-                char cell[MAX_LINE_LEN];
-                char c_cell[MAX_LINE_LEN];
-                int idx = base_idx + k;
-
-                repl_scratch_block_cell_text(&cells[k], cell, sizeof(cell));
-                repl_eval_expr_to_c(cell, c_cell, sizeof(c_cell));
-                exported += (k ? 1 : 0)                 /* joining space   */
-                          + (int)strlen(name)           /* A               */
-                          + 1                           /* [               */
-                          + (idx >= 10 ? 2 : 1)         /* index digits    */
-                          + 4                           /* ] = _           */
-                          + (int)strlen(c_cell)         /* the expression  */
-                          + 1;                          /* ;               */
-            }
-            if (comment[0])
-                exported += 2 + (int)strlen(comment);
-            if (exported >= MAX_LINE_LEN)
-                return compile_set_err(err, err_size,
-                    "block is too long to export - it expands to %d chars of C "
-                    "and the line limit is %d; split it across rows",
-                    exported, MAX_LINE_LEN - 1);
-        }
-
-        cmd.type = CMD_SCRATCH_BLOCK_ASSIGN;
-        cmd.valid = 1;
-        cmd.args[0] = (float)scratch_array_idx;
-        cmd.args[1] = (float)base_idx;
-        cmd.args[2] = (float)cell_count;
-        cmd.num_args = 3;
-        cmd.has_vars = has_cell_vars;
-        for (k = 0; k < cell_count; k++)
-            cmd.payload.scratch_block.v[k] = vals[k];
-
-        for (k = 0; k < cell_count; k++) {
-            out->scratch_ops[k].array_idx = scratch_array_idx;
-            out->scratch_ops[k].elem_idx = base_idx + k;
-            out->scratch_ops[k].value = vals[k];
-        }
-        out->scratch_op_count = cell_count;
-
-        snprintf(out->commit_message, sizeof(out->commit_message),
-                 "%s[%d..%d] = %d values", name, base_idx,
-                 base_idx + cell_count - 1, cell_count);
-
-        /* Canonicalize the separators before the shared text formatting
-         * below writes `rhs` out verbatim. Import rebuilds the list with
-         * ", " between cells, so a row committed as `{1,2}` would come back
-         * from a save/load as `{1, 2}` and break the text-exact round trip
-         * every scene corpus checks. Only the separators are touched - each
-         * cell expression keeps the text the user typed, exactly as the
-         * scalar `A[i] = expr;` form does. */
-        {
-            char norm[MAX_LINE_LEN];
-            int used = 1;
-            norm[0] = '{';
-            for (k = 0; k < cell_count; k++) {
-                char cell[MAX_LINE_LEN];
-                int wrote;
-                repl_scratch_block_cell_text(&cells[k], cell, sizeof(cell));
-                wrote = snprintf(norm + used, sizeof(norm) - (size_t)used,
-                                 "%s%s", k ? ", " : "", cell);
-                if (wrote < 0 || wrote >= (int)sizeof(norm) - used)
-                    return compile_set_err(err, err_size, "Command too long");
-                used += wrote;
-            }
-            if (used + 2 > (int)sizeof(norm))
-                return compile_set_err(err, err_size, "Command too long");
-            norm[used++] = '}';
-            norm[used] = '\0';
-            repl_copy_string_fits(rhs, sizeof(rhs), norm);
-        }
+        arm_rc = compile_var_assign_block_scratch(
+            name, index_expr, rhs, sizeof(rhs), comment, insert_idx,
+            ctx, vis, vis_n, &cmd, out, err, err_size);
     } else if (index_expr[0]) {
-        int scratch_array_idx = repl_eval_scratch_array_index(name);
-        if (scratch_array_idx < 0)
-            return compile_set_err(err, err_size, "unknown array '%s'", name);
-
-        if (!repl_eval_validate_expression_idents(
-                &(ReplExprIdentValidationConfig){
-                    .src = index_expr,
-                    .vars = vis_n > 0 ? vis : NULL,
-                    .num_vars = vis_n,
-                    .predef = ctx->predef,
-                    .err = verr,
-                    .errsz = (int)sizeof(verr),
-                }))
-            return compile_set_err(err, err_size, "%s", verr);
-        if (!repl_eval_validate_expression_idents(
-                &(ReplExprIdentValidationConfig){
-                    .src = rhs,
-                    .vars = vis_n > 0 ? vis : NULL,
-                    .num_vars = vis_n,
-                    .predef = ctx->predef,
-                    .err = verr,
-                    .errsz = (int)sizeof(verr),
-                }))
-            return compile_set_err(err, err_size, "%s", verr);
-
-        ExprCtx idx_ctx = { index_expr, vis_n > 0 ? vis : NULL, vis_n, NULL, 0,
-                            ctx->predef.vars, ctx->predef.count };
-        ExprCtx rhs_ctx = { rhs, vis_n > 0 ? vis : NULL, vis_n, NULL, 0,
-                            ctx->predef.vars, ctx->predef.count };
-        int elem_idx = (int)repl_eval_expr(&idx_ctx);
-        if (elem_idx < 0 || elem_idx >= REPL_SCRATCH_ARRAY_LEN)
-            return compile_set_err(err, err_size,
-                                   "scratch array index out of range: %d", elem_idx);
-
-        float val = repl_eval_expr(&rhs_ctx);
-        int has_index_vars = input_has_any_visible_vars(index_expr,
-                                                        vis_n > 0 ? vis : NULL, vis_n);
-        int has_rhs_vars = input_has_any_visible_vars(rhs,
-                                                      vis_n > 0 ? vis : NULL, vis_n);
-
-        cmd.type = CMD_SCRATCH_ASSIGN;
-        cmd.valid = 1;
-        cmd.args[0] = (float)scratch_array_idx;
-        cmd.args[1] = (float)elem_idx;
-        cmd.args[2] = val;
-        cmd.num_args = 3;
-        cmd.has_vars = has_index_vars || has_rhs_vars;
-
-        out->scratch_ops[0].array_idx = scratch_array_idx;
-        out->scratch_ops[0].elem_idx = elem_idx;
-        out->scratch_ops[0].value = val;
-        out->scratch_op_count = 1;
-
-        snprintf(out->commit_message, sizeof(out->commit_message),
-                 "%s[%d] = %g", name, elem_idx, (double)val);
+        arm_rc = compile_var_assign_indexed_scratch(
+            name, index_expr, rhs, ctx, vis, vis_n,
+            &cmd, out, err, err_size);
     } else {
-        /* Lexical target resolution. The innermost binding decides, and a
-         * matching PARAM/LOOP is never skipped in search of an outer
-         * LOCAL - a shadowed outer binding is simply not reachable from
-         * here, exactly as in C. Only when nothing scoped matches does
-         * the target fall through to a predef slot. */
-        int bind_slot = compile_bindings_find(&bind, name);
-        int var_idx;
-
-        if (bind_slot >= 0 && bind.kinds[bind_slot] == REPL_VISIBLE_VAR_PARAM)
-            return compile_set_err(err, err_size,
-                                   "cannot assign to function parameter '%s' - function parameters are constant",
-                                   name);
-        if (bind_slot >= 0 && bind.kinds[bind_slot] == REPL_VISIBLE_VAR_LOOP)
-            return compile_set_err(err, err_size,
-                                   "cannot assign to loop variable '%s' - loop variables are constant",
-                                   name);
-
-        if (bind_slot >= 0) {
-            var_idx = REPL_VAR_IDX_LOCAL;
-        } else {
-            var_idx = repl_eval_find_predef_var_idx_in(ctx->predef.vars,
-                                                       ctx->predef.count, name);
-            if (var_idx < 0)
-                return compile_set_err(err, err_size,
-                    "undeclared variable '%s' - use 'float %s;' first", name, name);
-        }
-
-        if (!repl_eval_validate_expression_idents(
-                &(ReplExprIdentValidationConfig){
-                    .src = rhs,
-                    .vars = vis_n > 0 ? vis : NULL,
-                    .num_vars = vis_n,
-                    .predef = ctx->predef,
-                    .err = verr,
-                    .errsz = (int)sizeof(verr),
-                }))
-            return compile_set_err(err, err_size, "%s", verr);
-
-        ExprCtx eval_ctx = { rhs, vis_n > 0 ? vis : NULL, vis_n, NULL, 0,
-                             ctx->predef.vars, ctx->predef.count };
-        float val = repl_eval_expr(&eval_ctx);
-        int has_rhs_vars = input_has_any_visible_vars(rhs,
-                                                      vis_n > 0 ? vis : NULL, vis_n);
-
-        cmd.type     = CMD_VAR_ASSIGN;
-        cmd.valid    = 1;
-        cmd.args[0]  = val;
-        cmd.num_args = 1;       /* args[0] holds the assigned value */
-        cmd.var_idx  = var_idx; /* predef slot the executor will write, or
-                                 * REPL_VAR_IDX_LOCAL for a scoped target */
-        cmd.has_vars = has_rhs_vars;
-
-        /* A local has no slot to set: its value exists only inside a call
-         * frame, so flatten writes it and the executor skips the row. */
-        if (var_idx >= 0 && out->predef_op_count < MAX_PREDEF_OPS_PER_COMMIT) {
-            out->predef_ops[out->predef_op_count].kind = REPL_PREDEF_OP_SET_VALUE;
-            repl_copy_string_fits(out->predef_ops[out->predef_op_count].name,
-                                  sizeof(out->predef_ops[out->predef_op_count].name), name);
-            out->predef_ops[out->predef_op_count].value = val;
-            out->predef_ops[out->predef_op_count].has_value = 1;
-            out->predef_op_count++;
-        }
-
-        snprintf(out->commit_message, sizeof(out->commit_message),
-                 "%s = %g", name, (double)val);
+        arm_rc = compile_var_assign_scalar(
+            name, rhs, ctx, &bind, vis, vis_n,
+            &cmd, out, err, err_size);
     }
+    if (arm_rc != REPL_COMPILE_OK)
+        return arm_rc;
 
     /* Format text using the scope indent at the insert position. */
     char indent[REPL_INDENT_TEXT_MAX];
