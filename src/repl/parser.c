@@ -1344,10 +1344,8 @@ static int parse_mult_matrixf(const char *args, GLCmd *cmd,
                 int wrote = snprintf(list + used, sizeof(list) - (size_t)used,
                                      "%s%s", k ? ", " : "",
                                      fmt_source_float(b, parsed[k]));
-                if (wrote < 0 || wrote >= (int)sizeof(list) - used) {
-                    used = (int)sizeof(list) - 1;
+                if (wrote < 0 || wrote >= (int)sizeof(list) - used)
                     break;
-                }
                 used += wrote;
             }
             snprintf(text_out, (size_t)text_sz,
