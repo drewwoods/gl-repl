@@ -14,6 +14,14 @@
  * instruction comment above the earlier labeled command line so
  * tutorials can teach "draw first, then insert setup before the batch".
  *
+ * Placement is independent of kind. A label-targeted COMMAND step is the
+ * "insert setup above the batch" case; a label-targeted NOTE (no command
+ * to type) instead parks the cursor on the labeled row, which is how a
+ * lesson sends the learner back to inspect a line it already wrote -
+ * cursor-scoped overlays follow the cursor. The park belongs to the step
+ * being entered, so any later append step moves the cursor back to the
+ * document tail.
+ *
  * Five step kinds exist (TutorialStepKind):
  *   COMMAND      the original "type the expected GL call" step.
  *                `comment` is OPTIONAL: NULL (or empty) commits the

@@ -47,6 +47,28 @@
       .cfg_value = 0, .cfg_value_name = NULL, .var_name = NULL, \
       .var_target = 0.0f }
 
+/* Label-placed NOTE: splice the narration above an EARLIER labeled row
+ * and park the cursor on that row, with nothing to type. This is how a
+ * lesson sends the learner back to inspect a line it already wrote -
+ * cursor-scoped overlays (normal arrows, edit guides, polygon
+ * highlight) follow the cursor, so parking it on a row is what makes
+ * them describe that row.
+ *
+ * Nothing in the runner is kind-specific about placement: the label
+ * resolves through the same tutorial_step_instruction_line() walk
+ * STEP_AT uses, and NOTE's own park (instruction_line + 1) then lands
+ * on the labeled row itself, one below the comment just spliced in.
+ * Ordering is what makes it work - the park belongs to the step being
+ * ENTERED, so an APPEND step after this one moves the cursor back to
+ * the document tail. Turn a cursor-scoped overlay on BEFORE the
+ * NOTE_AT, never after. */
+#define STEP_NOTE_AT(c, target) \
+    { .label = NULL, .comment = (c), .expected = NULL, \
+      .placement = TUTORIAL_STEP_LABEL, .target_label = (target), \
+      .kind = TUTORIAL_STEP_KIND_NOTE, .cfg_slug = NULL, \
+      .cfg_value = 0, .cfg_value_name = NULL, .var_name = NULL, \
+      .var_target = 0.0f }
+
 /* Showcase step: on entry apply cfg_slug=cfg_value so the user sees the
  * effect, show a "press Enter to continue" prompt, advance on ack key.
  * `expected` is NULL - there is no command to type. */
@@ -984,6 +1006,21 @@ static const char *const g_tutorial_two_sided_setup[] = {
  * default GL_FALSE the back face would be lit through the unflipped normal
  * and look perfectly correct, which is the closing note.
  *
+ * The middle of the lesson is a diagnosis in the order a learner would
+ * actually try it: a dark lit surface looks like a normal problem, so the
+ * normal is checked FIRST and cleared. That check is a STEP_NOTE_AT - the
+ * normal-arrow overlay goes on, then the cursor parks back on the
+ * glNormal3f row. Parking is what produces the evidence: the cursor guide
+ * prints that row's `n=(0.00, 0.00, 1.00)` at the vertex, and the overlay
+ * adds an arrow at every corner of the face. The overlay step has to come first: each
+ * step parks the cursor as it is entered, so a REQUIRE_KEY after the NOTE_AT
+ * would drag the cursor back to the document tail. Only once the normal is
+ * exonerated does the winding overlay name the real culprit.
+ *
+ * Both overlays are REQUIRE_KEY rather than SET so the learner presses the
+ * binding themselves, and the comments interpolate it from keymap.h instead
+ * of spelling out a key a rebind would falsify.
+ *
  * The winding overlay is the evidence step, but it replaces the program's own
  * shading with its green/red fill, so it is switched back off before the fix:
  * the payoff of the STEP_AT is the brightness change, and an overlay covering
@@ -995,7 +1032,7 @@ static const TutorialStep g_tutorial_two_sided_steps[] = {
     STEP_APPEND("quad_begin",
         "// Open a quad batch for one flat sheet, square to the camera.",
         "glBegin(GL_QUADS)"),
-    STEP_APPEND(NULL,
+    STEP_APPEND("normal_row",
         "// Aim the normal straight out of the screen, directly at the light.",
         "glNormal3f(0, 0, 1)"),
     STEP_APPEND(NULL,
@@ -1007,9 +1044,17 @@ static const TutorialStep g_tutorial_two_sided_steps[] = {
     STEP_CMD(NULL, "glEnd()"),
     STEP_NOTE(
         "// The normal points right at the lamp, yet the sheet is nearly black - only ambient reaches it."),
-    STEP_SET(NULL,
-        "// Turn on the winding overlay to ask GL which side of this quad it thinks you are looking at.",
-        "winding", 1),
+    STEP_REQUIRE_KEY(NULL,
+        "// First suspect is the normal. Press %s to draw it as an arrow.",
+        "normal_vectors", 1,
+        KM_KEY(GLR_NORMAL_VECTORS), KM_MODS(GLR_NORMAL_VECTORS), 0),
+    STEP_NOTE_AT(
+        "// Back at the normal: the guide reads n=(0, 0, 1), pointing at the lamp - so the normal is not the bug.",
+        "normal_row"),
+    STEP_REQUIRE_KEY(NULL,
+        "// Press %s to ask GL, via the winding overlay, which side of this quad it thinks you are looking at.",
+        "winding", 1,
+        KM_KEY(GLR_WINDING_VIEW), KM_MODS(GLR_WINDING_VIEW), 0),
     STEP_NOTE(
         "// Red: back-facing. glFrontFace is still GL_CCW, so clockwise vertices make this the BACK side."),
     STEP_NOTE(

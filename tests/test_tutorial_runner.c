@@ -2298,6 +2298,58 @@ static int phase_c_complete_current_step(void) {
            tutorial_state_view().step != before.step;
 }
 
+/* A label-placed NOTE has no command to type - the cursor park IS the step.
+ * Walk Two-Sided Lighting up to its STEP_NOTE_AT and assert the cursor lands
+ * on the glNormal3f row the label names, with the narration spliced directly
+ * above it. That park is the only reason the cursor-scoped normal-arrow
+ * overlay describes that row instead of wherever the previous step left the
+ * cursor, so an append-style park here would silently gut the lesson while
+ * every structural check still passed. */
+static void test_label_placed_note_parks_cursor_on_labeled_row(void) {
+    int idx = find_tutorial_idx("Two-Sided Lighting");
+    ASSERT_TRUE("Two-Sided Lighting present in catalog", idx >= 0);
+    if (idx < 0)
+        return;
+
+    reset_fixture();
+    tutorial_start(idx);
+
+    int guard = 0;
+    int limit = repl_tutorial_step_count(idx) + 4;
+    while (tutorial_active() && guard++ < limit) {
+        const TutorialStep *step =
+            repl_tutorial_step_get(idx, tutorial_state_view().step);
+        if (step && step->kind == TUTORIAL_STEP_KIND_NOTE &&
+            step->placement == TUTORIAL_STEP_LABEL)
+            break;
+        if (!phase_c_complete_current_step())
+            break;
+    }
+
+    const TutorialStep *at =
+        repl_tutorial_step_get(idx, tutorial_state_view().step);
+    ASSERT_TRUE("walk reached the label-placed NOTE",
+                at && at->kind == TUTORIAL_STEP_KIND_NOTE &&
+                at->placement == TUTORIAL_STEP_LABEL);
+    if (!at)
+        return;
+
+    /* The splice lands above the target's whole (instruction, command) pair,
+     * so the narration is two rows up, not one - and the park has to clear
+     * both rows to reach the command. */
+    SourceTextView doc = source_document_view();
+    int cursor = editor_state_edit_line();
+    const char *cursor_row = source_text_line(doc, cursor);
+    const char *pair_row   = source_text_line(doc, cursor - 1);
+    const char *note_row   = source_text_line(doc, cursor - 2);
+    ASSERT_TRUE("cursor parked on the labeled row",
+                cursor_row && strstr(cursor_row, "glNormal3f(0, 0, 1)") != NULL);
+    ASSERT_TRUE("labeled row keeps its own instruction comment directly above",
+                pair_row && strstr(pair_row, "Aim the normal") != NULL);
+    ASSERT_TRUE("narration spliced above the pair",
+                note_row && strstr(note_row, "not the bug") != NULL);
+}
+
 static void test_phase_c_catalog_full_walk(void) {
     static const char *const names[] = {
         "Points & Lines",
@@ -4945,6 +4997,7 @@ int main(void) {
     test_catalog_tag_metadata();
     test_catalog_subheading_metadata();
     test_catalog_validation_passes_for_all_tutorials();
+    test_label_placed_note_parks_cursor_on_labeled_row();
     test_phase_c_catalog_full_walk();
     test_block_open_commit_locks_header_and_parks_in_block();
     test_block_body_commit_shifts_locked_close();

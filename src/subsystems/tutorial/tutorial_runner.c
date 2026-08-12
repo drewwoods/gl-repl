@@ -409,11 +409,20 @@ static void tutorial_set_status_declare_var(const char *name) {
  * line into *out_line. Returns 0 (and sets a status message) on
  * internal failure. tutorial_start validates the catalog up front
  * so this should never fail at runtime unless something has gone
- * catastrophically wrong with the tracked-line bookkeeping. */
+ * catastrophically wrong with the tracked-line bookkeeping.
+ *
+ * `out_target_step` (optional) receives the earlier step the label
+ * resolved to, or -1 for append placement and for a setup `@anchor`
+ * target. A caller that needs the labeled COMMAND's row rather than the
+ * splice row has to know whether that step emitted an instruction
+ * comment of its own, since the splice lands above the whole pair. */
 static int tutorial_step_instruction_line(int tutorial_idx, int step,
-                                          int *out_line) {
+                                          int *out_line,
+                                          int *out_target_step) {
     if (!out_line)
         return 0;
+    if (out_target_step)
+        *out_target_step = -1;
 
     TutorialStepPlacementKind placement =
         repl_tutorial_step_placement(tutorial_idx, step);
@@ -501,6 +510,8 @@ static int tutorial_step_instruction_line(int tutorial_idx, int step,
         return 0;
     }
     *out_line = line;
+    if (out_target_step)
+        *out_target_step = target_step;
     return 1;
 }
 
@@ -1115,14 +1126,15 @@ static TutorialStepResult tutorial_enter_step_command(int idx, int step, int com
     return TUTORIAL_STEP_PAUSED;
 }
 
-static TutorialStepResult tutorial_enter_step_note(int instruction_line, TutorialRuntimeState *state) {
+static TutorialStepResult tutorial_enter_step_note(int park_line, TutorialRuntimeState *state) {
     /* Comment-only showcase: the instruction comment was already
      * emitted; wait for an ack key (Enter/Tab/Space). Same frozen-
      * document, park-past-the-comment flow as SET, minus the cfg
-     * write. */
+     * write. The caller picks the park row - one past the comment for
+     * an append note, the labeled command row for a label-placed one. */
     state->expected_commit_line = -1;
-    repl_dispatch_host_cursor_park(instruction_line + 1,
-                                   (instruction_line + 1) <
+    repl_dispatch_host_cursor_park(park_line,
+                                   park_line <
                                    repl_state_document_count());
     tutorial_set_status_ack_set();
     repl_dispatch_completion_update();
@@ -1296,7 +1308,9 @@ static TutorialStepResult tutorial_enter_step(int step) {
     int have_comment = (comment != NULL && comment[0] != '\0');
 
     int instruction_line = 0;
-    if (!tutorial_step_instruction_line(idx, step, &instruction_line)) {
+    int label_target_step = -1;
+    if (!tutorial_step_instruction_line(idx, step, &instruction_line,
+                                        &label_target_step)) {
         tutorial_teardown();
         return TUTORIAL_STEP_TERMINAL;
     }
@@ -1336,8 +1350,24 @@ static TutorialStepResult tutorial_enter_step(int step) {
                                            instruction_line +
                                            (have_comment ? 1 : 0),
                                            state);
-    case TUTORIAL_STEP_KIND_NOTE:
-        return tutorial_enter_step_note(instruction_line, state);
+    case TUTORIAL_STEP_KIND_NOTE: {
+        /* An append note parks one row past its own comment. A LABEL-placed
+         * note has no command to type - the park IS the step, sending the
+         * learner back to the row the label names so cursor-scoped overlays
+         * describe it. The splice lands above the target's whole
+         * (instruction, command) pair, so the labeled command sits one row
+         * further down whenever that step emitted a comment of its own. An
+         * `@anchor` target (label_target_step < 0) resolves to the anchor
+         * comment itself and needs no such adjustment. */
+        int park = instruction_line + 1;
+        if (label_target_step >= 0) {
+            const char *target_comment =
+                repl_tutorial_step_comment(idx, label_target_step);
+            if (target_comment && target_comment[0])
+                park++;
+        }
+        return tutorial_enter_step_note(park, state);
+    }
     case TUTORIAL_STEP_KIND_SET:
         return tutorial_enter_step_set(idx, step, instruction_line, state);
     case TUTORIAL_STEP_KIND_SET_QUIET:
