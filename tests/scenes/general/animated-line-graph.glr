@@ -1,0 +1,291 @@
+// @cfg view_mode = RENDER3D_VIEW_2D
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
+// @cfg vertex_outlines = 0
+// @cfg vertex_points = 0
+// @cfg polygon_highlight = 0
+// @cfg light_indicators = 0
+// @cfg grid = GRID_THEME_OFF
+// @cfg axes = AXES_THEME_OFF
+// @cfg transform_guides = 0
+// @cfg line_smooth = 1
+// Live telemetry chart: three harmonic series write on, hold, and fade.
+// A moving clip plane is the write-on; halo ribbons and an amber playhead
+// do the glow. n / amp / speed are @tune knobs.
+static float n = 72;     // @tune
+static float amp = 1;    // @tune
+static float speed = 1;  // @tune
+static float xL = -3.3;
+static float xR = 3.3;
+static float y, fade;
+
+// kind 0 flow / 1 trend / 2 pulse. y is the sampled value.
+wave(kind, uu, lag) {
+  float tt, w;
+  tt = speed * t - lag;
+  w = 0;
+  if(kind < 0.5) {
+    w = 0.82 * sin(uu * TAU * 1.15 + tt * 0.55) + 0.26 * sin(uu * TAU * 2.35 - tt * 0.72) + 0.10 * sin(uu * TAU * 3.80 + tt * 0.28);
+  }
+  if(kind > 0.5) {
+    if(kind < 1.5) {
+      w = 0.58 * sin(uu * TAU * 0.85 - tt * 0.38) + 0.22 * cos(uu * TAU * 1.70 + tt * 0.52) + 0.08;
+    }
+    if(kind > 1.5) {
+      w = 0.36 * sin(uu * TAU * 2.05 + tt * 0.95) + 0.14 * sin(uu * TAU * 3.40 - tt * 0.48) - 0.10;
+    }
+  }
+  y = amp * w;
+}
+
+fill(kind, cr, cg, cb) {
+  float uu;
+  glBegin(GL_QUAD_STRIP);
+    for(i, 0, n) {
+      uu = i / (n - 1);
+      wave(kind, uu, 0);
+      glColor4f(cr, cg, cb, 0.03 * fade);
+      glVertex3f(lerp(xL, xR, uu), 0, 0);
+      glColor4f(cr, cg, cb, 0.20 * fade * (0.25 + 0.75 * abs(y)));
+      glVertex3f(lerp(xL, xR, uu), y, 0);
+    }
+  glEnd();
+}
+
+halo(kind, cr, cg, cb, aa) {
+  float uu, half;
+  half = 0.055;
+  glBegin(GL_QUAD_STRIP);
+    for(i, 0, n) {
+      uu = i / (n - 1);
+      wave(kind, uu, 0);
+      glColor4f(cr, cg, cb, aa * fade * (0.35 + 0.65 * uu));
+      glVertex3f(lerp(xL, xR, uu), y - half, 0);
+      glVertex3f(lerp(xL, xR, uu), y + half, 0);
+    }
+  glEnd();
+}
+
+stroke(kind, cr, cg, cb, wid, aa) {
+  float uu, boost, sw;
+  sw = fmod(t * 0.32, 1);
+  glLineWidth(wid);
+  glBegin(GL_LINE_STRIP);
+    for(i, 0, n) {
+      uu = i / (n - 1);
+      wave(kind, uu, 0);
+      boost = 1 - smoothstep(0, 0.07, abs(uu - sw));
+      glColor4f(lerp(cr, 1.00, 0.45 * boost), lerp(cg, 0.85, 0.45 * boost), lerp(cb, 0.15, 0.45 * boost), aa * fade * (0.45 + 0.55 * uu));
+      glVertex3f(lerp(xL, xR, uu), y, 0);
+    }
+  glEnd();
+}
+
+ghost(kind, cr, cg, cb, aa, lag) {
+  float uu;
+  glLineWidth(1.5);
+  glBegin(GL_LINE_STRIP);
+    for(i, 0, n) {
+      uu = i / (n - 1);
+      wave(kind, uu, lag);
+      glColor4f(cr, cg, cb, aa * fade * (0.20 + 0.80 * uu));
+      glVertex3f(lerp(xL, xR, uu), y, 0);
+    }
+  glEnd();
+}
+
+beads(kind, cr, cg, cb, sz) {
+  float uu;
+  glPointSize(sz);
+  glBegin(GL_POINTS);
+    for(i, 0, n, 6) {
+      uu = i / (n - 1);
+      wave(kind, uu, 0);
+      glColor4f(cr, cg, cb, fade * 0.90);
+      glVertex3f(lerp(xL, xR, uu), y, 0);
+    }
+  glEnd();
+}
+
+scene() {
+  float cycle, rev0, rev1, rev2;
+  float clipX, headX, headY, pulse;
+  float xx, age;
+  cycle = fmod(t, 9);
+  fade = 1 - smoothstep(7.7, 9, cycle);
+  rev0 = smoothstep(0.00, 2.40, cycle);
+  rev1 = smoothstep(0.22, 2.70, cycle);
+  rev2 = smoothstep(0.44, 3.00, cycle);
+
+  // Chart well.
+  glColor4f(0.92, 0.95, 0.98, 0.035 * fade);
+  glBegin(GL_QUADS);
+    glVertex3f(xL - 0.22, -1.78, 0);
+    glVertex3f(xR + 0.22, -1.78, 0);
+    glVertex3f(xR + 0.22, 1.82, 0);
+    glVertex3f(xL - 0.22, 1.82, 0);
+  glEnd();
+
+  // Ruled grid, then a brighter zero baseline.
+  glLineWidth(1);
+  glColor4f(0.92, 0.95, 0.98, 0.10 * fade);
+  glBegin(GL_LINES);
+    for(g, -2, 3) {
+      glVertex3f(xL, g * 0.55, 0);
+      glVertex3f(xR, g * 0.55, 0);
+    }
+    for(g, 0, 7) {
+      xx = lerp(xL, xR, g / 6);
+      glVertex3f(xx, -1.55, 0);
+      glVertex3f(xx, 1.55, 0);
+    }
+  glEnd();
+  glColor4f(0.92, 0.95, 0.98, 0.28 * fade);
+  glBegin(GL_LINES);
+    glVertex3f(xL, 0, 0);
+    glVertex3f(xR, 0, 0);
+  glEnd();
+
+  // Write-on: keep x <= clipX. Each series gets its own reveal.
+  glEnable(GL_CLIP_PLANE0);
+  clipX = lerp(xL, xR, rev0);
+  glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){-1, 0, 0, clipX});
+  fill(0, 0.10, 0.95, 0.85);
+  ghost(0, 0.10, 0.95, 0.85, 0.22, 0.55);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  halo(0, 0.10, 0.95, 0.85, 0.20);
+  clipX = lerp(xL, xR, rev1);
+  glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){-1, 0, 0, clipX});
+  halo(1, 0.15, 0.55, 1.00, 0.14);
+  clipX = lerp(xL, xR, rev2);
+  glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){-1, 0, 0, clipX});
+  halo(2, 1.00, 0.35, 0.20, 0.12);
+
+  // Core strokes: azure and coral first so teal sits on top.
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  clipX = lerp(xL, xR, rev1);
+  glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){-1, 0, 0, clipX});
+  stroke(1, 0.15, 0.55, 1.00, 1.8, 0.80);
+  clipX = lerp(xL, xR, rev2);
+  glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){-1, 0, 0, clipX});
+  stroke(2, 1.00, 0.35, 0.20, 1.8, 0.78);
+  clipX = lerp(xL, xR, rev0);
+  glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){-1, 0, 0, clipX});
+  stroke(0, 0.10, 0.95, 0.85, 2.3, 0.95);
+  beads(0, 0.10, 0.95, 0.85, 4.2);
+  glDisable(GL_CLIP_PLANE0);
+
+  // Playhead: scan column, stippled cursor, value callout.
+  wave(0, rev0, 0);
+  headX = lerp(xL, xR, rev0);
+  headY = y;
+  pulse = 0.55 + 0.45 * sin(t * 6);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glColor4f(1.00, 0.85, 0.15, 0.12 * fade);
+  glBegin(GL_QUADS);
+    glVertex3f(headX - 0.08, -1.55, 0);
+    glVertex3f(headX + 0.08, -1.55, 0);
+    glVertex3f(headX + 0.08, 1.55, 0);
+    glVertex3f(headX - 0.08, 1.55, 0);
+  glEnd();
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glEnable(GL_LINE_STIPPLE);
+  glLineStipple(2, 3855);
+  glLineWidth(1.3);
+  glColor4f(1.00, 0.85, 0.15, 0.55 * fade);
+  glBegin(GL_LINES);
+    glVertex3f(headX, -1.55, 0);
+    glVertex3f(headX, 1.55, 0);
+    glVertex3f(headX - 0.22, headY, 0);
+    glVertex3f(headX + 0.22, headY, 0);
+  glEnd();
+  glDisable(GL_LINE_STIPPLE);
+  glPointSize(9 + 5 * pulse);
+  glColor4f(1.00, 0.85, 0.15, fade);
+  glBegin(GL_POINTS);
+    glVertex3f(headX, headY, 0);
+  glEnd();
+  glPointSize(3.4);
+  glColor4f(0.92, 0.95, 0.98, fade);
+  glBegin(GL_POINTS);
+    glVertex3f(headX, headY, 0);
+  glEnd();
+
+  // Sparks lift off the head and fade.
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glPointSize(3.2);
+  glBegin(GL_POINTS);
+    for(k, 0, 7) {
+      age = fmod(t * 0.55 + k * 0.14, 1);
+      glColor4f(1.00, 0.85, 0.15, (1 - age) * 0.50 * fade);
+      glVertex3f(headX + 0.05 * rand2(k, 0), headY + age * 0.58, 0);
+    }
+  glEnd();
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+  // Hairline well border.
+  glLineWidth(1.2);
+  glColor4f(0.92, 0.95, 0.98, 0.22 * fade);
+  glBegin(GL_LINE_LOOP);
+    glVertex3f(xL - 0.22, -1.78, 0);
+    glVertex3f(xR + 0.22, -1.78, 0);
+    glVertex3f(xR + 0.22, 1.82, 0);
+    glVertex3f(xL - 0.22, 1.82, 0);
+  glEnd();
+
+  // Title, ticks, live value, legend.
+  glColor4f(0.92, 0.95, 0.98, 0.72 * fade);
+  glRasterPos3f(xL, 1.66, 0);
+  label("signal");
+  glColor4f(0.92, 0.95, 0.98, 0.40 * fade);
+  glRasterPos3f(xL - 0.36, 1.05, 0);
+  label("1");
+  glRasterPos3f(xL - 0.36, -0.06, 0);
+  label("0");
+  glRasterPos3f(xL - 0.50, -1.16, 0);
+  label("-1");
+  glColor4f(1.00, 0.85, 0.15, 0.90 * fade);
+  glRasterPos3f(headX + lerp(0.14, -1.05, smoothstep(0.58, 0.86, rev0)), headY + 0.16, 0);
+  label("%f", headY);
+
+  glLineWidth(2);
+  glColor3f(0.10, 0.95, 0.85);
+  glBegin(GL_LINES);
+    glVertex3f(0.70, 1.70, 0);
+    glVertex3f(1.02, 1.70, 0);
+  glEnd();
+  glColor4f(0.10, 0.95, 0.85, 0.85 * fade);
+  glRasterPos3f(1.08, 1.66, 0);
+  label("flow");
+  glColor3f(0.15, 0.55, 1.00);
+  glBegin(GL_LINES);
+    glVertex3f(1.62, 1.70, 0);
+    glVertex3f(1.94, 1.70, 0);
+  glEnd();
+  glColor4f(0.15, 0.55, 1.00, 0.85 * fade);
+  glRasterPos3f(2.00, 1.66, 0);
+  label("trend");
+  glColor3f(1.00, 0.35, 0.20);
+  glBegin(GL_LINES);
+    glVertex3f(2.64, 1.70, 0);
+    glVertex3f(2.96, 1.70, 0);
+  glEnd();
+  glColor4f(1.00, 0.35, 0.20, 0.85 * fade);
+  glRasterPos3f(3.02, 1.66, 0);
+  label("pulse");
+}
+
+glTranslatef(0.0f, 0.0f, -6.10f);   // @camera dist
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glDisable(GL_LIGHTING);
+glDisable(GL_DEPTH_TEST);
+glEnable(GL_BLEND);
+glEnable(GL_LINE_SMOOTH);
+glEnable(GL_POINT_SMOOTH);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+glShadeModel(GL_SMOOTH);
+scene();

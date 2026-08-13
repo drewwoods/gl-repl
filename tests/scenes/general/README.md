@@ -36,6 +36,7 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 | `kaleidoscope-mandala.glr` | 3D, Polygons, Animation | An 8-fold symmetric rotating mandala with pulsing triangle fans, outer petals, and vibrant color cycles. |
 | `basic-shapes.glr` | General, Basics, 3D | Rotating neon teal cube and amber sphere. |
 | `helix-spiral.glr` | General, Math, Lines | 3D helix spiral via `for` loop with a teal-to-magenta color sweep. |
+| `animated-line-graph.glr` | General, Lines, 2D, Animation | Live three-series line chart: cascaded write-on, halo glow, lagged ghost, amber playhead, and a 9 s fade/redraw cycle. |
 | `translucent-blend.glr` | General, Blending, 3D | Two overlapping translucent quads using `GL_BLEND`. |
 | `line-stipple-patterns.glr` | General, Stipple, Lines | Four stipple masks with different factors via `glLineStipple`. |
 | `fog-depth-range.glr` | General, Fog, 3D | Linear fog (`GL_LINEAR`) with a retreating row of spheres. |
@@ -98,6 +99,7 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 ./gl-repl tests/scenes/general/kaleidoscope-mandala.glr
 ./gl-repl tests/scenes/general/basic-shapes.glr
 ./gl-repl tests/scenes/general/helix-spiral.glr
+./gl-repl tests/scenes/general/animated-line-graph.glr
 ./gl-repl tests/scenes/general/translucent-blend.glr
 ./gl-repl tests/scenes/general/line-stipple-patterns.glr
 ./gl-repl tests/scenes/general/fog-depth-range.glr
