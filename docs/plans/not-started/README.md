@@ -7,6 +7,7 @@ begun. They move to `plans/active/` once implementation starts.
 
 | Plan | Topic |
 |---|---|
+| `app-clarity-review.md` | Read-only clarity/consistency/maintainability review of `src/app`: ten ranked findings (a `GlrConfigKey` spread over five sites behind two non-exhaustive switches, five functions larger than the two `src/repl` god-functions the size ratchet already guards, the scene-subset roster spelled four times with a false "a test pins this" comment, three shapes of the bridge-installer idiom, …), plus the patterns other `src/app` code should copy |
 | `audio-playlist-and-organizer.md` | Audio menu: playlist browser, play/remove, tag organization - browser half **already shipped** by `done/audio-menu.md`; only right-click removal and `tags.txt` tag groups remain |
 | `clang-ast-mutation-analysis.md` | Clang AST pass for mutation analysis |
 | `float-returning-repl-functions.md` | Functions that return float values |
