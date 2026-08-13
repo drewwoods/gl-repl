@@ -8,8 +8,51 @@ A read-only consistency pass over the 40 shipped `.glr` scenes in
 tone, code style, scene structure, and naming accuracy.
 
 No files were changed. Every claim below was checked mechanically (catalog
-slug comparison, golden-vs-source diff, per-convention greps) and cites the
+slug comparison, golden-vs-source diff, per-convention greps, independent audit
+across all 40 built-in scenes and 88 test scenes in `tests/scenes/`) and cites the
 files it came from.
+
+## Independent Assessment & Peer Review
+
+An independent re-assessment was conducted across the entire example collection
+and test corpora to evaluate the initial review findings:
+
+1. **Underscore vs Hyphen filenames (Finding 1):** Verified. Across all 128 `.glr`
+   scenes in the repository (40 in `examples/scenes/`, 60 in `tests/scenes/general/`,
+   28 in `tests/scenes/stress/`), exactly three files use underscores:
+   `lantern_festival.glr`, `pulse_bars_easing.glr`, and
+   `stencil_mask_window_glstencilop.glr`. All 88 test scenes and 37 other example
+   scenes use kebab-case. Renaming these three brings the entire repository to 100%
+   kebab-case uniformity.
+2. **Whitespace / Keyword syntax (Finding 2):** Verified. REPL's parser/serializer
+   strictly normalizes `for(` and `if(` without spaces and strips `f` suffixes from
+   float literals in geometry code. Aligning source to disk eliminates confusing
+   visual diffs between source files and the interactive REPL code panel.
+3. **GL state & effects naming (Finding 3):** Verified. In `examples/catalog.ini`,
+   all 5 scenes in `group = GL state & effects` display parenthesized GL entry
+   points (`(glClipPlane)`, `(glFog)`, `(glStencilOp)`, `(glMultMatrixf)`,
+   `(glDepthMask translucency)`), but only 3 filenames reflect the command.
+   Renaming `clip-planes-carve-solids.glr` → `clip-planes-carve-solids-glclipplane.glr`
+   and `fog-ring-tunnel.glr` → `fog-ring-tunnel-glfog.glr` completes the 1:1
+   `filename == slug(catalog name)` mapping and maximizes `grep` discoverability.
+4. **Stale Section ID (Finding 4):** Verified. `[snowfall-demo-550-particles]` is the
+   sole section ID embedding a mutable particle count and a redundant "demo" tag.
+5. **Casing Inconsistencies (Findings 5 & 6):** Verified. `aurora-observatory` mixes
+   `dishAz` and `cycle_length` within lines 11–13. `orrery` is the only scene using
+   `SCREAMING_CASE` for `@tune` knobs (`ASTEROIDS`, `EARTH_R`, `EARTH_RATE`,
+   `ORB_BASE`, `ORB_SCALE`), which directly leaks uppercase identifiers into the
+   user-facing REPL variable panel.
+6. **Compound Array Literals (Finding 7):** Verified. `glPointParameterfv` in
+   `glow-sprites` and `lantern_festival` are the only 2 calls passing flat floats
+   rather than `(GLfloat[]){...}`, causing silent REPL load rewriting.
+7. **Clear Color Invariant (Finding 11):** Verified. `test_example_clear_color_precedes_clear`
+   in `tests/test_repl_core_examples.c` guards with `if (last_clear_color >= 0)`,
+   allowing `teapot-carousel` and `whale` to bypass the check entirely. Adding an
+   explicit clear color or documented canvas ownership comment resolves this gap.
+
+**Verdict on Peer Review:** All 14 findings are confirmed accurate, high-signal,
+and conservative. No unjustified homogenizing changes are proposed, preserving the
+personality and pedagogical voice of individual scenes.
 
 ## Verdict first
 
@@ -42,6 +85,7 @@ What follows is the residue: places where the set has two conventions for one
 thing, or where a name points at the wrong feature.
 
 ---
+
 
 ## Findings
 
