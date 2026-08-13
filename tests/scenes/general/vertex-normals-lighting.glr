@@ -4,7 +4,7 @@
 
 glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
 glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(t * 30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
 glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
 glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
@@ -20,6 +20,9 @@ glShadeModel(GL_FLAT);
 glEnable(GL_COLOR_MATERIAL);
 glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 glColor3f(1.00f, 0.85f, 0.15f); // AMBER
+
+// Rotate the pyramid
+glRotatef(30 * t, 0.0f, 1.0f, 0.0f);
 
 // Draw a custom 3D pyramid, explicitly providing surface normals.
 // For FLAT shading, only the provoking vertex's normal matters.

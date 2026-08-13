@@ -1,0 +1,82 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+
+static float grid_res = 16;
+static float time_mode, n_mode, m_mode;
+static float x_pos, y1_pos, y2_pos, w1_val, w2_val, w_mag;
+static float r_col, g_col, b_col;
+
+glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
+glRotatef(35.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, -0.2000f, 0.0000f);   // @camera pan
+
+glClearColor(0.03, 0.03, 0.06, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+// Slow rotation
+glRotatef(15.0 * t, 0.0, 1.0, 0.0);
+
+// Dynamic modal harmonic parameters evolving over time
+time_mode = t * 0.4;
+n_mode = 2.0 + 1.0 * sin(time_mode);
+m_mode = 4.0 + 1.0 * cos(time_mode * 0.7);
+
+// --- 1. Resonating Plate Surface Mesh ---
+for(j, 0, grid_res) {
+  y1_pos = -2.8 + (j / grid_res) * 5.6;
+  y2_pos = -2.8 + ((j + 1.0) / grid_res) * 5.6;
+
+  glBegin(GL_QUAD_STRIP);
+    for(i, 0, grid_res + 1) {
+      x_pos = -2.8 + (i / grid_res) * 5.6;
+
+      w1_val = 0.45 * (cos(n_mode * x_pos) * cos(m_mode * y1_pos) - cos(m_mode * x_pos) * cos(n_mode * y1_pos));
+      w_mag = abs(w1_val);
+
+      r_col = 0.15 + 0.85 * w_mag;
+      g_col = 0.20 + 0.50 * (1.0 - w_mag);
+      b_col = 0.60 + 0.35 * w_mag;
+      glColor3f(r_col * 0.7, g_col * 0.7, b_col * 0.7);
+      glVertex3f(x_pos, w1_val, y1_pos);
+
+      w2_val = 0.45 * (cos(n_mode * x_pos) * cos(m_mode * y2_pos) - cos(m_mode * x_pos) * cos(n_mode * y2_pos));
+      w_mag = abs(w2_val);
+
+      r_col = 0.15 + 0.85 * w_mag;
+      g_col = 0.20 + 0.50 * (1.0 - w_mag);
+      b_col = 0.60 + 0.35 * w_mag;
+      glColor3f(r_col * 0.7, g_col * 0.7, b_col * 0.7);
+      glVertex3f(x_pos, w2_val, y2_pos);
+    }
+  glEnd();
+}
+
+// --- 2. Chladni Sand Particles Settling on Nodal Lines ---
+glPointSize(3.5);
+glColor3f(1.0, 0.9, 0.3);
+glBegin(GL_POINTS);
+  for(i, 0, 24) {
+    for(j, 0, 24) {
+      x_pos = -2.8 + (i / 23.0) * 5.6;
+      y1_pos = -2.8 + (j / 23.0) * 5.6;
+      w1_val = 0.45 * (cos(n_mode * x_pos) * cos(m_mode * y1_pos) - cos(m_mode * x_pos) * cos(n_mode * y1_pos));
+
+      if(abs(w1_val) < 0.08) {
+        glVertex3f(x_pos, w1_val + 0.02, y1_pos);
+      }
+    }
+  }
+glEnd();
+
+// --- 3. Plate Perimeter Frame ---
+glLineWidth(2.5);
+glColor3f(0.6, 0.65, 0.75);
+glBegin(GL_LINE_LOOP);
+  glVertex3f(-2.85, 0.0, -2.85);
+  glVertex3f( 2.85, 0.0, -2.85);
+  glVertex3f( 2.85, 0.0,  2.85);
+  glVertex3f(-2.85, 0.0,  2.85);
+glEnd();

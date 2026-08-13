@@ -1,0 +1,101 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg light_theme = LIGHT_THEME_STUDIO
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+
+static float grid_n = 12;
+static float u_val, v1_val, v2_val, x_val;
+static float z1_val, z2_val;
+static float nx1, ny1, nlen1, nx2, ny2, nlen2;
+static float u_line, x_start, y_start, z_start, x_end, y_end, z_end;
+
+glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
+glRotatef(30.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+
+glClearColor(0.03, 0.03, 0.07, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT1);
+
+// Smooth 3D rotation
+glRotatef(20.0 * t, 0.0, 1.0, 0.0);
+
+// --- 1. Shaded Doubly-Ruled Saddle Surface ---
+glEnable(GL_POLYGON_OFFSET_FILL);
+glPolygonOffset(1.0, 1.0);
+
+glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.10, 0.15, 0.20, 1.0});
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.25, 0.55, 0.85, 1.0});
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.80, 0.90, 1.00, 1.0});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 64.0);
+
+for(j, 0, grid_n) {
+  v1_val = -2.4 + (j / grid_n) * 4.8;
+  v2_val = -2.4 + ((j + 1.0) / grid_n) * 4.8;
+
+  glBegin(GL_QUAD_STRIP);
+    for(i, 0, grid_n + 1) {
+      u_val = -2.4 + (i / grid_n) * 4.8;
+      x_val = u_val;
+
+      z1_val = 0.5 * (x_val * x_val - v1_val * v1_val);
+      nx1 = -x_val;
+      ny1 = v1_val;
+      nlen1 = sqrt(nx1 * nx1 + ny1 * ny1 + 1.0);
+      glNormal3f(nx1 / nlen1, ny1 / nlen1, 1.0 / nlen1);
+      glVertex3f(x_val, z1_val, v1_val);
+
+      z2_val = 0.5 * (x_val * x_val - v2_val * v2_val);
+      nx2 = -x_val;
+      ny2 = v2_val;
+      nlen2 = sqrt(nx2 * nx2 + ny2 * ny2 + 1.0);
+      glNormal3f(nx2 / nlen2, ny2 / nlen2, 1.0 / nlen2);
+      glVertex3f(x_val, z2_val, v2_val);
+    }
+  glEnd();
+}
+
+glDisable(GL_POLYGON_OFFSET_FILL);
+glDisable(GL_LIGHTING);
+
+// --- 2. Family A Ruling Lines (Golden Straight Lines Across Saddle) ---
+glLineWidth(2.2);
+glColor3f(1.0, 0.8, 0.2);
+glBegin(GL_LINES);
+  for(k, 0, 11) {
+    u_line = -2.4 + (k / 10.0) * 4.8;
+    x_start = -2.4;
+    y_start = u_line;
+    z_start = 0.5 * (x_start * x_start - y_start * y_start);
+
+    x_end = 2.4;
+    y_end = u_line;
+    z_end = 0.5 * (x_end * x_end - y_end * y_end);
+
+    glVertex3f(x_start, z_start, y_start);
+    glVertex3f(x_end, z_end, y_end);
+  }
+glEnd();
+
+// --- 3. Family B Ruling Lines (Cyan Straight Lines Across Saddle) ---
+glLineWidth(2.2);
+glColor3f(0.2, 0.9, 1.0);
+glBegin(GL_LINES);
+  for(k, 0, 11) {
+    u_line = -2.4 + (k / 10.0) * 4.8;
+    x_start = u_line;
+    y_start = -2.4;
+    z_start = 0.5 * (x_start * x_start - y_start * y_start);
+
+    x_end = u_line;
+    y_end = 2.4;
+    z_end = 0.5 * (x_end * x_end - y_end * y_end);
+
+    glVertex3f(x_start, z_start, y_start);
+    glVertex3f(x_end, z_end, y_end);
+  }
+glEnd();

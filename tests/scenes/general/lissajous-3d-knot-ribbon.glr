@@ -1,0 +1,90 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+
+static float steps = 100;
+static float ribbon_w = 0.22;
+static float u, frac, px, py, pz;
+static float dx, dy, dz, nx, ny, nz, nlen;
+static float phase, r_col, g_col, b_col;
+
+glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
+glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+
+glClearColor(0.03, 0.02, 0.06, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+// Gentle continuous 3D rotation
+glRotatef(18.0 * t, 0.0, 1.0, 0.0);
+glRotatef(12.0 * sin(t * 0.4), 1.0, 0.0, 0.0);
+
+// Draw continuous ribbon quad strip
+glBegin(GL_QUAD_STRIP);
+  for(i, 0, steps + 1) {
+    frac = i / steps;
+    u = frac * TAU;
+
+    // 3:4:5 3D Lissajous knot equations
+    px = 2.4 * sin(3.0 * u + t * 0.35);
+    py = 1.8 * cos(4.0 * u + t * 0.25);
+    pz = 2.0 * sin(5.0 * u + t * 0.30);
+
+    // Tangent derivative vector
+    dx = 7.2 * cos(3.0 * u + t * 0.35);
+    dy = -7.2 * sin(4.0 * u + t * 0.25);
+    dz = 10.0 * cos(5.0 * u + t * 0.30);
+
+    // Normal ribbon width offset vector
+    nx = -dy;
+    ny = dx;
+    nz = 0.5 * dz;
+    nlen = sqrt(nx * nx + ny * ny + nz * nz + 0.001);
+    nx = (nx / nlen) * ribbon_w;
+    ny = (ny / nlen) * ribbon_w;
+    nz = (nz / nlen) * ribbon_w;
+
+    // Chromatic color spectrum along ribbon
+    phase = frac * TAU * 2.0 + t * 0.6;
+    r_col = 0.5 + 0.5 * sin(phase);
+    g_col = 0.5 + 0.5 * sin(phase + TAU / 3.0);
+    b_col = 0.5 + 0.5 * sin(phase + 2.0 * TAU / 3.0);
+
+    glColor3f(r_col * 0.65, g_col * 0.65, b_col * 0.65);
+    glVertex3f(px - nx, py - ny, pz - nz);
+
+    glColor3f(r_col, g_col, b_col);
+    glVertex3f(px + nx, py + ny, pz + nz);
+  }
+glEnd();
+
+// Bright edge rails for crisp visual contour
+glLineWidth(1.8);
+glBegin(GL_LINE_STRIP);
+  for(i, 0, steps + 1) {
+    frac = i / steps;
+    u = frac * TAU;
+
+    px = 2.4 * sin(3.0 * u + t * 0.35);
+    py = 1.8 * cos(4.0 * u + t * 0.25);
+    pz = 2.0 * sin(5.0 * u + t * 0.30);
+
+    dx = 7.2 * cos(3.0 * u + t * 0.35);
+    dy = -7.2 * sin(4.0 * u + t * 0.25);
+    dz = 10.0 * cos(5.0 * u + t * 0.30);
+
+    nx = -dy;
+    ny = dx;
+    nz = 0.5 * dz;
+    nlen = sqrt(nx * nx + ny * ny + nz * nz + 0.001);
+    nx = (nx / nlen) * ribbon_w;
+    ny = (ny / nlen) * ribbon_w;
+    nz = (nz / nlen) * ribbon_w;
+
+    phase = frac * TAU * 2.0 + t * 0.6;
+    glColor3f(0.6 + 0.4 * sin(phase), 0.6 + 0.4 * sin(phase + TAU / 3.0), 0.6 + 0.4 * sin(phase + 2.0 * TAU / 3.0));
+    glVertex3f(px + nx, py + ny, pz + nz);
+  }
+glEnd();

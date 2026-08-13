@@ -1,0 +1,160 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg light_theme = LIGHT_THEME_STUDIO
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+
+static float ang, a_next, mid_a;
+static float r_in, r_out, r_tip;
+static float c1, s1, c2, s2, cm, sm;
+
+glTranslatef(0.0000f, 0.0000f, -10.0000f);   // @camera dist
+glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.2000f, -0.6000f, 0.0000f);   // @camera pan
+
+glClearColor(0.04, 0.04, 0.07, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT1);
+
+// --- 1. Brass/Gold Main Gear (16 Teeth, Radius 1.6) ---
+glPushMatrix();
+  glTranslatef(-1.6, 0.0, 0.0);
+  glRotatef(25.0 * t, 0.0, 0.0, 1.0);
+
+  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.25, 0.20, 0.05, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.85, 0.70, 0.20, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.90, 0.80, 0.40, 1.0});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 64.0);
+
+  r_in = 0.5;
+  r_out = 1.45;
+  r_tip = 1.75;
+
+  // Disc rim
+  glBegin(GL_QUAD_STRIP);
+    for(i, 0, 33) {
+      ang = i * (TAU / 32.0);
+      glNormal3f(0.0, 0.0, 1.0);
+      glVertex3f(cos(ang) * r_out, sin(ang) * r_out, 0.1);
+      glVertex3f(cos(ang) * r_in, sin(ang) * r_in, 0.1);
+    }
+  glEnd();
+
+  // 16 Gear teeth
+  for(i, 0, 16) {
+    ang = i * (TAU / 16.0);
+    a_next = ang + (TAU / 32.0);
+    mid_a = ang + (TAU / 64.0);
+
+    c1 = cos(ang);
+    s1 = sin(ang);
+    c2 = cos(a_next);
+    s2 = sin(a_next);
+    cm = cos(mid_a);
+    sm = sin(mid_a);
+
+    glBegin(GL_QUADS);
+      glNormal3f(0.0, 0.0, 1.0);
+      glVertex3f(c1 * r_out, s1 * r_out, 0.1);
+      glVertex3f(c1 * r_tip, s1 * r_tip, 0.1);
+      glVertex3f(c2 * r_tip, s2 * r_tip, 0.1);
+      glVertex3f(c2 * r_out, s2 * r_out, 0.1);
+    glEnd();
+  }
+
+  // Central axle hub
+  glutSolidTorus(0.12, 0.45, 12, 24);
+glPopMatrix();
+
+// --- 2. Steel-Blue Intermediate Gear (12 Teeth, Radius 1.2) ---
+glPushMatrix();
+  glTranslatef(1.2, 0.0, 0.0);
+  // Counter-rotation with angular phase offset to interlock teeth
+  glRotatef(-33.333 * t + 11.25, 0.0, 0.0, 1.0);
+
+  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.10, 0.15, 0.25, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.35, 0.65, 0.90, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.80, 0.90, 1.00, 1.0});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 80.0);
+
+  r_in = 0.4;
+  r_out = 1.05;
+  r_tip = 1.35;
+
+  glBegin(GL_QUAD_STRIP);
+    for(i, 0, 25) {
+      ang = i * (TAU / 24.0);
+      glNormal3f(0.0, 0.0, 1.0);
+      glVertex3f(cos(ang) * r_out, sin(ang) * r_out, 0.1);
+      glVertex3f(cos(ang) * r_in, sin(ang) * r_in, 0.1);
+    }
+  glEnd();
+
+  for(i, 0, 12) {
+    ang = i * (TAU / 12.0);
+    a_next = ang + (TAU / 24.0);
+
+    c1 = cos(ang);
+    s1 = sin(ang);
+    c2 = cos(a_next);
+    s2 = sin(a_next);
+
+    glBegin(GL_QUADS);
+      glNormal3f(0.0, 0.0, 1.0);
+      glVertex3f(c1 * r_out, s1 * r_out, 0.1);
+      glVertex3f(c1 * r_tip, s1 * r_tip, 0.1);
+      glVertex3f(c2 * r_tip, s2 * r_tip, 0.1);
+      glVertex3f(c2 * r_out, s2 * r_out, 0.1);
+    glEnd();
+  }
+
+  glutSolidTorus(0.10, 0.35, 12, 24);
+glPopMatrix();
+
+// --- 3. Copper Top Gear (8 Teeth, Radius 0.8) ---
+glPushMatrix();
+  glTranslatef(1.2, 2.0, 0.0);
+  // Forward rotation driven by gear 2
+  glRotatef(50.0 * t + 5.0, 0.0, 0.0, 1.0);
+
+  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.25, 0.10, 0.05, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.90, 0.45, 0.20, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.95, 0.70, 0.50, 1.0});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 60.0);
+
+  r_in = 0.25;
+  r_out = 0.65;
+  r_tip = 0.90;
+
+  glBegin(GL_QUAD_STRIP);
+    for(i, 0, 17) {
+      ang = i * (TAU / 16.0);
+      glNormal3f(0.0, 0.0, 1.0);
+      glVertex3f(cos(ang) * r_out, sin(ang) * r_out, 0.1);
+      glVertex3f(cos(ang) * r_in, sin(ang) * r_in, 0.1);
+    }
+  glEnd();
+
+  for(i, 0, 8) {
+    ang = i * (TAU / 8.0);
+    a_next = ang + (TAU / 16.0);
+
+    c1 = cos(ang);
+    s1 = sin(ang);
+    c2 = cos(a_next);
+    s2 = sin(a_next);
+
+    glBegin(GL_QUADS);
+      glNormal3f(0.0, 0.0, 1.0);
+      glVertex3f(c1 * r_out, s1 * r_out, 0.1);
+      glVertex3f(c1 * r_tip, s1 * r_tip, 0.1);
+      glVertex3f(c2 * r_tip, s2 * r_tip, 0.1);
+      glVertex3f(c2 * r_out, s2 * r_out, 0.1);
+    glEnd();
+  }
+
+  glutSolidTorus(0.08, 0.22, 10, 20);
+glPopMatrix();

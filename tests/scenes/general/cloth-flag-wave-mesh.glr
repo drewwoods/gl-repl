@@ -1,0 +1,96 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg light_theme = LIGHT_THEME_STUDIO
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+
+static float nx_segs = 22;
+static float ny_segs = 12;
+static float flag_w = 4.8;
+static float flag_h = 2.8;
+static float u1, u2, v, x1, x2, y, z1, z2;
+static float amp1, amp2, dzdx, nlen, nx_norm, ny_norm, nz_norm;
+static float r_col, g_col, b_col;
+
+glTranslatef(0.0000f, 0.0000f, -9.5000f);   // @camera dist
+glRotatef(18.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.6000f, -0.4000f, 0.0000f);   // @camera pan
+
+glClearColor(0.04, 0.05, 0.08, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT1);
+
+// Flagpole (Silver/Steel pole with Golden top finial)
+glPushMatrix();
+  glTranslatef(-2.4, 0.0, 0.0);
+
+  // Pole
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.7, 0.75, 0.8, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.9, 0.9, 0.95, 1.0});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 64.0);
+  glLineWidth(5.0);
+  glBegin(GL_LINES);
+    glNormal3f(0.0, 0.0, 1.0);
+    glVertex3f(0.0, -3.5, 0.0);
+    glVertex3f(0.0,  2.2, 0.0);
+  glEnd();
+
+  // Finial Gold Sphere at top
+  glTranslatef(0.0, 2.2, 0.0);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.95, 0.75, 0.15, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){1.0, 0.9, 0.5, 1.0});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 90.0);
+  glutSolidSphere(0.2, 16, 16);
+glPopMatrix();
+
+// Billowing Wavy Cloth Mesh (Drawn as horizontal Quad Strips)
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 25.0);
+
+for(j, 0, ny_segs) {
+  v = j / ny_segs;
+  y = 1.8 - v * flag_h;
+
+  // Tricolor flag bands: Blue (top), White (middle), Red (bottom)
+  if(v < 0.333) {
+    r_col = 0.15;
+    g_col = 0.35;
+    b_col = 0.90;
+  }
+  if(v >= 0.333 && v < 0.666) {
+    r_col = 0.92;
+    g_col = 0.92;
+    b_col = 0.95;
+  }
+  if(v >= 0.666) {
+    r_col = 0.90;
+    g_col = 0.18;
+    b_col = 0.22;
+  }
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){r_col, g_col, b_col, 1.0});
+
+  glBegin(GL_QUAD_STRIP);
+    for(i, 0, nx_segs + 1) {
+      u1 = i / nx_segs;
+      x1 = -2.4 + u1 * flag_w;
+
+      // Amplitude increases non-linearly with distance from pole
+      amp1 = 0.45 * pow(u1, 1.25);
+      z1 = amp1 * (sin(u1 * 5.0 - t * 4.5) + 0.35 * sin(u1 * 9.0 - t * 6.5 + v * 2.0));
+
+      // Normal estimation from wave derivative
+      dzdx = amp1 * 5.0 * cos(u1 * 5.0 - t * 4.5);
+      nlen = sqrt(dzdx * dzdx + 1.0);
+      nx_norm = -dzdx / nlen;
+      ny_norm = 0.0;
+      nz_norm = 1.0 / nlen;
+
+      glNormal3f(nx_norm, ny_norm, nz_norm);
+      glVertex3f(x1, y, z1);
+      glVertex3f(x1, y - (flag_h / ny_segs), z1);
+    }
+  glEnd();
+}
