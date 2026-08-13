@@ -1,0 +1,57 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// A traveling pulse opens a row of gates. Height is a smoothstep
+// falloff around the pulse; the if/else-if chain is the discrete
+// "shut / opening / open" colour, so both the continuous easing
+// primitives and the conditional flattener run on the same data.
+static float pulse, d, s, h, gate;
+
+glTranslatef(0.0f, 0.0f, -10.00f);   // @camera dist
+glRotatef(18.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(6.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, -0.40f, 0.0f);   // @camera pan
+
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+
+pulse = 6 * (0.5 + 0.5 * sin(0.55 * t));
+
+// Track
+glPushMatrix();
+  glTranslatef(0, -0.15, 0);
+  glScalef(7.2, 0.08, 0.7);
+  glColor3f(0.55, 0.30, 1.00);
+  glutSolidCube(1);
+glPopMatrix();
+
+// Pulse marker
+glPushMatrix();
+  glTranslatef(pulse - 3, 0.15, 0);
+  glColor3f(1.00, 0.85, 0.15);
+  glutSolidSphere(0.18, 14, 12);
+glPopMatrix();
+
+for(i, 0, 7) {
+  gate = i;
+  d = abs(gate - pulse);
+  s = 1 - smoothstep(0, 1.6, d);
+  h = lerp(0.45, 1.85, s);
+  glPushMatrix();
+    glTranslatef(i - 3, h / 2, 0);
+    if(s > 0.75) {
+      glColor3f(1.00, 0.85, 0.15);
+    } else if(s > 0.25) {
+      glColor3f(1.00, 0.35, 0.20);
+    } else {
+      glColor3f(0.15, 0.55, 1.00);
+    }
+    glScalef(0.55, h, 0.55);
+    glutSolidCube(1);
+  glPopMatrix();
+}

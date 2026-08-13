@@ -66,6 +66,16 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 | `hyperbolic-paraboloid-saddle.glr` | 3D, Math, Lines, Polygons | Ruled quadric saddle surface showcasing both the shaded surface and intersecting straight ruling lines. |
 | `chladni-plate-nodal-lines.glr` | 3D, Math, Particles, Animation | Acoustic resonance nodal lines on a vibrating plate with settling particle distribution. |
 | `foucault-pendulum-simulation.glr` | 3D, Hierarchical, Animation, Lines | Precessing Foucault pendulum demonstrating Earth's rotation over a circular compass dial with marker pegs. |
+| `aim-tracker-atan2.glr` | 3D, Math, Labels | `atan2` recovers the polar angle to an orbiting target; a cone, stippled aim line, and live `label()` share that angle. |
+| `attrib-stack-scoped-style.glr` | 3D, AttribStack, State | Five objects in a row: nested `glPushAttrib` mutates lighting / polygon / point state and the last teapot must match the first. |
+| `labeled-orbit-hud.glr` | 3D, Labels, Math | Elliptical orbit with a body-attached `label()` plus a four-line HUD (`%f` / `%%`, no commas in the format string). |
+| `two-sided-lighting-ribbon.glr` | 3D, Lighting, Materials | Waving flag with distinct `GL_FRONT` / `GL_BACK` materials and `GL_LIGHT_MODEL_TWO_SIDE`. |
+| `easing-phase-gates.glr` | 3D, Math, Conditionals | A traveling pulse opens a row of gates: `smoothstep` sets height, `if` / `else if` picks shut / opening / open colour. |
+| `point-attenuation-embers.glr` | 3D, Particles, Blending | Rising embers with `glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, ...)` and additive blend. |
+| `named-func-pinwheel.glr` | 3D, Functions, Locals | `petal()` / `hub()` / `rim()` named aliases with function-scoped locals. Named defs consume func slots in definition order. |
+| `depth-func-layers.glr` | 3D, DepthFunc, State | Overlapping cubes against a back plate under `GL_LESS`, `GL_GREATER`, and `GL_NOTEQUAL`. |
+| `loop-control-spokes.glr` | 3D, Loops, Control flow | A wheel whose spokes are filtered by `continue` (skip evens) and `break` (a traveling cut), not by shrinking the loop bounds. |
+| `front-face-cull-winding.glr` | 3D, Culling, State | Three teapots: conventional `GL_CCW`+cull back, reversed `GL_CW` (inside-out), and cull-front hollow shell. |
 
 ## How to Run & Validate
 
@@ -135,4 +145,14 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 ./gl-repl tests/scenes/general/hyperbolic-paraboloid-saddle.glr
 ./gl-repl tests/scenes/general/chladni-plate-nodal-lines.glr
 ./gl-repl tests/scenes/general/foucault-pendulum-simulation.glr
+./gl-repl tests/scenes/general/aim-tracker-atan2.glr
+./gl-repl tests/scenes/general/attrib-stack-scoped-style.glr
+./gl-repl tests/scenes/general/labeled-orbit-hud.glr
+./gl-repl tests/scenes/general/two-sided-lighting-ribbon.glr
+./gl-repl tests/scenes/general/easing-phase-gates.glr
+./gl-repl tests/scenes/general/point-attenuation-embers.glr
+./gl-repl tests/scenes/general/named-func-pinwheel.glr
+./gl-repl tests/scenes/general/depth-func-layers.glr
+./gl-repl tests/scenes/general/loop-control-spokes.glr
+./gl-repl tests/scenes/general/front-face-cull-winding.glr
 ```

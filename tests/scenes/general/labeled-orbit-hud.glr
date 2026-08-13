@@ -1,0 +1,73 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// Live HUD on a Kepler-ish orbit. label() takes only %f / %% and at
+// most four args, with no commas inside the format string. Raster
+// positions ride the matrix stack so a label can stick to a body.
+static float a = 2.35;
+static float b = 1.45;
+static float th, px, py, r;
+
+glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
+glRotatef(22.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(-10.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+
+th = t * 0.85;
+px = a * cos(th);
+py = b * sin(th);
+r = sqrt(px * px + py * py);
+
+// Orbit ellipse
+glDisable(GL_LIGHTING);
+glLineWidth(1.6);
+glColor3f(0.55, 0.30, 1.00);
+glBegin(GL_LINE_LOOP);
+  for(i, 0, 64) {
+    glVertex3f(a * cos(i * TAU / 64), b * sin(i * TAU / 64), 0);
+  }
+glEnd();
+glEnable(GL_LIGHTING);
+
+// Focus (the "sun")
+glColor3f(1.00, 0.85, 0.15);
+glutSolidSphere(0.28, 18, 14);
+
+// Orbiting body, label attached
+glPushMatrix();
+  glTranslatef(px, py, 0);
+  glColor3f(0.15, 0.55, 1.00);
+  glutSolidSphere(0.20, 16, 12);
+  glDisable(GL_LIGHTING);
+  glColor3f(0.92, 0.95, 0.98);
+  glRasterPos3f(0.28, 0.28, 0);
+  label("r=%f", r);
+  glEnable(GL_LIGHTING);
+glPopMatrix();
+
+// Radius spoke
+glDisable(GL_LIGHTING);
+glColor3f(0.10, 0.95, 0.85);
+glBegin(GL_LINES);
+  glVertex3f(0, 0, 0);
+  glVertex3f(px, py, 0);
+glEnd();
+
+// Screen-space HUD (raster pos in world, but parked at a stable corner)
+glColor3f(0.92, 0.95, 0.98);
+glRasterPos3f(-3.4, 2.35, 0);
+label("t=%f", t);
+glRasterPos3f(-3.4, 2.05, 0);
+label("th=%f rad", th);
+glRasterPos3f(-3.4, 1.75, 0);
+label("x=%f y=%f", px, py);
+glRasterPos3f(-3.4, 1.45, 0);
+label("pct %%  r=%f", r);

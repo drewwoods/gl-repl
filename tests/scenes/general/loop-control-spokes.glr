@@ -1,0 +1,63 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// A wheel whose spokes are filtered by continue / break, not by
+// shrinking the loop bounds. Even indices are skipped; a traveling
+// `cut` is the last spoke that is allowed to draw. The hub is
+// always complete so the missing spokes read as holes, not a
+// smaller wheel.
+static float cut, ang, reach;
+
+glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
+glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+
+// Always keep a few odd spokes; the traveling cut only grows the set.
+cut = 6 + floor(fmod(t * 3, 10));
+
+glPushMatrix();
+  glRotatef(t * 12, 0, 0, 1);
+
+  glColor3f(1.00, 0.85, 0.15);
+  glutSolidSphere(0.28, 16, 12);
+
+  glDisable(GL_LIGHTING);
+  glLineWidth(3);
+  for(i, 0, 16) {
+    if(fmod(i, 2) < 0.5) {
+      continue;
+    }
+    if(i > cut) {
+      break;
+    }
+    ang = i * TAU / 16;
+    reach = 2.15;
+    glColor3f(0.10, 0.95, 0.85);
+    glBegin(GL_LINES);
+      glVertex3f(0, 0, 0);
+      glVertex3f(cos(ang) * reach, sin(ang) * reach, 0);
+    glEnd();
+    glEnable(GL_LIGHTING);
+    glPushMatrix();
+      glTranslatef(cos(ang) * reach, sin(ang) * reach, 0);
+      glColor3f(1.00, 0.35, 0.20);
+      glutSolidSphere(0.16, 10, 8);
+    glPopMatrix();
+    glDisable(GL_LIGHTING);
+  }
+  glEnable(GL_LIGHTING);
+glPopMatrix();
+
+glDisable(GL_LIGHTING);
+glColor3f(0.92, 0.95, 0.98);
+glRasterPos3f(-2.6, 2.3, 0);
+label("cut %f", cut);

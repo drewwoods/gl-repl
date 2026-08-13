@@ -1,0 +1,75 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// atan2 recovers the polar angle to a moving target. The cone is
+// aimed about Z then laid along +X so its axis tracks the ball.
+// The dashed aim line and the live label are the same angle.
+static float tx, ty, ang, trail;
+
+glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
+glRotatef(12.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+
+tx = 2.45 * cos(0.7 * t);
+ty = 1.55 * sin(1.15 * t);
+ang = atan2(ty, tx) * 180 / PI;
+
+// Faint orbit of the last few seconds so the path reads.
+glDisable(GL_LIGHTING);
+glEnable(GL_BLEND);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+glLineWidth(1.5);
+glBegin(GL_LINE_STRIP);
+  for(i, 0, 48) {
+    trail = t - i * 0.04;
+    glColor4f(1.00, 0.85, 0.15, 1 - i / 48);
+    glVertex3f(2.45 * cos(0.7 * trail), 1.55 * sin(1.15 * trail), 0);
+  }
+glEnd();
+glDisable(GL_BLEND);
+
+// Aim line, origin to target.
+glEnable(GL_LINE_STIPPLE);
+glLineStipple(2, 3855);
+glColor3f(0.92, 0.95, 0.98);
+glBegin(GL_LINES);
+  glVertex3f(0, 0, 0);
+  glVertex3f(tx, ty, 0);
+glEnd();
+glDisable(GL_LINE_STIPPLE);
+glEnable(GL_LIGHTING);
+
+// Target
+glPushMatrix();
+  glTranslatef(tx, ty, 0);
+  glColor3f(1.00, 0.85, 0.15);
+  glutSolidSphere(0.22, 20, 14);
+glPopMatrix();
+
+// Tracker: rotate about Z by the recovered angle, then stand the cone up +X.
+glPushMatrix();
+  glRotatef(ang, 0, 0, 1);
+  glRotatef(90, 0, 1, 0);
+  glColor3f(0.15, 0.55, 1.00);
+  glutSolidCone(0.28, 1.15, 22, 8);
+glPopMatrix();
+
+// Hub
+glColor3f(0.10, 0.95, 0.85);
+glutSolidSphere(0.16, 14, 12);
+
+glDisable(GL_LIGHTING);
+glColor3f(0.92, 0.95, 0.98);
+glRasterPos3f(-3.1, 2.25, 0);
+label("aim %f deg", ang);
+glRasterPos3f(-3.1, 1.95, 0);
+label("x %f  y %f", tx, ty);

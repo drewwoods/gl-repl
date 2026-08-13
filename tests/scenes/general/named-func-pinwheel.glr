@@ -1,0 +1,59 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// Named function aliases (NAME(params) rather than funcN) plus
+// function-scoped locals. petal() wobbles with a private local so
+// two petals never share a write; hub() and rim() are sibling
+// aliases. Named defs consume func slots in definition order.
+static float folds = 10;
+
+petal(ang, reach, cr, cg, cb) {
+  float wob;
+  wob = 0.16 * sin(t * 3.1 + ang * PI / 180);
+  glPushMatrix();
+    glRotatef(ang + t * 22, 0, 0, 1);
+    glColor3f(cr, cg, cb);
+    glBegin(GL_TRIANGLES);
+      glVertex3f(0, 0, 0.02);
+      glVertex3f(reach, 0.32 + wob, 0);
+      glVertex3f(reach, -0.32 - wob, 0);
+    glEnd();
+  glPopMatrix();
+}
+
+hub() {
+  float pulse;
+  pulse = 0.22 + 0.06 * sin(t * 4);
+  glColor3f(1.00, 0.85, 0.15);
+  glutSolidSphere(pulse, 16, 12);
+}
+
+rim(s) {
+  glPushMatrix();
+    glRotatef(90, 1, 0, 0);
+    glColor3f(0.55, 0.30, 1.00);
+    glutSolidTorus(0.05, s, 10, 22);
+  glPopMatrix();
+}
+
+glTranslatef(0.0f, 0.0f, -7.00f);   // @camera dist
+glRotatef(18.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_BLEND);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+for(i, 0, folds) {
+  if(fmod(i, 2) < 0.5) {
+    petal(i * 36, 2.05, 1.00, 0.35, 0.20);
+  } else {
+    petal(i * 36, 1.75, 0.15, 0.55, 1.00);
+  }
+}
+
+rim(0.85);
+hub();
