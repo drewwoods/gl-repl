@@ -24,13 +24,13 @@ Current residents:
   per-module doc split and the heavier app/UI + editor/UI edges are
   deferred.
 - `src-repl-simplicity-review.md`
-- `repl-clarity-review.md` - the four top-ranked findings landed
-  (`geometry_query.c` split out of `autonormal.c`,
-  `repl_cmd_emits_immediate_vertex()` replacing six open-coded spellings,
-  one accurate new-command checklist, and the now-exhaustive
-  `repl_attrib_bits_for_cmd` switch). Findings 5-11, the architecture-document
-  gaps, and the `round` doc omission are deferred; 5 and 7 are deliberately
-  gated on a future consumer landing, and 11 is record-only.
+- `repl-clarity-review.md` - findings 1-4 and 9-11 landed, plus the
+  architecture-document gaps (`src/repl/ARCHITECTURE.md` §4.6, §4.7, §5.4,
+  §5.5 and the §10 invariants exist because of it). Findings 5-8 are deferred
+  and signposted in the code with `DEFERRED (repl-clarity-review.md finding N)`
+  comments: each is gated on a specific future change - a new structured form,
+  a seventh state slice, a 17th host callback, or someone opening the import
+  state machine - rather than on finding time.
 - `app-clarity-review.md` - the three ranked extension guards landed
   (compiler-exhaustive `GlrConfigKey` maps + duplicate-key validation, the
   single-source and now-tested scene-local config roster, the modal-kind

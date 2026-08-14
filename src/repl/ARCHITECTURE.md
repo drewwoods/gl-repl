@@ -546,6 +546,107 @@ come back. A range that opens a block it does not close, or that takes a
 declaration still read from outside it, is refused going out rather than
 producing a one-way operation.
 
+### 4.6 Document order - the `.glr` phase machine
+
+[`doc_order.c`](doc_order.c)/[`.h`](doc_order.h) enforces that a `.glr` file
+admits exactly one shape. Comments and blank lines go anywhere, as in C89;
+everything else falls in four phases, and the phase index may never decrease:
+
+| # | Phase | Lines |
+|---|---|---|
+| 1 | `DECLS` | `static float ...;` / `float ...;` at top level |
+| 2 | `FUNCS` | `funcN(...) { ... }` and named function definitions |
+| 3 | `CAMERA` | `@camera`-tagged transforms |
+| 4 | `BODY` | everything else the user wrote |
+
+That is the exported C's own order - file-scope globals, then functions, then
+the camera at the top of `display()` - so the two halves of one format cannot
+disagree about line placement. It is a **phase machine rather than a list of
+forbidden pairs**: one monotonic counter decides every case by construction,
+instead of inviting an argument about each one.
+
+One edge is tolerated: `CAMERA` may be entered straight from `DECLS`, and
+`FUNCS` may then follow it, because the `@camera` tag makes the placement
+unambiguous and some layouts read better with the camera near the top.
+"Straight from `DECLS`" includes a file with *no* declarations - a phase that
+does not occur must not change what is legal, or adding one variable to a
+scene would change whether its layout is accepted.
+
+Three properties are load-bearing and easy to break by accident:
+
+- **`.glr` only.** An exported `.c` is generated output whose layout the
+  exporter fixes, and that layout does not satisfy these phases -
+  `reshape()` and `main()` come after `display()`, so a machine that
+  classified every line would reject every file this project writes. The
+  importer gates on the source extension.
+- **Every loader runs it, or the format has two readings again.** The catalog
+  loader, the file importer, the tutorial setup-scaffold loader and
+  `--lint-scenes` all offer their lines. A contract enforced at one entry
+  point and not another is the same defect relocated. **Adding a loader means
+  adding a `repl_doc_order_offer()` call.**
+- **A violation is a relationship between two places, so the report names
+  both** - the line that broke the rule and the line that established the
+  phase it broke - and the scan *continues* after reporting, so one pass
+  produces the whole worklist instead of one error per reload.
+
+The checker lives here rather than in [`camera_header.c`](camera_header.c)
+on a clean split: the reader owns camera-line rules, the loader owns document
+shape. `repl_doc_order_offer()` takes the reader's verdict for the line
+(`is_camera_row`) because only the reader knows a tag when it sees one.
+
+### 4.7 The camera header - one reader, tag-addressed
+
+A scene's camera is carried by ordinary GL transform lines that self-identify
+through a trailing role tag:
+
+```c
+glTranslatef(0.0000f, 0.0000f, -10.0000f);   // @camera dist
+glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);       // @camera rx
+glRotatef(20.0000f, 0.0f, 1.0f, 0.0f);       // @camera ry
+glRotatef(g_angle, 0.0f, 1.0f, 0.0f);        // @camera spin  (.c only)
+glTranslatef(-0.0000f, 2.5000f, -0.0000f);   // @camera pan
+```
+
+**The tag is what makes a line a camera line** - never its position, never a
+`// camera` marker (an ordinary comment this reader never inspects), never a
+parser state variable. Exported C rewrites `//` into C89 block comments, so
+the same block reads `@camera dist` inside `/* */` there; both spellings are
+accepted.
+
+[`camera_header.c`](camera_header.c)/[`.h`](camera_header.h) is **the one
+reader**. File import, catalog/example load, tutorial setup scaffolds, the
+standalone demo and `--lint-scenes` all run this code and no other. Three
+contracts are worth knowing before touching it:
+
+- **Offering *every* line is a contract, not an optimisation target.** The
+  reader counts braces from what it is offered to know which region a tag
+  sits in; a caller that pre-filters silently mis-scopes. This is the one
+  most likely to be "optimised" away.
+- **Nothing is applied until `repl_camera_header_finish()`.** The deferred
+  merge is what makes a *partial* pose unrepresentable - a file supplying
+  `dist` and `rx` but no `ry` gets the baseline's `ry`, resolved once, rather
+  than a half-applied camera.
+- **The rule fully determines severity** (`repl_camera_rule_severity`), so no
+  diagnostic carries a settable severity field that two paths could disagree
+  about. `(role, rule, line_no)` is the whole comparable key, which is what
+  lets `test_camera_header_parity` diff two loaders' diagnostic streams.
+
+`ReplCameraApplyMode` names what a resolved pose is applied *for*, making
+explicit two axes that used to be side effects of which parser ran:
+
+| Mode | Transition | Scene default | Caller |
+|---|---|---|---|
+| `IMPORT` | snap | adopt | file / workspace load |
+| `RESTORE` | snap | leave | scene snapshot restore |
+| `EXAMPLE` | ease | adopt | example / tutorial scaffold |
+
+The fourth combination - ease without adopting - has no caller and is
+**deliberately not defined**. Do not add it to make the enum look complete.
+
+`spin` is write-only: it carries no pose data (its argument is exported C's
+`g_angle` animation hook), is accepted and discarded, and never counts toward
+the seen mask or the missing-role notes. It never appears in a `.glr`.
+
 ---
 
 ## 5. The frame flow (flatten → autonormal → execute)
@@ -782,6 +883,79 @@ emitting GL. Key behaviors:
 
 [`executor.c`](executor.c) is the **only** live-GL translation unit in this layer.
 
+### 5.4 The GL-state fold - the executor's shadow
+
+[`gl_state_inspector.c`](gl_state_inspector.c)/[`.h`](gl_state_inspector.h)
+answers "what is OpenGL's state at this source line?" for the right-click
+OpenGL-state popup. It is the largest file in the module, and structurally it
+is a **second executor**: `gl_state_apply_cmd` re-implements the state
+semantics of every command `repl_apply_state_cmd`
+([`executor.c`](executor.c)) emits, **without issuing GL**.
+
+That is the fact a reader most needs and would otherwise have to discover:
+**the fold and the executor move together.** A `glBlendFunc` case added to one
+and not the other means the popup reports a value the driver does not have.
+Its switch enumerates `CMD_TYPE_COUNT` with no `default:`, so
+`-Werror=switch` holds the build until a new `CmdType` is answered - see
+*Adding A New Command* step 3c in
+[`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+
+Why a source-checkpoint fold rather than a `glGet*` read-back:
+
+- A read-back answers only for the *end* of a frame that has already run. The
+  question the popup asks is about an arbitrary line in the middle of the
+  program, including lines a replay clamp never reached.
+- A read-back is a synchronous pipeline drain, and under gl4es/WebGL2 that is
+  a stall attributed to whatever flushes next.
+- A fold can attribute each value to the **line that last wrote it**, which is
+  the popup's whole point. A driver read-back carries no provenance.
+
+The fold models three layers and keeps them distinguishable:
+
+1. **OpenGL 2.1 initial values** as the comparison basis - so an explicit
+   write *of* a default value stays visible. `differs_from_basis` is kept
+   separate from touched-ness precisely so those two cases do not collapse.
+2. **The generated `init()`/`display()` writes** the app performs around the
+   user program (lights, camera/modelview, render toggles).
+3. **The user's own flat program**, up to the checkpoint.
+
+Rows are partitioned by authorship - user-written rows first, then the
+generated harness - because the generated group routinely outnumbers the
+authored one by an order of magnitude and the popup collapses on that
+boundary. The partition is stable: within each group rows keep
+`ReplGlTrackedState` field order. The basis is also re-pointable
+(`repl_gl_state_report_rebase()`) so two probe points can be diffed against
+each other instead of against the GL defaults.
+
+### 5.5 Attribute-stack mapping
+
+[`attrib_bits.c`](attrib_bits.c)/[`.h`](attrib_bits.h) is the pure mapping
+layer between commands and `glPushAttrib`/`glPopAttrib` groups - no GL calls,
+no live-GL reads. It answers three questions about the source document:
+
+1. **`repl_attrib_bits_for_cmd`** - which `GL_*_BIT` groups one command's
+   state falls under. Context-free and coarse; multi-bit membership falls out
+   naturally, matching real GL.
+2. **`repl_attrib_cmd_writes`** - which *atomic state cells* one command
+   writes, each tagged with its covering bits. **Flow-sensitive**: while
+   `GL_COLOR_MATERIAL` is enabled a `glColor*` line also rewrites the selected
+   material cells, so the caller threads a `ReplAttribFlowState`.
+3. **The two collectors** - fold the document with real LIFO attribute-stack
+   semantics and report which prior/scoped setter lines a push saves and a pop
+   reverts, for the editor's per-bit cursor highlight.
+
+The 10 supported bits and their canonical order are owned by
+[`command_spec.c`](command_spec.c)'s `k_attrib_bits[]`; this module derives
+everything from that one table so the two cannot drift.
+
+`repl_attrib_bits_for_cmd` **enumerates every `CmdType` with no `default:`**,
+and unusually it has a stronger claim to that idiom than the inspector does:
+its answer *gates* the inspector's own coverage ratchet in
+[`../../tests/test_repl_state.c`](../../tests/test_repl_state.c), which skips
+any type answering 0. A silently-unclassified command would therefore disable
+the guard meant to catch it. `-Werror=switch` makes that omission a build
+failure instead.
+
 ---
 
 ## 6. Runtime state and ownership
@@ -1002,6 +1176,21 @@ These boundaries are not just convention - they're ratcheted by guards in
   `STATIC_ASSERT` (never raw `_Static_assert`) and prototyped function
   pointer typedefs.
 
+Two cross-function invariants have no guard and live only in the code, so
+they are written down here as well:
+
+- **The attribute-cell cover must agree with the attribute-bit stamp.** A
+  cell's covering `GL_*_BIT` mask is a pure function of its identity
+  (`cell_cover` in [`attrib_bits.c`](attrib_bits.c)) and must match what
+  `repl_attrib_cmd_writes` stamps on it - otherwise a push does not save
+  exactly the cells its pop restores (§5.5).
+- **The GL-state fold is the executor's shadow.** `gl_state_apply_cmd`
+  ([`gl_state_inspector.c`](gl_state_inspector.c)) and
+  `repl_apply_state_cmd` ([`executor.c`](executor.c)) implement the same
+  per-command state semantics, one without GL and one with it, and must move
+  together (§5.4). `-Werror=switch` catches a *missing* command; it cannot
+  catch a *wrong* one.
+
 The structural payoff is provable: the standalone demo
 ([`tools/repl_demo/`](../../tools/repl_demo/)) links *only* this
 pipeline - parse → command store → flatten → execute - with no editor,
@@ -1214,13 +1403,14 @@ is the point of the link-boundary proof.
 
 ## 12. Map of the territory
 
-Grouped by role. (The README carries the same map as a flat table; this
-grouping is the mental model.)
+Grouped by role. The README carries the same set as a flat table with
+one-line responsibilities; this grouping is the mental model. **They list the
+same modules** - if you add a file here, add it there.
 
 **Core types & taxonomy**
 [`command.h`](command.h) (CmdType, GLCmd, control-flow predicates) ·
-[`command_spec.c`](command_spec.c)/`.h` (per-command descriptor tables) ·
-[`color_limits.h`](color_limits.h), [`util.h`](util.h) (shared constants/helpers)
+[`command_spec.c`](command_spec.c)/`.h` (per-command descriptor tables, incl. `k_attrib_bits[]`) ·
+[`color_limits.h`](color_limits.h), [`stencil_limits.h`](stencil_limits.h), [`util.h`](util.h) (shared constants/helpers)
 
 **Edit flow (text → program model)**
 [`parser.c`](parser.c)/`.h` (line → GLCmd + canonical text) ·
@@ -1231,18 +1421,25 @@ grouping is the mental model.)
 [`command_store.c`](command_store.c)/`.h` (low-level GLCmd array mechanics) ·
 [`load.c`](load.c)/`.h` (non-editor line loader + apply transaction) ·
 [`replace.c`](replace.c)/`.h`, [`comment_toggle.c`](comment_toggle.c)/`.h` (range transactions, §4.5) ·
+[`doc_order.c`](doc_order.c)/`.h` (the `.glr` document-order phase machine, §4.6) ·
+[`camera_header.c`](camera_header.c)/`.h` (the one `@camera` reader, §4.7) ·
 [`visible_vars.c`](visible_vars.c)/`.h`, [`text_helpers.c`](text_helpers.c)/`.h`, [`source_scope.c`](source_scope.c)/`.h`,
 [`format.c`](format.c)/`.h`, [`reformat.c`](reformat.c)/`.h`, [`bootstrap.c`](bootstrap.c)/`.h`
 
 **Frame flow (program model → GL)**
 [`flatten.c`](flatten.c)/`.h` (source → flat program) ·
+[`flatten_expr.c`](flatten_expr.c)/`.h` (flatten's cache/eval/dependency boundary, §5.2) ·
+[`expr_program.c`](expr_program.c)/`.h` (compiled-postfix expression evaluator, §5.2) ·
 [`flatten_query.c`](flatten_query.c)/`.h` (live flat cost/cursor queries) ·
 [`autonormal.c`](autonormal.c) (auto glNormal3f maintenance) ·
 [`executor.c`](executor.c)/`.h` (walk flat program, emit GL) ·
 [`transform_utils.h`](transform_utils.h) (shared matrix tracking) ·
 [`pipeline.h`](pipeline.h) (controller-facing frame entry points) ·
 [`program_query.c`](program_query.c)/`.h` (read-only program queries) ·
-[`geometry_query.c`](geometry_query.c)/`.h` (cursor-context feeding-state, bracket-partner and in-scope-transform queries)
+[`geometry_query.c`](geometry_query.c)/`.h` (cursor-context feeding-state, bracket-partner and in-scope-transform queries) ·
+[`gl_state_inspector.c`](gl_state_inspector.c)/`.h` (the no-GL state fold behind the OpenGL-state popup, §5.4) ·
+[`attrib_bits.c`](attrib_bits.c)/`.h` (glPushAttrib/glPopAttrib group + cell mapping, §5.5) ·
+[`init_state.h`](init_state.h) (read-only view of the state commands generated `init()` applies)
 
 **State & ownership**
 [`state.c`](state.c)/`.h` ([`ReplRuntimeState`](state.h#L18) storage, capture/restore) ·
@@ -1275,6 +1472,7 @@ grouping is the mental model.)
 [`tutorials.c`](tutorials.c)/`.h` (tutorial catalog) ·
 [`catalog_tags.h`](catalog_tags.h) (shared example/tutorial tag-bit helper) ·
 [`help_text.c`](help_text.c)/`.h` (F1 help tables) ·
+[`command_descriptions.c`](command_descriptions.c)/`.h` (lookup facade over the generated right-click help catalog; authored in [`command_descriptions.txt`](command_descriptions.txt)) ·
 [`keymap_format.c`](keymap_format.c) (user-facing keybinding labels)
 
 ---
@@ -1479,11 +1677,11 @@ here lands in the same place.
 | 7 | [`host_effects.h`](host_effects.h)'s stated contract is narrower than its table: 7 of 16 callbacks have no `src/repl` caller | The contract comment can be rewritten any time; **splitting the table is explicitly not recommended as a dedicated change** - it rides the hook that would otherwise be the 17th |
 | 8 | [`import.c`](import.c) is one ~3,200-line TU facing a six-TU exporter; `ImportState`'s snippet phase is implicit; the reader API is named and declared as if it were the writer's | The line translators can be lifted out on their own. The state machine waits for [`one-scene-loader.md`](../../docs/plans/not-started/one-scene-loader.md), which changes how many `.glr` walkers exist |
 
-Findings 9-11, the missing `ARCHITECTURE.md` sections the review identified
-(the GL-state fold, attribute-stack mapping, document-order phase machine, and
-camera-header contracts), and the §12/README map reconciliation are also open.
-Three gaps the review found already have their own design of record and are
-**not** re-derived in it:
+Findings 1-4 and 9-11 landed, as did the missing sections the review
+identified - §4.6, §4.7, §5.4 and §5.5 above exist because of it, and §10
+gained the two cross-function invariants it was missing. Three gaps the review
+found already have their own design of record and are **not** re-derived in
+it:
 [`one-scene-loader.md`](../../docs/plans/not-started/one-scene-loader.md),
 [`local-aware-rebake.md`](../../docs/plans/not-started/local-aware-rebake.md),
 and [`repl-capability-gaps.md`](../../docs/plans/not-started/repl-capability-gaps.md).

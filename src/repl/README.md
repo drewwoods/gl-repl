@@ -152,7 +152,7 @@ at build time, like the example catalog.
 |---|---|
 | [`command.h`](command.h) | Core types: [`CmdType`](command.h#L44), [`GLCmd`](command.h#L122), control-flow predicates |
 | [`command_spec.c`](command_spec.c) / `.h` | Per-command descriptor tables (arity, enum args, highlight category) |
-| [`color_limits.h`](color_limits.h), [`util.h`](util.h) | Shared limits (clear-color cap) and size-checked buffer helpers |
+| [`color_limits.h`](color_limits.h), [`stencil_limits.h`](stencil_limits.h), [`util.h`](util.h) | Shared limits (clear-color cap, stencil ref/mask range) and size-checked buffer helpers |
 | **Edit flow** | *text → program model* |
 | [`parser.c`](parser.c) / `.h` | One source line → [`GLCmd`](command.h#L122) + canonical text |
 | [`normalize.c`](normalize.c) / `.h` | Parse-and-normalize pipeline |
@@ -164,13 +164,16 @@ at build time, like the example catalog.
 | [`replace.c`](replace.c) / `.h`, [`comment_toggle.c`](comment_toggle.c) / `.h` | Range transactions - whole-document rebuild behind find/replace, and the Ctrl+/ range + direction. Both are invalid at every intermediate step, so both run under a [`SceneSnapshot`](scene_snapshot.h#L17) restored wholesale on any rejection (`ARCHITECTURE.md` §4.5) |
 | [`visible_vars.c`](visible_vars.c) / `.h`, [`text_helpers.c`](text_helpers.c) / `.h` | Ordered lexical scope collection - loop iterators, function parameters and function-scoped locals, each tagged with its [`ReplVisibleVarKind`](visible_vars.h#L20); parse/extract/canonical-text helpers |
 | [`source_scope.c`](source_scope.c) / `.h`, [`format.c`](format.c) / `.h`, [`reformat.c`](reformat.c) / `.h`, [`bootstrap.c`](bootstrap.c) / `.h` | Depth/indent/block-lookup cache, pure indentation, source reformat, startup loading |
+| [`doc_order.c`](doc_order.c) / `.h` | The canonical `.glr` document order as a monotonic four-phase machine (decls → funcs → camera → body, one tolerated edge). `.glr` only; **every loader must run it** or the format has two readings. Names both the offending line and the line that set the phase, and reports the whole file in one pass (`ARCHITECTURE.md` §4.6) |
+| [`camera_header.c`](camera_header.c) / `.h` | **The one camera reader.** `@camera`-tagged transform rows - the tag, never the position, is what makes a line a camera line. Every consumer offers *every* line (a pre-filtering caller mis-scopes) and applies nothing until `finish()`, which is what makes a partial pose unrepresentable. [`ReplCameraApplyMode`](camera_header.h#L56) names the three real transition/scene-default combinations; the fourth is deliberately undefined (`ARCHITECTURE.md` §4.7) |
 | **Frame flow** | *program model → GL* |
 | [`flatten.c`](flatten.c) / `.h` | Source → flat program (unroll/inline/resolve `if`) |
 | [`expr_program.c`](expr_program.c) / `.h` | Compiled expression programs and ephemeral per-line cache |
 | [`flatten_expr.c`](flatten_expr.c) / `.h` | Internal cache/evaluation/dependency boundary used by flatten and rebake |
 | [`flatten_query.c`](flatten_query.c) / `.h` | Live flat-program cost/cursor queries |
 | [`init_state.h`](init_state.h) | Read-only access to the effective REPL-modifiable state commands applied by `init()` |
-| [`gl_state_inspector.c`](gl_state_inspector.c) / `.h` | Pure source-checkpoint fold of every generated `init()`/`display()` state write plus REPL commands through the selected point; includes generated lights, camera/modelview, render toggles, and attribute-stack depth, and reports touched values, their latest source, and OpenGL 2.1 initial defaults without issuing GL calls |
+| [`gl_state_inspector.c`](gl_state_inspector.c) / `.h` | Pure source-checkpoint fold of every generated `init()`/`display()` state write plus REPL commands through the selected point; includes generated lights, camera/modelview, render toggles, and attribute-stack depth, and reports touched values, their latest source, and OpenGL 2.1 initial defaults without issuing GL calls. Structurally a **second executor** - `gl_state_apply_cmd` shadows `repl_apply_state_cmd` and the two move together (`ARCHITECTURE.md` §5.4) |
+| [`attrib_bits.c`](attrib_bits.c) / `.h` | Pure `glPushAttrib`/`glPopAttrib` mapping: coarse `GL_*_BIT` groups per command, the flow-sensitive atomic state *cells* each command writes, and the LIFO collectors behind the editor's per-bit cursor highlight. Bits and their order come from `command_spec.c`'s `k_attrib_bits[]`, so the two cannot drift. Exhaustive over `CmdType` on purpose - its answer gates the inspector's coverage ratchet (`ARCHITECTURE.md` §5.5) |
 | [`autonormal.c`](autonormal.c) | Auto-generated `glNormal3f` maintenance |
 | [`geometry_query.c`](geometry_query.c) / `.h` | Cursor-context queries: feeding normal/color command, push/pop/begin bracket partners, in-scope modelview transforms (source and flat walks) |
 | [`executor.c`](executor.c) / `.h` | Walks the flat program emitting live GL calls (the only live-GL TU) |

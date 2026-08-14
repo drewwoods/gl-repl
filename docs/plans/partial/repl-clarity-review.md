@@ -1,25 +1,22 @@
 # `src/repl` Clarity, Coupling & Extensibility Review
 
-## Status - FINDINGS 1-4 LANDED; 5-11 DEFERRED (2026-08-14)
+## Status - FINDINGS 1-4 AND 9-11 LANDED; 5-8 DEFERRED (2026-08-14)
 
-Findings 1, 2, 3 and 4 - the four the sequencing section marks as worth doing
-now - are implemented on branch `repl-cleanup`, one commit each. Everything
-below is left verbatim so the deferred findings keep their context; each
-landed finding carries a **LANDED** note under its heading.
+Findings 1, 2, 3, 4, 9, 10 and 11, plus the architecture-document gaps, are
+implemented on branch `repl-cleanup`. Everything below is left verbatim so the
+deferred findings keep their context; each landed finding carries a **LANDED**
+note under its heading.
 
-Deferred, with the reason each was deferred rather than done:
+Still open, with the reason each is deferred rather than done:
 
 | # | Why not now |
 |---|---|
 | 5 (two commit chains) | No cheap ratchet exists. Decide when the next structured form lands - see D3. |
-| 6 (checkpoint invalidation tail) | Ready to do; not in the requested batch. |
-| 7 (`ReplHostEffects` contract) | Comment-only fix, ready to do; the split itself waits for a 17th callback. |
-| 8, 9 (import split, `g_`-prefixed macros) | Ride adjacent work; 8 must not pre-empt `one-scene-loader.md`. |
-| 10 (builtin smoke loop) | Optional; dispatch is already shared by construction. |
-| 11 (transform-scope walk) | Record only; no action recommended. |
-| Architecture-document gaps | Four new `src/repl/ARCHITECTURE.md` sections plus the §12/README reconciliation. Not in the requested batch. |
+| 6 (checkpoint / invalidation tail) | Ready to do; the trigger is a seventh state slice or the next edit to the tail. |
+| 7 (`ReplHostEffects`) | The contract comment now names both audiences; the struct grouping and the split are not done. The split waits for a 17th callback, per the finding. |
+| 8 (import split) | Rides adjacent work; must not pre-empt `one-scene-loader.md`. |
 
-**Findings 5-8 are signposted in the code.** Each site carries a
+All four are signposted in the code. Each site carries a
 `DEFERRED (repl-clarity-review.md finding N, in docs/plans/partial/)` comment
 naming what is deferred and what would trigger doing it, so a reader who
 arrives with that file open finds this plan without knowing it exists:
@@ -50,8 +47,8 @@ interfaces absorb the next feature, and is anything duplicated or overcomplicate
 
 No code was changed *by the review*. Every finding below carries a file:line
 citation so it can be re-checked before anyone acts on it - note that the
-citations are as of the review date and the four landed findings have since
-moved some of the lines they name.
+citations are as of the review date and the landed findings have since moved
+some of the lines they name.
 
 **Provenance.** First pass 2026-08-13. Second pass 2026-08-14 independently
 re-read the pipeline, the host bridge, the new-command surface, and the
@@ -665,6 +662,13 @@ optional and should ride the same change, not lead it.
 
 ### 9. `export_format_shared.h` defines macros that impersonate globals
 
+> **LANDED** (`919640ba`). Took the second option: dropped the aliases and
+> spelled `IMPORT_EXPORT_VIEW.field` / `IMPORT_EXPORT_WRITABLE->field` at the
+> call site, so the read/write split lives in the expression rather than in a
+> name suffix. `scenes.c`'s local redefinitions and three test files' went too.
+> Where a line got unwieldy the fix is a local or a named helper, not a new
+> alias.
+
 **What.** `export_format_shared.h:16-30` defines 14 macros of the form:
 
 ```c
@@ -700,6 +704,13 @@ load-bearing everywhere else in the tree.
 
 ### 10. Builtin parity coverage is handwritten even though builtin dispatch is table-driven
 
+> **LANDED** (`1580190b`). `test_builtin_table_parity()` walks
+> `repl_eval_builtin_at(0..count)` and puts one call per builtin at `arity_min`
+> and `arity_max` through `check_parity`, plus name / arity-bound / eval-pointer
+> assertions. Verified it fires by widening `atan2`'s `arity_max`. The curated
+> corpus stays; its stale "all of them" comment now points at the loop. `round`
+> added to CLAUDE.md and the scene-authoring skill.
+
 **What.** `tests/test_expr_program.c:145` reads `/* builtins, all of them */`
 above a hand-written list of expression strings. It is currently complete. Nothing
 enforces that. `repl_eval_builtin_count()` / `repl_eval_builtin_at()`
@@ -727,6 +738,11 @@ function lists.
 ---
 
 ### 11. The source-side transform-scope walk hand-rolls what `TransformScopeScan` already does
+
+> **LANDED as recorded** (`1580190b`). No code change, as recommended.
+> `repl_find_affecting_transforms` (now in `geometry_query.c`) carries a
+> breadcrumb saying why the duplication is partial and justified, and what to
+> do if `TransformScopeScan` is ever opened anyway.
 
 **What.** `repl_find_affecting_transforms_for_flat_vertex`
 (`autonormal.c:924-949`) uses the shared `TransformScopeScan` from
@@ -765,6 +781,12 @@ land before or during `one-scene-loader.md`, not instead of it.
 ---
 
 ## Architecture-document gaps
+
+> **LANDED** (`src/repl/ARCHITECTURE.md` §4.6, §4.7, §5.4, §5.5, §10, §12 and
+> the README file map). All four proposed sections were written, the two
+> cross-function invariants joined §10, and §12 and the README now list the
+> same set of modules - checked file by file, so the "same map" claim is true
+> in both directions. The `round` omission is fixed under finding 10.
 
 `src/repl/ARCHITECTURE.md` §12 claims: *"The README carries the same map as a
 flat table; this grouping is the mental model."* The two maps do not agree.
