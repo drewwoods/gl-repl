@@ -16,6 +16,22 @@
  * When adding an item, extend GlrConfigKey and add the matching
  * GlrConfigItem row in glr_actions.c. Keep the descriptor table as the
  * single source of truth for slugs, labels, shortcuts, and state names.
+ *
+ * The descriptor row is the only *unconditional* edit. A new key may also
+ * need, depending on what it owns:
+ *
+ *   - config_value_ptr() + glr_config_get() in glr_config.c - always, and
+ *     the compiler says so: both switches are default-less under
+ *     -Werror=switch, so a key with no arm fails the build. A key whose
+ *     storage is not a plain `int *` returns NULL from the pointer map and
+ *     needs a glr_config_set() special case instead;
+ *   - CFG_DEFAULT_* in glr_defaults.h (plus GLR_STATE_DEFAULTS_INITIALIZER)
+ *     when the key owns a field in GlrPresentationState / GlrRenderState;
+ *   - the scene-local roster k_cfg_scene_defaults[] in glr_actions.c and the
+ *     matching reset line in glr_state_presentation_reset_example_defaults()
+ *     when the setting is per-scene rather than per-session;
+ *   - state_names[] plus regenerated example goldens for a named multi-state
+ *     value (see .claude/skills/gl-repl-config-toggle/).
  */
 #ifndef GLR_CONFIG_H
 #define GLR_CONFIG_H
@@ -156,9 +172,9 @@ const char *glr_config_item_display_label(const GlrConfigItem *item);
 const char *glr_config_item_slug(const GlrConfigItem *item);
 
 /* Validate the descriptor table's persistence identifiers. Returns 1 when
- * every actionable row has a unique, bounded lowercase [a-z0-9_] slug and
- * structural rows have no slug. On failure, writes one concise diagnostic to
- * `err` when supplied. */
+ * every actionable row has a unique, bounded lowercase [a-z0-9_] slug, a
+ * GlrConfigKey no other actionable row claims, and structural rows have no
+ * slug. On failure, writes one concise diagnostic to `err` when supplied. */
 int glr_config_validate(char *err, size_t err_sz);
 
 /* Get the current state value of a config item. Returns 0/1 for toggles, 0-N

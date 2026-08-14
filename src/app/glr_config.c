@@ -210,10 +210,19 @@ int glr_config_validate(char *err, size_t err_sz) {
         }
         for (int j = 0; j < i; j++) {
             const GlrConfigItem *prior = &g_cfg_items[j];
-            if (!prior->section_header && prior->key != GLR_CONFIG_NONE &&
-                prior->slug && strcmp(prior->slug, item->slug) == 0)
+            if (prior->section_header || prior->key == GLR_CONFIG_NONE)
+                continue;
+            if (prior->slug && strcmp(prior->slug, item->slug) == 0)
                 return config_validation_error(
                     err, err_sz, "duplicate config slug: %s", item->slug);
+            /* Two rows on one key is not a harmless alias: find_item_by_key()
+             * returns the first match, so the second row's state names and
+             * state count would silently never be used - its menu row would
+             * cycle and label itself through the first row's descriptor. */
+            if (prior->key == item->key)
+                return config_validation_error(
+                    err, err_sz, "duplicate config key on row %s",
+                    item->label ? item->label : "<unnamed>");
         }
     }
     if (err && err_sz > 0)
@@ -224,8 +233,11 @@ int glr_config_validate(char *err, size_t err_sz) {
 /* The key -> backing-storage map: where each config value actually
  * lives (glr_state render/presentation fields, REPL state, replay /
  * variable-panel peer state, UI panels). One arm per key, by design -
- * this switch *is* the ownership declaration, and the compiler flags a
- * new GlrConfigKey that forgot to claim a slot. NULL arms are values
+ * this switch *is* the ownership declaration. It has **no `default:`**
+ * so that -Werror=switch (Makefile CFLAGS) turns a new GlrConfigKey
+ * that forgot to claim a slot into a build failure rather than a
+ * silent NULL; the same holds for the read twin glr_config_get(). Keep
+ * both switches default-less when adding a key. NULL arms are values
  * with no plain int slot (module-owned, lifecycle-driven, or pure
  * action rows); glr_config_get / glr_config_set carry the matching
  * special cases for those. */
@@ -279,23 +291,21 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_SYNTAX_HIGHLIGHT:    return &glr_state_presentation_mut()->syntax_highlight;
     case GLR_CONFIG_PAREN_MATCH:         return &glr_state_presentation_mut()->paren_match;
     case GLR_CONFIG_PAREN_SCOPE:         return &glr_state_presentation_mut()->paren_scope;
-    case GLR_CONFIG_NONE:
-    case GLR_CONFIG_COUNT:
-    default:
-        return NULL;
+    case GLR_CONFIG_NONE:                return NULL; /* sentinel: not a row */
+    case GLR_CONFIG_COUNT:               return NULL; /* sentinel: not a row */
     }
+    return NULL;   /* out-of-range key cast in from outside the enum */
 }
 
 /* Read-side twin of config_value_ptr, against the const state views
  * (the pointer map above can't serve reads without granting mutable
- * access). Keep the two switches' arms in sync when adding a key. */
+ * access). Keep the two switches' arms in sync when adding a key -
+ * this one is default-less for the same reason, so a new key that
+ * claims storage but no read arm fails the build. */
 int glr_config_get(GlrConfigKey key) {
-    if (key == GLR_CONFIG_AUDIO_MODE)
-        return glr_audio_get_cfg_mode();
-    if (key == GLR_CONFIG_ACCUM_PASSES)
-        return accum_passes_get_cycle();
-
     switch (key) {
+    case GLR_CONFIG_AUDIO_MODE:          return glr_audio_get_cfg_mode();
+    case GLR_CONFIG_ACCUM_PASSES:        return accum_passes_get_cycle();
     case GLR_CONFIG_MSAA:                return glr_state_render().multisample_enabled;
     case GLR_CONFIG_LINE_SMOOTH:         return glr_state_render().line_smooth_enabled;
     case GLR_CONFIG_ACCUM_EFFECT:        return glr_state_render().accum_effect;
@@ -342,8 +352,10 @@ int glr_config_get(GlrConfigKey key) {
     case GLR_CONFIG_SYNTAX_HIGHLIGHT:    return glr_state_presentation().syntax_highlight;
     case GLR_CONFIG_PAREN_MATCH:         return glr_state_presentation().paren_match;
     case GLR_CONFIG_PAREN_SCOPE:         return glr_state_presentation().paren_scope;
-    default:                             return 0;
+    case GLR_CONFIG_NONE:                return 0; /* sentinel: not a row */
+    case GLR_CONFIG_COUNT:               return 0; /* sentinel: not a row */
     }
+    return 0;   /* out-of-range key cast in from outside the enum */
 }
 
 /* First g_cfg_items[] row whose key matches, or NULL. Section-header

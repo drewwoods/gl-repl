@@ -289,8 +289,12 @@ Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/gl
   (3D), `ui_*` (2D view), neutral (`prof`) for generic utilities. Don't
   introduce new top-level prefixes without documenting the boundary.
 - **Config toggles** → skill `gl-repl-config-toggle`. One-line version: append a
-  [`ReplConfigItem`](src/repl/cfg_baseline.h#L29) to `g_cfg_items[]` in [`src/app/glr_actions.c`](src/app/glr_actions.c)
-  under the right `### ` section; count + flyout membership auto-compute.
+  [`GlrConfigItem`](src/app/glr_config.h#L89) to `g_cfg_items[]` in [`src/app/glr_actions.c`](src/app/glr_actions.c)
+  under the right `### ` section (count + flyout membership auto-compute), then
+  claim storage in the two default-less switches in
+  [`src/app/glr_config.c`](src/app/glr_config.c) - `-Werror=switch` fails the
+  build until you do. A per-scene setting also joins `k_cfg_scene_defaults[]`
+  and `glr_state_presentation_reset_example_defaults()`.
 - **New GL commands** → skill `gl-repl-new-command` (five required edits:
   [`CmdType`](src/repl/command.h#L44), parser, executor, `flatten_range()`, spec tables).
 - Enum args live in `GLCmd.args[]` (there is **no `GLCmd.mode` field** - its

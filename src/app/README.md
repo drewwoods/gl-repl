@@ -136,7 +136,7 @@ formatters free of any boot dependency.
 | [`glr_camera_export.c`](glr_camera_export.c) | Camera state ↔ exported `glTranslatef`/`glRotatef` text |
 | [`glr_audio.c`](glr_audio.c) / `.h` | App-level playlist engine and persisted audio config (`glr_audio_*`) |
 | [`glr_actions.c`](glr_actions.c) / `.h` | Config descriptor table (`g_cfg_items[]`), config shortcuts, menu actions |
-| [`glr_config.c`](glr_config.c) / `.h` | `ReplConfigKey` / [`ReplConfigItem`](../repl/cfg_baseline.h#L29) descriptor API for keyed config access |
+| [`glr_config.c`](glr_config.c) / `.h` | [`GlrConfigKey`](glr_config.h#L31) / [`GlrConfigItem`](glr_config.h#L89) descriptor API for keyed config access; the key → storage map (`config_value_ptr`) and its read twin (`glr_config_get`) are default-less switches, so `-Werror=switch` catches a key that claims no storage |
 | [`glr_completion.c`](glr_completion.c) / `.h` | REPL-side completion provider; registers with `editor_completion` |
 | [`glr_state.c`](glr_state.c) / `.h` | App-level presentation/runtime toggles not owned by repl/editor/ui |
 | [`glr_source_document.c`](glr_source_document.c) | Binds the `source_document_*` contract to the live [`EditorState`](../editor/state.h#L199) buffer |

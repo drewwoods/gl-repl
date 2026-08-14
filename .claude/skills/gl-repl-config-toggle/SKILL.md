@@ -5,7 +5,13 @@ description: Add or change a gl-repl config toggle / GlrConfigKey - the g_cfg_it
 
 # Adding a config toggle
 
-## The one required edit
+## The two required edits
+
+A new toggle is **a descriptor row plus a storage claim**. The row alone
+compiles and renders a menu item whose reads return `0` - the storage switches
+below are what make it a setting.
+
+## 1. The descriptor row
 
 Append a `GlrConfigItem` descriptor to `g_cfg_items[]` in
 `src/app/glr_actions.c`, under the right `### ` section marker. The count
@@ -20,6 +26,40 @@ trailing **All** row, with hover-opening flyouts (generic engine in
 tag rows are **inert on click** - hover-open only, the activate branches return
 0. Flyout item clicks route via `route_submenu_item_hit` → `glr_cfg_cycle_row`;
 right-press cycles backward.
+
+## 2. Storage: the two switches in `src/app/glr_config.c`
+
+Every `GlrConfigKey` needs an arm in **both** `config_value_ptr()` (the
+write-side key → `int *` ownership map) and `glr_config_get()` (the read-side
+twin over the const state views). Neither switch has a `default:`, and the
+build carries `-Werror=switch`, so a key with no arm is a compile error rather
+than a silently-zero setting - do not "fix" that error by adding a `default:`.
+
+- Storage that is a plain `int` field (a `GlrPresentationState` /
+  `GlrRenderState` member, a peer module's `int`) returns its address from
+  `config_value_ptr()` and nothing more is needed: the generic tail of
+  `glr_config_set()` writes through the pointer.
+- Storage that is not a plain `int *` - an enum field needing a cast, a
+  lifecycle action (replay start/stop), a module-owned value (audio), or a
+  cycle index that maps to something else (accum passes) - returns `NULL` from
+  the pointer map and needs a matching `else if` arm in `glr_config_set()`.
+  `NULL` with no set arm means the value is read-only or a pure action row.
+
+Validation of the table itself (`glr_config_validate`, run at startup and by
+`test_glr_actions`) rejects a missing/duplicate slug and a `GlrConfigKey`
+claimed by two actionable rows, which `find_item_by_key()` would resolve to the
+first row only.
+
+## Is the setting per-scene or per-session?
+
+If it belongs to a scene (it should travel in a `.glr`/example `@cfg` header
+and must not leak across an F12 example switch), add it to
+`k_cfg_scene_defaults[]` in `glr_actions.c` **and** to
+`glr_state_presentation_reset_example_defaults()` in `glr_state.c`. That table
+is the roster: `cfg_key_in_scene_subset()` is derived from it, and
+`test_glr_actions.c` pins subset/defaults agreement plus the reset contract.
+Session-inspection settings (profilers, depth/stencil viz, post FX) and
+interface settings (code panel, syntax highlight) stay out of both.
 
 ## Defaults
 

@@ -1329,6 +1329,35 @@ static void test_config_slug_table(void) {
     ASSERT_STR("config slug validation has no error", err, "");
 }
 
+/* The property glr_config_validate() enforces for keys, asserted directly
+ * against the live table: find_item_by_key() returns the first match, so a
+ * second row on the same GlrConfigKey would silently inherit the first row's
+ * state count and state names. */
+static void test_config_keys_are_unique(void) {
+    int dup_key = GLR_CONFIG_NONE;
+    int actionable = 0;
+
+    for (int i = 0; i < CFG_ITEM_COUNT && dup_key == GLR_CONFIG_NONE; i++) {
+        const GlrConfigItem *item = glr_config_item_at(i);
+        if (!item || item->section_header || item->key == GLR_CONFIG_NONE)
+            continue;
+        actionable++;
+        for (int j = 0; j < i; j++) {
+            const GlrConfigItem *prior = glr_config_item_at(j);
+            if (!prior || prior->section_header)
+                continue;
+            if (prior->key == item->key) {
+                dup_key = (int)item->key;
+                break;
+            }
+        }
+    }
+
+    ASSERT_TRUE("config table has actionable rows", actionable > 0);
+    ASSERT_INT("no GlrConfigKey is claimed by two rows", dup_key,
+               GLR_CONFIG_NONE);
+}
+
 /* Depth view row: a 4-state cycle (Off / Linear / Scene / Split) bound
  * to Ctrl+Shift+D, with an explicit stable @cfg slug. */
 static void test_depth_viz_row_metadata(void) {
@@ -2651,6 +2680,7 @@ int main(void) {
     test_audio_menu_actions();
     test_scene_menu_cycle_actions();
     test_config_slug_table();
+    test_config_keys_are_unique();
     test_msaa_display_label_override();
     test_depth_viz_row_metadata();
     test_stencil_viz_row_metadata();
