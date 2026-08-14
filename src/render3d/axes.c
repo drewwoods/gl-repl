@@ -109,7 +109,7 @@ static void axes_xn_apply_transition_fog(float fog_tf,
     if (fog_tf <= 0.0f) return;
     float start = 1.0f + (1.0f - fog_tf) * 4.0f;
     float end   = start + 3.0f;
-    set_fog_to_presentation_color(bg_rgba);
+    glFogfv(GL_FOG_COLOR, bg_rgba);
     glEnable(GL_FOG);
     glFogi(GL_FOG_MODE, GL_LINEAR);
     glFogf(GL_FOG_START, start);

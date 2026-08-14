@@ -343,7 +343,7 @@ follows is the trip-wire list.
 ### Frame & rendering
 
 [`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L284) drives each frame: rebuild autonormals + flat
-program if dirty → build [`Render3dRenderConfig`](src/render3d/render_types.h#L138) → clear chrome + load camera
+program if dirty → build [`Render3dRenderConfig`](src/render3d/render_types.h#L139) → clear chrome + load camera
 + scissor (all **controller** policy - render3d owns no camera type, sets no
 scissor, clears no color/depth) → [`render3d_draw_scene()`](src/render3d/render.h#L139) (projection → user
 geometry callback → replay fades → grid/axes/backdrop → overlays → replay

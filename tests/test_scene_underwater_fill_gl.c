@@ -70,31 +70,34 @@ static void test_execute_noop(const Render3dExecuteContext *ctx, void *ud) {
 /* Build a config that lands in render3d_grid_render_ocean_theme's underwater
  * branch (cam_world_y < 0) with the GL_NV_fog_distance opt-in active. */
 static Render3dFrameRenderContext make_underwater_ctx(int render3d_w, int render3d_h) {
-    Render3dFrameRenderContext ctx = {0};
-    ctx.config.execute_fn = test_execute_noop;
-    ctx.config.render3d_x = 0;
-    ctx.config.render3d_y = 0;
-    ctx.config.render3d_w = render3d_w;
-    ctx.config.render3d_h = render3d_h;
-    ctx.config.grid_theme = GRID_THEME_OCEAN;
-    ctx.config.grid_opacity = 1.0f;
-    ctx.config.alpha_scale = 1.0f;
-    ctx.config.grid_extent_idx = GRID_EXTENT_MID;
-    ctx.config.grid_major_idx = GRID_MAJOR_1;
-    for (int i = 0; i < GRID_MAJOR_COUNT; i++) ctx.config.grid_major_steps[i] = 1.0f;
+    Render3dRenderConfig cfg = {0};
+    cfg.execute_fn = test_execute_noop;
+    cfg.render3d_x = 0;
+    cfg.render3d_y = 0;
+    cfg.render3d_w = render3d_w;
+    cfg.render3d_h = render3d_h;
+    cfg.grid_theme = GRID_THEME_OCEAN;
+    cfg.grid_opacity = 1.0f;
+    cfg.alpha_scale = 1.0f;
+    cfg.grid_extent_idx = GRID_EXTENT_MID;
+    cfg.grid_major_idx = GRID_MAJOR_1;
+    for (int i = 0; i < GRID_MAJOR_COUNT; i++) cfg.grid_major_steps[i] = 1.0f;
     /* MID extent is what the live whale.c uses (@cfg grid_extent = 2); the
      * fog end is keyed to extent, so this reproduces the live numerics. */
-    ctx.config.grid_extents[GRID_EXTENT_CLOSE] = 5.0f;
-    ctx.config.grid_extents[GRID_EXTENT_MID]   = 25.0f;
-    ctx.config.grid_extents[GRID_EXTENT_FAR]   = 100.0f;
-    ctx.config.cam_dist = 5.0f;
-    ctx.config.cam_rx = 0.0f;
-    ctx.config.cam_ty = -5.0f;   /* under the water plane */
-    ctx.config.projection_mix = 1.0f;
+    cfg.grid_extents[GRID_EXTENT_CLOSE] = 5.0f;
+    cfg.grid_extents[GRID_EXTENT_MID]   = 25.0f;
+    cfg.grid_extents[GRID_EXTENT_FAR]   = 100.0f;
+    cfg.cam_dist = 5.0f;
+    cfg.cam_rx = 0.0f;
+    cfg.cam_ty = -5.0f;   /* under the water plane */
+    cfg.projection_mix = 1.0f;
     /* The flag that arms the bug. The dispatcher in render3d_grid_render
      * calls glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV) when this
      * is set, then enters render3d_grid_render_ocean_theme. */
-    ctx.config.nv_fog_distance_supported = 1;
+    cfg.nv_fog_distance_supported = 1;
+
+    Render3dFrameRenderContext ctx;
+    render3d_prepare_frame_context(&ctx, &cfg);
     return ctx;
 }
 

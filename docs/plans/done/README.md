@@ -14,6 +14,7 @@ historical context and are not in the table below.
 | Plan | Landed | What it shipped |
 |---|---|---|
 | `user-guide-consistency-review.md` | 2026-08-14 | USER_GUIDE editorial pass: display-baseline/`glClear`, Ctrl+Shift+H, tour transport, common CLI, accum ladder, replay keys, PLY scope; language/overlay sections halved; math/shadows/stateless to TUTORIAL, driver oracles to CONTRIBUTING. |
+| `render3d-clarity-review.md` | 2026-08-14 | Clarity and consistency review of `src/render3d`: header contracts, quality helpers, post-FX decoupling, derived camera pose on `Render3dFrameRenderContext`, palette/winding tokens, `g_grid_theme_traits` table, bounds validation, text helper routing, and pipeline doc updates. |
 | `tutorial-catalog-review.md` | 2026-08-14 | Catalog consistency pass: lighting run reordered, Feature Tour retargeted, Depth Test Triangle retired, tags/voice/takeaways cleaned up, four Tier 1 lessons plus Loops Beyond the Ring. 29 tutorials. Function Scope blocked on the float-decl COMMAND ban. |
 | `tender-exploring-dream.md` | 2026-02-24 | Early wishlist / open-items catalog; kept as design history. |
 | `GLUTesselator.md` | 2026-02-24 | GLU tessellator support: `gluBegin/gluEnd/gluVertex/gluNormal/gluColor` commands with per-vertex normal and color data. |

@@ -13,7 +13,6 @@ begun. They move to `plans/active/` once implementation starts.
 | `historic-benchmark.md` | Historic bench trend tracking |
 | `local-aware-rebake.md` | Carry function-scoped locals through a value-only rebake, so a global feeding a local stops forcing a full flatten |
 | `one-scene-loader.md` | Retire the catalog's own `.glr` walk and make `import.c` the single scene reader, so format - not arrival route - picks the loader; plus the F12 hard block on a failed catalog load |
-| `render3d-clarity-review.md` | Reviewed clarity/consistency/extensibility audit of `src/render3d` (2026-08-14): the renderer contract holds and most of what looks like a problem is a documented decision; twelve ranked findings. Top items are stale pipeline docs, an empty `Render3dFrameRenderContext` while helpers re-derive camera pose, grid-theme membership spread across four lists, and app Post-FX types leaking through `render_types.h` |
 | `repl-capability-gaps.md` | Prioritized index of the REPL's language + GL-surface gaps, derived from the four stencil-shadow-volume scenes: what each unlocks, effort, and sequencing (indexes `float-returning-repl-functions.md` and `stencil-buffer-support.md` Phase 3 rather than restating them). Carries the measured z-fail / far-plane result arguing why `glMatrixMode` stays out of scope |
 | `scene-close-capability.md` | Close/remove a user scene (design brief) |
 | `smooth-autonormals-with-loop-support.md` | Smooth autonormals with loop awareness |

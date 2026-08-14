@@ -1,6 +1,6 @@
 # `src/render3d` Clarity, Consistency & Extensibility Review
 
-## Status - REVIEWED; REMEDIATION NOT STARTED (2026-08-14)
+## Status - IMPLEMENTED / DONE (2026-08-14)
 
 A read-only review of `src/render3d` (11 `.c` + 21 `.h`, ~10,800 lines)
 against the questions in the request: module boundaries, naming, API

@@ -14,7 +14,7 @@
 
 /* Grid show/hide fade durations (seconds). Owned by the grid module, not the
  * generic transition machine: the grid's reveal curve (render3d_grid_reveal)
- * reads these, scaled by each theme's g_grid_reveal[].time multiplier. The
+ * reads these, scaled by each theme's g_grid_theme_traits[].reveal.time multiplier. The
  * fade-in is the leisurely "draw-in" window; the fade-out is quicker so
  * cycling themes doesn't feel sticky. Tune to taste. */
 #ifndef GRID_FADE_IN_SECS

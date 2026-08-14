@@ -378,7 +378,6 @@ static void build_config(Render3dRenderConfig *cfg) {
     cfg->cam_tz   = g_cam_tz;
     cfg->cam_motion_glow = (g_drag_button >= 0) ? 1.0f : 0.0f;
 
-    cfg->user_lighting_enabled = g_lighting_on;
     seed_lights(cfg->lights);
     cfg->show_light_indicators = g_show_indicators;
     cfg->highlight_light_slot = -1; /* no cursor / editor in this harness */

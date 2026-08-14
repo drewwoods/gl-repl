@@ -480,36 +480,6 @@ static void render3d_apply_wireframe_config(const Render3dRenderConfig *config) 
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 }
 
-static void render3d_prepare_frame_context(Render3dFrameRenderContext *ctx,
-                                        const Render3dRenderConfig *config) {
-    ctx->config = *config;
-
-    const float deg = 3.14159265358979323846f / 180.0f;
-    float cx = cosf(config->cam_rx * deg), sx = sinf(config->cam_rx * deg);
-    float cy = cosf(config->cam_ry * deg), sy = sinf(config->cam_ry * deg);
-
-    /* Camera world position */
-    ctx->camera_world_pos[0] = config->cam_tx - config->cam_dist * cx * sy;
-    ctx->camera_world_pos[1] = config->cam_ty + config->cam_dist * sx;
-    ctx->camera_world_pos[2] = config->cam_tz + config->cam_dist * cx * cy;
-
-    /* 3x3 eye-to-world basis: world = Ry(-ry) * Rx(-rx) * eye */
-    /* Basis vector 0: eye +X (right) */
-    ctx->camera_basis[0][0] = cy;
-    ctx->camera_basis[0][1] = 0.0f;
-    ctx->camera_basis[0][2] = sy;
-
-    /* Basis vector 1: eye +Y (up) */
-    ctx->camera_basis[1][0] = sy * sx;
-    ctx->camera_basis[1][1] = cx;
-    ctx->camera_basis[1][2] = -cy * sx;
-
-    /* Basis vector 2: eye +Z (back) */
-    ctx->camera_basis[2][0] = -sy * cx;
-    ctx->camera_basis[2][1] = sx;
-    ctx->camera_basis[2][2] = cy * cx;
-}
-
 static void render3d_execute_user_geometry(const Render3dRenderConfig *config,
                                         Render3dExecutePurpose purpose) {
     /* The program runs unbounded by this module. Rasterization is already

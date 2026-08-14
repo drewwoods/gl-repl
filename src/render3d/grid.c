@@ -40,7 +40,7 @@
  * draw-in styles). This is a transition-only effect: at full opacity the
  * grid renders through the exact edge-fade path below, unchanged. Tune the
  * motion with the GRID_REVEAL_* constants and assign each theme an
- * { axis, head } pair in g_grid_reveal[]; all of it is meant to be edited and
+ * { axis, head } pair in g_grid_theme_traits[]; all of it is meant to be edited and
  * recompiled. A reveal is { axis, head=0 } for a plain dissolve with no head
  * wave, or { axis, head=1 } for the bright leading-edge draw-head. */
 typedef enum {

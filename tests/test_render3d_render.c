@@ -37,6 +37,10 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
     TEST_ASSERT_FLOAT_DEFAULT(&g_harness, label, got, exp); \
 } while (0)
 
+#define ASSERT_FLOAT_TOL(label, got, exp, tol) do { \
+    TEST_ASSERT_FLOAT(&g_harness, label, got, exp, tol); \
+} while (0)
+
 #ifdef GL_STUBS
 #define TRACE_PATH "/tmp/test_render3d_render_trace.txt"
 
@@ -424,9 +428,10 @@ static void test_scene_ortho_zoom_rescales(void) {
 
 /* Build a test Render3dFrameRenderContext. */
 static Render3dFrameRenderContext make_test_frame_ctx(void) {
-    Render3dFrameRenderContext ctx = {0};
-    ctx.config = make_test_config();
-    ctx.config.focus.valid = 0;
+    Render3dRenderConfig cfg = make_test_config();
+    cfg.focus.valid = 0;
+    Render3dFrameRenderContext ctx;
+    render3d_prepare_frame_context(&ctx, &cfg);
     return ctx;
 }
 
@@ -456,6 +461,36 @@ static void test_frame_ctx_defaults(void) {
 
     ASSERT_INT("config has execute_fn", ctx.config.execute_fn != NULL, 1);
     ASSERT_INT("focus not valid by default", ctx.config.focus.valid, 0);
+
+    /* Verify derived camera pose from default make_test_config():
+     * cam_dist=30, rx=0 deg, ry=0 deg, tx=ty=tz=0. */
+    ASSERT_FLOAT_TOL("camera_world_pos X default", ctx.camera_world_pos[0], 0.0f, 0.001f);
+    ASSERT_FLOAT_TOL("camera_world_pos Y default", ctx.camera_world_pos[1], 0.0f, 0.001f);
+    ASSERT_FLOAT_TOL("camera_world_pos Z default", ctx.camera_world_pos[2], 30.0f, 0.001f);
+
+    /* Verify derived camera pose with angled camera:
+     * cam_dist=5, rx=20 deg, ry=30 deg, tx=ty=tz=0. */
+    Render3dRenderConfig angled_cfg = make_test_config();
+    angled_cfg.cam_dist = 5.0f;
+    angled_cfg.cam_rx = 20.0f;
+    angled_cfg.cam_ry = 30.0f;
+    Render3dFrameRenderContext angled_ctx;
+    render3d_prepare_frame_context(&angled_ctx, &angled_cfg);
+
+    ASSERT_FLOAT_TOL("angled camera_world_pos X", angled_ctx.camera_world_pos[0], -2.34923f, 0.001f);
+    ASSERT_FLOAT_TOL("angled camera_world_pos Y", angled_ctx.camera_world_pos[1], 1.71010f, 0.001f);
+    ASSERT_FLOAT_TOL("angled camera_world_pos Z", angled_ctx.camera_world_pos[2], 4.06900f, 0.001f);
+
+    /* Basis vectors are orthonormal: basis[0] . basis[1] == 0, length == 1. */
+    float dot01 = angled_ctx.camera_basis[0][0]*angled_ctx.camera_basis[1][0] +
+                  angled_ctx.camera_basis[0][1]*angled_ctx.camera_basis[1][1] +
+                  angled_ctx.camera_basis[0][2]*angled_ctx.camera_basis[1][2];
+    ASSERT_FLOAT_TOL("basis orthogonal", dot01, 0.0f, 0.0001f);
+
+    float len0 = sqrtf(angled_ctx.camera_basis[0][0]*angled_ctx.camera_basis[0][0] +
+                       angled_ctx.camera_basis[0][1]*angled_ctx.camera_basis[0][1] +
+                       angled_ctx.camera_basis[0][2]*angled_ctx.camera_basis[0][2]);
+    ASSERT_FLOAT_TOL("basis len 0 is 1", len0, 1.0f, 0.0001f);
 }
 
 /* --- Tests for render3d_grid_render (minimal) ----------------------- */
