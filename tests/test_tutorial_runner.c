@@ -2460,12 +2460,13 @@ static void test_phase_c_catalog_full_walk(void) {
         "Functions",
         "If & Conditionals",
         "Scratch Arrays",
+        "Loops Beyond the Ring",
     };
 
-    /* 28 shipped entries: Depth Test Triangle retired, plus the four
-     * Tier 1 lessons (Expressions, Transform Stacks, Replay, Keeping). */
-    ASSERT_INT("catalog contains 28 tutorials",
-               repl_tutorial_count(), 28);
+    /* 29 shipped entries: Depth Test Triangle retired, plus Tier 1 and
+     * Loops Beyond the Ring. Function Scope is blocked (no float decls). */
+    ASSERT_INT("catalog contains 29 tutorials",
+               repl_tutorial_count(), 29);
 
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         char label[160];

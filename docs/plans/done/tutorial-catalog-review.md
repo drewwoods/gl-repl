@@ -2,10 +2,9 @@
 
 ## Status - landed, 2026-08-14
 
-Findings 1-12 and Tier 1 (A-D) shipped. The catalog is 28 tutorials:
-Depth Test Triangle retired, Scene Chrome & Overlays replaces Feature
-Tour, and four new lessons cover expressions, transform hierarchy,
-replay, and save/export. Tier 2 (E-H) and Tier 3 were not scheduled.
+Findings 1-12, Tier 1 (A-D), and Tier 2 F shipped. The catalog is 29
+tutorials. Function Scope & Locals (E) is blocked: COMMAND steps cannot
+carry a `float` declaration. G, H, and Tier 3 were not scheduled.
 
 | Finding | What shipped |
 |---|---|

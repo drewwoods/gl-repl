@@ -1225,6 +1225,54 @@ static const TutorialStep g_tutorial_scratch_arrays_steps[] = {
     STEP_SENTINEL,
 };
 
+/* Nested loops on a 4x4 grid, with continue skipping the diagonal and
+ * break cutting the inner walk short. Yaw 0 so the grid reads square.
+ * Function Scope & Locals is the other Tier 2 language lesson; it is
+ * not here because COMMAND steps cannot carry a `float` declaration
+ * (the validator rejects them - decls relocate). */
+static const char *const g_tutorial_nested_loops_setup[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -10.00f); // @camera dist",
+    "glRotatef(18.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f); // @camera ry",
+    "glTranslatef(0.0f, 0.0f, 0.0f); // @camera pan",
+    NULL,
+};
+
+static const TutorialStep g_tutorial_nested_loops_steps[] = {
+    STEP_NOTE(
+        "// Nested loops walk a grid. break leaves the innermost loop; continue skips the rest of this iteration."),
+    STEP_APPEND(NULL,
+        "// Outer index i walks 0 through 3.",
+        "for(i, 0, 4) {"),
+    STEP_APPEND(NULL,
+        "// Inner index j walks 0 through 3 for each i.",
+        "for(j, 0, 4) {"),
+    STEP_APPEND(NULL,
+        "// Skip the diagonal so i == j leaves a hole.",
+        "if(i == j) {"),
+    STEP_CMD(NULL, "continue"),
+    STEP_CMD(NULL, "}"),
+    STEP_APPEND(NULL,
+        "// Stop this inner walk once i + j is past 4.",
+        "if(i + j > 4) {"),
+    STEP_CMD(NULL, "break"),
+    STEP_CMD(NULL, "}"),
+    STEP_CMD(NULL, "glPushMatrix()"),
+    STEP_CMD(NULL, "glTranslatef((i - 1.5) * 1.5, (j - 1.5) * 1.5, 0)"),
+    STEP_CMD(NULL, "glutSolidCube(0.7)"),
+    STEP_CMD(NULL, "glPopMatrix()"),
+    STEP_APPEND(NULL,
+        "// Close the inner loop.",
+        "}"),
+    STEP_APPEND(NULL,
+        "// Close the outer loop to reveal the filtered grid.",
+        "}"),
+    STEP_NOTE(
+        "// break and continue always name the innermost enclosing loop in the same function body."),
+    STEP_SENTINEL,
+};
+
 /* "Expressions & Motion" - the catalog's first lesson whose subject is
  * that every numeric argument is an expression. First Animation used t
  * inside one rotation; this shows oscillation, a phase offset, and names
@@ -1589,6 +1637,13 @@ static const TutorialEntry g_tutorials[] = {
         .steps      = g_tutorial_scratch_arrays_steps,
         .setup      = g_tutorial_scratch_arrays_setup,
         .cfg        = g_tutorial_unlit_solid_cfg,
+        .tag_names  = (const char *const []){ "REPL Language", NULL },
+        .subheading = "Advanced",
+    },
+    {
+        .name       = "Loops Beyond the Ring",
+        .steps      = g_tutorial_nested_loops_steps,
+        .setup      = g_tutorial_nested_loops_setup,
         .tag_names  = (const char *const []){ "REPL Language", NULL },
         .subheading = "Advanced",
     },

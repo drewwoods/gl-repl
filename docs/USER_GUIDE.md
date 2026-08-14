@@ -229,7 +229,8 @@ with `./gl-repl --tutorial "First Triangle"` (a 1-based index also works).
   *Fog*, *Clip Planes*, *Line Stipple*, *Bitmap Text*,
   *Transform Stacks & Hierarchy*, *Watching a Program Run*, and
   *Keeping Your Work*.
-- **Advanced:** *Functions*, *If & Conditionals*, and *Scratch Arrays*.
+- **Advanced:** *Functions*, *If & Conditionals*, *Scratch Arrays*, and
+  *Loops Beyond the Ring*.
 
 ---
 
