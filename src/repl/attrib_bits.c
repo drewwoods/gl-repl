@@ -3,7 +3,7 @@
  *
  * See attrib_bits.h for the contract. Pure: no GL calls, no live-GL reads.
  * The collectors read the live REPL *source* document (repl_state_document_*)
- * the same way the bracket matchers in autonormal.c do.
+ * the same way the bracket matchers in geometry_query.c do.
  */
 #include <string.h>
 
@@ -164,9 +164,52 @@ unsigned repl_attrib_bits_for_cmd(const GLCmd *cmd) {
         return GL_TRANSFORM_BIT;
     case CMD_FOG_I: case CMD_FOG_F: case CMD_FOG_FV:
         return GL_FOG_BIT;
-    default:
+
+    /* --- Not attribute-scoped -------------------------------------------
+     *
+     * Enumerated rather than caught by a `default:`, because this fold is
+     * the *gate* on the inspector's own coverage ratchet in
+     * tests/test_repl_state.c: a command that answers 0 here is skipped by
+     * that sweep, so a forgotten classification would disable the one guard
+     * designed to catch it. With no default, -Werror=switch makes a new
+     * CmdType impossible to add without consciously answering "which
+     * attribute group, if any?". Same idiom as gl_state_apply_cmd and the
+     * executor's own dispatch. */
+
+    /* Geometry and the primitive block: vertex data, not state. */
+    case CMD_BEGIN: case CMD_END:
+    case CMD_VERTEX3F: case CMD_VERTEX2F: case CMD_VERTEX4F:
+    case CMD_GLUT_TORUS: case CMD_GLUT_CUBE: case CMD_GLUT_SPHERE:
+    case CMD_GLUT_TEAPOT: case CMD_GLUT_CONE:
+    case CMD_LABEL:
+    /* Tessellator state lives on the REPL's own tess cursor
+     * (ExecCursor.tess_current_normal/_color), not on GL's current-state
+     * cells, so glPushAttrib does not scope it. */
+    case CMD_TESS_BEGIN_POLYGON: case CMD_TESS_BEGIN_CONTOUR:
+    case CMD_TESS_END: case CMD_TESS_NORMAL: case CMD_TESS_COLOR:
+    case CMD_TESS_VERTEX:
+    /* The modelview stack is glPushMatrix's, not glPushAttrib's. */
+    case CMD_TRANSLATE3F: case CMD_SCALEF: case CMD_ROTATEF:
+    case CMD_PUSH_MATRIX: case CMD_POP_MATRIX: case CMD_LOAD_IDENTITY:
+    case CMD_MULT_MATRIXF:
+    /* glClear consumes the clear-value cells (which CMD_CLEAR_COLOR /
+     * _DEPTH / _STENCIL above do carry) but writes none of them. */
+    case CMD_CLEAR:
+    /* Control flow, language primitives, editor rows: no GL state at all. */
+    case CMD_FOR_BEGIN: case CMD_FOR_END:
+    case CMD_BREAK: case CMD_CONTINUE:
+    case CMD_FUNC_DEF: case CMD_FUNC_END: case CMD_CALL:
+    case CMD_IF_BEGIN: case CMD_IF_END: case CMD_ELSE_IF: case CMD_ELSE:
+    case CMD_VAR_ASSIGN: case CMD_SCRATCH_ASSIGN:
+    case CMD_SCRATCH_BLOCK_ASSIGN: case CMD_VAR_DECLARE:
+    case CMD_COMMENT: case CMD_EMPTY:
+    /* The brackets themselves: they move the stack, they do not write a
+     * cell the stack would save. */
+    case CMD_PUSH_ATTRIB: case CMD_POP_ATTRIB:
+    case CMD_TYPE_COUNT:
         return 0;
     }
+    return 0;
 }
 
 unsigned repl_attrib_bits_for_type(CmdType type, unsigned enum_arg0) {

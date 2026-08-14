@@ -83,7 +83,13 @@ typedef struct {
 /* Context-free coarse mask of GL_*_BIT groups a command's state falls under.
  * 0 when the command is not an attribute-scoped state setter. Does NOT fold in
  * the flow-dependent color-material -> LIGHTING membership (that is
- * context-sensitive and belongs only in repl_attrib_cmd_writes). */
+ * context-sensitive and belongs only in repl_attrib_cmd_writes).
+ *
+ * Its switch enumerates every CmdType with no `default:` on purpose. This
+ * answer *gates* the inspector coverage sweep in tests/test_repl_state.c - a
+ * command that returns 0 is skipped there - so an unclassified new command
+ * would silently disable the guard meant to catch it. -Werror=switch makes
+ * the omission a build failure instead. */
 unsigned repl_attrib_bits_for_cmd(const GLCmd *cmd);
 
 /* Same mask keyed by command type alone, for consumers gating a restore on

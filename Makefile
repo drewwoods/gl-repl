@@ -183,7 +183,10 @@ endif
 # clean under both Apple clang and GCC 14 when introduced. A switch that
 # genuinely does not care still keeps its `default:` and is unaffected;
 # dropping one is how a fold declares "this list is exhaustive on purpose"
-# (see gl_state_apply_cmd in src/repl/gl_state_inspector.c).
+# (see gl_state_apply_cmd in src/repl/gl_state_inspector.c and
+# repl_attrib_bits_for_cmd in src/repl/attrib_bits.c - the latter has the
+# strongest claim to it, because its answer gates the coverage sweep that
+# would otherwise catch an unclassified command).
 
 # Debug info, deliberately not a blanket -ggdb -g3. Emscripten is the reason:
 # emcc keeps DWARF inside the .wasm and, when it is present, falls back to
