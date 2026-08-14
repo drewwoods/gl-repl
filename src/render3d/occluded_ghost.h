@@ -9,7 +9,7 @@
  * stipple pattern (and the ghost passes the same alpha fraction). These
  * constants are that convention; they are values, not a mechanism - each
  * helper still owns how it applies them (transform_guides routes the
- * alpha through its private g_guide_alpha_mul; render.c multiplies it
+ * alpha through its alpha_mul parameter; render.c multiplies it
  * inline; the plain dashed-line consumers set their own line factor).
  *
  * STIPPLE consumers: render.c (orbit-target gizmo),

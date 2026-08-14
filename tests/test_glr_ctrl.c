@@ -477,7 +477,6 @@ static void test_display_frame_builds_config_and_restores_live_state(void) {
     ASSERT_FLOAT("camera distance forwarded", g_last_scene_config.cam_dist, 7.5f);
     ASSERT_FLOAT("camera tx forwarded", g_last_scene_config.cam_tx, 0.5f);
     ASSERT_FLOAT("camera glow forwarded", g_last_scene_config.cam_motion_glow, 0.9f);
-    ASSERT_INT("user lighting copied", g_last_scene_config.user_lighting_enabled, 1);
     ASSERT_INT("light indicators copied", g_last_scene_config.show_light_indicators, 1);
     /* Replay-fade data is a controller-private static
      * (g_replay_fade_plan), rather than part of Render3dRenderConfig.
@@ -4745,8 +4744,6 @@ static void test_display_frame_scene_config_is_stable_across_frames(void) {
                frame2.grid_theme, frame1.grid_theme);
     ASSERT_INT("scene axes_theme stable across frames",
                frame2.axes_theme, frame1.axes_theme);
-    ASSERT_INT("scene user_lighting_enabled stable across frames",
-               frame2.user_lighting_enabled, frame1.user_lighting_enabled);
     ASSERT_INT("scene show_light_indicators stable across frames",
                frame2.show_light_indicators, frame1.show_light_indicators);
     ASSERT_FLOAT("scene alpha_scale stable across frames",

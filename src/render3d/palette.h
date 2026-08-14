@@ -109,13 +109,18 @@ typedef enum {
     RENDER3D_CLR_WIREFRAME_VISIBLE,   /* visible edges            0.96,0.98,1.00 */
     RENDER3D_CLR_WIREFRAME_HIDDEN,    /* hidden edges             0.30,0.38,0.52 */
 
+    /* Winding visualization materials (render.c). Material-as-draw-color
+     * tokens for front/back face identity. */
+    RENDER3D_CLR_WINDING_FRONT,       /* front-facing material    0.16,0.80,0.32 */
+    RENDER3D_CLR_WINDING_BACK,        /* back-facing material     0.88,0.20,0.18 */
+
     RENDER3D_CLR_COUNT
 } Render3dColorToken;
 
 /* Single fixed scheme. Every slot carries alpha 1.0; a designated-init
  * gap leaves a slot zero-filled, so alpha == 0 reliably flags a missing
  * entry (the render3d palette test asserts this). */
-static const Render3dRgba g_scene_palette[RENDER3D_CLR_COUNT] = {
+static const Render3dRgba g_render3d_palette[RENDER3D_CLR_COUNT] = {
     [RENDER3D_CLR_GUIDE_PLANE_X_FILL]  = { 0.90f, 0.65f, 0.60f, 1.0f },
     [RENDER3D_CLR_GUIDE_PLANE_X_EDGE]  = { 0.90f, 0.30f, 0.30f, 1.0f },
     [RENDER3D_CLR_GUIDE_PLANE_Y_FILL]  = { 0.65f, 0.90f, 0.60f, 1.0f },
@@ -162,15 +167,17 @@ static const Render3dRgba g_scene_palette[RENDER3D_CLR_COUNT] = {
     [RENDER3D_CLR_VERTEX_POINT_REPLAY] = { 1.00f, 0.88f, 0.20f, 1.0f },
     [RENDER3D_CLR_WIREFRAME_VISIBLE]   = { 0.96f, 0.98f, 1.00f, 1.0f },
     [RENDER3D_CLR_WIREFRAME_HIDDEN]    = { 0.30f, 0.38f, 0.52f, 1.0f },
+    [RENDER3D_CLR_WINDING_FRONT]       = { 0.16f, 0.80f, 0.32f, 1.0f },
+    [RENDER3D_CLR_WINDING_BACK]        = { 0.88f, 0.20f, 0.18f, 1.0f },
 };
 
 static inline Render3dRgba render3d_rgba(Render3dColorToken t) {
-    return g_scene_palette[t];
+    return g_render3d_palette[t];
 }
 
 /* Set the current GL color from a token (alpha = token's own, 1.0). */
 static inline void render3d_clr(Render3dColorToken t) {
-    const Render3dRgba c = g_scene_palette[t];
+    const Render3dRgba c = g_render3d_palette[t];
     glColor4f(c.r, c.g, c.b, c.a);
 }
 
@@ -178,16 +185,16 @@ static inline void render3d_clr(Render3dColorToken t) {
  * (multiplies the token alpha) - matches the dominant
  * glColor4f(r, g, b, <computed alpha>) scene call shape. */
 static inline void render3d_clr_a(Render3dColorToken t, float a) {
-    const Render3dRgba c = g_scene_palette[t];
+    const Render3dRgba c = g_render3d_palette[t];
     glColor4f(c.r, c.g, c.b, c.a * a);
 }
 
 /* Table-and-enum agreement: bumping RENDER3D_CLR_COUNT now only needs
- * the matching g_scene_palette entry, not a literal-count update.
+ * the matching g_render3d_palette entry, not a literal-count update.
  * the palette test still verifies each named token has a non-NaN
  * RGBA tuple. */
-STATIC_ASSERT(sizeof(g_scene_palette) / sizeof(g_scene_palette[0])
+STATIC_ASSERT(sizeof(g_render3d_palette) / sizeof(g_render3d_palette[0])
                   == RENDER3D_CLR_COUNT,
-              "g_scene_palette length must match RENDER3D_CLR_COUNT");
+              "g_render3d_palette length must match RENDER3D_CLR_COUNT");
 
 #endif /* RENDER3D_PALETTE_H */

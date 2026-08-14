@@ -65,19 +65,25 @@ typedef struct {
 #define GRID_REVEAL_HEAD_ALPHA  0.35f /* additive head-glow alpha at the front    */
 #define GRID_REVEAL_SEGS        22    /* per-line subdivisions while wiping        */
 
-/* Per-theme reveal motion. Only the edge-fade line themes animate a reveal;
- * the environment themes (Ocean / Frozen / Soil / Radar) keep their own
- * atmosphere fade, so their entries are unused. Unlisted entries default to
- * { GRID_REVEAL_RADIAL, head=0 } (designated-init zero) - a plain radial
- * dissolve with no head wave; that includes XZ Ruler and Star Chart, whose
- * decorations fade radially, so a quiet radial graticule reveal stays cohesive
- * with them. Edit freely. */
-static const GridReveal g_grid_reveal[GRID_THEME_COUNT] = {
-    /*                       axis                  head  time                  */
-    [GRID_THEME_EMBER]     = { GRID_REVEAL_RADIAL,   1,  7.0f },
-    [GRID_THEME_TRON]      = { GRID_REVEAL_SWEEP_X,  1,  7.0f },
-    [GRID_THEME_SYNTHWAVE] = { GRID_REVEAL_DIAGONAL, 1,  6.6f },
-    [GRID_THEME_STARCHART] = { GRID_REVEAL_RADIAL,   0,  4.0f },
+/* Per-theme behavioral traits: edge-fade dissolve, distance fog ownership,
+ * NV radial fog opt-in, and reveal animation motion. */
+typedef struct GridThemeTraits {
+    int        uses_edge_fade;
+    int        uses_fog;
+    int        uses_nv_fog;
+    GridReveal reveal;
+} GridThemeTraits;
+
+static const GridThemeTraits g_grid_theme_traits[GRID_THEME_COUNT] = {
+    [GRID_THEME_CLASSIC]   = { .uses_edge_fade = 1, .reveal = { GRID_REVEAL_RADIAL,   0, 0.0f } },
+    [GRID_THEME_TRON]      = { .uses_edge_fade = 1, .reveal = { GRID_REVEAL_SWEEP_X,  1, 7.0f } },
+    [GRID_THEME_EMBER]     = { .uses_edge_fade = 1, .reveal = { GRID_REVEAL_RADIAL,   1, 7.0f } },
+    [GRID_THEME_AURORA]    = { .uses_edge_fade = 1, .reveal = { GRID_REVEAL_RADIAL,   0, 0.0f } },
+    [GRID_THEME_SYNTHWAVE] = { .uses_edge_fade = 1, .reveal = { GRID_REVEAL_DIAGONAL, 1, 6.6f } },
+    [GRID_THEME_XZRULER]   = { .uses_edge_fade = 1, .reveal = { GRID_REVEAL_RADIAL,   0, 0.0f } },
+    [GRID_THEME_STARCHART] = { .uses_edge_fade = 1, .reveal = { GRID_REVEAL_RADIAL,   0, 4.0f } },
+    [GRID_THEME_OCEAN]     = { .uses_fog = 1 },
+    [GRID_THEME_RADAR]     = { .uses_nv_fog = 1 },
 };
 
 /* Returns non-zero when v is close enough to a multiple of `major`
@@ -871,20 +877,6 @@ static const GridThemeSpec *grid_theme_spec(Render3dGridTheme theme) {
     return &g_grid_theme_specs[theme];
 }
 
-static void render3d_grid_apply_quality_config(const Render3dRenderConfig *config) {
-    if (config->multisample_enabled) glEnable(GL_MULTISAMPLE);
-    else glDisable(GL_MULTISAMPLE);
-    if (config->line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
-    else glDisable(GL_LINE_SMOOTH);
-}
-
-/* Camera world-space height; < 0 means the eye is below the grid
- * plane (Ocean's underwater branch, Frozen's under-ice branch). */
-static float grid_camera_world_y(const Render3dRenderConfig *config) {
-    float camera_rx_rad = config->cam_rx * (float)M_PI / 180.0f;
-    return config->cam_ty + sinf(camera_rx_rad) * config->cam_dist;
-}
-
 /* Fill the active scene viewport with a tint rect (Ocean's underwater
  * teal, Frozen's under-ice glacial blue). Coordinates use
  * render3d_w/render3d_h (not the full window viewport) so the rect lines up
@@ -931,7 +923,7 @@ static void render3d_grid_render_ocean_theme(const GridDrawContext *grid_ctx,
     const Render3dRenderConfig *config = &frame_ctx->config;
 
     /* Underwater fog - slightly breathing density */
-    if (grid_camera_world_y(config) < 0.0f) {
+    if (frame_ctx->camera_world_pos[1] < 0.0f) {
         grid_draw_viewport_tint(grid_ctx, config, 0.05f, 0.25f, 0.35f, 0.75f);
     } else {
         glEnable(GL_FOG);
@@ -1130,7 +1122,7 @@ static void render3d_grid_render_frozen_theme(const GridDrawContext *grid_ctx,
      * steady frames remain fog-call-free, which the fog<->predicate
      * test pins.) The tint rect itself is immune to the mist
      * (grid_draw_viewport_tint brackets and disables fog). */
-    if (grid_camera_world_y(config) < 0.0f) {
+    if (frame_ctx->camera_world_pos[1] < 0.0f) {
         grid_draw_viewport_tint(grid_ctx, config,
                                 RENDER3D_GLACIAL_TINT_R, RENDER3D_GLACIAL_TINT_G,
                                 RENDER3D_GLACIAL_TINT_B, 0.65f);
@@ -1321,7 +1313,7 @@ static void render3d_grid_render_soil_theme(const GridDrawContext *grid_ctx,
     const float w = major * GRID_SOIL_FURROW_HALF_FRAC;
 
     /* Buried camera: near-black warm earth filter over the viewport. */
-    if (grid_camera_world_y(config) < 0.0f)
+    if (frame_ctx->camera_world_pos[1] < 0.0f)
         grid_draw_viewport_tint(grid_ctx, config, 0.09f, 0.06f, 0.04f, 0.92f);
 
     /* ---- Soil height-field ----
@@ -1698,7 +1690,8 @@ static void render3d_grid_render_radar_theme(const GridDrawContext *grid_ctx) {
 }
 
 int render3d_grid_theme_uses_fog(Render3dGridTheme grid_theme) {
-    return grid_theme == GRID_THEME_OCEAN;
+    if (grid_theme < 0 || grid_theme >= GRID_THEME_COUNT) return 0;
+    return g_grid_theme_traits[grid_theme].uses_fog;
 }
 
 /* ===========================================================================
@@ -2165,7 +2158,7 @@ static void render3d_grid_render_graphplanes_theme(const Render3dRenderConfig *c
 static float grid_reveal_time_scale(int grid_theme) {
     if (grid_theme <= GRID_THEME_OFF || grid_theme >= GRID_THEME_COUNT)
         return 1.0f;
-    float t = g_grid_reveal[grid_theme].time;
+    float t = g_grid_theme_traits[grid_theme].reveal.time;
     return (t > 0.0f) ? t : 1.0f;
 }
 
@@ -2199,19 +2192,8 @@ const Render3dXnReveal render3d_grid_reveal = {
 };
 
 int render3d_grid_theme_uses_edge_fade(Render3dGridTheme grid_theme) {
-    /* Pure reference line-grids dissolve their alpha to the backdrop at
-     * the rim instead of fogging to the clear color: the table-driven
-     * line themes plus the XZ Ruler and Star Chart - custom-path grids
-     * that still emit their graticule through draw_grid_line_pair, so
-     * they pick up the per-vertex radial fade once they are in this set.
-     * The custom *environment* themes (OCEAN / FROZEN / SOIL) own their
-     * own atmosphere, and RADAR owns its distance fog, so all of those
-     * are out of scope.
-     * Pure - safe to call from tests. */
-    if (grid_theme == GRID_THEME_XZRULER ||
-        grid_theme == GRID_THEME_STARCHART)
-        return 1;
-    return grid_theme_spec(grid_theme) != NULL;
+    if (grid_theme < 0 || grid_theme >= GRID_THEME_COUNT) return 0;
+    return g_grid_theme_traits[grid_theme].uses_edge_fade;
 }
 
 /* --- render3d_grid_render phases ---
@@ -2256,7 +2238,7 @@ static void grid_setup_blend_depth(const Render3dRenderConfig *config) {
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
-    render3d_grid_apply_quality_config(config);
+    render3d_apply_quality_config(config);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
@@ -2286,7 +2268,7 @@ static GridDrawContext grid_build_draw_context(const Render3dFrameRenderContext 
          * set this) must not zero out grid-line alpha, so treat <= 0 as the
          * neutral 1.0 multiplier. */
         .grid_brightness = config->grid_brightness > 0.0f
-                               ? config->grid_brightness : 1.0f,
+                                ? config->grid_brightness : 1.0f,
     };
 }
 
@@ -2347,7 +2329,7 @@ static void grid_apply_far_fog(const Render3dRenderConfig *config,
  * every standard theme by spec-table lookup, so adding/removing a
  * GridThemeSpec entry is a one-edit change instead of two parallel
  * lists. set_nv_fog is true iff the runtime supports NV fog distance
- * AND the active theme wants radial eye-distance fog (OCEAN, RADAR). */
+ * AND the active theme wants radial eye-distance fog (RADAR). */
 static void grid_dispatch_theme(const Render3dFrameRenderContext *frame_ctx,
                                 const GridDrawContext *grid_ctx,
                                 Render3dGridTheme grid_theme,
@@ -2356,16 +2338,6 @@ static void grid_dispatch_theme(const Render3dFrameRenderContext *frame_ctx,
     switch (grid_theme) {
 
     case GRID_THEME_OCEAN:
-#if 0 /* nv radial fog breaks some of the geometry, since its per vertex and
-         some of the grid lines are very long, extending past the fog end,
-         making them invisible */
-
-        /* Opt into radial eye-distance fog when available, so the fog
-         * closes in by true distance rather than eye-plane depth and the
-         * fringes stop swimming as the camera orbits. */
-        if (set_nv_fog)
-            glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV);
-#endif
         render3d_grid_render_ocean_theme(grid_ctx, frame_ctx, grid_ctx->breath);
         break;
 
@@ -2398,9 +2370,8 @@ static void grid_dispatch_theme(const Render3dFrameRenderContext *frame_ctx,
         break;
 
     case GRID_THEME_RADAR:
-        /* Same radial-fog opt-in as Ocean (see above): the radar rings
-         * read the shared FAR-extent distance fog, which swims at the
-         * fringes under the eye-plane default. */
+        /* Radial-fog opt-in: the radar rings read the shared FAR-extent
+         * distance fog, which swims at the fringes under the eye-plane default. */
         if (set_nv_fog)
             glFogi(GL_FOG_DISTANCE_MODE_NV, GL_EYE_RADIAL_NV);
         render3d_grid_render_radar_theme(grid_ctx);
@@ -2435,7 +2406,7 @@ void render3d_grid_render(const Render3dFrameRenderContext *frame_ctx) {
     GridDrawContext grid_ctx = grid_build_draw_context(frame_ctx);
     grid_ctx.xn_opacity   = xn.opacity;
     grid_ctx.xn_alpha     = xn.alpha;
-    grid_ctx.reveal       = g_grid_reveal[grid_theme];
+    grid_ctx.reveal       = g_grid_theme_traits[grid_theme].reveal;
 
     /* Edge-fade dissolve: always on for the line themes. The grid
      * dissolves to transparency by world radial distance, reaching 0 at
@@ -2455,12 +2426,11 @@ void render3d_grid_render(const Render3dFrameRenderContext *frame_ctx) {
 
     /* GL_FOG_DISTANCE_MODE_NV isn't in the Khronos GL_FOG_BIT spec, so
      * a strict glPushAttrib(GL_ALL_ATTRIB_BITS) may not save/restore it.
-     * Snapshot before the OCEAN/RADAR themes mutate it, restore at the
+     * Snapshot before the RADAR theme mutates it, restore at the
      * tail before pop. */
     GLint saved_nv_fog_mode = 0;
     int set_nv_fog = (config->nv_fog_distance_supported &&
-                      (grid_theme == GRID_THEME_OCEAN ||
-                       grid_theme == GRID_THEME_RADAR));
+                      g_grid_theme_traits[grid_theme].uses_nv_fog);
     if (set_nv_fog)
         glGetIntegerv(GL_FOG_DISTANCE_MODE_NV, &saved_nv_fog_mode);
 

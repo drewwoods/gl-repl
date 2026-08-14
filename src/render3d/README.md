@@ -9,17 +9,18 @@
 ## What this is, in general
 
 A **3D renderer** is the part of a graphics program that owns the
-*frame*: it sets the viewport, clears the buffers, builds the projection,
-positions the camera, configures lighting, draws the world, and adds the
-"studio" decorations (a reference grid, axes, a backdrop). It does **not**
-decide *what* geometry exists - that is handed in.
+*frame*: it sets the viewport, builds the projection, configures lighting,
+draws the world, and adds the "studio" decorations (a reference grid, axes,
+a backdrop), and manages internal accumulation loops. It does **not**
+clear color/depth buffers, own a camera type, or decide *what* geometry exists -
+those are handed in.
 
 `src/render3d` is a renderer for **fixed-function OpenGL** - the classic GL 1.x
 style of `glBegin`/`glEnd`, the matrix stack, and `glLight*`/`glMaterial*`
 lighting (no shaders). Its central abstraction is a **geometry callback**:
-the caller fills a [`Render3dRenderConfig`](render_types.h#L139) (camera pose, lighting, grid/axes
+the caller fills a [`Render3dRenderConfig`](render_types.h#L138) (camera pose, lighting, grid/axes
 themes, AA settings, background colors) and supplies an `execute_fn` that draws
-the actual geometry. [`render3d_draw_scene()`](render.h#L129) does everything around that
+the actual geometry. [`render3d_draw_scene()`](render.h#L139) does everything around that
 callback:
 
 ```c
@@ -80,7 +81,7 @@ The demo is the **layer-independence proof** for `src/render3d`: it builds with
 a deliberately slim object list and a geometry callback that knows nothing
 about the REPL. If render3d code ever grew a hard dependency on the editor,
 controller, or UI, this binary would stop linking. It also documents the
-contract by example - `build_config()` shows exactly which [`Render3dRenderConfig`](render_types.h#L139)
+contract by example - `build_config()` shows exactly which [`Render3dRenderConfig`](render_types.h#L138)
 fields must be set (e.g. the grid step tables, or the renderer's grid loop
 never terminates).
 
@@ -102,7 +103,7 @@ last good module loaded.
 **State survives the reload** because every piece of demo state - camera pose,
 2D/3D + projection blend, grid/axes themes, lighting, backdrop - lives in the
 host TU ([`render3d_demo.c`](../../tools/render3d_demo/render3d_demo.c)), which is never reloaded; only the render3d `.c`
-bodies are. [`Render3dState`](render.h#L88) crosses the boundary but is host-owned, and its
+bodies are. [`Render3dState`](render.h#L101) crosses the boundary but is host-owned, and its
 layout is fixed by [`render.h`](render.h) at host-compile time - so editing `.c` bodies is
 free, while changing that struct's **layout** (a header edit) is the one case
 that needs a relaunch.
@@ -122,10 +123,11 @@ target is untouched (it stays the link-proof `make test-full` and
 ## In the REPL app
 
 Inside the full app this is **layer 4** of the ownership map. The controller
-([`src/app/glr_ctrl.c`](../app/glr_ctrl.c)) builds a [`Render3dRenderConfig`](render_types.h#L139) from REPL runtime state + view
+([`src/app/glr_ctrl.c`](../app/glr_ctrl.c)) builds a [`Render3dRenderConfig`](render_types.h#L138) from REPL runtime state + view
 state each frame, then calls [`glr_camera_load_modelview()`](../app/glr_camera.h#L165) and
-[`render3d_draw_scene()`](render.h#L129) once per accumulation-jitter sample (with its own
-[`Render3dState`](render.h#L88)). The geometry callback is the REPL executor
+[`render3d_draw_scene()`](render.h#L139) once per frame (the accumulation-AA jitter
+loop is managed internally by `render3d_draw_scene()` with its own
+[`Render3dState`](render.h#L101)). The geometry callback is the REPL executor
 (`repl_execute_program`), so the user's typed program becomes the rendered
 geometry.
 
@@ -134,7 +136,7 @@ Render3d renderers **consume snapshots/configs and never read REPL runtime state
 under `guides/` (vertex/normal guides at the cursor, transform guides during
 replay) still obey this: the `edit_overlays` peer subsystem
 `src/subsystems/edit_overlays/` (driven by the controller each frame)
-resolves their data into a [`Render3dGuideSnapshot`](guides/guides_shared.h#L44) and passes it in. The camera transform is the
+resolves their data into a [`Render3dGuideSnapshot`](guides/guides_shared.h#L53) and passes it in. The camera transform is the
 controller's job - [`render.c`](render.c) only brackets sub-renderer push/pop and
 applies a render3d-local frustum shift for jitter.
 
@@ -143,7 +145,7 @@ applies a render3d-local frustum shift for jitter.
 | File | Responsibility |
 |---|---|
 | [`render.c`](render.c) / `.h` | Frame orchestration: viewport, clear, projection, accumulation loop, geometry-callback hook, overlay/HUD passes |
-| [`render_types.h`](render_types.h) | [`Render3dRgba`](render_types.h#L63), [`Render3dRenderConfig`](render_types.h#L139), frame-context types - the renderer contract |
+| [`render_types.h`](render_types.h) | [`Render3dRgba`](render_types.h#L62), [`Render3dRenderConfig`](render_types.h#L138), frame-context types - the renderer contract |
 | [`grid.c`](grid.c) / `.h` | Reference-grid rendering and grid themes (incl. ocean/ruler passes) |
 | [`axes.c`](axes.c) / `.h` | Axis rendering and axis themes |
 | [`render3d_transition.c`](render3d_transition.c) / `.h` | Pure grid/axes show <--> hide fade state machine (no GL) |
@@ -151,7 +153,7 @@ applies a render3d-local frustum shift for jitter.
 | [`lights.c`](lights.c) / `.h` | Baseline lighting setup and light-indicator gizmos |
 | [`overlays.c`](overlays.c) / `.h` | Tiny per-vertex primitives (vertex-number labels, normal arrows) |
 | [`postprocess_filter.c`](postprocess_filter.c) / `.h` | Optional full-frame post-process pass |
-| [`guides/geometry_guides.c`](guides/geometry_guides.c) | Vertex/primitive guides at the cursor (from [`Render3dGuideSnapshot`](guides/guides_shared.h#L44)) |
+| [`guides/geometry_guides.c`](guides/geometry_guides.c) | Vertex/primitive guides at the cursor (from [`Render3dGuideSnapshot`](guides/guides_shared.h#L53)) |
 | [`guides/transform_guides.c`](guides/transform_guides.c) | Transform guides (pending matrix ops during replay) |
 | [`guides/guides_shared.h`](guides/guides_shared.h) | Shared guide snapshots and per-frame guide-plan types |
 | [`palette.h`](palette.h), [`themes.h`](themes.h), [`occluded_ghost.h`](occluded_ghost.h) | Shared color/theme/style constants |

@@ -146,7 +146,6 @@ static Render3dRenderConfig make_test_config(void) {
     cfg.accum_effect = RENDER3D_ACCUM_EFFECT_AA;
     cfg.accum_passes = 2;
 
-    cfg.user_lighting_enabled = 0;
     cfg.show_light_indicators = 0;
     cfg.backdrop_mode = 0;
 
@@ -405,7 +404,7 @@ static void test_scene_ortho_zoom_rescales(void) {
     ASSERT_TRUE("zoom out grows ortho_top",   p_out.ortho_top > p_base.ortho_top);
 
     /* Exact ratio is htan-independent and pins the arithmetic. */
-#if GLR_ORTHO_REF_MODE == GLR_ORTHO_REF_FROZEN
+#if RENDER3D_ORTHO_REF_MODE == RENDER3D_ORTHO_REF_FROZEN
     /* ref = 8 + (cam_dist - 30): 5, 8, 11 -> ratios 5/8 and 11/8. */
     ASSERT_FLOAT("frozen zoom-in ratio",
                  (float)(p_in.ortho_top / p_base.ortho_top), 5.0f / 8.0f);
@@ -445,7 +444,6 @@ static void test_config_defaults(void) {
     ASSERT_INT("use_accum default", cfg.use_accum, 1);
     ASSERT_INT("accum effect default", cfg.accum_effect, RENDER3D_ACCUM_EFFECT_AA);
     ASSERT_INT("accum passes default", cfg.accum_passes, 2);
-    ASSERT_INT("user_lighting_enabled default", cfg.user_lighting_enabled, 0);
     ASSERT_FLOAT("anim_time default", cfg.anim_time, 0.0f);
 }
 
@@ -808,12 +806,6 @@ static void test_scene_lights(void) {
     /* Render. */
     render3d_lights_render(&ctx);
     ASSERT_TRUE("render3d_lights_render did not crash", 1);
-
-    /* With lighting enabled. */
-    ctx.config.user_lighting_enabled = 1;
-    render3d_lights_setup(&ctx);
-    render3d_lights_render(&ctx);
-    ASSERT_TRUE("scene_lights with user_lighting_enabled did not crash", 1);
 }
 
 /* --- Tests for scene_overlay functions (minimal) ------------------ */

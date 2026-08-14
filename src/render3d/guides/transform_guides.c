@@ -2,9 +2,11 @@
  * transform_guides.c - transform edit-guide planning/rendering.
  */
 #include "transform_guides.h"
+#include "config.h"
 #include "repl/transform_utils.h"
 #include "render3d/palette.h"
 #include "render3d/occluded_ghost.h"
+#include "render3d/overlays.h"
 
 #include <ctype.h>  /* isspace */
 #include <math.h>   /* sqrtf, fminf, fmodf, cosf, sinf, fabsf, M_PI */
@@ -39,6 +41,10 @@ static void transform_guides_begin_overlay_state(void) {
     glDepthMask(GL_FALSE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+}
+
+static void transform_guides_end_overlay_state(void) {
+    transform_guides_pop_state();
 }
 
 /* Shared arrowhead sizing, used by every translate/scale guide path:
@@ -143,9 +149,7 @@ static float tg_snap_zero(float v) {
 /* Shared two-run "<name> <numbers>" label emitter for the translate and
  * scale guides, mirroring the normal glyph's " n" + "=(...)" pattern so a
  * transform guide cannot be misread as a normal readout. Depth-test
- * off so the text is always legible. Emits the glyphs directly (rather than
- * via render3d overlays) so this TU stays free of an overlays.o link
- * dependency - the isolated guides test links only the guide objects. */
+ * off so the text is always legible. Emits via render3d_draw_vertex_label_text. */
 static void draw_named_value_label(const Render3dGuideSnapshot *snapshot,
                                    const float pos[3],
                                    const char *name, const char *detail) {
@@ -157,11 +161,7 @@ static void draw_named_value_label(const Render3dGuideSnapshot *snapshot,
     glColor4f(0.80f, 0.95f, 1.0f, 0.95f);
     render3d_guide_record_label(snapshot, pos, FONT_MONO, name,
                                   FONT_TINY, detail);
-    glRasterPos3f(pos[0], pos[1], pos[2]);
-    for (const char *c = name; *c; c++)
-        glutBitmapCharacter(FONT_MONO, (unsigned char)*c);
-    for (const char *c = detail; *c; c++)
-        glutBitmapCharacter(FONT_TINY, (unsigned char)*c);
+    render3d_draw_vertex_label_text(pos[0], pos[1], pos[2], name, detail);
     transform_guides_pop_state();
 }
 
@@ -740,9 +740,7 @@ static void draw_rotate_angle_label(const Render3dGuideSnapshot *snapshot,
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glColor4f(0.80f, 0.95f, 1.0f, 0.95f);
     render3d_guide_record_label(snapshot, pos, FONT_SMALL, buf, NULL, NULL);
-    glRasterPos3f(pos[0], pos[1], pos[2]);
-    for (const char *c = buf; *c; c++)
-        glutBitmapCharacter(FONT_SMALL, (unsigned char)*c);
+    render3d_draw_bitmap_text(FONT_SMALL, pos[0], pos[1], pos[2], buf);
     transform_guides_pop_state();
 }
 

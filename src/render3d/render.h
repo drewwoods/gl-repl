@@ -3,10 +3,18 @@
  *
  * Exposes the render3d module's top-level render entry points. Callers build a
  * Render3dRenderConfig snapshot, populate GL_MODELVIEW with their own camera
- * transform, then call render3d_draw_scene() for one pass. The render3d
- * module owns projection setup, clear, helper renderers (backdrop, grid,
- * axes, lights), and the optional callback hooks that bracket the main
- * geometry fill - but does NOT own a camera type or apply helper.
+ * transform, then call render3d_draw_scene(). The render3d module owns
+ * projection setup, baseline clear-color state, helper renderers (backdrop,
+ * grid, axes, lights), internal accumulation loops, and callback hooks that
+ * bracket the main geometry fill - but does NOT own a camera type, camera
+ * apply helper, or color/depth buffer clearing (the caller owns the camera
+ * transform and frame buffer clearing).
+ *
+ * Naming convention for symbols in src/render3d/:
+ * - New enumerators and public constants must use the RENDER3D_* prefix.
+ * - Do not introduce GLR_* symbols in this directory (those belong to the app).
+ * - The existing GRID_THEME_*, AXES_THEME_*, WIREFRAME_*, and PROJ_* sets are
+ *   preserved as the canonical cfg X-macro source.
  *
  * The public surface is application-independent: user geometry, replay work,
  * and edit overlays enter through callbacks and snapshots carried on
@@ -46,11 +54,16 @@ void render3d_init_gl(void);
  * jitter loop) so the value reflects the canonical zero-jitter math,
  * not a transient sample. Export/debug paths read it through
  * render3d_get_active_projection() so they emit a faithful reshape()
- * without re-deriving from scene internals. The blend mid-transition
- * is snapped to whichever side the mix is closest to, because
- * downstream callers want a discrete mode rather than an interpolated
- * matrix. ortho_top is the aspect-independent half-height (callers
- * multiply by their own aspect). */
+ * without re-deriving from scene internals.
+ *
+ * Projection mode representation:
+ * - Render3dViewMode (view_mode.h) is the caller's discrete 2D/3D request.
+ * - projection_mix (render_types.h) is the renderer's continuous blend (0..1).
+ * - Render3dProjectionDesc.projection is the snapped discrete mode (PROJ_*)
+ *   that export and debug paths read.
+ *
+ * ortho_top is the aspect-independent half-height (callers multiply by their
+ * own aspect). */
 typedef struct Render3dProjectionDesc {
     Render3dProjectionMode projection; /* perspective / orthographic */
     double fovy_deg;     /* perspective vertical field of view */
@@ -67,15 +80,15 @@ typedef struct Render3dProjectionDesc {
  * reproduces. Both modes probe drawn geometry and pivot on the midpoint of its
  * eye-distance span (the depth-center):
  *
- *   GLR_ORTHO_REF_FROZEN   sample once at the perspective->ortho edge and
- *                          hold that reference until perspective returns.
- *   GLR_ORTHO_REF_PERFRAME re-probe every frame while ortho contributes.
+ *   RENDER3D_ORTHO_REF_FROZEN   sample once at the perspective->ortho edge and
+ *                               hold that reference until perspective returns.
+ *   RENDER3D_ORTHO_REF_PERFRAME re-probe every frame while ortho contributes.
  *
  * A probe that finds nothing falls back to cam_dist. */
-#define GLR_ORTHO_REF_FROZEN   0
-#define GLR_ORTHO_REF_PERFRAME 1
-#ifndef GLR_ORTHO_REF_MODE
-#define GLR_ORTHO_REF_MODE GLR_ORTHO_REF_FROZEN
+#define RENDER3D_ORTHO_REF_FROZEN   0
+#define RENDER3D_ORTHO_REF_PERFRAME 1
+#ifndef RENDER3D_ORTHO_REF_MODE
+#define RENDER3D_ORTHO_REF_MODE RENDER3D_ORTHO_REF_FROZEN
 #endif
 
 /* Per-renderer state the render3d module needs to persist across frames.
@@ -88,7 +101,7 @@ typedef struct Render3dProjectionDesc {
 typedef struct Render3dState {
     /* 2D ortho scale reference (depth-center of the drawn geometry).
      * How it's sampled - once at the switch vs. every frame - is
-     * selected at compile time by GLR_ORTHO_REF_MODE above.
+     * selected at compile time by RENDER3D_ORTHO_REF_MODE above.
      * 0 means "no usable measurement" and the projection math falls
      * back to config->cam_dist (the camera's distance to the orbit
      * target plane). */
@@ -117,15 +130,12 @@ void render3d_state_init(Render3dState *state);
 /* Render the full 3D scene for one frame using an explicit config snapshot.
  * Orchestrates projection setup, user geometry execution, grid/axes, and
  * callback-provided overlays and guides.
- * Called once per frame (or multiple times per frame for accumulation-buffer
- * AA). The caller builds the config once and passes it in along with its
+ * Called once per frame (the renderer manages the internal accumulation AA
+ * loop). The caller builds the config once and passes it in along with its
  * owned renderer state.
  *
  * Returns 0 on success, -1 with errno = EINVAL if the config is rejected
- * by validate_render_config: NULL config, non-positive render3d_w / render3d_h,
- * out-of-range grid_theme / axes_theme, grid index out of range or grid
- * extent/step <= 0 when grid is enabled, unknown accum_effect, or
- * accum_passes outside [1, MAX_ACCUM_SAMPLES] when accumulation is active. */
+ * by validate_render_config. */
 int render3d_draw_scene(Render3dState *state,
                           const Render3dRenderConfig *config);
 

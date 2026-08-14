@@ -5,6 +5,15 @@
  * editor/replay context, then guide renderers consume it without reaching back
  * into those owners' state. Render3dTransformGuidePlan is the small per-frame
  * cache transform guides use between prepare and render.
+ *
+ * Guide contract:
+ * - New cursor guides must take pre-evaluated argument bags (vertices,
+ *   normals, clip planes, transformed positions) pre-resolved by the
+ *   controller or edit_overlays subsystem.
+ * - Do NOT add new walks of GLCmd[] / source_cmds / FlatProgramView inside
+ *   render3d. If a future guide needs "the transform in force at the cursor",
+ *   evaluate that matrix in the controller/edit_overlays and pass the 16
+ *   floats in.
  */
 #ifndef RENDER3D_GUIDES_SHARED_H
 #define RENDER3D_GUIDES_SHARED_H
@@ -50,7 +59,6 @@ typedef struct Render3dGuideSnapshot {
      * from replay_focus_anchor_flat_idx(). */
     int replay_focus_anchor_flat_idx;
     Render3dXformGuideMode xform_guide_mode;
-    int user_lighting_enabled;
     float anim_time;
 
     /* `input` is the live editor input buffer text - always a valid C

@@ -554,7 +554,7 @@ static void fill_guide_arg_slots(Render3dGuideSnapshot *snapshot,
 
 /* Build a guide-render snapshot from live REPL + editor state. The
  * Render3dRenderConfig argument is consulted only for fields the
- * controller already supplies (alpha_scale, user_lighting_enabled);
+ * controller already supplies (alpha_scale);
  * everything else comes from REPL/editor accessors so this can run
  * without a per-frame config pointer if needed. */
 static Render3dGuideSnapshot glr_ctrl_build_guide_snapshot(const Render3dRenderConfig *config) {
@@ -568,7 +568,6 @@ static Render3dGuideSnapshot glr_ctrl_build_guide_snapshot(const Render3dRenderC
         .replaying = replay_active(),
         .replay_focus_anchor_flat_idx = replay_focus_anchor_flat_idx(),
         .xform_guide_mode = presentation.xform_guide_mode,
-        .user_lighting_enabled = config ? config->user_lighting_enabled : 0,
         .anim_time = vars.anim_time,
         .input = input.input,
         .input_len = input.input_len,
@@ -1638,7 +1637,7 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
      * pack itself is built at the END of this function (see
      * "Build overlay snapshot pack" below) so it reads the fully-
      * populated config fields (multisample_enabled, line_smooth_enabled,
-     * user_lighting_enabled, alpha_scale) - those are assigned later in
+     * alpha_scale) - those are assigned later in
      * this function, so building the pack here would read stack garbage. */
     config->post_overlays_fn        = edit_overlays_post_overlays;
     config->post_overlays_user_data = &g_overlay_pack;
@@ -1726,7 +1725,6 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
      * colors / eye-space, in glr_state) with the REPL-owned enable bitmask
      * (light_enabled_mask, written by the executor as the program runs).
      * The light-indicator overlay reads the `.enabled` flags from here. */
-    config->user_lighting_enabled = repl_state_flat_program_user_lighting_enabled();
     for (int i = 0; i < MAX_LIGHTS; i++) {
         config->lights[i] = render.lights[i];
         config->lights[i].enabled = repl_light_enabled(repl_render.light_enabled_mask, i);

@@ -2,6 +2,8 @@
  * axes.c - axes theme rendering
  */
 #include "axes.h"
+#include "config.h"
+#include "overlays.h"    /* render3d_draw_bitmap_text */
 #include "overlay_xn.h"  /* Render3dOverlayXn + shared resolve helper */
 #include "occluded_ghost.h"  /* RENDER3D_OCCLUDED_GHOST_STIPPLE */
 #include "render3d_hash.h"   /* render3d_hash01 - Fountain droplet scatter */
@@ -98,27 +100,24 @@ static Render3dRgba rgba(float r, float g, float b, float a) {
 
 #if AXES_XN_STYLE == GRID_AXES_XN_FOG
 #define AXES_XN_FOG_ALPHA_KNEE 0.30f
-#define AXES_XN_FOG_REACH      4.0f   /* nominal axis+label extent */
 
-/* tf = 1 - opacity (0 shown .. 1 hidden). Pull a background-colored linear-fog
- * wall in toward the origin as the axes fade out. Untouched at tf<=0 so
- * a steady, fully-shown axes set is unfogged. */
-static void axes_xn_apply_transition_fog(float tf,
-                                         const float presentation_rgba[4]) {
-    if (tf <= 0.0f) return;
-    glFogfv(GL_FOG_COLOR, presentation_rgba);
+static void axes_xn_apply_transition_fog(float fog_tf,
+                                         const float bg_rgba[4]) {
+    /* Fog fades in as the overlay hides: fog_tf runs 0 (steady) -> 1 (hidden).
+     * Linear range [1.0, 5.0] puts the fog wall right on top of the axes,
+     * fading them to clear-color as alpha drops to the knee. */
+    if (fog_tf <= 0.0f) return;
+    float start = 1.0f + (1.0f - fog_tf) * 4.0f;
+    float end   = start + 3.0f;
+    set_fog_to_presentation_color(bg_rgba);
     glEnable(GL_FOG);
     glFogi(GL_FOG_MODE, GL_LINEAR);
-    float far_end  = AXES_XN_FOG_REACH;
-    float near_end = AXES_XN_FOG_REACH * 0.02f;
-    float end = far_end + (near_end - far_end) * tf;
-    glFogf(GL_FOG_START, end * 0.15f);
-    glFogf(GL_FOG_END,   end);
+    glFogf(GL_FOG_START, start);
+    glFogf(GL_FOG_END, end);
 }
 #endif
 
-static void axes_color(const AxesDrawContext *ctx,
-                       float r, float g, float b, float a) {
+static void axes_color(const AxesDrawContext *ctx, float r, float g, float b, float a) {
     glColor4f(r, g, b, a * ctx->xn_alpha);
 }
 
@@ -131,8 +130,8 @@ static void draw_axis_label(const AxesDrawContext *ctx,
                             float x, float y, float z, char ch,
                             float r, float g, float b) {
     axes_color(ctx, r, g, b, 1.0f);
-    glRasterPos3f(x, y, z);
-    glutBitmapCharacter(FONT_MONO, ch);
+    char str[2] = { ch, '\0' };
+    render3d_draw_bitmap_text(FONT_MONO, x, y, z, str);
 }
 
 static const AxesThemeSpec g_axes_theme_specs[AXES_THEME_COUNT] = {
@@ -222,13 +221,6 @@ static const AxesThemeSpec *axes_theme_spec(Render3dAxesTheme theme) {
     if (g_axes_theme_specs[theme].len <= 0.0f)
         return NULL;
     return &g_axes_theme_specs[theme];
-}
-
-static void render3d_axes_apply_quality_config(const Render3dRenderConfig *config) {
-    if (config->multisample_enabled) glEnable(GL_MULTISAMPLE);
-    else glDisable(GL_MULTISAMPLE);
-    if (config->line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
-    else glDisable(GL_LINE_SMOOTH);
 }
 
 static void draw_axis_line_triplet(const AxesDrawContext *ctx,
@@ -739,7 +731,7 @@ void render3d_axes_render(const Render3dFrameRenderContext *frame_ctx) {
     glDisable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
-    render3d_axes_apply_quality_config(config);
+    render3d_apply_quality_config(config);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 

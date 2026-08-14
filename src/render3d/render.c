@@ -114,6 +114,12 @@ static int validate_render_config(const Render3dRenderConfig *config) {
         if (!(config->grid_major_steps[config->grid_major_idx] > 0.0f))
                                                               goto bad;
     }
+    if (config->wireframe < 0 || config->wireframe >= WIREFRAME_COUNT) goto bad;
+    if (config->post_filter_mode < 0
+        || config->post_filter_mode >= RENDER3D_POST_FILTER_COUNT)    goto bad;
+    if (config->winding_view < 0 || config->winding_view > 1)         goto bad;
+    if (config->highlight_light_slot < -1
+        || config->highlight_light_slot >= MAX_LIGHTS)                goto bad;
     /* accum_effect must be a known mode. accum_passes must be a sane sample
      * count in [1, MAX_ACCUM_SAMPLES], but only when accumulation is
      * actually active (effect != OFF on an accum-capable context) - a
@@ -275,7 +281,7 @@ static double render3d_probe_eye_dist(const Render3dRenderConfig *config) {
 /* Refresh the ortho scale reference for this frame. mix == 1 is pure
  * perspective; anything below means ortho is contributing (a switch is
  * in progress or we are dwelling in 2D). Sampling strategy is chosen by
- * GLR_ORTHO_REF_MODE in render.h.
+ * RENDER3D_ORTHO_REF_MODE in render.h.
  *
  * FROZEN: capture once on the perspective->ortho edge, release on the
  * ortho->perspective edge. The embedding caller sequences the 3D->2D switch as
@@ -290,14 +296,14 @@ static void render3d_update_ortho_ref(Render3dState *state,
                                    const Render3dRenderConfig *config) {
     int ortho_now = (config->projection_mix < 0.999f);
 
-#if GLR_ORTHO_REF_MODE == GLR_ORTHO_REF_PERFRAME
+#if RENDER3D_ORTHO_REF_MODE == RENDER3D_ORTHO_REF_PERFRAME
     (void)state->ortho_active;
     state->ortho_ref_dist = ortho_now ? render3d_probe_eye_dist(config) : 0.0;
     /* The probe just ran at the live cam_dist, so the zoom delta is zero
      * this frame; record the baseline anyway to keep
      * render3d_effective_ortho_ref's arithmetic correct. */
     state->ortho_ref_cam_dist = (double)config->cam_dist;
-#else /* GLR_ORTHO_REF_FROZEN */
+#else /* RENDER3D_ORTHO_REF_FROZEN */
     {
         if (ortho_now && !state->ortho_active) {
             state->ortho_ref_dist = render3d_probe_eye_dist(config);
@@ -469,13 +475,6 @@ static void render3d_apply_projection(const Render3dState *state,
 /* The render3d module does not own a camera-apply helper. Callers populate
  * GL_MODELVIEW themselves before invoking render3d_draw_scene. */
 
-static void render3d_apply_quality_config(const Render3dRenderConfig *config) {
-    if (config->multisample_enabled) glEnable(GL_MULTISAMPLE);
-    else glDisable(GL_MULTISAMPLE);
-    if (config->line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
-    else glDisable(GL_LINE_SMOOTH);
-}
-
 static void render3d_apply_wireframe_config(const Render3dRenderConfig *config) {
     if (config->wireframe == WIREFRAME_PLAIN)
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -484,6 +483,31 @@ static void render3d_apply_wireframe_config(const Render3dRenderConfig *config) 
 static void render3d_prepare_frame_context(Render3dFrameRenderContext *ctx,
                                         const Render3dRenderConfig *config) {
     ctx->config = *config;
+
+    const float deg = 3.14159265358979323846f / 180.0f;
+    float cx = cosf(config->cam_rx * deg), sx = sinf(config->cam_rx * deg);
+    float cy = cosf(config->cam_ry * deg), sy = sinf(config->cam_ry * deg);
+
+    /* Camera world position */
+    ctx->camera_world_pos[0] = config->cam_tx - config->cam_dist * cx * sy;
+    ctx->camera_world_pos[1] = config->cam_ty + config->cam_dist * sx;
+    ctx->camera_world_pos[2] = config->cam_tz + config->cam_dist * cx * cy;
+
+    /* 3x3 eye-to-world basis: world = Ry(-ry) * Rx(-rx) * eye */
+    /* Basis vector 0: eye +X (right) */
+    ctx->camera_basis[0][0] = cy;
+    ctx->camera_basis[0][1] = 0.0f;
+    ctx->camera_basis[0][2] = sy;
+
+    /* Basis vector 1: eye +Y (up) */
+    ctx->camera_basis[1][0] = sy * sx;
+    ctx->camera_basis[1][1] = cx;
+    ctx->camera_basis[1][2] = -cy * sx;
+
+    /* Basis vector 2: eye +Z (back) */
+    ctx->camera_basis[2][0] = -sy * cx;
+    ctx->camera_basis[2][1] = sx;
+    ctx->camera_basis[2][2] = cy * cx;
 }
 
 static void render3d_execute_user_geometry(const Render3dRenderConfig *config,
@@ -521,7 +545,7 @@ static void orbit_gizmo_axes(float tx, float ty, float tz, float r) {
 /* Crosshair gizmo at the orbit target. Visible only while the camera is
  * moving (during drag or while momentum carries it); fades out. Caller-only -
  * never exported. Styled to match the other scene helpers: soft halo line
- * under a bright core, alpha driven by g_cam_motion_glow. Drawn in two
+ * under a bright core, alpha driven by config->cam_motion_glow. Drawn in two
  * passes so it is never fully hidden inside user geometry - pass 0 is a
  * depth-disabled stippled ghost at reduced alpha, pass 1 is the solid
  * depth-tested gizmo on top where it isn't occluded. */
@@ -608,9 +632,9 @@ static void render3d_apply_baseline_clear_color(const float clear_color[4]) {
                  clear_color[2], clear_color[3]);
 }
 
-/* --- render_3d_scene_pass phases ---
+/* --- render3d_scene_pass phases ---
  *
- * The accumulation-AA loop calls render_3d_scene_pass once per
+ * The accumulation-AA loop calls render3d_scene_pass once per
  * jitter sample, and each call does five distinct things in order:
  * projection/lighting setup, user fill, scene helpers (backdrop /
  * grid / axes / orbit target), and post-fill / post-overlays
@@ -714,8 +738,10 @@ static void render3d_pass_winding(const Render3dRenderConfig *config) {
      * The caller's execute_fn must install a state filter that suppresses
      * the program's own material / lighting / cull / color-material commands
      * so this setup survives the geometry walk. */
-    static const GLfloat front_rgba[4]    = { 0.16f, 0.80f, 0.32f, 1.0f }; /* green */
-    static const GLfloat back_rgba[4]     = { 0.88f, 0.20f, 0.18f, 1.0f }; /* red   */
+    Render3dRgba front = render3d_rgba(RENDER3D_CLR_WINDING_FRONT);
+    Render3dRgba back  = render3d_rgba(RENDER3D_CLR_WINDING_BACK);
+    const GLfloat front_rgba[4]    = { front.r, front.g, front.b, front.a }; /* green */
+    const GLfloat back_rgba[4]     = { back.r,  back.g,  back.b,  back.a  }; /* red   */
     static const GLfloat model_ambient[4] = { 0.65f, 0.65f, 0.65f, 1.0f };
     static const GLfloat light_diffuse[4] = { 0.55f, 0.55f, 0.55f, 1.0f };
     static const GLfloat light_dir[4]     = { 0.3f, 0.5f, 1.0f, 0.0f }; /* eye-space */
@@ -827,7 +853,7 @@ static void render3d_pass_overlays(const Render3dFrameRenderContext *frame_ctx) 
     prof_accum_end(PROF_RENDER3D_OVERLAYS);
 }
 
-static void render_3d_scene_pass(const Render3dState *state,
+static void render3d_scene_pass(const Render3dState *state,
                                  const Render3dRenderConfig *config,
                                  float accum_jitter_x,
                                  float accum_jitter_y,
@@ -944,11 +970,11 @@ int render3d_draw_scene(Render3dState *state,
                                           pass_idx, accum_passes, &pass_cfg);
                 render3d_compute_active_projection(state, &pass_cfg);
                 prof_accum_end(PROF_RENDER3D_ACCUM_EFFECT);
-                render_3d_scene_pass(state, &pass_cfg, 0.0f, 0.0f,
+                render3d_scene_pass(state, &pass_cfg, 0.0f, 0.0f,
                                      pass_idx == accum_passes - 1);
             } else {
                 prof_accum_end(PROF_RENDER3D_ACCUM_EFFECT);
-                render_3d_scene_pass(state, config,
+                render3d_scene_pass(state, config,
                                      g_jitter_table[pass_idx % MAX_ACCUM_SAMPLES][0],
                                      g_jitter_table[pass_idx % MAX_ACCUM_SAMPLES][1],
                                      pass_idx == accum_passes - 1);
@@ -965,7 +991,7 @@ int render3d_draw_scene(Render3dState *state,
     } else {
         /* No clear here: the caller owns the region outside the scene rect,
          * and the scene rect belongs to the program's glClear. */
-        render_3d_scene_pass(state, config, 0.0f, 0.0f, 1);
+        render3d_scene_pass(state, config, 0.0f, 0.0f, 1);
     }
 
     /* Screen-anchored annotation (bitmap-text labels) draws once per

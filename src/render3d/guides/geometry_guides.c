@@ -2,6 +2,7 @@
  * geometry_guides.c - vertex/normal edit-guide rendering.
  */
 #include "geometry_guides.h"
+#include "config.h"
 #include "render3d/palette.h"
 #include "render3d/occluded_ghost.h"  /* RENDER3D_OCCLUDED_GHOST_STIPPLE */
 #include "render3d/overlays.h"

@@ -92,7 +92,7 @@ The controller translates REPL state into per-frame view inputs.
 
 Render3d modules may consume [`FlatProgramView`](../src/repl/flatten.h#L58), [`CmdType`](../src/repl/command.h#L44), and other
 command-domain data when that data is already present in the
-[`Render3dRenderConfig`](../src/render3d/render_types.h#L139) or a derived frame snapshot. They should not fetch REPL
+[`Render3dRenderConfig`](../src/render3d/render_types.h#L138) or a derived frame snapshot. They should not fetch REPL
 globals or call `repl_state_*` APIs directly during rendering.
 
 ## Core Tenets
@@ -219,17 +219,20 @@ flowchart TD
 
     subgraph loop["for each accumulation sample"]
         direction TB
-        p1["prepare Render3dFrameRenderContext"] --> p2["apply projection (render3d-local jitter)"]
-        p2 --> p3["apply camera & quality flags"]
-        p3 --> p4["set up generated light state"]
-        p4 --> p5["execute user geometry<br/>(narrow execution boundary)"]
-        p5 --> p6["optional post_fill_fn<br/>(controller's replay-fade overlay)"]
-        p6 --> p7["render backdrop, grid, axes, orbit target"]
-        p7 --> p8["render REPL-aware 3D overlays from snapshots"]
-        p8 --> p9["render light indicators &<br/>other foreground helpers"]
+        p1["prepare Render3dFrameRenderContext<br/>(derived camera world pos & basis)"] --> p2["apply projection (render3d-local jitter)"]
+        p2 --> p3["set up baseline lighting"]
+        p3 --> p4["execute user geometry<br/>(narrow execution boundary)"]
+        p4 --> p5["optional post_fill_fn<br/>(controller's replay-fade overlay)"]
+        p5 --> p6["buffer_read_fn hook<br/>(depth/stencil inspection)"]
+        p6 --> p7["render host chrome<br/>(backdrop, grid, axes, orbit target)"]
+        p7 --> p8["buffer_pass_overlay_fn hook<br/>(sparse under-guides overlay)"]
+        p8 --> p9["post_overlays_fn hook<br/>(geometry-reporting overlays)"]
         p9 --> p10["accumulate sample if accumulation AA active"]
     end
     p10 -.->|next sample| p1
+    p10 --> r1["post_resolve_overlays_fn hook<br/>(bitmap-text labels)"]
+    r1 --> r2["buffer_resolve_overlay_fn hook<br/>(full-rect viz overlays)"]
+    r2 --> r3["post-process filter pass"]
 ```
 
 The exact ordering may preserve current visuals. The ownership rule still
@@ -561,7 +564,7 @@ Responsibilities:
 
 * rebuild flat program and autonormals when dirty
 * prepare replay frame clamps and restore state after rendering
-* build [`Render3dRenderConfig`](../src/render3d/render_types.h#L139) and any guide/focus snapshots from REPL state
+* build [`Render3dRenderConfig`](../src/render3d/render_types.h#L138) and any guide/focus snapshots from REPL state
 * call `render3d_draw_scene(&config)`
 * call UI renderers in the correct order
 * keep profiling section boundaries around render3d and UI rendering
@@ -575,20 +578,20 @@ should remain mechanical because [`gl_repl.h`](../gl_repl.h) is included broadly
 
 ## Render3d Render Config
 
-[`Render3dRenderConfig`](../src/render3d/render_types.h#L139) is the render3d module's explicit per-frame input. It may carry
+[`Render3dRenderConfig`](../src/render3d/render_types.h#L138) is the render3d module's explicit per-frame input. It may carry
 REPL-aware data because this sample has one frontend and no plugin-host
 requirement.
 
-The controller builds the config once per frame, and [`render3d_draw_scene()`](../src/render3d/render.h#L129)
+The controller builds the config once per frame, and [`render3d_draw_scene()`](../src/render3d/render.h#L139)
 consumes it directly without calling back into REPL globals or rebuilding the
 frame inputs itself. The config currently carries the execute callback,
 [`FlatProgramView`](../src/repl/flatten.h#L58), viewport, camera, animation, quality flags, lighting,
 backdrop, overlay toggles, replay/HUD layout, grid tables, cursor-block
-metadata, and the [`Render3dFocusVertex`](../src/render3d/render_types.h#L131) / [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L44) snapshots needed by
+metadata, and the [`Render3dFocusVertex`](../src/render3d/render_types.h#L130) / [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L53) snapshots needed by
 3D overlays.
 
 Render3d-local accumulation jitter does not live in the config. Derived
-per-pass data belongs in [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L354), for example camera world height,
+per-pass data belongs in [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L359), for example camera world height,
 focus vertex, and other values that helper renderers should share.
 
 ## Render3d Layer
@@ -610,7 +613,7 @@ Responsibilities:
 Neutral render3d modules such as [`src/render3d/grid.c`](../src/render3d/grid.c), [`src/render3d/axes.c`](../src/render3d/axes.c),
 [`src/render3d/backdrop.c`](../src/render3d/backdrop.c), and [`src/render3d/lights.c`](../src/render3d/lights.c) should remain free of REPL
 state access. REPL-aware overlays live under `src/render3d/guides/` and consume
-the explicit [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L44) rather than pulling globals directly.
+the explicit [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L53) rather than pulling globals directly.
 
 The default color-material enable/mode, two-sided lighting, specular color,
 and shininess are ordinary editable scene commands. Fresh scenes, Clear All,
@@ -719,7 +722,7 @@ camera looks down -Z. In 3D they render as a vertical wall at z=0;
 filtering theme availability by view mode is a deliberate later step (the
 look was the first goal). Both use the shared scene accent palette, route line
 alpha through `grid_color()` (so the show/hide fade still applies), and
-carry no [`GridThemeSpec`](../src/render3d/grid.c#L141), so [`render3d_grid_theme_uses_edge_fade()`](../src/render3d/grid.h#L55) is
+carry no [`GridThemeSpec`](../src/render3d/grid.c#L147), so [`render3d_grid_theme_uses_edge_fade()`](../src/render3d/grid.h#L55) is
 false and the radial edge-fade machinery is skipped. They live as custom
 arms in `grid_dispatch_theme` in [`src/render3d/grid.c`](../src/render3d/grid.c).
 
@@ -815,7 +818,7 @@ single current authored anchor" rather than "every generated mesh vertex."
 #### Cursor Edit Guides
 
 The vertex/normal guides drawn at the cursor line
-([`src/render3d/guides/geometry_guides.c`](../src/render3d/guides/geometry_guides.c)) render from a [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L44).
+([`src/render3d/guides/geometry_guides.c`](../src/render3d/guides/geometry_guides.c)) render from a [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L53).
 The snapshot initially comes from `glr_ctrl_build_guide_snapshot()`, but text
 parsing the input line can only evaluate predefined variables. It cannot resolve
 funcN-local parameters or loop-assigned values, so the controller must override
@@ -1301,7 +1304,7 @@ Runtime shape:
   alpha, skip limits, baseline predef values)
 * render3d iterates the snapshot and owns the GL pass orchestration without
   calling `replay_*` or `repl_state_*`
-* accumulation-AA settings are [`Render3dRenderConfig`](../src/render3d/render_types.h#L139) fields set by the controller
+* accumulation-AA settings are [`Render3dRenderConfig`](../src/render3d/render_types.h#L138) fields set by the controller
 * 2D replay HUD lives in [`src/ui/subsystems/replay_hud.c`](../src/ui/subsystems/replay_hud.c), driven by config fields
 * `render3d_*.c` files contain no `repl_state_*` or `replay_*` calls; Makefile
   checks keep that true
@@ -1542,7 +1545,7 @@ include `ui_*` headers.
 
 ### Render3d state access
 
-Target rule: `render3d_*` files consume [`Render3dRenderConfig`](../src/render3d/render_types.h#L139), [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L354),
+Target rule: `render3d_*` files consume [`Render3dRenderConfig`](../src/render3d/render_types.h#L138), [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L359),
 or explicit snapshot structs. They should not call `repl_state_*` directly.
 
 `check-state-boundaries` enforces the current audited boundary.
@@ -1755,7 +1758,7 @@ executor, or GL-free export code.
 GL feature availability that varies by *runtime context* (not by build) is
 detected once in [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L16) - the first point at which the GL
 context is current - and pushed into the GL-free REPL/render3d layers through
-setters and [`Render3dRenderConfig`](../src/render3d/render_types.h#L139), never re-queried per frame.
+setters and [`Render3dRenderConfig`](../src/render3d/render_types.h#L138), never re-queried per frame.
 
 The first case is **`glPointParameterfv`** (distance-attenuated point
 size), core GL 1.4 but absent on some legacy contexts. Detection:
@@ -1878,7 +1881,7 @@ mechanisms:
 
 1. **Render3d caches what it applied (Tenet 3).**
    `render3d_apply_projection()` writes a jitter-free [`Render3dProjectionDesc`](../src/render3d/render.h#L62)
-   into a file static every frame; [`render3d_get_active_projection()`](../src/render3d/render.h#L135) reads
+   into a file static every frame; [`render3d_get_active_projection()`](../src/render3d/render.h#L145) reads
    it. The continuous perspective↔ortho blend is *snapped to the
    dominant side* (`mix < 0.5` ⇒ ortho) because `reshape()` emits one
    discrete mode, never an interpolated matrix. Render3d exposes data; it
@@ -1888,7 +1891,7 @@ mechanisms:
    [`ReplExportCameraBridge`](../src/repl/export.h#L93)). [`src/repl/export.c`](../src/repl/export.c) is GL-free, so it owns
    no projection math. `ReplExportProjectionBridge.fill_reshape_block`
    is installed by [`glr_ctrl.c`](../src/app/glr_ctrl.c) next to the camera-distance source; its
-   adapter reads [`render3d_get_active_projection()`](../src/render3d/render.h#L135) and formats the C
+   adapter reads [`render3d_get_active_projection()`](../src/render3d/render.h#L145) and formats the C
    lines. No bridge installed (render3d_demo, tests) ⇒
    [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L171) returns the canonical
    perspective default (correct `0.1, 200.0` near/far).
@@ -1904,7 +1907,7 @@ state and (b) read by more than one consumer in the frame loop:
 
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
-*opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L129) in
+*opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L139) in
 [`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L284) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
@@ -1936,7 +1939,7 @@ Per the rule above:
   `UiRenderSnapshot.reshape_proj_lines/_count`; both panel passes read
   that frozen copy and never touch the resolver. This is the canonical
   shape - UI reads the snapshot only (the symmetric counterpart of
-  [`Render3dRenderConfig`](../src/render3d/render_types.h#L139)). The block is the *previous* frame's render3d
+  [`Render3dRenderConfig`](../src/render3d/render_types.h#L138)). The block is the *previous* frame's render3d
   projection (snapshot is built before render3d render); a one-frame text
   lag during a transition is invisible and, crucially, internally
   consistent. snapshot.h hardcodes `UI_RESHAPE_PROJ_LINES/_LINE_MAX`
@@ -1950,7 +1953,7 @@ Per the rule above:
   a controller-owned [`ReplExportLayout`](../src/repl/export.h#L267)-style export context is the
   documented next step if save is ever folded into the frame path.)
 
-[`render3d_get_active_projection()`](../src/render3d/render.h#L135) is the *nearest-steady* projection: the
+[`render3d_get_active_projection()`](../src/render3d/render.h#L145) is the *nearest-steady* projection: the
 continuous blend is snapped to the dominant side (`mix < 0.5` ⇒ ortho).
 It is deliberately not the live blended 16-float matrix - `reshape()`
 emits one discrete mode, not an interpolation; a faithful mid-transition
@@ -1982,7 +1985,7 @@ view must *pick* an eye distance whose on-screen size it reproduces, and
 zoom must rescale that pick rather than dolly a camera the projection
 ignores. All of this lives in [`src/render3d/render.c`](../src/render3d/render.c); the controller feeds
 only `cam_dist` and `projection_mix` (the 2D↔3D blend) through
-[`Render3dRenderConfig`](../src/render3d/render_types.h#L139).
+[`Render3dRenderConfig`](../src/render3d/render_types.h#L138).
 
 **The probe runs once per *entry* into 2D - never on zoom.**
 `render3d_update_ortho_ref()` calls `render3d_probe_eye_dist()` (a
@@ -1996,7 +1999,7 @@ the camera distance at that moment (`ortho_ref_cam_dist`). For the entire
 2D dwell after that - including every zoom frame - neither branch of the
 edge test fires, so there is no feedback pass at all. One feedback pass
 per round-trip into 2D, full stop. (This is the default
-`GLR_ORTHO_REF_FROZEN` mode; see [`config.h`](../config.h).)
+`RENDER3D_ORTHO_REF_FROZEN` mode; see [`config.h`](../config.h).)
 
 **Zoom rescales the frozen reference by arithmetic, not a re-probe.**
 `render3d_effective_ortho_ref()` returns
@@ -2021,7 +2024,7 @@ animation: `t`-driven geometry moving in and out of the depth span would
 wobble the ortho scale every frame even when the user isn't touching
 anything. Freezing the intrinsic depth-center and adding only the camera
 delta gives zoom-tracking without animation-induced wobble. (The
-non-default `GLR_ORTHO_REF_PERFRAME` knob re-probes every ortho frame and
+non-default `RENDER3D_ORTHO_REF_PERFRAME` knob re-probes every ortho frame and
 accepts the breathing in exchange for tracking live 3D stage motion - even
 that is per-frame, not keyed to zoom.)
 
@@ -2106,7 +2109,7 @@ passes + stripped tess are the load-bearing reason here); reach for
 more than once per frame (the wireframe's three passes; a depth probe).
 `scene_execute_adapter` in [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c)
 snapshots and restores predef vars / scratch arrays / [`ReplRenderState`](../src/repl/state_views.h#L123)
-around any pass whose [`Render3dExecutePurpose`](../src/render3d/render_types.h#L75) is *not* the one
+around any pass whose [`Render3dExecutePurpose`](../src/render3d/render_types.h#L74) is *not* the one
 side-effecting fill - so `t = t + 1` style assignment animation advances
 exactly once per frame. `RENDER3D_EXEC_MAIN_FILL`, the wireframe's visible-
 line pass, and `RENDER3D_EXEC_WINDING` are the side-effecting fills (they
@@ -2404,7 +2407,7 @@ after the ownership and boundary sections above identify the correct layer.
 * New user-geometry execution behavior: [`src/repl/executor.c`](../src/repl/executor.c).
 * New 3D world decorator: `render3d_*`.
 * New 3D REPL-aware overlay: current home is still `render3d_*`, consuming
-  [`FlatProgramView`](../src/repl/flatten.h#L58) or a snapshot from [`Render3dRenderConfig`](../src/render3d/render_types.h#L139).
+  [`FlatProgramView`](../src/repl/flatten.h#L58) or a snapshot from [`Render3dRenderConfig`](../src/render3d/render_types.h#L138).
 * New 2D UI: a `ui_*` renderer plus an editor, REPL, or peer-subsystem action
   path when mutation is required.
 * New per-frame render3d/UI wiring: [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c).

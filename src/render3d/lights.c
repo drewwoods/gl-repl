@@ -219,42 +219,6 @@ void render3d_lights_setup(const Render3dFrameRenderContext *frame_ctx) {
     }
 }
 
-/* Camera origin in world coordinates, derived from the camera fields
- * Render3dRenderConfig carries. Lets render3d_lights_render draw indicators
- * for eye-space slots at the actual camera position instead of (0,0,0).
- * Matches the forward modelview chain in glr_camera_load_modelview:
- *   T(0,0,-cam_dist) * Rx(cam_rx) * Ry(cam_ry) * T(-cam_tx,-cam_ty,-cam_tz). */
-static void render3d_lights_camera_world_pos(const Render3dRenderConfig *cfg,
-                                          float *out_x, float *out_y, float *out_z) {
-    const float deg = 3.14159265358979323846f / 180.0f;
-    float cx = cosf(cfg->cam_rx * deg), sx = sinf(cfg->cam_rx * deg);
-    float cy = cosf(cfg->cam_ry * deg), sy = sinf(cfg->cam_ry * deg);
-    *out_x = cfg->cam_tx - cfg->cam_dist * cx * sy;
-    *out_y = cfg->cam_ty + cfg->cam_dist * sx;
-    *out_z = cfg->cam_tz + cfg->cam_dist * cx * cy;
-}
-
-/* Rotate an eye-space direction into world space using the camera
- * orientation - the inverse of the Rx(cam_rx)*Ry(cam_ry) view rotation in
- * glr_camera_load_modelview, i.e. world = Ry(-ry) * Rx(-rx) * eye. Lets an
- * eye-space (HEADLIGHT) slot's offset be placed in front of the camera
- * along the real view axis instead of naively shifted in world Z. */
-static void render3d_lights_eye_dir_to_world(const Render3dRenderConfig *cfg,
-                                          float ex, float ey, float ez,
-                                          float *out_x, float *out_y, float *out_z) {
-    const float deg = 3.14159265358979323846f / 180.0f;
-    float cx = cosf(cfg->cam_rx * deg), sx = sinf(cfg->cam_rx * deg);
-    float cy = cosf(cfg->cam_ry * deg), sy = sinf(cfg->cam_ry * deg);
-    /* Rx(-rx) * (ex,ey,ez) */
-    float x1 =  ex;
-    float y1 =  cx * ey + sx * ez;
-    float z1 = -sx * ey + cx * ez;
-    /* Ry(-ry) * (x1,y1,z1) */
-    *out_x = cy * x1 - sy * z1;
-    *out_y = y1;
-    *out_z = sy * x1 + cy * z1;
-}
-
 void render3d_lights_render(const Render3dFrameRenderContext *frame_ctx) {
     if (!frame_ctx->config.show_light_indicators) return;
 
@@ -266,8 +230,9 @@ void render3d_lights_render(const Render3dFrameRenderContext *frame_ctx) {
 
     float breath = sinf(frame_ctx->config.anim_time * 1.2f) * 0.5f + 0.5f;
 
-    float cam_wx = 0.0f, cam_wy = 0.0f, cam_wz = 0.0f;
-    render3d_lights_camera_world_pos(&frame_ctx->config, &cam_wx, &cam_wy, &cam_wz);
+    float cam_wx = frame_ctx->camera_world_pos[0];
+    float cam_wy = frame_ctx->camera_world_pos[1];
+    float cam_wz = frame_ctx->camera_world_pos[2];
 
     for (int i = 0; i < MAX_LIGHTS; i++) {
         const Render3dLight *light = &frame_ctx->config.lights[i];
@@ -282,10 +247,16 @@ void render3d_lights_render(const Render3dFrameRenderContext *frame_ctx) {
             /* pos[] is in eye space; the slot rides the camera, so the
              * world location is the camera's world position plus the
              * eye-space offset rotated into world space along the view
-             * axis (not a naive world-Z shift). */
-            float ox, oy, oz;
-            render3d_lights_eye_dir_to_world(&frame_ctx->config,
-                                          p[0], p[1], p[2], &ox, &oy, &oz);
+             * axis via the precomputed camera basis. */
+            float ox = frame_ctx->camera_basis[0][0] * p[0] +
+                       frame_ctx->camera_basis[1][0] * p[1] +
+                       frame_ctx->camera_basis[2][0] * p[2];
+            float oy = frame_ctx->camera_basis[0][1] * p[0] +
+                       frame_ctx->camera_basis[1][1] * p[1] +
+                       frame_ctx->camera_basis[2][1] * p[2];
+            float oz = frame_ctx->camera_basis[0][2] * p[0] +
+                       frame_ctx->camera_basis[1][2] * p[1] +
+                       frame_ctx->camera_basis[2][2] * p[2];
             lx = cam_wx + ox;
             ly = cam_wy + oy;
             lz = cam_wz + oz;
@@ -372,9 +343,9 @@ void render3d_lights_render(const Render3dFrameRenderContext *frame_ctx) {
                 /* Headlight aim ray: a positional point at the eye reads as
                  * a static lamp, so trace the view direction it shines along
                  * (eye -Z rotated to world) a short way into the scene. */
-                float fx, fy, fz;
-                render3d_lights_eye_dir_to_world(&frame_ctx->config,
-                                              0.0f, 0.0f, -1.0f, &fx, &fy, &fz);
+                float fx = -frame_ctx->camera_basis[2][0];
+                float fy = -frame_ctx->camera_basis[2][1];
+                float fz = -frame_ctx->camera_basis[2][2];
                 float aim = 1.2f;
                 glLineWidth(1.5f);
                 glBegin(GL_LINES);

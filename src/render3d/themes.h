@@ -2,13 +2,29 @@
  * src/render3d/themes.h - Shared 3D theme enums.
  *
  * This is the renderer-owned vocabulary for grid themes, axes themes, backdrop
- * modes, and grid spacing/extent indices. Callers import the enums to present
- * and store those choices; the renderer owns their meanings.
+ * modes, post-filter modes, and grid spacing/extent indices. Callers import the
+ * enums to present and store those choices; the renderer owns their meanings.
+ *
+ * Naming convention for symbols in src/render3d/:
+ * - New enumerators and public constants must use the RENDER3D_* prefix.
+ * - Do not introduce GLR_* symbols in this directory (those belong to the app).
+ * - The existing GRID_THEME_*, AXES_THEME_*, WIREFRAME_*, and PROJ_* sets are
+ *   preserved as the canonical cfg X-macro source.
  *
  * Label tables and render data keyed by these enums must stay in enum order.
  */
 #ifndef RENDER3D_THEMES_H
 #define RENDER3D_THEMES_H
+
+/* Scene-viewport post-process filter modes. */
+typedef enum Render3dPostFilterMode {
+    RENDER3D_POST_FILTER_OFF = 0,
+    RENDER3D_POST_FILTER_CHROMATIC_ABERRATION,
+    RENDER3D_POST_FILTER_VIGNETTE,
+    RENDER3D_POST_FILTER_SCANLINES,
+    RENDER3D_POST_FILTER_FILM_GRAIN,
+    RENDER3D_POST_FILTER_COUNT
+} Render3dPostFilterMode;
 
 /* X-macro lists drive the enum *and* any cfg-symbol string table that
  * needs to round-trip the value name. Adding a new theme/backdrop here picks

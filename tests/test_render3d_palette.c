@@ -26,16 +26,16 @@ int main(void) {
      * gap, because its alpha is still 1.0. */
     for (int t = 0; t < RENDER3D_CLR_COUNT; t++)
         ASSERT_TRUE("no zeroed/uninitialized token slot",
-                    g_scene_palette[t].a > 0.0f);
+                    g_render3d_palette[t].a > 0.0f);
 
     /* 2. render3d_rgba() returns the table row by value. */
     for (int t = 0; t < RENDER3D_CLR_COUNT; t++) {
         Render3dRgba c = render3d_rgba((Render3dColorToken)t);
         ASSERT_TRUE("render3d_rgba matches table",
-                    c.r == g_scene_palette[t].r &&
-                    c.g == g_scene_palette[t].g &&
-                    c.b == g_scene_palette[t].b &&
-                    c.a == g_scene_palette[t].a);
+                    c.r == g_render3d_palette[t].r &&
+                    c.g == g_render3d_palette[t].g &&
+                    c.b == g_render3d_palette[t].b &&
+                    c.a == g_render3d_palette[t].a);
     }
 
     /* 3. Visual-no-op anchors: a few tokens transcribed verbatim from
@@ -70,7 +70,17 @@ int main(void) {
         ASSERT_F("wireframe-hidden R", wire_hid.r, 0.30f);
         ASSERT_F("wireframe-hidden G", wire_hid.g, 0.38f);
         ASSERT_F("wireframe-hidden B", wire_hid.b, 0.52f);
+
+        Render3dRgba wind_front = render3d_rgba(RENDER3D_CLR_WINDING_FRONT);
+        ASSERT_F("winding-front R", wind_front.r, 0.16f);
+        ASSERT_F("winding-front G", wind_front.g, 0.80f);
+        ASSERT_F("winding-front B", wind_front.b, 0.32f);
+
+        Render3dRgba wind_back = render3d_rgba(RENDER3D_CLR_WINDING_BACK);
+        ASSERT_F("winding-back R", wind_back.r, 0.88f);
+        ASSERT_F("winding-back G", wind_back.g, 0.20f);
+        ASSERT_F("winding-back B", wind_back.b, 0.18f);
     }
 
-    return test_harness_report(&g_harness, "test_scene_palette");
+    return test_harness_report(&g_harness, "test_render3d_palette");
 }

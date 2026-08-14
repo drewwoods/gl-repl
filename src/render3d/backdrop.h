@@ -11,8 +11,9 @@
 
 #include "render_types.h"
 
-/* Render the backdrop for the current frame. Called at the deepest background
- * stage before grid, user geometry, and overlays. */
+/* Render the backdrop for the current frame. Called in the helper pass
+ * after user geometry and before grid, axes, and overlays (so antialiased
+ * edges blend against the final background). */
 void render3d_backdrop_render(const Render3dFrameRenderContext *frame_ctx);
 
 /* Configure + enable any backdrop-owned environment lights (GL_LIGHT4+,

@@ -10,7 +10,6 @@
 
 #include "themes.h"
 #include "render3d_transition.h"   /* Render3dXnPhase for the overlay fade fields */
-#include "postprocess_filter.h" /* Render3dPostFilterMode */
 #include "gl_includes.h"        /* GLenum for Render3dLight.id */
 
 #if !defined(APIENTRY)
@@ -277,7 +276,6 @@ typedef struct Render3dRenderConfig {
     void  *setup_subframe_user_data;
 
     /* --- Lighting --- */
-    int        user_lighting_enabled;
     Render3dLight lights[MAX_LIGHTS];
     int        show_light_indicators;
     /* Slot 0..MAX_LIGHTS-1 of the light whose indicator to emphasize
@@ -324,12 +322,12 @@ typedef struct Render3dRenderConfig {
      * FADE_OUT / STEADY) the caller fills in from its transition
      * machine. The render3d renderer does not read these values at runtime;
      * keep them populated so tests can verify the forwarded contract. */
-    int          grid_theme;
+    Render3dGridTheme grid_theme;
     float        grid_opacity;
     Render3dXnPhase grid_xn_phase;   /* RESERVED - see comment above */
     int          grid_extent_idx;
     int          grid_major_idx;
-    int          axes_theme;
+    Render3dAxesTheme axes_theme;
     float        axes_opacity;
     Render3dXnPhase axes_xn_phase;   /* RESERVED - see comment above */
     float grid_major_steps[GRID_MAJOR_COUNT];
@@ -347,12 +345,29 @@ typedef struct Render3dRenderConfig {
     float grid_brightness; /* user grid-line alpha multiplier (Grid brightness cfg); 1.0 = no change */
 } Render3dRenderConfig;
 
+/* Common rendering quality configuration (MSAA + line smooth). */
+static inline void render3d_apply_quality_config(const Render3dRenderConfig *config) {
+    if (config->multisample_enabled) glEnable(GL_MULTISAMPLE);
+    else glDisable(GL_MULTISAMPLE);
+    if (config->line_smooth_enabled) glEnable(GL_LINE_SMOOTH);
+    else glDisable(GL_LINE_SMOOTH);
+}
+
 /* Derived state that helper renderers should consume instead of recomputing
- * from globals. Wraps the snapshot Render3dRenderConfig so helpers can be
- * extended with frame-derived fields here without changing every
- * helper's parameter list. */
+ * from config/globals. Wraps the snapshot Render3dRenderConfig and carries
+ * derived frame-level pose (camera position and basis). */
 typedef struct Render3dFrameRenderContext {
     Render3dRenderConfig config;
+
+    /* Derived camera world-space pose (computed once in render3d_prepare_frame_context). */
+    float camera_world_pos[3]; /* world-space eye position (x, y, z); y is camera height */
+
+    /* 3x3 eye-to-world orientation basis mapping eye vectors to world vectors:
+     * world_dir = basis * eye_dir.
+     *   basis[0] = world vector for eye +X (right)
+     *   basis[1] = world vector for eye +Y (up)
+     *   basis[2] = world vector for eye +Z (back) */
+    float camera_basis[3][3];
 } Render3dFrameRenderContext;
 
 #endif /* RENDER3D_RENDER_TYPES_H */
