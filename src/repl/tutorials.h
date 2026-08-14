@@ -102,12 +102,13 @@ STATIC_ASSERT(TUTORIAL_LOCKED_LINE_MAX >= TUTORIAL_MAX_STEPS,
               "Locked-line capacity must hold every possible per-step lock");
 
 /* The tutorial runner injects a fixed scene prelude ahead of every
- * tutorial's steps and setup scaffold: a one-line explanatory comment and
- * the glClear it describes (g_tutorial_scene_prelude in
- * tutorial_runner.c). Both rows are locked, so the locked-line budget in
- * repl_tutorial_validate() reserves them. Kept here so the runner (which
- * loads the rows) and the validator (which budgets for them) can't drift. */
-#define TUTORIAL_SCENE_PRELUDE_ROWS 2
+ * tutorial's steps and setup scaffold: a clear-color explanation plus
+ * glClearColor, followed by the explanatory comment and glClear it prepares
+ * (g_tutorial_scene_prelude in tutorial_runner.c). All four rows are locked,
+ * so the locked-line budget in repl_tutorial_validate() reserves them. Kept
+ * here so the runner (which loads the rows) and the validator (which budgets
+ * for them) can't drift. */
+#define TUTORIAL_SCENE_PRELUDE_ROWS 4
 
 /* Maximum length of a setup-scaffold anchor name, including the NUL. */
 #define TUTORIAL_ANCHOR_NAME_MAX   64

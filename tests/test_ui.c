@@ -35,6 +35,7 @@
 #include "subsystems/tutorial/tutorial_animation.h"
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
+#include "repl/tutorials.h"
 #include "support/test_harness.h"
 #include <GL/gl_stub_counts.h>
 #include "ui/core/gl_2d.h"
@@ -1789,9 +1790,10 @@ static void test_tutorial_fade_math_uses_snapshot_view(void) {
     line = editor_buffer_view_line(s.editor_buffer, line_idx);
     line_len = line ? (int)strlen(line) : 0;
 
-    /* The first instruction comment lands at row 2, below the 2-row
-     * scene-clear prelude; the fade animates that freshly-inserted row. */
-    ASSERT_INT("snapshot fade line is the first instruction row", line_idx, 2);
+    /* The first instruction comment lands below the fixed scene-clear
+     * prelude; the fade animates that freshly-inserted row. */
+    ASSERT_INT("snapshot fade line is the first instruction row", line_idx,
+               TUTORIAL_SCENE_PRELUDE_ROWS);
     ASSERT_TRUE("snapshot fade line text present", line_len > 0);
     ASSERT_TRUE("snapshot fade active just after start",
                 tutorial_fade_line_active(&s.tutorial_fade, line_idx,

@@ -1007,7 +1007,7 @@ before code-panel/camera wheel handlers so scroll does not leak behind menus.
 is `src/repl/tutorials.{c,h}`. Each tutorial entry declares a null-terminated
 `tag_names` string list; the synthetic `ALL` tag (index 0) is returned as a
 member of every entry unconditionally, so catalog literals only name real
-domain tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L353)
+domain tags. Top-level visible rows are tags ([`repl_tutorial_visible_tag_count()`](../src/repl/tutorials.h#L354)
 hides unused tags), followed by `Restart Tutorial` / `Exit Tutorial` rows while
 a tutorial is active. Tag rows are inert hover-only parents; selecting a flyout
 tutorial routes through the controller to `tutorial_start(index)` and dismisses
@@ -2858,7 +2858,7 @@ checklist above (its steps 1-2), a structured command touches:
 
 ### Adding A New Tutorial Step Kind
 
-Tutorial step kinds ([`TutorialStepKind`](../src/repl/tutorials.h#L135) in [`src/repl/tutorials.h`](../src/repl/tutorials.h)) name the
+Tutorial step kinds ([`TutorialStepKind`](../src/repl/tutorials.h#L164) in [`src/repl/tutorials.h`](../src/repl/tutorials.h)) name the
 contract between a catalog entry and the runtime: what extra fields the
 step carries, what UI it shows, what user action advances it, and which
 guard rails apply. Current kinds are:
@@ -2981,8 +2981,8 @@ land in roughly the order below.
 
 #### 1. Catalog layer (`src/repl/tutorials.{h,c}`)
 
-- Add the new enum value to [`TutorialStepKind`](../src/repl/tutorials.h#L135).
-- Add any extra fields to [`TutorialStep`](../src/repl/tutorials.h#L135). **Place new fields AFTER all
+- Add the new enum value to [`TutorialStepKind`](../src/repl/tutorials.h#L164).
+- Add any extra fields to [`TutorialStep`](../src/repl/tutorials.h#L199). **Place new fields AFTER all
   existing ones** so positional initializers in `STEP_APPEND` / `STEP_AT`
   / `STEP_SET` / `STEP_REQUIRE` / `STEP_SENTINEL` keep zero-initializing
   to the new defaults - adding fields mid-struct silently shifts other

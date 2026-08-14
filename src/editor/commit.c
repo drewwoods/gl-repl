@@ -488,6 +488,22 @@ static int compile_func_leading_comment_start(const ReplCompileContext *ctx,
     return start;
 }
 
+/* A clear color is scene-open prologue only when it belongs to the
+ * clear-color/clear pair. Standalone glClearColor remains ordinary executable
+ * state, so function definitions keep the historical hoisting order for
+ * existing scenes that set a color and then continue with other commands. */
+static int compile_function_clear_color_is_prologue(
+        const ReplCompileContext *ctx, int pos) {
+    int next = pos + 1;
+
+    while (next < ctx->document_count &&
+           (ctx->document_cmds[next].type == CMD_COMMENT ||
+            ctx->document_cmds[next].type == CMD_EMPTY))
+        next++;
+    return next < ctx->document_count &&
+           ctx->document_cmds[next].type == CMD_CLEAR;
+}
+
 /* Walk function_decl_insert_pos's logic against a virtually-deleted
  * document where indices [delete_pos, delete_pos+delete_count) are
  * gone. Returns the insert position in post-delete coordinates.
@@ -510,14 +526,16 @@ static int compile_function_decl_insert_pos_after_delete(
          * lines / comments interspersed among them. A blank line between
          * two float groups must not terminate the walk, or the new func
          * lands between the groups instead of after all decls. A leading
-         * glClear counts as prologue too: it is the scene-open boilerplate
-         * every example (and every tutorial, which injects it as a locked
-         * prelude row) authors first, so a newly-typed func def should
-         * hoist to just BELOW it rather than above it - keeping glClear at
-         * the document top the way exported scenes read. */
+         * the clear-color/glClear pair counts as prologue too: it is the
+         * scene-open boilerplate every tutorial injects as locked prelude
+         * rows, so a newly-typed func def should hoist to just BELOW it
+         * rather than above it. Standalone glClearColor is deliberately not
+         * in this walk; existing scenes keep their established ordering. */
         if (cmds[pos].type == CMD_VAR_DECLARE ||
             cmds[pos].type == CMD_COMMENT || cmds[pos].type == CMD_EMPTY ||
-            cmds[pos].type == CMD_CLEAR) {
+            cmds[pos].type == CMD_CLEAR ||
+            (cmds[pos].type == CMD_CLEAR_COLOR &&
+             compile_function_clear_color_is_prologue(ctx, pos))) {
             pos++;
             continue;
         }

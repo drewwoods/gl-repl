@@ -696,26 +696,32 @@ static void tutorial_camera_report_missing(const ReplCameraFinish *finish,
     fprintf(stderr, "%s\n", msg);
 }
 
-/* Every tutorial scene opens with a locked glClear so the scene rect is
+/* Every tutorial scene opens with a locked glClearColor followed by glClear so the scene rect is
  * cleared each frame. Nothing clears it on the program's behalf - the
  * scene-rect clear is program-owned (see glr_ctrl_clear_chrome),
  * identical to the exported C and every built-in example scene, all of
- * which lead with this same call. Without it the render3d scene never
- * clears and animated or orbited frames smear. A one-line comment rides
- * just above it so the learner sees why the locked line is there. Both
- * rows load ahead of any setup scaffold (rows 0-1 of the transient
- * scene) and are locked like the rest of the preloaded rows. */
+ * which lead with this same pair. Without it the render3d scene never
+ * clears and animated or orbited frames smear. A comment rides above each
+ * line so the learner sees why the locked lines are there. All four rows
+ * load ahead of any setup scaffold and are locked like the rest of the
+ * preloaded rows. */
+#define TUTORIAL_SCENE_CLEAR_COLOR_COMMENT \
+    "// Set the background color before clearing it."
+#define TUTORIAL_SCENE_CLEAR_COLOR_LINE \
+    "glClearColor(0.1, 0.1, 0.1, 1)"
 #define TUTORIAL_SCENE_CLEAR_COMMENT \
     "// Clear the color and depth buffers so each frame starts fresh."
 #define TUTORIAL_SCENE_CLEAR_LINE \
     "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)"
 
 /* The prelude rows injected ahead of every tutorial's steps and setup
- * scaffold, in document order: the explanatory comment then the glClear
- * it describes. Kept as a table so the load loop and the locked-line
+ * scaffold, in document order: the clear-color comment and glClearColor,
+ * then the explanatory comment and glClear. Kept as a table so the load loop and the locked-line
  * budget in repl_tutorial_validate() agree on the count
  * (TUTORIAL_SCENE_PRELUDE_ROWS). */
 static const char *const g_tutorial_scene_prelude[] = {
+    TUTORIAL_SCENE_CLEAR_COLOR_COMMENT,
+    TUTORIAL_SCENE_CLEAR_COLOR_LINE,
     TUTORIAL_SCENE_CLEAR_COMMENT,
     TUTORIAL_SCENE_CLEAR_LINE,
 };
@@ -727,8 +733,9 @@ STATIC_ASSERT((int)(sizeof(g_tutorial_scene_prelude) /
 
 /* Preload the tutorial's scene prelude into the just-reset transient
  * scene, before step 0: first the mandatory scene-clear rows
- * (g_tutorial_scene_prelude - the explanatory comment and its glClear,
- * every tutorial), then the optional setup scaffold (TutorialEntry.setup).
+ * (g_tutorial_scene_prelude - the clear-color comment and glClearColor,
+ * then the explanatory comment and its glClear, every tutorial), then the
+ * optional setup scaffold (TutorialEntry.setup).
  * The scaffold honors the example header vocabulary: a leading contiguous
  * `// @cfg` run (parsed into the pending bag, applied through the bridge),
  * optional blank spacing, any `@camera`-tagged transform rows (recognised by
@@ -747,9 +754,10 @@ static int tutorial_load_scene_prelude(int idx) {
 
     repl_dispatch_insert_mode_off();
 
-    /* Rows 0-1: the scene-clear comment and glClear, unconditionally, for
-     * every tutorial. Loaded through the non-editor loader like setup body
-     * lines so they land ahead of any scaffold and are locked below. */
+    /* Rows 0-3: the clear-color comment and glClearColor, then the scene-clear
+     * comment and glClear, unconditionally, for every tutorial. Loaded through
+     * the non-editor loader like setup body lines so they land ahead of any
+     * scaffold and are locked below. */
     for (size_t i = 0; i < TUTORIAL_SCENE_PRELUDE_ROWS; i++) {
         if (!repl_load_apply_line(g_tutorial_scene_prelude[i], err,
                                   (int)sizeof(err), &loader_edit_line)) {
@@ -819,8 +827,9 @@ static int tutorial_load_scene_prelude(int idx) {
         tutorial_camera_report_missing(&camera_fin, name);
     }
 
-    /* Lock the whole prelude - the glClear plus the scaffold - read-only
-     * for the tutorial's duration, like instruction rows. The range
+    /* Lock the whole prelude - the clear-color pair, glClear pair, plus the
+     * scaffold - read-only for the tutorial's duration, like instruction
+     * rows. The range
      * covers every loaded row even where the loader reordered them (float
      * decls auto-promote to the document top). Capacity is validator-
      * guaranteed (1 clear + setup lines + steps <= TUTORIAL_LOCKED_LINE_MAX). */
@@ -874,8 +883,8 @@ void tutorial_start(int idx) {
 
     tutorial_baseline_apply(idx);
 
-    /* Preload the scene prelude (the row-0 glClear plus the setup
-     * scaffold, if any) into the fresh transient scene before step 0 -
+    /* Preload the scene prelude (the clear-color/glClear pairs plus the
+     * setup scaffold, if any) into the fresh transient scene before step 0 -
      * still before `active = 1`, so its cfg writes cannot auto-advance a
      * REQUIRE step 0. On failure unwind the pieces teardown would (cfg
      * baseline restore + state reset); active was never set, so

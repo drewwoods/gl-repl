@@ -138,18 +138,28 @@ static void test_start_enters_transient_tutorial_scene(void) {
     ASSERT_INT("tutorial step starts at zero", tutorial_state_view().step, 0);
     ASSERT_INT("example detached", repl_state_scenes().active_example_idx, -1);
     ASSERT_INT("user scene detached", repl_active_user_scene(), -1);
-    /* Rows 0-1 are the injected scene-clear prelude (a comment then its
-     * glClear, both locked); row 2 is step 0's instruction comment. */
-    ASSERT_INT("tutorial doc line count", doc.line_count, 3);
+    /* The fixed four-row prelude is locked; step 0's instruction comment
+     * follows it. */
+    ASSERT_INT("tutorial doc line count", doc.line_count,
+               TUTORIAL_SCENE_PRELUDE_ROWS + 1);
     ASSERT_TRUE("prelude comment is first",
                 strncmp(trim_leading_ws(source_text_line(doc, 0)), "//", 2) == 0);
-    ASSERT_TRUE("second line is the scene-clearing glClear",
-                strstr(source_text_line(doc, 1), "glClear") != NULL);
-    ASSERT_TRUE("prelude comment locked", tutorial_line_is_locked(0));
-    ASSERT_TRUE("glClear line locked", tutorial_line_is_locked(1));
-    ASSERT_TRUE("instruction line is comment",
+    ASSERT_TRUE("second line sets the clear color",
+                strstr(source_text_line(doc, 1), "glClearColor") != NULL);
+    ASSERT_TRUE("third line explains the scene-clearing glClear",
                 strncmp(trim_leading_ws(source_text_line(doc, 2)), "//", 2) == 0);
-    ASSERT_TRUE("instruction line locked", tutorial_line_is_locked(2));
+    ASSERT_TRUE("fourth line is the scene-clearing glClear",
+                strstr(source_text_line(doc, 3), "glClear(") != NULL);
+    ASSERT_TRUE("prelude comment locked", tutorial_line_is_locked(0));
+    ASSERT_TRUE("glClearColor line locked", tutorial_line_is_locked(1));
+    ASSERT_TRUE("glClear comment locked", tutorial_line_is_locked(2));
+    ASSERT_TRUE("glClear line locked", tutorial_line_is_locked(3));
+    ASSERT_TRUE("instruction line is comment",
+                strncmp(trim_leading_ws(source_text_line(doc,
+                                                           TUTORIAL_SCENE_PRELUDE_ROWS)),
+                        "//", 2) == 0);
+    ASSERT_TRUE("instruction line locked",
+                tutorial_line_is_locked(TUTORIAL_SCENE_PRELUDE_ROWS));
     ASSERT_STR("current expected text",
                tutorial_current_expected_text(),
                repl_tutorial_step_expected(0, 0));
@@ -316,14 +326,18 @@ static void test_runner_match_and_advance(void) {
     editor_feed_line(expected);
     tutorial_advance_after_successful_commit();
 
-    /* Doc rows: 0-1 clear prelude, 2 step-0 comment, 3 committed glBegin,
-     * 4 step-1 comment. */
+    /* The fixed prelude is followed by step-0's comment, its committed
+     * command, and step-1's comment. */
     doc = source_document_view();
     ASSERT_INT("step advanced after success", tutorial_state_view().step, 1);
-    ASSERT_INT("next instruction appended", doc.line_count, 5);
-    ASSERT_STR("new instruction text", trim_leading_ws(source_text_line(doc, 4)),
+    ASSERT_INT("next instruction appended", doc.line_count,
+               TUTORIAL_SCENE_PRELUDE_ROWS + 3);
+    ASSERT_STR("new instruction text",
+               trim_leading_ws(source_text_line(doc,
+                                                 TUTORIAL_SCENE_PRELUDE_ROWS + 2)),
                repl_tutorial_step_comment(0, 1));
-    ASSERT_TRUE("new instruction locked", tutorial_line_is_locked(4));
+    ASSERT_TRUE("new instruction locked",
+                tutorial_line_is_locked(TUTORIAL_SCENE_PRELUDE_ROWS + 2));
     ASSERT_STR("expected text advanced",
                tutorial_current_expected_text(),
                repl_tutorial_step_expected(0, 1));
@@ -346,7 +360,7 @@ static void test_semicolon_route_rejects_mismatch_and_preserves_input(void) {
     ASSERT_STR("semicolon mismatch preserves input",
                editor_state_input().input, "glEnd()");
     ASSERT_INT("semicolon mismatch does not commit line",
-               doc.line_count, 3);
+               doc.line_count, TUTORIAL_SCENE_PRELUDE_ROWS + 1);
 }
 
 static void test_enter_route_advances_after_match(void) {
@@ -360,9 +374,11 @@ static void test_enter_route_advances_after_match(void) {
 
     doc = source_document_view();
     ASSERT_INT("enter route advanced step", tutorial_state_view().step, 1);
-    ASSERT_INT("enter route appended instruction", doc.line_count, 5);
+    ASSERT_INT("enter route appended instruction", doc.line_count,
+               TUTORIAL_SCENE_PRELUDE_ROWS + 3);
     ASSERT_STR("enter route next instruction text",
-               trim_leading_ws(source_text_line(doc, 4)),
+               trim_leading_ws(source_text_line(doc,
+                                                 TUTORIAL_SCENE_PRELUDE_ROWS + 2)),
                repl_tutorial_step_comment(0, 1));
 }
 
@@ -378,12 +394,12 @@ static void test_replace_existing_line_does_not_advance(void) {
     (void)editor_handle_key(';', 0, 0);
     ASSERT_INT("step advanced after first commit", tutorial_state_view().step, 1);
 
-    /* Navigate back to the previously-committed user line (row 3: rows 0-1
-     * are the injected clear prelude, row 2 is step 0's comment) and try to
+    /* Navigate back to the previously-committed user line (the row directly
+     * below step 0's comment) and try to
      * commit the current step's expected text. The precheck must reject the
      * non-append commit so the user does not overwrite prior progress while
      * also advancing. */
-    editor_state_edit_line_set(3);
+    editor_state_edit_line_set(TUTORIAL_SCENE_PRELUDE_ROWS + 1);
     expected = tutorial_current_expected_text();
     set_input_text(expected);
     (void)editor_handle_key(';', 0, 0);
@@ -397,7 +413,7 @@ static void test_replace_existing_line_does_not_advance(void) {
     ASSERT_STR("non-append commit preserves input",
                editor_state_input().input, expected);
     ASSERT_INT("non-append commit does not append a new line",
-               doc.line_count, 5);
+               doc.line_count, TUTORIAL_SCENE_PRELUDE_ROWS + 3);
 }
 
 static void test_shadow_suffix_strict_prefix(void) {
@@ -733,19 +749,19 @@ static void test_locked_comment_mutations_are_blocked(void) {
 
     (void)editor_handle_key(KEY_CTRL_D, 0, 0);
     ASSERT_INT("ctrl-d keeps locked comment row",
-               repl_state_document_count(), 3);
+               repl_state_document_count(), TUTORIAL_SCENE_PRELUDE_ROWS + 1);
     ASSERT_STR("ctrl-d read-only status",
                status_text(), "Tutorial line is read-only");
 
     (void)editor_handle_key(KEY_CTRL_L, 0, 0);
     ASSERT_INT("ctrl-l keeps tutorial rows",
-               repl_state_document_count(), 3);
+               repl_state_document_count(), TUTORIAL_SCENE_PRELUDE_ROWS + 1);
     ASSERT_STR("ctrl-l read-only status",
                status_text(), "Tutorial line is read-only");
 
     (void)editor_handle_key(KEY_CTRL_BACKSLASH, 0, 0);
     ASSERT_INT("ctrl-backslash keeps tutorial rows",
-               repl_state_document_count(), 3);
+               repl_state_document_count(), TUTORIAL_SCENE_PRELUDE_ROWS + 1);
     ASSERT_STR("ctrl-backslash read-only status",
                status_text(), "Tutorial line is read-only");
 }
@@ -760,9 +776,9 @@ static void test_paste_before_locked_prefix_is_blocked(void) {
     set_input_text(expected);
     (void)editor_handle_key(';', 0, 0);
 
-    /* Copy the committed user line (row 3, after the 2-row clear prelude
-     * and step 0's comment), then aim the paste at the locked row 0. */
-    editor_state_edit_line_set(3);
+    /* Copy the committed user line (directly after step 0's comment), then
+     * aim the paste at the locked row 0. */
+    editor_state_edit_line_set(TUTORIAL_SCENE_PRELUDE_ROWS + 1);
     editor_clipboard_copy_current();
     editor_state_edit_line_set(0);
 
@@ -777,7 +793,7 @@ static void test_paste_before_locked_prefix_is_blocked(void) {
     editor_undo_ring_state_capture(&ring_after);
 
     ASSERT_INT("paste before locked prefix keeps line count",
-               repl_state_document_count(), 5);
+               repl_state_document_count(), TUTORIAL_SCENE_PRELUDE_ROWS + 3);
     ASSERT_STR("paste before locked prefix status",
                status_text(), "Tutorial line is read-only");
     ASSERT_INT("blocked paste pushes no phantom undo",
@@ -813,12 +829,12 @@ static void test_navigation_rejects_non_matching_input(void) {
     doc_before = source_document_view();
 
     /* Type a parseable but non-matching line at the trailing edit row,
-     * then navigate to the non-locked user line (row 3, after the 2-row
-     * clear prelude and step 0's comment). Without the navigation-path
+     * then navigate to the non-locked user line directly below step 0's
+     * comment. Without the navigation-path
      * tutorial gate, commit_before_navigation would slip the line in
      * without advancing the step. */
     set_input_text("glPointSize(1)");
-    editor_navigate_to_line(3);
+    editor_navigate_to_line(TUTORIAL_SCENE_PRELUDE_ROWS + 1);
 
     doc_after = source_document_view();
     ASSERT_INT("navigation does not commit non-matching line",
@@ -847,16 +863,16 @@ static void test_navigation_advances_on_matching_input(void) {
     (void)editor_handle_key(';', 0, 0);
 
     /* Type the current expected text at trailing edit row, navigate up to
-     * the committed user line (row 3, after the 2-row clear prelude and
-     * step 0's comment). The navigation commit should advance the tutorial. */
+     * the committed user line directly below step 0's comment. The
+     * navigation commit should advance the tutorial. */
     expected = tutorial_current_expected_text();
     set_input_text(expected);
-    editor_navigate_to_line(3);
+    editor_navigate_to_line(TUTORIAL_SCENE_PRELUDE_ROWS + 1);
 
     char expected_status[256];
     doc = source_document_view();
     ASSERT_INT("navigation advance committed user line + next instruction",
-               doc.line_count, 7);
+               doc.line_count, TUTORIAL_SCENE_PRELUDE_ROWS + 5);
     ASSERT_INT("step advanced via navigation", tutorial_state_view().step, 2);
     get_expected_hint(0, 3, repl_tutorial_step_count(0), 0,
                       expected_status, sizeof(expected_status));
@@ -905,7 +921,7 @@ static void test_ctrl_slash_on_locked_line_is_blocked(void) {
     editor_input_set_modifier_provider_for_test(NULL);
 
     ASSERT_INT("ctrl-/ keeps tutorial comment row",
-               repl_state_document_count(), 3);
+               repl_state_document_count(), TUTORIAL_SCENE_PRELUDE_ROWS + 1);
     ASSERT_STR("ctrl-/ read-only status",
                status_text(), "Tutorial line is read-only");
 }
@@ -935,7 +951,7 @@ static void test_tab_autofill_then_semicolon_advances(void) {
     ASSERT_INT("tab then semicolon advances step",
                tutorial_state_view().step, 1);
     ASSERT_INT("tab then semicolon appends instruction",
-               doc.line_count, 5);
+               doc.line_count, TUTORIAL_SCENE_PRELUDE_ROWS + 3);
 }
 
 static void test_rejected_commit_does_not_advance_tutorial(void) {
@@ -1036,10 +1052,10 @@ static void test_fade_duration_math(void) {
     state = tutorial_state_view();
 
     ASSERT_TRUE("tutorial active after start", state.active);
-    /* Step 0's instruction comment lands at row 2, below the 2-row
-     * scene-clear prelude; the fade animates that freshly-inserted row. */
+    /* Step 0's instruction comment lands below the fixed scene prelude;
+     * the fade animates that freshly-inserted row. */
     ASSERT_INT("fade line idx is the step-0 instruction row",
-               state.fade_line_idx, 2);
+               state.fade_line_idx, TUTORIAL_SCENE_PRELUDE_ROWS);
     /* Duration is now derived from the comment's length at a fixed
      * chars-per-second rate. Use the catalog's comment string (the same
      * input the emit code measures) - `source_text_line` may differ by
@@ -3385,11 +3401,11 @@ static void test_note_step_waits_for_ack_and_freezes_document(void) {
     tutorial_start(idx);
     ASSERT_TRUE("tutorial active", tutorial_active());
     ASSERT_INT("on the NOTE step", tutorial_state_view().step, 0);
-    /* Rows 0-1 are the scene-clear prelude; the NOTE comment lands at
-     * row 2. */
+    /* The NOTE comment lands below the fixed scene prelude. */
     ASSERT_INT("NOTE comment emitted below the clear prelude",
-               repl_state_document_count(), 3);
-    ASSERT_TRUE("NOTE comment row is locked", tutorial_line_is_locked(2));
+               repl_state_document_count(), TUTORIAL_SCENE_PRELUDE_ROWS + 1);
+    ASSERT_TRUE("NOTE comment row is locked",
+                tutorial_line_is_locked(TUTORIAL_SCENE_PRELUDE_ROWS));
     ASSERT_INT("no expected commit row during NOTE",
                tutorial_state_view().expected_commit_line, -1);
 
@@ -3399,7 +3415,7 @@ static void test_note_step_waits_for_ack_and_freezes_document(void) {
     ASSERT_INT("step unchanged after rejected commit during NOTE",
                tutorial_state_view().step, 0);
     ASSERT_INT("document unchanged after rejected commit",
-               repl_state_document_count(), 3);
+               repl_state_document_count(), TUTORIAL_SCENE_PRELUDE_ROWS + 1);
     char expected_status[256];
     snprintf(expected_status, sizeof(expected_status), "[%d/%d] %s Tutorial: Press Enter / Tab / Space to continue", idx + 1, repl_tutorial_count(), repl_tutorial_name(idx));
     ASSERT_STR("ack hint shown for NOTE",
@@ -3529,7 +3545,7 @@ static void test_setup_scaffold_preloads_locked_rows_and_cfg(void) {
     tutorial_start(idx);
     ASSERT_TRUE("tutorial active", tutorial_active());
 
-    /* The 2-row scene-clear prelude loads ahead of the scaffold body
+    /* The fixed scene-clear prelude loads ahead of the scaffold body
      * (9 rows: comment, glBegin, glColor3f, vertex, @anchor left, vertex,
      * @anchor right, vertex, glEnd); the step-0 NOTE comment appends one
      * more. */

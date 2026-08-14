@@ -331,7 +331,7 @@ static const TutorialStep g_tutorial_feature_tour_steps[] = {
         "// And the Aurora grid backdrop looks like this.",
         "grid", "GRID_THEME_AURORA"),
     STEP_NOTE(
-        "// Those settings live in the app. The locked glClear at the top wipes the buffers each frame; glClearColor sets that color and must be written above the clear."),
+        "// Grid and overlays live in the app. The locked prelude shows the program-side clear: glClearColor must appear before glClear so that clear uses the chosen color."),
     STEP_SENTINEL,
 };
 
@@ -774,7 +774,7 @@ static const char *const g_tutorial_fog_setup[] = {
 
 static const TutorialStep g_tutorial_fog_steps[] = {
     STEP_AT(NULL,
-        "// Enable fixed-function fog before the drawing scaffold.",
+        "// Enable fixed-function fog before the locked torus drawing.",
         "glEnable(GL_FOG)", "draw"),
     STEP_AT(NULL,
         "// EXP2 fog grows smoothly with the square of eye-space distance.",
@@ -1293,13 +1293,22 @@ static const TutorialStep g_tutorial_expressions_steps[] = {
     STEP_CMD(NULL, "glutSolidCube(1)"),
     STEP_CMD(NULL, "glPopMatrix()"),
     STEP_APPEND(NULL,
-        "// A phase offset of +2 delays this copy of the same motion.",
+        "// Use cos for a second oscillator and offset its phase by +2.",
         "glPushMatrix()"),
-    STEP_CMD(NULL, "glTranslatef(sin(t + 2) * 2, 1.6, 0)"),
+    STEP_CMD(NULL, "glTranslatef(cos(t + 2) * 2, 1.6, 0)"),
     STEP_CMD(NULL, "glutSolidCube(1)"),
     STEP_CMD(NULL, "glPopMatrix()"),
+    STEP_APPEND(NULL,
+        "// Ease a value from -2 to 2 with smoothstep inside lerp.",
+        "glPushMatrix()"),
+    STEP_CMD(NULL,
+        "glTranslatef(lerp(-2, 2, smoothstep(0, 1, (sin(t) + 1) * 0.5)), -1.6, 0)"),
+    STEP_CMD(NULL,
+        "glColor3f(0.3 + rand(1) * 0.7, 0.4, 1)"),
+    STEP_CMD(NULL, "glutSolidCube(0.8)"),
+    STEP_CMD(NULL, "glPopMatrix()"),
     STEP_NOTE(
-        "// lerp(a, b, s) blends two values; smoothstep eases the blend; rand(i) is a repeatable 0..1 value for each index."),
+        "// lerp(a, b, s) blends two values; smoothstep eases the blend; rand(index) supplies repeatable 0..1 variation."),
     STEP_SENTINEL,
 };
 
@@ -1397,7 +1406,7 @@ static const TutorialStep g_tutorial_keeping_work_steps[] = {
         "glColor3f(0.2, 0.8, 1)"),
     STEP_CMD(NULL, "glutSolidCube(2)"),
     STEP_NOTE(
-        "// Ctrl+S saves the session. File → Export writes a standalone .c file you can compile outside the app."),
+        "// Ctrl+S (File -> Save Scene) saves this scene and writes the standalone C program you can compile outside the app."),
     STEP_SENTINEL,
 };
 
@@ -2461,8 +2470,9 @@ int repl_tutorial_validate_entry(const TutorialEntry *entry,
     }
 
     /* Every preloaded prelude row is locked: the injected scene-clear
-     * rows (TUTORIAL_SCENE_PRELUDE_ROWS - the comment + glClear the runner
-     * loads ahead of every tutorial) plus every setup line, plus up to one
+     * rows (TUTORIAL_SCENE_PRELUDE_ROWS - the clear-color pair plus the
+     * comment + glClear the runner loads ahead of every tutorial) plus every
+     * setup line, plus up to one
      * baseline lock per step. A commented block-open needs TWO additional
      * locks for its committed header + auto-`}` (the baseline step lock is
      * its instruction comment); a comment-less open needs only one extra,
