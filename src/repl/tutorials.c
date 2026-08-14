@@ -1225,6 +1225,134 @@ static const TutorialStep g_tutorial_scratch_arrays_steps[] = {
     STEP_SENTINEL,
 };
 
+/* "Expressions & Motion" - the catalog's first lesson whose subject is
+ * that every numeric argument is an expression. First Animation used t
+ * inside one rotation; this shows oscillation, a phase offset, and names
+ * the other built-ins If & Conditionals will assume. Unlit: Lighting
+ * Basics has not run yet when this sits in the Beginner band. */
+static const char *const g_tutorial_expressions_cfg[] = {
+    "// @cfg auto_time = 1",
+    NULL,
+};
+
+static const TutorialStep g_tutorial_expressions_steps[] = {
+    STEP_NOTE(
+        "// Every numeric argument is an expression. sin and cos oscillate between -1 and 1."),
+    STEP_APPEND(NULL,
+        "// Isolate the first cube so its translate does not move the second.",
+        "glPushMatrix()"),
+    STEP_CMD(NULL, "glTranslatef(sin(t) * 2, 0, 0)"),
+    STEP_CMD(NULL, "glutSolidCube(1)"),
+    STEP_CMD(NULL, "glPopMatrix()"),
+    STEP_APPEND(NULL,
+        "// A phase offset of +2 delays this copy of the same motion.",
+        "glPushMatrix()"),
+    STEP_CMD(NULL, "glTranslatef(sin(t + 2) * 2, 1.6, 0)"),
+    STEP_CMD(NULL, "glutSolidCube(1)"),
+    STEP_CMD(NULL, "glPopMatrix()"),
+    STEP_NOTE(
+        "// lerp(a, b, s) blends two values; smoothstep eases the blend; rand(i) is a repeatable 0..1 value for each index."),
+    STEP_SENTINEL,
+};
+
+/* Body / arm / hand: each push is one level deeper, so the hand rides the
+ * arm and the arm rides the body. Yaw 0 so the X-axis chain reads at even
+ * size; auto_time is on so the nested rotations are the evidence. */
+static const char *const g_tutorial_transform_stacks_setup[] = {
+    "// camera",
+    "glTranslatef(0.0f, 0.0f, -9.00f); // @camera dist",
+    "glRotatef(18.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
+    "glRotatef(0.0f, 0.0f, 1.0f, 0.0f); // @camera ry",
+    "glTranslatef(0.0f, 0.0f, 0.0f); // @camera pan",
+    "// These locked lines are the minimal lit pipeline from the Lighting Basics tutorial.",
+    "glEnable(GL_DEPTH_TEST)",
+    "glEnable(GL_LIGHTING)",
+    "glEnable(GL_LIGHT0)",
+    "glEnable(GL_COLOR_MATERIAL)",
+    "glColor3f(0.8, 0.7, 0.3)",
+    NULL,
+};
+
+static const char *const g_tutorial_transform_stacks_cfg[] = {
+    "// @cfg auto_time = 1",
+    NULL,
+};
+
+static const TutorialStep g_tutorial_transform_stacks_steps[] = {
+    STEP_NOTE(
+        "// Nested glPushMatrix / glPopMatrix makes each child's transform relative to its parent."),
+    STEP_APPEND(NULL,
+        "// Open the body frame.",
+        "glPushMatrix()"),
+    STEP_CMD(NULL, "glutSolidCube(1.4)"),
+    STEP_APPEND(NULL,
+        "// Open the arm frame: sit on the body's right face, then swing.",
+        "glPushMatrix()"),
+    STEP_CMD(NULL, "glTranslatef(1.2, 0, 0)"),
+    STEP_CMD(NULL, "glRotatef(t * 40, 0, 0, 1)"),
+    STEP_CMD(NULL, "glutSolidCube(0.8)"),
+    STEP_APPEND(NULL,
+        "// Open the hand frame one level deeper, riding the arm.",
+        "glPushMatrix()"),
+    STEP_CMD(NULL, "glTranslatef(0.8, 0, 0)"),
+    STEP_CMD(NULL, "glRotatef(t * 70, 0, 0, 1)"),
+    STEP_CMD(NULL, "glutSolidCube(0.4)"),
+    STEP_CMD(NULL, "glPopMatrix()"),
+    STEP_CMD(NULL, "glPopMatrix()"),
+    STEP_CMD(NULL, "glPopMatrix()"),
+    STEP_NOTE(
+        "// Each pop restores the parent frame. glPushAttrib / glPopAttrib is the same idea for enable and material state."),
+    STEP_SENTINEL,
+};
+
+/* A ring of cubes with a per-iteration assignment so replay has both
+ * several draw calls and a value to annotate. auto_time is off: the
+ * geometry is still while the learner steps the program counter. */
+static const char *const g_tutorial_replay_cfg[] = {
+    "// @cfg auto_time = 0",
+    NULL,
+};
+
+static const TutorialStep g_tutorial_replay_steps[] = {
+    STEP_NOTE(
+        "// Replay steps through the program one draw at a time so you can see which command produced which geometry."),
+    STEP_APPEND(NULL,
+        "// Repeat the body eight times with i taking values 0 through 7.",
+        "for(i, 0, 8) {"),
+    STEP_CMD(NULL, "glPushMatrix()"),
+    STEP_CMD(NULL, "glRotatef(i * 45, 0, 0, 1)"),
+    STEP_CMD(NULL, "glTranslatef(2, 0, 0)"),
+    STEP_APPEND(NULL,
+        "// Record this iteration so replay can annotate the live value.",
+        "A[0] = i"),
+    STEP_CMD(NULL, "glutSolidCube(0.6)"),
+    STEP_CMD(NULL, "glPopMatrix()"),
+    STEP_APPEND(NULL,
+        "// Close the loop to reveal a ring of eight cubes.",
+        "}"),
+    STEP_NOTE(
+        "// Left and Right step the program counter. Assignment annotations show the live value at that step."),
+    STEP_NOTE(
+        "// Right-click an assignment row to plot its values over time."),
+    STEP_REQUIRE_KEY(NULL,
+        "// Press %s to start replay. The highlighted row is the command that just ran.",
+        "replay", 1,
+        KM_KEY(GLR_REPLAY), KM_MODS(GLR_REPLAY), 0),
+    STEP_SENTINEL,
+};
+
+static const TutorialStep g_tutorial_keeping_work_steps[] = {
+    STEP_NOTE(
+        "// The session is a C program. When this tutorial ends, what you typed stays as a user scene you can edit."),
+    STEP_APPEND(NULL,
+        "// Choose a color so the exported file has something besides the locked clear.",
+        "glColor3f(0.2, 0.8, 1)"),
+    STEP_CMD(NULL, "glutSolidCube(2)"),
+    STEP_NOTE(
+        "// Ctrl+S saves the session. File → Export writes a standalone .c file you can compile outside the app."),
+    STEP_SENTINEL,
+};
+
 /* REPL_TUTORIAL_TAG_ALL is a synthetic tag: every tutorial is a member.
  * It is not listed in any g_tutorials[] `.tag_names` literal; instead
  * tutorial_catalog_entry_has_tag() returns true for index 0
@@ -1328,6 +1456,13 @@ static const TutorialEntry g_tutorials[] = {
         .subheading = "Beginner",
     },
     {
+        .name       = "Expressions & Motion",
+        .steps      = g_tutorial_expressions_steps,
+        .cfg        = g_tutorial_expressions_cfg,
+        .tag_names  = (const char *const []){ "Animation", NULL },
+        .subheading = "Beginner",
+    },
+    {
         .name       = "Lighting Basics",
         .steps      = g_tutorial_lighting_basics_steps,
         .cfg        = g_tutorial_dense_solid_cfg,
@@ -1424,6 +1559,27 @@ static const TutorialEntry g_tutorials[] = {
         .name       = "Bitmap Text",
         .steps      = g_tutorial_bitmap_text_steps,
         .cfg        = g_tutorial_bitmap_text_cfg,
+        .tag_names  = (const char *const []){ "REPL Language", NULL },
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Transform Stacks & Hierarchy",
+        .steps      = g_tutorial_transform_stacks_steps,
+        .setup      = g_tutorial_transform_stacks_setup,
+        .cfg        = g_tutorial_transform_stacks_cfg,
+        .tag_names  = (const char *const []){ "Color & Transforms", NULL },
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Watching a Program Run",
+        .steps      = g_tutorial_replay_steps,
+        .cfg        = g_tutorial_replay_cfg,
+        .tag_names  = (const char *const []){ "REPL Language", NULL },
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Keeping Your Work",
+        .steps      = g_tutorial_keeping_work_steps,
         .tag_names  = (const char *const []){ "REPL Language", NULL },
         .subheading = "Intermediate",
     },

@@ -1202,6 +1202,9 @@ static void test_catalog_cfg_lines(void) {
                      strcmp(name, "Color & Transform") == 0 ||
                      strcmp(name, "Scene Chrome & Overlays") == 0 ||
                      strcmp(name, "First Animation") == 0 ||
+                     strcmp(name, "Expressions & Motion") == 0 ||
+                     strcmp(name, "Transform Stacks & Hierarchy") == 0 ||
+                     strcmp(name, "Watching a Program Run") == 0 ||
                      strcmp(name, "Points & Lines") == 0 ||
                      strcmp(name, "Line Stipple") == 0 ||
                      strcmp(name, "Blending & Transparency") == 0 ||
@@ -2450,15 +2453,19 @@ static void test_phase_c_catalog_full_walk(void) {
         "Two-Sided Lighting",
         "Culling & Winding",
         "Bitmap Text",
+        "Expressions & Motion",
+        "Transform Stacks & Hierarchy",
+        "Watching a Program Run",
+        "Keeping Your Work",
         "Functions",
         "If & Conditionals",
         "Scratch Arrays",
     };
 
-    /* 24 shipped entries: Depth Test Triangle was retired into
-     * Depth Mask & Draw Order. */
-    ASSERT_INT("catalog contains 24 tutorials",
-               repl_tutorial_count(), 24);
+    /* 28 shipped entries: Depth Test Triangle retired, plus the four
+     * Tier 1 lessons (Expressions, Transform Stacks, Replay, Keeping). */
+    ASSERT_INT("catalog contains 28 tutorials",
+               repl_tutorial_count(), 28);
 
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         char label[160];
