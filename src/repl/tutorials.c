@@ -248,7 +248,7 @@ static const TutorialStep g_tutorial_first_triangle_steps[] = {
  * hanging off to the right. Half the size makes the displacement legible. */
 static const TutorialStep g_tutorial_color_transform_steps[] = {
     STEP_APPEND(NULL,
-        "// Save the current matrix so this example can clean up after itself.",
+        "// Save the current matrix so this tutorial can clean up after itself.",
         "glPushMatrix()"),
     STEP_APPEND(NULL,
         "// Set the drawing color; OpenGL keeps using it for later vertices.",
