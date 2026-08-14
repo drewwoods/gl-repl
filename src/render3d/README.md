@@ -144,7 +144,7 @@ applies a render3d-local frustum shift for jitter.
 
 | File | Responsibility |
 |---|---|
-| [`render.c`](render.c) / `.h` | Frame orchestration: viewport, clear, projection, accumulation loop, geometry-callback hook, overlay/HUD passes |
+| [`render.c`](render.c) / `.h` | Frame orchestration: viewport, baseline clear-color state, projection, accumulation loop, geometry-callback hook, overlay/HUD passes |
 | [`render_types.h`](render_types.h) | [`Render3dRgba`](render_types.h#L63), [`Render3dRenderConfig`](render_types.h#L139), frame-context types - the renderer contract |
 | [`grid.c`](grid.c) / `.h` | Reference-grid rendering and grid themes (incl. ocean/ruler passes) |
 | [`axes.c`](axes.c) / `.h` | Axis rendering and axis themes |

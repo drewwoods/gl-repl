@@ -9,8 +9,9 @@ the next overlay / guide / backdrop / theme / projection / post-effect /
 pass, implementation-pattern consistency, readability, duplication, header
 hygiene, and OpenGL state conventions.
 
-No code was changed. Every finding below carries a file:line citation so it
-can be re-checked before anyone acts on it.
+The implementation and follow-up fixes are now landed. Every finding below
+retains its original file:line citation and rationale so the completed work
+can be re-checked against the design decisions that motivated it.
 
 This is not a re-run of `plans/done/src-scene-code-smell-audit.md` (2026-05).
 That pass closed the real bugs (mutable globals, god-functions, projection
@@ -88,7 +89,7 @@ own stated intent, or where the next feature will cost more than it should.
    caller-owned `Render3dState`.
 4. Either one pass, or N accumulation samples (AA jitter *or* blur
    subframe hook, never both).
-5. Per pass (`render_3d_scene_pass`, `render.c:830-877`):
+5. Per pass (`render3d_scene_pass`, `render.c:830-877`):
    - `render3d_pass_setup` — projection (jittered), lights + backdrop
      env lights, lighting disabled as the user-geometry baseline,
      quality/wireframe flags. Outer `glPushAttrib(GL_ALL_ATTRIB_BITS)`.
@@ -123,7 +124,7 @@ in this list: the controller builds a `Render3dGuideSnapshot` and the
 | **Grid / axes / light theme** | X-macro in `themes.h` (cfg symbols follow). Then either a `GridThemeSpec` / `AxesThemeSpec` row **or** a custom function + dispatch case, plus the membership predicates. This is the expensive one — Finding 3. | A theme-object framework. |
 | **Projection / view mode** | `projection_mix` is a 1-D blend between perspective and a top-down ortho that matches the same FOV. `Render3dViewMode` (2D/3D) and `Render3dProjectionMode` (PERSPECTIVE/ORTHO) are the discrete faces of that same axis. A third mode (isometric, side ortho) does not fit the mix. | Do not add a fourth enum. Document the limit; invent a new mix only when a real third mode is requested. |
 | **Post-process effect** | `Render3dPostFilterMode` + a `postprocess_filter_render_*` arm. Warp geometry already lives in `postprocess_surface` (RIPPLE is implemented and unwired). App cfg currently forces a *second* enum — Finding 4. | Shaders / FBOs. The module is fixed-function on purpose. |
-| **Render pass** | A named `render3d_pass_*` and one call in `render_3d_scene_pass`, or a hook if the body belongs to a caller. Hidden-line and winding are the in-renderer precedents. | A pass graph. |
+| **Render pass** | A named `render3d_pass_*` and one call in `render3d_scene_pass`, or a hook if the body belongs to a caller. Hidden-line and winding are the in-renderer precedents. | A pass graph. |
 
 ---
 
@@ -622,7 +623,7 @@ indirection.
 
 ## Highest-value changes
 
-1. **Bring the written pipeline back in line with `render_3d_scene_pass`**
+1. **Bring the written pipeline back in line with `render3d_scene_pass`**
    (Finding 1). Comments and `ARCHITECTURE.md` only. Highest leverage
    per minute; stops the next change from targeting a renderer that
    no longer exists.

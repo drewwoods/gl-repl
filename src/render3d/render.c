@@ -1,5 +1,5 @@
 /*
- * render.c - 3D scene rendering (frame prep, edit guides)
+ * render.c - 3D scene rendering (frame prep and named scene passes)
  */
 #include "axes.h"
 #include "backdrop.h"

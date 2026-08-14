@@ -39,7 +39,7 @@ UI = view + hit-test/render services.
 
 Render3d = 3D stage renderer.
     Owns the 3D viewport around the user-programmed REPL geometry: projection,
-    camera/view transform, grid, axes, lights, backdrop, accumulation,
+    camera pose inputs and derived frame pose, grid, axes, lights, backdrop, accumulation,
     render3d-local post-process, and 3D guide/decorator drawing.
     It consumes explicit per-frame config and callbacks - including the
     background as two plain inputs, a baseline clear color it establishes
@@ -322,7 +322,7 @@ handlers - they just log) plus Quit.
 | `repl_*` | Program model and compiler pipeline: parser, eval, command spec, source scope, compile, command store, flatten, executor, autonormal, examples, export. **No editor or UI state. No replay runtime state (that lives on the `replay` peer).** |
 | `editor_*` | Text-document model + controller: line text, active input, cursor, scroll, selection, navigation, undo/redo, clipboard, search, autocomplete, cursor blink, commit orchestration. Includes read-only document sessions (e.g. help) backed by a content provider |
 | `ui_*` | Screen-space rendering and hit-test/measurement services. Renderers consume snapshots; input handlers compute neutral [`UiHit`](../src/ui/core/hit.h#L60) results and return them. **Does not own state. Does not dispatch.** |
-| `render3d_*` | 3D rendering, camera/view transforms, world decorators, 3D overlays. Camera input routes through `glr_ctrl` to render3d/viewport controller |
+| `render3d_*` | 3D rendering, projection and camera-pose consumption, world decorators, 3D overlays. Camera input routes through `glr_ctrl` to the app camera owner |
 | `glr_*` | Application controller/composition layer: GLUT callback registration, frame ordering, snapshot builders, raw-input → owning-subsystem dispatch (based on `UiHit.kind` / focus), diagnostic relay from REPL to editor + status. Intended to be a router/coordinator; currently still carries too much mixed app policy, so new behavior should move toward the owning layer when possible |
 | `variable_panel_*` | Peer subsystem: variable-slider visibility + drag transaction + writeback policy. Owns its own state |
 | `assign_plot_*` | Peer subsystem: the right-clicked assignment rows being value-plotted (up to four series), the capture rate, the presentation chips, and per series its plot buffer and running statistics. Owns its own state |
@@ -613,7 +613,7 @@ parameters. They must not discover or mutate editor state globally.
 
 ### 4. 3D render3d rendering
 
-`render3d_*` owns the 3D view. Render3d renderers consume snapshots/configs and
+`render3d_*` owns the 3D stage. Render3d renderers consume snapshots/configs and
 never read REPL runtime state, [`EditorState`](../src/editor/state.h#L199), or [`UiState`](../src/ui/app/state.h#L20) directly.
 
 Naming note: `render3d_*` is the current code prefix for the rendered world or
@@ -624,7 +624,7 @@ scratch, `world_*` or `stage_*` would be more direct.
 
 | Module | Role |
 |--------|------|
-| `src/render3d/render` | 3D frame setup: viewport, clear, projection, camera, accumulation loop, user-geometry execution hook |
+| `src/render3d/render` | 3D frame setup: viewport, baseline clear-color state, projection, accumulation loop, user-geometry execution hook; the caller owns modelview camera loading and color/depth clears |
 | `src/render3d/render_types` | Render3d config/context types and narrow callback interfaces |
 | `src/render3d/grid` | Grid rendering and grid themes |
 | `src/render3d/axes` | Axis rendering and axis themes |

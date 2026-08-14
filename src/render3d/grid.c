@@ -123,7 +123,7 @@ typedef struct GridDrawContext {
     float ef_fade_end;  /* radius where alpha hits 0 (for arbitrary-pos eval) */
     float ef_band;      /* ramp width just inside fade_end */
     /* Transition-time draw-in (see GRID_REVEAL_* up top). Set from
-     * g_grid_reveal[theme]; only consulted while a line theme is
+     * g_grid_theme_traits[theme].reveal; only consulted while a line theme is
      * mid-transition (grid_reveal_active). */
     GridReveal reveal;
 } GridDrawContext;

@@ -105,9 +105,11 @@ The ownership model becomes enforceable through these rules:
 2. **The executor is the narrow live-GL gate for user geometry.**
    [`src/repl/executor.c`](../src/repl/executor.c) turns a flat program into OpenGL calls. General `repl_*`
    modules should not casually call OpenGL.
-3. **The render3d module owns the stage, not the editor.** It sets viewport, clear,
-   projection, camera, accumulation, baseline lighting, grid, axes, backdrop,
-   light indicators, orbit target, and 3D overlay passes from config.
+3. **The render3d module owns the stage, not the editor.** It sets viewport,
+   projection, baseline clear-color state, accumulation, baseline lighting,
+   grid, axes, backdrop, light indicators, orbit target, and 3D overlay passes
+   from config. The caller owns the modelview camera transform and color/depth
+   buffer clears.
 4. **The UI owns screen-space presentation.** UI renderers draw code rows,
    menus, popups, color picker, help, status, and profile views from snapshots
    and route mutations through the owning editor, REPL, or peer-subsystem path.
@@ -2405,7 +2407,8 @@ after the ownership and boundary sections above identify the correct layer.
 * New user-geometry execution behavior: [`src/repl/executor.c`](../src/repl/executor.c).
 * New 3D world decorator: `render3d_*`.
 * New 3D REPL-aware overlay: current home is still `render3d_*`, consuming
-  [`FlatProgramView`](../src/repl/flatten.h#L58) or a snapshot from [`Render3dRenderConfig`](../src/render3d/render_types.h#L139).
+  pre-resolved data from [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L53)
+  or another explicit caller snapshot.
 * New 2D UI: a `ui_*` renderer plus an editor, REPL, or peer-subsystem action
   path when mutation is required.
 * New per-frame render3d/UI wiring: [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c).
