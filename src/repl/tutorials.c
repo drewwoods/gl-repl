@@ -729,24 +729,34 @@ static const TutorialStep g_tutorial_blending_steps[] = {
     STEP_SENTINEL,
 };
 
+static const char *const g_tutorial_depth_mask_setup[] = {
+    "// These locked lines are the minimal lit pipeline from the Lighting Basics tutorial.",
+    "glEnable(GL_DEPTH_TEST)",
+    "glEnable(GL_LIGHTING)",
+    "glEnable(GL_LIGHT0)",
+    "glEnable(GL_COLOR_MATERIAL)",
+    "glColor3f(0.8, 0.7, 0.3)",
+    NULL,
+};
+
 static const TutorialStep g_tutorial_depth_mask_steps[] = {
     STEP_NOTE(
-        "// Draw opaque geometry first, then translucent geometry after it."),
+        "// Draw the opaque cube first, then a translucent sphere with depth writes still on."),
     STEP_APPEND(NULL,
-        "// Keep ordinary depth testing active for both objects.",
-        "glEnable(GL_DEPTH_TEST)"),
-    STEP_APPEND(NULL,
-        "// Draw the opaque cube first so it establishes solid depth.",
+        "// Draw the opaque cube so it establishes solid depth.",
         "glutSolidCube(2)"),
     STEP_CMD(NULL, "glEnable(GL_BLEND)"),
     STEP_CMD(NULL, "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)"),
-    STEP_APPEND(NULL,
-        "// Stop translucent fragments from writing new depth values.",
-        "glDepthMask(GL_FALSE)"),
     STEP_CMD(NULL, "glColor4f(0.4, 0.8, 1, 0.4)"),
-    STEP_APPEND(NULL,
-        "// Draw a larger translucent sphere around the opaque cube.",
+    STEP_APPEND("sphere",
+        "// Draw a larger translucent sphere around the cube. Depth writes are still on.",
         "glutSolidSphere(1.4, 32, 24)"),
+    STEP_NOTE(
+        "// Near fragments of the sphere wrote depth, so the rest of the sphere and the cube disappear behind them."),
+    STEP_AT(NULL,
+        "// Go back above the sphere and stop translucent fragments from writing depth.",
+        "glDepthMask(GL_FALSE)",
+        "sphere"),
     STEP_APPEND(NULL,
         "// Restore depth writes for whatever is drawn next.",
         "glDepthMask(GL_TRUE)"),
@@ -1393,6 +1403,7 @@ static const TutorialEntry g_tutorials[] = {
     {
         .name       = "Depth Mask & Draw Order",
         .steps      = g_tutorial_depth_mask_steps,
+        .setup      = g_tutorial_depth_mask_setup,
         .cfg        = g_tutorial_dense_solid_cfg,
         .tag_names  = (const char *const []){ "Effects", "Depth & Lighting", NULL },
         .subheading = "Intermediate",
