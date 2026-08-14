@@ -785,9 +785,9 @@ static int find_tutorial_idx_by_name(const char *name) {
  * since simulating a submenu-item hit would be integration-level. */
 static void test_tutorial_start_applies_cfg(void) {
     int first = find_tutorial_idx_by_name("First Triangle");
-    int color = find_tutorial_idx_by_name("Color & Transform");
+    int no_cfg = find_tutorial_idx_by_name("First Loop");
     ASSERT_TRUE("First Triangle in catalog", first >= 0);
-    ASSERT_TRUE("Color & Transform in catalog", color >= 0);
+    ASSERT_TRUE("First Loop in catalog", no_cfg >= 0);
 
     /* (A) First Triangle ships `@cfg view_mode = 1`: a 2D ortho view. */
     glr_ctrl_reset_all();
@@ -813,14 +813,14 @@ static void test_tutorial_start_applies_cfg(void) {
                    glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
     }
 
-    /* (B) A tutorial with no cfg (Color & Transform) still gets the
+    /* (B) A tutorial with no cfg (First Loop) still gets the
      * per-start presentation reset, so a prior 2D doesn't leak in. */
     glr_ctrl_reset_all();
     glr_config_set(GLR_CONFIG_ORTHO_MODE, 1);
-    if (color >= 0) {
-        ASSERT_TRUE("Color & Transform has no cfg",
-                    repl_tutorial_cfg_lines(color) == NULL);
-        tutorial_start(color);
+    if (no_cfg >= 0) {
+        ASSERT_TRUE("First Loop has no cfg",
+                    repl_tutorial_cfg_lines(no_cfg) == NULL);
+        tutorial_start(no_cfg);
         ASSERT_INT("no-cfg tutorial active", tutorial_active(), 1);
         ASSERT_INT("no-cfg tutorial resets view to 3D default",
                    glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
@@ -828,7 +828,7 @@ static void test_tutorial_start_applies_cfg(void) {
          * unconditionally (not just when the tutorial's
          * @cfg / SET / REQUIRE references it), so the per-start
          * presentation_reset -> 3D no longer leaks past teardown.
-         * Color & Transform names no presentation slugs, but the
+         * First Loop names no presentation slugs, but the
          * captured baseline still holds the pre-start 2D and exit
          * restores it. See test_tutorial_runner.c's
          * test_baseline_captures_view_mode_even_when_unreferenced

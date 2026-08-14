@@ -160,8 +160,8 @@ static void test_start_enters_transient_tutorial_scene(void) {
  * the camera eases back to the built-in pose (examples deliberately
  * inherit it; tutorials do not), the grid narrows to CLOSE to frame
  * unit-scale lesson geometry, and the vertex overlays go off so the
- * lesson starts on bare geometry. "Color & Transform" ships no leading
- * `@cfg`, so nothing layers over the reset. */
+ * lesson starts on bare geometry. "Color & Transform" only overrides
+ * view_mode, so the other reset slugs stay at the tutorial defaults. */
 static void test_start_resets_view_to_tutorial_defaults(void) {
     reset_fixture();
 
@@ -1199,6 +1199,7 @@ static void test_catalog_cfg_lines(void) {
     for (int i = 0; i < repl_tutorial_count(); i++) {
         const char *name = repl_tutorial_name(i);
         if (name && (strcmp(name, "First Triangle") == 0 ||
+                     strcmp(name, "Color & Transform") == 0 ||
                      strcmp(name, "Feature Tour") == 0 ||
                      strcmp(name, "First Animation") == 0 ||
                      strcmp(name, "Points & Lines") == 0 ||
@@ -3920,18 +3921,18 @@ static void test_baseline_captures_view_mode_even_when_unreferenced(void) {
     glr_config_set(GLR_CONFIG_ORTHO_MODE, 1);
     ASSERT_INT("baseline view_mode 2D", repl_cfg_get_int("view_mode", -1), 1);
 
-    /* Color & Transform has no .cfg block and no SET/REQUIRE steps -
+    /* First Loop has no .cfg block and no SET/REQUIRE steps -
      * it never names view_mode, so the bug case is exactly this. */
-    int idx = find_tutorial_idx("Color & Transform");
-    ASSERT_TRUE("found Color & Transform", idx >= 0);
+    int idx = find_tutorial_idx("First Loop");
+    ASSERT_TRUE("found First Loop", idx >= 0);
     tutorial_start(idx);
-    ASSERT_TRUE("color-transform active", tutorial_active());
+    ASSERT_TRUE("first-loop active", tutorial_active());
     /* presentation_reset -> CFG_DEFAULT_ORTHO_MODE = 0 (3D) */
     ASSERT_INT("view_mode reset to 3D inside tutorial",
                repl_cfg_get_int("view_mode", -1), 0);
 
     tutorial_stop();
-    ASSERT_TRUE("color-transform inactive after exit", !tutorial_active());
+    ASSERT_TRUE("first-loop inactive after exit", !tutorial_active());
     ASSERT_INT("exit keeps the tutorial's 3D view",
                repl_cfg_get_int("view_mode", -1), 0);
     tutorial_teardown();

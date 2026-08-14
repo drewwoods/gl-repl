@@ -245,7 +245,14 @@ static const TutorialStep g_tutorial_first_triangle_steps[] = {
 /* The square is 2 units, not the flat-figure +/-2 motif: it is the one flat
  * tutorial whose figure gets translated, and at 4 units wide a 2-unit shift
  * barely separated it from the origin - it just read as an oversized quad
- * hanging off to the right. Half the size makes the displacement legible. */
+ * hanging off to the right. Half the size makes the displacement legible.
+ * Forced 2D so the "rotate around Z, the screen-facing axis" step is true
+ * under the shared tutorial pose (yaw 30, pitch 20 would make Z oblique). */
+static const char *const g_tutorial_color_transform_cfg[] = {
+    "// @cfg view_mode = RENDER3D_VIEW_2D",
+    NULL,
+};
+
 static const TutorialStep g_tutorial_color_transform_steps[] = {
     STEP_APPEND(NULL,
         "// Save the current matrix so this tutorial can clean up after itself.",
@@ -265,15 +272,9 @@ static const TutorialStep g_tutorial_color_transform_steps[] = {
     STEP_APPEND(NULL,
         "// Give the square its lower-left corner in the transformed space.",
         "glVertex3f(-1, -1, 0)"),
-    STEP_APPEND(NULL,
-        "// Add the lower-right corner at the same height.",
-        "glVertex3f(1, -1, 0)"),
-    STEP_APPEND(NULL,
-        "// Add the upper-right corner so the quad has height.",
-        "glVertex3f(1, 1, 0)"),
-    STEP_APPEND(NULL,
-        "// Add the upper-left corner; vertex order walks around the square.",
-        "glVertex3f(-1, 1, 0)"),
+    STEP_CMD(NULL, "glVertex3f(1, -1, 0)"),
+    STEP_CMD(NULL, "glVertex3f(1, 1, 0)"),
+    STEP_CMD(NULL, "glVertex3f(-1, 1, 0)"),
     STEP_APPEND(NULL,
         "// Close the quad batch to draw the rotated cyan square.",
         "glEnd()"),
@@ -403,7 +404,7 @@ static const char *const g_tutorial_feature_tour_cfg[] = {
  * typed `n = 10;` advances it. */
 static const TutorialStep g_tutorial_variable_slider_steps[] = {
     STEP_REQUIRE_VAR(NULL,
-        "// @config the triangle's size; the slider will grow it",
+        "// @config the triangle's size; that tag keeps the slider highlighted",
         "n", 1.0f),
     STEP_APPEND(NULL,
         "// Open a triangle batch.",
@@ -1291,6 +1292,7 @@ static const TutorialEntry g_tutorials[] = {
     {
         .name       = "Color & Transform",
         .steps      = g_tutorial_color_transform_steps,
+        .cfg        = g_tutorial_color_transform_cfg,
         .tag_names  = (const char *const []){ "Color & Transforms", NULL },
         .subheading = "Beginner",
     },
