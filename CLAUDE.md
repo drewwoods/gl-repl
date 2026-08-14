@@ -785,7 +785,7 @@ Two policies that bite from a distance, so they stay here:
 ## Math
 
 `sin cos tan asin acos atan atan2 sqrt abs pow log ln min max clamp lerp
-smoothstep sign floor ceil fmod rem rand rand2` - `log` is base-10, `ln`
+smoothstep sign floor ceil round fmod rem rand rand2` - `log` is base-10, `ln`
 natural; `asin`/`acos` clamp their input to [-1, 1] (the evaluator stays
 total); `lerp` is deliberately unclamped. `clamp`/`lerp`/`smoothstep`/`sign`
 have no libm twin, so export emits a `repl_*f` helper per used one

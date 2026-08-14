@@ -53,7 +53,7 @@ Semantics in depth: `docs/USER_GUIDE.md`.
 ## Math
 
 Functions: `sin cos tan asin acos atan atan2(y,x) sqrt abs pow log ln min max
-clamp(x,lo,hi) lerp(a,b,s) smoothstep(e0,e1,x) sign floor ceil fmod rem
+clamp(x,lo,hi) lerp(a,b,s) smoothstep(e0,e1,x) sign floor ceil round fmod rem
 rand(seed[,iter]) rand2(seed[,iter])` - `log` is base-10, `ln` natural;
 `asin`/`acos` clamp to [-1,1] before the call, `atan2` returns [-PI, PI] (the
 aim-at / polar-angle primitive); `lerp` is unclamped (s outside [0,1]

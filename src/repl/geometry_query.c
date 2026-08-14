@@ -153,6 +153,19 @@ static int skip_function_body_backward(const GLCmd *cmds, int func_end_idx) {
     return -1;
 }
 
+/* DEFERRED (repl-clarity-review.md finding 11, in docs/plans/partial/): the
+ * push/pop/load-identity scope accounting below (the popped_depth counter,
+ * three cases, ~10 lines) is the same logic the shared TransformScopeScan in
+ * transform_utils.h runs for the flat-program twin further down. The
+ * duplication is only partial and the difference is justified - this walk
+ * additionally skips opaque function bodies and stops at an enclosing
+ * CMD_FUNC_DEF, which the flat walk gets for free because flattening already
+ * inlined everything - but the depth half is genuinely maintained twice, and
+ * it is the half where an off-by-one would be hardest to spot. **The review
+ * recommends no action on its own.** If you are already changing
+ * TransformScopeScan, consider giving it an optional "stop at block head /
+ * skip nested func body" policy so both callers share the depth accounting
+ * and differ only in policy. */
 int repl_find_affecting_transforms(int line_idx, int *out, int out_cap) {
     if (!out || out_cap <= 0) return 0;
     int n = repl_state_document_count();

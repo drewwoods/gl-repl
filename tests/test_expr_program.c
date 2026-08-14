@@ -142,7 +142,8 @@ static void test_parity_corpus(void) {
         /* constants */
         "PI", "TAU", "e", "2 * PI", "PI / 2", "NAN", "INFINITY",
         "nan", "inf", "infinity", "-INFINITY", "NAN + 1", "0 * INFINITY",
-        /* builtins, all of them */
+        /* builtins - curated edge cases; exhaustiveness is
+         * test_builtin_table_parity()'s job, not this list's */
         "sin(1)", "cos(1)", "tan(0.5)", "sqrt(2)", "sqrt(-4)", "abs(-3)",
         "asin(0.5)", "asin(2)", "acos(0.5)", "acos(-2)",
         "atan(0.5)", "atan(-3)",
@@ -208,6 +209,79 @@ static void test_parity_corpus(void) {
     repl_expr_cache_destroy(cache);
     repl_eval_undeclare_predef_var("radius");
     repl_eval_undeclare_predef_var("n");
+}
+
+/* ---- Table-driven builtin coverage --------------------------------------- */
+
+/* The corpus above is curated: it picks edge cases per builtin (asin(2),
+ * clamp(-5, 0, 1), atan2(0, 0)) and is worth keeping for exactly that. What it
+ * cannot do is stay complete - it is a hand-written list, and its "all of them"
+ * comment had no enforcement behind it.
+ *
+ * Builtin *semantics* cannot diverge between the two evaluators by
+ * construction: expr_program.c resolves the call through
+ * repl_eval_builtin_index_of() and invokes the same function pointer
+ * repl_eval_builtin_at() hands the text evaluator. What a new table row can
+ * still get wrong is the plumbing around it - arity bounds, the compile path's
+ * argument marshalling, the args[] buffer width. So walk the table itself and
+ * put one call per builtin at each end of its arity range through the same
+ * parity check.
+ *
+ * Do not "verify the corpus covers everything" by substring-searching it
+ * instead: "sin" is inside "asin". */
+static void test_builtin_table_parity(void) {
+    /* Arbitrary but valid for every current builtin: inside asin/acos's
+     * domain, positive so log/ln are finite, distinct so min/max/clamp/lerp
+     * do not collapse. */
+    static const float k_args[REPL_EXPR_BUILTIN_ARGS_MAX] = { 0.5f, 1.5f, 2.5f };
+    ReplExprCache *cache = repl_expr_cache_create();
+    int count = repl_eval_builtin_count();
+    int i;
+
+    repl_eval_init_predef_vars();
+    TEST_ASSERT_TRUE(&g_harness, "builtin table is non-empty", count > 0);
+
+    for (i = 0; i < count; i++) {
+        ReplEvalBuiltinView b = repl_eval_builtin_at(i);
+        int arity;
+        char label[160];
+
+        snprintf(label, sizeof(label), "builtin[%d] has a name", i);
+        TEST_ASSERT_TRUE(&g_harness, label, b.name != NULL && b.name[0]);
+        if (!b.name || !b.name[0])
+            continue;
+
+        snprintf(label, sizeof(label),
+                 "%s: 1 <= arity_min <= arity_max <= REPL_EXPR_BUILTIN_ARGS_MAX",
+                 b.name);
+        TEST_ASSERT_TRUE(&g_harness, label,
+                         b.arity_min >= 1 && b.arity_min <= b.arity_max &&
+                         b.arity_max <= REPL_EXPR_BUILTIN_ARGS_MAX);
+        if (b.arity_min < 1 || b.arity_min > b.arity_max ||
+            b.arity_max > REPL_EXPR_BUILTIN_ARGS_MAX)
+            continue;
+
+        snprintf(label, sizeof(label), "%s: eval pointer is set", b.name);
+        TEST_ASSERT_TRUE(&g_harness, label, b.eval != NULL);
+
+        /* arity_min, then arity_max when it differs (rand / rand2 are the
+         * only two today, and their optional arg is the whole reason the
+         * exporter has a fungible-spelling rule). */
+        for (arity = b.arity_min; arity <= b.arity_max; arity++) {
+            char src[128];
+            int n = snprintf(src, sizeof(src), "%s(", b.name);
+            int a;
+            for (a = 0; a < arity; a++)
+                n += snprintf(src + n, sizeof(src) - (size_t)n, "%s%g",
+                              a ? ", " : "", (double)k_args[a]);
+            snprintf(src + n, sizeof(src) - (size_t)n, ")");
+            check_parity(cache, src, NULL, 0);
+            if (arity != b.arity_min && arity != b.arity_max)
+                break;   /* only the two ends, not every arity in between */
+        }
+    }
+
+    repl_expr_cache_destroy(cache);
 }
 
 /* ---- Dependency masks ---------------------------------------------------- */
@@ -511,6 +585,7 @@ static void test_line_entries(void) {
 
 int main(void) {
     test_parity_corpus();
+    test_builtin_table_parity();
     test_dependency_masks();
     test_compile_rejection();
     test_compile_lists();
