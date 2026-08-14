@@ -454,49 +454,24 @@ const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
 
 #include "repl/cfg_baseline.h"
 
-/* Subset of cfg keys saved per-scene: presentation toggles plus
- * camera_rotate. The controller owns this knowledge so src/repl/scenes.c
- * stays neutral. */
-static int cfg_key_in_scene_subset(GlrConfigKey key) {
-    switch (key) {
-    case GLR_CONFIG_WIREFRAME:
-    case GLR_CONFIG_GRID_THEME:
-    case GLR_CONFIG_GRID_MAJOR:
-    case GLR_CONFIG_GRID_EXTENT:
-    case GLR_CONFIG_GRID_BRIGHTNESS:
-    case GLR_CONFIG_AXES_THEME:
-    case GLR_CONFIG_VERTEX_LABELS:
-    case GLR_CONFIG_VERTEX_LABEL_PLACEMENT:
-    case GLR_CONFIG_OVERLAY_SCOPE:
-    case GLR_CONFIG_NORMAL_VECTORS:
-    case GLR_CONFIG_VERTEX_OUTLINES:
-    case GLR_CONFIG_VERTEX_OUTLINE_STYLE:
-    case GLR_CONFIG_VERTEX_POINTS:
-    case GLR_CONFIG_POLY_HIGHLIGHT:
-    case GLR_CONFIG_XFORM_GUIDE_MODE:
-    case GLR_CONFIG_LIGHT_INDICATORS:
-    case GLR_CONFIG_LIGHT_THEME:
-    case GLR_CONFIG_BACKDROP:
-    case GLR_CONFIG_ORTHO_MODE:
-    case GLR_CONFIG_PROJECTION:
-    case GLR_CONFIG_CAMERA_ROTATE:
-    case GLR_CONFIG_VARIABLE_PANEL:
-        return 1;
-    default:
-        return 0;
-    }
-}
-
-/* Default value of every cfg_key_in_scene_subset() key - the baseline
- * glr_ctrl_reset_example_chrome() lands on before a scene's own leading
- * `@cfg` is applied. Values come from the CFG_DEFAULT_* macros in
- * glr_defaults.h (the single source of truth), never from literals, so a
- * default change moves both the reset and this table together.
+/* THE scene-local config roster: the cfg keys a scene owns (presentation
+ * toggles plus camera_rotate and the variable panel), each with the default
+ * value glr_ctrl_reset_example_chrome() lands on before a scene's own leading
+ * `@cfg` is applied. The controller owns this knowledge so src/repl/scenes.c
+ * stays neutral.
  *
- * Keep it complete against cfg_key_in_scene_subset(): a missing row makes
- * the .glr writer emit that slug unconditionally rather than only when it
- * differs, which is degraded output, not a crash.
- * test_glr_actions.c pins the coverage. */
+ * Membership and defaults are one table on purpose - cfg_key_in_scene_subset()
+ * is derived from it below, so a new per-scene key cannot end up saved but
+ * never reset (or reset but never saved). Values come from the CFG_DEFAULT_*
+ * macros in glr_defaults.h (the single source of truth), never from literals,
+ * so a default change moves both the reset and this table together.
+ *
+ * The third shape of the same roster is
+ * glr_state_presentation_reset_example_defaults() in glr_state.c, which writes
+ * the GlrPresentationState fields directly (a pure-storage reset must not run
+ * glr_config_set()'s side effects) plus the two peer writes for camera
+ * autorotation and variable-panel visibility in glr_ctrl_reset_example_chrome().
+ * test_glr_actions.c pins that reset against this table, key by key. */
 typedef struct {
     GlrConfigKey key;
     int          value;
@@ -537,6 +512,14 @@ static int cfg_scene_default_for_key(GlrConfigKey key, int *out_value) {
         return 1;
     }
     return 0;
+}
+
+/* Membership *is* having a row in the roster above - deliberately not a
+ * second switch to keep in sync. */
+static int cfg_key_in_scene_subset(GlrConfigKey key) {
+    if (key == GLR_CONFIG_NONE)
+        return 0;
+    return cfg_scene_default_for_key(key, NULL);
 }
 
 static void glr_export_cfg_normalize_legacy_alias(const char **slug, int *val,
@@ -902,9 +885,10 @@ static void glr_export_cfg_fill_scene_subset(ReplConfigBag *cfg) {
 }
 
 /* Same rows, same order as glr_export_cfg_fill_scene_subset, but carrying
- * each slug's default instead of its live value. A subset key with no
- * k_cfg_scene_defaults row is simply absent from the bag; the .glr writer
- * then treats it as "no known default" and emits it. */
+ * each slug's default instead of its live value. Membership and defaults come
+ * from the same k_cfg_scene_defaults[] roster, so the two bags always carry
+ * the same slug set (test_glr_actions.c asserts it); the cfg_scene_default_-
+ * for_key() miss below is therefore unreachable and stays only as a guard. */
 static void glr_export_cfg_fill_scene_defaults(ReplConfigBag *cfg) {
     int n = 0;
     const GlrConfigItem *items = glr_config_items(&n);

@@ -2137,6 +2137,47 @@ static void test_cfg_bridge_enforces_backdrop_grid_pair_order(void) {
                glr_config_get(GLR_CONFIG_GRID_THEME), GRID_THEME_STARCHART);
 }
 
+/* The two scene bags are one roster: fill_scene_subset carries the live
+ * values and fill_scene_defaults the defaults, and the .glr writer diffs
+ * them slug by slug (and, per the bridge contract, positionally). Both
+ * derive from k_cfg_scene_defaults[] since membership stopped being a
+ * second hand-maintained switch, so this pins the property that made the
+ * merge safe: same slugs, same order, no key saved without a default. */
+static void test_scene_subset_and_defaults_agree(void) {
+    ReplConfigBag subset, defaults;
+
+    glr_ctrl_reset_all();
+    printf("--- scene subset and scene defaults carry the same slugs ---\n");
+
+    repl_config_bag_clear(&subset);
+    repl_config_bag_clear(&defaults);
+    repl_config_bridge()->fill_scene_subset(&subset);
+    repl_config_bridge()->fill_scene_defaults(&defaults);
+
+    ASSERT_TRUE("scene subset is non-empty", subset.count > 0);
+    ASSERT_INT("scene subset and defaults have the same row count",
+               defaults.count, subset.count);
+    ASSERT_TRUE("scene bags fit the bag capacity",
+                subset.count <= REPL_CFG_MAX_ITEMS);
+
+    for (int i = 0; i < subset.count && i < defaults.count; i++) {
+        char label[REPL_CFG_KEY_MAX + 48];
+        snprintf(label, sizeof(label), "scene bags agree at row %d", i);
+        ASSERT_STR(label, defaults.items[i].key, subset.items[i].key);
+    }
+
+    /* Every subset slug is a scene-subset slug by the bridge's own
+     * predicate - the query the example loader and the .glr writer use. */
+    for (int i = 0; i < subset.count; i++) {
+        char label[REPL_CFG_KEY_MAX + 48];
+        snprintf(label, sizeof(label), "%s is scene-subset",
+                 subset.items[i].key);
+        ASSERT_INT(label,
+                   repl_config_bridge()->slug_is_scene_subset(subset.items[i].key),
+                   1);
+    }
+}
+
 /* F9 was reassigned from Auto-normals to cycling the light theme. The
  * generic special-shortcut dispatch finds the descriptor row by key_code
  * and cycles it, so F9 must now advance GLR_CONFIG_LIGHT_THEME through all
@@ -2700,6 +2741,7 @@ int main(void) {
     test_backdrop_grid_pairing_policy();
     test_cfg_bridge_resolves_symbolic_names();
     test_cfg_bridge_enforces_backdrop_grid_pair_order();
+    test_scene_subset_and_defaults_agree();
 
     glr_audio_shutdown();
     return test_harness_report(&g_harness, "test_repl_actions");

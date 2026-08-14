@@ -143,15 +143,26 @@ int glr_state_default_syntax_highlight(void) {
 }
 
 void glr_state_presentation_reset_example_defaults(void) {
-    /* Reset the scene-bound subset plus ortho_mode. The scene-subset
-     * roster mirrors the cfg-bridge `fill_scene_subset` whitelist in
-     * glr_actions.c; ortho_mode is reset alongside it (rather than in
-     * the subset proper) so the 2D/3D view doesn't leak across example
-     * loads in the F12 cycle - an example whose @cfg omits `view_mode`
-     * gets the default 3D, not whatever the prior example set.
-     * Fields outside this reset (autonormal, code_panel_layout,
-     * wrap_at_comma) keep their current values
-     * across example switches. */
+    /* Reset the presentation fields of the **scene-local** roster - the
+     * settings a scene owns and therefore must not inherit from whatever
+     * was loaded before it. The roster is `k_cfg_scene_defaults[]` in
+     * glr_actions.c (which also drives the cfg-bridge's
+     * `fill_scene_subset` / `fill_scene_defaults`); this function is its
+     * direct-write form, deliberately bypassing glr_config_set() so the
+     * reset carries no side effects. ortho_mode and projection_mode are
+     * in that roster too, and both are reset here so the 2D/3D view and
+     * the projection don't leak across example loads in the F12 cycle -
+     * an example whose @cfg omits `view_mode` gets the default 3D, not
+     * whatever the prior example set. The roster's two non-presentation
+     * members (camera auto-rotate, variable-panel visibility) live in peer
+     * modules and are reset by glr_ctrl_reset_example_chrome() instead.
+     *
+     * Everything else is deliberately NOT scene-local and survives an
+     * example switch: session-inspection settings (the profilers, depth /
+     * stencil viz, post FX, replay options), interface settings
+     * (code_panel_layout, wrap_at_comma, syntax_highlight, paren match /
+     * scope), render features (MSAA, line smooth, accum), and autonormal.
+     * test_glr_ctrl.c pins this reset against the roster. */
     GlrPresentationState *p = &g_glr_state.presentation;
     p->wireframe             = CFG_DEFAULT_WIREFRAME;
     p->grid_theme            = CFG_DEFAULT_GRID_THEME;
@@ -172,10 +183,7 @@ void glr_state_presentation_reset_example_defaults(void) {
     p->light_theme           = CFG_DEFAULT_LIGHT_THEME;
     p->backdrop_mode         = CFG_DEFAULT_BACKDROP_MODE;
     p->ortho_mode            = CFG_DEFAULT_ORTHO_MODE;
-    /* Reset alongside ortho_mode so the projection choice doesn't leak
-     * across example loads in the F12 cycle (an example whose @cfg omits
-     * `projection` gets the default perspective). */
-    p->projection_mode      = CFG_DEFAULT_PROJECTION;
+    p->projection_mode       = CFG_DEFAULT_PROJECTION;
 }
 
 void glr_state_render_reset_defaults(void) {

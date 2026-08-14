@@ -289,7 +289,7 @@ Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/gl
   (3D), `ui_*` (2D view), neutral (`prof`) for generic utilities. Don't
   introduce new top-level prefixes without documenting the boundary.
 - **Config toggles** → skill `gl-repl-config-toggle`. One-line version: append a
-  [`GlrConfigItem`](src/app/glr_config.h#L89) to `g_cfg_items[]` in [`src/app/glr_actions.c`](src/app/glr_actions.c)
+  [`GlrConfigItem`](src/app/glr_config.h#L105) to `g_cfg_items[]` in [`src/app/glr_actions.c`](src/app/glr_actions.c)
   under the right `### ` section (count + flyout membership auto-compute), then
   claim storage in the two default-less switches in
   [`src/app/glr_config.c`](src/app/glr_config.c) - `-Werror=switch` fails the
@@ -477,12 +477,20 @@ still round-trips through `@scene-name` / `@workspace-dir` headers.
 
 ### Example metadata & presentation reset
 
-**Every example load resets the non-camera presentation settings (incl.
-`view_mode`) to `CFG_DEFAULT_*` (in [`src/app/glr_defaults.h`](src/app/glr_defaults.h)
-- the single source of truth; reuse the macros, never duplicate literals)
-before applying the example's `@cfg`.** Camera is deliberately excluded
-(inherited unless the scene carries `@camera`-tagged rows); `restore_user_scene()`
-restores commands + predef vars only.
+**Every example load resets the *scene-local* settings (incl. `view_mode`) to
+`CFG_DEFAULT_*` (in [`src/app/glr_defaults.h`](src/app/glr_defaults.h) - the
+single source of truth; reuse the macros, never duplicate literals) before
+applying the example's `@cfg`.** The roster is `k_cfg_scene_defaults[]`
+([`src/app/glr_actions.c`](src/app/glr_actions.c)) - one table, from which
+`cfg_key_in_scene_subset()` and both cfg-bridge fills derive; its
+direct-write twin is `glr_state_presentation_reset_example_defaults()` plus
+the two peer writes (camera auto-rotate, variable panel) in
+`glr_ctrl_reset_example_chrome()`. Session-inspection settings (profilers,
+depth/stencil viz, post FX, replay) and interface settings (code panel, wrap,
+syntax highlight, paren match/scope) are **not** scene-local and survive the
+switch. Camera is deliberately excluded (inherited unless the scene carries
+`@camera`-tagged rows); `restore_user_scene()` restores commands + predef vars
+only.
 
 Full authoring detail - `@cfg` slugs, the five files that move together, size
 budgets, index-keyed goldens: skill `gl-repl-scene-authoring`.

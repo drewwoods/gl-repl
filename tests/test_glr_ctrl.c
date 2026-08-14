@@ -24,6 +24,8 @@
 #include "repl/time.h"
 #include "repl/pipeline.h"
 #include "repl/state_notify.h"
+#include "repl/cfg_baseline.h"  /* scene-local roster bags via the cfg bridge */
+#include "app/glr_actions.h"    /* glr_actions_install_export_cfg_bridge */
 #include "editor/input.h"
 #include "editor/search.h"
 #include "keys.h"
@@ -5722,6 +5724,101 @@ static void test_example_reset_reapplies_light_theme(void) {
                        sizeof(expected_default)) == 0);
 }
 
+static const GlrConfigItem *cfg_item_for_slug(const char *slug) {
+    for (int i = 0; i < CFG_ITEM_COUNT; i++) {
+        const GlrConfigItem *item = glr_config_item_at(i);
+        const char *item_slug = glr_config_item_slug(item);
+        if (item_slug && strcmp(item_slug, slug) == 0)
+            return item;
+    }
+    return NULL;
+}
+
+/* Bag values are symbolic where the key has a symbol table ("GRID_THEME_OFF")
+ * and decimal otherwise. */
+static int cfg_bag_value_int(const char *slug, const char *text) {
+    int value = 0;
+    if (repl_cfg_resolve_text(slug, text, &value))
+        return value;
+    return atoi(text);
+}
+
+/* The scene-local config contract, end to end. `k_cfg_scene_defaults[]` in
+ * glr_actions.c is the roster of settings a *scene* owns; this reset is its
+ * other half - the direct GlrPresentationState writes in
+ * glr_state_presentation_reset_example_defaults() plus the camera-autorotate
+ * and variable-panel peer writes here. A key added to the roster but missed in
+ * the reset leaks across an F12 example switch (the next scene inherits the
+ * previous scene's grid, backdrop, view mode, ...), which is exactly the
+ * failure no compiler and no single-table guard can see.
+ *
+ * So: drive every roster key off its default through the real setter, then run
+ * the example-load chrome reset and require all of them back at the default
+ * the .glr writer diffs against. */
+static void test_scene_local_reset_covers_whole_roster(void) {
+    printf("--- example chrome reset covers the whole scene-local roster ---\n");
+
+    glr_actions_install_export_cfg_bridge();
+    const ReplConfigBridge *bridge = repl_config_bridge();
+    ASSERT_TRUE("cfg bridge exposes the scene defaults",
+                bridge && bridge->fill_scene_defaults && bridge->apply);
+    if (!bridge || !bridge->fill_scene_defaults || !bridge->apply)
+        return;
+
+    ReplConfigBag defaults;
+    repl_config_bag_clear(&defaults);
+    bridge->fill_scene_defaults(&defaults);
+    ASSERT_TRUE("scene-local roster is non-empty", defaults.count > 0);
+
+    /* Start from the defaults so the mutation pass below is deterministic
+     * (notably: a paired backdrop would otherwise pin grid_theme). */
+    bridge->apply(&defaults);
+
+    for (int i = 0; i < defaults.count; i++) {
+        const char *slug = defaults.items[i].key;
+        int def = cfg_bag_value_int(slug, defaults.items[i].value);
+        const GlrConfigItem *item = cfg_item_for_slug(slug);
+        char label[REPL_CFG_KEY_MAX + 64];
+        int moved = 0;
+
+        snprintf(label, sizeof(label), "%s has a descriptor row", slug);
+        ASSERT_TRUE(label, item != NULL);
+        if (!item)
+            continue;
+
+        for (int v = 0; v < item->state_count && !moved; v++) {
+            if (v == def)
+                continue;
+            /* A backdrop that owns a grid would drag grid_theme along with
+             * it; keep the two keys independently mutated. */
+            if (item->key == GLR_CONFIG_BACKDROP &&
+                glr_config_backdrop_forces_grid((Render3dBackdropMode)v, NULL))
+                continue;
+            glr_config_set(item->key, v);
+            moved = glr_config_get(item->key) != def;
+        }
+
+        snprintf(label, sizeof(label), "%s moved off its default", slug);
+        ASSERT_TRUE(label, moved);
+    }
+
+    /* Mask 0 applies no example tag defaults, so the built-in baseline is
+     * the whole expectation. */
+    glr_ctrl_reset_example_chrome(0u);
+
+    for (int i = 0; i < defaults.count; i++) {
+        const char *slug = defaults.items[i].key;
+        const GlrConfigItem *item = cfg_item_for_slug(slug);
+        char label[REPL_CFG_KEY_MAX + 64];
+
+        if (!item)
+            continue;
+        snprintf(label, sizeof(label), "%s reset to its scene default", slug);
+        ASSERT_INT(label, glr_config_get(item->key),
+                   cfg_bag_value_int(slug, defaults.items[i].value));
+    }
+}
+
 /* Render3dRenderConfig.lights[] is assembled per frame
  * from two owners - the app-owned theme-seeded dimensional data
  * (GlrRenderState.lights: position / color / id / eye-space) merged with the
@@ -7105,6 +7202,7 @@ int main(void) {
     test_auxiliary_scene_pass_side_effects();
     test_wireframe_renderer_ignores_user_draw_state();
     test_example_reset_reapplies_light_theme();
+    test_scene_local_reset_covers_whole_roster();
     test_display_frame_merges_light_theme_and_enable_mask();
     test_export_light_bridge_reads_app_state();
     test_mouse_routing_and_hit_testing();

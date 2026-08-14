@@ -133,9 +133,14 @@ GlrRenderState        glr_state_render(void);
 GlrRenderState       *glr_state_render_mut(void);
 
 void glr_state_presentation_reset_defaults(void);
-/* Reset the scene-bound presentation subset to the example baseline.
- * Mirrors the cfg-bridge `fill_scene_subset` whitelist in glr_actions.c
- * (wireframe, grid theme, axes theme, vertex overlays, etc.). The
+/* Reset the presentation fields of the scene-local config roster to the
+ * example baseline (wireframe, grid theme, axes theme, vertex overlays,
+ * view mode, projection, ...). The roster's authority is
+ * `k_cfg_scene_defaults[]` in glr_actions.c - the same table the cfg
+ * bridge's `fill_scene_subset` / `fill_scene_defaults` walk; its two
+ * non-presentation members (camera auto-rotate, variable panel) are reset
+ * by glr_ctrl_reset_example_chrome() alongside this call. Session and
+ * interface settings are outside the roster and survive the switch. The
  * example loader invokes this through the controller-installed
  * `ReplHostEffects.example_presentation_reset` callback so the REPL
  * pipeline never reaches into glr_state directly. */
