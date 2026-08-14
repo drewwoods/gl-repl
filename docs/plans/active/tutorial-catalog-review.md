@@ -1,8 +1,11 @@
 # Built-in Tutorial Catalog Review
 
-## Status - read-only review, 2026-08-14
+## Status - implementing, 2026-08-14
 
-Nothing here is implemented. This is a review of the **25 shipped tutorials**
+Findings 1-12 and Tier 1 (A-D) are in progress. The original review
+text is unchanged below; each landing commit is recorded as it ships.
+
+This is a review of the **25 shipped tutorials**
 in [`src/repl/tutorials.c`](../../../src/repl/tutorials.c) as a *set* - their
 progression, voice, terminology, and coverage - plus the catalog metadata
 (tags, subheadings, order) that decides how a learner encounters them. The
