@@ -2519,8 +2519,36 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
                ui_state_gl_state_inspector().source_line_idx, blank_line);
     ASSERT_INT("capture hook reports failure on a code row",
                glr_ctrl_open_gl_state_popup(0), 0);
-    ASSERT_INT("capture hook cannot ask for a row's popup off-screen",
-               glr_ctrl_open_gl_state_popup(repl_state_document_count() + 50), 0);
+    ui_state_command_description_close();
+
+    /* The retry contract the shared helper owns: a row that exists but is
+     * scrolled out of the panel must fail *without clicking*, because
+     * GLR_EDIT_LINE's follow-scroll only lands during a display pass - the
+     * capture hook is expected to try the same row again next frame, not to
+     * click whatever is on screen instead. Grow the document past a
+     * panel-full (same shape as the scroll-clamp fixture below) and park the
+     * view away from the blank row. */
+    {
+        int doc_count = repl_state_document_count();
+        int i;
+
+        for (i = doc_count; i < 120; i++)
+            editor_buffer_set_line(i, "glVertex3f(1, 2, 3);");
+        repl_state_document_count_set(120);
+        editor_scroll_follow_cursor_set(0);
+        editor_scroll_set(110);
+
+        ASSERT_INT("capture hook reports failure for a scrolled-out row",
+                   glr_ctrl_open_gl_state_popup(blank_line), 0);
+        ASSERT_INT("and opens nothing while it waits for the row",
+                   ui_state_gl_state_inspector().visible, 0);
+
+        /* Scrolled back, the same row is targetable again - so the failure
+         * above was the row's position, not the row. */
+        editor_scroll_set(0);
+        ASSERT_INT("the same row opens once it is back on screen",
+                   glr_ctrl_open_gl_state_popup(blank_line), 1);
+    }
     ui_state_gl_state_inspector_close();
     ui_state_command_description_close();
 }
