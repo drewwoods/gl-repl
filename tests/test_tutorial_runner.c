@@ -247,12 +247,15 @@ static void test_catalog_includes_color_transform_tutorial(void) {
                repl_tutorial_name(0), "First Triangle");
     ASSERT_STR("second tutorial is Color & Transform",
                repl_tutorial_name(1), "Color & Transform");
-    ASSERT_INT("color-transform tutorial has 11 steps",
-               repl_tutorial_step_count(1), 11);
+    ASSERT_INT("color-transform tutorial has 12 steps",
+               repl_tutorial_step_count(1), 12);
     ASSERT_STR("color-transform first expected command",
                repl_tutorial_step_expected(1, 0), "glPushMatrix()");
-    ASSERT_STR("color-transform last expected command",
+    ASSERT_STR("color-transform last command is glPopMatrix",
                repl_tutorial_step_expected(1, 10), "glPopMatrix()");
+    ASSERT_INT("color-transform closes with a takeaway NOTE",
+               (int)repl_tutorial_step_kind(1, 11),
+               (int)TUTORIAL_STEP_KIND_NOTE);
 }
 
 static void test_color_transform_walkthrough(void) {
@@ -266,13 +269,18 @@ static void test_color_transform_walkthrough(void) {
     ASSERT_INT("color-transform tutorial idx",
                tutorial_state_view().tutorial_idx, 1);
     char expected_status[256];
-    get_expected_hint(1, 1, 11, 0, expected_status, sizeof(expected_status));
+    total_steps = repl_tutorial_step_count(1);
+    get_expected_hint(1, 1, total_steps, 0, expected_status, sizeof(expected_status));
     ASSERT_STR("color-transform start status",
                status_text(),
                expected_status);
 
-    total_steps = repl_tutorial_step_count(1);
     for (idx = 0; idx < total_steps; idx++) {
+        TutorialStepKind kind = tutorial_current_step_kind();
+        if (kind == TUTORIAL_STEP_KIND_NOTE) {
+            glr_ctrl_keyboard('\r', 0, 0);
+            continue;
+        }
         expected = tutorial_current_expected_text();
         ASSERT_TRUE("expected exists mid-tutorial", expected != NULL);
         set_input_text(expected);
@@ -575,7 +583,8 @@ static void test_tutorial_start_sets_step_progress_status(void) {
     char expected_status[256];
     reset_fixture();
     tutorial_start(0);
-    get_expected_hint(0, 1, 5, 0, expected_status, sizeof(expected_status));
+    get_expected_hint(0, 1, repl_tutorial_step_count(0), 0,
+                      expected_status, sizeof(expected_status));
     ASSERT_STR("start sets step 1 status",
                status_text(),
                expected_status);
@@ -590,7 +599,8 @@ static void test_tutorial_advance_updates_step_progress_status(void) {
     expected = tutorial_current_expected_text();
     set_input_text(expected);
     (void)editor_handle_key(';', 0, 0);
-    get_expected_hint(0, 2, 5, 0, expected_status, sizeof(expected_status));
+    get_expected_hint(0, 2, repl_tutorial_step_count(0), 0,
+                      expected_status, sizeof(expected_status));
     ASSERT_STR("advance sets step 2 status",
                status_text(),
                expected_status);
@@ -610,8 +620,10 @@ static void test_tutorial_status_hint_variants(void) {
     char expected_commit[256];
     int got;
 
-    get_expected_hint(0, 1, 5, 0, expected_entry, sizeof(expected_entry));
-    get_expected_hint(0, 1, 5, 1, expected_commit, sizeof(expected_commit));
+    get_expected_hint(0, 1, repl_tutorial_step_count(0), 0,
+                      expected_entry, sizeof(expected_entry));
+    get_expected_hint(0, 1, repl_tutorial_step_count(0), 1,
+                      expected_commit, sizeof(expected_commit));
 
     /* Inactive: returns 0 with empty out. */
     reset_fixture();
@@ -662,8 +674,10 @@ static void test_tutorial_refresh_input_hint_on_full_match(void) {
     char expected_entry[256];
     char expected_commit[256];
 
-    get_expected_hint(0, 1, 5, 0, expected_entry, sizeof(expected_entry));
-    get_expected_hint(0, 1, 5, 1, expected_commit, sizeof(expected_commit));
+    get_expected_hint(0, 1, repl_tutorial_step_count(0), 0,
+                      expected_entry, sizeof(expected_entry));
+    get_expected_hint(0, 1, repl_tutorial_step_count(0), 1,
+                      expected_commit, sizeof(expected_commit));
 
     /* Active: empty input is a no-op (status keeps the entry hint). */
     reset_fixture();
@@ -844,7 +858,8 @@ static void test_navigation_advances_on_matching_input(void) {
     ASSERT_INT("navigation advance committed user line + next instruction",
                doc.line_count, 7);
     ASSERT_INT("step advanced via navigation", tutorial_state_view().step, 2);
-    get_expected_hint(0, 3, 5, 0, expected_status, sizeof(expected_status));
+    get_expected_hint(0, 3, repl_tutorial_step_count(0), 0,
+                      expected_status, sizeof(expected_status));
     ASSERT_STR("navigation advance sets step 3 status",
                status_text(),
                expected_status);
@@ -1063,6 +1078,10 @@ static void test_complete_and_menu_actions(void) {
     ASSERT_INT("restart resets step", tutorial_state_view().step, 0);
 
     while (tutorial_active()) {
+        if (tutorial_current_step_kind() == TUTORIAL_STEP_KIND_NOTE) {
+            glr_ctrl_keyboard('\r', 0, 0);
+            continue;
+        }
         expected = tutorial_current_expected_text();
         ASSERT_TRUE("expected exists while tutorial active", expected != NULL);
         editor_feed_line(expected);
@@ -3546,13 +3565,20 @@ static void test_setup_label_targeted_steps_splice_into_scaffold(void) {
     ASSERT_TRUE("commit the green corner color",
                 commit_command_step(idx, 1));
 
-    /* Final step: commit directly - commit_command_step's step-advance
-     * check can't observe completion (teardown resets the step). */
+    /* Last COMMAND: commit directly - commit_command_step's step-advance
+     * check can't observe a completion (teardown resets the step), and
+     * this lesson now closes on a takeaway NOTE after the splice. */
     const char *blue_expected = repl_tutorial_step_expected(idx, 2);
-    ASSERT_TRUE("final step has expected text", blue_expected != NULL);
+    ASSERT_TRUE("last COMMAND has expected text", blue_expected != NULL);
     set_input_text(blue_expected ? blue_expected : "");
     editor_handle_key(';', 0, 0);
-    ASSERT_TRUE("tutorial completes after the final splice",
+    ASSERT_TRUE("tutorial still active for the closing NOTE",
+                tutorial_active());
+    ASSERT_INT("closing step is a NOTE",
+               (int)tutorial_current_step_kind(),
+               (int)TUTORIAL_STEP_KIND_NOTE);
+    glr_ctrl_keyboard('\r', 0, 0);
+    ASSERT_TRUE("tutorial completes after the takeaway NOTE",
                 !tutorial_active());
 
     /* Final document order: each color lands immediately above its

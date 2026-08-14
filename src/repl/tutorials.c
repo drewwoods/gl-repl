@@ -237,6 +237,8 @@ static const TutorialStep g_tutorial_first_triangle_steps[] = {
     STEP_APPEND(NULL,
         "// Close the batch and the filled triangle appears in the scene.",
         "glEnd()"),
+    STEP_NOTE(
+        "// A triangle is three corners between glBegin and glEnd. glVertex2f is glVertex3f with z = 0; the numbers beside each corner are app vertex labels of the coordinates just typed."),
     STEP_SENTINEL,
 };
 
@@ -278,6 +280,8 @@ static const TutorialStep g_tutorial_color_transform_steps[] = {
     STEP_APPEND(NULL,
         "// Restore the saved matrix so future commands are not moved or rotated.",
         "glPopMatrix()"),
+    STEP_NOTE(
+        "// Transforms accumulate in source order; glPushMatrix / glPopMatrix is what bounds them so later commands are not moved or rotated."),
     STEP_SENTINEL,
 };
 
@@ -454,6 +458,8 @@ static const TutorialStep g_tutorial_lighting_basics_steps[] = {
     STEP_APPEND(NULL,
         "// Draw a lit sphere; watch the shading fall off from the lit side to the dark side.",
         "glutSolidSphere(1, 32, 24)"),
+    STEP_NOTE(
+        "// Those four glEnable calls are the minimum lit pipeline; the sphere's normals come from the GLUT solid, not from glNormal3f."),
     STEP_SENTINEL,
 };
 
@@ -521,6 +527,8 @@ static const TutorialStep g_tutorial_color_interp_steps[] = {
         "// Set blue before the lower-right vertex to complete the gradient.",
         "glColor3f(0.2, 0.3, 1)",
         "right"),
+    STEP_NOTE(
+        "// The gradient is GL_SMOOTH interpolating those per-vertex colors across the triangle."),
     STEP_SENTINEL,
 };
 
@@ -626,6 +634,8 @@ static const TutorialStep g_tutorial_glut_solids_steps[] = {
         "// A cone grows along +Z from its base, so stand this one upright.",
         "glRotatef(-90, 1, 0, 0)"),
     STEP_CMD(NULL, "glutSolidCone(1, 2, 24, 8)"),
+    STEP_NOTE(
+        "// Each GLUT solid has its own size convention; match extents explicitly rather than passing 1 to every constructor."),
     STEP_SENTINEL,
 };
 
@@ -1193,6 +1203,8 @@ static const TutorialStep g_tutorial_conditionals_steps[] = {
     STEP_APPEND(NULL,
         "// Draw one cube whose color changes as sin(t) crosses zero.",
         "glutSolidCube(2)"),
+    STEP_NOTE(
+        "// if selects which block runs this frame; the color set inside stays current for later commands."),
     STEP_SENTINEL,
 };
 
