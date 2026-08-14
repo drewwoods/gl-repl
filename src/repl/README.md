@@ -102,7 +102,7 @@ the `float x;` / `x = expr;` / typed-as-text `for(...) {` flows live in
 [`src/editor/commit.c`](../editor/commit.c) (editor business), so the demo hand-constructs commands
 instead. [`tools/repl_demo/stubs.c`](../../tools/repl_demo/stubs.c) is empty - the pipeline has zero
 backfill dependencies once host effects flow through the one
-[`ReplHostEffects`](host_effects.h#L37) bridge.
+[`ReplHostEffects`](host_effects.h#L54) bridge.
 
 ## In the REPL app
 
@@ -200,3 +200,17 @@ at build time, like the example catalog.
 own editor state, UI state, replay *runtime* state (a `src/subsystems/` peer), or
 live input dispatch. The only live GL in this layer is [`executor.c`](executor.c).
 `ARCHITECTURE.md` §10 lists the guards that ratchet these boundaries.
+
+## Known deferred work
+
+The 2026-08-14 clarity / coupling / extensibility review of this module lives
+at [`../../docs/plans/partial/repl-clarity-review.md`](../../docs/plans/partial/repl-clarity-review.md).
+Its top four findings landed; the rest are deferred on purpose, and most are
+gated on a specific future change - the commit-chain order
+([`compile.c`](compile.c) + [`../editor/commit.c`](../editor/commit.c)), the
+checkpoint/runtime state pair ([`state.h`](state.h), [`state.c`](state.c)), the
+[`host_effects.h`](host_effects.h) contract, and the
+[`import.c`](import.c) monolith. **Check it before starting work in one of
+those**: each is a case where the next edit is the cheap moment. Every site
+carries a `DEFERRED (repl-clarity-review.md finding N)` comment.
+`ARCHITECTURE.md` §14 has the table.

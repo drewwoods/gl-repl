@@ -840,7 +840,7 @@ actions (clear the input buffer, scroll the panel, set a status message,
 read/write the cursor). The bridge ([`host_effects.h`](host_effects.h)) is how it asks for
 those *by purpose* without naming an implementation.
 
-The controller installs a [`ReplHostEffects`](host_effects.h#L37) table once at startup; REPL
+The controller installs a [`ReplHostEffects`](host_effects.h#L54) table once at startup; REPL
 code calls dispatchers (`repl_dispatch_*`, `repl_set_status`,
 `repl_set_status_error`). **Any unset callback is a no-op** - which is
 exactly why pure REPL tests and the standalone demo "just work" with no
@@ -1455,3 +1455,35 @@ dumb and the cost model a single static cap. A staged design for this VM - with
 the "VM is the one flattener" shape, milestones, and per-consumer migration
 stories - is Phase B of
 [docs/plans/done/rethinking-flattening-behaviour.md](../../docs/plans/done/rethinking-flattening-behaviour.md).
+
+---
+
+## 14. Known deferred work
+
+A clarity / coupling / extensibility review of this module ran on 2026-08-14
+and is kept at
+[`../../docs/plans/partial/repl-clarity-review.md`](../../docs/plans/partial/repl-clarity-review.md).
+Its four top-ranked findings landed; the rest are **deferred on purpose**, most
+of them gated on a specific future change rather than on someone finding time.
+
+Read it before you start work in one of the areas below - each is a place where
+the next edit is the cheap moment to make the fix, and where making it later
+costs more. The code carries a `DEFERRED (repl-clarity-review.md finding N)`
+comment at each site, so a reader who arrives from the code rather than from
+here lands in the same place.
+
+| # | Where | Deferred until |
+|---|---|---|
+| 5 | [`compile.c`](compile.c)'s `chain[]` and [`../editor/commit.c`](../editor/commit.c)'s three dispatchers spell the same load-bearing handler order twice, with nothing tying them together | A new structured / control-flow form is added. That change picks between a shared handler-kind enum and explicit parity coverage. A corpus test is *not* a completeness ratchet - see the plan's D3 |
+| 6 | [`ReplCheckpointState`](state.h) is [`ReplRuntimeState`](state.h) minus one slice, hand-copied, and the post-restore invalidation tail in [`state.c`](state.c) is written twice | A seventh REPL-owned slice is added (it would compile cleanly while being silently absent from every tour-baseline snapshot), or someone touches the invalidation tail |
+| 7 | [`host_effects.h`](host_effects.h)'s stated contract is narrower than its table: 7 of 16 callbacks have no `src/repl` caller | The contract comment can be rewritten any time; **splitting the table is explicitly not recommended as a dedicated change** - it rides the hook that would otherwise be the 17th |
+| 8 | [`import.c`](import.c) is one ~3,200-line TU facing a six-TU exporter; `ImportState`'s snippet phase is implicit; the reader API is named and declared as if it were the writer's | The line translators can be lifted out on their own. The state machine waits for [`one-scene-loader.md`](../../docs/plans/not-started/one-scene-loader.md), which changes how many `.glr` walkers exist |
+
+Findings 9-11, the missing `ARCHITECTURE.md` sections the review identified
+(the GL-state fold, attribute-stack mapping, document-order phase machine, and
+camera-header contracts), and the §12/README map reconciliation are also open.
+Three gaps the review found already have their own design of record and are
+**not** re-derived in it:
+[`one-scene-loader.md`](../../docs/plans/not-started/one-scene-loader.md),
+[`local-aware-rebake.md`](../../docs/plans/not-started/local-aware-rebake.md),
+and [`repl-capability-gaps.md`](../../docs/plans/not-started/repl-capability-gaps.md).

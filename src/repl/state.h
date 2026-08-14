@@ -39,7 +39,17 @@ void repl_state_restore(const ReplRuntimeState *snapshot);
  * Restore rebinds evaluator predef storage, restores the special `t` binding,
  * invalidates the expression + source-scope caches, clears the flat-program
  * count, marks the flat program dirty, and drops any stale rebake / args-dirty
- * routing so no rebake runs against the just-invalidated cache. */
+ * routing so no rebake runs against the just-invalidated cache.
+ *
+ * DEFERRED (repl-clarity-review.md finding 6, in docs/plans/partial/): this
+ * struct is ReplRuntimeState minus `flat_program`, and nothing connects the
+ * two. **Adding a seventh REPL-owned slice compiles cleanly while being
+ * silently absent from every tour-baseline snapshot** - if that is what you
+ * are here to do, read the finding first; it suggests a shared field-list
+ * macro (or a nested checkpoint payload) as the rider that makes membership
+ * compile-checked, and argues against reshaping ReplRuntimeState just to
+ * shorten the copy. The duplicated post-restore invalidation tail in
+ * state.c is the other half of the same finding. */
 typedef struct {
     ReplDocumentState     document;
     ReplVariableState     variables;

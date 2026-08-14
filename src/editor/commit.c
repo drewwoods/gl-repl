@@ -1079,7 +1079,18 @@ int editor_try_commit_close_brace(void) {
     return editor_try_commit_block(editor_compile_close_brace);
 }
 
-/* --- Higher-order dispatchers --- */
+/* --- Higher-order dispatchers ---
+ *
+ * DEFERRED (repl-clarity-review.md finding 5, in docs/plans/partial/): the
+ * order these three dispatchers offer handlers in is the same load-bearing
+ * order as the chain[] table in src/repl/compile.c's compile dispatcher,
+ * spelled a second time, with no test, guard or shared
+ * table tying them together. The two lists agree today. What can drift is
+ * classification: a new structured form added to one chain and not the
+ * other. **If you are adding a structured form, read the finding before
+ * adding it here** - it is the point at which the plan says to choose
+ * between a shared handler-kind enum and explicit parity coverage. The
+ * handlers themselves are deliberately not shared; see the same finding. */
 
 /* Block-structural commit handlers: `} else`, `}`, `for(`, `funcN`, `if(`. */
 int editor_try_commit_block_structs(void) {

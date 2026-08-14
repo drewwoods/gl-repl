@@ -472,6 +472,15 @@ void repl_state_capture(ReplRuntimeState *snapshot) {
     *snapshot = g_repl_state;
 }
 
+/* DEFERRED (repl-clarity-review.md finding 6, in docs/plans/partial/): the
+ * post-restore invalidation tail below is spelled twice - here and in
+ * repl_state_checkpoint_restore - with near-identical comments. The only
+ * real difference is that the checkpoint path additionally zeroes the flat
+ * counts and clears the current block, because it did not copy a flat
+ * program in. **Add a line to one copy and you must add it to the other**;
+ * the fix (extract the shared tail, keep the checkpoint-only clearing
+ * adjacent to its call, name the restore policy rather than passing a
+ * `keep_flat_count` bool) is written up in the finding. */
 void repl_state_restore(const ReplRuntimeState *snapshot) {
     if (!snapshot)
         return;
@@ -512,6 +521,8 @@ void repl_state_checkpoint_capture(ReplCheckpointState *out) {
     out->import_export = g_repl_state.import_export;
 }
 
+/* The second copy of the post-restore invalidation tail - see the note above
+ * repl_state_restore (repl-clarity-review.md finding 6). */
 void repl_state_checkpoint_restore(const ReplCheckpointState *snapshot) {
     if (!snapshot)
         return;

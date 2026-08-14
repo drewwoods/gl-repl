@@ -286,6 +286,16 @@ int repl_export_save_glr(const char *filename, SourceTextView text);
 /* Code-panel dumps used by debug output and test fixtures. */
 void repl_dump_code_panel_text(FILE *out, SourceTextView text);
 
+/* --- Reader half (implemented in import.c) ---------------------------------
+ *
+ * DEFERRED (repl-clarity-review.md finding 8, in docs/plans/partial/): these
+ * are the *loader's* entry points, declared in the writer's header under a
+ * "Save/load of REPL sessions" banner, with the writer's `repl_export_`
+ * prefix and no import.h to find them in. Callers looking for the loader
+ * open the wrong file. Renaming to repl_import_load_* behind a thin import.h
+ * is explicitly optional and should ride a change that is already opening
+ * import.c - it must not lead one. */
+
 /* Caller-supplied scratch for repl_export_load_from_file to populate
  * with the metadata it parsed (or empty strings if the file didn't
  * carry the corresponding directives). The buffers stay valid for the

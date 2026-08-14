@@ -85,7 +85,23 @@ ReplCompileResult repl_compile_dispatch(const char *text,
      * var_assign (otherwise `float x` would misread as an
      * assignment to identifier `float`); if_branch must come before
      * close_brace so `} else ...` is not consumed as a plain block
-     * close; close_brace still precedes the three block openers. */
+     * close; close_brace still precedes the three block openers.
+     *
+     * DEFERRED (repl-clarity-review.md finding 5, in
+     * docs/plans/partial/): this order is spelled twice - here and in
+     * editor_try_commit_block_structs / _var_statements / _any
+     * (src/editor/commit.c) - with no test, guard or shared table tying
+     * the two together. The handlers are deliberately not twins (the
+     * editor wrappers add header-replace / one-liner-body / paired-end
+     * branches on top of the shared kernels), so what can drift is only
+     * *classification*: a new structured form added to one chain and not
+     * the other. Deliberately not fixed yet, because a corpus test would
+     * only cover the forms someone remembered to add to it. **If you are
+     * adding a structured form, this is the moment**: either export the
+     * order as a shared handler-kind enum and make both dispatchers
+     * exhaustive over it, or add explicit parity coverage for the new
+     * form. Read the finding first - it argues against unifying the
+     * handlers themselves. */
     static const struct {
         ReplCompileResult (*fn)(const char *, const ReplCompileContext *,
                                 ReplCompiledChange *, char *, int);

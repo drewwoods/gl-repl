@@ -22,6 +22,26 @@
  * export_format_shared.h. The two TUs do NOT share static helpers - the
  * WORKSPACE_DIRECTIVES dispatcher table here pairs each name with its reader
  * only, and export.c carries its own emit-only table.
+ *
+ * DEFERRED (repl-clarity-review.md finding 8, in docs/plans/partial/): this
+ * file is one ~3,200-line TU facing a writer half split across six. The
+ * five responsibilities listed above are the seam list. **The plan's advice
+ * is not "split it" - it is "split item 5 first and nothing else"**: lift
+ * the C-to-REPL line translators (import_make_repl_* and their parsing
+ * helpers, roughly the run from import_make_repl_for_header to
+ * import_make_repl_scratch_block_line) into import_line_translators.c plus
+ * a narrow internal header, exposing only the body-line and function-header
+ * translators the state machine needs. They have no ImportState dependency,
+ * and the result pairs naturally with export_cmd_writer.c.
+ *
+ * Leave the state machine (import_process_line -> import_try_*) alone until
+ * something needs to touch it - most likely
+ * docs/plans/not-started/one-scene-loader.md, which retires
+ * example_loader.c's own .glr walk. Rewriting the machine on the assumption
+ * that there are two .glr walkers should wait for that plan or be done as
+ * part of it. Renaming the reader API (repl_export_load_* ->
+ * repl_import_load_*) and cutting a thin import.h is optional and should
+ * ride that change, not lead it.
  */
 #include <errno.h>
 #include <stdarg.h>
@@ -89,6 +109,15 @@ typedef struct {
 
 #define IMPORT_MAX_PENDING_COMMENTS 16
 
+/* DEFERRED (repl-clarity-review.md finding 8, in docs/plans/partial/): phase,
+ * format policy and scanner state sit in adjacent scalar fields here, and the
+ * phase is implicit in handler order plus the in_snippet / past_snippet pair
+ * rather than named. The plan's scope is narrow on purpose: **replace only
+ * in_snippet / past_snippet with a named phase**, and keep func_depth (a
+ * counter), func_block_comment, active_staged_func_slot (a tagged index) and
+ * the format-policy flags explicit - they are legitimately orthogonal, not
+ * one Cartesian product. Do this when something else brings you into the
+ * state machine, likely one-scene-loader.md. */
 struct ImportState {
     ReplCameraHeader camera;          /* the one camera-header reader */
     ReplDocOrder     order;           /* canonical document order (.glr only) */

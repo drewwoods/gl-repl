@@ -30,6 +30,23 @@ void repl_set_status_error(const char *msg);
  * purpose, without naming editor/UI implementation details. The callbacks
  * are grouped here so the pipeline has one host boundary to install.
  *
+ * DEFERRED (repl-clarity-review.md finding 7, in docs/plans/partial/):
+ * **the contract stated above is narrower than the table below.** Seven of
+ * the sixteen callbacks have no caller inside src/repl at all - six are
+ * driven only by src/subsystems/tutorial/tutorial_runner.c
+ * (tutorial_presentation_reset, host_cursor_park, host_focus_line,
+ * completion_clear, completion_update, host_input_get) and set_time_playing
+ * belongs to the app/replay clock owner. The table is honest about the
+ * second audience only at the "Decoupled editor/completion mutations"
+ * comment further down. Nothing is broken; a reader just cannot tell which
+ * callbacks are load-bearing for the pipeline and which are pass-through,
+ * and an unclear table grows without resistance. **The plan says: do not
+ * split this as a dedicated change** - it would undo an earlier
+ * consolidation that was itself a review recommendation. Rewrite this
+ * contract to name both audiences and group the struct accordingly; split
+ * only as a rider on whatever would otherwise be the 17th callback. If you
+ * are about to add one, that is now.
+ *
  * Insert-mode QUERY (for ReplCompileContext.insert_mode) is the
  * caller's responsibility - repl_compile_context_from_live() defaults
  * to 0 (overwrite, the safe load-path value); editor-side callers

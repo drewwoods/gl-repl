@@ -19,6 +19,21 @@ Deferred, with the reason each was deferred rather than done:
 | 11 (transform-scope walk) | Record only; no action recommended. |
 | Architecture-document gaps | Four new `src/repl/ARCHITECTURE.md` sections plus the §12/README reconciliation. Not in the requested batch. |
 
+**Findings 5-8 are signposted in the code.** Each site carries a
+`DEFERRED (repl-clarity-review.md finding N, in docs/plans/partial/)` comment
+naming what is deferred and what would trigger doing it, so a reader who
+arrives with that file open finds this plan without knowing it exists:
+
+| # | Sites |
+|---|---|
+| 5 | `src/repl/compile.c` (the `chain[]` table), `src/editor/commit.c` (the higher-order dispatchers) |
+| 6 | `src/repl/state.h` (`ReplCheckpointState`), `src/repl/state.c` (both copies of the invalidation tail) |
+| 7 | `src/repl/host_effects.h` (the `ReplHostEffects` contract block) |
+| 8 | `src/repl/import.c` (file banner + `struct ImportState`), `src/repl/export.h` (the reader-API declarations) |
+
+`src/repl/README.md` and `src/repl/ARCHITECTURE.md` §14 point here from the
+module's two front doors.
+
 One correction the work turned up, recorded here because the review's
 finding 1 predicted a different set of source inventories: only two explicit
 lists name `autonormal.c` (`REPL_DEMO_DEP_SRCS` and
