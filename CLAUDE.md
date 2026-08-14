@@ -299,9 +299,11 @@ Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/gl
   *Adding A New Command*; skill `gl-repl-new-command` carries the extra detail.
   A bound table-driven command means [`CmdType`](src/repl/command.h#L44), the
   three `command_spec.c` tables, executor, replay annotation,
-  `command_descriptions.txt` (build-enforced), export round-trip - plus
-  `attrib_bits.c` + `gl_state_inspector.c` when it writes attribute-scoped
-  state. **`parser.c` and `flatten_range()` are not on that list**: both are
+  `command_descriptions.txt` (build-enforced), export round-trip, and an
+  explicit classification in the default-less `attrib_bits.c` and
+  `gl_state_inspector.c` switches. Attribute-scoped setters also map their
+  bit groups, cells, and inspector semantics. **`parser.c` and
+  `flatten_range()` are not on that list**: both are
   driven by the spec tables, and only structured/control-flow syntax needs
   custom parse or lowering work.
 - Enum args live in `GLCmd.args[]` (there is **no `GLCmd.mode` field** - its
@@ -387,15 +389,18 @@ rebuilt next frame. Budgets: `MAX_FLATTEN_VISIT_BUDGET` = 200000,
 `MAX_FLATTEN_CALL_DEPTH` = 64. Animation is reflatten-per-frame, not
 execute-time re-eval.
 
-### Commit paths (two, and they differ)
+### Line-entry shapes and commit dispatchers
 
 - **Interactive `;` key**: the input buffer does **not** contain the `;` -
   handlers must accept input without a trailing `;`.
 - **Bulk line feeding**: [`editor_feed_line()`](src/editor/input.h#L196)
   (clipboard paste, tests, editor-side loaders) and
   [`repl_load_apply_line()`](src/repl/load.h#L78) (file import, catalog load,
-  replace - the pipeline TUs' twin) both copy the full line *including* `;`,
-  then run the same chain.
+  replace - the pipeline TUs' twin) both receive the full line *including* `;`.
+  They are separate ordered wrappers over shared compile kernels:
+  `editor_feed_line()` runs `editor_try_commit_any()`, while
+  `repl_load_apply_line()` runs `repl_compile_dispatch()`. Adding a structured
+  form to one wrapper does not add it to the other.
 - Enter may or may not have `;`. [`editor_load_line_to_input()`](src/editor/input.h#L189) strips the
   trailing `;`, so re-committing an existing line takes the no-semicolon
   path - handlers checking for `;` must also accept end-of-string.

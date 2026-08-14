@@ -32,11 +32,12 @@ wrong turns:
 - **`src/repl/command_descriptions.txt`** - one `[command CMD_*]` section per
   bound GL/GLU/GLUT `CmdType`. `scripts/gen_command_descriptions.py` is
   exhaustive over the enum, so a missing section fails the build.
-- **`src/repl/attrib_bits.c` + `src/repl/gl_state_inspector.c`** - required for
-  any command that writes attribute-scoped GL state. The inspector's switch is
-  `-Werror=switch`-enforced; `attrib_bits` is where the omission is silent, and
-  it gates the coverage sweep in `tests/test_repl_state.c` that would otherwise
-  catch you. Do `attrib_bits` first.
+- **`src/repl/attrib_bits.c` + `src/repl/gl_state_inspector.c`** - classify
+  every new `CmdType` in both default-less switches; `-Werror=switch` holds the
+  build until you do. Non-state commands take explicit zero/no-op cases.
+  Attribute-scoped setters additionally map their bit groups, atomic cells,
+  and inspector semantics; the coverage sweep in `tests/test_repl_state.c`
+  checks those nonzero classifications across push/pop. Do `attrib_bits` first.
 
 ## `CmdType` classification
 
@@ -103,7 +104,10 @@ Two commit paths that differ:
   must accept input without a trailing semicolon.
 - **Bulk line feeding** - `editor_feed_line()` (clipboard paste, tests,
   editor-side loaders) and `repl_load_apply_line()` (file import, catalog
-  load, replace) both copy the full line *including* `;`.
+  load, replace) both receive the full line *including* `;`. They do not share
+  a wrapper dispatcher: the editor path runs `editor_try_commit_any()`, the
+  pipeline path runs `repl_compile_dispatch()`, and both order the shared
+  compile kernels canonically. A structured-form change must cover both.
 
 `editor_load_line_to_input()` strips the trailing `;`, so re-committing an
 existing line takes the no-semicolon path. Any handler checking for `;` must

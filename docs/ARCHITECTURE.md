@@ -2499,21 +2499,25 @@ list changes.
 
 Functions evaluated inside expressions (e.g. `rand2(seed, iter)` inside
 `glVertex3f(rand2(t, 0), …)`) do **not** become a [`CmdType`](../src/repl/command.h#L44) and do **not**
-go through [`src/repl/executor.c`](../src/repl/executor.c). They live entirely inside [`src/repl/eval.c`](../src/repl/eval.c):
+go through [`src/repl/executor.c`](../src/repl/executor.c). Their single
+registration point is `k_expr_builtins[]` in
+[`src/repl/eval.c`](../src/repl/eval.c):
 
-1. Add the name to `k_reserved_idents[]` so the user can't shadow it with a
-   `float` declaration.
-2. Add a dispatch arm in `eval_primary` (string-compare on the function
-   name) calling your evaluator helper.
-3. Add an entry to the REPL→C identifier map (`{ "rand2", "repl_rand2f", 1 }`)
-   and the inverse C→REPL map. The exporter uses these to translate
-   call-site syntax in both directions.
-4. Step 2a still applies - add a `k_func_completions[]` entry with
+1. Implement the `builtin_*` evaluator and add one `k_expr_builtins[]` row:
+   REPL name, exported-C name, minimum/maximum arity, evaluator function, and
+   any omitted-argument defaults. That row automatically makes the name
+   reserved, dispatches both the text evaluator and compiled expression
+   program through the same function pointer, and drives REPL→C plus C→REPL
+   call-name translation. Do not add an `eval_primary` arm or separate name
+   maps.
+2. Step 2a still applies - add a `k_func_completions[]` entry with
    `REPL_HELP_GROUP_MATH` so it shows up in F1 help and autocomplete.
-5. Step 7 still applies - emit a standalone helper function from
-   [`src/repl/export.c`](../src/repl/export.c) (gated on a `needs_*` flag detected via
-   `export_text_uses_token("rand2(", …)`) so the exported file compiles
-   without dragging the whole REPL runtime.
+3. Step 7's export/import round-trip coverage always applies. If the C name is
+   a project helper rather than a libc/libm symbol, also add its `ExportNeeds`
+   detection in [`src/repl/export_display.c`](../src/repl/export_display.c),
+   emit the standalone helper from
+   [`src/repl/export_prologue.c`](../src/repl/export_prologue.c), and wire its
+   scaffold section in [`src/repl/export.c`](../src/repl/export.c).
 
 After step 0b, skip to step 2a, then jump to step 7. Steps 1, 2bc, 3a-3c, 4,
 5, and 6 do not apply to math functions.
@@ -2621,27 +2625,30 @@ Draws a solid cube of the given edge length centred on the origin, with
 generated normals so it lights correctly.
 ```
 
-#### 3c. The REPL's state mirrors - only for commands that write tracked GL state
+#### 3c. Classify every `CmdType` in the REPL's state mirrors
 
-Skip this step entirely for geometry, transforms and language primitives. For a
-command that sets state `glPushAttrib` would scope (anything in the
-`glEnable` / `glBlendFunc` / `glMaterialfv` / `glPolygonMode` family), **two
-non-executor folds re-derive the same semantics without issuing GL** and both
-must learn the command, or the REPL's own mirrors quietly disagree with the
-driver:
+Every new `CmdType` must be classified in two default-less switches. Geometry
+and language rows still need explicit non-state cases; transforms and other
+tracked operations need their fold semantics; and a setter that
+`glPushAttrib` scopes (anything in the `glEnable` / `glBlendFunc` /
+`glMaterialfv` / `glPolygonMode` family) must also name its attribute group and
+atomic state cells. These non-executor folds issue no GL calls:
 
 - [`src/repl/attrib_bits.c`](../src/repl/attrib_bits.c) -
-  `repl_attrib_bits_for_cmd` maps the command to its covering `GL_*_BIT`
-  group(s), and `repl_attrib_cmd_writes` names the atomic state *cells* it
-  writes. This drives the editor's per-bit push/pop cursor highlighting. Omit
-  it and the setter vanishes from the highlight.
+  `repl_attrib_bits_for_cmd` must either map the command to its covering
+  `GL_*_BIT` group(s) or list it explicitly as non-attribute-scoped. For a
+  scoped setter, `repl_attrib_cmd_writes` also names the atomic state *cells*
+  it writes. This drives the editor's per-bit push/pop cursor highlighting.
 - [`src/repl/gl_state_inspector.c`](../src/repl/gl_state_inspector.c) -
   `gl_state_apply_cmd` is a **second executor**: a pure source-checkpoint fold
-  that re-implements the state semantics of every command
+  that re-implements tracked state semantics and explicitly lists commands
+  that move no tracked cell. It mirrors every command
   `repl_apply_state_cmd` ([`src/repl/executor.c`](../src/repl/executor.c))
   emits, so the OpenGL-state popup can report values without a `glGet*`
-  read-back. Its switch enumerates `CMD_TYPE_COUNT` with no `default:`, so
-  `-Werror=switch` will hold the build until you answer.
+  read-back.
+
+Both switches enumerate through `CMD_TYPE_COUNT` with no `default:`, so
+`-Werror=switch` holds the build until each new type has an explicit answer.
 
 Commit `4c693a35` (`glPolygonMode` / `glPolygonOffset`) is the worked example;
 its message calls these two edits *"what makes the commands actually usable."*
@@ -2650,9 +2657,10 @@ The coverage sweep in
 [`tests/test_repl_state.c`](../tests/test_repl_state.c) (`3. ratchet: every
 state-carrying CmdType is in the table`) asserts that anything `attrib_bits`
 classifies as attribute-scoped is modeled by the inspector and exercised across
-a `glPushAttrib`/`glPopAttrib` pair. Note its direction: the sweep is *gated* on
-`repl_attrib_bits_for_type(t, 0) != 0`, so it can only catch an inspector gap
-once `attrib_bits` knows about the command. Do `attrib_bits` first.
+a `glPushAttrib`/`glPopAttrib` pair. The sweep is *gated* on
+`repl_attrib_bits_for_type(t, 0) != 0`; the compiler now catches a missing
+classification, and the sweep checks the nonzero classification's inspector
+coverage. Implement the `attrib_bits` answer before extending the sweep.
 
 #### 4. [`src/subsystems/replay/replay_annotations.c`](../src/subsystems/replay/replay_annotations.c) - replay display format
 
