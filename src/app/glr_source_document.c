@@ -6,8 +6,8 @@
  * the read view and the full mutation port (insert/replace/load/clear
  * and the combined apply_change variant) so REPL pipeline TUs never
  * reach into editor state directly. The full app composes both layers
- * through this file; the standalone repl_demo links the same adapter
- * today (a tiny editor-free implementation ships separately).
+ * through this file; the standalone repl_demo uses its separate fixed-line
+ * implementation at tools/repl_demo/source_document.c instead.
  * (Bridges the REPL parser and compiler text needs to the editor.) */
 
 #include "source_document.h"

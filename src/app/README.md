@@ -96,7 +96,7 @@ different worlds:
   runs *before or without* a live GL context and never sits on the frame loop.
   CLI parse, the startup init trace, the headless capture-env `GLR_*` hooks,
   the frame pacer (a pure timer-delay calculator), the splash banner, and the
-  `--dump-*` dump-and-exit path. These modules are reached **only from the host
+  `--dump-*` / `--lint-scenes` dump-and-exit paths. These modules are reached **only from the host
   [`gl_repl.c`](../../gl_repl.c)** (plus their tests and sibling boot modules) -
   never from the controller.
 - **Frame-time controller band - the files directly in `src/app/`.** The
@@ -150,8 +150,9 @@ here too - see [`../../docs/MODULES.md`](../../docs/MODULES.md) for the full ros
 
 | File | Responsibility |
 |---|---|
-| [`boot/glr_cli.c`](boot/glr_cli.c) / `.h` | argv → [`GlrCliOptions`](boot/glr_cli.h#L34) bag; `print_usage`, `--list-*`/`-h` exit paths, `--example`/`--tutorial`/`--tour` name→index resolve |
+| [`boot/glr_cli.c`](boot/glr_cli.c) / `.h` | argv → [`GlrCliOptions`](boot/glr_cli.h#L34) bag; `print_usage`, `--list-*`/`-h`/`--lint-scenes` exit paths, `--example`/`--tutorial`/`--tour` name→index resolve |
 | [`boot/glr_boot_dumps.c`](boot/glr_boot_dumps.c) / `.h` | `--dump-*` / `--flat-histogram` GL-free bootstrap-dump-and-exit path (drives `glr_debug` formatters) |
+| [`boot/glr_lint_scenes.c`](boot/glr_lint_scenes.c) / `.h` | Windowless `--lint-scenes <dir>` validation of every `.glr` file against canonical document order and `@camera` tags |
 | [`boot/glr_init_trace.c`](boot/glr_init_trace.c) / `.h` | Startup stall diagnostic (`[init +N.NNNs] <phase>`); baseline + `--detailed-prof` phases |
 | [`boot/glr_capture_env.c`](boot/glr_capture_env.c) / `.h` | Headless-capture `GLR_*` env hooks: `_apply` (bootstrap) + `_frame_hook` (per-frame overlays) |
 | [`boot/glr_frame_pacer.c`](boot/glr_frame_pacer.c) / `.h` | Pure absolute-deadline 60 Hz timer-delay calculator used by the GLUT host |

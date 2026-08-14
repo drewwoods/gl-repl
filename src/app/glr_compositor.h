@@ -1,15 +1,17 @@
 /*
  * glr_compositor.h - App-level compositor post-processing hook.
  *
- * A seam for running a post-process pass over the ENTIRE composited
- * frame - the 3D scene plus every 2D UI layer - after all drawing is
- * done and before the buffer swap. The controller calls the hook at the
- * tail of glr_ctrl_display_frame().
+ * A seam for running a post-process pass over all controller-owned drawing
+ * for the frame - the 3D scene plus controller-owned 2D UI - after that
+ * drawing is done and before the buffer swap. Host-owned splash and tour
+ * layers render later in gl_repl.c, outside this hook. The controller calls
+ * the hook at the tail of glr_ctrl_display_frame().
  *
  * This is the compositor-level counterpart to
  * src/render3d/postprocess_filter.c, which runs inside
  * render3d_draw_scene() over the scene viewport rect only and leaves the
- * code panel / UI crisp. The two are independent: the render3d filter is
+ * code panel / UI crisp. The two filters are independently owned, and Post FX
+ * Scope selects at most one of them per frame: the render3d filter is
  * owned by the render3d module (and reachable from the standalone
  * render3d_demo), while this hook is an app concern operating on the final
  * framebuffer.

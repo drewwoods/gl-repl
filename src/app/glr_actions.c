@@ -178,8 +178,9 @@ static int save_workspace_including_visible_scene(
  * Indices:
  *   0 = Off  - paused
  *   1 = On   - playing, preserving the current loop mode
- * Old 4-state ini values (1/2/3) are all remapped to On in
- * glr_actions_apply_defaults() via the > AUDIO_CFG_ALL clamp. */
+ * Old 4-state ini values (1/2/3) are all remapped to On in the audio-session
+ * restore performed by glr_actions_apply_defaults(), via the > AUDIO_CFG_ALL
+ * clamp. */
 static const char *syntax_hl_names[SYNTAX_HIGHLIGHT_COUNT] = {
     SYNTAX_HIGHLIGHT_LIST(SYNTAX_HIGHLIGHT_NAME_ENTRY)
 };
@@ -1856,7 +1857,8 @@ void glr_actions_apply_defaults(void) {
         repl_set_status(glr_actions_audio_mode_status_string(AUDIO_CFG_PAUSE));
         return;
     }
-    /* Restore the audio mode persisted from the previous session.
+    /* This function restores the audio mode persisted from the previous
+     * session; it does not seed presentation defaults.
      * glr_audio_play_playlist() calls load_state() which stores the cfg_mode
      * in the audio module; pull it here so the UI config and the actual audio
      * engine agree before the first frame. */

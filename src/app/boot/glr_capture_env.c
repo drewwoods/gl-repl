@@ -372,7 +372,7 @@ void glr_capture_env_apply(const char *time_arg) {
      * (glr_capture_env_frame_hook), not here: the picker clamps its
      * placement against the live viewport, which reshape has not
      * populated yet at bootstrap time. */
-    /* Accumulation-AA boost: GLR_ACCUM_PASSES=<count> (1/2/4/8/12/16)
+    /* Accumulation-AA boost: GLR_ACCUM_PASSES=<count> (1/2/4/6/8/10/12/14/16)
      * raises the accumulation sample count. Capture hook: the 2D UI
      * renders outside the accumulation loop, so this antialiases the
      * 3D scene while text keeps its full size - unlike 2x supersampling,

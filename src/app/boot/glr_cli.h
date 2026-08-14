@@ -3,7 +3,7 @@
  *
  * Parses argv into a plain GlrCliOptions bag and handles the self-contained
  * exit paths (-h/--help, --list-examples, --list-tutorials, --list-tours,
- * --list-config)
+ * --list-config, --lint-scenes)
  * plus the fail-fast resolvers (--examples-dir load, --example / --tutorial /
  * --tour name->index) that must validate before a window opens. Everything
  * here is policy-free plumbing:

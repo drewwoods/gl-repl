@@ -13,8 +13,9 @@
  *
  * Config shortcut dispatch is part of the same surface because the key map
  * is derived from the same GlrConfigKey-backed descriptor table exposed by
- * glr_config.h. Startup defaults also live here: glr_actions_apply_defaults()
- * seeds config state before examples or workspace metadata override it.
+ * glr_config.h. Audio-session restoration also lives here:
+ * glr_actions_apply_defaults() restores the persisted audio mode before the
+ * first frame.
  */
 #ifndef GLR_ACTIONS_H
 #define GLR_ACTIONS_H
@@ -42,7 +43,7 @@ enum {
     GLR_FILE_ITEM_SAVE_GLR,          /* Scene as authoring-format .glr source */
     GLR_FILE_ITEM_LOAD_SCENE,        /* Prompt for a .c scene path */
     GLR_FILE_ITEM_RENAME_SCENE,
-    GLR_FILE_ITEM_EXPORT_PLY,        /* F11: capture geometry to output.ply */
+    GLR_FILE_ITEM_EXPORT_PLY,        /* Export geometry to active scene's .ply path */
     GLR_FILE_ITEM_SPLIT_DECL,        /* split multi-var decl at cursor */
     GLR_FILE_ITEM_SCENE_SEP,         /* "---" non-actionable divider row */
     GLR_FILE_ITEM_WORKSPACE_HDR,     /* "### WORKSPACE: <name>" inert header */
@@ -93,6 +94,8 @@ enum {
  *   [0..g-1]               source group rows (g = visible audio groups)
  *   [g + AUDIO_OFF_SEP]    "---" separator row
  *   [g + AUDIO_OFF_PLAY]   "Play" / "Pause" action
+ *   [g + AUDIO_OFF_BACK10] "Jump Back 10s" action
+ *   [g + AUDIO_OFF_FWD10]  "Jump Forward 10s" action
  *   [g + AUDIO_OFF_NEXT]   "Next Track" action
  *   [g + AUDIO_OFF_PREV]   "Previous Track" action
  *   [g + AUDIO_OFF_LOOP]   "Loop: <mode>" action */
@@ -107,9 +110,9 @@ enum {
     GLR_AUDIO_FIXED_COUNT = 7
 };
 
-/* Apply initial presentation configuration defaults at startup. Initializes the
- * presentation config toggles and cycles to their default values. Called during
- * REPL init; examples can override via @cfg metadata headers. */
+/* Restore the persisted audio mode into the app config at startup. This is
+ * audio-only; presentation defaults are owned by glr_state and scene/example
+ * reset paths. */
 #define AUDIO_CFG_PAUSE 0
 #define AUDIO_CFG_ALL   1
 

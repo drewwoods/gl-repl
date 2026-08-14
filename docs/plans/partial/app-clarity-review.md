@@ -1,14 +1,17 @@
 # `src/app` Clarity, Consistency & Maintainability Review
 
-## Status — PARTIAL: findings 1-3 and 5 landed 2026-08-14; 4 deferred
+## Status — COMPLETE: findings 1-5 implemented 2026-08-14
 
-The three ranked items of the execution plan below are implemented on `main`:
+The five ranked items of the execution plan below are implemented in the
+current tree:
 
 | # | Finding | Commit |
 |---|---|---|
 | 1 | `GlrConfigKey` maps are default-less (so `-Werror=switch` enforces them), `glr_config_validate` rejects duplicate actionable keys, config-toggle docs corrected | `app/config: make GlrConfigKey storage maps compiler-exhaustive` |
 | 2 | Scene-local membership derives from `k_cfg_scene_defaults[]` (the duplicate switch is gone), with a subset/defaults slug-set test and a reset-contract test; contract comments corrected in `glr_state.{c,h}` and `CLAUDE.md` | `app/config: single-source the scene-local roster and test its reset` |
 | 3 | `GLR_MODAL_COUNT` + range check in `glr_modal_begin`, all three modal dispatches exhaustive, and a per-kind prompt/typing/commit test | `app/modal: guard the modal-kind extension contract` |
+| 4 | Factual app API/comment sweep, boot-map corrections, and removal of the duplicate camera prototype | current worktree |
+| 5 | Shared synthetic right-click capture step with coverage for all three capture entry points | `app/ctrl: extract the shared synthetic right-click capture step` |
 
 Both new tests were mutation-checked: removing one reset line and emptying one
 prompt arm each fail them.
@@ -19,13 +22,9 @@ keeps its own success check, and the two hooks that had no coverage through
 their capture entry point now have it (`app/ctrl: extract the shared synthetic
 right-click capture step`).
 
-**Deferred on purpose** — finding 4, the factual comment/declaration sweep:
-safe but Low, and best bundled as documentation hygiene. Everything else in
-this review is an explicit *do not do*.
-
-One correction to finding 4's table while it waits: the reset-contract test it
-will describe is `test_scene_local_reset_covers_whole_roster` in
-`tests/test_glr_ctrl.c`, not in `test_glr_actions.c`.
+Finding 4 is the scoped factual comment/declaration sweep. It intentionally
+does not rename APIs, split modules, or broaden the duplicate-declaration
+guard.
 
 ## Original assessment — RECONCILED INDEPENDENT ASSESSMENT (2026-08-14)
 

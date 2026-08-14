@@ -3335,11 +3335,12 @@ void glr_ctrl_display_frame(void) {
      * the OpenGL-state popup). */
     ui_panels_render_scene_status(&ui_snap);
 
-    /* Compositor post-process: the whole-frame filter runs over the
-     * entire composited image (3D scene + every 2D UI layer) now that
-     * all drawing for the frame is done, before the buffer swap in
-     * display_func(). The scene-viewport filter (PROF_RENDER3D_POST_PROCESS)
-     * is the separate scene-layer pass; this is the compositor stage. */
+    /* Compositor post-process: the whole-frame filter runs over all
+     * controller-owned drawing (3D scene + controller-owned 2D UI) now that
+     * this stage is done, before the host-owned splash/tour layers and the
+     * buffer swap in display_func(). The scene-viewport filter
+     * (PROF_RENDER3D_POST_PROCESS) is the separate scene-layer pass; Post FX
+     * Scope selects at most one of these filters per frame. */
     prof_begin(PROF_COMPOSITOR);
     glr_compositor_postprocess_frame(
         glr_state_presentation().compositor_filter_mode,
@@ -3382,7 +3383,6 @@ void glr_ctrl_reshape(int w, int h) {
     glr_ctrl_invalidate_depth_snapshot();
 }
 
-/* Idempotent app-service installer required for any REPL loading/export path (including CLI). */
 /* Applies example tag-default overrides dynamically after a global state reset. */
 static const GlrExampleTagDefault k_example_tag_defaults[] =
     GLR_EXAMPLE_TAG_DEFAULTS;
@@ -3998,6 +3998,8 @@ static const VariablePanelValueSource g_glr_var_value_source = {
     glr_ctrl_var_read_row,
 };
 
+/* Idempotent app-service installer required for any REPL loading/export path
+ * (including CLI). */
 static void glr_ctrl_install_app_services(void) {
     /* Install the host-effect bridge (status sink, example presentation, editor effects, tutorial). */
     repl_install_host_effects(&g_glr_host_effects);
@@ -4681,7 +4683,8 @@ void glr_ctrl_set_accum_passes(int count) {
         }
     }
     fprintf(stderr,
-            "gl-repl: GLR_ACCUM_PASSES=%d ignored (want 1/2/4/8/12/16)\n",
+            "gl-repl: GLR_ACCUM_PASSES=%d ignored "
+            "(want 1/2/4/6/8/10/12/14/16)\n",
             count);
 }
 
@@ -4694,27 +4697,6 @@ void glr_ctrl_fill_export_layout(ReplExportLayout *out) {
         .render3d_h = sh,
     };
 }
-
-/* ===========================================================================
- * Router helpers: non-editor input concerns
- *
- * glr_ctrl is the controller - it owns routing of raw GLUT input to
- * the subsystem that owns each concern (replay, audio, config, save,
- * scene cycle, variable panel, scene press, camera, scroll wheel,
- * help). The editor's keyboard_func / special_func / mouse_func /
- * motion_func / mousewheel_func dispatchers see only editor-text
- * concerns: every helper below is run before the editor handler.
- *
- * Helpers are exported (declared in glr_ctrl.h) so test fixtures
- * can drive a single routing concern without applying GLUT effects.
- * Helpers fill the editor_input EditorInputDispatchEffects via
- * editor_request_redraw etc.; glr_ctrl_apply_input_effects actualizes the
- * controller-owned effects after routing. The GLUT host independently owns
- * continuous redisplay and timer scheduling. Test fixtures bypass
- * apply_input_effects entirely.
- * ===========================================================================
- */
-
 
 /* Per-frame tick (16 ms): advance audio playlist, surface track-change
  * status, advance time variable, advance replay state, decay camera

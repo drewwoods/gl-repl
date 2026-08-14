@@ -26,22 +26,23 @@ void glr_ctrl_set_time(float value);
  * on a headless render with no keyboard input. */
 void glr_ctrl_set_edit_line(int line);
 
-/* Set the accumulation sample count (one of 1/2/4/8/12/16; anything
- * else warns and is ignored). Startup hook for GLR_ACCUM_PASSES:
+/* Set the accumulation sample count (one of the values in
+ * GLR_ACCUM_PASS_LADDER; anything else warns and is ignored). Startup hook
+ * for GLR_ACCUM_PASSES:
  * headless captures raise the AA passes for smoother 3D edges without
  * supersampling - the 2D UI renders outside the accumulation loop, so
  * text keeps its full size. */
 void glr_ctrl_set_accum_passes(int count);
 
-/* Open the floating color picker on source line `line` (clamped to the
- * document; no-op unless the line is a picker-editable color command).
- * Startup hook for GLR_OPEN_COLOR_PICKER: the picker only opens via a
- * swatch click, so a headless capture can't otherwise pose it. */
 /* Capture affordance (GLR_CODE_SCROLL): park the code panel's first visible
  * row and stop follow-scroll from pulling it back. Panel rows, not document
  * lines - with code focus off the generated C fills rows no cursor can reach. */
 void glr_ctrl_set_code_panel_scroll(int top_row);
 
+/* Open the floating color picker on source line `line` (clamped to the
+ * document; no-op unless the line is a picker-editable color command).
+ * Startup hook for GLR_OPEN_COLOR_PICKER: the picker only opens via a
+ * swatch click, so a headless capture can't otherwise pose it. */
 void glr_ctrl_open_color_picker(int line);
 
 /* Right-click the visible code-panel row for source line `line`, through the
@@ -136,15 +137,14 @@ void glr_ctrl_close_help(void);
 
 void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap);
 
-/* Per-frame view for the right-click OpenGL-state popup table. Validates the
- * anchor (closing if no longer a visually blank committed/live editor row),
- * rebuilds the report from the live flat program, and resolves the popup
- * anchor into y-up window coords. view.visible is 0 when closed. */
-/* Per-frame view for the floating OpenGL-state popup. `snap` is the frame's
- * UI snapshot when the caller has one (the display path): it lets the source
- * column's gutter-label resolution reuse the code panel's already-built rows
- * instead of rebuilding them. Pass NULL from input/hit-test paths, which fall
- * back to the controller's cached snapshot. */
+/* Per-frame view for the floating right-click OpenGL-state popup table.
+ * Validates the anchor (closing if no longer a visually blank committed/live
+ * editor row), rebuilds the report from the live flat program, and resolves
+ * the popup anchor into y-up window coords. `snap` is the frame's UI snapshot
+ * when the caller has one (the display path): it lets the source column's
+ * gutter-label resolution reuse the code panel's already-built rows instead
+ * of rebuilding them. Pass NULL from input/hit-test paths, which fall back to
+ * the controller's cached snapshot. view.visible is 0 when closed. */
 UiGlStatePanelView glr_ctrl_build_gl_state_panel_view(const UiRenderSnapshot *snap);
 
 /* Per-frame view for the stencil-buffer legend panel. Reads the histogram

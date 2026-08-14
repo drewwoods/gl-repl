@@ -412,7 +412,7 @@ gl_repl.c GLUT callback
                                 (peer subsystem - drag transaction)
        UI_HIT_REPLAY_BUTTON -> replay_handle_*(...)
                                 (peer subsystem - toggle / step)
-       UI_HIT_MENU_ITEM     -> glr_menu_route(...)
+       UI_HIT_MENU_ITEM     -> glr_action_menu_item_activate(...)
        UI_HIT_NONE          -> camera/viewport drag if over 3D viewport
                                 -> render3d_camera_handle_*(...)
 
@@ -453,7 +453,7 @@ central dispatch enum and no "UI emits actions" layer.
 
 The application shell bootstrap, event routing, frame/snapshot coordination, and global app-level services.
 
-`src/app/` splits into two bands (see [`../src/app/README.md`](../src/app/README.md)): the **frame-time controller band** (files directly in `src/app/`, assuming a live GL context and running frame loop) and the **boot / lifecycle band** (`src/app/boot/`: CLI parse, init trace, capture-env hooks, frame pacer, splash, the `--dump-*` dispatch - reached only from `gl_repl`, before/without a frame). The guard `check-app-boot-band` enforces the one-way edge: boot may call down into the controller, never the reverse.
+`src/app/` splits into two bands (see [`../src/app/README.md`](../src/app/README.md)): the **frame-time controller band** (files directly in `src/app/`, assuming a live GL context and running frame loop) and the **boot / lifecycle band** (`src/app/boot/`: CLI parse, init trace, capture-env hooks, frame pacer, splash, the `--dump-*` and `--lint-scenes` dispatches - reached only from `gl_repl`, before/without a frame). The guard `check-app-boot-band` enforces the one-way edge: boot may call down into the controller, never the reverse.
 
 | Module | Role |
 |--------|------|
@@ -477,7 +477,7 @@ The application shell bootstrap, event routing, frame/snapshot coordination, and
 | `src/app/glr_audio` | App-level playlist engine and persisted audio config (`glr_audio_*`) |
 | `src/app/glr_pointer_script` | Scripted synthetic pointer/keyboard engine. Two run kinds: env-driven capture (`GLR_POINTER_SCRIPT`, video recording; untimed-completion or absolute-timestamp, never canceled, no HUD) and menu-started **controlled tours** (untimed only; `glr_pointer_script_start_tour`) with a virtual clock, a `0.25×`-`16×` speed ladder, play/pause, immediate single-step, backstep (one whole-app baseline + prefix replay via `glr_tour_snapshot`), a final-caption Done linger followed by auto-close, and the [`GlrTourPlaybackView`](../src/app/glr_pointer_script.h#L132) HUD feed. Transport input arrives through `glr_pointer_script_handle_tour_key` / `_handle_tour_special` - the module owns which keys are transport, while the physical controller entry points own when to offer them and when to cancel. Symbolic point targets (`menu:`/`item:`/`sub:`/`pin:`/`scene:` resolved against live app layout, plus web-only `shell:` DOM controls) and the cursor/ripple/ring/caption overlay |
 | `src/app/glr_tour_presence` | Ambient "a guided tour is running" phase machine (OFF -> INTRO -> ACTIVE -> OUTRO) over a rendered-frame clock, feeding the whole-window presence layer `ui/subsystems/tour_presence` draws. App band rather than UI band because the OUTRO must **outlive the tour**: `glr_pointer_script` reports inactive and drops its metadata pointers the instant a tour stops, so the tour name is latched into this module's own storage and the exit collapse keeps ticking afterward. Never freezes on pause - a paused tour is still a mode you are inside |
-| `src/app/glr_tour_snapshot` | Whole-app tour-rewind baseline: composes the focused per-owner captures (repl checkpoint, editor session, undo history, scene catalog, glr/ui/replay/tutorial/variable-panel/help-session by-value states, and the camera / view-transition / menu-bar / color-picker / overlay-layout runtime snapshots) into one opaque, heap-allocated `GlrTourSnapshot`. Excludes derived state (flat program, renderer resources, controller frame caches); restore leaves the flat program dirty. [`glr_ctrl_after_tour_restore()`](../src/app/glr_ctrl.h#L101) re-syncs derived chrome + export strings afterward |
+| `src/app/glr_tour_snapshot` | Whole-app tour-rewind baseline: composes the focused per-owner captures (repl checkpoint, editor session, undo history, scene catalog, glr/ui/replay/tutorial/variable-panel/help-session by-value states, and the camera / view-transition / menu-bar / color-picker / overlay-layout runtime snapshots) into one opaque, heap-allocated `GlrTourSnapshot`. Excludes derived state (flat program, renderer resources, controller frame caches); restore leaves the flat program dirty. [`glr_ctrl_after_tour_restore()`](../src/app/glr_ctrl.h#L102) re-syncs derived chrome + export strings afterward |
 | `src/app/glr_tours` | Built-in guided-tour catalog behind the Tours menu - file-backed like the example scenes (`tours/*.pointer` plus native `catalog.ini` / web `catalog-emscripten.ini`, compiled in by `scripts/gen_tours.py`), played as controlled tours via `glr_pointer_script_start_tour` (name + `.pointer` filename passed for the HUD) and authored with symbolic targets so they play at any window size; a mouse click/wheel or any non-transport key cancels at the physical `glr_ctrl_*` boundary, while `glr_ctrl_scripted_*` events bypass that arbitration |
 | `src/app/glr_compositor` | App-level compositor post-process hook. Runs a post-process pass over the **entire composited frame** (3D stage + all 2D UI) at the tail of `glr_ctrl_display_frame`, after all drawing and before the buffer swap |
 | `src/app/glr_camera_export` | Camera-block format owner: translates camera state ↔ the `// camera` block + `glRotatef`/`glTranslatef` text in saved files |
@@ -486,8 +486,9 @@ Boot / lifecycle band (`src/app/boot/`, reached only from `gl_repl`):
 
 | Module | Role |
 |--------|------|
-| `boot/glr_cli` | argv → [`GlrCliOptions`](../src/app/boot/glr_cli.h#L34) bag; usage/`--list-*` exit paths (including tab-separated config slug discovery), `--examples-dir` load, fail-fast name→index resolution for `--example` / `--tutorial` / `--tour` |
+| `boot/glr_cli` | argv → [`GlrCliOptions`](../src/app/boot/glr_cli.h#L34) bag; usage/`--list-*`/`--lint-scenes` exit paths (including tab-separated config slug discovery), `--examples-dir` load, fail-fast name→index resolution for `--example` / `--tutorial` / `--tour` |
 | `boot/glr_boot_dumps` | The GL-free `--dump-*` / `--flat-histogram` path: bootstrap, dump, exit. Drives the `glr_debug` formatters |
+| `boot/glr_lint_scenes` | Windowless `--lint-scenes <dir>` validation of every `.glr` file against canonical document order and `@camera` tags |
 | `boot/glr_init_trace` | Startup-stall diagnostic (`[init +N.NNNs] <phase>`), with an elapsed clock shared with audio + controller |
 | `boot/glr_capture_env` | Headless-capture `GLR_*` env hooks, split into a bootstrap `_apply` and a per-frame `_frame_hook` |
 | `boot/glr_frame_pacer` | Pure absolute-deadline 60 Hz pacer; converts host-supplied monotonic time to the next integer-millisecond timer delay without accumulating rounding drift or catch-up bursts |
@@ -753,7 +754,7 @@ flowchart TB
 
     gl_repl["gl_repl.c<br/>(GLUT entry · callback wiring · buffer swap)"]
 
-    app["<b>0. App shell</b><br/><b>controller band:</b> glr_ctrl broad coordinator · _router · _view_transition<br/>glr_state · glr_actions · glr_config · glr_prof · glr_paths · glr_workspaces · glr_modal · glr_web_io<br/>bridges: glr_source_document · glr_camera_export · glr_color_picker_bridge ·<br/>glr_assign_plot_bridge · glr_clipboard<br/>glr_compositor · glr_audio · tours (glr_tours · _pointer_script · _tour_snapshot)<br/><b>boot band:</b> glr_cli · glr_boot_dumps · glr_init_trace · glr_capture_env ·<br/>glr_frame_pacer · splash<br/>(owns app presentation/render state; target is thinner routing)"]
+    app["<b>0. App shell</b><br/><b>controller band:</b> glr_ctrl broad coordinator · _router · _view_transition<br/>glr_state · glr_actions · glr_config · glr_prof · glr_paths · glr_workspaces · glr_modal · glr_web_io<br/>bridges: glr_source_document · glr_camera_export · glr_color_picker_bridge ·<br/>glr_assign_plot_bridge · glr_clipboard<br/>glr_compositor · glr_audio · tours (glr_tours · _pointer_script · _tour_snapshot)<br/><b>boot band:</b> glr_cli · glr_boot_dumps · glr_lint_scenes · glr_init_trace · glr_capture_env ·<br/>glr_frame_pacer · splash<br/>(owns app presentation/render state; target is thinner routing)"]
 
     editor["<b>2. Editor</b><br/>input · edit_ops · commit · state · undo · clipboard ·<br/>search · replace · completion · reformat ·<br/>inline_rename · inline_file_prompt · help_session<br/>(owns EditorState)"]
 

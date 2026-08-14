@@ -271,7 +271,7 @@ int glr_ctrl_router_handle_audio_key(unsigned char key) {
     return 1;
 }
 
-/* Ctrl+= / Ctrl+- step the Config "Accum passes" cycle (1/2/4/8/12/16,
+/* Ctrl+= / Ctrl+- step the Config "Accum passes" cycle (1/2/4/6/8/10/12/14/16,
  * clamped, no wrap), so the keyboard and the menu are one coherent model.
  * Gated on use_accum (no accumulation buffer under --no-accum) and on the
  * effect being active - adjusting the sample count is meaningless while the
