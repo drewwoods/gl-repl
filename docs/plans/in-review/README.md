@@ -6,4 +6,4 @@ or to `../active/` if implementation begins immediately.
 
 | Plan | Topic |
 |---|---|
-| *(none)* | |
+| [BYOE.md](BYOE.md) | Bring your own editor: external-editor sync, in four stages |
