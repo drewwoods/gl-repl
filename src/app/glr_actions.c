@@ -471,7 +471,9 @@ const int CFG_ITEM_COUNT = (int)(sizeof(g_cfg_items) / sizeof(g_cfg_items[0]));
  * the GlrPresentationState fields directly (a pure-storage reset must not run
  * glr_config_set()'s side effects) plus the two peer writes for camera
  * autorotation and variable-panel visibility in glr_ctrl_reset_example_chrome().
- * test_glr_actions.c pins that reset against this table, key by key. */
+ * test_glr_ctrl.c pins that reset against this table, key by key
+ * (test_scene_local_reset_covers_whole_roster); test_glr_actions.c pins the
+ * subset/defaults bag agreement the .glr writer diffs against. */
 typedef struct {
     GlrConfigKey key;
     int          value;

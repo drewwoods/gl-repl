@@ -142,8 +142,12 @@ Examples may lead with `// @cfg <slug> = <value>` lines plus an optional 5-line
 Slug list: `docs/ADVANCED_USAGE.md` (scene-presentation only; `projection` =
 ortho projection at the free camera, `view_mode` = locked 2D/3D toggle).
 
-**Every example load resets the non-camera presentation settings (including
-`view_mode`) to `CFG_DEFAULT_*` before applying the example's `@cfg`.**
+**Every example load resets the scene-local settings (including `view_mode`)
+to `CFG_DEFAULT_*` before applying the example's `@cfg`.** The roster is
+`k_cfg_scene_defaults[]` in `src/app/glr_actions.c` - exactly the slugs an
+example may set. Session-inspection settings (profilers, depth/stencil viz,
+post FX) and interface settings (code panel, syntax highlight) are not
+scene-local, are not reset, and survive an example switch.
 `CFG_DEFAULT_*` lives in `src/app/glr_defaults.h` and is the single source of
 truth - reuse the macros, never duplicate literals.
 

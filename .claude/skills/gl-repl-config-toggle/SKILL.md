@@ -56,19 +56,23 @@ If it belongs to a scene (it should travel in a `.glr`/example `@cfg` header
 and must not leak across an F12 example switch), add it to
 `k_cfg_scene_defaults[]` in `glr_actions.c` **and** to
 `glr_state_presentation_reset_example_defaults()` in `glr_state.c`. That table
-is the roster: `cfg_key_in_scene_subset()` is derived from it, and
-`test_glr_actions.c` pins subset/defaults agreement plus the reset contract.
-Session-inspection settings (profilers, depth/stencil viz, post FX) and
-interface settings (code panel, syntax highlight) stay out of both.
+is the roster: `cfg_key_in_scene_subset()` is derived from it,
+`test_glr_ctrl.c` pins the reset contract key by key
+(`test_scene_local_reset_covers_whole_roster`), and `test_glr_actions.c` pins
+the subset/defaults bag agreement. Session-inspection settings (profilers,
+depth/stencil viz, post FX) and interface settings (code panel, syntax
+highlight) stay out of both.
 
 ## Defaults
 
 `CFG_DEFAULT_*` in `src/app/glr_defaults.h` is the single source of truth.
 Reuse the macros - never duplicate the literal value at a second site.
 
-Every example load resets non-camera presentation settings to `CFG_DEFAULT_*`
-before applying the example's `@cfg`, so a new presentation-scoped key needs a
-default that is sane for a bare scene.
+Every example load resets every **scene-local** setting - the
+`k_cfg_scene_defaults[]` roster above, and nothing else - to `CFG_DEFAULT_*`
+before applying the example's `@cfg`, so a new scene-local key needs a default
+that is sane for a bare scene. A session or interface setting is not reset and
+must not be added to that path.
 
 ## Tests must not assume the shipped default
 
