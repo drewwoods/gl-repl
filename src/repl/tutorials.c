@@ -1044,25 +1044,25 @@ static const TutorialStep g_tutorial_two_sided_steps[] = {
     STEP_CMD(NULL, "glVertex3f(1.8, -1.8, 0)"),
     STEP_CMD(NULL, "glEnd()"),
     STEP_NOTE(
-        "// Weird, the +Z normal faces the key light, yet the sheet receives no diffuse light - only ambient reaches it."),
-    STEP_NOTE("// First suspect is the normal. Let's inspect the focused normal guide by placing the cursor on the glNormal3f row."),
+        "// The +Z normal faces the key light, yet the sheet receives no diffuse light - only ambient reaches it."),
+    STEP_NOTE("// The normal is the first suspect - place the cursor on the glNormal3f row to read the focused normal guide."),
     STEP_NOTE_AT(
         "// The guide reads n=(0.00, 0.00, 1.00) - the authored normal faces the key light, so it is not the problem.",
         "normal_row"),
     STEP_REQUIRE_KEY(NULL,
-        "// Okay, the normal is right; let's verify the key-light direction. Press %s to show the light indicators.",
+        "// The normal is right; verify the key-light direction. Press %s to show the light indicators.",
         "light_indicators", 1,
         KM_KEY(GLR_LIGHT_INDICATORS), KM_MODS(GLR_LIGHT_INDICATORS), 0),
     STEP_REQUIRE_KEY(NULL,
-        "// The key-light direction looks right; let's inspect GL's front/back classification. Press %s to show the winding overlay.",
+        "// The key-light direction looks right; inspect GL's front/back classification. Press %s to show the winding overlay.",
         "winding", 1,
         KM_KEY(GLR_WINDING_VIEW), KM_MODS(GLR_WINDING_VIEW), 0),
     STEP_NOTE(
-        "// Ah, red means back-facing. With the default GL_CCW rule, clockwise vertices make this the back face."),
+        "// Red means back-facing. With the default GL_CCW rule, clockwise vertices make this the back face."),
     STEP_NOTE(
         "// Two-sided lighting reverses the back-face normal to -Z, opposite the key-light direction, so the diffuse term is zero."),
     STEP_REQUIRE_KEY(NULL,
-        "// Let's turn the winding view off. Press %s to hide the winding overlay.",
+        "// Press %s to hide the winding overlay.",
         "winding", 0,
         KM_KEY(GLR_WINDING_VIEW), KM_MODS(GLR_WINDING_VIEW), 0),
     STEP_NOTE(
