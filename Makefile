@@ -652,6 +652,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/command_spec.c \
                      src/repl/command_store.c \
                      src/repl/compile.c \
+                     src/repl/doc_order.c \
                      src/repl/eval.c \
                      src/repl/example_loader.c \
                      src/repl/examples.c \
@@ -666,6 +667,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/flatten.c \
                      src/repl/flatten_expr.c \
                      src/repl/flatten_query.c \
+                     src/repl/geometry_query.c \
                      src/repl/host_effects.c \
                      src/repl/import.c \
                      src/repl/keymap_format.c \

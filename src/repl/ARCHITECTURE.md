@@ -1240,7 +1240,8 @@ grouping is the mental model.)
 [`executor.c`](executor.c)/`.h` (walk flat program, emit GL) ·
 [`transform_utils.h`](transform_utils.h) (shared matrix tracking) ·
 [`pipeline.h`](pipeline.h) (controller-facing frame entry points) ·
-[`program_query.c`](program_query.c)/`.h`, [`geometry_query.h`](geometry_query.h) (read-only program queries)
+[`program_query.c`](program_query.c)/`.h` (read-only program queries) ·
+[`geometry_query.c`](geometry_query.c)/`.h` (cursor-context feeding-state, bracket-partner and in-scope-transform queries)
 
 **State & ownership**
 [`state.c`](state.c)/`.h` ([`ReplRuntimeState`](state.h#L18) storage, capture/restore) ·

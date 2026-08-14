@@ -55,6 +55,7 @@
         "repl/examples.c",
         "repl_autocomplete.c",
         "repl/autonormal.c",
+        "repl/geometry_query.c",
         "subsystems/replay/replay_fade.c",
         "subsystems/replay/replay_input.c",
         "subsystems/replay/replay_playback.c",

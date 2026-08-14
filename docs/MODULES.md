@@ -600,7 +600,8 @@ Program-side state that is not the source command array itself.
 | `repl_camera_header` | **The one camera-header reader.** Tag recognition, brace/region tracking, per-role parse, validation, diagnostics with rule-derived severity, and the deferred pose merge that makes a partial pose unrepresentable. Every consumer - file import, catalog load, tutorial scaffolds, the standalone demo, `--lint-scenes` - runs this code and no other |
 | `repl_doc_order` | The canonical `.glr` document order as a monotonic phase machine (declarations, function definitions, camera, body). Rejects, names both the offending line and the line that established the phase, and reports the whole document in one pass. `.glr` only: exported C emits `reshape()`/`main()` after `display()`, so the importer gates on the source extension. Every loader runs it - catalog, file import, tutorial scaffolds, `--lint-scenes` - because a contract enforced at one entry point and not another is the same defect relocated |
 | `repl_examples` | Built-in example catalog facade: [`examples/catalog.ini`](../examples/catalog.ini) owns order/name/tags/group, [`examples/scenes/`](../examples/scenes/) owns `.glr` snippets or full `.c` import sources, and [`scripts/gen_examples.py`](../scripts/gen_examples.py) emits the compiled-in [`ReplExampleEntry`](../src/repl/examples.c#L31) table used by the `repl_example_tag_*` query API and `repl_example_subheading`. `--examples-dir` can load the same catalog shape at runtime for authoring. Symmetric with the tutorial catalog axes |
-| `repl_autonormal` | Auto-generated `glNormal3f` maintenance and feeding-command lookup. Emits one row per *run* of vertices sharing a normal, so it owns a delete path as well as insert/replace: a recompute that makes a generated row redundant reclaims it, and `repl_strip_auto_normals()` removes the whole generated set when the feature is switched off (a one-shot the controller calls on that transition, never on an OFF-mode recompute) |
+| `repl_geometry_query` | Cursor-context read-only queries the code panel, edit overlays and render3d guides consume: which normal/color command feeds the vertex under the cursor, which `glPushMatrix`/`glPushAttrib`/`glBegin` bracket partner closes it, and which modelview transforms are in scope. Two transform walks, deliberately: the source walk stops at `CMD_FUNC_DEF` and treats function bodies as opaque, the flat walk sees call-site transforms because flattening already inlined every body |
+| `repl_autonormal` | Auto-generated `glNormal3f` maintenance. Emits one row per *run* of vertices sharing a normal, so it owns a delete path as well as insert/replace: a recompute that makes a generated row redundant reclaims it, and `repl_strip_auto_normals()` removes the whole generated set when the feature is switched off (a one-shot the controller calls on that transition, never on an OFF-mode recompute) |
 | `repl_visible_vars` | Loop / function-local variable lookup for parse contexts - which names are in scope at a given source line |
 | `repl_program_query` | Decl-tag collectors and other read-only questions about the committed program |
 
@@ -916,7 +917,7 @@ flowchart LR
         scenes["src/repl/scenes.c<br/>user scenes · workspace"]
         scene_snapshot["src/repl/scene_snapshot.c<br/>copyable scene snapshots"]
         workspace_io["src/repl/workspace_io.c<br/>workspace fs · file naming"]
-        autonormal["src/repl/autonormal.c<br/>autonormals · feeding cmds"]
+        autonormal["src/repl/autonormal.c<br/>autonormals"]
     end
 
     subgraph services["6. Services + neutral support"]

@@ -172,10 +172,11 @@ at build time, like the example catalog.
 | [`init_state.h`](init_state.h) | Read-only access to the effective REPL-modifiable state commands applied by `init()` |
 | [`gl_state_inspector.c`](gl_state_inspector.c) / `.h` | Pure source-checkpoint fold of every generated `init()`/`display()` state write plus REPL commands through the selected point; includes generated lights, camera/modelview, render toggles, and attribute-stack depth, and reports touched values, their latest source, and OpenGL 2.1 initial defaults without issuing GL calls |
 | [`autonormal.c`](autonormal.c) | Auto-generated `glNormal3f` maintenance |
+| [`geometry_query.c`](geometry_query.c) / `.h` | Cursor-context queries: feeding normal/color command, push/pop/begin bracket partners, in-scope modelview transforms (source and flat walks) |
 | [`executor.c`](executor.c) / `.h` | Walks the flat program emitting live GL calls (the only live-GL TU) |
 | [`transform_utils.h`](transform_utils.h) | Shared GL matrix tracking helpers (no executor link dependency) |
 | [`pipeline.h`](pipeline.h) | Controller-facing frame entry points (flatten/autonormal/refresh) |
-| [`program_query.c`](program_query.c) / `.h`, [`geometry_query.h`](geometry_query.h) | Read-only queries over the source/flat program |
+| [`program_query.c`](program_query.c) / `.h` | Read-only queries over the source/flat program |
 | **State & ownership** | |
 | [`state.c`](state.c) / `.h`, [`state_views.h`](state_views.h), [`state_owners.h`](state_owners.h) | [`ReplRuntimeState`](state.h#L18) storage + capture/restore + typed read/mut facades |
 | [`state_notify.h`](state_notify.h) | Dirty-flag invalidation entry points |
