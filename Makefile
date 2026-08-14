@@ -60,6 +60,29 @@ FREEGLUT_SRC        := third_party/freeglut
 # building/linking the vendored library.
 FREEGLUT_VENDOR     ?= 1
 
+# FREEGLUT_LIB_PATH=<path/to/libglut.a> links an *external* static freeglut
+# instead of the one built from third_party/freeglut - for experimenting with a
+# different fork/branch/build without re-vendoring. The path is used verbatim
+# everywhere $(FREEGLUT_STATIC_LIB) is (link lines, link prerequisites,
+# render3d-hot's -force_load, the GL benches), and the CMake build rule is
+# replaced by an existence check: nothing under third_party/freeglut is built or
+# consulted for the archive.
+#
+# Headers do NOT follow the archive - point FREEGLUT_INCLUDE_DIR at the matching
+# <GL/freeglut.h> whenever the external build's headers differ from the vendored
+# ones (a capture-less upstream freeglut is exactly that case: its header lacks
+# the fork's declarations). Objects get their own build/*-fgext objdir so they
+# never mix with vendored-header objects.
+#
+#   make gl-repl FREEGLUT_LIB_PATH=~/src/freeglut/build/lib/libglut.a \
+#                FREEGLUT_INCLUDE_DIR=~/src/freeglut/include
+#
+# Everything the archive itself does not carry (frameworks on macOS, X11 libs on
+# Linux) still comes from the platform link line below, so an external build has
+# to be a static freeglut for the *same* backend as the arm you are building.
+FREEGLUT_LIB_PATH   ?=
+FREEGLUT_INCLUDE_DIR ?= $(FREEGLUT_SRC)/include
+
 # FREEGLUT_VENDOR_LINUX=1 opts the *windowed Linux* build into the vendored
 # freeglut (X11/GLX backend) instead of the distro's -lglut. Off by default:
 # system freeglut is the right thing for an ordinary Linux build and needs no
@@ -70,6 +93,12 @@ FREEGLUT_VENDOR     ?= 1
 # (The Linux OSMesa build vendors unconditionally; only this windowed path is
 # a choice.) Needs cmake plus the X11/GL dev headers.
 FREEGLUT_VENDOR_LINUX ?= 0
+
+# An external archive is linked by path, which on Linux is the vendored-style
+# arm (include dir first, no -lglut) - so asking for one implies it.
+ifneq ($(FREEGLUT_LIB_PATH),)
+  FREEGLUT_VENDOR_LINUX := 1
+endif
 
 # FREEGLUT_OSMESA=1 builds the vendored freeglut with its headless OSMesa
 # (off-screen software) backend instead of the macOS Cocoa backend, and links
@@ -121,6 +150,13 @@ else
     # system freeglut and never builds this.
     FREEGLUT_CMAKE_BACKEND := -DFREEGLUT_COCOA=OFF -DFREEGLUT_GLES=OFF
   endif
+endif
+
+# An external archive replaces the vendored one for every consumer at once.
+# FREEGLUT_BUILD is left pointing at the vendored build dir so `make
+# freeglut-clean` still cleans what it always cleaned.
+ifneq ($(FREEGLUT_LIB_PATH),)
+  FREEGLUT_STATIC_LIB := $(FREEGLUT_LIB_PATH)
 endif
 
 # FREEGLUT_HEADER_CFLAGS is set per-platform in the Darwin/Linux block below:
@@ -334,6 +370,7 @@ BUILD_REPORT_PARAMS = $(strip \
 	$(if $(filter command line environment,$(origin WEB)),WEB=$(WEB),) \
 	$(if $(filter command line environment,$(origin FREEGLUT_OSMESA)),FREEGLUT_OSMESA=$(FREEGLUT_OSMESA),) \
 	$(if $(filter command line environment,$(origin FREEGLUT_VENDOR)),FREEGLUT_VENDOR=$(FREEGLUT_VENDOR),) \
+	$(if $(FREEGLUT_LIB_PATH),FREEGLUT_LIB_PATH=$(FREEGLUT_LIB_PATH),) \
 	$(if $(filter command line environment,$(origin CC)),CC=$(CC),) \
 	)
 
@@ -347,7 +384,7 @@ ifeq ($(UNAME_S),Darwin)
     # wins; <GL/gl.h>/<GL/glu.h> resolve from the Mesa includes.
     MESA_PREFIX     := $(shell brew --prefix mesa 2>/dev/null)
     MESA_GLU_PREFIX := $(shell brew --prefix mesa-glu 2>/dev/null)
-    FREEGLUT_HEADER_CFLAGS = -DFREEGLUT_OSMESA=1 -I$(FREEGLUT_SRC)/include -I$(MESA_PREFIX)/include -I$(MESA_GLU_PREFIX)/include
+    FREEGLUT_HEADER_CFLAGS = -DFREEGLUT_OSMESA=1 -I$(FREEGLUT_INCLUDE_DIR) -I$(MESA_PREFIX)/include -I$(MESA_GLU_PREFIX)/include
     ifeq ($(FREEGLUT_VENDOR),1)
       FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
     endif
@@ -373,7 +410,7 @@ ifeq ($(UNAME_S),Darwin)
 	-framework CoreAudio -framework CoreFoundation -framework AudioToolbox
   else
     # macOS: system frameworks + vendored static freeglut (Cocoa backend).
-    FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_SRC)/include
+    FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_INCLUDE_DIR)
     ifeq ($(FREEGLUT_VENDOR),1)
       FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
     endif
@@ -405,7 +442,7 @@ else
     # so its include dir supplies <GL/freeglut.h>; <GL/gl.h>/<GL/glu.h> resolve from
     # the system Mesa headers on the default path. libGLU pulls libGL via DT_NEEDED;
     # both share Mesa's libglapi dispatch with libOSMesa, so they coexist.
-    FREEGLUT_HEADER_CFLAGS = -DFREEGLUT_OSMESA=1 -I$(FREEGLUT_SRC)/include
+    FREEGLUT_HEADER_CFLAGS = -DFREEGLUT_OSMESA=1 -I$(FREEGLUT_INCLUDE_DIR)
     ifeq ($(FREEGLUT_VENDOR),1)
       FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
     endif
@@ -428,7 +465,7 @@ else
     # by path with no -lglut, mirroring the macOS arm. That is the build that
     # has the fork's frame capture; see the flag's comment up top.
     ifeq ($(FREEGLUT_VENDOR_LINUX),1)
-      FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_SRC)/include
+      FREEGLUT_HEADER_CFLAGS = -I$(FREEGLUT_INCLUDE_DIR)
       ifeq ($(FREEGLUT_VENDOR),1)
         FREEGLUT_LIB := $(FREEGLUT_STATIC_LIB)
       endif
@@ -465,7 +502,7 @@ endif
 ifeq ($(WEB),1)
 GL_HEADER_CFLAGS = \
 	-include $(GL4ES_DIR)/include/GL/gl.h \
-	-I$(GL4ES_DIR)/include -I$(GLU_DIR)/include -I$(FREEGLUT_SRC)/include \
+	-I$(GL4ES_DIR)/include -I$(GLU_DIR)/include -I$(FREEGLUT_INCLUDE_DIR) \
 	-DUSE_MGL_NAMESPACE -DCFG_DEFAULT_VERTEX_OUTLINES=0 \
 	-DCFG_DEFAULT_VERTEX_POINTS=1 -std=gnu99
 # The trailing -std=gnu99 lands after COMMON_CFLAGS' -std=c99 on the compile
@@ -784,7 +821,12 @@ REPL_LIVE_DEMO_DEP_SRCS = $(REPL_DEMO_DEP_SRCS) \
 # OBJDIR would reuse objects built against the other one. Only meaningful on the
 # native windowed Linux path -- the flag is inert under OSMesa/web/stubs, and those
 # arms already have their own suffix, so it is not applied there.
-OBJDIR = build/$(BUILD)$(if $(filter debug,$(BUILD)),$(DEBUG_SAN_SUFFIX),)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)$(if $(filter 0,$(FREEGLUT_VENDOR)),-glut,)$(if $(filter 1,$(WEB)),-web,)$(if $(filter 1,$(USE_GL_STUBS))$(filter 1,$(FREEGLUT_OSMESA))$(filter 1,$(WEB))$(filter Darwin,$(UNAME_S)),,$(if $(filter 1,$(FREEGLUT_VENDOR_LINUX)),-fgvendor,))
+#
+# -fgext does the same job for FREEGLUT_LIB_PATH: an external freeglut usually
+# comes with its own headers (FREEGLUT_INCLUDE_DIR), and those objects must not
+# be reused by - or reuse - a vendored-header build. It applies on every arm,
+# since the header swap is platform-independent.
+OBJDIR = build/$(BUILD)$(if $(filter debug,$(BUILD)),$(DEBUG_SAN_SUFFIX),)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)$(if $(filter 0,$(FREEGLUT_VENDOR)),-glut,)$(if $(filter 1,$(WEB)),-web,)$(if $(filter 1,$(USE_GL_STUBS))$(filter 1,$(FREEGLUT_OSMESA))$(filter 1,$(WEB))$(filter Darwin,$(UNAME_S)),,$(if $(filter 1,$(FREEGLUT_VENDOR_LINUX)),-fgvendor,))$(if $(FREEGLUT_LIB_PATH),-fgext,)
 BINDIR = $(OBJDIR)
 # Each Make process gets its own report directory. Recursive test/build
 # invocations therefore print and summarize only their own source files.
@@ -1350,6 +1392,17 @@ $(OBJDIR)/%.o: %.c | $(COMPILE_REPORT_START)
 # on Linux libosmesa6-dev puts it on the default pkg-config path, so this stays
 # empty there.
 FREEGLUT_PKG_CONFIG_PATH := $(if $(filter 1,$(FREEGLUT_OSMESA)),$(if $(filter Darwin,$(UNAME_S)),$(shell brew --prefix mesa 2>/dev/null)/lib/pkgconfig),)
+#
+# Under FREEGLUT_LIB_PATH the archive is somebody else's build product: make
+# never creates it, so the rule degrades to an existence check with a useful
+# message (an unbuildable prerequisite would otherwise fail as "no rule to make
+# target"). A rule with no prerequisites does not re-run for a file that exists.
+ifneq ($(FREEGLUT_LIB_PATH),)
+$(FREEGLUT_STATIC_LIB):
+	@printf 'error: FREEGLUT_LIB_PATH=%s does not exist\n' '$(FREEGLUT_LIB_PATH)' >&2; \
+	 printf '       build that freeglut first, or unset FREEGLUT_LIB_PATH to use the vendored one.\n' >&2; \
+	 exit 1
+else
 $(FREEGLUT_STATIC_LIB): $(FREEGLUT_SRC)/VENDORED.txt
 	PKG_CONFIG_PATH="$(FREEGLUT_PKG_CONFIG_PATH):$$PKG_CONFIG_PATH" \
 	$(FREEGLUT_CMAKE_LAUNCHER) cmake -S $(FREEGLUT_SRC) -B $(FREEGLUT_BUILD) \
@@ -1357,6 +1410,7 @@ $(FREEGLUT_STATIC_LIB): $(FREEGLUT_SRC)/VENDORED.txt
 	  -DFREEGLUT_BUILD_SHARED_LIBS=OFF -DFREEGLUT_BUILD_DEMOS=OFF \
 	  -DCMAKE_BUILD_TYPE=Release
 	cmake --build $(FREEGLUT_BUILD) --target freeglut_static
+endif
 
 freeglut-clean: ## Remove the vendored freeglut CMake build (forces a rebuild).
 	rm -rf $(FREEGLUT_BUILD) $(FREEGLUT_SRC)/build-osmesa-shared
@@ -2620,7 +2674,7 @@ ifeq ($(UNAME_S),Darwin)
 $(CODE_PANEL_STENCIL_BENCH_BIN): $(CODE_PANEL_STENCIL_BENCH_SRC) $(FREEGLUT_STATIC_LIB)
 	@mkdir -p $(dir $@)
 	$(CC) -Wall -Wextra -O2 -std=c99 -D_GNU_SOURCE -DGL_SILENCE_DEPRECATION -DFREEGLUT_STATIC \
-	  -I$(FREEGLUT_SRC)/include $< \
+	  -I$(FREEGLUT_INCLUDE_DIR) $< \
 	  $(FREEGLUT_STATIC_LIB) -lm \
 	  -framework IOKit -framework Cocoa -framework OpenGL -framework CoreVideo -o $@
 
@@ -2631,7 +2685,7 @@ ifeq ($(FREEGLUT_VENDOR_LINUX),1)
 $(CODE_PANEL_STENCIL_BENCH_BIN): $(CODE_PANEL_STENCIL_BENCH_SRC) $(FREEGLUT_STATIC_LIB)
 	@mkdir -p $(dir $@)
 	$(CC) -Wall -Wextra -O2 -std=c99 -D_GNU_SOURCE -DFREEGLUT_STATIC \
-	  -I$(FREEGLUT_SRC)/include $< \
+	  -I$(FREEGLUT_INCLUDE_DIR) $< \
 	  $(FREEGLUT_STATIC_LIB) -lGL -lGLU -lX11 -lXi -lXrandr -lXxf86vm \
 	  -lm -lpthread -ldl -o $@
 else
@@ -2669,7 +2723,7 @@ ifeq ($(UNAME_S),Darwin)
 $(VERTEX_LABEL_BENCH_BIN): $(VERTEX_LABEL_BENCH_SRC) $(FREEGLUT_STATIC_LIB)
 	@mkdir -p $(dir $@)
 	$(CC) -Wall -Wextra -O2 -std=c99 -D_GNU_SOURCE -DGL_SILENCE_DEPRECATION -DFREEGLUT_STATIC \
-	  -I$(FREEGLUT_SRC)/include $< \
+	  -I$(FREEGLUT_INCLUDE_DIR) $< \
 	  $(FREEGLUT_STATIC_LIB) -lm \
 	  -framework IOKit -framework Cocoa -framework OpenGL -framework CoreVideo -o $@
 
@@ -3187,6 +3241,17 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "    coexists with the default build. macOS always vendors and the Linux\n"
 	@printf "    OSMesa build (FREEGLUT_OSMESA=1) vendors unconditionally; neither\n"
 	@printf "    needs this flag. See docs/ADVANCED_USAGE.md > Windowed capture on Linux.\n"
+	@printf "  - FREEGLUT_LIB_PATH=<path/to/libglut.a> links an external static\n"
+	@printf "    freeglut instead of the vendored one - for trying a different\n"
+	@printf "    fork/branch without re-vendoring. Pair it with\n"
+	@printf "    FREEGLUT_INCLUDE_DIR=<path/to/include> whenever that build's\n"
+	@printf "    <GL/freeglut.h> differs from the vendored header (upstream\n"
+	@printf "    freeglut, which lacks the capture declarations, is exactly that),\n"
+	@printf "    e.g. make gl-repl FREEGLUT_LIB_PATH=~/src/freeglut/build/lib/libglut.a\n"
+	@printf "    FREEGLUT_INCLUDE_DIR=~/src/freeglut/include. Nothing is built from\n"
+	@printf "    third_party/freeglut; separate build/*-fgext objdir. On Linux it\n"
+	@printf "    implies FREEGLUT_VENDOR_LINUX=1 (archive by path, no -lglut).\n"
+	@printf "    See docs/ADVANCED_USAGE.md > External freeglut.\n"
 	@printf "  - GLR_AUDIO_NO_THREAD=1 (e.g. make gl-repl CFLAGS=-DGLR_AUDIO_NO_THREAD=1)\n"
 	@printf "    drops the audio background worker thread: the playlist lifecycle ops\n"
 	@printf "    (file open/uninit, state save) run synchronously, drained from\n"

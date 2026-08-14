@@ -432,6 +432,38 @@ without recompiling each other. macOS always vendors and needs no flag; the
 Linux **OSMesa** build (`FREEGLUT_OSMESA=1`) vendors unconditionally, since
 system freeglut has no OSMesa backend.
 
+### External freeglut (`FREEGLUT_LIB_PATH`)
+
+To try a freeglut that is *not* the vendored one - a local fork, another
+branch, a distro build - point the build at its static archive instead of
+re-vendoring:
+
+```bash
+make gl-repl \
+  FREEGLUT_LIB_PATH=~/src/freeglut/build/lib/libglut.a \
+  FREEGLUT_INCLUDE_DIR=~/src/freeglut/include
+```
+
+The path replaces the vendored archive everywhere it is used (the binary, the
+tests, the GL benches, `make render3d-hot`), and nothing under
+`third_party/freeglut/` is built or consulted for it - if the file is missing,
+the build stops with that message rather than running CMake. `make
+freeglut-clean` still cleans the vendored build dir.
+
+**Headers do not follow the archive.** `FREEGLUT_INCLUDE_DIR` defaults to the
+vendored `third_party/freeglut/include`, so set it whenever the external
+build's `<GL/freeglut.h>` differs - upstream freeglut is exactly that case,
+since its header lacks the fork's capture declarations. Objects go to a
+separate `build/<cfg>-fgext/` tree so they never mix with vendored-header
+objects.
+
+Everything the archive does not carry itself still comes from the platform link
+line (macOS frameworks, X11 libs on Linux), so the external build has to be a
+**static** freeglut for the same backend as the arm you are building - Cocoa on
+macOS, X11/GLX for a windowed Linux build, OSMesa under `FREEGLUT_OSMESA=1`. On
+Linux the flag implies `FREEGLUT_VENDOR_LINUX=1` (archive by path, no
+`-lglut`).
+
 ### Re-pinning vendored freeglut
 
 The in-tree vendored freeglut already carries the OSMesa backend and the native

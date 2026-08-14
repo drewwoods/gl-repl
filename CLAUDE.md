@@ -94,7 +94,10 @@ gitignored, survives `make clean`).
   `VENDORED.txt`; `FREEGLUT_REPO=<url-or-path>` accepts a local fork), then
   `make freeglut-clean`. The pinned tree carries the fork's OSMesa backend
   *and* the SIGUSR1/record capture support on all backends - no re-vendor
-  needed for capture work.
+  needed for capture work. `FREEGLUT_LIB_PATH=<libglut.a>` (+
+  `FREEGLUT_INCLUDE_DIR=<dir>` when its headers differ) links an **external**
+  static freeglut instead - own `build/*-fgext` objdir, no cmake, nothing built
+  from `third_party/freeglut`.
 - **Windowed Linux capture**: `make gl-repl FREEGLUT_VENDOR_LINUX=1` links the
   vendored static freeglut (X11/GLX) instead of the distro's `-lglut`. Needed
   for capture on Linux - system freeglut has no capture hooks, so SIGUSR1 /
