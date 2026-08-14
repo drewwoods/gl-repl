@@ -1,567 +1,438 @@
 # `examples/scenes` Consistency Review
 
-## Status - NOT STARTED (2026-08-13)
+## Status - CONSOLIDATED REVIEW (2026-08-14)
 
-A read-only consistency pass over the 40 shipped `.glr` scenes in
-`examples/scenes/`, plus `examples/catalog.ini` and
-`examples/catalog-emscripten.ini`, against filename conventions, comment
-tone, code style, scene structure, and naming accuracy.
+This is a read-only review of the 40 shipped `.glr` scenes in
+`examples/scenes/`, both example catalogs, the user-facing example lists,
+showcase links, capture selectors, exact-name test lookups, and the generated
+example goldens. No scene or catalog change has been implemented yet.
 
-No files were changed. Every claim below was checked mechanically (catalog
-slug comparison, golden-vs-source diff, per-convention greps, independent audit
-across all 40 built-in scenes and 88 test scenes in `tests/scenes/`) and cites the
-files it came from.
+The collection is already coherent. Its useful variation follows the catalog
+groups: Basics and Functions are compact, GL-state examples are more didactic,
+and Showcase scenes allow longer narrative and implementation comments. A
+cleanup pass is warranted, but it should concentrate on names and source text
+that visibly disagree with the collection's own conventions. It should not
+rewrite scene personalities or force every file into one comment template.
 
-## Independent Assessment & Peer Review
-
-An independent re-assessment was conducted across the entire example collection
-and test corpora to evaluate the initial review findings:
-
-1. **Underscore vs Hyphen filenames (Finding 1):** Verified. Across all 128 `.glr`
-   scenes in the repository (40 in `examples/scenes/`, 60 in `tests/scenes/general/`,
-   28 in `tests/scenes/stress/`), exactly three files use underscores:
-   `lantern_festival.glr`, `pulse_bars_easing.glr`, and
-   `stencil_mask_window_glstencilop.glr`. All 88 test scenes and 37 other example
-   scenes use kebab-case. Renaming these three brings the entire repository to 100%
-   kebab-case uniformity.
-2. **Whitespace / Keyword syntax (Finding 2):** Verified. REPL's parser/serializer
-   strictly normalizes `for(` and `if(` without spaces and strips `f` suffixes from
-   float literals in geometry code. Aligning source to disk eliminates confusing
-   visual diffs between source files and the interactive REPL code panel.
-3. **GL state & effects naming (Finding 3):** Verified. In `examples/catalog.ini`,
-   all 5 scenes in `group = GL state & effects` display parenthesized GL entry
-   points (`(glClipPlane)`, `(glFog)`, `(glStencilOp)`, `(glMultMatrixf)`,
-   `(glDepthMask translucency)`), but only 3 filenames reflect the command.
-   Renaming `clip-planes-carve-solids.glr` → `clip-planes-carve-solids-glclipplane.glr`
-   and `fog-ring-tunnel.glr` → `fog-ring-tunnel-glfog.glr` completes the 1:1
-   `filename == slug(catalog name)` mapping and maximizes `grep` discoverability.
-4. **Stale Section ID (Finding 4):** Verified. `[snowfall-demo-550-particles]` is the
-   sole section ID embedding a mutable particle count and a redundant "demo" tag.
-5. **Casing Inconsistencies (Findings 5 & 6):** Verified. `aurora-observatory` mixes
-   `dishAz` and `cycle_length` within lines 11–13. `orrery` is the only scene using
-   `SCREAMING_CASE` for `@tune` knobs (`ASTEROIDS`, `EARTH_R`, `EARTH_RATE`,
-   `ORB_BASE`, `ORB_SCALE`), which directly leaks uppercase identifiers into the
-   user-facing REPL variable panel.
-6. **Compound Array Literals (Finding 7):** Verified. `glPointParameterfv` in
-   `glow-sprites` and `lantern_festival` are the only 2 calls passing flat floats
-   rather than `(GLfloat[]){...}`, causing silent REPL load rewriting.
-7. **Clear Color Invariant (Finding 11):** Verified. `test_example_clear_color_precedes_clear`
-   in `tests/test_repl_core_examples.c` guards with `if (last_clear_color >= 0)`,
-   allowing `teapot-carousel` and `whale` to bypass the check entirely. Adding an
-   explicit clear color or documented canvas ownership comment resolves this gap.
-
-**Verdict on Peer Review:** All 14 findings are confirmed accurate, high-signal,
-and conservative. No unjustified homogenizing changes are proposed, preserving the
-personality and pedagogical voice of individual scenes.
-
-## Verdict first
-
-**The collection is in good shape.** It reads as one curated set, not a
-grab-bag, and the structural conventions are unusually well kept:
-
-- **Scene skeleton is near-universal.** 38 of 40 scenes run
-  `func defs → @camera block → glClearColor → glClear → GL state → geometry`
-  with `glClearColor` and `glClear` on adjacent lines. Every scene that
-  defines functions puts all of them above the camera block. There is no
-  ordering cleanup to do.
-- **Filename ↔ catalog coupling is real and mostly honoured.** For 32 of 40
-  entries, `filename stem == section id == kebab-slug(catalog name)` exactly.
-  That is a genuine, derived convention, not one worth inventing.
-- **The variant-suffix families are exemplary.** `animated-wave-surface` /
-  `-analytic-normals` and `glu-concave-arrow` / `-cutout` / `-extrusion` both
-  use bare-base + descriptive-suffix, and both sets read in an obvious order.
-  These are the precedent other groups should be measured against.
-- **The palette rollout is already tracked.** Off-palette scenes are on the
-  remove-only ratchet in `scripts/baselines/palette-coverage.txt`; that
-  process needs no help from this review.
-- **Deliberate variation is genuinely deliberate.** The stencil scene's
-  `glStencilMask(255)` / `glColorMask(0, 0, 0, 0)` are documented on the line
-  itself as teaching the reverse-mapping; the second-person voice clusters in
-  the "GL state & effects" group where the scenes are explicitly didactic;
-  `jellyfish` shadows globals with parameters and says so. None of that is
-  drift.
-
-What follows is the residue: places where the set has two conventions for one
-thing, or where a name points at the wrong feature.
+All 40 scenes currently pass `scripts/format_scenes.py --check`; both catalogs
+pass `scripts/gen_examples.py --check`. The findings below therefore concern
+collection-level naming and canonical source spelling, not a broken formatter
+or catalog.
 
 ---
 
+## Decisions after comparing the prior reviews
+
+The prior reviews correctly identified the three underscore filenames, the
+stale snowfall section ID, and the places where a permissive input spelling is
+rewritten before appearing in the code panel.
+
+This assessment changes four conclusions:
+
+1. **Drop generic `animated` labels from the spirograph, wave-surface, and
+   torus-knot examples.** Keep `animated-ring-for-t.glr`: it is the Basics
+   example whose subject is the first-animation mechanism (`for + t`). In the
+   other three conceptual examples, animation is neither a useful family name
+   nor a discriminator; many neighboring scenes animate without saying so.
+2. **Drop `(glFog)` from the catalog name, but do not add `-glfog` to the
+   filename.** The scene calls `glFogi`, `glFogf`, and `glFogfv`; there is no
+   exact `glFog()` command in the REPL. “Fog ring tunnel” already names the
+   effect, while the scene comments and Showcase caption retain API
+   discoverability.
+3. **If the recursive-tree name is cleaned up, use
+   `3d-tree-func-recursion`, not `tree-3d-func-recursion`.** “3D tree” is the
+   natural subject and the proposed filename remains the exact slug of the
+   catalog name. The stronger collection rule is filename/section/name
+   agreement, not forcing the dimension behind every possible subject.
+4. **Do not add `glClearColor` to teapot carousel or whale merely for
+   uniformity.** The renderer explicitly establishes
+   `CFG_DEFAULT_CLEAR_{R,G,B,A}` before a program walk, and the exporter has a
+   matching default setup. Their bare `glClear` is deterministic and
+   supported. They are structural exceptions, not broken scenes.
+
+---
 
 ## Findings
 
-Ranked by (cost of leaving it) × (cheapness of fixing it). 1-4 are worth
-doing as a batch; 5-9 are worth doing when the file is already open; 10-14 are
-recorded for the record and may well be left alone.
+The first five findings form a worthwhile cleanup pass. Findings 6-8 are
+lower-priority and should only join that pass if the additional name/reference
+churn is acceptable.
 
----
+### 1. Three filenames use underscores while every other `.glr` file uses hyphens
 
-### 1. Three scene files use underscores; 37 use hyphens
+**Files**
 
-**Files.** `lantern_festival.glr`, `pulse_bars_easing.glr`,
-`stencil_mask_window_glstencilop.glr`
+- `lantern_festival.glr`
+- `pulse_bars_easing.glr`
+- `stencil_mask_window_glstencilop.glr`
 
-**What.** Every other scene file in the directory is kebab-case. These three
-are snake_case — and, tellingly, **their own catalog section IDs are already
-hyphenated**:
+**Inconsistency.** The other 37 built-in scenes use kebab-case. These three
+catalog entries already use the intended hyphenated section IDs:
+`[lantern-festival]`, `[pulse-bars-easing]`, and
+`[stencil-mask-window-glstencilop]`. They are also the only `.glr` filenames
+anywhere in the repository that contain underscores; the test-scene corpora
+use hyphens too.
 
-| section id | file on disk |
+**Why it matters.** This is the clearest different-era marker in the folder.
+It affects tab completion, path prediction, and the otherwise strong
+filename/section-ID relationship.
+
+**Smallest change.** Rename only the files to the existing section-ID spelling,
+then update `file =` in both catalogs and the affected Showcase links. Do not
+lengthen `lantern-festival` with its long catalog-only technique list.
+
+**Precedent.** The other 37 filenames and these entries' own section IDs.
+
+### 2. `animated` is applied inconsistently to three visual subjects
+
+**Files and catalog names**
+
+| Current | Recommended |
 |---|---|
-| `[lantern-festival]` | `scenes/lantern_festival.glr` |
-| `[pulse-bars-easing]` | `scenes/pulse_bars_easing.glr` |
-| `[stencil-mask-window-glstencilop]` | `scenes/stencil_mask_window_glstencilop.glr` |
+| `animated-spirograph-curve.glr` / “Animated spirograph curve” | `spirograph-curve.glr` / “Spirograph curve” |
+| `animated-wave-surface.glr` / “Animated wave surface” | `wave-surface.glr` / “Wave surface” |
+| `animated-wave-surface-analytic-normals.glr` / “Animated wave surface (analytic normals)” | `wave-surface-analytic-normals.glr` / “Wave surface (analytic normals)” |
+| `torus-knot-animated.glr` / “Torus knot (animated)” | `torus-knot.glr` / “Torus knot” |
 
-The catalog already states the intended name; only the filename disagrees.
-The `tests/scenes/general/` corpus independently uses
-`stencil-mask-window.glr` for its own stencil scene, so the hyphen form is the
-house convention on both sides of the tree.
+This is three conceptual examples; the wave surface has a base and an
+analytic-normal variant, so four files move.
 
-**Why it matters.** These are the clearest "different era" marker in the
-directory — a tab-completing or `ls`-scanning reader hits two shell-word
-conventions in one folder. It is also the one inconsistency where the fix is
-purely mechanical and provably intent-preserving, because the desired string
-is already written down three lines away.
+**Inconsistency.** Animation appears as a prefix for spirograph and wave, as a
+suffix for torus knot, and nowhere in the names of many other animated scenes
+(`traveling-ripple-ring`, `snowfall-particles`, `fog-ring-tunnel`,
+`planar-shadows-glmultmatrixf`, and most Showcase scenes). It therefore does
+not form a reliable browsing family or distinguish animated from static
+content.
 
-**Smallest change.** `git mv` each to the hyphenated form, update the `file =`
-line in both `catalog.ini` and `catalog-emscripten.ini`, and fix the three
-links in `docs/SHOWCASE.md:436,488,540`. Section IDs already match, so catalog
-order and the index-keyed goldens are untouched. Re-run
-`make check-examples-catalog`.
+**Why it matters.** The generic adjective pushes the actual visual subject
+later in alphabetical/path scanning, and the prefix/suffix split makes the
+three related naming decisions look unrelated. Dropping it also makes the
+existing base/variant pair read more cleanly:
+`wave-surface` / `wave-surface-analytic-normals`.
 
-**Precedent.** The 37 hyphenated filenames, and these entries' own section IDs.
+**Smallest change.** Apply the four file/section/name changes above and update
+exact-name consumers. Keep `animated-ring-for-t.glr` and “Animated ring
+(for + t)” unchanged: unlike the others, it sits in Basics and explicitly
+introduces animation through the predefined `t` variable. Its adjective is
+the lesson, not a generic property of the rendering.
 
----
+**Precedent.** Subject-first names throughout the catalog, the Showcase tiles
+already titled “Torus knot,” and the bare-base + descriptive-suffix structure
+of the GLU-arrow family.
 
-### 2. `for (` / `if (` spacing in three files is rewritten before it ships
+### 3. “Fog ring tunnel (glFog)” is redundant and names no exact REPL command
 
-**Files.** `lantern_festival.glr` (7 sites), `snowfall-particles.glr` (1),
-`bezier-curve-with-guides.glr` (1)
+**Files.** `examples/catalog.ini`, `examples/catalog-emscripten.ini`, and
+user-facing references to the exact display name.
 
-**What.** 26 scenes write `for(i, ...)`. These three write `for (i, ...)`, and
-`lantern_festival.glr:144` also writes `if (mirror > 0.5)`. The REPL
-canonicalizes the spacing on load, so the shipped text differs from the file:
+**Inconsistency.** The filename is already the concise, accurate
+`fog-ring-tunnel.glr`, but the catalog appends `(glFog)`. The scene actually
+demonstrates the `glFogi`, `glFogf`, and `glFogfv` family. By contrast,
+parentheticals such as `(glClipPlane)`, `(glStencilOp)`, and
+`(glMultMatrixf)` name exact calls, while `(glDepthMask translucency)` names
+both an exact call and the technique it enables.
 
-```
-disk  (lantern_festival.glr:183)          ships (32.golden.txt:272)
-for (i, 0, lanterns) {                 →  for(i, 0, lanterns) {
-if (mirror > 0.5) {                    →  if(mirror > 0.5) {
-```
+**Why it matters.** The qualifier does not improve discovery—the subject
+already says fog—and it looks like an exact command name even though no
+`glFog()` spelling exists. The Showcase already uses the cleaner visible
+title “Fog ring tunnel” and explains the `glFog*` mechanism in its subcaption.
 
-`bezier-curve-with-guides.glr:49` carries the same problem twice over —
-`for (u, 0, 1, 0.01f)` ships as `for(u, 0, 1, 0.01)`. Canonical REPL text
-carries no `f` suffix (`repl_load_apply_line` strips it), so the suffix is
-also non-canonical; it is the only stray `f` suffix in scene geometry.
+**Smallest change.** Change only the catalog display name to “Fog ring tunnel”
+in both catalogs and update exact-name selectors, the User Guide list, and
+goldens. Keep the filename and section ID as `fog-ring-tunnel`. Do not add
+`-glfog` or `-glclipplane` filename suffixes.
 
-**Why it matters.** This is not a style preference — it is the file on disk
-disagreeing with the code panel the user actually reads in the app. Anyone
-copying a line out of the source and comparing it to the running scene sees a
-mismatch, and the divergence is invisible until you diff against a golden.
+**Precedent.** Catalog-only mechanism detail is already allowed when the
+filename's subject is sufficient (`lantern-festival` is the clearest example),
+and Showcase titles put the visual subject first while retaining API detail
+below it.
 
-**Smallest change.** Delete 9 spaces and one `f`. No behavior change, no
-golden churn (the goldens already record the canonical form).
+### 4. Snowfall's section ID contains stale, mutable detail
 
-**Precedent.** The 26 scenes using `for(`, and the goldens themselves.
+**Files.** The `[snowfall-demo-550-particles]` entry in both catalogs.
 
----
+**Inconsistency.** The file and display name are `snowfall-particles.glr` and
+“Snowfall particles,” but the section ID adds both `demo` and the current
+`flakeCount` value. After the underscore renames, it is the only section ID
+that does not match its filename stem for accidental rather than abbreviated
+or catalog-only reasons.
 
-### 3. The "GL state & effects" group names its GL command in 3 of 5 filenames
+**Why it matters.** `flakeCount` is a `@tune` knob, so `550` can become false
+without touching the catalog. Stable identifiers should describe the example,
+not freeze a mutable setting.
 
-**Files.** `clip-planes-carve-solids.glr`, `fog-ring-tunnel.glr` (no command)
-vs `planar-shadows-glmultmatrixf.glr`,
-`jellyfish-gldepthmask-translucency.glr`, `stencil_mask_window_glstencilop.glr`
-(command present)
+**Smallest change.** Use `[snowfall-particles]` in both catalogs. The generated
+C symbol changes, but section IDs are not exposed in the runtime example
+entry; catalog order and index-keyed fixture positions stay unchanged. Align
+the stale “Snowfall demo (550 particles)” wording in
+`docs/images/showcase/README.md` if it is intended as a scene title rather than
+a capture description.
 
-**What.** This group has a visible sub-convention — `<effect>-<glcommand>` —
-and the catalog names apply it to all five:
+**Precedent.** The filename stem and display name already agree on “Snowfall
+particles.”
 
-| catalog name | filename carries the command? |
-|---|---|
-| Clip planes carve solids **(glClipPlane)** | no |
-| Fog ring tunnel **(glFog)** | no |
-| Stencil mask window (glStencilOp) | yes |
-| Planar shadows (glMultMatrixf) | yes |
-| Jellyfish (glDepthMask translucency) | yes |
+### 5. Several source spellings are rewritten before users see the scene
 
-So the intent is already recorded in the catalog for all five; two filenames
-just do not carry it.
+**Files and inconsistencies**
 
-**Why it matters.** This is the group where the GL command *is* the reason the
-scene exists, and it is the thing someone greps for. `grep -l glclipplane
-examples/scenes/` finds nothing by name today. Within a five-scene group, a
-3/2 split is the difference between "a family" and "some files that happen to
-be adjacent."
+- `lantern_festival.glr`, `snowfall-particles.glr`, and
+  `bezier-curve-with-guides.glr` contain nine total `for (` / `if (` sites;
+  loaded code uses `for(` / `if(`.
+- Bezier's `0.01f` loop step is shown as `0.01`; canonical REPL expression text
+  does not retain the suffix.
+- `glow-sprites-blend-point-attenuation.glr` and `lantern_festival.glr` use the
+  accepted flat shorthand for `glPointParameterfv`; the loader presents the
+  argument as `(GLfloat[]){...}`.
+- The two `gluColor` sites in `dusk-lighthouse-atoll-stress-test.glr` omit
+  alpha; the loader presents them with an explicit fourth argument of `1`.
 
-**Smallest change.** Rename two files to `clip-planes-carve-solids-glclipplane.glr`
-and `fog-ring-tunnel-glfog.glr`, matching the slug of their existing catalog
-names; update section IDs and both catalogs to match. If the longer names are
-judged unwieldy, the equally-consistent alternative is to drop `(glClipPlane)`
-/ `(glFog)` from the two catalog names — but pick one direction for the group
-rather than leaving the split.
+**Why it matters.** These are not requests to prefer one valid style over
+another. The repository source and the code panel show different text for the
+same built-in example, which complicates copying, review, and golden diffs.
+Built-in sources should normally use their own loader's canonical spelling.
 
-**Precedent.** The three siblings that already do it, and these two entries'
-own catalog names.
+**Smallest change.** Delete the keyword spaces and the one `f`; wrap the two
+point-attenuation vectors in `(GLfloat[]){...}`; add `, 1` to the two
+three-component `gluColor` calls. No rendered behavior should change, and the
+existing goldens should already contain these canonical forms.
 
----
+**Precedent.** The code-panel goldens, the 26 scenes already using `for(`, the
+four-component `gluColor` calls in the GLU-arrow family, and the compound
+literals used for other vector-valued GL commands.
 
-### 4. `snowfall` carries a stale section ID naming a count and a "demo"
+### 6. The recursive-tree sibling repeats its construct and orders the name awkwardly
 
-**File.** `examples/catalog.ini:154`, `catalog-emscripten.ini:158`
+**Files.** The three consecutive Recursion entries:
 
-**What.** The section ID is `[snowfall-demo-550-particles]`; the file is
-`snowfall-particles.glr` and the name is `Snowfall particles`. It is the only
-section ID in the catalog that does not equal its filename stem apart from the
-three underscore cases in finding 1, and the only identifier anywhere in the
-set that hardcodes a magic number.
+- `sierpinski-carpet-2d-recursion.glr`
+- `sierpinski-sponge-3d-recursion.glr`
+- `recursive-3d-tree-func-recursion.glr`
 
-**Why it matters.** Section IDs are stable IDs, so a stale one is cheap to
-leave — but it is also the one place a reader looks to confirm a file's
-identity, and "550" invites a future edit to `flakeCount` to silently falsify
-it. `docs/images/showcase/README.md:23` already repeats the stale
-"Snowfall demo (550 particles)" phrasing.
+**Inconsistency.** The first two use one occurrence of `recursion` as the
+mechanism qualifier. The third says both `recursive` and `recursion` and is
+the longest, least scannable member of the group.
 
-**Smallest change.** Rename the section to `[snowfall-particles]` in both
-catalogs. Nothing keys off section IDs — the goldens are index-keyed and the
-grep confirms no test or source file references this string — so this is a
-two-line edit. Optionally align `docs/images/showcase/README.md:23`.
+**Why it matters.** Differences inside a three-entry catalog family are more
+visible than differences between unrelated scenes. Here the repeated construct
+does not add meaning; `func` is the useful discriminator because this scene
+specifically demonstrates a recursive named function with arguments.
 
-**Precedent.** The other 36 section IDs, which equal their filename stems.
+**Smallest change.** If this rename joins the cleanup, use
+`3d-tree-func-recursion.glr` and “3D tree (func + recursion).” This removes one
+word while keeping the exact filename/section/name slug relationship. Do not
+use `tree-3d-func-recursion`: it mimics the Sierpinski filename order at the
+cost of the less natural subject “tree 3D” and a new catalog/filename mismatch.
 
----
+**Precedent.** The catalog's dominant `<subject> (<mechanism>)` presentation
+and exact slug coupling. This is lower priority than findings 1-5 because the
+current name is still accurate.
 
-### 5. `aurora-observatory` mixes camelCase and snake_case in one declaration block
+### 7. Aurora mixes camelCase and snake_case in one small state block
 
-**File.** `aurora-observatory-dish-tracks-sky.glr:11-13`
+**File.** `aurora-observatory-dish-tracks-sky.glr`.
 
-**What.** Multi-word scene variables are camelCase in 11 files (`fogDensity`,
-`flakeCount`, `bladeCount`, `blowHoleX`, `orbitRate`, `marineSnow`, `tentLen`,
-`ringZ`, `spinRate`, `flyRadius`, …) and snake_case in 4
-(`step_size`, `z_phase`, `slope_x0`, `x_a`). Aurora uses **both, three lines
-apart**:
+**Inconsistency.** `dishAz` and `cycle_length` are declared three lines apart.
+Cross-file variation exists and can be intentional—the wave pair, for example,
+uses internally consistent mathematical names such as `z_phase` and
+`slope_x0`—but Aurora mixes the forms for two ordinary scene-state values.
 
-```c
-static float dishAz;                // dish azimuth, degrees
-static float cycle_length = 30;     // seconds per dome shutter cycle
-```
+**Why it matters.** Within-file consistency helps readers distinguish naming
+semantics from historical drift. There is no apparent semantic distinction
+between these two names that the casing communicates.
 
-**Why it matters.** Cross-file variation is defensible; within one declaration
-block it just reads as an oversight. Aurora is also a Showcase scene, so it is
-one of the first files a reader opens.
+**Smallest change.** Rename `cycle_length` to `cycleLength` in its declaration,
+three uses/comment references, and nowhere else.
 
-**Smallest change.** Rename `cycle_length` → `cycleLength` in that one file
-(4 occurrences). Leave the two wave-surface scenes and `bezier` alone —
-`step_size` / `slope_x0` / `x_a` are internally consistent per file and
-`slope_x0`/`slope_z1` genuinely read better with the separator.
+**Precedent.** `dishAz` in the same block and the broader Showcase use of
+camelCase (`flyRadius`, `marineSnow`, `spinRate`, `orbitRate`). This is safe but
+opportunistic, not a reason for a standalone pass.
 
-**Precedent.** camelCase, on an 11-to-4 file split, and `dishAz` in the same block.
+### 8. Orrery's tunables are the only variable-panel names in SCREAMING_CASE
 
----
+**File.** `orrery-labels-track-3d-orbits.glr`.
 
-### 6. `orrery` is the only scene using SCREAMING_CASE for panel-visible knobs
+**Inconsistency.** `ASTEROIDS`, `EARTH_R`, `EARTH_RATE`, `ORB_BASE`, and
+`ORB_SCALE` are tagged `@tune`, so they appear in the variable panel. No other
+panel-visible tunable is all-caps. Most use camelCase or short lowercase names;
+the wave pair's `z_phase` shows that snake_case also exists, but not constant
+style.
 
-**File.** `orrery-labels-track-3d-orbits.glr:10,17-20`
+**Why it matters.** This difference is user-visible, not confined to a
+scientific helper. On the other hand, the uppercase notation makes Orrery's
+formula-heavy comments resemble conventional orbital tables, so it also
+supports that scene's personality.
 
-**What.** `ASTEROIDS`, `EARTH_R`, `EARTH_RATE`, `ORB_BASE`, `ORB_SCALE` — all
-tagged `// @tune`. Every other `@tune` knob in the collection is camelCase or
-a short lowercase word: `fogDensity`, `bladeCount`, `waterDroplets`,
-`marineSnow`, `tentLen`, `flakeCount`, `depth`, `len`, `rad`, `rise`,
-`spread`, `bright`.
+**Smallest change.** If panel consistency is judged more important, rename the
+five to `asteroids`, `earthR`, `earthRate`, `orbBase`, and `orbScale`, including
+formula comments. Otherwise leave them deliberately; do not touch internal
+orbital-element parameters such as `Drel`, `Yrel`, or `Ldot`.
 
-**Why it matters.** `@tune` variables are surfaced in the **variable panel**,
-so this is user-visible, not internal. A user cycling scenes with the panel
-open reads `fogDensity`, then `bladeCount`, then `EARTH_RATE` — the naming
-style changes under them for no reason they can see.
-
-**Smallest change.** Lowercase the five to `asteroids`, `earthR`, `earthRate`,
-`orbBase`, `orbScale`. Note this touches ~25 reference sites plus four prose
-comment blocks that name `ORB_BASE`/`ORB_SCALE`/`EARTH_RATE` in formulas, so
-it is a bigger edit than its rank suggests — reasonable to defer until the
-file is open for another reason.
-
-**Precedent.** The 13 other scenes carrying `@tune` knobs.
-
----
-
-### 7. `glPointParameterfv` is the one array-argument call spelled without the cast
-
-**Files.** `glow-sprites-blend-point-attenuation.glr:31`,
-`lantern_festival.glr:176`
-
-**What.** Array-argument GL calls in the collection use a bracketed cast —
-`glMaterialfv` 25 times, `glClipPlane` 9, `glFogfv` 1, all
-`(GLfloat[]){…}` / `(GLdouble[]){…}`. The two `glPointParameterfv` calls pass
-bare arguments, and the REPL rewrites them on load:
-
-```
-disk : glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 0.2, 0, 0.15);
-ships: glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){0.2, 0, 0.15});
-```
-
-**Why it matters.** Same class as finding 2 — the disk text is not what the
-app shows — plus these two lines are the only place a reader learns the
-command's shape, and they teach the non-canonical spelling of it.
-
-**Smallest change.** Wrap both argument lists in `(GLfloat[]){…}`.
-
-**Precedent.** The 35 other array-argument calls.
+**Precedent.** All other `@tune` rows support the lowercase/camelCase option;
+Orrery's scientific voice supports leaving it alone. This review does not put
+the rename in the recommended cleanup batch.
 
 ---
 
-### 8. "Animated" is a prefix three times and a suffix once
+## Differences examined and intentionally left alone
 
-**File.** `torus-knot-animated.glr`
-
-**What.** `animated-ring-for-t`, `animated-spirograph-curve`,
-`animated-wave-surface` — then `torus-knot-animated`. Catalog names follow the
-files: three `Animated X`, one `Torus knot (animated)`.
-
-**Why it matters.** All four sit in the two adjacent catalog groups
-("Curves & plots", "Surfaces & tessellation"), so they appear near each other
-in the Scene menu, where alphabetical-ish scanning makes the odd one out
-visible. It also breaks the qualifier convention: parenthesised qualifiers
-elsewhere name a *mechanism* (`(for + t)`, `(nested for)`,
-`(analytic normals)`, `(scratch arrays)`), not an adjective already available
-as a prefix.
-
-**Smallest change.** Rename to `animated-torus-knot.glr` / `Animated torus
-knot`, with matching section ID.
-
-**Precedent.** The three `animated-*` files.
-
----
-
-### 9. The recursion trio orders its concepts three different ways
-
-**Files.** `sierpinski-carpet-2d-recursion.glr`,
-`sierpinski-sponge-3d-recursion.glr`, `recursive-3d-tree-func-recursion.glr`
-
-**What.** Two siblings are `<subject>-<dim>-recursion`:
-
-- `sierpinski-carpet-2d-recursion` → "Sierpinski carpet (2D recursion)"
-- `sierpinski-sponge-3d-recursion` → "Sierpinski sponge (3D recursion)"
-
-The third fronts the construct and then repeats it: `recursive-3d-tree-func-recursion`
-→ "Recursive 3D tree (func + recursion)". "Recursive" and "recursion" both
-appear; the dimension tag has moved from the qualifier into the subject.
-
-**Why it matters.** This is a three-member group in its own catalog `group =
-Recursion`, listed consecutively in the Scene menu. It is exactly the case
-where an ordering difference reads as accidental rather than expressive, and
-the redundancy makes the longest name in the group the least informative.
-
-**Smallest change.** `3d-tree-func-recursion.glr` / "3D tree (func +
-recursion)" — drops the duplicated word, restores `<subject>-<qualifier>`
-order, and keeps `func +` which is the one thing genuinely distinguishing it
-from the two Sierpinski scenes (it is the only one using a recursive
-user-defined function with arguments).
-
-**Precedent.** Its two sibling scenes.
+- **No `-glclipplane` / `-glfog` filename suffixes.** A command suffix is useful
+  when the visual subject would not reveal the API (`planar-shadows`,
+  `stencil-mask-window`, `jellyfish`). `clip-planes` and `fog` already name the
+  concept. Content and Showcase captions provide command-level searchability.
+- **`function-demo-named-func.glr`.** “Demo” is generic, but the primary concept
+  is the named function, not the incidental triangles. Renaming it to
+  `function-triangles-*` would trade pedagogical accuracy for visual naming and
+  does not clear the recommendation bar.
+- **Teapot carousel and whale omit `glClearColor`.** This is supported by the
+  explicit neutral baseline in `src/app/glr_defaults.h`, applied before each
+  program walk. The test deliberately requires ordering only when a scene sets
+  its own clear color. A clarifying source comment is reasonable if either file
+  is already open, but adding a color is not a consistency fix.
+- **`glClearColor` is not adjacent to `glClear` in `glr-logo`, clip planes, and
+  planar shadows.** Those scenes place material/lighting setup between the two
+  intentionally. Thirty-five scenes use adjacent calls; adjacency is a common
+  skeleton, not a semantic rule.
+- **Heading spellings.** `// ===== ... =====` is used for scene/major-phase
+  banners, while `// --- ... ---` is used for setup/helper sections. Aurora's
+  four-dash pass labels and the logo's blank-comment title block are isolated
+  but readable. Do not restyle them solely to make the punctuation uniform.
+- **Trailing-comment alignment.** Several files align comments in the source;
+  the code panel collapses the extra spaces. The alignment is harmless on disk
+  and does not warrant a cleanup pass.
+- **Second-person instructions.** “Tip,” “Things to try,” and draggable-knob
+  guidance cluster in GL-state scenes, where direct instruction is useful.
+  Basics remain terse; Showcase scenes carry more narrative. That variation
+  follows purpose rather than era.
+- **Numeric spelling in colors and camera metadata.** Trailing zeroes are often
+  useful when scanning color triples, and camera blocks are machine-written.
+  Normalizing them would impose a preference without improving discovery.
+- **Scene length and function naming.** The 26-to-458-line range tracks the
+  catalog groups. Noun functions (`triangle`, `carpet`, `limb`) and action
+  functions (`drawSeat`, `computeLifespan`) both read naturally in context.
 
 ---
 
-### 10. `function-demo-named-func` is the only filename whose subject names nothing visual
+## Dominant conventions today
 
-**File.** `function-demo-named-func.glr`
+### Naming
 
-**What.** Its two group siblings name what is drawn or done —
-`function-polygons-args-for`, `function-branching-args-if`. This one names
-"demo". The scene draws three triangles via a named `triangle()` func. "demo"
-is also the only occurrence of that word in any current filename.
+- Kebab-case filenames.
+- The usual relationship is
+  `filename stem == catalog section ID == kebab-slug(display name)`.
+- Display names are normally `<Subject> (<mechanism>)`: the visual or language
+  subject comes first; a construct, technique, or exact GL entry point follows
+  only when it improves identification.
+- Variant families keep a bare base and add a descriptive suffix:
+  `glu-concave-arrow` / `-cutout` / `-extrusion`, and after the recommended
+  cleanup, `wave-surface` / `-analytic-normals`.
+- `-2d`, `-3d`, `-func`, `-recursion`, and GL-command suffixes are
+  disambiguators, not mandatory taxonomy.
+- Generic properties shared by much of the catalog—especially “animated”—are
+  omitted unless they are the actual teaching concept, as in Animated ring.
 
-**Why it matters.** In a menu group of three consecutive entries
-("Function demo", "Function polygons", "Function branching") the first tells
-the reader least, and it is the group's introductory scene — the one a new
-user opens first.
+### Comment tone and presentation
 
-**Smallest change.** `function-triangles-named-func.glr` / "Function triangles
-(named func)".
+The dominant voice is neutral and explanatory. Full prose usually uses normal
+sentence capitalization; short inline annotations and helper descriptions
+often use lowercase fragments. Comments prefer purpose, mechanism, or a useful
+constraint over narrating the next obvious call. Basics and early language
+examples are sparse, GL-state scenes talk directly to the reader, and long
+Showcase scenes explain algorithms and performance-sensitive structure.
 
-**Precedent.** Its two sibling scenes, which name the geometry.
+That is a coherent tiered style. The earlier claim that the collection's
+comments are simply “lowercase” is not supported: comment lines are split
+roughly evenly between sentence-initial uppercase prose and lowercase
+fragments.
 
----
+### Structure and code style
 
-### 11. Two Showcase scenes never set a clear color
+Comparable scenes have a recognizable order:
 
-**Files.** `teapot-carousel-transform-stacks-glow-points.glr`,
-`whale-particle-system-lit-model.glr`
+1. `@cfg` and declarations,
+2. helper functions,
+3. camera block,
+4. clear/background setup,
+5. GL state,
+6. drawing/composition.
 
-**What.** 38 of 40 scenes open with `glClearColor(...)` immediately before
-`glClear(...)`. These two call `glClear` with no `glClearColor` at all. Both
-enable a backdrop, which is presumably the reason — but `ringed-planet`,
-`dusk-lighthouse` and `lantern` also enable backdrops and all three still set
-a clear color.
-
-**Why it matters.** `glClearColor` preceding `glClear` is a documented,
-guarded project invariant (`test_example_clear_color_precedes_clear`), and the
-guard only fires when a clear color exists — so these two sit in the gap
-rather than being blessed by it. A reader learning the rule from the catalog
-meets two counterexamples with no comment explaining them.
-
-**Smallest change.** Either add the canonical
-`glClearColor(0.05, 0.06, 0.08, 1);` above the existing `glClear`, or add a
-one-line comment saying the backdrop owns the canvas. Verify the framing is
-unchanged before committing — this is the one finding with a visible outcome.
-
-**Precedent.** The 38 scenes that set it, including the three backdrop scenes.
-
----
-
-### 12. `dusk-lighthouse` is the only scene calling `gluColor` with three arguments
-
-**File.** `dusk-lighthouse-atoll-stress-test.glr:67,77`
-
-**What.** 23 `gluColor` calls across the GLU scenes pass four arguments; these
-two pass three, and the REPL appends the alpha (`gluColor(0.08, 0.14, 0.20)`
-ships as `gluColor(0.08, 0.14, 0.2, 1)`).
-
-**Smallest change.** Add the explicit `, 1` to both.
-
-**Precedent.** The 23 four-argument calls, all in `glu-concave-arrow*`.
+Functions precede the camera/body in every scene that defines them. Exceptions
+to adjacent clear calls and the two baseline-clear scenes are intentional.
+Indentation is already formatter-clean. Variable naming is mostly internally
+consistent, with Aurora as the clearest accidental mix and Orrery as a
+deliberate scientific-style outlier.
 
 ---
 
-### 13. Two section-heading comment styles, both used inside the same files
+## Recommended implementation scope
 
-**Files.** `// --- X ---` in `glr-logo`, `rotating-cube`, `clip-planes`,
-`pulse_bars`, `stencil`, `aurora`, `dusk-lighthouse`; `// ===== X =====` in
-`aurora`, `dusk-lighthouse`, `ringed-planet`
+### Batch A - warranted
 
-**What.** The dash form (7 files) marks *setup sections* — "Render State",
-"Lighting", "Material Colors", "Pass 1: stamp". The banner form (3 files)
-marks *scene titles* and top-level phases — "Aurora observatory: a lonely dish
-tracking the sky", "Scene composition". `aurora` and `dusk-lighthouse` use
-both.
+1. Hyphenate the three underscore filenames.
+2. Remove generic `animated` from the spirograph, wave pair, and torus knot;
+   retain Animated ring.
+3. Drop `(glFog)` from the Fog ring tunnel display name; do not add command
+   suffixes to the fog or clip-plane filenames.
+4. Rename the snowfall section ID.
+5. Apply the canonical source spellings in finding 5.
 
-**Why it matters.** Read that way the two forms are not actually in conflict —
-they encode two different levels. That is worth **writing down** rather than
-changing, because right now it is a pattern a new scene has to reverse-engineer
-and is as likely to get backwards as right.
+### Batch B - optional while names are already moving
 
-**Smallest change.** One sentence in the `gl-repl-scene-authoring` skill:
-banner `=====` for the scene title/major phase, dashes `---` for setup
-sections. No file edits.
+6. Shorten the recursive-tree entry to `3d-tree-func-recursion`.
+7. Rename Aurora's `cycle_length` to `cycleLength`.
 
----
+Leave Orrery's all-caps tunables unless there is a separate decision to align
+variable-panel labels; that edit is larger and the current notation has a
+scene-specific rationale.
 
-### 14. Column-aligned trailing comments are collapsed before they ship
+### Files that must move together
 
-**Files.** `torus-knot-animated`, `glow-sprites-blend-point-attenuation`,
-`jellyfish`, `lantern_festival`, `orrery`, `parametric-torus-nested-for`
+For file or display-name changes, inspect and update:
 
-**What.** These six align trailing comments into a column; the REPL collapses
-the run of spaces to one:
+- `examples/scenes/*.glr`
+- `examples/catalog.ini`
+- `examples/catalog-emscripten.ini`
+- `docs/USER_GUIDE.md`
+- `docs/SHOWCASE.md`
+- `docs/images/showcase/README.md`
+- `scripts/docs-assets.sh` exact `--example` selectors
+- root `README.md` where it uses an exact example name
+- exact-name lookups in `tests/test_repl_core_examples.c` and
+  `tests/test_repl_flatten_rebake.c`
+- current-name comments/lookups in `bench/bench_repl.c`, benchmark baselines,
+  tours documentation, and pointer-script documentation
+- index-keyed example UI goldens via the supported regeneration target
 
-```
-disk : static float count = 160;       // number of glow points
-ships: static float count = 160; // number of glow points
-```
+Do **not** rename `tests/testdata/camera-order/torus-knot-animated.glr`: it is a
+frozen pre-migration rejection fixture, not the built-in scene. Historical
+plans may retain the old name when describing the state at that time; update
+only links or statements intended to point at the current built-in file.
 
-**Why it matters.** The alignment is invisible to every user of the app, so it
-is effort spent on a view nobody sees — and it makes the *source* look like it
-has a second comment style that the shipped scenes do not have.
-
-**Smallest change.** Do **not** reformat the six files; the alignment is
-harmless and arguably nicer on disk. Add one line to the
-`gl-repl-scene-authoring` skill noting the collapse so nobody invests in
-column alignment on the assumption it survives.
-
----
-
-## Examined and deliberately not raised
-
-- **Numeric trailing zeros** (`glColor3f(0.40, 0.82, 0.50)` shipping as
-  `0.4, 0.82, 0.5`). This affects most of the collection and is the single
-  largest source of source-vs-shipped divergence — but the aligned decimal
-  form is *more* readable in a column of color triples, and normalizing it
-  would be imposing a preference for no reader benefit. Leave it.
-- **`glClearColor(..., 1)` vs `(..., 1.0)`** — an 18/14 split with no dominant
-  form and no visible effect. No precedent to appeal to; not worth a rule.
-- **`glr-logo.glr` vs name "gl-repl logo"**, and
-  `aurora-observatory-dish-tracks-sky` vs "…dish tracks **the** sky". Slug
-  mismatches caused by an established abbreviation and a dropped article. Both
-  benign; renaming would cost more than it returns.
-- **Camera-block literal formats** (`-6.00f` vs `-6.5000f` vs bare `-6`,
-  and the lone `-115f` at `whale-particle-system-lit-model.glr:159`). These are
-  machine-written metadata, hidden in Code Focus mode and rewritten on save.
-  `-115f` was checked and parses correctly — it resolves to `-115.0000f` — so
-  there is no defect here, only three export eras.
-- **Second-person voice** ("Drag `fogDensity`…", "Tip: park the cursor…",
-  "Things to try:"). Concentrated in the GL state & effects group, which is
-  the didactic group. That is a tone matching a purpose, not drift. The
-  "Things to try:" exercise footer in `stencil` is unique in the collection;
-  extending it to `clip-planes` and `fog-ring` would be a content decision,
-  not a consistency fix.
-- **`// leave shared GL state the way we found it`**, present in 3 of the ~6
-  scenes that restore blend/depth-mask state. Worth copying into the others
-  if they are touched; not worth a pass of its own.
-- **Off-palette canvas colors** in `annotated-orbit-plot-labels` (`0.06, 0.07,
-  0.09`) and `clip-planes` (`0.04, 0.05, 0.08`), which look like near-misses of
-  the canonical `0.05, 0.06, 0.08` rather than deliberate moods. Both files are
-  already on the `scripts/baselines/palette-coverage.txt` ratchet, so this is
-  tracked work with an owner; no separate action.
-- **Scene length spread** (26 to 458 lines). Correlates with catalog group —
-  Basics is short, Showcase is long — which is the intended shape.
-
----
-
-## Summary
-
-### Dominant naming convention
-
-Derived from the 32 of 40 entries that already agree:
-
-> **`filename stem` == `section id` == kebab-slug of the catalog `name`**,
-> where the name is `<Subject> (<mechanism>)` — subject first, mechanism in
-> parentheses, dimension tags (`2d`/`3d`) inside the mechanism qualifier.
-
-Mechanism qualifiers name a construct (`args + for`, `nested for`,
-`vars only`, `func + recursion`), a GL entry point (`glMultMatrixf`,
-`glStencilOp`, `glDepthMask`), or a technique (`analytic normals`,
-`scratch arrays`, `blend + point attenuation`). Variants of an existing scene
-extend the base name with a suffix (`-cutout`, `-extrusion`,
-`-analytic-normals`) rather than being renamed.
-
-### Dominant comment/tone style
-
-Lowercase, explanatory, mechanism-first prose in `//` line comments, placed
-directly above the code it explains, with the *why* preferred over the *what*
-("Emit the high-x edge first so the upward-facing triangles are CCW"). Longer
-scenes open with a 3-8 line description block. Em-dash asides use `--`.
-Section headings use `// --- Title ---` for setup groups and
-`// ===== Title =====` for the scene title. The didactic group additionally
-addresses the reader directly and names draggable knobs in backticks.
-
-### Clear outliers
-
-1. The three underscore filenames — `lantern_festival`, `pulse_bars_easing`,
-   `stencil_mask_window_glstencilop`. These are also the two Showcase files
-   lacking a mechanism qualifier and the three files whose section IDs already
-   disagree with them; they read as a different era of the collection.
-2. `lantern_festival` again, as the only file using `for (` / `if (` throughout.
-3. `orrery`'s SCREAMING_CASE tunables, the only ones in the variable panel.
-4. `recursive-3d-tree-func-recursion`, the only filename naming its construct twice.
-
-### Is a cleanup pass warranted?
-
-**Yes, but a small and mostly mechanical one.** Findings 1-4 are worth doing
-as a single batch: they are ~15 lines of catalog edits, five `git mv`s, three
-doc-link fixes and nine deleted spaces, they need no golden regeneration
-(section IDs and catalog order are preserved), and they remove every outlier
-that makes the directory look like it came from two projects. Finding 11 is
-worth checking visually at the same time.
-
-Findings 5-10 and 12 are real but small; fold them in opportunistically as
-those files are edited. Findings 13-14 are documentation-only — two sentences
-in the `gl-repl-scene-authoring` skill — and are arguably the highest
-value-per-keystroke items here, because they stop the next scene from
-re-introducing the drift.
-
-Nothing in this review calls for rewriting comments or homogenizing scene
-personality. The individual voices are working.
-
-## Verification after any of the above
+### Verification
 
 ```bash
-make check-examples-catalog      # catalog schema + file paths
-make check-palette               # scene literals vs accent_palette.h
-make test-scenes                 # opt-in corpora, includes export/trace parity
-grep -rn "lantern_festival\|pulse_bars_easing\|stencil_mask_window" docs/ examples/
+python3 scripts/format_scenes.py --check examples/scenes/*.glr
+make check-examples-catalog
+make check-user-guide-examples
+make rebuild-golden
+make test-stubs
+make test-scenes
+rg -n "lantern_festival|pulse_bars_easing|stencil_mask_window|snowfall-demo-550|Animated spirograph|Animated wave surface|Torus knot \(animated\)|Fog ring tunnel \(glFog\)" \
+  examples docs scripts tests bench README.md
 ```
+
+The final `rg` should leave only deliberate historical or frozen-fixture
+references. Catalog order should not change, so numeric example positions stay
+stable even though display-name goldens must be regenerated.
+
+---
+
+## Final assessment
+
+The directory already feels like one example collection. The clear outliers
+are the three underscore paths, the inconsistent generic `animated` qualifier,
+the stale snowfall ID, and the handful of non-canonical source spellings.
+`(glFog)` is worth dropping because it is redundant and technically imprecise,
+not because every catalog parenthetical must be removed.
+
+A targeted cleanup is warranted. A broad tone, comment, whitespace, or scene
+structure rewrite is not.
