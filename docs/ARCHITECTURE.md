@@ -592,7 +592,7 @@ backdrop mode, grid and axes theme settings, background colors, and pass
 hooks (`post_fill_fn`, `post_overlays_fn`, `post_resolve_overlays_fn`, buffer viz hooks).
 
 Render3d-local accumulation jitter does not live in the config. Derived
-per-pass data belongs in [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L360), for example camera world position,
+per-pass data belongs in [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L368), for example camera world position,
 camera orientation basis, and other values that helper renderers should share.
 
 ## Render3d Layer
@@ -704,6 +704,7 @@ with - keep this current when adding a theme):
 | Tilled Field | Opaque depth-written terrain - no translucent-line stacking |
 | Sketchbook, Neon Graph | Own alpha fade (`grid_color` xn_alpha); XY-plane 2D themes, not on the radial path |
 | Graph Planes | Own alpha fade (`grid_color` xn_alpha) + per-plane camera-orientation weight; 3D adaptive labelled planes |
+| Checkerboard | Own alpha fade (`grid_color_surface` xn_alpha) on the lit cell fill; its per-cell labels additionally ramp alpha to zero by camera distance and are hard-culled at that same radius. No fog of its own - deliberately alpha, so far strokes dissolve into the square under them rather than toward the sky color |
 
 Open follow-up: Radar, Fog, Tilled Field, Focus, and Adaptive Planes are
 *not* on the world-radial path. Ocean/Frozen are deliberate (they own
@@ -722,7 +723,7 @@ camera looks down -Z. In 3D they render as a vertical wall at z=0;
 filtering theme availability by view mode is a deliberate later step (the
 look was the first goal). Both use the shared scene accent palette, route line
 alpha through `grid_color()` (so the show/hide fade still applies), and
-carry no [`GridThemeSpec`](../src/render3d/grid.c#L147), so [`render3d_grid_theme_uses_edge_fade()`](../src/render3d/grid.h#L55) is
+carry no [`GridThemeSpec`](../src/render3d/grid.c#L153), so [`render3d_grid_theme_uses_edge_fade()`](../src/render3d/grid.h#L55) is
 false and the radial edge-fade machinery is skipped. They live as custom
 arms in `grid_dispatch_theme` in [`src/render3d/grid.c`](../src/render3d/grid.c).
 
@@ -1545,7 +1546,7 @@ include `ui_*` headers.
 
 ### Render3d state access
 
-Target rule: `render3d_*` files consume [`Render3dRenderConfig`](../src/render3d/render_types.h#L139), [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L360),
+Target rule: `render3d_*` files consume [`Render3dRenderConfig`](../src/render3d/render_types.h#L139), [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L368),
 or explicit snapshot structs. They should not call `repl_state_*` directly.
 
 `check-state-boundaries` enforces the current audited boundary.

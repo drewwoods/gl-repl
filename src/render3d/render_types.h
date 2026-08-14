@@ -344,6 +344,14 @@ typedef struct Render3dRenderConfig {
      * so render3d takes the scale and never recomputes it from the color. */
     float alpha_scale;
     float grid_brightness; /* user grid-line alpha multiplier (Grid brightness cfg); 1.0 = no change */
+    /* The same Grid brightness cfg as the *setting* rather than as the derived
+     * line multiplier above (Render3dGridBrightness; peer of grid_extent_idx /
+     * grid_major_idx). A theme wanting its own per-step response - the
+     * Checkerboard floor picks a fill and ink opacity per step - cannot get
+     * there from grid_brightness, whose factors run past 4.0 and are shaped for
+     * scaling faint lines. Out-of-range guards to NORMAL, so a zero-initialized
+     * config reads as DIM by index, not as an error. */
+    int grid_brightness_idx;
 } Render3dRenderConfig;
 
 /* Common rendering quality configuration (MSAA + line smooth). */

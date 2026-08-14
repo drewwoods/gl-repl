@@ -45,7 +45,8 @@ typedef enum Render3dPostFilterMode {
     X(PLANES, "Adaptive Planes") \
     X(SKETCH, "Sketchbook")  \
     X(NEON, "Neon Graph")    \
-    X(GRAPHPLANES, "Graph Planes")
+    X(GRAPHPLANES, "Graph Planes") \
+    X(CHECKER, "Checkerboard")
 
 #define GRID_THEME_ENUM_ENTRY(name, str) GRID_THEME_##name,
 #define GRID_THEME_NAME_ENTRY(name, str) [GRID_THEME_##name] = str,

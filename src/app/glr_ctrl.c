@@ -1806,6 +1806,7 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
     int br_i = presentation.grid_brightness_idx;
     if (br_i < 0 || br_i >= GRID_BRIGHTNESS_COUNT) br_i = GRID_BRIGHTNESS_NORMAL;
     config->grid_brightness = k_grid_brightness_factors[br_i];
+    config->grid_brightness_idx = br_i;
     config->axes_theme = g_axes_xn.current;
     config->axes_opacity = render3d_xn_opacity(&g_axes_xn);
     config->axes_xn_phase = g_axes_xn.phase;

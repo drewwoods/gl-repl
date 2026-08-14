@@ -2146,6 +2146,275 @@ static void render3d_grid_render_graphplanes_theme(const Render3dRenderConfig *c
     glLineWidth(1.0f);
 }
 
+/* ===========================================================================
+ * Checkerboard: a lit, solid-fill floor with a coordinate label per cell
+ *
+ * Unlike every other grid theme this one is a *surface*, not a line drawing:
+ * major cells alternate between two flat tones and are filled as quads with an
+ * upward normal, drawn under the program's own enabled light slots - so the
+ * floor takes the scene's key/fill exactly like user geometry does instead of
+ * carrying its own baked shading. It stays translucent so geometry behind it
+ * still reads - and how translucent is the **Grid brightness** setting, which
+ * drives the fill's alpha through grid_checker_fill_alpha (Dim is a ghost of a
+ * floor, Bold is solid) as well as the label ink's, the usual way.
+ *
+ * Each cell carries its own "x,z" label in GLUT stroke glyphs, laid flat in the
+ * cell and sized to fit inside it (GRID_CHECKER_LABEL_HEIGHT, shrunk further
+ * when the digits would overrun GRID_CHECKER_LABEL_FIT of the cell width), so
+ * the type scales with the grid rather than with the viewport. The cells draw
+ * under GL_POLYGON_OFFSET_FILL, pushed back just enough that the coplanar
+ * strokes sit cleanly on top of the fill instead of z-fighting it.
+ *
+ * Distance is handled at both ends, and the split is the point:
+ *   - near/mid: each label's *alpha* ramps down with its distance from the
+ *     camera, so it dissolves into whatever square is under it;
+ *   - far: a hard cull. Past GRID_CHECKER_REACH labels are simply not emitted,
+ *     because at that range a cell is a few pixels wide and its label is
+ *     illegible scribble that reads as noise over the checker - and skipping
+ *     them is also what keeps the per-frame glyph count bounded.
+ * The alpha ramp reaches zero exactly at the cull radius, so nothing visible is
+ * ever dropped and the boundary can't pop. Alpha rather than the LINEAR fog
+ * this theme first used: fog fades toward the presentation *background*, which
+ * over a checkered floor means far strokes drift toward the sky color and read
+ * differently on pale squares than on dark ones. Alpha is uniform over both.
+ * The reach is keyed to the *camera distance*, so zooming out keeps a labelled
+ * patch of roughly constant screen size around the view centre instead of
+ * either vanishing or carpeting the floor.
+ * ========================================================================= */
+
+#define GRID_CHECKER_MAX_CELLS    160    /* per axis; runaway guard at FAR     */
+#define GRID_CHECKER_LABEL_MAX    700    /* per frame; runaway guard           */
+#define GRID_CHECKER_LABEL_HEIGHT 0.115f /* cap height as a fraction of a cell */
+#define GRID_CHECKER_LABEL_FIT    0.72f  /* max label width as a cell fraction */
+#define GRID_CHECKER_LABEL_DENSITY 0.09f /* label stride ~= cam_dist * this    */
+#define GRID_CHECKER_REACH        1.2f   /* cull radius as a multiple of dist  */
+#define GRID_CHECKER_FADE_START   0.35f  /* alpha ramp start, fraction of reach*/
+#define GRID_CHECKER_INK_WIDTH    1.4f   /* stroke width (px)                  */
+#define GRID_CHECKER_POLY_OFFSET  1.0f   /* factor == units, pushes cells back */
+#define GRID_STROKE_CAP_HEIGHT    100.0f /* GLUT_STROKE_ROMAN em, font units   */
+
+/* The two square tones. Fed to the lights as GL_AMBIENT_AND_DIFFUSE
+ * reflectances via GL_COLOR_MATERIAL, so these are the *unlit* albedo - keep
+ * them well below 1.0 or a bright key blows the pale squares out. Per-theme
+ * table data, so palette.h bucket 3 (see its header): deliberately not a
+ * RENDER3D_CLR_* token. */
+static const float k_grid_checker_pale[3] = { 0.72f, 0.71f, 0.67f };
+static const float k_grid_checker_dark[3] = { 0.20f, 0.22f, 0.26f };
+
+/* Enable the light slots the *program* has on, so the floor is lit by the
+ * same lamps as the user's geometry. render3d_lights_setup already wrote every
+ * slot's position/colors under this frame's camera modelview, so re-enabling a
+ * slot here needs no repositioning. A program with no lights on would leave the
+ * floor flat ambient-black, which reads as a bug rather than as a scene with no
+ * lamps - so that case gets a neutral overhead key on slot 0 instead. Both the
+ * enables and the fallback's light parameters are restored by the theme's
+ * enclosing glPushAttrib(GL_ALL_ATTRIB_BITS) (GL_LIGHTING_BIT). */
+static void grid_checker_bind_lights(const Render3dRenderConfig *config) {
+    int any = 0;
+    for (int i = 0; i < MAX_LIGHTS; i++) {
+        if (!config->lights[i].enabled) continue;
+        glEnable(config->lights[i].id);
+        any = 1;
+    }
+    if (!any) {
+        /* Bucket-2 carve-out (palette.h): lighting coefficients, not draw
+         * colors. Directional (w = 0), so the current modelview turns it into
+         * a world-fixed key from above/front. */
+        static const GLfloat fb_pos[4] = { 0.35f, 0.90f, 0.45f, 0.0f };
+        static const GLfloat fb_dif[4] = { 0.85f, 0.85f, 0.82f, 1.0f };
+        static const GLfloat fb_amb[4] = { 0.18f, 0.18f, 0.20f, 1.0f };
+        glLightfv(GL_LIGHT0, GL_POSITION, fb_pos);
+        glLightfv(GL_LIGHT0, GL_DIFFUSE,  fb_dif);
+        glLightfv(GL_LIGHT0, GL_AMBIENT,  fb_amb);
+        glEnable(GL_LIGHT0);
+    }
+    /* Two-sided so the floor is still lit when the camera drops below it -
+     * the single +Y normal would otherwise face away and leave it black. */
+    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+    glEnable(GL_LIGHTING);
+    glEnable(GL_COLOR_MATERIAL);
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+}
+
+/* Opacity per Grid brightness step (Dim / Normal / Bright / Bold), read from
+ * the *setting* (grid_brightness_idx) rather than from the derived
+ * grid_brightness multiplier the line themes scale by: those factors run to
+ * 4.5, shaped for lifting deliberately-faint lines, and applying them to a fill
+ * that starts near 0.5 would clamp the top three steps to flat opaque - three
+ * settings, one look. Two columns because the strokes are thin and need more
+ * opacity than the fill to stay readable over it at the same step. */
+typedef struct GridCheckerOpacity {
+    float fill;   /* checker square alpha */
+    float ink;    /* label stroke alpha, before the distance ramp */
+} GridCheckerOpacity;
+
+static const GridCheckerOpacity k_grid_checker_opacity[GRID_BRIGHTNESS_COUNT] = {
+    [GRID_BRIGHTNESS_DIM]    = { .fill = 0.08f, .ink = 0.10f },
+    [GRID_BRIGHTNESS_NORMAL] = { .fill = 0.20f, .ink = 0.20f },
+    [GRID_BRIGHTNESS_BRIGHT] = { .fill = 0.55f, .ink = 0.60f },
+    [GRID_BRIGHTNESS_BOLD]   = { .fill = 0.85f, .ink = 1.00f },
+};
+
+static GridCheckerOpacity grid_checker_opacity(const Render3dRenderConfig *config) {
+    int i = config->grid_brightness_idx;
+    if (i < 0 || i >= GRID_BRIGHTNESS_COUNT) i = GRID_BRIGHTNESS_NORMAL;
+    return k_grid_checker_opacity[i];
+}
+
+/* The checkerboard itself: one quad per major cell, alternating tone by cell
+ * parity. Cell coordinates are integers so the parity is exact (no fmod
+ * tolerance) and the pattern stays pinned to the world origin. */
+static void grid_checker_cells(const GridDrawContext *ctx, float alpha) {
+    float cell = ctx->major;
+    int n = (int)(ctx->extent / cell + 0.5f);
+    if (n > GRID_CHECKER_MAX_CELLS / 2) n = GRID_CHECKER_MAX_CELLS / 2;
+    if (n < 1) return;
+
+    glNormal3f(0.0f, 1.0f, 0.0f);
+    glBegin(GL_QUADS);
+    for (int i = -n; i < n; i++) {
+        float x0 = (float)i * cell, x1 = x0 + cell;
+        for (int k = -n; k < n; k++) {
+            float z0 = (float)k * cell, z1 = z0 + cell;
+            const float *c = ((i + k) & 1) ? k_grid_checker_dark
+                                           : k_grid_checker_pale;
+            /* grid_color_surface takes the transition fade only - the Grid
+             * brightness contribution is already folded into `alpha` by
+             * grid_checker_fill_alpha, on its own curve. */
+            grid_color_surface(ctx, c[0], c[1], c[2], alpha);
+            glVertex3f(x0, 0.0f, z0);   /* CCW seen from +Y, matching the normal */
+            glVertex3f(x0, 0.0f, z1);
+            glVertex3f(x1, 0.0f, z1);
+            glVertex3f(x1, 0.0f, z0);
+        }
+    }
+    glEnd();
+}
+
+/* Far cull radius: past this a cell is a handful of pixels wide, so its label
+ * is unreadable scribble and is not emitted at all. Also where the fog below
+ * has finished fading, so the cull never cuts a still-visible stroke. Keyed to
+ * the camera distance so the labelled patch stays a roughly constant share of
+ * the screen at any zoom. */
+static float grid_checker_label_reach(const GridDrawContext *ctx, float cam_dist) {
+    float reach = cam_dist * GRID_CHECKER_REACH + ctx->major * 2.0f;
+    return fminf(reach, ctx->extent);
+}
+
+/* Which cells carry a label: one *every* cell at normal zoom, thinning to a
+ * nice multiple (1/2/5/10...) of the cell only once a cell is too few pixels
+ * across for its number to be readable at all. The type is always sized to a
+ * single cell (see below), so this decides density, never size. */
+static float grid_checker_label_stride(const GridDrawContext *ctx, float cam_dist) {
+    float ratio = cam_dist * GRID_CHECKER_LABEL_DENSITY / ctx->major;
+    return ctx->major * grid_nice_step_mul(ratio);
+}
+
+/* One "x,z" label per cell, laid flat and centred *in* the cell - the value is
+ * the cell's own corner, so the number still names its gridlines. The glyph
+ * basis puts the text in the XZ plane reading from +Z: advance along +X, cap
+ * height along -Z. Type is sized off one cell, never off the label stride: at a
+ * thinned stride the labels get sparser, not bigger, so a number always reads
+ * as belonging to the square it sits in. A long value ("-15,-10") is scaled
+ * down to GRID_CHECKER_LABEL_FIT of the cell rather than bleeding across it. */
+static void grid_checker_labels(const GridDrawContext *ctx, const float cam[3],
+                                float reach, float stride, float ink) {
+    static const float right[3] = { 1.0f, 0.0f,  0.0f };
+    static const float up[3]    = { 0.0f, 0.0f, -1.0f };
+    float ext  = ctx->extent;
+    float cell = ctx->major;
+    float base = cell * GRID_CHECKER_LABEL_HEIGHT / GRID_STROKE_CAP_HEIGHT;
+    float fit  = cell * GRID_CHECKER_LABEL_FIT;
+    /* Distance ramp: full ink out to GRID_CHECKER_FADE_START of the reach, then
+     * down to zero exactly at it, so a label has already dissolved by the
+     * radius where the cull stops emitting it and the boundary never pops. */
+    float fade_from = reach * GRID_CHECKER_FADE_START;
+    float fade_span = reach - fade_from;
+    if (fade_span < 1e-4f) fade_span = 1e-4f;
+
+    float lo_x = ceilf (fmaxf(cam[0] - reach, -ext) / stride) * stride;
+    float hi_x = floorf(fminf(cam[0] + reach,  ext - cell) / stride) * stride;
+    float lo_z = ceilf (fmaxf(cam[2] - reach, -ext) / stride) * stride;
+    float hi_z = floorf(fminf(cam[2] + reach,  ext - cell) / stride) * stride;
+
+    int drawn = 0;
+    for (float gz = lo_z; gz <= hi_z + GRID_LOOP_EPSILON; gz += stride) {
+        for (float gx = lo_x; gx <= hi_x + GRID_LOOP_EPSILON; gx += stride) {
+            /* Cull on the cell's centre, and as a sphere rather than a box:
+             * that matches how the fog (an eye-distance ramp) actually fades
+             * them, so nothing is dropped while still visible. */
+            float cx = gx + cell * 0.5f, cz = gz + cell * 0.5f;
+            float dx = cx - cam[0], dy = cam[1], dz = cz - cam[2];
+            float d2 = dx * dx + dy * dy + dz * dz;
+            if (d2 > reach * reach) continue;
+            if (++drawn > GRID_CHECKER_LABEL_MAX) return;
+
+            float f = (sqrtf(d2) - fade_from) / fade_span;
+            if (f < 0.0f) f = 0.0f;
+            if (f > 1.0f) f = 1.0f;
+            f = 1.0f - f * f * (3.0f - 2.0f * f);   /* smoothstep out */
+            if (f <= 0.004f) continue;
+            /* Not grid_color: that folds in the grid-line brightness multiplier,
+             * and `ink` already carries this step's opacity from the table. */
+            grid_color_surface(ctx, 0.94f, 0.95f, 0.98f, ink * f);
+
+            char b[32];
+            snprintf(b, sizeof b, "%g,%g", (double)gx, (double)gz);
+            float scale = base;
+            float tw = grid_stroke_text_width(scale, b);
+            if (tw > fit) {                    /* shrink to stay inside the cell */
+                scale *= fit / tw;
+                tw = fit;
+            }
+            /* Centre in the cell: half the text width back along +X, half the
+             * cap height back along -up (= +Z), so the glyph box straddles the
+             * cell centre in both axes. */
+            grid_stroke_text_billboard(cx - tw * 0.5f, 0.0f,
+                                       cz + GRID_STROKE_CAP_HEIGHT * 0.5f * scale,
+                                       scale, right, up, b);
+        }
+    }
+}
+
+static void render3d_grid_render_checker_theme(const GridDrawContext *grid_ctx,
+                                               const Render3dFrameRenderContext *frame_ctx) {
+    const Render3dRenderConfig *config = &frame_ctx->config;
+    const float *cam = frame_ctx->camera_world_pos;
+    float cam_dist = config->cam_dist > 0.5f ? config->cam_dist : 6.0f;
+    float reach    = grid_checker_label_reach(grid_ctx, cam_dist);
+    float stride   = grid_checker_label_stride(grid_ctx, cam_dist);
+    GridCheckerOpacity op = grid_checker_opacity(config);
+
+    /* ---- 1. The lit checkerboard ----
+     * Polygon offset pushes the fill back a hair so the label strokes - exactly
+     * coplanar with it - land on top instead of z-fighting. Culling is
+     * explicitly off: the floor is a single-normal sheet meant to be visible
+     * from below too, and the program's own glCullFace state is still live
+     * here. Fog: at FAR the caller's clear-color distance fog is left in place
+     * so the rim recedes with it; at any other extent fog would be whatever the
+     * program left enabled, so it is cleared first. */
+    glDisable(GL_FOG);
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_POLYGON_OFFSET_FILL);
+    glPolygonOffset(GRID_CHECKER_POLY_OFFSET, GRID_CHECKER_POLY_OFFSET);
+    if (config->grid_extent_idx == GRID_EXTENT_FAR)
+        glEnable(GL_FOG);
+    grid_checker_bind_lights(config);
+    grid_checker_cells(grid_ctx, op.fill);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_COLOR_MATERIAL);
+    glDisable(GL_POLYGON_OFFSET_FILL);
+
+    /* ---- 2. Cell labels ----
+     * The distance falloff is per-label *alpha*, not fog (see the header note),
+     * applied inside grid_checker_labels: full ink out to
+     * GRID_CHECKER_FADE_START of the reach, smoothstepping to nothing exactly
+     * at the radius where the cull takes over. */
+    glLineWidth(GRID_CHECKER_INK_WIDTH);
+    grid_checker_labels(grid_ctx, cam, reach, stride, op.ink);
+    glLineWidth(1.0f);
+}
+
 /* ---- Grid transition curve plugin (Render3dXnReveal, see render3d_transition.h) --
  * The grid owns its fade durations + per-theme speed + opacity shape; the
  * machine just feeds elapsed time and reads opacity back. A linear opacity
@@ -2367,6 +2636,10 @@ static void grid_dispatch_theme(const Render3dFrameRenderContext *frame_ctx,
 
     case GRID_THEME_PLANES:
         render3d_grid_render_planes_theme(config, grid_ctx);
+        break;
+
+    case GRID_THEME_CHECKER:
+        render3d_grid_render_checker_theme(grid_ctx, frame_ctx);
         break;
 
     case GRID_THEME_RADAR:
