@@ -27,6 +27,6 @@ Current residents:
 - `app-clarity-review.md` - the three ranked extension guards landed
   (compiler-exhaustive `GlrConfigKey` maps + duplicate-key validation, the
   single-source and now-tested scene-local config roster, the modal-kind
-  enum/switch guard with a per-kind wiring test); the two Low items - the
-  factual comment/declaration sweep and the synthetic right-click helper -
-  are deferred, the latter until adjacent work opens `glr_ctrl.c` anyway.
+  enum/switch guard with a per-kind wiring test), plus the Low synthetic
+  right-click extraction; only the factual comment/declaration sweep
+  (finding 4) is deferred.

@@ -1,6 +1,6 @@
 # `src/app` Clarity, Consistency & Maintainability Review
 
-## Status — PARTIAL: findings 1-3 landed 2026-08-14; 4-5 deferred
+## Status — PARTIAL: findings 1-3 and 5 landed 2026-08-14; 4 deferred
 
 The three ranked items of the execution plan below are implemented on `main`:
 
@@ -13,11 +13,19 @@ The three ranked items of the execution plan below are implemented on `main`:
 Both new tests were mutation-checked: removing one reset line and emptying one
 prompt arm each fail them.
 
-**Deferred on purpose** — the two Low items, unchanged from the assessment
-below: finding 4 (the factual comment/declaration sweep, safe but Low) and
-finding 5 (the synthetic right-click helper, to be done only when one of those
-three capture hooks is next modified). Everything else in this review is an
-explicit *do not do*.
+Finding 5 (Low) also landed, ahead of the "defer until adjacent work" advice:
+`glr_ctrl_right_click_source_line()` is the file-static shared step, each hook
+keeps its own success check, and the two hooks that had no coverage through
+their capture entry point now have it (`app/ctrl: extract the shared synthetic
+right-click capture step`).
+
+**Deferred on purpose** — finding 4, the factual comment/declaration sweep:
+safe but Low, and best bundled as documentation hygiene. Everything else in
+this review is an explicit *do not do*.
+
+One correction to finding 4's table while it waits: the reset-contract test it
+will describe is `test_scene_local_reset_covers_whole_roster` in
+`tests/test_glr_ctrl.c`, not in `test_glr_actions.c`.
 
 ## Original assessment — RECONCILED INDEPENDENT ASSESSMENT (2026-08-14)
 
