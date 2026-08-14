@@ -303,8 +303,11 @@ Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/gl
   `ENUM_OR_EXPR` (only `glLightModeli` slot 1). Spec tables stay **alphabetical
   by GL name**.
 - [`CmdType`](src/repl/command.h#L44) set tests use the inline predicates in [`command.h`](src/repl/command.h)
-  (`repl_cmd_is_transform`, `repl_cmd_emits_vertex`, `repl_cmd_is_block_head`
-  / `_end`), never ad-hoc `||` chains. That's the *control-flow* taxonomy;
+  (`repl_cmd_is_transform`, `repl_cmd_emits_vertex` /
+  `repl_cmd_emits_immediate_vertex` for the glVertex-only subset,
+  `repl_cmd_is_block_head` / `_end`), never ad-hoc `||` chains
+  (`emits_vertex(t) && t != CMD_TESS_VERTEX` included - that spelling *is* the
+  subset predicate). That's the *control-flow* taxonomy;
   [`CmdSyntaxCategory`](src/repl/command_spec.h#L152) is the separate *visual* one - don't fold one through
   the other. A drift test in [`tests/test_replay_walk.c`](tests/test_replay_walk.c) asserts agreement.
 - Splitting comma-separated call args: [`repl_scan_next_arg_delim()`](src/repl/eval.h#L438) from

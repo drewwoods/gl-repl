@@ -243,6 +243,7 @@ Two design notes worth internalizing:
 so a new command goes next to its relatives - never reorder existing
 entries. [`command.h`](command.h) also exposes the *control-flow taxonomy* as inline
 predicates (`repl_cmd_is_transform`, `repl_cmd_emits_vertex`,
+`repl_cmd_emits_immediate_vertex`,
 `repl_cmd_is_block_head/_end`, `repl_cmd_is_glut_solid`,
 `repl_cmd_starts_geometry_emit`, `repl_cmd_consumes_current_color`).
 These are a separate axis from [`CmdSyntaxCategory`](command_spec.h#L152) in [`command_spec.h`](command_spec.h),

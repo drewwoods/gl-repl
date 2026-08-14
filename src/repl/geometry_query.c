@@ -9,7 +9,6 @@
  * queries used to share a file with.
  */
 #include "repl/geometry_query.h"
-#include "repl/pipeline.h"
 #include "repl/state_owners.h"
 #include "repl/transform_utils.h"  /* TransformScopeScan */
 
@@ -31,7 +30,7 @@ static int find_feeding_state_cmd(int line_idx, int want_normal) {
      *                    their own normals but draw under the current
      *                    GL color via glColorMaterial / lighting. */
     CmdType target = repl_state_document_cmds()[line_idx].type;
-    int is_gl_vtx = repl_cmd_emits_vertex(target) && target != CMD_TESS_VERTEX;
+    int is_gl_vtx = repl_cmd_emits_immediate_vertex(target);
     int is_tess_vtx = (target == CMD_TESS_VERTEX);
     int is_glut_solid = (!is_gl_vtx && !is_tess_vtx &&
                          repl_cmd_consumes_current_color(target));

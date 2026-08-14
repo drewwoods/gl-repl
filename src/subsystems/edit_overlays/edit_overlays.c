@@ -751,6 +751,21 @@ static GLenum overlay_front_face_opposite(GLenum front_face) {
     return front_face == GL_CW ? GL_CCW : GL_CW;
 }
 
+/* Re-issue one immediate-mode vertex inside an overlay's own glBegin block.
+ * The overlay redraws user geometry rather than executing it, so this is the
+ * one place the glVertex arity ladder is spelled here; deliberately not shared
+ * with executor.c, which is the only TU allowed to emit live GL for the
+ * program itself. Callers must have screened the type with
+ * repl_cmd_emits_immediate_vertex(). */
+static void overlay_emit_immediate_vertex(const GLCmd *cmd) {
+    if (cmd->type == CMD_VERTEX3F)
+        glVertex3f(cmd->args[0], cmd->args[1], cmd->args[2]);
+    else if (cmd->type == CMD_VERTEX2F)
+        glVertex2f(cmd->args[0], cmd->args[1]);
+    else
+        glVertex4f(cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
+}
+
 static void render_single_polygon_highlight(const OverlayWalkCtx *ctx,
                                             int begin_idx,
                                             const OverlayGlState *st) {
@@ -770,18 +785,10 @@ static void render_single_polygon_highlight(const OverlayWalkCtx *ctx,
     for (int i = begin_idx + 1; i < cmd_count; i++) {
         if (!cmds[i].valid) continue;
         if (cmds[i].type == CMD_END) break;
-        if (!repl_cmd_emits_vertex(cmds[i].type) ||
-            cmds[i].type == CMD_TESS_VERTEX)
+        if (!repl_cmd_emits_immediate_vertex(cmds[i].type))
             continue;
-        if (cursor_poly_contains_ordinal(ctx, ord)) {
-            if (cmds[i].type == CMD_VERTEX3F)
-                glVertex3f(cmds[i].args[0], cmds[i].args[1], cmds[i].args[2]);
-            else if (cmds[i].type == CMD_VERTEX2F)
-                glVertex2f(cmds[i].args[0], cmds[i].args[1]);
-            else
-                glVertex4f(cmds[i].args[0], cmds[i].args[1], cmds[i].args[2],
-                           cmds[i].args[3]);
-        }
+        if (cursor_poly_contains_ordinal(ctx, ord))
+            overlay_emit_immediate_vertex(&cmds[i]);
         ord++;
     }
     glEnd();
@@ -872,17 +879,10 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
             block_is_current = 0;
             break;
         case CMD_VERTEX3F:
-            if (in_begin && (block_is_current || ctx->show_vertex_outlines))
-                glVertex3f(cmds[i].args[0], cmds[i].args[1], cmds[i].args[2]);
-            break;
         case CMD_VERTEX2F:
-            if (in_begin && (block_is_current || ctx->show_vertex_outlines))
-                glVertex2f(cmds[i].args[0], cmds[i].args[1]);
-            break;
         case CMD_VERTEX4F:
             if (in_begin && (block_is_current || ctx->show_vertex_outlines))
-                glVertex4f(cmds[i].args[0], cmds[i].args[1], cmds[i].args[2],
-                           cmds[i].args[3]);
+                overlay_emit_immediate_vertex(&cmds[i]);
             break;
         default:
             break;

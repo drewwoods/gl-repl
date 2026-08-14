@@ -552,7 +552,8 @@ static void test_parse_arg_slots_nested_parens(void) {
 /* --- 6. predicate/category agreement (drift guard) --------------------
  *
  * src/repl/command.h holds inline control-flow predicates
- * (repl_cmd_is_transform, repl_cmd_emits_vertex). src/repl/command_spec.h
+ * (repl_cmd_is_transform, repl_cmd_emits_vertex,
+ * repl_cmd_emits_immediate_vertex). src/repl/command_spec.h
  * holds a CmdSyntaxCategory enum used for code-panel syntax highlighting.
  * Both name the same sets of types from different angles.
  *
@@ -586,6 +587,17 @@ static void test_predicate_category_agreement(void) {
                  "type=%d: is_transform predicate matches CMD_CAT_TRANSFORM",
                  t_int);
         ASSERT_INT(label, pred_xform, cat_xform);
+
+        /* The immediate-mode subset is the vertex set minus exactly the
+         * tessellator variant. A new vertex family added to one predicate
+         * and not the other lands here, at the responsible CmdType, rather
+         * than as a silently-skipped vertex in an overlay or an autonormal
+         * block. */
+        int pred_imm = repl_cmd_emits_immediate_vertex(t);
+        snprintf(label, sizeof(label),
+                 "type=%d: emits_immediate_vertex == emits_vertex minus tess",
+                 t_int);
+        ASSERT_INT(label, pred_imm, pred_vertex && t != CMD_TESS_VERTEX);
     }
 }
 

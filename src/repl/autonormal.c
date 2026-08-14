@@ -614,8 +614,8 @@ void repl_recompute_autonormals(int autonormal_mode,
              * normal feeder (CMD_TESS_NORMAL). glVertex2f sets args[2]
              * to 0 (parser default), so its cross product folds into
              * the same (x, y, 0) plane as a 3D vertex with z=0. */
-            if (repl_cmd_emits_vertex(repl_state_document_cmds()[j].type) &&
-                repl_state_document_cmds()[j].type != CMD_TESS_VERTEX) {
+            if (repl_cmd_emits_immediate_vertex(
+                    repl_state_document_cmds()[j].type)) {
                 vi[nv++] = j;
                 if (repl_state_document_cmds()[j].has_vars)
                     any_vertex_has_vars = 1;
