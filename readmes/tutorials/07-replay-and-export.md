@@ -90,7 +90,7 @@ Headless capture, for scripting:
 - Cycle the built-in examples with **`F12`** and read their source — they're the
   best reference for what's possible.
 - Press **`F1`** for the full command + key-binding reference.
-- Skim [`ARCHITECTURE.md`](../../ARCHITECTURE.md) for how the pieces fit together.
+- Skim `ARCHITECTURE.md` for how the pieces fit together.
 
 ---
 

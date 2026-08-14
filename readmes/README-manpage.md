@@ -142,10 +142,10 @@ wall-clock trace, one line per phase.
 
 ## SEE ALSO
 
-[**ARCHITECTURE.md**](ARCHITECTURE.md)(7),
-[**MODULES.md**](MODULES.md)(7),
-[**CALLGRAPH_GUIDE.md**](CALLGRAPH_GUIDE.md)(7),
-[**AGENTS.md**](AGENTS.md)(7)
+**ARCHITECTURE.md**(7),
+**MODULES.md**(7),
+**CALLGRAPH_GUIDE.md**(7),
+**AGENTS.md**(7)
 
 ## BUGS
 

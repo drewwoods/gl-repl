@@ -151,7 +151,7 @@ flowchart LR
 
 ---
 
-### §6 &nbsp;&nbsp; Supported drawing surface &nbsp;*(extract — full set in [`AGENTS.md`](AGENTS.md))*
+### §6 &nbsp;&nbsp; Supported drawing surface &nbsp;*(extract — full set in `AGENTS.md`)*
 
 ```c
 /* primitives ------------------------------------------------------ */
