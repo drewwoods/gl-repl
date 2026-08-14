@@ -4591,7 +4591,19 @@ void glr_ctrl_open_color_picker(int line) {
                        ui_state_viewport().window_h - (sy + sh / 2));
 }
 
-int glr_ctrl_open_gl_state_popup(int line) {
+/* Shared body of the three capture affordances below: right-click a document
+ * row the way a user does. Resolve the row through the live code-panel model,
+ * then take the exact production input path, which keeps capture placement,
+ * blank-row validation, popup toggling, pointer state, and right-click
+ * behavior identical to a real click. The routing - not the caller - decides
+ * which of the three right-click popups a row gets, so each caller checks its
+ * own popup afterwards rather than asking for one here.
+ *
+ * Returns 0 without clicking when the row has no on-screen point:
+ * GLR_EDIT_LINE may have requested follow-scroll before the main loop, and
+ * until a rendered frame applies it an off-screen row must fail so the capture
+ * hook retries rather than clicking the wrong row. */
+static int glr_ctrl_right_click_source_line(int line) {
     UiRenderSnapshot snap;
     int x;
     int y;
@@ -4599,12 +4611,6 @@ int glr_ctrl_open_gl_state_popup(int line) {
     if (line < 0)
         return 0;
 
-    /* Resolve through the live code-panel row model, then take the exact
-     * production input path. This keeps capture placement, blank-row
-     * validation, popup toggling, pointer state, and right-click
-     * behavior identical to a user's click. GLR_EDIT_LINE may have requested
-     * follow-scroll before the main loop; until a rendered frame applies it,
-     * an off-screen row deliberately returns 0 so the capture hook retries. */
     glr_ctrl_build_ui_snapshot(&snap);
     if (!ui_repl_code_panel_source_line_point(&snap, line, &x, &y))
         return 0;
@@ -4612,55 +4618,32 @@ int glr_ctrl_open_gl_state_popup(int line) {
     glr_ctrl_scripted_passive_motion(x, y);
     glr_ctrl_scripted_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
     glr_ctrl_scripted_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    return 1;
+}
+
+int glr_ctrl_open_gl_state_popup(int line) {
+    if (!glr_ctrl_right_click_source_line(line))
+        return 0;
     return ui_state_gl_state_inspector().visible &&
            ui_state_gl_state_inspector().source_line_idx == line;
 }
 
 int glr_ctrl_open_assign_plot(int line) {
-    UiRenderSnapshot snap;
-    int x;
-    int y;
-
-    if (line < 0)
+    /* The click carries the "row is not an assignment" rejection with it, so
+     * a non-assignment row reports failure here instead of opening a plot. */
+    if (!glr_ctrl_right_click_source_line(line))
         return 0;
-
-    /* Same shape as glr_ctrl_open_gl_state_popup: resolve the row through the
-     * live code-panel model, then take the real right-click path, so a capture
-     * run exercises exactly the routing a user's click does - including the
-     * "row is not an assignment" rejection. Returns 0 for an off-screen row so
-     * the capture hook retries after follow-scroll lands. */
-    glr_ctrl_build_ui_snapshot(&snap);
-    if (!ui_repl_code_panel_source_line_point(&snap, line, &x, &y))
-        return 0;
-
-    glr_ctrl_scripted_passive_motion(x, y);
-    glr_ctrl_scripted_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
-    glr_ctrl_scripted_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
     return assign_plot_is_open() && assign_plot_source_line() == line;
 }
 
 int glr_ctrl_open_command_description(int line, int anchor_dx) {
-    UiRenderSnapshot snap;
-    int x;
-    int y;
-
-    if (line < 0)
+    /* A row with no authored description opens one of the other popups (or
+     * nothing), so this reports failure rather than silently posing something
+     * else. Note the routing closes the description when a later right-click
+     * lands on an assignment row, so a capture posing both wants this hook
+     * last. */
+    if (!glr_ctrl_right_click_source_line(line))
         return 0;
-
-    /* Third of the same shape (see glr_ctrl_open_gl_state_popup): the real
-     * right-click path decides which of the three right-click popups a row
-     * gets, so a capture cannot ask for the help card directly - it clicks the
-     * row and checks which popup came up. A row with no authored description
-     * therefore returns 0 rather than opening something else. Note the routing
-     * closes the description when a later right-click lands on an assignment
-     * row, so a capture posing both wants this hook last. */
-    glr_ctrl_build_ui_snapshot(&snap);
-    if (!ui_repl_code_panel_source_line_point(&snap, line, &x, &y))
-        return 0;
-
-    glr_ctrl_scripted_passive_motion(x, y);
-    glr_ctrl_scripted_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y);
-    glr_ctrl_scripted_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
     if (!ui_state_command_description().visible ||
         ui_state_command_description().source_line_idx != line)
         return 0;

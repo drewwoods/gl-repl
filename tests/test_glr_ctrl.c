@@ -2079,6 +2079,16 @@ static void test_right_click_assignment_opens_value_plot(void) {
                ui_state_command_description().visible, 1);
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
     ui_state_command_description_close();
+
+    /* The capture entry point (GLR_OPEN_ASSIGN_PLOT) drives the same
+     * synthetic right-click, so the "row is not an assignment" rejection is
+     * the routing's, not a second copy of it. */
+    ASSERT_INT("capture hook opens the plot on the assignment row",
+               glr_ctrl_open_assign_plot(1), 1);
+    ASSERT_INT("capture hook targets that row", assign_plot_source_line(), 1);
+    ASSERT_INT("capture hook refuses a GL command row",
+               glr_ctrl_open_assign_plot(2), 0);
+    ui_state_command_description_close();
     assign_plot_reset_all();
 }
 
@@ -2497,6 +2507,22 @@ static void test_right_click_empty_line_toggles_gl_state_report(void) {
     ASSERT_INT("right-click non-empty line does not open report",
                ui_state_gl_state_inspector().visible, 0);
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, x, y);
+    ui_state_command_description_close();
+
+    /* The capture entry point (GLR_OPEN_GL_STATE) poses the popup through the
+     * same synthetic right-click a user makes, so it inherits the row policy
+     * rather than restating it: a blank row opens the report, a code row does
+     * not. */
+    ASSERT_INT("capture hook opens the report on the blank row",
+               glr_ctrl_open_gl_state_popup(blank_line), 1);
+    ASSERT_INT("capture hook anchors the report to that row",
+               ui_state_gl_state_inspector().source_line_idx, blank_line);
+    ASSERT_INT("capture hook reports failure on a code row",
+               glr_ctrl_open_gl_state_popup(0), 0);
+    ASSERT_INT("capture hook cannot ask for a row's popup off-screen",
+               glr_ctrl_open_gl_state_popup(repl_state_document_count() + 50), 0);
+    ui_state_gl_state_inspector_close();
+    ui_state_command_description_close();
 }
 
 /* The resize cursor must promise exactly what a press delivers. A panel
