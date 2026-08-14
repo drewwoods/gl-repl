@@ -97,10 +97,6 @@ static const EditorClipboardHostBridge g_test_clipboard_bridge = {
 #define replay_pc            (replay_state_mut()->pc)
 #define replay_src_line      (replay_state_mut()->src_line_idx)
 
-#define g_workspace_header_lines (repl_state_import_export().workspace_header_lines)
-#define g_workspace_header_line_count (repl_state_import_export().workspace_header_line_count)
-#define g_render_state_lines (repl_state_import_export().render_state_lines)
-#define g_cam_lines (repl_state_import_export().cam_lines)
 
 static void declare_test_vars(void) {
     ui_state_viewport_set_size(1200, 800);

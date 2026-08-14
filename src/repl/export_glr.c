@@ -92,13 +92,13 @@ static void glr_scene_write_cfg_overrides(FILE *f) {
  * which is the whole argument for tagging them. */
 static int glr_scene_write_camera(FILE *f, int leading_blank) {
     repl_refresh_camera_lines();
-    if (!g_cam_lines[0][0])
+    if (!IMPORT_EXPORT_VIEW.cam_lines[0][0])
         return 0;
     if (leading_blank)
         fprintf(f, "\n");
     for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++)
-        if (g_cam_lines[i][0])
-            glr_scene_write_line(f, g_cam_lines[i]);
+        if (IMPORT_EXPORT_VIEW.cam_lines[i][0])
+            glr_scene_write_line(f, IMPORT_EXPORT_VIEW.cam_lines[i]);
     return 1;
 }
 

@@ -13,7 +13,7 @@
  *     file-scope g_angle. g_angle's initializer stays 0.0f - the yaw itself
  *     rides on the numeric `@camera ry` row.
  *   - with_anim_hook = 0: four pose rows, no hook. Used by the code-panel
- *     preview (g_cam_lines) and the .glr writer, neither of which may show
+ *     preview (ReplImportExportState.cam_lines) and the .glr writer, neither of which may show
  *     a g_angle the user cannot type.
  */
 #include "app/glr_camera_export.h"

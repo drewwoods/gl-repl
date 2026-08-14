@@ -140,7 +140,7 @@ const char *g_display_header[] = {
 /* Workspace header directive table - writer half.                            */
 /*                                                                            */
 /* Each entry pairs a directive name with its emit step                       */
-/* (append zero or more lines into g_workspace_header_lines).                 */
+/* (append zero or more lines into the workspace_header_lines slice).        */
 /* Order in this table determines emit order. The matching reader-side       */
 /* table lives in src/repl/import.c; the two are intentionally               */
 /* independent so neither TU has to forward-declare into the other.          */
@@ -175,13 +175,20 @@ static int export_slot_pos_is_eye_space(int slot) {
     return info.pos_is_eye_space;
 }
 
+/* Writable slot `idx` of the workspace_header_lines slice. Every emit step
+ * below appends through this, so the state accessor is spelled once instead
+ * of inside each snprintf. */
+static char *header_line_slot(int idx) {
+    return IMPORT_EXPORT_WRITABLE->workspace_header_lines[idx];
+}
+
 /* --- workspace-dir --------------------------------------------------------- */
 
 static void emit_workspace_dir(int *n) {
     const char *workspace_dir = repl_workspace_dir();
 
     if (workspace_dir[0] && *n < MAX_WORKSPACE_HEADER_LINES) {
-        snprintf(g_workspace_header_lines_writable[(*n)++], WORKSPACE_HEADER_LINE_LEN,
+        snprintf(header_line_slot((*n)++), WORKSPACE_HEADER_LINE_LEN,
                 "/* @workspace-dir %s */", workspace_dir);
     }
 }
@@ -190,11 +197,11 @@ static void emit_workspace_dir(int *n) {
 
 static void emit_scene_name(int *n) {
     /* Explicit export hint overrides the active-slot name. */
-    const char *scene_name = g_export_scene_name_hint;
+    const char *scene_name = IMPORT_EXPORT_VIEW.export_scene_name_hint;
     if ((!scene_name || !*scene_name) && repl_active_user_scene() >= 0)
         scene_name = repl_user_scene_name(repl_active_user_scene());
     if (scene_name && *scene_name && *n < MAX_WORKSPACE_HEADER_LINES) {
-        snprintf(g_workspace_header_lines_writable[(*n)++], WORKSPACE_HEADER_LINE_LEN,
+        snprintf(header_line_slot((*n)++), WORKSPACE_HEADER_LINE_LEN,
                  "/* @scene-name %s */", scene_name);
     }
 }
@@ -212,7 +219,7 @@ static void emit_func_aliases(int *n) {
          slot++) {
         const char *alias = repl_func_alias_get(slot);
         if (!alias) continue;
-        if (repl_format_fits(g_workspace_header_lines_writable[*n],
+        if (repl_format_fits(header_line_slot(*n),
                              WORKSPACE_HEADER_LINE_LEN,
                              "/* @func %d = %s */", slot, alias))
             (*n)++;
@@ -232,7 +239,7 @@ static void emit_cfgs(int *n) {
     g_export_cfg_bridge->fill_all(&cfg);
     int i = 0;
     for (; i < cfg.count && *n < MAX_WORKSPACE_HEADER_LINES; i++) {
-        snprintf(g_workspace_header_lines_writable[(*n)++], WORKSPACE_HEADER_LINE_LEN,
+        snprintf(header_line_slot((*n)++), WORKSPACE_HEADER_LINE_LEN,
                  "/* @cfg %s = %s */", cfg.items[i].key, cfg.items[i].value);
     }
     /* The header budget is sized (export_state.h) so this never trips,
@@ -276,12 +283,12 @@ STATIC_ASSERT(MAX_WORKSPACE_HEADER_LINES >=
 void repl_state_refresh_workspace_header_lines(void) {
     int line_count = 0;
     if (line_count < MAX_WORKSPACE_HEADER_LINES) {
-        snprintf(g_workspace_header_lines_writable[line_count++], WORKSPACE_HEADER_LINE_LEN,
+        snprintf(header_line_slot(line_count++), WORKSPACE_HEADER_LINE_LEN,
                  REPL_WORKSPACE_HEADER_BANNER);
     }
     for (int dir_idx = 0; dir_idx < WORKSPACE_DIRECTIVE_COUNT; dir_idx++)
         WORKSPACE_DIRECTIVES[dir_idx].emit(&line_count);
-    g_workspace_header_line_count_writable = line_count;
+    IMPORT_EXPORT_WRITABLE->workspace_header_line_count = line_count;
 }
 
 const char *g_header_post[] = {
@@ -636,7 +643,7 @@ void repl_export_init_section_line(int i, char *buf, size_t n) {
     }
 
     if (i < RENDER_STATE_LINE_COUNT) {
-        snprintf(buf, n, "%s", g_render_state_lines[i]);
+        snprintf(buf, n, "%s", IMPORT_EXPORT_VIEW.render_state_lines[i]);
         return;
     }
 
@@ -675,7 +682,7 @@ void emit_export_init_section_to_file(FILE *f, int include_tess) {
 
     for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT;
          state_line_idx++)
-        export_write_c89_line(f, g_render_state_lines[state_line_idx]);
+        export_write_c89_line(f, IMPORT_EXPORT_VIEW.render_state_lines[state_line_idx]);
 
     for (int line_idx = 0; g_init_host_only_visible_c[line_idx]; line_idx++)
         export_write_c89_line(f, g_init_host_only_visible_c[line_idx]);
@@ -769,10 +776,12 @@ void repl_refresh_render_state_strings(void) {
      * "Disable" defaults below; the demo never exports anyway. */
     int msaa_on = repl_cfg_get_int(REPL_EXPORT_CFG_SLUG_MSAA, 1);
     int line_smooth_on = repl_cfg_get_int(REPL_EXPORT_CFG_SLUG_LINE_SMOOTH, 0);
-    snprintf(g_render_state_lines_writable[0], sizeof(g_render_state_lines_writable[0]),
+    char (*state_lines)[RENDER_STATE_LINE_LEN] =
+        IMPORT_EXPORT_WRITABLE->render_state_lines;
+    snprintf(state_lines[0], sizeof(state_lines[0]),
              "  gl%s(GL_MULTISAMPLE);",
              msaa_on ? "Enable" : "Disable");
-    snprintf(g_render_state_lines_writable[1], sizeof(g_render_state_lines_writable[1]),
+    snprintf(state_lines[1], sizeof(state_lines[1]),
              "  gl%s(GL_LINE_SMOOTH);",
              line_smooth_on ? "Enable" : "Disable");
 }
@@ -780,12 +789,12 @@ void repl_refresh_render_state_strings(void) {
 void repl_refresh_camera_lines(void) {
     /* Bridge-driven preview: the bridge formats the tagged pose rows from
      * current camera state, without the exported-C animation hook.
-     * Without a bridge installed (the demo case), g_cam_lines stays
+     * Without a bridge installed (the demo case), the cam_lines slice stays
      * empty - the demo doesn't render a code panel. */
     const ReplExportCameraBridge *camera_bridge = repl_export_camera_bridge();
     if (!camera_bridge || !camera_bridge->fill_block) {
         for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++)
-            g_cam_lines_writable[i][0] = '\0';
+            IMPORT_EXPORT_WRITABLE->cam_lines[i][0] = '\0';
         return;
     }
     ReplExportCameraBlock block;
@@ -794,7 +803,8 @@ void repl_refresh_camera_lines(void) {
      * type, so the spin slot stays empty and every consumer skips it. */
     camera_bridge->fill_block(&block, 0);
     for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++) {
-        snprintf(g_cam_lines_writable[i], sizeof(g_cam_lines_writable[i]), "%s", block.lines[i]);
+        char *dst = IMPORT_EXPORT_WRITABLE->cam_lines[i];
+        snprintf(dst, REPL_EXPORT_CAMERA_LINE_MAX, "%s", block.lines[i]);
     }
 }
 

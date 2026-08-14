@@ -10,24 +10,21 @@
 
 #include "repl/state_owners.h"
 
+/* Read and write access to the ReplImportExportState slice.
+ *
+ * Spell these at the call site - `IMPORT_EXPORT_VIEW.cam_lines`,
+ * `IMPORT_EXPORT_WRITABLE->cam_lines`. There used to be a `g_cam_lines` /
+ * `g_cam_lines_writable` alias per field, a transitional shim from the
+ * state-facade refactor that kept the pre-facade call sites compiling. It
+ * outlived its transition and lied twice: `g_` is this tree's marker for a
+ * **file-private static** (CLAUDE.md, Conventions) and these are neither
+ * file-private nor variables - VIEW expands to a call returning a by-value
+ * view struct, WRITABLE to one returning a pointer, so a reader who trusted
+ * the prefix would assume a cheap load and might write it in a loop. The
+ * read/write split also belongs in the expression, not in a name suffix:
+ * these two spellings show at the call site which one it is. */
 #define IMPORT_EXPORT_VIEW     (repl_state_import_export())
 #define IMPORT_EXPORT_WRITABLE (repl_state_import_export_writable())
-
-#define g_workspace_header_lines      (IMPORT_EXPORT_VIEW.workspace_header_lines)
-#define g_workspace_header_line_count (IMPORT_EXPORT_VIEW.workspace_header_line_count)
-#define g_render_state_lines          (IMPORT_EXPORT_VIEW.render_state_lines)
-#define g_cam_lines                   (IMPORT_EXPORT_VIEW.cam_lines)
-#define g_export_scene_name_hint      (IMPORT_EXPORT_VIEW.export_scene_name_hint)
-#define g_pending_scene_name          (IMPORT_EXPORT_VIEW.pending_scene_name)
-#define g_pending_workspace_dir       (IMPORT_EXPORT_VIEW.pending_workspace_dir)
-
-#define g_workspace_header_lines_writable      (IMPORT_EXPORT_WRITABLE->workspace_header_lines)
-#define g_workspace_header_line_count_writable (IMPORT_EXPORT_WRITABLE->workspace_header_line_count)
-#define g_render_state_lines_writable          (IMPORT_EXPORT_WRITABLE->render_state_lines)
-#define g_cam_lines_writable                   (IMPORT_EXPORT_WRITABLE->cam_lines)
-#define g_export_scene_name_hint_writable      (IMPORT_EXPORT_WRITABLE->export_scene_name_hint)
-#define g_pending_scene_name_writable          (IMPORT_EXPORT_WRITABLE->pending_scene_name)
-#define g_pending_workspace_dir_writable       (IMPORT_EXPORT_WRITABLE->pending_workspace_dir)
 
 #define REPL_WORKSPACE_DIRECTIVE_SCENE_NAME    "scene-name"
 #define REPL_WORKSPACE_DIRECTIVE_WORKSPACE_DIR "workspace-dir"

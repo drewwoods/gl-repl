@@ -298,11 +298,13 @@ static void emit_export_banner_section(FILE *f,
 
 static void emit_export_workspace_metadata_section(FILE *f,
                                                    const ExportScaffoldContext *ctx) {
+    ReplImportExportView ie = IMPORT_EXPORT_VIEW;
     (void)ctx;
     /* Emit workspace directives (@scene-name, @workspace-dir, etc). */
-    for (int header_line_idx = 0; header_line_idx < g_workspace_header_line_count; header_line_idx++)
-        fprintf(f, "%s\n", g_workspace_header_lines[header_line_idx]);
-    if (g_workspace_header_line_count > 0)
+    for (int header_line_idx = 0; header_line_idx < ie.workspace_header_line_count;
+         header_line_idx++)
+        fprintf(f, "%s\n", ie.workspace_header_lines[header_line_idx]);
+    if (ie.workspace_header_line_count > 0)
         fprintf(f, "\n");
 }
 
@@ -554,8 +556,8 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
     /* Camera transform rows. The spin slot is empty in this projection, and
      * an empty slot is skipped rather than dumped as a blank row. */
     for (int cam_line_idx = 0; cam_line_idx < REPL_EXPORT_CAMERA_LINES; cam_line_idx++)
-        if (g_cam_lines[cam_line_idx][0])
-            fprintf(dst, "%s\n", g_cam_lines[cam_line_idx]);
+        if (IMPORT_EXPORT_VIEW.cam_lines[cam_line_idx][0])
+            fprintf(dst, "%s\n", IMPORT_EXPORT_VIEW.cam_lines[cam_line_idx]);
 
     fprintf(dst, "--- header_post ---\n");
     /* Dump post-header lines (light setup, etc). */
@@ -577,7 +579,7 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
      * follows the authored source in the code panel. */
     for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT;
          state_line_idx++)
-        fprintf(dst, "%s\n", g_render_state_lines[state_line_idx]);
+        fprintf(dst, "%s\n", IMPORT_EXPORT_VIEW.render_state_lines[state_line_idx]);
 
     fflush(dst);
 }

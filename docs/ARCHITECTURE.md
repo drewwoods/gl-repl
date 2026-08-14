@@ -2749,7 +2749,7 @@ nearest visible bit. Divergence examples to guard against:
   default specular `{0.4,0.4,0.4,1}` and shininess `30`) but whose
   exported helper assumes the OpenGL defaults. Either replicate the
   per-frame reset in the exporter's `display()` (see
-  `g_render_state_lines` and `emit_export_geometry_pass`), or make the
+  `ReplImportExportState.render_state_lines` and `emit_export_geometry_pass`), or make the
   REPL executor stop relying on an implicit baseline.
 
 Add a focused round-trip case to [`tests/test_repl_export_all_commands.c`](../tests/test_repl_export_all_commands.c)

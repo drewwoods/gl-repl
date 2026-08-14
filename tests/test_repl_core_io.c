@@ -31,7 +31,12 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define g_render_state_lines    (repl_state_import_export().render_state_lines)
+/* One generated init() render-state line, read through the state facade.
+ * Named as the call it is - there is no g_render_state_lines array. */
+static const char *render_state_line(int idx) {
+    return repl_state_import_export().render_state_lines[idx];
+}
+
 /* Render-config toggles live in glr_state.render. */
 #define g_multisample_enabled   (glr_state_render_mut()->multisample_enabled)
 #define g_line_smooth_enabled   (glr_state_render_mut()->line_smooth_enabled)
@@ -238,8 +243,8 @@ int main(void) {
     ASSERT_TRUE("init has line smooth render state",
                 find_init_line_substr("GL_LINE_SMOOTH") >= 0);
     {
-        int multisample_line = find_init_line(g_render_state_lines[0]);
-        int line_smooth_line = find_init_line(g_render_state_lines[1]);
+        int multisample_line = find_init_line(render_state_line(0));
+        int line_smooth_line = find_init_line(render_state_line(1));
         int ambient_line = find_init_line(
             "  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, repl_glfloat4(0.15f, 0.15f, 0.20f, 1.0f));");
         ASSERT_TRUE("init render state precedes ambient light setup",
@@ -288,7 +293,7 @@ int main(void) {
         ASSERT_TRUE("saved line smooth init state",
                     strstr(buf, "glEnable(GL_LINE_SMOOTH);") != NULL);
         ASSERT_TRUE("saved render state precedes ambient light setup",
-                    appears_before(buf, g_render_state_lines[0],
+                    appears_before(buf, render_state_line(0),
                                    "  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, repl_glfloat4(0.15f, 0.15f, 0.20f, 1.0f));"));
         for (int state_line_idx = 0; state_line_idx < RENDER_STATE_LINE_COUNT;
              state_line_idx++) {
@@ -298,13 +303,13 @@ int main(void) {
             ASSERT_TRUE(label,
                         substring_in_window(buf, "void init(void) {",
                                             "}\n\nint main",
-                                            g_render_state_lines[state_line_idx]));
+                                            render_state_line(state_line_idx)));
             snprintf(label, sizeof(label),
                      "render state[%d] is absent from display()", state_line_idx);
             ASSERT_TRUE(label,
                         !substring_in_window(buf, "void display(void) {",
                                              "}\n\n/* Keep the projection",
-                                             g_render_state_lines[state_line_idx]));
+                                             render_state_line(state_line_idx)));
         }
         ASSERT_TRUE("saved geometry helper",
                     strstr(buf, "static void draw_scene(void)") != NULL);
@@ -1652,7 +1657,7 @@ int main(void) {
             char label[64];
             snprintf(label, sizeof(label),
                      "render_state[%d] appears in exported init()", i);
-            ASSERT_TRUE(label, strstr(buf, g_render_state_lines[i]) != NULL);
+            ASSERT_TRUE(label, strstr(buf, render_state_line(i)) != NULL);
         }
 
         /* (4) The scratch decoration line is panel-only - must NOT

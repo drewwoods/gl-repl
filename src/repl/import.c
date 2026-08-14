@@ -359,16 +359,19 @@ static int import_repl_func_line_slot(const char *line) {
 static int parse_workspace_dir(ImportWorkspaceAccum *accum, const char *args) {
     size_t char_idx = 0;
     while (*args && char_idx < REPL_WORKSPACE_DIR_MAX - 1)
-        g_pending_workspace_dir_writable[char_idx++] = *args++;
-    g_pending_workspace_dir_writable[char_idx] = '\0';
+        IMPORT_EXPORT_WRITABLE->pending_workspace_dir[char_idx++] = *args++;
+    IMPORT_EXPORT_WRITABLE->pending_workspace_dir[char_idx] = '\0';
     /* More source left over the cap means the path was clipped - a
      * truncated path points at the wrong directory, so don't do it silently. */
     if (*args)
         import_workspace_warn(accum,
                               "@workspace-dir path exceeds the %d-char limit; truncated",
                               (int)REPL_WORKSPACE_DIR_MAX - 1);
-    while (char_idx > 0 && isspace((unsigned char)g_pending_workspace_dir_writable[char_idx - 1]))
-        g_pending_workspace_dir_writable[--char_idx] = '\0';
+    {
+        char *dir = IMPORT_EXPORT_WRITABLE->pending_workspace_dir;
+        while (char_idx > 0 && isspace((unsigned char)dir[char_idx - 1]))
+            dir[--char_idx] = '\0';
+    }
     return 1;
 }
 
@@ -377,14 +380,18 @@ static int parse_workspace_dir(ImportWorkspaceAccum *accum, const char *args) {
 static int parse_scene_name(ImportWorkspaceAccum *accum, const char *args) {
     size_t char_idx = 0;
     while (*args && char_idx < USER_SCENE_NAME_MAX - 1)
-        g_pending_scene_name_writable[char_idx++] = *args++;
-    g_pending_scene_name_writable[char_idx] = '\0';
+        IMPORT_EXPORT_WRITABLE->pending_scene_name[char_idx++] = *args++;
+    IMPORT_EXPORT_WRITABLE->pending_scene_name[char_idx] = '\0';
     if (*args)
         import_workspace_warn(accum,
                               "@scene-name exceeds the %d-char limit; truncated to '%s'",
-                              (int)USER_SCENE_NAME_MAX - 1, g_pending_scene_name);
-    while (char_idx > 0 && isspace((unsigned char)g_pending_scene_name_writable[char_idx - 1]))
-        g_pending_scene_name_writable[--char_idx] = '\0';
+                              (int)USER_SCENE_NAME_MAX - 1,
+                              IMPORT_EXPORT_VIEW.pending_scene_name);
+    {
+        char *name = IMPORT_EXPORT_WRITABLE->pending_scene_name;
+        while (char_idx > 0 && isspace((unsigned char)name[char_idx - 1]))
+            name[--char_idx] = '\0';
+    }
     return 1;
 }
 
@@ -2448,8 +2455,8 @@ static void import_process_line(ImportState *s, const char *p, const char *raw) 
  * per-line workspace-header parser exposes them to legacy callers. The
  * cfg/deferred-var accumulators are per ImportState during file import. */
 static void import_clear_pending_result_fields(void) {
-    g_pending_scene_name_writable[0]    = '\0';
-    g_pending_workspace_dir_writable[0] = '\0';
+    IMPORT_EXPORT_WRITABLE->pending_scene_name[0]    = '\0';
+    IMPORT_EXPORT_WRITABLE->pending_workspace_dir[0] = '\0';
 }
 
 static const char *import_find_block_comment_start(const char *s) {
@@ -2985,9 +2992,9 @@ static int import_finish_load(ImportState *state,
 
     if (result) {
         snprintf(result->scene_name, sizeof(result->scene_name),
-                 "%s", g_pending_scene_name);
+                 "%s", IMPORT_EXPORT_VIEW.pending_scene_name);
         snprintf(result->workspace_dir, sizeof(result->workspace_dir),
-                 "%s", g_pending_workspace_dir);
+                 "%s", IMPORT_EXPORT_VIEW.pending_workspace_dir);
     }
 
     /* Resolve and apply the camera exactly once, after the whole file has

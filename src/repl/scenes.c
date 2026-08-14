@@ -37,14 +37,6 @@
 #define IMPORT_EXPORT_VIEW      (repl_state_import_export())
 #define IMPORT_EXPORT_WRITABLE  (repl_state_import_export_writable())
 
-#define g_export_scene_name_hint (IMPORT_EXPORT_VIEW.export_scene_name_hint)
-#define g_pending_scene_name     (IMPORT_EXPORT_VIEW.pending_scene_name)
-#define g_pending_workspace_dir  (IMPORT_EXPORT_VIEW.pending_workspace_dir)
-
-#define g_export_scene_name_hint_writable (IMPORT_EXPORT_WRITABLE->export_scene_name_hint)
-#define g_pending_scene_name_writable     (IMPORT_EXPORT_WRITABLE->pending_scene_name)
-#define g_pending_workspace_dir_writable  (IMPORT_EXPORT_WRITABLE->pending_workspace_dir)
-
 /* The per-scene cfg subset is selected by a controller-installed
  * bridge (ReplConfigBridge.fill_scene_subset / .apply) rather
  * than a static slug list. The controller knows which slugs belong
@@ -275,8 +267,8 @@ void repl_scenes_save_active_scene_if_any(void) {
 void repl_scenes_enter_transient_scene(void) {
     repl_scenes_save_active_scene_if_any();
     restore_pre_example_cfg_if_valid();
-    g_export_scene_name_hint_writable = NULL;
-    g_pending_scene_name_writable[0] = '\0';
+    IMPORT_EXPORT_WRITABLE->export_scene_name_hint = NULL;
+    IMPORT_EXPORT_WRITABLE->pending_scene_name[0] = '\0';
     g_active_user_scene = -1;
     repl_state_scenes_set_active_example_idx(-1);
     /* Unconditional: entering a transient buffer supersedes any retained
@@ -562,15 +554,15 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
             goto fail;
         }
 
-        g_export_scene_name_hint_writable = g_user_scenes[s].name;
+        IMPORT_EXPORT_WRITABLE->export_scene_name_hint = g_user_scenes[s].name;
         if (!repl_export_save_output(tmp_path, source_document_view(), layout)) {
-            g_export_scene_name_hint_writable = NULL;
+            IMPORT_EXPORT_WRITABLE->export_scene_name_hint = NULL;
             unlink(tmp_path);
             snprintf(err, sizeof(err),
                      "Workspace save: could not stage scene files");
             goto fail;
         }
-        g_export_scene_name_hint_writable = NULL;
+        IMPORT_EXPORT_WRITABLE->export_scene_name_hint = NULL;
         snprintf(manifest.scene_files[manifest.scene_count], WORKSPACE_IO_FILE_MAX,
                  "%s", g_user_scenes[s].file_name);
         manifest.scene_count++;
@@ -626,7 +618,7 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
     return written;
 
 fail:
-    g_export_scene_name_hint_writable = NULL;
+    IMPORT_EXPORT_WRITABLE->export_scene_name_hint = NULL;
     cleanup_workspace_scene_temps(dir, &manifest);
     cleanup_unpublished_scene_files(
         dir, &manifest, had_old_manifest ? &old_manifest : NULL,
@@ -696,12 +688,12 @@ int repl_save_active_scene(const ReplExportLayout *layout) {
     char path[REPL_WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
     format_scene_path("c", workspace_dir, path, sizeof(path));
 
-    g_export_scene_name_hint_writable = g_user_scenes[slot].name;
+    IMPORT_EXPORT_WRITABLE->export_scene_name_hint = g_user_scenes[slot].name;
     if (!repl_export_save_output(path, source_document_view(), layout)) {
-        g_export_scene_name_hint_writable = NULL;
+        IMPORT_EXPORT_WRITABLE->export_scene_name_hint = NULL;
         return 0;
     }
-    g_export_scene_name_hint_writable = NULL;
+    IMPORT_EXPORT_WRITABLE->export_scene_name_hint = NULL;
 
     /* repl_export_save_output hardcodes its success status to
      * "...output.c"; mask it with the real path, same as
@@ -958,8 +950,8 @@ int repl_scenes_create_empty_user_scene(void) {
 
     repl_scenes_save_active_scene_if_any();
     restore_pre_example_cfg_if_valid();
-    g_export_scene_name_hint_writable = NULL;
-    g_pending_scene_name_writable[0] = '\0';
+    IMPORT_EXPORT_WRITABLE->export_scene_name_hint = NULL;
+    IMPORT_EXPORT_WRITABLE->pending_scene_name[0] = '\0';
 
     repl_scenes_reset_for_transient();
     if (!repl_load_default_display_baseline(seed_err, sizeof(seed_err), NULL)) {

@@ -90,9 +90,6 @@ static void vp_rect(int count, int *px, int *py, int *pw, int *ph) {
     TEST_ASSERT_STR(&g_harness, label, got, exp); \
 } while (0)
 
-#define g_workspace_header_lines (repl_state_import_export().workspace_header_lines)
-#define g_workspace_header_line_count (repl_state_import_export().workspace_header_line_count)
-#define g_cam_lines (repl_state_import_export().cam_lines)
 
 #define replay_active        (replay_state_mut()->active)
 #define replay_state         (replay_state_mut()->state)
@@ -272,9 +269,12 @@ static int code_panel_header_row_count(void) {
 
     ui_layout_code_panel_rect(NULL, NULL, &panel_w, NULL);
     refresh_workspace_header_lines();
-    for (int i = 0; i < g_workspace_header_line_count; i++)
-        rows += test_code_panel_row_count_for_text(g_workspace_header_lines[i],
-                                                   text_x, panel_w);
+    {
+        ReplImportExportView ie = repl_state_import_export();
+        for (int i = 0; i < ie.workspace_header_line_count; i++)
+            rows += test_code_panel_row_count_for_text(ie.workspace_header_lines[i],
+                                                       text_x, panel_w);
+    }
     {
         unsigned collision_mask = repl_export_math_collision_mask();
         for (int i = 0; g_header_pre[i]; i++) {
@@ -303,9 +303,13 @@ static int code_panel_header_row_count(void) {
             rows += test_code_panel_row_count_for_text(line, text_x, panel_w);
         }
     }
-    for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++)
-        if (g_cam_lines[i][0])
-            rows += test_code_panel_row_count_for_text(g_cam_lines[i], text_x, panel_w);
+    {
+        const char (*cam)[REPL_EXPORT_CAMERA_LINE_MAX] =
+            repl_state_import_export().cam_lines;
+        for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++)
+            if (cam[i][0])
+                rows += test_code_panel_row_count_for_text(cam[i], text_x, panel_w);
+    }
     {
         char line[MAX_LINE_LEN];
         int n = repl_export_lights_display_line_count();
@@ -648,8 +652,9 @@ int main() {
         {
             int found_hidden_export = 0;
             refresh_workspace_header_lines();
-            for (int i = 0; i < g_workspace_header_line_count; i++) {
-                if (strcmp(g_workspace_header_lines[i],
+            ReplImportExportView ie = repl_state_import_export();
+            for (int i = 0; i < ie.workspace_header_line_count; i++) {
+                if (strcmp(ie.workspace_header_lines[i],
                            "/* @cfg code_panel = 3 */") == 0)
                     found_hidden_export = 1;
             }
