@@ -18,3 +18,4 @@ begun. They move to `plans/active/` once implementation starts.
 | `scene-close-capability.md` | Close/remove a user scene (design brief) |
 | `smooth-autonormals-with-loop-support.md` | Smooth autonormals with loop awareness |
 | `streamed-numeric-input.md` | Framed stdin float groups consumed by a baked `input` expression atom |
+| `tutorial-catalog-review.md` | Read-only consistency/clarity/coverage review of the 25 built-in tutorials as a set (2026-08-14): twelve ranked findings - the lighting run ordered so each lesson depends on the next, two entries that exist to exercise the runner rather than teach GL, beginner lessons with no closing takeaway, runner vocabulary in learner-facing text, three wrong tags - plus ten proposed tutorials in three tiers (transform hierarchy, expressions & motion, replay, keeping your work) |
