@@ -5724,6 +5724,107 @@ static void test_example_reset_reapplies_light_theme(void) {
                        sizeof(expected_default)) == 0);
 }
 
+/* ---- Modal kind contract ------------------------------------------------
+ *
+ * A GlrModalKind is only usable when all three of its dispatches are wired:
+ * glr_modal.c admits characters, this controller's snapshot builder formats
+ * the prompt, and glr_actions.c commits. The switches are exhaustive under
+ * -Werror=switch, which catches a missing *arm* - but not an arm that is
+ * present and empty, which still produces a modal that captures the keyboard
+ * with nothing on screen. This test is that second half: every kind renders a
+ * prompt, follows its typing policy, and reaches its commit. */
+typedef struct {
+    GlrModalKind kind;
+    int          accepts_typing;   /* 0 = confirmation prompt, not a field */
+    unsigned char confirm_key;     /* key that commits it */
+} ModalKindPolicy;
+
+static const ModalKindPolicy k_modal_policies[] = {
+    { GLR_MODAL_WORKSPACE_NEW,           1, '\r' },
+    { GLR_MODAL_WORKSPACE_SAVE_AS,       1, '\r' },
+    { GLR_MODAL_WORKSPACE_OPEN_PATH,     1, '\r' },
+    { GLR_MODAL_SCENE_SAVE_AS,           1, '\r' },
+    { GLR_MODAL_CONFIRM_DELETE_SCENE,    0, 'y'  },
+};
+
+static GlrModalKind g_modal_commit_kind;
+static int g_modal_commit_calls;
+
+static int test_modal_commit(GlrModalKind kind, const char *text, int context) {
+    (void)text;
+    (void)context;
+    g_modal_commit_kind = kind;
+    g_modal_commit_calls++;
+    return 1;   /* accept, so the modal closes */
+}
+
+static const ModalKindPolicy *modal_policy_for(GlrModalKind kind) {
+    for (int i = 0; i < (int)(sizeof(k_modal_policies) /
+                              sizeof(k_modal_policies[0])); i++)
+        if (k_modal_policies[i].kind == kind)
+            return &k_modal_policies[i];
+    return NULL;
+}
+
+static void test_every_modal_kind_is_wired(void) {
+    printf("--- every modal kind has a prompt, a typing policy, a commit ---\n");
+
+    ASSERT_INT("modal kind NONE does not open",
+               glr_modal_begin(GLR_MODAL_NONE, "", 0, test_modal_commit), 0);
+    ASSERT_INT("modal kind COUNT does not open",
+               glr_modal_begin(GLR_MODAL_COUNT, "", 0, test_modal_commit), 0);
+    ASSERT_INT("out-of-range modal kind does not open",
+               glr_modal_begin((GlrModalKind)(GLR_MODAL_COUNT + 7), "", 0,
+                               test_modal_commit), 0);
+    ASSERT_INT("modal with no commit callback does not open",
+               glr_modal_begin(GLR_MODAL_SCENE_SAVE_AS, "", 0, NULL), 0);
+    ASSERT_TRUE("no modal is active after the refused opens",
+                !glr_modal_active());
+
+    for (int k = GLR_MODAL_NONE + 1; k < GLR_MODAL_COUNT; k++) {
+        GlrModalKind kind = (GlrModalKind)k;
+        const ModalKindPolicy *policy = modal_policy_for(kind);
+        UiRenderSnapshot snap;
+        char label[96];
+
+        snprintf(label, sizeof(label),
+                 "modal kind %d has a declared typing policy", k);
+        ASSERT_TRUE(label, policy != NULL);
+        if (!policy)
+            continue;
+
+        ASSERT_INT("modal opens", glr_modal_begin(kind, "seed", 0,
+                                                  test_modal_commit), 1);
+
+        glr_ctrl_build_ui_snapshot(&snap);
+        snprintf(label, sizeof(label), "modal kind %d reports active", k);
+        ASSERT_INT(label, snap.app_modal_active, 1);
+        snprintf(label, sizeof(label), "modal kind %d renders a prompt", k);
+        ASSERT_TRUE(label, snap.app_modal_message[0] != '\0');
+        snprintf(label, sizeof(label), "modal kind %d offers a way out", k);
+        ASSERT_TRUE(label, strstr(snap.app_modal_message, "[Esc]") != NULL);
+
+        /* Typing policy: a name/path field takes printable characters; a
+         * confirmation prompt takes none. */
+        glr_modal_handle_key('a');
+        snprintf(label, sizeof(label), "modal kind %d typing policy", k);
+        ASSERT_INT(label, strcmp(glr_modal_text(), "seeda") == 0,
+                   policy->accepts_typing);
+
+        g_modal_commit_calls = 0;
+        g_modal_commit_kind = GLR_MODAL_NONE;
+        glr_modal_handle_key(policy->confirm_key);
+        snprintf(label, sizeof(label), "modal kind %d reaches its commit", k);
+        ASSERT_INT(label, g_modal_commit_calls, 1);
+        snprintf(label, sizeof(label), "modal kind %d commits as itself", k);
+        ASSERT_INT(label, (int)g_modal_commit_kind, k);
+        snprintf(label, sizeof(label), "modal kind %d closes on commit", k);
+        ASSERT_INT(label, glr_modal_active(), 0);
+    }
+
+    glr_modal_cancel();
+}
+
 static const GlrConfigItem *cfg_item_for_slug(const char *slug) {
     for (int i = 0; i < CFG_ITEM_COUNT; i++) {
         const GlrConfigItem *item = glr_config_item_at(i);
@@ -7203,6 +7304,7 @@ int main(void) {
     test_wireframe_renderer_ignores_user_draw_state();
     test_example_reset_reapplies_light_theme();
     test_scene_local_reset_covers_whole_roster();
+    test_every_modal_kind_is_wired();
     test_display_frame_merges_light_theme_and_enable_mask();
     test_export_light_bridge_reads_app_state();
     test_mouse_routing_and_hit_testing();

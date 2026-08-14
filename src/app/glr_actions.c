@@ -1474,6 +1474,9 @@ static int glr_action_delete_scene_commit(int slot) {
     return 1;
 }
 
+/* Commit half of the modal contract: one arm per GlrModalKind, no
+ * `default:`, so a new kind cannot compile into a prompt that ignores Enter.
+ * Returning 0 keeps the modal open (with an error set); 1 closes it. */
 static int glr_action_modal_commit(GlrModalKind kind, const char *text,
                                    int context) {
     char path[GLR_PATH_MAX];
@@ -1561,9 +1564,11 @@ static int glr_action_modal_commit(GlrModalKind kind, const char *text,
     }
     case GLR_MODAL_CONFIRM_DELETE_SCENE:
         return glr_action_delete_scene_commit(context);
-    default:
-        return 0;
+    case GLR_MODAL_NONE:
+    case GLR_MODAL_COUNT:
+        return 0;   /* not open: glr_modal_begin() rejects these */
     }
+    return 0;
 }
 
 int glr_action_menu_item_activate(int menu_id, int item_idx) {

@@ -2365,6 +2365,10 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     if (snap->app_modal_active) {
         const char *text = glr_modal_text();
         const char *error = glr_modal_error();
+        /* Presentation half of the modal contract: one arm per GlrModalKind,
+         * no `default:`, so a new kind cannot render as a blank prompt bar.
+         * The kind's input policy lives in glr_modal.c and its commit effects
+         * in glr_actions.c - all three switches are exhaustive together. */
         switch (glr_modal_kind()) {
         case GLR_MODAL_WORKSPACE_NEW:
             snprintf(snap->app_modal_message, sizeof(snap->app_modal_message),
@@ -2391,8 +2395,9 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
                      "%s   %s%s[Y] delete   [Esc] cancel", text,
                      error[0] ? error : "", error[0] ? "   " : "");
             break;
-        default:
-            break;
+        case GLR_MODAL_NONE:
+        case GLR_MODAL_COUNT:
+            break;   /* not open: glr_modal_active() already excluded these */
         }
     }
 

@@ -20,7 +20,7 @@ static GlrModalCommitFn g_commit;
 
 int glr_modal_begin(GlrModalKind kind, const char *initial_text,
                     int context, GlrModalCommitFn commit) {
-    if (kind == GLR_MODAL_NONE || !commit)
+    if (kind <= GLR_MODAL_NONE || kind >= GLR_MODAL_COUNT || !commit)
         return 0;
     editor_inline_rename_cancel();
     editor_inline_file_prompt_cancel();
@@ -51,17 +51,29 @@ void glr_modal_set_error(const char *msg) {
     snprintf(g_error, sizeof(g_error), "%s", msg ? msg : "");
 }
 
+/* Character-admission policy, one arm per kind. No `default:`: a new kind
+ * that forgets its policy must fail the build rather than silently reject
+ * every printable character (an un-typable prompt). A confirmation kind
+ * legitimately admits nothing - say so with an explicit arm. */
 static int modal_char_ok(unsigned char c) {
     if (c < 32 || c > 126)
         return 0;
-    if (g_kind == GLR_MODAL_WORKSPACE_OPEN_PATH)
+    switch (g_kind) {
+    case GLR_MODAL_WORKSPACE_OPEN_PATH:
+        /* A path: separators are the point, shell metacharacters are not. */
         return c != '"' && c != '\'' && c != '`' && c != '|' &&
                c != '<' && c != '>' && c != '\\';
-    if (g_kind == GLR_MODAL_WORKSPACE_NEW ||
-        g_kind == GLR_MODAL_WORKSPACE_SAVE_AS)
+    case GLR_MODAL_WORKSPACE_NEW:
+    case GLR_MODAL_WORKSPACE_SAVE_AS:
+    case GLR_MODAL_SCENE_SAVE_AS:
+        /* A single name that becomes a directory/file entry. */
         return c != '/' && c != '\\' && c != ':';
-    if (g_kind == GLR_MODAL_SCENE_SAVE_AS)
-        return c != '/' && c != '\\' && c != ':';
+    case GLR_MODAL_CONFIRM_DELETE_SCENE:
+        return 0;   /* y/N confirmation: nothing is typed into it */
+    case GLR_MODAL_NONE:
+    case GLR_MODAL_COUNT:
+        return 0;   /* not open */
+    }
     return 0;
 }
 
