@@ -592,7 +592,7 @@ static const char *const g_tutorial_glut_solids_setup[] = {
     "glRotatef(16.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
     "glRotatef(0.0f, 0.0f, 1.0f, 0.0f); // @camera ry",
     "glTranslatef(0.0f, 0.0f, 0.0f); // @camera pan",
-    "// Lighting scaffold shared by every solid in this tour.",
+    "// These locked lines enable lighting so the solids read as 3D; Lighting Basics teaches each call.",
     "glEnable(GL_DEPTH_TEST)",
     "glEnable(GL_LIGHTING)",
     "glEnable(GL_LIGHT0)",
@@ -828,7 +828,7 @@ static const TutorialStep g_tutorial_clip_planes_steps[] = {
 };
 
 static const char *const g_tutorial_materials_setup[] = {
-    "// Minimal lighting scaffold for explicit material properties.",
+    "// These locked lines are the minimal lit pipeline from the Lighting Basics tutorial.",
     "glEnable(GL_DEPTH_TEST)",
     "glEnable(GL_LIGHTING)",
     "glEnable(GL_LIGHT0)",
@@ -854,7 +854,7 @@ static const TutorialStep g_tutorial_materials_steps[] = {
 };
 
 static const char *const g_tutorial_shade_model_setup[] = {
-    "// Lighting scaffold for the shade-model comparison.",
+    "// These locked lines are the minimal lit pipeline from the Lighting Basics tutorial.",
     "glEnable(GL_DEPTH_TEST)",
     "glEnable(GL_LIGHTING)",
     "glEnable(GL_LIGHT0)",
@@ -893,7 +893,7 @@ static const char *const g_tutorial_normals_setup[] = {
     "glRotatef(25.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
     "glRotatef(0.0f, 0.0f, 1.0f, 0.0f); // @camera ry",
     "glTranslatef(0.0f, 0.0f, 0.0f); // @camera pan",
-    "// Lighting scaffold for the surface-normal demonstration.",
+    "// These locked lines are the minimal lit pipeline from the Lighting Basics tutorial.",
     "glEnable(GL_DEPTH_TEST)",
     "glEnable(GL_LIGHTING)",
     "glEnable(GL_LIGHT0)",
@@ -983,7 +983,7 @@ static const char *const g_tutorial_two_sided_setup[] = {
     "glRotatef(12.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
     "glRotatef(0.0f, 0.0f, 1.0f, 0.0f); // @camera ry",
     "glTranslatef(0.0f, 0.0f, 0.0f); // @camera pan",
-    "// Lighting scaffold for the two-sided lighting lesson.",
+    "// These locked lines are the minimal lit pipeline from the Lighting Basics tutorial.",
     "glEnable(GL_DEPTH_TEST)",
     "glEnable(GL_LIGHTING)",
     "glEnable(GL_LIGHT0)",
@@ -1177,7 +1177,7 @@ static const TutorialStep g_tutorial_functions_steps[] = {
     STEP_CMD(NULL, "spoke(120)"),
     STEP_CMD(NULL, "spoke(240)"),
     STEP_NOTE(
-        "// Named calls compile to the REPL's funcN slots while the source keeps the readable name."),
+        "// The same function with different arguments draws the same geometry in more than one place."),
     STEP_SENTINEL,
 };
 
