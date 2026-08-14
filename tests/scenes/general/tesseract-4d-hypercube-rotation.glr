@@ -31,10 +31,10 @@ glLineWidth(2.2);
 glBegin(GL_LINES);
   for(i, 0, 16) {
     // 4D coordinate signs of vertex i
-    sx = (fmod(i, 2) >= 1) ? 1.0 : -1.0;
-    sy = (fmod(floor(i / 2.0), 2) >= 1) ? 1.0 : -1.0;
-    sz = (fmod(floor(i / 4.0), 2) >= 1) ? 1.0 : -1.0;
-    sw = (fmod(floor(i / 8.0), 2) >= 1) ? 1.0 : -1.0;
+    sx = (fmod(i, 2) >= 1) * 2.0 - 1.0;
+    sy = (fmod(floor(i / 2.0), 2) >= 1) * 2.0 - 1.0;
+    sz = (fmod(floor(i / 4.0), 2) >= 1) * 2.0 - 1.0;
+    sw = (fmod(floor(i / 8.0), 2) >= 1) * 2.0 - 1.0;
 
     // Rotate vertex i in 4D (XW and YZ planes)
     w_tmp = sx * s_xw + sw * c_xw;
@@ -131,10 +131,10 @@ glEnable(GL_COLOR_MATERIAL);
 glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 
 for(i, 0, 16) {
-  sx = (fmod(i, 2) >= 1) ? 1.0 : -1.0;
-  sy = (fmod(floor(i / 2.0), 2) >= 1) ? 1.0 : -1.0;
-  sz = (fmod(floor(i / 4.0), 2) >= 1) ? 1.0 : -1.0;
-  sw = (fmod(floor(i / 8.0), 2) >= 1) ? 1.0 : -1.0;
+  sx = (fmod(i, 2) >= 1) * 2.0 - 1.0;
+  sy = (fmod(floor(i / 2.0), 2) >= 1) * 2.0 - 1.0;
+  sz = (fmod(floor(i / 4.0), 2) >= 1) * 2.0 - 1.0;
+  sw = (fmod(floor(i / 8.0), 2) >= 1) * 2.0 - 1.0;
 
   w_tmp = sx * s_xw + sw * c_xw;
   x1 = sx * c_xw - sw * s_xw;
