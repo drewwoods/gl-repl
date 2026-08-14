@@ -272,7 +272,7 @@ ReplCompileResult repl_compile_var_assign(const char *input,
                                           ReplCompiledChange *out,
                                           char *err, int err_size);
 
-/* Compile dispatcher: walks all six per-kind compile validators in
+/* Compile dispatcher: walks all seven per-kind compile validators in
  * canonical order and returns the first one that produces a
  * non-NO_CHANGE result. NO_CHANGE means the input didn't match any
  * handler - the caller decides whether that is "fall through to a

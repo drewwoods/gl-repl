@@ -41,9 +41,11 @@
  *   repl_compile_uncomment_line     REPLACE_ONE re-parsing one
  *                                   stripped comment row in place
  *
- * Dispatcher: repl_compile_dispatch() walks the float-decl +
- * var-assign chain and is callable from outside the editor. The
- * uncomment path calls it as a fallback.
+ * Dispatcher: repl_compile_dispatch() walks all seven per-kind
+ * validators in canonical order (float_decl -> var_assign ->
+ * if_branch -> close_brace -> for_loop -> func_def -> if_block) and is
+ * callable from outside the editor. The uncomment path calls it as a
+ * fallback. The order is load-bearing - see the chain[] table below.
  */
 
 #define _POSIX_C_SOURCE 200809L /* for strnlen on linux */

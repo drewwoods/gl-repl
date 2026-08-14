@@ -295,8 +295,15 @@ Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/gl
   [`src/app/glr_config.c`](src/app/glr_config.c) - `-Werror=switch` fails the
   build until you do. A per-scene setting also joins `k_cfg_scene_defaults[]`
   and `glr_state_presentation_reset_example_defaults()`.
-- **New GL commands** → skill `gl-repl-new-command` (five required edits:
-  [`CmdType`](src/repl/command.h#L44), parser, executor, `flatten_range()`, spec tables).
+- **New GL commands** → the canonical checklist is `docs/ARCHITECTURE.md`
+  *Adding A New Command*; skill `gl-repl-new-command` carries the extra detail.
+  A bound table-driven command means [`CmdType`](src/repl/command.h#L44), the
+  three `command_spec.c` tables, executor, replay annotation,
+  `command_descriptions.txt` (build-enforced), export round-trip - plus
+  `attrib_bits.c` + `gl_state_inspector.c` when it writes attribute-scoped
+  state. **`parser.c` and `flatten_range()` are not on that list**: both are
+  driven by the spec tables, and only structured/control-flow syntax needs
+  custom parse or lowering work.
 - Enum args live in `GLCmd.args[]` (there is **no `GLCmd.mode` field** - its
   absence is the invariant). Per-slot [`ReplEnumSlotKind`](src/repl/command_spec.h#L76): `ENUM_ONLY`
   (default), `ENUM_OR_CONST_VALUE` (bool masks, 0/1 reverse-mapped),
@@ -504,8 +511,12 @@ Export ([`src/repl/export.c`](src/repl/export.c)) writes standalone C:
 header directives (`@cfg`, `@scene-name`, `@workspace-dir`), camera as raw
 transforms, predefs + scratch arrays as globals, funcs, `display()` body.
 Import ([`src/repl/import.c`](src/repl/import.c)) reverses it line-by-line,
-feeding geometry through [`editor_feed_line()`](src/editor/input.h#L196). The `IMPORT_EXPORT_STATE`
-macro block is deliberately duplicated verbatim across the two TUs.
+feeding geometry through [`repl_load_apply_line()`](src/repl/load.h#L78) -
+the compile + apply path for non-editor callers, **not**
+`editor_feed_line()`. Reader and writer share one
+[`export_format_shared.h`](src/repl/export_format_shared.h)
+(`IMPORT_EXPORT_VIEW` / `IMPORT_EXPORT_WRITABLE`); there is no duplicated
+state macro to keep in sync.
 `repl_cfg_get_int`/`_set_int` etc. go through the installed config bridge
 only (`check-repl-export-via-bridge`).
 

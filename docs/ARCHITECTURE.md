@@ -2456,15 +2456,27 @@ shapes.
 > **What kind of thing am I adding?** The path branches at step 0.
 >
 > - **Bound GL/GLU/GLUT command** (most common - `glutSolidCube`,
->   `glRasterPos3f`, `glColor3f`, etc.) → steps 1-8 in order.
+>   `glRasterPos3f`, `glColor3f`, etc.) → steps 1-8 in order. Step 3c applies
+>   only if the command writes attribute-scoped GL state.
 > - **REPL primitive** that compiles down to a custom helper at export time
 >   (`label` is the only example today) → steps 1-4, 5 (with extra emphasis on
 >   semantic parity), 6, 7, 8. Step 7 must include a hand-written export
 >   helper because the line is not a real GL symbol.
 > - **Math / expression function** (`rand`, `rand2`, `sin`, etc.) - these are
 >   evaluated inline by [`src/repl/eval.c`](../src/repl/eval.c), never become a [`CmdType`](../src/repl/command.h#L44), and skip
->   steps 1, 2bc, 3, 4. They still need step 2a (autocomplete + F1 help) and
+>   steps 1, 2bc, 3a-3c, 4. They still need step 2a (autocomplete + F1 help) and
 >   step 7 (export round-trip helper if non-trivial). See **Step 0b** below.
+>
+> **The parser and the flattener are table-driven and are not steps here.**
+> A row in `k_std_command_specs[]` / `k_enum_command_specs[]` (step 2b) is what
+> teaches [`src/repl/parser.c`](../src/repl/parser.c) the spelling, and
+> `flatten_range()` special-cases only control flow, assignments, scratch
+> writes and source-only markers - everything else falls through to
+> `flatten_reparse_line`, which re-reads the same spec tables. Neither
+> `a4056e54` (`glVertex4f`) nor `4c693a35` (`glPolygonMode` /
+> `glPolygonOffset`) touched either file. Only the fourth shape below - a
+> structured or context-sensitive form the generic parser cannot own - needs
+> custom parse and lowering work.
 > - **Structured / control-flow syntax** (a new block construct, branch
 >   separator, or context-sensitive statement the generic parser can't own -
 >   `for`, `if`, `} else if(...) {`) → the shared wiring here still applies
@@ -2503,8 +2515,8 @@ go through [`src/repl/executor.c`](../src/repl/executor.c). They live entirely i
    `export_text_uses_token("rand2(", …)`) so the exported file compiles
    without dragging the whole REPL runtime.
 
-After step 0b, skip to step 2a, then jump to step 7. Steps 1, 2bc, 3, 4, 5,
-and 6 do not apply to math functions.
+After step 0b, skip to step 2a, then jump to step 7. Steps 1, 2bc, 3a-3c, 4,
+5, and 6 do not apply to math functions.
 
 #### 1. [`src/repl/command.h`](../src/repl/command.h) - declare the type
 
@@ -2573,7 +2585,7 @@ commands use `(1, 1, ...)` - needs semicolon, needs block indent.
 CMD_TYPE_SPEC(CMD_GLUT_CUBE, 1, 1, CMD_CAT_GLUT_SHAPE),
 ```
 
-#### 3. [`src/repl/executor.c`](../src/repl/executor.c) - execute the command
+#### 3a. [`src/repl/executor.c`](../src/repl/executor.c) - execute the command
 
 Add a `case` block after the nearest related command. Call the GL/GLU/GLUT
 function, casting `flat_cmds[pc].args[N]` to the correct C type (`(double)`,
@@ -2589,6 +2601,58 @@ case CMD_GLUT_CUBE:
     glutSolidCube((double)flat_cmds[pc].args[0]);
     break;
 ```
+
+#### 3b. [`src/repl/command_descriptions.txt`](../src/repl/command_descriptions.txt) - the right-click help popup
+
+> [!IMPORTANT]
+> **Build-enforced for every bound GL/GLU/GLUT `CmdType`.**
+> [`scripts/gen_command_descriptions.py`](../scripts/gen_command_descriptions.py)
+> is exhaustive over the enum: a new GL-family type with no `[command …]`
+> section fails the generator, and therefore the build. Language/editor types
+> (`CMD_FOR_BEGIN`, `CMD_VAR_ASSIGN`, …) are listed in the generator's
+> `NON_GL_COMMANDS` set and are exempt; `glEnable`/`glDisable` are exempt too
+> because their popup content is selected from the `[capability …]` catalog by
+> `args[0]`, so a new *capability* needs a section there instead.
+
+```
+[command CMD_GLUT_CUBE]
+title = glutSolidCube
+Draws a solid cube of the given edge length centred on the origin, with
+generated normals so it lights correctly.
+```
+
+#### 3c. The REPL's state mirrors - only for commands that write tracked GL state
+
+Skip this step entirely for geometry, transforms and language primitives. For a
+command that sets state `glPushAttrib` would scope (anything in the
+`glEnable` / `glBlendFunc` / `glMaterialfv` / `glPolygonMode` family), **two
+non-executor folds re-derive the same semantics without issuing GL** and both
+must learn the command, or the REPL's own mirrors quietly disagree with the
+driver:
+
+- [`src/repl/attrib_bits.c`](../src/repl/attrib_bits.c) -
+  `repl_attrib_bits_for_cmd` maps the command to its covering `GL_*_BIT`
+  group(s), and `repl_attrib_cmd_writes` names the atomic state *cells* it
+  writes. This drives the editor's per-bit push/pop cursor highlighting. Omit
+  it and the setter vanishes from the highlight.
+- [`src/repl/gl_state_inspector.c`](../src/repl/gl_state_inspector.c) -
+  `gl_state_apply_cmd` is a **second executor**: a pure source-checkpoint fold
+  that re-implements the state semantics of every command
+  `repl_apply_state_cmd` ([`src/repl/executor.c`](../src/repl/executor.c))
+  emits, so the OpenGL-state popup can report values without a `glGet*`
+  read-back. Its switch enumerates `CMD_TYPE_COUNT` with no `default:`, so
+  `-Werror=switch` will hold the build until you answer.
+
+Commit `4c693a35` (`glPolygonMode` / `glPolygonOffset`) is the worked example;
+its message calls these two edits *"what makes the commands actually usable."*
+
+The coverage sweep in
+[`tests/test_repl_state.c`](../tests/test_repl_state.c) (`3. ratchet: every
+state-carrying CmdType is in the table`) asserts that anything `attrib_bits`
+classifies as attribute-scoped is modeled by the inspector and exercised across
+a `glPushAttrib`/`glPopAttrib` pair. Note its direction: the sweep is *gated* on
+`repl_attrib_bits_for_type(t, 0) != 0`, so it can only catch an inspector gap
+once `attrib_bits` knows about the command. Do `attrib_bits` first.
 
 #### 4. [`src/subsystems/replay/replay_annotations.c`](../src/subsystems/replay/replay_annotations.c) - replay display format
 
@@ -2649,7 +2713,11 @@ source-document line text (`source_text_line(view, cmd_idx)` via the
 neutral port - flat commands do not own source text, and [`export.c`](../src/repl/export.c) does
 not reach into [`EditorState`](../src/editor/state.h#L199) directly)
 verbatim into the exported `display()` body, and `repl_export_load_from_file`
-feeds those lines back through the commit pipeline. You only need to
+feeds those lines back through
+[`repl_load_apply_line()`](../src/repl/load.h#L78) - the compile + apply path
+shared by file import, catalog load and replace, **not** `editor_feed_line()`
+(see [`src/repl/load.h`](../src/repl/load.h), which is explicit that it
+replaces `editor_feed_line` for non-editor callers). You only need to
 touch [`src/repl/export.c`](../src/repl/export.c) for commands with non-source-text encoding -
 declarations (`@declare`), tess blocks, REPL primitives that need a
 standalone helper, etc.
@@ -2712,6 +2780,7 @@ make gl-repl USE_GL_STUBS=1   # verify stub build still links if step 6 changed
 # Spot-check the new command end-to-end:
 # - F1 overlay shows it with description in the expected group
 # - Type the prefix; Tab fills the rest and the parameter hint shows
+# - Right-click the committed row: the help popup shows the step-3b entry
 # - Replay (Ctrl+G) shows the command annotated correctly
 # - Save (Ctrl+S) → reload (./gl-repl output.c) → command appears identical
 # - For commands with a custom export helper: gcc -c output.c against
