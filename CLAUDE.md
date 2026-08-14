@@ -391,8 +391,11 @@ execute-time re-eval.
 
 - **Interactive `;` key**: the input buffer does **not** contain the `;` -
   handlers must accept input without a trailing `;`.
-- **[`editor_feed_line()`](src/editor/input.h#L196)** (file/example loading): copies the full line
-  *including* `;`, then runs the same chain.
+- **Bulk line feeding**: [`editor_feed_line()`](src/editor/input.h#L196)
+  (clipboard paste, tests, editor-side loaders) and
+  [`repl_load_apply_line()`](src/repl/load.h#L78) (file import, catalog load,
+  replace - the pipeline TUs' twin) both copy the full line *including* `;`,
+  then run the same chain.
 - Enter may or may not have `;`. [`editor_load_line_to_input()`](src/editor/input.h#L189) strips the
   trailing `;`, so re-committing an existing line takes the no-semicolon
   path - handlers checking for `;` must also accept end-of-string.

@@ -101,8 +101,9 @@ Two commit paths that differ:
 
 - **Interactive `;`** - the input buffer does *not* contain the `;`. Handlers
   must accept input without a trailing semicolon.
-- **`editor_feed_line()`** (interactive-equivalent line feeding) - copies the
-  full line *including* `;`.
+- **Bulk line feeding** - `editor_feed_line()` (clipboard paste, tests,
+  editor-side loaders) and `repl_load_apply_line()` (file import, catalog
+  load, replace) both copy the full line *including* `;`.
 
 `editor_load_line_to_input()` strips the trailing `;`, so re-committing an
 existing line takes the no-semicolon path. Any handler checking for `;` must
