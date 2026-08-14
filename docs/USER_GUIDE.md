@@ -220,7 +220,7 @@ with `./gl-repl --tutorial "First Triangle"` (a 1-based index also works).
   **Exit Tutorial** entries.
 - Instruction lines are locked - the tutorial guards them against edits
   until you finish or exit.
-- **Beginner:** *First Triangle*, *Color & Transform*, *Feature Tour*,
+- **Beginner:** *First Triangle*, *Color & Transform*, *Scene Chrome & Overlays*,
   *Variable Slider*, *First Animation*, *Points & Lines*, *GLUT Solids Tour*,
   and *First Loop*.
 - **Intermediate:** *Depth Test Triangle*, *Lighting Basics*, *Color

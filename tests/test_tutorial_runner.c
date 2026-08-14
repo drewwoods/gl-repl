@@ -1200,7 +1200,7 @@ static void test_catalog_cfg_lines(void) {
         const char *name = repl_tutorial_name(i);
         if (name && (strcmp(name, "First Triangle") == 0 ||
                      strcmp(name, "Color & Transform") == 0 ||
-                     strcmp(name, "Feature Tour") == 0 ||
+                     strcmp(name, "Scene Chrome & Overlays") == 0 ||
                      strcmp(name, "First Animation") == 0 ||
                      strcmp(name, "Points & Lines") == 0 ||
                      strcmp(name, "Line Stipple") == 0 ||
@@ -1381,7 +1381,13 @@ static void test_catalog_tag_metadata(void) {
         snprintf(label, sizeof(label),
                  "tutorial %d ('%s') has at least one real tag",
                  idx, entry->name ? entry->name : "?");
-        ASSERT_TRUE(label, named > 0);
+        /* Scene Chrome & Overlays is the orientation lesson: it teaches
+         * app view settings, which match no topic tag, so it lives in All
+         * only. Every other entry must name at least one real tag. */
+        if (entry->name && strcmp(entry->name, "Scene Chrome & Overlays") == 0)
+            ASSERT_INT(label, named, 0);
+        else
+            ASSERT_TRUE(label, named > 0);
 
         snprintf(label, sizeof(label), "tutorial %d has tag 0 (All)", idx);
         ASSERT_TRUE(label, repl_tutorial_has_tag(idx, 0));
@@ -2758,7 +2764,7 @@ static void test_block_esc_then_navigate_back_reenters_insert_mode(void) {
  * success, -1 if the catalog doesn't contain Feature Tour or a step
  * fails to advance. */
 static int start_feature_tour_and_walk_commands(void) {
-    int idx = find_tutorial_idx("Feature Tour");
+    int idx = find_tutorial_idx("Scene Chrome & Overlays");
     if (idx < 0) return -1;
     tutorial_start(idx);
     int total = repl_tutorial_step_count(idx);
@@ -2853,7 +2859,13 @@ static void test_set_step_applies_cfg_and_advances_on_ack(void) {
     ASSERT_INT("cfg grid applied to Aurora",
                repl_cfg_get_int("grid", -1), GRID_THEME_AURORA);
 
-    /* One more ack: past the final SET -> tutorial completes. */
+    /* One more ack: past the final SET into the closing NOTE. */
+    glr_ctrl_keyboard('\r', 0, 0);
+    ASSERT_TRUE("tutorial still active for the closing NOTE",
+                tutorial_active());
+    ASSERT_INT("closing step is a NOTE",
+               (int)tutorial_current_step_kind(),
+               (int)TUTORIAL_STEP_KIND_NOTE);
     glr_ctrl_keyboard('\r', 0, 0);
     ASSERT_TRUE("final ack completes the tutorial", !tutorial_active());
 }
@@ -3351,16 +3363,16 @@ static void test_validate_block_step_rules(void) {
                 repl_tutorial_validate_entry(&e10, err, sizeof(err)));
 }
 
-/* Feature Tour is the catalog's showcase for the relaxed shapes: it must
- * open with a NOTE step and carry comment-less COMMAND steps, and
- * step_count must include them (they'd vanish if any walker still used
- * the old `comment == NULL` sentinel). */
+/* Scene Chrome & Overlays is the catalog's showcase for the non-COMMAND
+ * step kinds: it must open with a NOTE, carry a REQUIRE and SET steps,
+ * and include those in step_count (they'd vanish if any walker still
+ * used the old `comment == NULL` sentinel). */
 static void test_catalog_feature_tour_uses_relaxed_step_shapes(void) {
-    int idx = find_tutorial_idx("Feature Tour");
-    ASSERT_TRUE("Feature Tour is in catalog", idx >= 0);
+    int idx = find_tutorial_idx("Scene Chrome & Overlays");
+    ASSERT_TRUE("Scene Chrome is in catalog", idx >= 0);
     if (idx < 0) return;
 
-    ASSERT_INT("Feature Tour opens with a NOTE step",
+    ASSERT_INT("Scene Chrome opens with a NOTE step",
                (int)repl_tutorial_step_kind(idx, 0),
                (int)TUTORIAL_STEP_KIND_NOTE);
     ASSERT_TRUE("NOTE step has a comment",
@@ -3368,18 +3380,17 @@ static void test_catalog_feature_tour_uses_relaxed_step_shapes(void) {
     ASSERT_TRUE("NOTE step has no expected",
                 repl_tutorial_step_expected(idx, 0) == NULL);
 
-    int comment_less = 0;
+    int commands = 0, requires = 0, sets = 0;
     int total = repl_tutorial_step_count(idx);
     for (int s = 0; s < total; s++) {
-        if (repl_tutorial_step_kind(idx, s) == TUTORIAL_STEP_KIND_COMMAND &&
-            repl_tutorial_step_comment(idx, s) == NULL) {
-            ASSERT_TRUE("comment-less step still has expected",
-                        repl_tutorial_step_expected(idx, s) != NULL);
-            comment_less++;
-        }
+        TutorialStepKind kind = repl_tutorial_step_kind(idx, s);
+        if (kind == TUTORIAL_STEP_KIND_COMMAND) commands++;
+        else if (kind == TUTORIAL_STEP_KIND_REQUIRE) requires++;
+        else if (kind == TUTORIAL_STEP_KIND_SET) sets++;
     }
-    ASSERT_INT("Feature Tour has two comment-less COMMAND steps",
-               comment_less, 2);
+    ASSERT_TRUE("Scene Chrome has a COMMAND to hang overlays on", commands >= 1);
+    ASSERT_TRUE("Scene Chrome has a REQUIRE step", requires >= 1);
+    ASSERT_INT("Scene Chrome has two grid SET steps", sets, 2);
 }
 
 /* Runtime NOTE behavior: the instruction comment is emitted and locked,
@@ -3387,7 +3398,7 @@ static void test_catalog_feature_tour_uses_relaxed_step_shapes(void) {
  * non-ack key is not consumed, and an ack key advances. */
 static void test_note_step_waits_for_ack_and_freezes_document(void) {
     reset_fixture();
-    int idx = find_tutorial_idx("Feature Tour");
+    int idx = find_tutorial_idx("Scene Chrome & Overlays");
     ASSERT_TRUE("Feature Tour found", idx >= 0);
     if (idx < 0) return;
 
@@ -3434,16 +3445,22 @@ static void test_note_step_waits_for_ack_and_freezes_document(void) {
  * is recorded as the step's anchor and locked. */
 static void test_comment_less_command_commits_without_instruction_row(void) {
     reset_fixture();
-    int idx = find_tutorial_idx("Feature Tour");
-    ASSERT_TRUE("Feature Tour found", idx >= 0);
+    int idx = find_tutorial_idx("Color & Transform");
+    ASSERT_TRUE("Color & Transform found", idx >= 0);
     if (idx < 0) return;
 
     tutorial_start(idx);
-    glr_ctrl_keyboard('\r', 0, 0);                      /* ack the NOTE   */
-    ASSERT_TRUE("commit glBegin step",
-                commit_command_step(idx, tutorial_state_view().step));
-    ASSERT_TRUE("commit top-vertex step",
-                commit_command_step(idx, tutorial_state_view().step));
+    /* Walk narrated COMMAND steps until the first comment-less one. */
+    int guard = 0;
+    int total = repl_tutorial_step_count(idx);
+    while (tutorial_active() && guard++ < total) {
+        int step = tutorial_state_view().step;
+        if (repl_tutorial_step_kind(idx, step) == TUTORIAL_STEP_KIND_COMMAND &&
+            repl_tutorial_step_comment(idx, step) == NULL)
+            break;
+        ASSERT_TRUE("walk to first comment-less COMMAND",
+                    commit_command_step(idx, step));
+    }
 
     /* Now paused on the first comment-less vertex step. */
     int step = tutorial_state_view().step;
@@ -3956,7 +3973,7 @@ static void test_feature_tour_grid_steps_use_symbolic_names(void) {
     int n = repl_tutorial_count();
     int tour_idx = -1;
     for (int i = 0; i < n; i++) {
-        if (strcmp(repl_tutorial_name(i), "Feature Tour") == 0) {
+        if (strcmp(repl_tutorial_name(i), "Scene Chrome & Overlays") == 0) {
             tour_idx = i;
             break;
         }
@@ -3993,7 +4010,7 @@ static void test_feature_tour_grid_steps_use_symbolic_names(void) {
 }
 
 static void test_feature_tour_vertex_outline_hint_uses_keymap(void) {
-    int tour_idx = find_tutorial_idx("Feature Tour");
+    int tour_idx = find_tutorial_idx("Scene Chrome & Overlays");
     ASSERT_TRUE("Feature Tour exists for shortcut hint test", tour_idx >= 0);
     if (tour_idx < 0) return;
 
@@ -4041,7 +4058,7 @@ static void test_validate_rejects_typo_symbolic_value_name(void) {
     int n = repl_tutorial_count();
     int tour_idx = -1;
     for (int i = 0; i < n; i++) {
-        if (strcmp(repl_tutorial_name(i), "Feature Tour") == 0) {
+        if (strcmp(repl_tutorial_name(i), "Scene Chrome & Overlays") == 0) {
             tour_idx = i;
             break;
         }

@@ -325,38 +325,29 @@ static const char *const g_tutorial_first_triangle_cfg[] = {
     NULL,
 };
 
-/* "Feature Tour" - exercises the non-COMMAND step kinds and the
- * relaxed step shapes:
- *   1) A NOTE step opens the tour (comment-only; ack key advances).
- *   2) Five COMMAND steps draw a triangle in 3D. The two lower-corner
- *      vertex steps are comment-less (STEP_CMD) - the autocomplete
- *      ghost and status hint carry the instruction, demonstrating
- *      that a narration comment per command is not required.
- *   3) One REQUIRE step asks the user to enable vertex outlines (using
- *      the GLR_VERTEX_OUTLINES binding) so they see how the feature
- *      changes the rendering.
- *   4) Two SET steps showcase Radar and Aurora grid themes;
- *      the user presses Enter/Tab/Space to advance through them.
+/* "Scene Chrome & Overlays" - the catalog's orientation lesson for app
+ * view settings. Geometry is one locked-in cube so the steps spend themselves
+ * on overlays and grid themes, not on re-drawing the triangle the learner
+ * just built. Step kinds:
+ *   1) A NOTE opens: chrome is an app setting, not program state.
+ *   2) One COMMAND places a cube so the overlays have something to trace.
+ *   3) One REQUIRE asks the user to enable vertex outlines (using the
+ *      GLR_VERTEX_OUTLINES binding).
+ *   4) Two SET steps showcase Radar and Aurora grid themes.
+ *   5) A closing NOTE states the catalog-wide rule and names glClearColor.
  *
  * The entry-level `@cfg` block guarantees a known baseline (3D view,
  * grid off, vertex outlines off) so the REQUIRE step has the intended
  * teaching effect rather than auto-advancing immediately. The SET
  * steps use symbolic cfg values so enum reordering in src/render3d/themes.h
- * does not silently retarget the showcase. */
+ * does not silently retarget the showcase. Lives in All only - it teaches
+ * no Geometry. */
 static const TutorialStep g_tutorial_feature_tour_steps[] = {
     STEP_NOTE(
-        "// A quick tour of the REPL's scene features."),
+        "// Grid, overlays, and view mode are app settings - they are not commands in the program."),
     STEP_APPEND(NULL,
-        "// Open a triangle batch.",
-        "glBegin(GL_TRIANGLES)"),
-    STEP_APPEND(NULL,
-        "// Add the three corners, starting at the top.",
-        "glVertex3f(0, 2, 0)"),
-    STEP_CMD(NULL, "glVertex3f(-2, -2, 0)"),
-    STEP_CMD(NULL, "glVertex3f(2, -2, 0)"),
-    STEP_APPEND(NULL,
-        "// Close the batch - the filled triangle appears.",
-        "glEnd()"),
+        "// Draw a cube so the overlays have an edge to trace.",
+        "glutSolidCube(2)"),
     STEP_REQUIRE_KEY(NULL,
         "// Press %s to turn on vertex outlines; they trace each edge.",
         "vertex_outlines", 1,
@@ -367,6 +358,8 @@ static const TutorialStep g_tutorial_feature_tour_steps[] = {
     STEP_SET_SYM(NULL,
         "// And the Aurora grid backdrop looks like this.",
         "grid", "GRID_THEME_AURORA"),
+    STEP_NOTE(
+        "// Those settings live in the app. The locked glClear at the top wipes the buffers each frame; glClearColor sets that color and must be written above the clear."),
     STEP_SENTINEL,
 };
 
@@ -1303,10 +1296,10 @@ static const TutorialEntry g_tutorials[] = {
         .subheading = "Beginner",
     },
     {
-        .name       = "Feature Tour",
+        .name       = "Scene Chrome & Overlays",
         .steps      = g_tutorial_feature_tour_steps,
         .cfg        = g_tutorial_feature_tour_cfg,
-        .tag_names  = (const char *const []){ "Geometry", NULL },
+        .tag_names  = (const char *const []){ NULL },
         .subheading = "Beginner",
     },
     {
