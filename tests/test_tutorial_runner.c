@@ -2251,10 +2251,10 @@ static int find_tutorial_idx(const char *name) {
 
 static int commit_command_step(int idx, int step);
 
-/* First Animation keeps the built-in `t` clock paused while its two
+/* First Animation keeps the built-in `t` clock paused while its
  * commands are entered, then enables Auto time only when Ctrl+T is pressed.
  * This protects the tutorial's core visual promise: the shortcut starts the
- * motion rather than pausing an already moving cube. */
+ * motion rather than pausing an already moving cone. */
 static void test_first_animation_starts_on_ctrl_t(void) {
     reset_fixture();
 
@@ -2264,8 +2264,8 @@ static void test_first_animation_starts_on_ctrl_t(void) {
 
     ASSERT_TRUE("First Animation is tagged Animation",
                 repl_tutorial_has_tag(idx, REPL_TUTORIAL_TAG_ANIMATION));
-    ASSERT_INT("First Animation has intro, two commands, a REQUIRE, and a closing NOTE",
-               repl_tutorial_step_count(idx), 5);
+    ASSERT_INT("First Animation has intro, three commands, a REQUIRE, and a closing NOTE",
+               repl_tutorial_step_count(idx), 6);
     const char *const *cfg = repl_tutorial_cfg_lines(idx);
     ASSERT_TRUE("First Animation pauses Auto time in its cfg",
                 cfg != NULL && cfg[0] != NULL &&
@@ -2286,9 +2286,13 @@ static void test_first_animation_starts_on_ctrl_t(void) {
                "glRotatef(t * 45, 0, 1, 0)");
     ASSERT_TRUE("rotation command commits",
                 commit_command_step(idx, tutorial_state_view().step));
-    ASSERT_STR("cube command follows rotation",
-               tutorial_current_expected_text(), "glutSolidCube(2)");
-    ASSERT_TRUE("cube command commits",
+    ASSERT_STR("stand-up rotation follows the spin",
+               tutorial_current_expected_text(), "glRotatef(-90, 1, 0, 0)");
+    ASSERT_TRUE("stand-up rotation commits",
+                commit_command_step(idx, tutorial_state_view().step));
+    ASSERT_STR("cone command follows the stand-up rotation",
+               tutorial_current_expected_text(), "glutSolidCone(1, 2, 24, 8)");
+    ASSERT_TRUE("cone command commits",
                 commit_command_step(idx, tutorial_state_view().step));
 
     const TutorialStep *step = repl_tutorial_step_get(

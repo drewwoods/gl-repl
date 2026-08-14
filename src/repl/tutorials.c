@@ -466,11 +466,14 @@ static const TutorialStep g_tutorial_lighting_basics_steps[] = {
 
 /* "First Animation" - introduces the built-in `t` clock without asking the
  * learner to declare or edit it. The entry cfg pauses Auto time before the
- * first step, so the cube is visibly frozen until the REQUIRE step asks the
- * learner to press Ctrl+T. The closing NOTE leaves the motion on-screen
- * before teardown. `t` is reserved (rather than a user predef variable), so
- * this deliberately watches the app-level auto_time configuration instead of
- * using REQUIRE_VAR. */
+ * first step, so the cone is visibly frozen until the REQUIRE step asks the
+ * learner to press Ctrl+T. A cone (stood up from its +Z growth axis) is used
+ * instead of a cube so the unlit silhouette itself carries the rotation -
+ * Lighting Basics has not run yet, so there is no lighting scaffold here.
+ * The closing NOTE leaves the motion on-screen before teardown. `t` is
+ * reserved (rather than a user predef variable), so this deliberately
+ * watches the app-level auto_time configuration instead of using
+ * REQUIRE_VAR. */
 static const TutorialStep g_tutorial_first_animation_steps[] = {
     STEP_NOTE(
         "// The built-in t value is a clock in seconds; use it inside a number to animate that number."),
@@ -478,10 +481,13 @@ static const TutorialStep g_tutorial_first_animation_steps[] = {
         "// Rotate later geometry 45 degrees per second around the vertical Y axis.",
         "glRotatef(t * 45, 0, 1, 0)"),
     STEP_APPEND(NULL,
-        "// Draw a cube. It stays frozen until you start the t clock.",
-        "glutSolidCube(2)"),
+        "// A cone grows along +Z from its base, so stand this one upright.",
+        "glRotatef(-90, 1, 0, 0)"),
+    STEP_APPEND(NULL,
+        "// Draw the cone. It stays frozen until you start the t clock.",
+        "glutSolidCone(1, 2, 24, 8)"),
     STEP_REQUIRE_KEY(NULL,
-        "// Press %s to start the clock and watch the cube spin.",
+        "// Press %s to start the clock and watch the cone spin.",
         "auto_time", 1,
         KM_KEY(GLR_AUTO_TIME), KM_MODS(GLR_AUTO_TIME), 0),
     STEP_NOTE(
