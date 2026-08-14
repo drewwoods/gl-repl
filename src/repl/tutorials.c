@@ -286,34 +286,6 @@ static const TutorialStep g_tutorial_color_transform_steps[] = {
     STEP_SENTINEL,
 };
 
-/* This label-targeted tutorial first has the user draw a
- * triangle (five append steps), then a sixth step splices
- * glEnable(GL_DEPTH_TEST) above the original glBegin so the
- * batch renders with depth testing already enabled. The label
- * "triangle_begin" anchors the insertion above the original glBegin. */
-static const TutorialStep g_tutorial_depth_triangle_steps[] = {
-    STEP_APPEND("triangle_begin",
-        "// Start the triangle batch; the label here anchors a later insert.",
-        "glBegin(GL_TRIANGLES)"),
-    STEP_APPEND(NULL,
-        "// Add the top vertex.",
-        "glVertex3f(0, 2, 0)"),
-    STEP_APPEND(NULL,
-        "// Add the lower-left vertex.",
-        "glVertex3f(-2, -2, 0)"),
-    STEP_APPEND(NULL,
-        "// Add the lower-right vertex.",
-        "glVertex3f(2, -2, 0)"),
-    STEP_APPEND(NULL,
-        "// Close the triangle batch.",
-        "glEnd()"),
-    STEP_AT(NULL,
-        "// Enable depth testing before the triangle is submitted.",
-        "glEnable(GL_DEPTH_TEST)",
-        "triangle_begin"),
-    STEP_SENTINEL,
-};
-
 /* A flat triangle in the z=0 plane: present it in true 2D so a
  * first-time user sees the shape head-on without perspective
  * foreshortening or accidental orbit. */
@@ -1313,7 +1285,7 @@ static const TutorialEntry g_tutorials[] = {
         .subheading = "Beginner",
     },
     {
-        /* Placed before "Depth Test Triangle" (Intermediate) so the ALL
+        /* Placed before the first Intermediate entry so the ALL
          * flyout walks Beginner-only entries first, then transitions
          * once to Intermediate at the tail - the subheading contiguity
          * test (test_catalog_subheading_metadata) requires a single
@@ -1356,19 +1328,6 @@ static const TutorialEntry g_tutorials[] = {
         .subheading = "Beginner",
     },
     {
-        /* Intermediate: introduces depth-testing as a new GL concept
-         * (the previous tutorials were pure geometry/color/transform). */
-        .name       = "Depth Test Triangle",
-        .steps      = g_tutorial_depth_triangle_steps,
-        .tag_names  = (const char *const []){ "Geometry", "Depth & Lighting", NULL },
-        .subheading = "Intermediate",
-    },
-    {
-        /* Appended after Depth Test Triangle so both Intermediate entries
-         * stay contiguous (Beginner run, then Intermediate run) in the ALL
-         * flyout, and the two DEPTH_LIGHTING entries (Depth Test Triangle,
-         * Lighting Basics) form a single Intermediate run in that flyout -
-         * test_catalog_subheading_metadata enforces both. */
         .name       = "Lighting Basics",
         .steps      = g_tutorial_lighting_basics_steps,
         .cfg        = g_tutorial_dense_solid_cfg,

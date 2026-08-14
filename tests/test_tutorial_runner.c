@@ -1119,7 +1119,7 @@ static void test_start_leaves_unsaved_buffer_transient(void) {
 static void test_catalog_starter_steps_are_append(void) {
     /* The original append-only starter tutorials now represented by
      * TutorialStep records should still report append placement across all
-     * their steps with no label or target_label. Depth Test Triangle is
+     * their steps with no label or target_label. Flat & Smooth Shading is
      * intentionally excluded because it carries a label-targeted step. */
     const char *const append_only[] = { "First Triangle", "Color & Transform" };
     for (size_t k = 0; k < sizeof(append_only)/sizeof(append_only[0]); k++) {
@@ -1286,7 +1286,7 @@ static void test_catalog_setup_transforms_are_camera_tagged(void) {
  * has_tag/count_for_tag/index_for_tag mutual agreement, bounds, the
  * visible-tag count, and that every shipped catalog entry names at least
  * one tag, all of whose names resolve to known labels. Also asserts that the
- * known multi-tag entry ("Depth Test Triangle" -> GEOMETRY|DEPTH_LIGHTING)
+ * known multi-tag entry ("Two-Sided Lighting" -> GEOMETRY|DEPTH_LIGHTING)
  * is reachable under each of its tags via index_for_tag - the equivalent
  * of examples' Stress-test multi-tag assertion. */
 static void test_catalog_tag_metadata(void) {
@@ -1393,28 +1393,28 @@ static void test_catalog_tag_metadata(void) {
         ASSERT_TRUE(label, repl_tutorial_has_tag(idx, 0));
     }
 
-    /* Known multi-tag entry: Depth Test Triangle ships under both
+    /* Known multi-tag entry: Two-Sided Lighting ships under both
      * GEOMETRY and DEPTH_LIGHTING. Must be discoverable from each. */
-    int depth_idx = -1;
+    int multi_idx = -1;
     for (int i = 0; i < tutorial_count; i++) {
         const char *name = repl_tutorial_name(i);
-        if (name && strcmp(name, "Depth Test Triangle") == 0) {
-            depth_idx = i;
+        if (name && strcmp(name, "Two-Sided Lighting") == 0) {
+            multi_idx = i;
             break;
         }
     }
-    ASSERT_TRUE("known multi-tag tutorial found", depth_idx >= 0);
-    if (depth_idx >= 0) {
+    ASSERT_TRUE("known multi-tag tutorial found", multi_idx >= 0);
+    if (multi_idx >= 0) {
         int hits = 0;
         for (int tag_idx = 0; tag_idx < tag_count; tag_idx++) {
             int found_under_tag = 0;
-            if (!repl_tutorial_has_tag(depth_idx, tag_idx))
+            if (!repl_tutorial_has_tag(multi_idx, tag_idx))
                 continue;
             hits++;
             for (int ordinal = 0;
                  ordinal < repl_tutorial_count_for_tag(tag_idx);
                  ordinal++) {
-                if (repl_tutorial_index_for_tag(tag_idx, ordinal) == depth_idx) {
+                if (repl_tutorial_index_for_tag(tag_idx, ordinal) == multi_idx) {
                     found_under_tag = 1;
                     break;
                 }
@@ -1439,7 +1439,7 @@ static void test_catalog_tag_metadata(void) {
  *     header per group; interleaving would render duplicate headers).
  *   - At least one shipped tutorial has a non-NULL subheading so the
  *     menu walker's HEADER path is actually exercised in production.
- *   - The known multi-tag entry (Depth Test Triangle) shows up in
+ *   - The known multi-tag entry (Two-Sided Lighting) shows up in
  *     every one of its tag flyouts under the same subheading. */
 static void test_catalog_subheading_metadata(void) {
     int tag_count = repl_tutorial_tag_count();
@@ -1503,30 +1503,30 @@ static void test_catalog_subheading_metadata(void) {
         ASSERT_INT(label, transitions, seen_count);
     }
 
-    /* Known multi-tag entry: Depth Test Triangle. Its subheading must
+    /* Known multi-tag entry: Two-Sided Lighting. Its subheading must
      * be non-NULL (we currently ship "Intermediate") and the same
      * value must surface under every tag it carries. */
-    int depth_idx = -1;
+    int multi_idx = -1;
     for (int i = 0; i < tutorial_count; i++) {
         const char *name = repl_tutorial_name(i);
-        if (name && strcmp(name, "Depth Test Triangle") == 0) {
-            depth_idx = i;
+        if (name && strcmp(name, "Two-Sided Lighting") == 0) {
+            multi_idx = i;
             break;
         }
     }
-    ASSERT_TRUE("Depth Test Triangle in catalog", depth_idx >= 0);
-    if (depth_idx >= 0) {
-        const char *expected_sub = repl_tutorial_subheading(depth_idx);
-        ASSERT_TRUE("Depth Test Triangle has a subheading",
+    ASSERT_TRUE("Two-Sided Lighting in catalog", multi_idx >= 0);
+    if (multi_idx >= 0) {
+        const char *expected_sub = repl_tutorial_subheading(multi_idx);
+        ASSERT_TRUE("Two-Sided Lighting has a subheading",
                     expected_sub != NULL);
         for (int t = 0; t < tag_count; t++) {
-            if (!repl_tutorial_has_tag(depth_idx, t))
+            if (!repl_tutorial_has_tag(multi_idx, t))
                 continue;
             int n = repl_tutorial_count_for_tag(t);
             int found = 0;
             for (int o = 0; o < n; o++) {
                 int tut_idx = repl_tutorial_index_for_tag(t, o);
-                if (tut_idx != depth_idx)
+                if (tut_idx != multi_idx)
                     continue;
                 const char *sub = repl_tutorial_subheading(tut_idx);
                 if (sub && expected_sub && strcmp(sub, expected_sub) == 0)
@@ -1744,100 +1744,86 @@ static void test_append_first_expected_commit_line_is_trailing_row(void) {
                repl_state_document_count());
 }
 
-static int g_depth_tutorial_idx_cached = -1;
+static int g_shade_model_tutorial_idx_cached = -1;
 
-static int depth_tutorial_idx(void) {
-    if (g_depth_tutorial_idx_cached >= 0)
-        return g_depth_tutorial_idx_cached;
+static int shade_model_tutorial_idx(void) {
+    if (g_shade_model_tutorial_idx_cached >= 0)
+        return g_shade_model_tutorial_idx_cached;
     for (int i = 0; i < repl_tutorial_count(); i++) {
         const char *name = repl_tutorial_name(i);
-        if (name && strcmp(name, "Depth Test Triangle") == 0) {
-            g_depth_tutorial_idx_cached = i;
+        if (name && strcmp(name, "Flat & Smooth Shading") == 0) {
+            g_shade_model_tutorial_idx_cached = i;
             return i;
         }
     }
     return -1;
 }
 
+/* Commit the labeled sphere, ack the GL_SMOOTH NOTE, land on the
+ * STEP_AT that splices glShadeModel(GL_FLAT) above the sphere. */
+static void walk_shade_model_to_label_step(void) {
+    int t_idx = shade_model_tutorial_idx();
+    if (t_idx < 0)
+        return;
+    reset_fixture();
+    tutorial_start(t_idx);
+    const char *expected = tutorial_current_expected_text();
+    set_input_text(expected);
+    (void)editor_handle_key(';', 0, 0);
+    glr_ctrl_keyboard('\r', 0, 0);
+}
+
 static void test_depth_tutorial_label_targeted_step_inserts_above_label(void) {
-    /* The label-targeted splice for step 5 should land ABOVE the original
-     * (instruction, command) pair
-     * for step 0 - keeping the original step-0 instruction comment
-     * directly above its glBegin command rather than orphaning
-     * them. Use editor_feed_line and tutorial_advance_after_successful_commit
-     * to step through the append commits. */
-    int t_idx = depth_tutorial_idx();
-    ASSERT_TRUE("Depth Test Triangle present in catalog", t_idx >= 0);
+    /* The label-targeted splice should land ABOVE the original
+     * (instruction, command) pair for the labeled sphere - keeping that
+     * instruction comment directly above its glutSolidSphere rather than
+     * orphaning them. */
+    int t_idx = shade_model_tutorial_idx();
+    ASSERT_TRUE("Flat & Smooth Shading present in catalog", t_idx >= 0);
     if (t_idx < 0)
         return;
 
-    reset_fixture();
-    tutorial_start(t_idx);
-
-    /* The labeled step (index 0) emits its instruction at row 2, below
-     * the 2-row scene-clear prelude; record that anchor before the
-     * appends. */
-    int instruction_row = tutorial_state_view().instruction_line_for_step[0];
-    ASSERT_INT("step 0 instruction recorded below the clear prelude",
-               instruction_row, 2);
-
-    for (int s = 0; s < 5; s++) {
-        const char *expected = tutorial_current_expected_text();
-        editor_feed_line(expected);
-        tutorial_advance_after_successful_commit();
-    }
+    walk_shade_model_to_label_step();
 
     /* We are now on the label-targeted step. */
-    int t_count = repl_tutorial_step_count(t_idx);
     ASSERT_INT("walk advanced to label-targeted step",
-               tutorial_state_view().step, 5);
-    ASSERT_TRUE("more steps left after walking through append",
-                t_count >= 6);
+               (int)repl_tutorial_step_placement(t_idx,
+                                                 tutorial_state_view().step),
+               TUTORIAL_STEP_LABEL);
 
-    /* The new step-5 instruction should land at the recorded
-     * instruction row (which has stayed at 2 because every prior
-     * append went strictly below it). The original step-0
-     * instruction shifted to row 3 and the originally-labeled
-     * glBegin shifted to row 4 - keeping the (instruction,
-     * command) pair adjacent, still below the row 0-1 clear prelude. */
+    /* Locate the labeled sphere and the two rows above it: the original
+     * instruction and the spliced STEP_AT instruction. Setup scaffold
+     * rows sit above that pair, so the splice is not at a fixed index. */
     SourceTextView doc = source_document_view();
-    const char *new_instruction = source_text_line(doc, 2);
-    const char *orig_instruction = source_text_line(doc, 3);
-    const char *labeled_line = source_text_line(doc, 4);
+    int sphere_row = -1;
+    for (int i = 0; i < doc.line_count; i++) {
+        const char *line = source_text_line(doc, i);
+        if (line && strstr(line, "glutSolidSphere")) {
+            sphere_row = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("labeled sphere row found", sphere_row >= 2);
+    const char *orig_instruction = source_text_line(doc, sphere_row - 1);
+    const char *new_instruction  = source_text_line(doc, sphere_row - 2);
     ASSERT_TRUE("new instruction comment lands at the splice row",
                 new_instruction &&
                 strstr(new_instruction,
-                       "Enable depth testing before the triangle") != NULL);
+                       "switch the shade model to flat") != NULL);
     ASSERT_TRUE("original step-0 instruction shifted but stays adjacent",
                 orig_instruction &&
                 strstr(orig_instruction,
-                       "Start the triangle batch") != NULL);
-    ASSERT_TRUE("originally-labeled command kept directly below its instruction",
-                labeled_line &&
-                strstr(labeled_line, "glBegin(GL_TRIANGLES)") != NULL);
+                       "Draw a coarse sphere") != NULL);
 
     ASSERT_TRUE("new instruction row is locked",
-                tutorial_line_is_locked(2));
+                tutorial_line_is_locked(sphere_row - 2));
     ASSERT_INT("expected_commit_line lands directly below new instruction",
-               tutorial_state_view().expected_commit_line, 3);
+               tutorial_state_view().expected_commit_line, sphere_row - 1);
     ASSERT_TRUE("editor cursor moved to expected commit line",
                 editor_state_edit_line() ==
                     tutorial_state_view().expected_commit_line);
     ASSERT_TRUE("editor in insert mode since expected row is mid-document",
                 editor_insert_mode() != 0);
-}
-
-static void walk_depth_tutorial_to_label_step(void) {
-    int t_idx = depth_tutorial_idx();
-    if (t_idx < 0)
-        return;
-    reset_fixture();
-    tutorial_start(t_idx);
-    for (int s = 0; s < 5; s++) {
-        const char *expected = tutorial_current_expected_text();
-        set_input_text(expected);
-        (void)editor_handle_key(';', 0, 0);
-    }
 }
 
 static void test_phase3_label_targeted_commit_inserts_above_label(void) {
@@ -1846,47 +1832,47 @@ static void test_phase3_label_targeted_commit_inserts_above_label(void) {
      * command at expected_commit_line and the runner advances.
      * Walks the depth-test tutorial via the real keyboard route
      * (which exercises the precheck) rather than editor_feed_line. */
-    int t_idx = depth_tutorial_idx();
+    int t_idx = shade_model_tutorial_idx();
     if (t_idx < 0)
         return;
 
-    walk_depth_tutorial_to_label_step();
+    walk_shade_model_to_label_step();
     ASSERT_INT("walked to label-targeted step",
-               tutorial_state_view().step, 5);
+               tutorial_state_view().step, 2);
 
     int target_line = tutorial_state_view().expected_commit_line;
     ASSERT_TRUE("expected_commit_line is set on label step",
                 target_line >= 0);
 
     const char *expected = tutorial_current_expected_text();
-    ASSERT_STR("expected for label step is glEnable",
-               expected, "glEnable(GL_DEPTH_TEST)");
+    ASSERT_STR("expected for label step is glShadeModel",
+               expected, "glShadeModel(GL_FLAT)");
     set_input_text(expected);
     (void)editor_handle_key(';', 0, 0);
 
     /* Step advanced past the label-targeted step (or completed). */
     ASSERT_TRUE("step advanced or tutorial completed",
-                tutorial_state_view().step != 5 || !tutorial_active());
+                tutorial_state_view().step != 2 || !tutorial_active());
 
     SourceTextView doc = source_document_view();
     const char *committed = source_text_line(doc, target_line);
     const char *orig_instr = source_text_line(doc, target_line + 1);
-    const char *glbegin   = source_text_line(doc, target_line + 2);
-    ASSERT_TRUE("committed glEnable lands at the expected commit line",
-                committed && strstr(committed, "glEnable(GL_DEPTH_TEST)") != NULL);
+    const char *sphere    = source_text_line(doc, target_line + 2);
+    ASSERT_TRUE("committed glShadeModel lands at the expected commit line",
+                committed && strstr(committed, "glShadeModel(GL_FLAT)") != NULL);
     ASSERT_TRUE("original step-0 instruction stays adjacent to its command",
                 orig_instr &&
-                strstr(orig_instr, "Start the triangle batch") != NULL);
-    ASSERT_TRUE("originally-labeled glBegin sits directly below its instruction",
-                glbegin && strstr(glbegin, "glBegin(GL_TRIANGLES)") != NULL);
+                strstr(orig_instr, "Draw a coarse sphere") != NULL);
+    ASSERT_TRUE("originally-labeled sphere sits directly below its instruction",
+                sphere && strstr(sphere, "glutSolidSphere") != NULL);
 }
 
 static void test_phase3_wrong_input_at_label_step_does_not_insert(void) {
-    int t_idx = depth_tutorial_idx();
+    int t_idx = shade_model_tutorial_idx();
     if (t_idx < 0)
         return;
 
-    walk_depth_tutorial_to_label_step();
+    walk_shade_model_to_label_step();
     int target_line = tutorial_state_view().expected_commit_line;
     SourceTextView doc_before = source_document_view();
     int step_before = tutorial_state_view().step;
@@ -1908,11 +1894,11 @@ static void test_phase3_wrong_input_at_label_step_does_not_insert(void) {
 }
 
 static void test_phase3_correct_input_at_wrong_line_does_not_insert(void) {
-    int t_idx = depth_tutorial_idx();
+    int t_idx = shade_model_tutorial_idx();
     if (t_idx < 0)
         return;
 
-    walk_depth_tutorial_to_label_step();
+    walk_shade_model_to_label_step();
     int target_line = tutorial_state_view().expected_commit_line;
     SourceTextView doc_before = source_document_view();
     int step_before = tutorial_state_view().step;
@@ -1921,7 +1907,7 @@ static void test_phase3_correct_input_at_wrong_line_does_not_insert(void) {
      * but keep input correct. The precheck should reject. */
     editor_state_edit_line_set(repl_state_document_count());
     editor_insert_mode_set(0);
-    set_input_text("glEnable(GL_DEPTH_TEST)");
+    set_input_text("glShadeModel(GL_FLAT)");
     (void)editor_handle_key(';', 0, 0);
 
     SourceTextView doc_after = source_document_view();
@@ -2043,102 +2029,104 @@ static void test_phase4_depth_tutorial_catalog_shape(void) {
     /* Pin the label-targeted tutorial's catalog
      * shape so future catalog edits can't silently drop the
      * label-targeted step or rename the label. */
-    int t_idx = depth_tutorial_idx();
-    ASSERT_TRUE("Depth Test Triangle is in the catalog", t_idx >= 0);
+    int t_idx = shade_model_tutorial_idx();
+    ASSERT_TRUE("Flat & Smooth Shading is in the catalog", t_idx >= 0);
     if (t_idx < 0)
         return;
 
-    ASSERT_STR("Depth tutorial name",
-               repl_tutorial_name(t_idx), "Depth Test Triangle");
-    ASSERT_INT("Depth tutorial step count",
-               repl_tutorial_step_count(t_idx), 6);
+    ASSERT_STR("shade-model tutorial name",
+               repl_tutorial_name(t_idx), "Flat & Smooth Shading");
 
-    /* Step 0: labeled append, the glBegin batch opener. */
-    ASSERT_STR("Step 0 expected is glBegin(GL_TRIANGLES)",
+    /* Step 0: labeled append, the sphere draw. */
+    ASSERT_STR("Step 0 expected is glutSolidSphere",
                repl_tutorial_step_expected(t_idx, 0),
-               "glBegin(GL_TRIANGLES)");
-    ASSERT_STR("Step 0 label is 'triangle_begin'",
-               repl_tutorial_step_label(t_idx, 0), "triangle_begin");
+               "glutSolidSphere(1.4, 16, 12)");
+    ASSERT_STR("Step 0 label is 'sphere_draw'",
+               repl_tutorial_step_label(t_idx, 0), "sphere_draw");
     ASSERT_INT("Step 0 placement is append",
                repl_tutorial_step_placement(t_idx, 0),
                TUTORIAL_STEP_APPEND);
 
-    /* Step 5: label-targeted insertion of glEnable(GL_DEPTH_TEST). */
-    ASSERT_INT("Step 5 placement is label-targeted",
-               repl_tutorial_step_placement(t_idx, 5),
-               TUTORIAL_STEP_LABEL);
-    ASSERT_STR("Step 5 target_label is 'triangle_begin'",
-               repl_tutorial_step_target_label(t_idx, 5),
-               "triangle_begin");
-    ASSERT_STR("Step 5 expected is glEnable(GL_DEPTH_TEST)",
-               repl_tutorial_step_expected(t_idx, 5),
-               "glEnable(GL_DEPTH_TEST)");
+    /* The STEP_AT that splices glShadeModel(GL_FLAT) above the sphere. */
+    int at = -1;
+    int total = repl_tutorial_step_count(t_idx);
+    for (int s = 0; s < total; s++) {
+        if (repl_tutorial_step_placement(t_idx, s) == TUTORIAL_STEP_LABEL) {
+            at = s;
+            break;
+        }
+    }
+    ASSERT_TRUE("shade-model tutorial has a label-targeted step", at >= 0);
+    ASSERT_STR("STEP_AT target_label is 'sphere_draw'",
+               repl_tutorial_step_target_label(t_idx, at),
+               "sphere_draw");
+    ASSERT_STR("STEP_AT expected is glShadeModel(GL_FLAT)",
+               repl_tutorial_step_expected(t_idx, at),
+               "glShadeModel(GL_FLAT)");
 }
 
 static void test_phase4_full_walk_places_setup_before_batch(void) {
-    /* Walk the full Depth Test Triangle tutorial through
-     * the real keyboard route and assert the inserted setup
-     * command (glEnable) sits BEFORE the originally-committed
-     * glBegin row in the final source order. */
-    int t_idx = depth_tutorial_idx();
+    /* Walk Flat & Smooth Shading through the real routes and assert
+     * the inserted glShadeModel sits BEFORE the originally-committed
+     * sphere in the final source order. */
+    int t_idx = shade_model_tutorial_idx();
     if (t_idx < 0)
         return;
 
     reset_fixture();
     tutorial_start(t_idx);
-
-    int total = repl_tutorial_step_count(t_idx);
-    for (int s = 0; s < total; s++) {
-        const char *expected = tutorial_current_expected_text();
-        ASSERT_TRUE("expected exists during walk", expected != NULL);
-        if (!expected)
-            return;
-        set_input_text(expected);
-        (void)editor_handle_key(';', 0, 0);
+    int guard = 0;
+    int limit = repl_tutorial_step_count(t_idx) + 4;
+    while (tutorial_active() && guard++ < limit) {
+        if (tutorial_current_step_kind() == TUTORIAL_STEP_KIND_COMMAND) {
+            set_input_text(tutorial_current_expected_text());
+            (void)editor_handle_key(';', 0, 0);
+        } else {
+            glr_ctrl_keyboard('\r', 0, 0);
+        }
     }
-
     ASSERT_TRUE("tutorial completed", !tutorial_active());
     char expected_comp[256];
     get_expected_completion_status(expected_comp, sizeof(expected_comp));
     ASSERT_STR("tutorial completion status",
                status_text(), expected_comp);
 
-    /* Now scan the document and assert the glEnable line sits at a
-     * lower index than the glBegin line - the whole point of the
+    /* Now scan the document and assert glShadeModel sits at a
+     * lower index than glutSolidSphere - the whole point of the
      * label-targeted step. */
     SourceTextView doc = source_document_view();
-    int glenable_row = -1;
-    int glbegin_row  = -1;
+    int shade_row  = -1;
+    int sphere_row = -1;
     for (int i = 0; i < doc.line_count; i++) {
         const char *line = source_text_line(doc, i);
         if (!line) continue;
-        if (glenable_row < 0 && strstr(line, "glEnable(GL_DEPTH_TEST)"))
-            glenable_row = i;
-        if (glbegin_row < 0 && strstr(line, "glBegin(GL_TRIANGLES)"))
-            glbegin_row = i;
+        if (shade_row < 0 && strstr(line, "glShadeModel(GL_FLAT)"))
+            shade_row = i;
+        if (sphere_row < 0 && strstr(line, "glutSolidSphere"))
+            sphere_row = i;
     }
-    ASSERT_TRUE("glEnable row found", glenable_row >= 0);
-    ASSERT_TRUE("glBegin row found", glbegin_row >= 0);
-    ASSERT_TRUE("glEnable lands before glBegin in the final document",
-                glenable_row >= 0 && glbegin_row >= 0 &&
-                glenable_row < glbegin_row);
+    ASSERT_TRUE("glShadeModel row found", shade_row >= 0);
+    ASSERT_TRUE("glutSolidSphere row found", sphere_row >= 0);
+    ASSERT_TRUE("glShadeModel lands before the sphere in the final document",
+                shade_row >= 0 && sphere_row >= 0 &&
+                shade_row < sphere_row);
 
     /* The original step-0 (instruction, command) pair must remain
      * adjacent - the label-targeted splice anchors above the
      * instruction comment, not between the comment and its
      * command. */
-    int begin_instr_row = -1;
+    int sphere_instr_row = -1;
     for (int i = 0; i < doc.line_count; i++) {
         const char *line = source_text_line(doc, i);
-        if (line && strstr(line, "Start the triangle batch")) {
-            begin_instr_row = i;
+        if (line && strstr(line, "Draw a coarse sphere")) {
+            sphere_instr_row = i;
             break;
         }
     }
     ASSERT_TRUE("step-0 instruction comment still in document",
-                begin_instr_row >= 0);
-    ASSERT_TRUE("step-0 instruction sits directly above its glBegin",
-                begin_instr_row >= 0 && glbegin_row == begin_instr_row + 1);
+                sphere_instr_row >= 0);
+    ASSERT_TRUE("step-0 instruction sits directly above its sphere",
+                sphere_instr_row >= 0 && sphere_row == sphere_instr_row + 1);
 }
 
 static void test_phase3_paste_above_locked_still_blocked(void) {
@@ -2160,26 +2148,16 @@ static void test_phase3_paste_above_locked_still_blocked(void) {
 }
 
 static void test_depth_tutorial_label_targeted_emit_shifts_prior_locked_lines(void) {
-    /* Locked instruction comments for steps 0-4 should
-     * shift to keep pointing at the same source content after the
-     * step-5 label-targeted insertion shoves rows down by one. */
-    int t_idx = depth_tutorial_idx();
+    /* Locked instruction comments should still point at the same source
+     * content after the label-targeted insertion shoves rows down by one. */
+    int t_idx = shade_model_tutorial_idx();
     if (t_idx < 0)
         return;
 
-    reset_fixture();
-    tutorial_start(t_idx);
+    walk_shade_model_to_label_step();
 
-    /* Walk the first five append commits, recording the document
-     * snapshot before the label-targeted insert fires. */
-    for (int s = 0; s < 5; s++) {
-        const char *expected = tutorial_current_expected_text();
-        editor_feed_line(expected);
-        tutorial_advance_after_successful_commit();
-    }
-
-    /* Every previously locked instruction row should still point at
-     * a comment line that starts with "//". */
+    /* Every locked row is still in range and non-empty after the splice
+     * shifts later rows down. Setup scaffold commands are locked too. */
     TutorialRuntimeState state = tutorial_state_view();
     SourceTextView doc = source_document_view();
     for (int i = 0; i < state.locked_line_count; i++) {
@@ -2189,27 +2167,21 @@ static void test_depth_tutorial_label_targeted_emit_shifts_prior_locked_lines(vo
         if (line < 0 || line >= doc.line_count)
             continue;
         const char *text = source_text_line(doc, line);
-        /* Locked rows are the instruction comments plus the injected
-         * scene-clear prelude (its comment and the glClear it describes);
-         * the glClear is the one locked row that isn't a `//` comment. */
-        ASSERT_TRUE("locked line still points at a tutorial comment or the clear",
-                    text != NULL &&
-                    (strstr(text, "//") != NULL ||
-                     strstr(text, "glClear") != NULL));
+        ASSERT_TRUE("locked line still points at live source",
+                    text != NULL && text[0] != '\0');
     }
 
     /* instruction_line_for_step now records each step's INSTRUCTION
      * COMMENT row (not the committed command row), so a label
      * target resolves above the original (instruction, command)
-     * pair and keeps it adjacent. Step 0's instruction starts with
-     * "// Start the triangle batch...". */
-    int begin_step_instruction = state.instruction_line_for_step[0];
+     * pair and keeps it adjacent. */
+    int sphere_step_instruction = state.instruction_line_for_step[0];
     ASSERT_TRUE("instruction_line_for_step[0] points at the comment",
-                begin_step_instruction >= 0 &&
-                begin_step_instruction < doc.line_count &&
-                source_text_line(doc, begin_step_instruction) &&
-                strstr(source_text_line(doc, begin_step_instruction),
-                       "Start the triangle batch") != NULL);
+                sphere_step_instruction >= 0 &&
+                sphere_step_instruction < doc.line_count &&
+                source_text_line(doc, sphere_step_instruction) &&
+                strstr(source_text_line(doc, sphere_step_instruction),
+                       "Draw a coarse sphere") != NULL);
 }
 
 static void test_validate_accepts_well_formed_label_tutorial(void) {
@@ -2483,10 +2455,10 @@ static void test_phase_c_catalog_full_walk(void) {
         "Scratch Arrays",
     };
 
-    /* The catalog contains 25 entries: the "Normals & Shade Model" split
-     * into "Flat & Smooth Shading" + "Normals", plus "Two-Sided Lighting". */
-    ASSERT_INT("catalog contains 25 tutorials",
-               repl_tutorial_count(), 25);
+    /* 24 shipped entries: Depth Test Triangle was retired into
+     * Depth Mask & Draw Order. */
+    ASSERT_INT("catalog contains 24 tutorials",
+               repl_tutorial_count(), 24);
 
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         char label[160];

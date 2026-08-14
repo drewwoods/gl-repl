@@ -223,11 +223,10 @@ with `./gl-repl --tutorial "First Triangle"` (a 1-based index also works).
 - **Beginner:** *First Triangle*, *Color & Transform*, *Scene Chrome & Overlays*,
   *Variable Slider*, *First Animation*, *Points & Lines*, *GLUT Solids Tour*,
   and *First Loop*.
-- **Intermediate:** *Depth Test Triangle*, *Lighting Basics*, *Color
-  Interpolation*, *Line Stipple*, *Blending & Transparency*, *Depth Mask &
-  Draw Order*, *Fog*, *Clip Planes*, *Normals*, *Flat & Smooth Shading*,
-  *Materials & Shininess*, *Culling & Winding*, *Two-Sided Lighting*, and
-  *Bitmap Text*.
+- **Intermediate:** *Lighting Basics*, *Color Interpolation*, *Line Stipple*,
+  *Blending & Transparency*, *Depth Mask & Draw Order*, *Fog*, *Clip Planes*,
+  *Normals*, *Flat & Smooth Shading*, *Materials & Shininess*,
+  *Culling & Winding*, *Two-Sided Lighting*, and *Bitmap Text*.
 - **Advanced:** *Functions*, *If & Conditionals*, and *Scratch Arrays*.
 
 ---
