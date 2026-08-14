@@ -1,9 +1,29 @@
 # Built-in Tutorial Catalog Review
 
-## Status - implementing, 2026-08-14
+## Status - landed, 2026-08-14
 
-Findings 1-12 and Tier 1 (A-D) are in progress. The original review
-text is unchanged below; each landing commit is recorded as it ships.
+Findings 1-12 and Tier 1 (A-D) shipped. The catalog is 28 tutorials:
+Depth Test Triangle retired, Scene Chrome & Overlays replaces Feature
+Tour, and four new lessons cover expressions, transform hierarchy,
+replay, and save/export. Tier 2 (E-H) and Tier 3 were not scheduled.
+
+| Finding | What shipped |
+|---|---|
+| 1 | Lighting run: Normals → Flat & Smooth → Materials → Culling → Two-Sided |
+| 2 | Feature Tour retargeted; Depth Test Triangle retired |
+| 3 | Closing takeaway NOTE on First Triangle, Color & Transform, GLUT Solids, Lighting Basics, Color Interpolation, If & Conditionals |
+| 4 | Two-Sided Lighting rewritten in the catalog voice |
+| 5 | Scaffold comments and Functions takeaway no longer say "scaffold" / "funcN" |
+| 6 | Variable Slider / Bitmap Text → REPL Language; GLUT Solids and Materials drop the wrong extra tag |
+| 7 | Learner-facing "example" → "tutorial" |
+| 8 | Line stipple masks taught as `0x00FF` / `0xAAAA` |
+| 9 | First Triangle names vertex labels; Scene Chrome states chrome vs program |
+| 10 | Depth Mask draws the mistake, then splices `glDepthMask(GL_FALSE)` |
+| 11 | First Animation draws a stood-up cone |
+| 12 | Color & Transform is 2D + STEP_CMD corners; `@config` explained |
+| A-D | Transform Stacks, Expressions & Motion, Watching a Program Run, Keeping Your Work |
+
+The original review text is unchanged below.
 
 This is a review of the **25 shipped tutorials**
 in [`src/repl/tutorials.c`](../../../src/repl/tutorials.c) as a *set* - their

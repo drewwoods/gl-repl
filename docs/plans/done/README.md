@@ -13,6 +13,7 @@ historical context and are not in the table below.
 
 | Plan | Landed | What it shipped |
 |---|---|---|
+| `tutorial-catalog-review.md` | 2026-08-14 | Catalog consistency pass: lighting run reordered, Feature Tour retargeted, Depth Test Triangle retired, tags/voice/takeaways cleaned up, and four Tier 1 lessons (expressions, transform stacks, replay, save/export). 28 tutorials. |
 | `tender-exploring-dream.md` | 2026-02-24 | Early wishlist / open-items catalog; kept as design history. |
 | `GLUTesselator.md` | 2026-02-24 | GLU tessellator support: `gluBegin/gluEnd/gluVertex/gluNormal/gluColor` commands with per-vertex normal and color data. |
 | `recursive-func.md` | 2026-04-09 | Feasibility assessment for recursive functions and float-returning calls; recommended phased approach (args before control flow). |
