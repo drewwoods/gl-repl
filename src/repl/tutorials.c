@@ -1317,7 +1317,7 @@ static const TutorialEntry g_tutorials[] = {
          * Beginner->Intermediate transition across the whole catalog. */
         .name       = "Variable Slider",
         .steps      = g_tutorial_variable_slider_steps,
-        .tag_names  = (const char *const []){ "Color & Transforms", NULL },
+        .tag_names  = (const char *const []){ "REPL Language", NULL },
         .subheading = "Beginner",
     },
     {
@@ -1343,7 +1343,7 @@ static const TutorialEntry g_tutorials[] = {
         .steps      = g_tutorial_glut_solids_steps,
         .setup      = g_tutorial_glut_solids_setup,
         .cfg        = g_tutorial_dense_solid_cfg,
-        .tag_names  = (const char *const []){ "Geometry", "Depth & Lighting", NULL },
+        .tag_names  = (const char *const []){ "Geometry", NULL },
         .subheading = "Beginner",
     },
     {
@@ -1424,7 +1424,7 @@ static const TutorialEntry g_tutorials[] = {
         .steps      = g_tutorial_materials_steps,
         .setup      = g_tutorial_materials_setup,
         .cfg        = g_tutorial_dense_solid_cfg,
-        .tag_names  = (const char *const []){ "Depth & Lighting", "Effects", NULL },
+        .tag_names  = (const char *const []){ "Depth & Lighting", NULL },
         .subheading = "Intermediate",
     },
     {
@@ -1461,7 +1461,7 @@ static const TutorialEntry g_tutorials[] = {
         .name       = "Bitmap Text",
         .steps      = g_tutorial_bitmap_text_steps,
         .cfg        = g_tutorial_bitmap_text_cfg,
-        .tag_names  = (const char *const []){ "Geometry", NULL },
+        .tag_names  = (const char *const []){ "REPL Language", NULL },
         .subheading = "Intermediate",
     },
     {
