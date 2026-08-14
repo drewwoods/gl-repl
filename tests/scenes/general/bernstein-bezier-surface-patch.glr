@@ -1,0 +1,220 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg grid_major = GRID_MAJOR_2
+// @cfg light_indicators = 1
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// Bicubic Bezier surface patch evaluated via Bernstein basis polynomials
+// (B_{i,3}(u) * B_{j,3}(v)) with dynamic control points and two-sided lighting.
+// Evaluates exact analytical partial derivatives for smooth normal continuity.
+static float u_steps = 16; // @tune @config u subdivision steps
+static float v_steps = 16; // @tune @config v subdivision steps
+static float y11, y12, y21, y22;
+
+// Evaluates and renders the bicubic Bezier surface patch using quad strips.
+// All loop counters, basis polynomials, and normal vectors are scoped locally.
+renderPatch(y11, y12, y21, y22, u_steps, v_steps) {
+  // Function-scoped local variables (prevents polluting the global variable table)
+  float u1, u2, v, bu1_1, bu2_1, dbu1_1, dbu2_1, bu1_2;
+  float bu2_2, dbu1_2, dbu2_2, bv1, bv2, dbv1, dbv2, py1;
+  float py2, dy_du, dy_dv, nlen;
+
+  glFrontFace(GL_CW);
+
+  // Sweep across u strips
+  for(i, 0, u_steps) {
+    u1 = i / u_steps;
+    u2 = (i + 1) / u_steps;
+
+    // Cubic Bernstein basis polynomials at u1: B_1(u) = 3u(1-u)^2, B_2(u) = 3u^2(1-u)
+    bu1_1 = 3.0 * u1 * (1.0 - u1) * (1.0 - u1);
+    bu2_1 = 3.0 * u1 * u1 * (1.0 - u1);
+
+    // Analytical first derivatives w.r.t. u at u1: B_1'(u) = 3(1-u)(1-3u), B_2'(u) = 3u(2-3u)
+    dbu1_1 = 3.0 * (1.0 - u1) * (1.0 - 3.0 * u1);
+    dbu2_1 = 3.0 * u1 * (2.0 - 3.0 * u1);
+
+    // Cubic Bernstein basis polynomials and derivatives at u2 (next strip edge)
+    bu1_2 = 3.0 * u2 * (1.0 - u2) * (1.0 - u2);
+    bu2_2 = 3.0 * u2 * u2 * (1.0 - u2);
+    dbu1_2 = 3.0 * (1.0 - u2) * (1.0 - 3.0 * u2);
+    dbu2_2 = 3.0 * u2 * (2.0 - 3.0 * u2);
+
+    glBegin(GL_QUAD_STRIP);
+      for(j, 0, v_steps + 1) {
+        v = j / v_steps;
+
+        // Cubic Bernstein basis polynomials and derivatives along v
+        bv1 = 3.0 * v * (1.0 - v) * (1.0 - v);
+        bv2 = 3.0 * v * v * (1.0 - v);
+        dbv1 = 3.0 * (1.0 - v) * (1.0 - 3.0 * v);
+        dbv2 = 3.0 * v * (2.0 - 3.0 * v);
+
+        // --- Vertex 1: (u1, v) ---
+        // Surface height y(u, v) = sum(B_i(u) * B_j(v) * P_y[i,j])
+        py1 = bu1_1 * bv1 * y11 + bu1_1 * bv2 * y12 + bu2_1 * bv1 * y21 + bu2_1 * bv2 * y22;
+
+        // Exact analytical partial derivatives: dy/du and dy/dv
+        dy_du = dbu1_1 * bv1 * y11 + dbu1_1 * bv2 * y12 + dbu2_1 * bv1 * y21 + dbu2_1 * bv2 * y22;
+        dy_dv = bu1_1 * dbv1 * y11 + bu1_1 * dbv2 * y12 + bu2_1 * dbv1 * y21 + bu2_1 * dbv2 * y22;
+
+        // Tangent cross product N = Tv x Tu = (-dy/du, L, -dy/dv) with scale L = 4.2 (L^2 = 17.64)
+        nlen = sqrt(dy_du * dy_du + 17.64 + dy_dv * dy_dv);
+        glNormal3f(-dy_du / nlen, 4.2 / nlen, -dy_dv / nlen);
+        glVertex3f(-2.1 + u1 * 4.2, py1, -2.1 + v * 4.2);
+
+        // --- Vertex 2: (u2, v) ---
+        // Evaluated at u2 so normal matches exactly with strip i+1's u1 edge (C1 normal continuity)
+        py2 = bu1_2 * bv1 * y11 + bu1_2 * bv2 * y12 + bu2_2 * bv1 * y21 + bu2_2 * bv2 * y22;
+        dy_du = dbu1_2 * bv1 * y11 + dbu1_2 * bv2 * y12 + dbu2_2 * bv1 * y21 + dbu2_2 * bv2 * y22;
+        dy_dv = bu1_2 * dbv1 * y11 + bu1_2 * dbv2 * y12 + bu2_2 * dbv1 * y21 + bu2_2 * dbv2 * y22;
+
+        nlen = sqrt(dy_du * dy_du + 17.64 + dy_dv * dy_dv);
+        glNormal3f(-dy_du / nlen, 4.2 / nlen, -dy_dv / nlen);
+        glVertex3f(-2.1 + u2 * 4.2, py2, -2.1 + v * 4.2);
+      }
+    glEnd();
+  }
+}
+
+// Renders the 4x4 control point lattice cage, corner endpoints, and dynamic inner knots.
+renderLattice(y11, y12, y21, y22) {
+  // Stippled control mesh lattice lines connecting the 16 control points
+  glDisable(GL_LIGHTING);
+  glEnable(GL_LINE_STIPPLE);
+  glLineStipple(2, 3855);
+  glColor3f(0.92, 0.95, 0.98);
+  glLineWidth(1.2);
+  glFrontFace(GL_CCW);
+
+  glBegin(GL_LINES);
+    // Outer boundary perimeter (fixed edge control polygon at y = 0)
+    glVertex3f(-2.1, 0, -2.1);
+    glVertex3f(-2.1, 0, 2.1);
+    glVertex3f(-2.1, 0, 2.1);
+    glVertex3f(2.1, 0, 2.1);
+    glVertex3f(2.1, 0, 2.1);
+    glVertex3f(2.1, 0, -2.1);
+    glVertex3f(2.1, 0, -2.1);
+    glVertex3f(-2.1, 0, -2.1);
+
+    // Lattice row 1 (z = -0.7) connecting boundary -> knot (1,1) -> knot (2,1) -> boundary
+    glVertex3f(-2.1, 0, -0.7);
+    glVertex3f(-0.7, y11, -0.7);
+    glVertex3f(-0.7, y11, -0.7);
+    glVertex3f(0.7, y21, -0.7);
+    glVertex3f(0.7, y21, -0.7);
+    glVertex3f(2.1, 0, -0.7);
+
+    // Lattice row 2 (z = 0.7) connecting boundary -> knot (1,2) -> knot (2,2) -> boundary
+    glVertex3f(-2.1, 0, 0.7);
+    glVertex3f(-0.7, y12, 0.7);
+    glVertex3f(-0.7, y12, 0.7);
+    glVertex3f(0.7, y22, 0.7);
+    glVertex3f(0.7, y22, 0.7);
+    glVertex3f(2.1, 0, 0.7);
+
+    // Lattice column 1 (x = -0.7) connecting boundary -> knot (1,1) -> knot (1,2) -> boundary
+    glVertex3f(-0.7, 0, -2.1);
+    glVertex3f(-0.7, y11, -0.7);
+    glVertex3f(-0.7, y11, -0.7);
+    glVertex3f(-0.7, y12, 0.7);
+    glVertex3f(-0.7, y12, 0.7);
+    glVertex3f(-0.7, 0, 2.1);
+
+    // Lattice column 2 (x = 0.7) connecting boundary -> knot (2,1) -> knot (2,2) -> boundary
+    glVertex3f(0.7, 0, -2.1);
+    glVertex3f(0.7, y21, -0.7);
+    glVertex3f(0.7, y21, -0.7);
+    glVertex3f(0.7, y22, 0.7);
+    glVertex3f(0.7, y22, 0.7);
+    glVertex3f(0.7, 0, 2.1);
+  glEnd();
+  glDisable(GL_LINE_STIPPLE);
+
+  // Knot and endpoint sphere markers
+  glEnable(GL_LIGHTING);
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+
+  // 4 Fixed patch corner endpoints (Teal spheres at (-2.1, 0, -2.1), etc.)
+  glColor3f(0.1, 0.95, 0.85);
+  glPushMatrix();
+    glTranslatef(-2.1, 0, -2.1);
+    glutSolidSphere(0.1, 12, 10);
+  glPopMatrix();
+
+  glPushMatrix();
+    glTranslatef(-2.1, 0, 2.1);
+    glutSolidSphere(0.1, 12, 10);
+  glPopMatrix();
+
+  glPushMatrix();
+    glTranslatef(2.1, 0, -2.1);
+    glutSolidSphere(0.1, 12, 10);
+  glPopMatrix();
+
+  glPushMatrix();
+    glTranslatef(2.1, 0, 2.1);
+    glutSolidSphere(0.1, 12, 10);
+  glPopMatrix();
+
+  // 4 Dynamic inner control knots (Amber spheres at (-0.7, y11, -0.7), etc.)
+  glColor3f(1, 0.85, 0.15);
+  glPushMatrix();
+    glTranslatef(-0.7, y11, -0.7);
+    glutSolidSphere(0.12, 12, 10);
+  glPopMatrix();
+
+  glPushMatrix();
+    glTranslatef(-0.7, y12, 0.7);
+    glutSolidSphere(0.12, 12, 10);
+  glPopMatrix();
+
+  glPushMatrix();
+    glTranslatef(0.7, y21, -0.7);
+    glutSolidSphere(0.12, 12, 10);
+  glPopMatrix();
+
+  glPushMatrix();
+    glTranslatef(0.7, y22, 0.7);
+    glutSolidSphere(0.12, 12, 10);
+  glPopMatrix();
+}
+
+// Camera pose
+glTranslatef(0.0000f, 0.0000f, -7.3449f);   // @camera dist
+glRotatef(14.0120f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(-0.5395f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+
+// Clear color and buffer initialization
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT2);
+glEnable(GL_NORMALIZE);
+glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+glFrontFace(GL_CW);
+
+// Dynamic inner control point heights (gentle harmonic wave oscillation)
+y11 = 3 + 1.3 * sin(0.75 * t);
+y12 = 1.3 * cos(0.75 * t);
+y21 = 1.3 * cos(0.75 * t + 1.2);
+y22 = -3 + 1.3 * sin(0.75 * t + 1.2);
+
+// Two-sided material setup: Front = Cyan/Teal, Back = Electric Violet
+glMaterialfv(GL_FRONT, GL_AMBIENT, (GLfloat[]){0.05, 0.2, 0.25, 1});
+glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){0.1, 0.75, 0.85, 1});
+glMaterialfv(GL_FRONT, GL_SPECULAR, (GLfloat[]){0.9, 0.95, 1, 1});
+glMaterialf(GL_FRONT, GL_SHININESS, 64);
+
+glMaterialfv(GL_BACK, GL_AMBIENT, (GLfloat[]){0.2, 0.05, 0.25, 1});
+glMaterialfv(GL_BACK, GL_DIFFUSE, (GLfloat[]){0.65, 0.25, 0.9, 1});
+glMaterialfv(GL_BACK, GL_SPECULAR, (GLfloat[]){0.95, 0.7, 1, 1});
+glMaterialf(GL_BACK, GL_SHININESS, 32);
+
+// Render surface patch and control lattice
+renderPatch(y11, y12, y21, y22, u_steps, v_steps);
+renderLattice(y11, y12, y21, y22);

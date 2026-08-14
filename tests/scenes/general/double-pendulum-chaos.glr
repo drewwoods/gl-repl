@@ -1,0 +1,110 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// Double compound pendulum exhibiting nonlinear coupled motion.
+// The lower bob leaves a fading multi-color history trail in space.
+static float th1, th2, x1, y1, x2, y2;
+static float past_t, pth1, pth2, px1, py1, px2, py2;
+static float u, ang_deg1, ang_deg2;
+
+glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
+glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, -0.3000f, 0.0000f);   // @camera pan
+
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+th1 = 1.10 * sin(1.4 * t) + 0.35 * sin(2.9 * t);
+th2 = 1.60 * sin(2.1 * t + 0.8) + 0.65 * sin(4.3 * t - 0.5);
+
+x1 = 1.7 * sin(th1);
+y1 = 2.0 - 1.7 * cos(th1);
+
+x2 = x1 + 1.5 * sin(th2);
+y2 = y1 - 1.5 * cos(th2);
+
+// --- Motion history trail of the second bob ---
+glDisable(GL_LIGHTING);
+glEnable(GL_BLEND);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+glLineWidth(2.0);
+
+glBegin(GL_LINE_STRIP);
+  for(i, 0, 48) {
+    past_t = t - i * 0.032;
+    pth1 = 1.10 * sin(1.4 * past_t) + 0.35 * sin(2.9 * past_t);
+    pth2 = 1.60 * sin(2.1 * past_t + 0.8) + 0.65 * sin(4.3 * past_t - 0.5);
+    px1 = 1.7 * sin(pth1);
+    py1 = 2.0 - 1.7 * cos(pth1);
+    px2 = px1 + 1.5 * sin(pth2);
+    py2 = py1 - 1.5 * cos(pth2);
+
+    u = i / 47.0;
+    glColor4f(1.00 - 0.90 * u, 0.35 + 0.60 * u, 0.20 + 0.65 * (1.0 - u), 1.0 - u);
+    glVertex3f(px2, py2, -0.05);
+  }
+glEnd();
+glDisable(GL_BLEND);
+
+// --- Physical Pendulum Assembly ---
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+
+// Ceiling mount
+glPushMatrix();
+  glTranslatef(0, 2.0, 0);
+  glColor3f(0.35, 0.40, 0.48);
+  glutSolidCube(0.3);
+  glColor3f(0.92, 0.95, 0.98);
+  glutSolidTorus(0.06, 0.15, 10, 16);
+glPopMatrix();
+
+// Arm 1 (brass rod)
+glPushMatrix();
+  glTranslatef(0, 2.0, 0);
+  ang_deg1 = th1 * (180.0 / PI);
+  glRotatef(ang_deg1, 0, 0, 1);
+  glTranslatef(0, -0.85, 0);
+  glScalef(0.08, 1.7, 0.08);
+  glColor3f(1.00, 0.85, 0.15);
+  glutSolidCube(1.0);
+glPopMatrix();
+
+// Joint 1 (bearing & intermediate bob)
+glPushMatrix();
+  glTranslatef(x1, y1, 0);
+  glColor3f(0.92, 0.95, 0.98);
+  glutSolidSphere(0.18, 16, 12);
+glPopMatrix();
+
+// Arm 2 (steel rod)
+glPushMatrix();
+  glTranslatef(x1, y1, 0);
+  ang_deg2 = th2 * (180.0 / PI);
+  glRotatef(ang_deg2, 0, 0, 1);
+  glTranslatef(0, -0.75, 0);
+  glScalef(0.06, 1.5, 0.06);
+  glColor3f(0.15, 0.55, 1.00);
+  glutSolidCube(1.0);
+glPopMatrix();
+
+// Bob 2 (chaotic tip)
+glPushMatrix();
+  glTranslatef(x2, y2, 0);
+  glColor3f(1.00, 0.35, 0.20);
+  glutSolidSphere(0.24, 20, 14);
+glPopMatrix();
+
+// Telemetry HUD
+glDisable(GL_LIGHTING);
+glColor3f(0.92, 0.95, 0.98);
+glRasterPos3f(-3.2, 2.4, 0);
+label("Double Pendulum Chaos");
+glRasterPos3f(-3.2, 2.1, 0);
+label("theta1: %f deg  theta2: %f deg", th1 * 57.2958, th2 * 57.2958);
+glRasterPos3f(-3.2, 1.8, 0);
+label("Bob2: x=%f  y=%f", x2, y2);

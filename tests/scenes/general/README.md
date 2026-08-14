@@ -76,6 +76,14 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 | `depth-func-layers.glr` | 3D, DepthFunc, State | Overlapping cubes against a back plate under `GL_LESS`, `GL_GREATER`, and `GL_NOTEQUAL`. |
 | `loop-control-spokes.glr` | 3D, Loops, Control flow | A wheel whose spokes are filtered by `continue` (skip evens) and `break` (a traveling cut), not by shrinking the loop bounds. |
 | `front-face-cull-winding.glr` | 3D, Culling, State | Three teapots: conventional `GL_CCW`+cull back, reversed `GL_CW` (inside-out), and cull-front hollow shell. |
+| `lorenz-attractor-chaos.glr` | 3D, Math, Chaos, Lines | Numerical integration of the Lorenz strange attractor with a neon line strip ribbon and orbiting tracker bead. |
+| `planetary-gear-epicyclic-train.glr` | 3D, Hierarchical, Kinematics, Lighting | Epicyclic planetary gear train with sun gear, rotating planet carrier, three meshed planet gears, and an outer ring gear. |
+| `trefoil-knot-tube-extrusion.glr` | 3D, Parametric curves, Math, Lighting | 3D Trefoil knot rendered as an extruded tubular surface using Frenet-Serret framing and specular lighting. |
+| `double-pendulum-chaos.glr` | 3D, Physics, Animation, Hierarchical | Double compound pendulum exhibiting nonlinear coupled motion with a fading multi-color history trail. |
+| `bernstein-bezier-surface-patch.glr` | 3D, Curves & surfaces, Math, Lighting | Bicubic Bezier surface patch evaluated via Bernstein basis polynomials with dynamic control points and two-sided lighting. |
+| `fresnel-concentric-ripple-pool.glr` | 3D, Waves, Lighting, Math | Dynamic multi-source wave interference in a circular water pool with surface normals computed from wave gradients. |
+| `tesseract-4d-hypercube-rotation.glr` | 3D, Math, Transforms, Geometry | 4D Hypercube (tesseract) rotating simultaneously across XW and YZ planes, projected into 3D perspective. |
+| `stellar-plasma-solar-prominence.glr` | 3D, Particles, Blending, Lighting | Magnetic solar prominence plasma arches erupting from a stellar sphere with traveling flux knots and additive blending. |
 
 ## How to Run & Validate
 
@@ -155,4 +163,12 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 ./gl-repl tests/scenes/general/depth-func-layers.glr
 ./gl-repl tests/scenes/general/loop-control-spokes.glr
 ./gl-repl tests/scenes/general/front-face-cull-winding.glr
+./gl-repl tests/scenes/general/lorenz-attractor-chaos.glr
+./gl-repl tests/scenes/general/planetary-gear-epicyclic-train.glr
+./gl-repl tests/scenes/general/trefoil-knot-tube-extrusion.glr
+./gl-repl tests/scenes/general/double-pendulum-chaos.glr
+./gl-repl tests/scenes/general/bernstein-bezier-surface-patch.glr
+./gl-repl tests/scenes/general/fresnel-concentric-ripple-pool.glr
+./gl-repl tests/scenes/general/tesseract-4d-hypercube-rotation.glr
+./gl-repl tests/scenes/general/stellar-plasma-solar-prominence.glr
 ```
