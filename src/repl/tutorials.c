@@ -673,8 +673,8 @@ static const TutorialStep g_tutorial_line_stipple_steps[] = {
         "// Thicken the line so the pattern is easy to see.",
         "glLineWidth(2)"),
     STEP_APPEND(NULL,
-        "// Repeat each pattern bit once; 255 supplies the 16-bit mask.",
-        "glLineStipple(1, 255)"),
+        "// Repeat each pattern bit once; 0x00FF supplies the 16-bit mask.",
+        "glLineStipple(1, 0x00FF)"),
     STEP_APPEND(NULL,
         "// Draw a closed outline whose edges all use the stipple mask.",
         "glBegin(GL_LINE_LOOP)"),
@@ -686,7 +686,7 @@ static const TutorialStep g_tutorial_line_stipple_steps[] = {
         "// Close the loop and inspect the repeated dash pattern.",
         "glEnd()"),
     STEP_NOTE(
-        "// The mask is 16 bits: 255 reads as dashes, while 43690 produces dots."),
+        "// The mask is 16 bits: 0x00FF is eight on-bits (dashes); 0xAAAA is alternating bits (dots)."),
     STEP_SENTINEL,
 };
 
