@@ -1406,35 +1406,6 @@ static const TutorialEntry g_tutorials[] = {
         .subheading = "Beginner",
     },
     {
-        .name       = "Scene Chrome & Overlays",
-        .steps      = g_tutorial_feature_tour_steps,
-        .cfg        = g_tutorial_feature_tour_cfg,
-        .tag_names  = (const char *const []){ NULL },
-        .subheading = "Beginner",
-    },
-    {
-        /* Placed before the first Intermediate entry so the ALL
-         * flyout walks Beginner-only entries first, then transitions
-         * once to Intermediate at the tail - the subheading contiguity
-         * test (test_catalog_subheading_metadata) requires a single
-         * Beginner->Intermediate transition across the whole catalog. */
-        .name       = "Variable Slider",
-        .steps      = g_tutorial_variable_slider_steps,
-        .tag_names  = (const char *const []){ "REPL Language", NULL },
-        .subheading = "Beginner",
-    },
-    {
-        /* Keep this Beginner entry before the first Intermediate entry so
-         * the All flyout's section headers remain a single contiguous
-         * Beginner run followed by Intermediate. This is the first entry
-         * carrying ANIMATION, so that tag becomes visible in the menu. */
-        .name       = "First Animation",
-        .steps      = g_tutorial_first_animation_steps,
-        .cfg        = g_tutorial_first_animation_cfg,
-        .tag_names  = (const char *const []){ "Animation", NULL },
-        .subheading = "Beginner",
-    },
-    {
         .name       = "Points & Lines",
         .steps      = g_tutorial_points_lines_steps,
         .cfg        = g_tutorial_points_lines_cfg,
@@ -1450,9 +1421,17 @@ static const TutorialEntry g_tutorials[] = {
         .subheading = "Beginner",
     },
     {
-        .name       = "First Loop",
-        .steps      = g_tutorial_first_loop_steps,
-        .tag_names  = (const char *const []){ "REPL Language", NULL },
+        .name       = "Scene Chrome & Overlays",
+        .steps      = g_tutorial_feature_tour_steps,
+        .cfg        = g_tutorial_feature_tour_cfg,
+        .tag_names  = (const char *const []){ NULL },
+        .subheading = "Beginner",
+    },
+    {
+        .name       = "First Animation",
+        .steps      = g_tutorial_first_animation_steps,
+        .cfg        = g_tutorial_first_animation_cfg,
+        .tag_names  = (const char *const []){ "Animation", NULL },
         .subheading = "Beginner",
     },
     {
@@ -1463,58 +1442,22 @@ static const TutorialEntry g_tutorials[] = {
         .subheading = "Beginner",
     },
     {
+        .name       = "Variable Slider",
+        .steps      = g_tutorial_variable_slider_steps,
+        .tag_names  = (const char *const []){ "REPL Language", NULL },
+        .subheading = "Beginner",
+    },
+    {
+        .name       = "First Loop",
+        .steps      = g_tutorial_first_loop_steps,
+        .tag_names  = (const char *const []){ "REPL Language", NULL },
+        .subheading = "Beginner",
+    },
+    {
         .name       = "Lighting Basics",
         .steps      = g_tutorial_lighting_basics_steps,
         .cfg        = g_tutorial_dense_solid_cfg,
         .tag_names  = (const char *const []){ "Depth & Lighting", NULL },
-        .subheading = "Intermediate",
-    },
-    {
-        /* Builds on First Triangle via a preloaded setup scaffold -
-         * the learner colors the corners without re-drawing the
-         * triangle. It closes the original Intermediate trio; the catalog
-         * continues with more Intermediate entries. */
-        .name       = "Color Interpolation",
-        .steps      = g_tutorial_color_interp_steps,
-        .setup      = g_tutorial_color_interp_setup,
-        .tag_names  = (const char *const []){ "Color & Transforms", NULL },
-        .subheading = "Intermediate",
-    },
-    {
-        .name       = "Line Stipple",
-        .steps      = g_tutorial_line_stipple_steps,
-        .cfg        = g_tutorial_line_stipple_cfg,
-        .tag_names  = (const char *const []){ "Effects", NULL },
-        .subheading = "Intermediate",
-    },
-    {
-        .name       = "Blending & Transparency",
-        .steps      = g_tutorial_blending_steps,
-        .cfg        = g_tutorial_blending_cfg,
-        .tag_names  = (const char *const []){ "Effects", NULL },
-        .subheading = "Intermediate",
-    },
-    {
-        .name       = "Depth Mask & Draw Order",
-        .steps      = g_tutorial_depth_mask_steps,
-        .setup      = g_tutorial_depth_mask_setup,
-        .cfg        = g_tutorial_dense_solid_cfg,
-        .tag_names  = (const char *const []){ "Effects", "Depth & Lighting", NULL },
-        .subheading = "Intermediate",
-    },
-    {
-        .name       = "Fog",
-        .steps      = g_tutorial_fog_steps,
-        .cfg        = g_tutorial_fog_cfg,
-        .setup      = g_tutorial_fog_setup,
-        .tag_names  = (const char *const []){ "Effects", NULL },
-        .subheading = "Intermediate",
-    },
-    {
-        .name       = "Clip Planes",
-        .steps      = g_tutorial_clip_planes_steps,
-        .cfg        = g_tutorial_dense_solid_cfg,
-        .tag_names  = (const char *const []){ "Effects", NULL },
         .subheading = "Intermediate",
     },
     {
@@ -1553,6 +1496,50 @@ static const TutorialEntry g_tutorials[] = {
         .setup      = g_tutorial_two_sided_setup,
         .cfg        = g_tutorial_two_sided_cfg,
         .tag_names  = (const char *const []){ "Depth & Lighting", "Geometry", NULL },
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Color Interpolation",
+        .steps      = g_tutorial_color_interp_steps,
+        .setup      = g_tutorial_color_interp_setup,
+        .tag_names  = (const char *const []){ "Color & Transforms", NULL },
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Blending & Transparency",
+        .steps      = g_tutorial_blending_steps,
+        .cfg        = g_tutorial_blending_cfg,
+        .tag_names  = (const char *const []){ "Effects", NULL },
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Depth Mask & Draw Order",
+        .steps      = g_tutorial_depth_mask_steps,
+        .setup      = g_tutorial_depth_mask_setup,
+        .cfg        = g_tutorial_dense_solid_cfg,
+        .tag_names  = (const char *const []){ "Effects", "Depth & Lighting", NULL },
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Fog",
+        .steps      = g_tutorial_fog_steps,
+        .cfg        = g_tutorial_fog_cfg,
+        .setup      = g_tutorial_fog_setup,
+        .tag_names  = (const char *const []){ "Effects", NULL },
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Clip Planes",
+        .steps      = g_tutorial_clip_planes_steps,
+        .cfg        = g_tutorial_dense_solid_cfg,
+        .tag_names  = (const char *const []){ "Effects", NULL },
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Line Stipple",
+        .steps      = g_tutorial_line_stipple_steps,
+        .cfg        = g_tutorial_line_stipple_cfg,
+        .tag_names  = (const char *const []){ "Effects", NULL },
         .subheading = "Intermediate",
     },
     {

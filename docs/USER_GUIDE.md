@@ -220,13 +220,13 @@ with `./gl-repl --tutorial "First Triangle"` (a 1-based index also works).
   **Exit Tutorial** entries.
 - Instruction lines are locked - the tutorial guards them against edits
   until you finish or exit.
-- **Beginner:** *First Triangle*, *Color & Transform*, *Scene Chrome & Overlays*,
-  *Variable Slider*, *First Animation*, *Points & Lines*, *GLUT Solids Tour*,
-  *First Loop*, and *Expressions & Motion*.
-- **Intermediate:** *Lighting Basics*, *Color Interpolation*, *Line Stipple*,
-  *Blending & Transparency*, *Depth Mask & Draw Order*, *Fog*, *Clip Planes*,
-  *Normals*, *Flat & Smooth Shading*, *Materials & Shininess*,
-  *Culling & Winding*, *Two-Sided Lighting*, *Bitmap Text*,
+- **Beginner:** *First Triangle*, *Color & Transform*, *Points & Lines*,
+  *GLUT Solids Tour*, *Scene Chrome & Overlays*, *First Animation*,
+  *Expressions & Motion*, *Variable Slider*, and *First Loop*.
+- **Intermediate:** *Lighting Basics*, *Normals*, *Flat & Smooth Shading*,
+  *Materials & Shininess*, *Culling & Winding*, *Two-Sided Lighting*,
+  *Color Interpolation*, *Blending & Transparency*, *Depth Mask & Draw Order*,
+  *Fog*, *Clip Planes*, *Line Stipple*, *Bitmap Text*,
   *Transform Stacks & Hierarchy*, *Watching a Program Run*, and
   *Keeping Your Work*.
 - **Advanced:** *Functions*, *If & Conditionals*, and *Scratch Arrays*.
