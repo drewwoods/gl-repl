@@ -38,7 +38,7 @@ stars() {
   float sy, tw;
   glPointSize(5);
   glBegin(GL_POINTS);
-    for (k, 0, 90) {
+    for(k, 0, 90) {
       sy = 3 + 40 * rand(42, k);
       tw = 0.55 + 0.45 * sin(2.3 * t + 6.28 * rand(43, k));
       glColor4f(0.92, 0.95, 0.98, 0.75 * tw * smoothstep(3, 10, sy));
@@ -70,7 +70,7 @@ glints() {
   float gx, gz, gp, ga;
   glPointSize(6);
   glBegin(GL_POINTS);
-    for (k, 0, lanterns*2) {
+    for(k, 0, lanterns*2) {
       gx = 1.33 * spread * rand2(51, k);
       gz = 0 - 3 - 26 * rand(52, k);
       gp = TAU * rand(53, k);
@@ -95,7 +95,7 @@ lantern(px, py, pz, s, glow) {
       glColor4f(0.5 * glow, 0.175 * glow, 0.1 * glow, 0.9);
       glVertex3f(0, 1.35, 0);
       glColor4f(glow, 0.35 * glow, 0.2 * glow, 0.9);
-      for (k, 0, 7) {
+      for(k, 0, 7) {
         ax = TAU * k / 6;
         glVertex3f(0.6 * cos(ax), 0.42, 0.6 * sin(ax));
       }
@@ -104,7 +104,7 @@ lantern(px, py, pz, s, glow) {
       glColor4f(glow, 0.85 * glow, 0.15 * glow, 0.95);
       glVertex3f(0, 0, 0);
       glColor4f(glow, 0.35 * glow, 0.2 * glow, 0.9);
-      for (k, 0, 7) {
+      for(k, 0, 7) {
         ax = TAU * k / 6;
         glVertex3f(0.6 * cos(ax), 0.42, 0.6 * sin(ax));
       }
@@ -141,7 +141,7 @@ launch(i, mirror) {
   dim = 1 - 0.6 * smoothstep(6, 26, 0 - zpos);
   sz = 0.5 + 0.35 * rand(23, i);
   g = bright * fade * flick * dim;
-  if (mirror > 0.5) {
+  if(mirror > 0.5) {
     glPushMatrix();
       glScalef(1, -1, 1);
       lantern(xpos + 0.18 * sin(1.6 * t + 0.7 * zpos), ypos + 0.35, zpos, sz, 0.5 * g);
@@ -173,14 +173,14 @@ glEnable(GL_DEPTH_TEST);
 glDisable(GL_LIGHTING);
 glEnable(GL_BLEND);
 glEnable(GL_POINT_SMOOTH);
-glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 0.3, 0, 0.004);
+glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){0.3, 0, 0.004});
 
 sky();
 stars();
 // Reflections go down first, under the water plane...
 glDepthMask(GL_FALSE);
 glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-for (i, 0, lanterns) {
+for(i, 0, lanterns) {
   launch(i, 1);
 }
 // ...then the translucent surface seals them in...
@@ -191,7 +191,7 @@ water();
 glDepthMask(GL_FALSE);
 glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 glints();
-for (i, 0, lanterns) {
+for(i, 0, lanterns) {
   launch(i, 0);
 }
 glDepthMask(GL_TRUE);

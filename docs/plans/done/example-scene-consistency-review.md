@@ -1,6 +1,34 @@
 # `examples/scenes` Consistency Review
 
-## Status - CONSOLIDATED REVIEW (2026-08-14)
+## Status - LANDED 2026-08-14 (Batch A + Batch B)
+
+Findings 1-5 (Batch A) and 6-7 (Batch B) are implemented. Finding 8 (Orrery's
+SCREAMING_CASE `@tune` names) was deliberately left alone, as this review
+recommends. Catalog order did not change, so every numeric example index is
+stable.
+
+Two as-built deviations from the text below:
+
+- **Finding 5 covers one `gluColor` site, not two.** The loader only
+  normalizes a `gluColor` call whose arguments are plain literals; the
+  expression-argument call at `dusk-lighthouse-atoll-stress-test.glr:67`
+  round-trips verbatim with three arguments and no alpha, so it already
+  matched the code panel. Only the literal call gained `, 1` (and `0.20` →
+  `0.2`, which the loader also rewrites). The goldens confirm this: the
+  finding-5 edits produced **zero** golden churn, exactly as predicted.
+- **`bench/baselines/*.csv` was left untouched.** Those files are a frozen
+  record of one benchmark run - they already carried a name (`Recursive
+  triangle tree (func + recursion)`) that went stale before this pass - so
+  rewriting their comments would misdescribe what was measured.
+
+The one golden that changed is `36.golden.txt` (Aurora), from finding 7's
+`cycle_length` → `cycleLength` rename.
+
+The original review follows unchanged.
+
+---
+
+## Original review (read-only, 2026-08-14)
 
 This is a read-only review of the 40 shipped `.glr` scenes in
 `examples/scenes/`, both example catalogs, the user-facing example lists,

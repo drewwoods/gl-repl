@@ -74,7 +74,7 @@ island(r, lagoon) {
       for(i, 0, 20) {
         x = lagoon*cos(-i*TAU/20) - r*0.35;
         z = lagoon*sin(-i*TAU/20) + r*0.2;
-        gluColor(0.08, 0.14, 0.20);
+        gluColor(0.08, 0.14, 0.2, 1);
         gluVertex(x, 0, z);
       }
     gluEnd();

@@ -8,7 +8,7 @@ rasterized as hard squares under WebGL regardless of the enable, since GLES2
 has no point-antialiasing state of its own.
 
 That breaks any scene drawing round sprites with large glPointSize: gl-repl's
-glow-point examples (glow-sprites-blend-point-attenuation, lantern_festival,
+glow-point examples (glow-sprites-blend-point-attenuation, lantern-festival,
 jellyfish-gldepthmask-translucency, teapot-carousel, orrery-labels,
 dusk-lighthouse-atoll) all enable GL_POINT_SMOOTH and render square blocks in
 the Emscripten build while looking correct natively. gl-repl's own chrome hits

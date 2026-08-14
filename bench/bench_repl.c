@@ -365,7 +365,7 @@ static BenchResult bench_feed_examples(int iters) {
 
 /* ---- bench: flatten cost on a fixed scene ----------------------------- */
 
-/* A verbatim, frozen copy of the "Animated wave surface" built-in example (a
+/* A verbatim, frozen copy of the "Wave surface" built-in example (a
  * nested-for surface that unrolls to a large flat program). Hardcoded here so
  * the flatten benchmark's workload is fixed regardless of changes to the
  * built-in example list - adding, reordering, or editing examples in
@@ -802,7 +802,7 @@ static void bench_flatten_refresh(int iters) {
     static const struct { const char *row; const char *display; } cases[] = {
         { "refresh_grass", "Swaying grass field (rand + t)" },
         { "refresh_orrery", "Orrery (labels track 3D orbits)" },
-        { "refresh_wave", "Animated wave surface (analytic normals)" },
+        { "refresh_wave", "Wave surface (analytic normals)" },
     };
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         int idx = example_index_by_name(cases[i].display);
@@ -917,7 +917,7 @@ static void bench_refresh_slider(int iters) {
          * keeping visible: EARTH_RATE feeds planetKepler()'s local `th`
          * *directly*, while ORB_SCALE reaches planet()'s local `th` only
          * transitively, by way of the global `orbitR` that `th` reads. */
-        { "slider_wave_value", "Animated wave surface (analytic normals)",
+        { "slider_wave_value", "Wave surface (analytic normals)",
           "amp", REPL_FLAT_REFRESH_REBAKE },
         { "slider_orrery_local", "Orrery (labels track 3D orbits)",
           "EARTH_RATE", REPL_FLAT_REFRESH_FULL },

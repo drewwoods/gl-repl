@@ -46,7 +46,7 @@ glBegin(GL_POINTS);
 glEnd();
 glColor4f(0.92, 0.95, 0.98, 0.95);
 glBegin(GL_LINE_STRIP);
-  for (u, 0, 1, 0.01f) {
+  for(u, 0, 1, 0.01) {
     bezier(u);
     glVertex2f(x, y);
   }

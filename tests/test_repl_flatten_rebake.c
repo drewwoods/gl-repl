@@ -616,7 +616,7 @@ static void test_real_scene_time_routes(void) {
     printf("--- refresh: real-scene t routes ---\n");
     /* Wave is the production value-only case: `t` reaches vertex arguments
      * and nothing else, so the existing flat topology is reusable. */
-    assert_real_scene_time_route("Animated wave surface (analytic normals)",
+    assert_real_scene_time_route("Wave surface (analytic normals)",
                                  REPL_FLAT_REFRESH_REBAKE);
     /* Grass used to rebake here. Its blade() temporaries are function-scoped
      * locals now, and `t` feeds them - every dep of a local's RHS is

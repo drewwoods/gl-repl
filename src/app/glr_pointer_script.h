@@ -45,7 +45,7 @@
  *                         its top-left)
  *
  * Labels match by normalized prefix: case-insensitive, '_' matches ' '
- * ("torus_knot" matches "Torus knot (animated)"); chrome rows (dividers,
+ * ("torus_knot" matches "Torus knot"); chrome rows (dividers,
  * headers, flyout subheadings) never match. Row targets need their menu
  * open - click it open first, exactly as a user would. An unresolvable
  * target aborts a capture run (exit 1) and stops a tour with a status

@@ -1500,12 +1500,12 @@ EOF
 
 # Profile panels: Histogram mode shows the section listing (CPU/GPU/Max
 # columns), the log-log section histogram, and the FPS plot at once. Use the
-# real animated-wave example as the workload, with asset-specific presentation
+# real wave-surface example as the workload, with asset-specific presentation
 # config prepended to it. Stock AA: raising the accum passes would multiply
 # every section's cost 16x and distort the numbers the panel is there to show.
 stage_profile() {
     stage_scene profile \
-        "$ROOT/examples/scenes/animated-wave-surface-analytic-normals.glr" <<'EOF'
+        "$ROOT/examples/scenes/wave-surface-analytic-normals.glr" <<'EOF'
 /* @cfg compute_profile = 3 */
 /* @cfg variable_panel = 0 */
 /* @cfg light_indicators = 0 */
@@ -1857,7 +1857,7 @@ if want axes-compass; then
 fi
 
 if want view-mode-2d; then
-    # A GIF that toggles View mode (Ctrl+Shift+V) on the animated wave surface,
+    # A GIF that toggles View mode (Ctrl+Shift+V) on the wave surface,
     # so the doc shows the 3D->2D->3D transition rather than a frozen 2D still.
     # GLR_VIEW_TOGGLE_AT fires on gl_repl's rendered-frame clock (t = frame/60),
     # which counts the WARM_EXAMPLE leading frames gif() renders and discards for
@@ -1868,7 +1868,7 @@ if want view-mode-2d; then
     # (2D->3D). The 6s clip then holds ~1.5s of 3D before it loops.
     ( export GLR_VIEW_TOGGLE_AT=4,6
       gif "$OUT/view-mode-2d.gif" 240 2 20 560 \
-          --example "Animated wave surface (analytic normals)" )
+          --example "Wave surface (analytic normals)" )
 fi
 
 if want labels-orrery; then
@@ -2308,7 +2308,7 @@ fi
 
 # Featured.
 if want sc-torus-knot; then
-    gif "$SHOW/torus-knot.gif" 200 2 20 720 --example "Torus knot (animated)"
+    gif "$SHOW/torus-knot.gif" 200 2 20 720 --example "Torus knot"
 fi
 if want sc-snowfall; then
     gif "$SHOW/snowfall.gif" 220 2 22 720 --example "Snowfall particles"
@@ -2320,12 +2320,12 @@ if want sc-parametric-torus; then
 fi
 if want sc-recursive-tree; then
     gif "$SHOW/recursive-tree.gif" 200 2 20 720 \
-        --example "Recursive 3D tree (func + recursion)"
+        --example "3D tree (func + recursion)"
 fi
 
 # Curves & line art.
 if want sc-spirograph; then
-    gif "$SHOW/spirograph.gif" 200 2 20 560 --example "Animated spirograph curve"
+    gif "$SHOW/spirograph.gif" 200 2 20 560 --example "Spirograph curve"
 fi
 if want sc-ripple-ring; then
     gif "$SHOW/ripple-ring.gif" 200 2 20 560 --example "Traveling ripple ring"
@@ -2346,7 +2346,7 @@ fi
 
 if want sc-wave-surface; then
     gif "$SHOW/wave-surface.gif" 200 2 20 560 \
-        --example "Animated wave surface (analytic normals)"
+        --example "Wave surface (analytic normals)"
 fi
 
 # Surfaces. (The old "Procedural terrain" example is gone; the new "Ringed
@@ -2418,7 +2418,7 @@ if want sc-planar-shadows; then
 fi
 if want sc-fog-ring-tunnel; then
     gif "$SHOW/fog-ring-tunnel.gif" 200 2 20 560 \
-        --example "Fog ring tunnel (glFog)"
+        --example "Fog ring tunnel"
 fi
 if want sc-pulse-bars; then
     gif "$SHOW/pulse-bars.gif" 200 2 20 560 \

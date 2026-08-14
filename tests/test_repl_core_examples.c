@@ -1641,7 +1641,7 @@ static void test_example_tag_default_cfg(void) {
     int stress_idx     = find_example_index_by_name("Dusk lighthouse atoll (stress test)");
     int whale_idx      = find_example_index_by_name("Whale (particle system + lit model)");
     int spirograph_idx =
-        find_example_index_by_name("Animated spirograph curve");
+        find_example_index_by_name("Spirograph curve");
 
     ASSERT_TRUE("bezier example index found", bezier_idx >= 0);
     ASSERT_TRUE("cube example index found", cube_idx >= 0);

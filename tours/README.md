@@ -149,7 +149,7 @@ top-left), or one of these symbolic tokens:
 | `code:<label>` or `code:<n>` | A code-panel row - the first *visible* row whose canonical text the label prefixes (`code:glcolor3f`), or a line by the number in the panel's gutter (`code:3`, 1-based like the `GLR_*` capture hooks). Only resolves for a row currently scrolled into view. |
 
 Labels use a case-insensitive normalized prefix match. In target labels, `_`
-matches a space, so `sub:3d:torus_knot` can match **Torus knot (animated)**.
+matches a space, so `sub:3d:torus_knot` can match **Torus knot**.
 Use enough of the label to be unambiguous. Chrome rows such as dividers and
 headers cannot match.
 

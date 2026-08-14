@@ -9,7 +9,6 @@ begun. They move to `plans/active/` once implementation starts.
 |---|---|
 | `audio-playlist-and-organizer.md` | Audio menu: playlist browser, play/remove, tag organization - browser half **already shipped** by `done/audio-menu.md`; only right-click removal and `tags.txt` tag groups remain |
 | `clang-ast-mutation-analysis.md` | Clang AST pass for mutation analysis |
-| `example-scene-consistency-review.md` | Consolidated consistency review of the 40 shipped `examples/scenes/*.glr`: a targeted cleanup for three underscore filenames, generic `animated` labels outside the introductory ring scene, redundant/imprecise `(glFog)`, stale snowfall metadata, and source spellings rewritten by the loader; preserves intentional group tone, baseline-clear scenes, and scene-specific scientific notation |
 | `float-returning-repl-functions.md` | Functions that return float values |
 | `historic-benchmark.md` | Historic bench trend tracking |
 | `local-aware-rebake.md` | Carry function-scoped locals through a value-only rebake, so a global feeding a local stops forcing a full flatten |

@@ -145,7 +145,7 @@ for(i, 0, n) {
 
 ---
 
-### [Recursive 3D tree](../examples/scenes/recursive-3d-tree-func-recursion.glr)
+### [3D tree](../examples/scenes/3d-tree-func-recursion.glr)
 
 A `limb(depth, len, rad, seed)` function that calls itself - recursion,
 inlined by the flattener, capped at depth 64. Each call draws one tapered
@@ -184,9 +184,9 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 
 <!-- images/showcase/spirograph.gif
      scripts/docs-assets.sh sc-spirograph -->
-<img src="images/showcase/spirograph.gif" alt="Animated spirograph curve" width="100%">
+<img src="images/showcase/spirograph.gif" alt="Spirograph curve" width="100%">
 
-**[Animated spirograph](../examples/scenes/animated-spirograph-curve.glr)**
+**[Spirograph curve](../examples/scenes/spirograph-curve.glr)**
 <br><sub>epitrochoid swept by `t`</sub>
 
 </td>
@@ -247,10 +247,10 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      scripts/docs-assets.sh sc-wave-surface
      Intent: compare the base strip mesh with the version whose analytic
      normals make the lighting roll across the wave. -->
-<img src="images/showcase/wave-surface.gif" alt="Animated wave surface" width="100%">
+<img src="images/showcase/wave-surface.gif" alt="Wave surface" width="100%">
 
-**[Animated wave surface](../examples/scenes/animated-wave-surface.glr)**
-<br><sub>then [add analytic per-vertex normals](../examples/scenes/animated-wave-surface-analytic-normals.glr)</sub>
+**[Wave surface](../examples/scenes/wave-surface.glr)**
+<br><sub>then [add analytic per-vertex normals](../examples/scenes/wave-surface-analytic-normals.glr)</sub>
 
 </td>
 <td width="33%" align="center">
@@ -305,7 +305,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      scripts/docs-assets.sh sc-torus-knot -->
 <img src="images/showcase/torus-knot.gif" alt="An animated (2,3) torus knot in cycling color" width="100%">
 
-**[Torus knot](../examples/scenes/torus-knot-animated.glr)**
+**[Torus knot](../examples/scenes/torus-knot.glr)**
 <br><sub>`(p,q)` knot, one `GL_LINE_LOOP`</sub>
 
 </td>
@@ -433,7 +433,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      burns over a translucent water plane that mirrors it. -->
 <img src="images/showcase/lantern-festival.gif" alt="Lantern festival - paper lanterns rising over reflecting water" width="100%">
 
-**[Lantern festival](../examples/scenes/lantern_festival.glr)**
+**[Lantern festival](../examples/scenes/lantern-festival.glr)**
 <br><sub>additive glow + mirrored reflections</sub>
 
 </td>
@@ -485,7 +485,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      scripts/docs-assets.sh sc-stencil-mask -->
 <img src="images/showcase/stencil-mask.gif" alt="A rotating stencil window revealing a teapot" width="100%">
 
-**[Stencil mask window](../examples/scenes/stencil_mask_window_glstencilop.glr)**
+**[Stencil mask window](../examples/scenes/stencil-mask-window-glstencilop.glr)**
 <br><sub>three passes with `glStencilFunc`, `glStencilMask`, and `glStencilOp`</sub>
 
 </td>
@@ -537,7 +537,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
      scripts/docs-assets.sh sc-pulse-bars -->
 <img src="images/showcase/pulse-bars.gif" alt="A pulse moving through a row of easing bars" width="100%">
 
-**[Pulse bars (easing)](../examples/scenes/pulse_bars_easing.glr)**
+**[Pulse bars (easing)](../examples/scenes/pulse-bars-easing.glr)**
 <br><sub>a sine-driven bar pulse with `smoothstep` falloff and `lerp`d height</sub>
 
 </td>

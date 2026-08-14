@@ -28,7 +28,7 @@ glEnable(GL_BLEND);
 glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 glEnable(GL_POINT_SMOOTH);
 glPointSize(24);
-glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, 0.2, 0, 0.15);
+glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){0.2, 0, 0.15});
 glBegin(GL_POINTS);
   for(i, 0, count) {
     angle = rand(i, 0)*TAU;                  // random base angle in [0, TAU)

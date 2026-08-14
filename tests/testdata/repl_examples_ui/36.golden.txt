@@ -109,7 +109,7 @@ void display(void) {
 --- source ---
   static float dd, blink, ink, ph, slit; // expanding-pulse distance; beacon blink; brightness multiplier on the base ink color; shutter-cycle phase; slit half-angle
   static float dishAz; // dish azimuth, degrees -- see the note below
-  static float cycle_length = 30; // seconds per dome shutter cycle (open ~2/3 of it)
+  static float cycleLength = 30; // seconds per dome shutter cycle (open ~2/3 of it)
 
   // concrete pad a building stands on
   pad(rad) {
@@ -216,11 +216,11 @@ void display(void) {
     // The planes are captured in the dome frame BEFORE that rotation, so
     // the cuts stay upright.
     // Shutter cycle: closed at t = 0, `slit` swings open over 2 s, stays
-    // open (0.31 rad) until 2/3 of `cycle_length`, swings shut, and rests
+    // open (0.31 rad) until 2/3 of `cycleLength`, swings shut, and rests
     // closed for the last third. The plane equations reference `slit`, so
     // they re-evaluate every frame.
-    ph = fmod(t, cycle_length);
-    slit = 0.31*clamp(min(ph/2, (2*cycle_length/3 + 2 - ph)/2), 0, 1);
+    ph = fmod(t, cycleLength);
+    slit = 0.31*clamp(min(ph/2, (2*cycleLength/3 + 2 - ph)/2), 0, 1);
     glClipPlane(GL_CLIP_PLANE1, (GLdouble[]){0, 1, 0, 0});
     glEnable(GL_CLIP_PLANE1);
     glClipPlane(GL_CLIP_PLANE2, (GLdouble[]){0, -1, 0, 1.02});

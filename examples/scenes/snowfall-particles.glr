@@ -28,7 +28,7 @@ glEnable(GL_POINT_SMOOTH);
 glEnable(GL_DEPTH_TEST);
 glPointSize(10);
 glBegin(GL_POINTS);
-  for (p, 0, flakeCount) {
+  for(p, 0, flakeCount) {
     drift = driftMax * rand2(p, 1);
     flakeX = rem(wrapX * rand2(p,4) + t * drift, 2 * wrapX);
 

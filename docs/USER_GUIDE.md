@@ -157,13 +157,13 @@ set.
 The **&lt; Prev** / **Next &gt;** buttons in the menu bar (left of the 2D/3D
 swatch) do the same stepping with the mouse - and while a tutorial is
 running they step the *lesson* catalog instead, matching F11 / Shift+F11.
-Hovering either one names where it lands - `Next Example | Torus knot
-(animated) | F12` - so you can see what is one click away before taking it.
+Hovering either one names where it lands - `Next Example | Torus knot |
+F12` - so you can see what is one click away before taking it.
 They hide themselves when the code panel is too narrow to fit them
 alongside the menus and the search field.
 
 ```
- 1  gl-repl logo                                        21  Torus knot (animated)
+ 1  gl-repl logo                                        21  Torus knot
  2  Rotating cube                                       22  GLU concave arrow
  3  Animated ring (for + t)                             23  GLU concave arrow cutout
  4  Conditional colors (if + t)                         24  GLU concave arrow extrusion
@@ -171,18 +171,18 @@ alongside the menus and the search field.
  6  Function demo (named func)                          26  Snowfall particles
  7  Function polygons (args + for)                      27  Swaying grass field (rand + t)
  8  Function branching (args + if)                      28  Clip planes carve solids (glClipPlane)
- 9  2D assignment sketch (vars only)                    29  Fog ring tunnel (glFog)
-10  Animated spirograph curve                           30  Stencil mask window (glStencilOp)
+ 9  2D assignment sketch (vars only)                    29  Fog ring tunnel
+10  Spirograph curve                                    30  Stencil mask window (glStencilOp)
 11  Traveling ripple ring                               31  Planar shadows (glMultMatrixf)
 12  Bezier curve with guides                            32  Jellyfish (glDepthMask translucency)
 13  Annotated orbit plot (labels)                       33  Lantern festival (additive glow + reflections)
 14  Bubble sort (scratch arrays)                        34  Whale (particle system + lit model)
 15  Sierpinski carpet (2D recursion)                    35  Teapot carousel (transform stacks + glow points)
 16  Sierpinski sponge (3D recursion)                    36  Ringed planet (nebula skies)
-17  Recursive 3D tree (func + recursion)                37  Aurora observatory (dish tracks the sky)
+17  3D tree (func + recursion)                          37  Aurora observatory (dish tracks the sky)
 18  Parametric torus (nested for)                       38  Orrery (labels track 3D orbits)
-19  Animated wave surface                               39  Dusk lighthouse atoll (stress test)
-20  Animated wave surface (analytic normals)            40  Pulse bars (easing)
+19  Wave surface                                        39  Dusk lighthouse atoll (stress test)
+20  Wave surface (analytic normals)                     40  Pulse bars (easing)
 ```
 
 Examples may carry their own presentation presets (grid theme, backdrop,
@@ -1054,7 +1054,7 @@ drawCube();
 ```
 
 Ten function slots are available. Recursion works when paired with an
-`if(...)` guard - see the *Recursive 3D tree* example.
+`if(...)` guard - see the *3D tree* example.
 
 #### Function-scoped locals
 

@@ -19,16 +19,16 @@ scripts/docs-assets.sh --list             # asset names
 
 | File | Asset | Example |
 |---|---|---|
-| `torus-knot.gif` | `sc-torus-knot` | Torus knot (animated) |
-| `snowfall.gif` | `sc-snowfall` | Snowfall demo (550 particles) |
+| `torus-knot.gif` | `sc-torus-knot` | Torus knot |
+| `snowfall.gif` | `sc-snowfall` | Snowfall particles |
 | `parametric-torus.png` | `sc-parametric-torus` | Parametric torus (nested for) - still (static geometry) |
-| `recursive-tree.gif` | `sc-recursive-tree` | Recursive 3D tree (func + recursion) |
-| `spirograph.gif` | `sc-spirograph` | Animated spirograph curve |
+| `recursive-tree.gif` | `sc-recursive-tree` | 3D tree (func + recursion) |
+| `spirograph.gif` | `sc-spirograph` | Spirograph curve |
 | `ripple-ring.gif` | `sc-ripple-ring` | Traveling ripple ring |
 | `bezier.png` | `sc-bezier` | Bezier curve with guides (draws its own control points) |
 | `bubble-sort.gif` | `sc-bubble-sort` | Bubble sort (scratch arrays) |
 | `orbit-plot.png` | `sc-orbit-plot` | Annotated orbit plot (labels) |
-| `wave-surface.gif` | `sc-wave-surface` | Animated wave surface pair (analytic normals shown) |
+| `wave-surface.gif` | `sc-wave-surface` | Wave surface pair (analytic normals shown) |
 | `ringed-planet.gif` | `sc-ringed-planet` | Ringed planet (nebula skies) - replaces the retired "Procedural terrain" |
 | `gl-repl-logo.png` | `sc-gl-repl-logo` | gl-repl Logo |
 | `grass.gif` | `sc-grass` | Swaying grass field (rand + t) |
