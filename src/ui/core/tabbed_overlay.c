@@ -47,8 +47,17 @@ static int overlay_compute_geom(const UiOverlayState *in, OverlayGeom *g) {
 
     int win_w = in->viewport_w;
     int win_h = in->viewport_h;
-    g->hx = win_w / 6;     g->hy = win_h / 12;
-    g->hw = win_w * 2 / 3; g->hh = win_h * 5 / 6;
+    /* Five or more tabs get a wider card: this keeps every label and hit
+     * target comfortably visible without changing compact overlays. */
+    if (num_tabs >= 5) {
+        g->hx = win_w / 8;
+        g->hw = win_w * 3 / 4;
+    } else {
+        g->hx = win_w / 6;
+        g->hw = win_w * 2 / 3;
+    }
+    g->hy = win_h / 12;
+    g->hh = win_h * 5 / 6;
     g->tab_bar_h = LINE_H + 2;
     g->title_h   = LINE_H + 4;
     g->pad_top   = g->title_h + g->tab_bar_h + 6;
@@ -252,8 +261,8 @@ void ui_tabbed_overlay_render(const UiOverlayState *in) {
         /* Titled divider: a leading 0x13 (DC3) byte marks a GL-drawn
          * section separator rather than a text line - the label at the
          * left in accent, then a thin rule out to the right edge. The
-         * marker byte itself never draws. Used to group the Keys tab
-         * (Editor / 3D Scene / Interface). */
+         * marker byte itself never draws. Used to group long help tabs
+         * into titled sections. */
         if ((unsigned char)text[i][0] == 0x13) {
             const char *label = text[i] + 1;
             int label_len = (int)strlen(label);

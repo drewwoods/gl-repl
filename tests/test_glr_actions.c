@@ -156,7 +156,7 @@ static void test_help_tab_actions(void) {
     editor_help_session_set_tab(0);
     editor_help_session_set_scroll(50);
 
-    /* Tabs: Overview(0) -> Commands(1) -> Keys(2) -> About(3). */
+    /* Tabs: Overview(0) -> Commands(1) -> Editor(2) -> Scene(3) -> About(4). */
     glr_action_help_tab_next();
     ASSERT_INT("help tab next moves to 1", editor_help_session_tab_idx(), 1);
     ASSERT_INT("help tab next resets scroll", editor_help_session_scroll(), 0);
@@ -167,14 +167,20 @@ static void test_help_tab_actions(void) {
     glr_action_help_tab_next();
     ASSERT_INT("help tab next moves to 3", editor_help_session_tab_idx(), 3);
 
+    glr_action_help_tab_next();
+    ASSERT_INT("help tab next moves to 4", editor_help_session_tab_idx(), 4);
+
     editor_help_session_set_scroll(30);
     glr_action_help_tab_next();
-    ASSERT_INT("help tab next stays at 3 (max)", editor_help_session_tab_idx(), 3);
+    ASSERT_INT("help tab next stays at 4 (max)", editor_help_session_tab_idx(), 4);
     ASSERT_INT("help tab next at max keeps scroll", editor_help_session_scroll(), 30);
 
     glr_action_help_tab_prev();
-    ASSERT_INT("help tab prev moves to 2", editor_help_session_tab_idx(), 2);
+    ASSERT_INT("help tab prev moves to 3", editor_help_session_tab_idx(), 3);
     ASSERT_INT("help tab prev resets scroll", editor_help_session_scroll(), 0);
+
+    glr_action_help_tab_prev();
+    ASSERT_INT("help tab prev moves to 2", editor_help_session_tab_idx(), 2);
 
     glr_action_help_tab_prev();
     ASSERT_INT("help tab prev moves to 1", editor_help_session_tab_idx(), 1);
@@ -2573,27 +2579,54 @@ static int help_tab_contains_binding(const char *tab_label,
     return 0;
 }
 
-static void test_help_keys_tab_uses_keymap_labels(void) {
+static int help_tab_line_index(const char *tab_label, const char *text) {
+    const ReplHelpContent *help = repl_help_text_build();
+    for (int t = 0; help && t < help->tab_count; t++) {
+        const ReplHelpTab *tab = &help->tabs[t];
+        if (!tab->label || strcmp(tab->label, tab_label) != 0)
+            continue;
+        for (int i = 0; tab->lines && tab->lines[i]; i++) {
+            if (strstr(tab->lines[i], text))
+                return i;
+        }
+    }
+    return -1;
+}
+
+static void test_help_key_tabs_use_keymap_labels(void) {
     char shortcut[KEYMAP_SHORTCUT_LABEL_MAX];
 
     keymap_binding_to_string(shortcut, (int)sizeof(shortcut),
                              KM_KEY(GLR_SAVE), KM_MODS(GLR_SAVE), 0);
-    ASSERT_TRUE("help Keys tab renders Save shortcut from keymap",
-                help_tab_contains_binding("Keys", shortcut, "Save to output.c"));
+    ASSERT_TRUE("help Editor tab renders Save shortcut from keymap",
+                help_tab_contains_binding("Editor", shortcut, "Save to output.c"));
 
     keymap_binding_to_string(shortcut, (int)sizeof(shortcut),
                              KM_KEY(GLR_NEXT_EXAMPLE), KM_MODS(GLR_NEXT_EXAMPLE), 1);
-    ASSERT_TRUE("help Keys tab renders Next Example shortcut from keymap",
-                help_tab_contains_binding("Keys", shortcut, "Next example / scene"));
+    ASSERT_TRUE("help Scene tab renders Next Example shortcut from keymap",
+                help_tab_contains_binding("Scene", shortcut, "Next example / scene"));
 
     keymap_binding_to_string(shortcut, (int)sizeof(shortcut),
                              KM_KEY(GLR_AUDIO_PREV), KM_MODS(GLR_AUDIO_PREV), 1);
-    ASSERT_TRUE("help Keys tab renders Audio Previous shortcut from keymap",
-                help_tab_contains_binding("Keys", shortcut, "Previous track"));
+    ASSERT_TRUE("help Scene tab renders Audio Previous shortcut from keymap",
+                help_tab_contains_binding("Scene", shortcut, "Previous track"));
 
-    ASSERT_TRUE("help Keys tab mentions OpenGL state inspector",
-                help_tab_contains_binding("Keys", "Right-click blank row",
+    ASSERT_TRUE("help Editor tab mentions OpenGL state inspector",
+                help_tab_contains_binding("Editor", "Right-click blank row",
                                           "current vs default OpenGL state"));
+
+    int rendering = help_tab_line_index("Scene", "RENDERING:");
+    int time_replay = help_tab_line_index("Scene", "TIME & REPLAY:");
+    int scene = help_tab_line_index("Scene", "SCENE:");
+    int camera = help_tab_line_index("Scene", "CAMERA:");
+    int geometry = help_tab_line_index("Scene", "GEOMETRY:");
+    int overlays = help_tab_line_index("Scene", "OVERLAYS:");
+    int interface = help_tab_line_index("Scene", "INTERFACE:");
+    ASSERT_TRUE("help Scene tab follows Config menu section order",
+                rendering >= 0 && rendering < time_replay &&
+                time_replay < scene && scene < camera &&
+                camera < geometry && geometry < overlays &&
+                overlays < interface);
 }
 
 static void test_help_commands_tab_lists_if_branches(void) {
@@ -2691,7 +2724,7 @@ int main(void) {
     test_no_duplicate_config_bindings();
     test_keymap_event_is_strict();
     test_keymap_binding_to_string();
-    test_help_keys_tab_uses_keymap_labels();
+    test_help_key_tabs_use_keymap_labels();
     test_help_commands_tab_lists_if_branches();
     test_auto_normals_off_strips_generated_rows();
     test_f9_cycles_light_theme();

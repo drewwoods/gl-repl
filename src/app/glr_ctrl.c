@@ -3563,7 +3563,9 @@ static void glr_ctrl_scroll_to_line(int target) {
 }
 
 const UiOverlayContent *glr_ctrl_help_overlay_content(void) {
-    enum { GLR_HELP_OVERLAY_MAX_TABS = 4 };
+    /* Keep headroom beyond today's five tabs so extending the REPL-owned
+     * help content cannot silently hide the trailing tab again. */
+    enum { GLR_HELP_OVERLAY_MAX_TABS = 8 };
     static UiOverlayTab tabs[GLR_HELP_OVERLAY_MAX_TABS];
     static UiOverlayContent content;
     static int cached = 0;
@@ -3962,7 +3964,7 @@ static void glr_ctrl_tick_overlay_xn(void) {
 }
 
 /* Look up the label of the config row currently bound to F<fn>.
- * Used by the help overlay's F-Key Toggles section through the
+ * Used by the help overlay's Config Controls groups through the
  * controller-installed ReplHelpFkeyProvider, so src/repl/help_text.c can
  * obtain labels without reaching into src/app/glr_config.h. */
 static const char *glr_ctrl_help_fkey_label(int fn) {
@@ -4023,7 +4025,8 @@ static void glr_ctrl_install_app_services(void) {
     /* Light bridge: feeds the app-owned theme-seeded light data to the exporter's glLightfv blocks. */
     repl_export_install_light_bridge(&g_export_light_bridge_impl);
     /* Help-overlay F-key label provider so src/repl/help_text.c can
-     * walk F2..F10 labels without including app/glr_config.h. */
+     * place F2..F10 labels in Config-menu order without including
+     * app/glr_config.h. */
     repl_help_text_install_fkey_provider(&g_glr_help_fkey_provider);
     /* Seed the grid/axes overlay transition machines. */
     glr_ctrl_seed_overlay_xn();

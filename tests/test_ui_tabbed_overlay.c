@@ -19,6 +19,7 @@
 #include "support/test_harness.h"
 
 #include <stdio.h>
+#include <string.h>
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
 
@@ -115,6 +116,32 @@ static void test_hit_test_regions(void) {
                   hidden.kind, UI_OVERLAY_HIT_OUTSIDE);
 }
 
+static void test_five_tab_help_exposes_about(void) {
+    const UiOverlayContent *content = glr_ctrl_help_overlay_content();
+    ASSERT_TRUE("help adapter exposes all five tabs", content != 0 &&
+                content->tab_count == 5);
+    ASSERT_TRUE("help adapter keeps About as the trailing tab",
+                content != 0 && content->tab_count == 5 &&
+                content->tabs[4].label != 0 &&
+                strcmp(content->tabs[4].label, "About") == 0);
+
+    UiOverlayState st = {
+        .visible = 1, .tab_idx = 0, .scroll = 0,
+        .viewport_w = 1000, .viewport_h = 600, .content = content,
+    };
+    int mx = -1;
+    int my = -1;
+    ASSERT_TRUE("wider five-tab card resolves the About target",
+                ui_tabbed_overlay_tab_point(&st, 4, &mx, &my));
+    UiOverlayHit hit = ui_tabbed_overlay_hit_test(&st, mx, my);
+    ASSERT_INT_EQ("About target lands on a tab", hit.kind,
+                  UI_OVERLAY_HIT_TAB);
+    ASSERT_INT_EQ("About target lands on tab index 4", hit.tab, 4);
+
+    /* Five-tab geometry is 3/4 of the viewport: x=125..875 at 1000px. */
+    ASSERT_INT_EQ("five-tab help uses the wider panel", mx, 800);
+}
+
 /* The regression: over-scrolling must NOT accumulate past the end,
  * so a single upward scroll is immediately visible (no unwind). */
 static void test_help_scroll_clamp_regression(void) {
@@ -186,6 +213,7 @@ int main(void) {
     init_synthetic_lines();
     test_max_scroll_bounds();
     test_hit_test_regions();
+    test_five_tab_help_exposes_about();
     test_help_scroll_clamp_regression();
 #ifdef GL_STUBS
     test_short_lines_render_no_overflow();

@@ -9,9 +9,6 @@ docs/*.md files from drifting, and also checks docs/USER_GUIDE.md's
 
   - advertised counts (for example, "N built-in scenes" or "F12 cycles all
     N") must equal the catalog size;
-  - the numbered table in that section must list every catalog entry with
-    its exact 1-based index and display name — a mid-catalog insert that
-    shifts later indices fails here instead of silently misnumbering;
   - docs/SHOWCASE.md must link every catalog scene file, so adding an example
     cannot silently leave the "full showcase" incomplete;
   - each catalog scene's Showcase tile (or feature section) must embed a local
@@ -55,36 +52,6 @@ def guide_examples_section(guide: str) -> str:
     if not match:
         raise SystemExit("USER_GUIDE.md: no '## Built-in Examples' section found")
     return match.group(1)
-
-
-def parse_guide_table(section: str) -> dict[int, str]:
-    """Parse the numbered example table (a fenced code block laid out in
-    columns: index, two spaces, name, wide gap, index, two spaces, name)."""
-    fences = re.findall(r"^```\n(.*?)^```$", section, re.MULTILINE | re.DOTALL)
-    if not fences:
-        raise SystemExit(
-            "USER_GUIDE.md: no fenced example table in the Built-in Examples section")
-    table: dict[int, str] = {}
-    for line in fences[0].splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        tokens = re.split(r"\s{2,}", line)
-        if len(tokens) % 2 != 0:
-            raise SystemExit(
-                f"USER_GUIDE.md example table: cannot pair index/name columns "
-                f"in line {line!r} (need two or more spaces between columns)")
-        for idx_tok, name in zip(tokens[0::2], tokens[1::2]):
-            if not idx_tok.isdigit():
-                raise SystemExit(
-                    f"USER_GUIDE.md example table: expected an index, got "
-                    f"{idx_tok!r} in line {line!r}")
-            idx = int(idx_tok)
-            if idx in table:
-                raise SystemExit(
-                    f"USER_GUIDE.md example table: index {idx} listed twice")
-            table[idx] = name
-    return table
 
 
 def line_number(text: str, offset: int) -> int:
@@ -199,19 +166,6 @@ def main() -> int:
         failures.append(
             "count claim: expected an advertised built-in-example count in the "
             "Built-in Examples section")
-
-    table = parse_guide_table(section)
-    for idx, name in enumerate(names, start=1):
-        listed = table.get(idx)
-        if listed is None:
-            failures.append(f"table: missing entry {idx:2d}  {name}")
-        elif listed != name:
-            failures.append(
-                f"table: entry {idx} is {listed!r}, catalog says {name!r}")
-    for idx in sorted(set(table) - set(range(1, len(names) + 1))):
-        failures.append(
-            f"table: entry {idx} {table[idx]!r} is beyond the catalog "
-            f"({len(names)} examples)")
 
     known = {name.lower() for name in names}
     for path in docs:

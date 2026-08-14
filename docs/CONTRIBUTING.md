@@ -30,13 +30,70 @@ has a versioned name. `test-msan` also sets `GLR_AUDIO_NO_DEVICE=1` so
 the audio tests exercise the engine without opening host audio backends.
 `make test BUILD=release` is the fast release-mode run. `make gl-repl` is the
 production OpenGL compile/link smoke check, while `make gl-tests` runs the
-small set of tests that require an actual GL context. Two of those are
-differential oracles against the driver rather than regression tests:
-`test_attrib_bits_gl` (does `attrib_bits.c`'s cell→bit table match what
-`glPushAttrib`/`glPopAttrib` really save?) and `test_gl_state_inspector_gl`
-(drive one program through both the executor and the pure
-`gl_state_inspector` fold, then diff every reported row against `glGet*`).
+small set of tests that require an actual GL context.
+
+### Fidelity to OpenGL
+
+Two things gl-repl shows you are answers *about* OpenGL that it works out
+itself, without asking the driver: the state inspector re-implements the
+parts of the GL state machine a program can reach - matrix composition, the
+lighting equation, `glPushAttrib` group semantics - and attribute scope
+decides which state each mask bit covers. Both are claims about the spec, so
+both are tested as claims rather than against fixtures. `make gl-tests` runs
+them as **differential oracles against a live driver**:
+
+- `test_gl_state_inspector_gl` - one `GLCmd` program is driven through *both*
+  the real executor (against a real context) and the pure state model; then
+  every row the inspector reports is read back with `glGet*` and compared.
+- `test_attrib_bits_gl` - for each `glPushAttrib` bit, both directions are
+  asserted: state the table says the bit covers is restored by `glPopAttrib`,
+  and state it says the bit does *not* cover is not - so the mapping can be
+  neither too narrow nor too broad.
+
 Reach for that pattern whenever a pure module re-implements GL semantics.
+
+Running those checks on more than one driver can also expose differences
+between driver implementations. The differences found in this comparison all
+affect `GL_CURRENT_RASTER_COLOR`: the color `label()` bitmap text is drawn
+with, latched at the `glRasterPos` and unchangeable by a later `glColor3f`.
+Three tested driver configurations produced these results:
+
+| Deviation | Apple M2 (2.1 Metal) | Mesa 25.2.8 (Intel) | NVIDIA 595.84 |
+|---|---|---|---|
+| `GL_COLOR_MATERIAL` enabled at the `glRasterPos` call | tracked components light as **zero** | correct | correct |
+| Raster position lit from its **object-space** position - wrong light vector under the tested transformed modelview | correct | **wrong** | correct |
+| `GL_NORMALIZE` honoured on that path | correct | **ignored** | correct |
+| Unlit latch clamped to [0, 1] (GL 2.1 §2.14.6) | clamps | stores **raw** | clamps |
+
+On each row gl-repl follows the specification. The driver-specific behavior
+was characterized by matching the observed values to six decimals, and those
+values are recorded in the test beside the corresponding skip gate. A skip
+prints in the test output, so it remains visible when a driver-specific case
+is not compared.
+
+The one that bites users is Apple's: a scene that enables `GL_COLOR_MATERIAL`
+before its `glRasterPos` gets **black label text**. The workaround lives
+under [`label()`](USER_GUIDE.md#bitmap-text---label) in the user guide.
+
+When a bug turns out to be the driver's, it gets reduced to a standalone
+program that depends on nothing here and written up with its spec citation in
+[`third_party/bugs/`](../third_party/bugs/). The four deviations above are
+three reports there (Mesa's two raster-lighting symptoms share one). The two
+lighting reproducers check the driver against *itself*: they compare the
+raster colour with the colour that same driver gives a vertex under identical
+state, which the specification defines as the same computation. The
+unclamped-colour probe instead checks the specified [0, 1] range and includes
+the lit path as a control. A fourth report was found from a scene rendering
+differently on Mesa: retargeting `glColorMaterial` to another face discards
+the colour the outgoing face was tracking, turning the *glr-logo* example's
+exterior black on the tested Mesa configurations.
+
+The same standard applies to export. The C that `Ctrl+S` writes is compiled
+and *run* in the test suite, and its GL call stream is compared against the
+REPL executor's - call for call and **argument for argument**, over several
+values of `t` run as successive frames. A frozen vertex or a drifted matrix
+cell fails the build; what you see in the REPL is what the standalone program
+draws.
 
 [`tests/README.md`](../tests/README.md) maps every binary in the suite and
 highlights the ones with their own `--help` - `test_export_trace_parity`,

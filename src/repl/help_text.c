@@ -2,8 +2,8 @@
  * src/repl/help_text.c - Help-overlay text content owned by the REPL.
  *
  * Pulled out of ui_help_overlay.c so the renderer carries no REPL
- * knowledge. The Commands tab is fully static; the Keys tab
- * interleaves a static base with dynamic F-key entries supplied via
+ * knowledge. The Commands tab is fully static; the Editor and Scene tabs
+ * interleave static controls with dynamic F-key entries supplied via
  * a controller-installed ReplHelpFkeyProvider (see help_text.h). The provider
  * keeps the F-key labels dynamic without reaching into the app shell.
  */
@@ -87,7 +87,7 @@ static const char *const k_tab_overview[] = {
     "Finding your way around:",
     "  Open this help any time with the help shortcut or keycap.",
     "  The Commands tab lists every GL command and the REPL language.",
-    "  The Keys tab is the full keyboard and mouse reference.",
+    "  The Editor and Scene tabs cover keyboard and mouse controls.",
     "  The close shortcut or an outside click dismisses this overlay.",
     "",
     NULL
@@ -187,7 +187,7 @@ static const char *const k_lang_sections_tail[] = {
     "  blurs only camera motion (else AA). --no-accum",
     "  disables; --accum forces it on where a software",
     "  accumulation buffer (Mesa) auto-disables it.",
-    "  Passes (samples): 1/2/4/8/12/16. Status: AA 2x / Blur 8x.",
+    "  Passes (samples): 1/2/4/6/8/10/12/14/16. Status: AA 1x / Blur 8x.",
     "",
     NULL
 };
@@ -216,11 +216,13 @@ static const char *const k_tab_about[] = {
     NULL
 };
 
+#define HELP_KEY_TAB_COUNT 2
 #define HELP_KEYS_MAX 128
 #define HELP_KEY_LINE_BUF 144
 
-static char        g_key_strbuf[HELP_KEYS_MAX][HELP_KEY_LINE_BUF];
-static const char *g_tab_keys[HELP_KEYS_MAX];
+static char        g_key_strbuf[HELP_KEY_TAB_COUNT][HELP_KEYS_MAX][HELP_KEY_LINE_BUF];
+static const char *g_tab_keys[HELP_KEY_TAB_COUNT][HELP_KEYS_MAX];
+static int         g_key_tab_build_idx = 0;
 
 /* Commands tab: per-command rows generated from k_func_completions[];
  * the language-tail (Math, Variables, ...) lives in
@@ -235,7 +237,7 @@ static const char *g_tab_keys[HELP_KEYS_MAX];
 static char        g_cmd_strbuf[HELP_CMD_LINES_MAX][HELP_CMD_LINE_BUF];
 static const char *g_tab_commands[HELP_CMD_LINES_MAX];
 
-static ReplHelpTab g_tabs[4];
+static ReplHelpTab g_tabs[5];
 static ReplHelpContent g_content;
 
 static const char *help_group_header(ReplHelpGroup g) {
@@ -324,10 +326,17 @@ static int key_emit(int n, const char *fmt, ...) {
     }
     va_list ap;
     va_start(ap, fmt);
-    vsnprintf(g_key_strbuf[n], HELP_KEY_LINE_BUF, fmt, ap);
+    vsnprintf(g_key_strbuf[g_key_tab_build_idx][n], HELP_KEY_LINE_BUF, fmt, ap);
     va_end(ap);
-    g_tab_keys[n] = g_key_strbuf[n];
+    g_tab_keys[g_key_tab_build_idx][n] = g_key_strbuf[g_key_tab_build_idx][n];
     return n + 1;
+}
+
+static void key_emit_end(int n) {
+    if (n < HELP_KEYS_MAX)
+        g_tab_keys[g_key_tab_build_idx][n] = NULL;
+    else
+        g_tab_keys[g_key_tab_build_idx][HELP_KEYS_MAX - 1] = NULL;
 }
 
 static int key_emit_binding(int n, const char *prefix,
@@ -341,6 +350,16 @@ static int key_emit_binding(int n, const char *prefix,
                     shortcut,
                     suffix ? suffix : "",
                     desc ? desc : "");
+}
+
+/* Emit an F-key config row in Config-menu order while keeping its label
+ * sourced from the controller-owned config table. */
+static int key_emit_config_fkey(int n, int fn) {
+    const char *label = (g_fkey_provider && g_fkey_provider->fkey_label)
+                      ? g_fkey_provider->fkey_label(fn)
+                      : NULL;
+    if (!label) return n;
+    return key_emit_binding(n, "", GLUT_KEY_F1 + fn - 1, 0, 1, "", label);
 }
 
 const ReplHelpContent *repl_help_text_build(void) {
@@ -363,6 +382,7 @@ const ReplHelpContent *repl_help_text_build(void) {
     else
         g_tab_commands[HELP_CMD_LINES_MAX - 1] = NULL;
 
+    g_key_tab_build_idx = 0;
     int nk = 0;
     nk = key_emit(nk, HELP_SEP "Editor");
     nk = key_emit(nk, "Editing:");
@@ -420,126 +440,126 @@ const ReplHelpContent *repl_help_text_build(void) {
     nk = key_emit_binding(nk, "", KM_KEY(GLR_ESCAPE), KM_MODS(GLR_ESCAPE), 0, "",
                           "Clear input / close overlay");
     nk = key_emit(nk, "");
-    nk = key_emit(nk, HELP_SEP "3D Scene");
-    nk = key_emit(nk, "Camera:");
-    nk = key_emit(nk, "  Left-drag            \tOrbit");
-    nk = key_emit(nk, "  Right-drag           \tPan (XZ)");
-    nk = key_emit(nk, "  Shift+Right-drag     \tPan (Y)");
-    nk = key_emit(nk, "  Scroll wheel         \tZoom (viewport) / Scroll (code panel or long menu)");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_FOCUS_ORIGIN), KM_MODS(GLR_FOCUS_ORIGIN), 0, "",
-                          "Focus origin (ease target to 0,0,0)");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_RESET_CAMERA), KM_MODS(GLR_RESET_CAMERA), 0, "",
-                          "Reset camera to default (eased)");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_CAMERA_ROTATE), KM_MODS(GLR_CAMERA_ROTATE), 0, "",
-                          "Toggle camera auto-rotate");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_VIEW_MODE), KM_MODS(GLR_VIEW_MODE), 0, "",
-                          "Toggle View mode (2D / 3D)");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_PROJECTION), KM_MODS(GLR_PROJECTION), 0, "",
-                          "Toggle Projection (Perspective / Ortho)");
-    nk = key_emit(nk, "");
-    nk = key_emit(nk, "Time & Replay:");
+    key_emit_end(nk);
+
+    g_key_tab_build_idx = 1;
+    nk = 0;
+    nk = key_emit(nk, HELP_SEP "Config Controls");
+    nk = key_emit(nk, "  Shift+F2..F10        \tCycle the matching F-key item backward");
+    nk = key_emit(nk, "RENDERING:");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_MSAA), KM_MODS(GLR_MSAA), 0, "",
+                          "Toggle GL_MULTISAMPLE");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_LINE_SMOOTH), KM_MODS(GLR_LINE_SMOOTH), 0, "",
+                          "Toggle GL_LINE_SMOOTH");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_ACCUM_EFFECT), KM_MODS(GLR_ACCUM_EFFECT), 0, "",
+                          "Cycle accumulation effect");
+    nk = key_emit(nk, "  Ctrl+= / Ctrl+-      \tIncrease / decrease accumulation passes");
+    nk = key_emit_config_fkey(nk, 10);
+    nk = key_emit(nk, "TIME & REPLAY:");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_AUTO_TIME), KM_MODS(GLR_AUTO_TIME), 0, "",
                           "Play / pause time variable");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_TIME_RESET), KM_MODS(GLR_TIME_RESET), 0, "",
+                          "Reset time to 0");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_REPLAY), KM_MODS(GLR_REPLAY), 0, "", "Start / stop replay");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_REPLAY_JUMP), KM_MODS(GLR_REPLAY_JUMP), 0, "",
                           "Jump replay to cursor line (first geometry at/after)");
     nk = key_emit(nk, "  Space                \tPause / resume replay");
     nk = key_emit(nk, "  + / -                \tChange replay speed");
     nk = key_emit(nk, "  m / M                \tToggle polygon / vertex replay mode");
+    nk = key_emit(nk, "  e / E                \tCycle Replay expand (Off / Expanded / Verbose)");
+    nk = key_emit(nk, "  n / N                \tCycle replay normals (off / vector / + direction)");
+    nk = key_emit(nk, "  v / V                \tToggle the replay focused-vertex label");
     nk = key_emit(nk, "  Left / Right         \tStep backward / forward (when paused)");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_ESCAPE), KM_MODS(GLR_ESCAPE), 0, "", "Stop replay");
     nk = key_emit(nk, "");
-    nk = key_emit(nk, "Guided Tours (while a Tours-menu tour runs):");
-    nk = key_emit(nk, "  Click tour HUD       \tExpand / collapse transport details");
-    nk = key_emit(nk, "  Space                \tPause / resume (restart from the end)");
-    nk = key_emit(nk, "  Right                \tStep one event, then pause");
-    nk = key_emit(nk, "  Left                 \tBackstep to the previous step");
-    nk = key_emit(nk, "  + / -                \tChange tour speed (0.25x .. 16x)");
-    nk = key_emit(nk, "  Esc                  \tExit tour (keeps its result)");
-    nk = key_emit(nk, "");
-    nk = key_emit(nk, "Render State:");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_CODE_PANEL), KM_MODS(GLR_CODE_PANEL), 0, "",
-                          "Cycle code panel layout");
-    nk = key_emit(nk, "  Ctrl+=               \tIncrease jitter samples");
-    nk = key_emit(nk, "  Ctrl+-               \tDecrease jitter samples");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_MSAA), KM_MODS(GLR_MSAA), 0, "",
-                          "Toggle GL_MULTISAMPLE");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_LINE_SMOOTH), KM_MODS(GLR_LINE_SMOOTH), 0, "",
-                          "Toggle GL_LINE_SMOOTH");
+    nk = key_emit(nk, "SCENE:");
+    nk = key_emit_config_fkey(nk, 2);
     nk = key_emit_binding(nk, "", KM_KEY(GLR_GRID_MAJOR), KM_MODS(GLR_GRID_MAJOR), 0, "",
                           "Cycle grid major tick spacing (1 / 2 / 5 / 10)");
+    nk = key_emit_config_fkey(nk, 3);
+    nk = key_emit_config_fkey(nk, 4);
+    nk = key_emit_config_fkey(nk, 6);
+    nk = key_emit_config_fkey(nk, 5);
+    nk = key_emit_config_fkey(nk, 9);
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_LIGHT_INDICATORS), KM_MODS(GLR_LIGHT_INDICATORS), 0, "",
+                          "Toggle light indicators");
+    nk = key_emit(nk, "");
+    nk = key_emit(nk, "CAMERA:");
+    nk = key_emit(nk, "  Left-drag / scroll   \tOrbit / zoom");
+    nk = key_emit(nk, "  Right-drag / Shift+Right-drag\tPan (XZ) / Pan (Y)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_VIEW_MODE), KM_MODS(GLR_VIEW_MODE), 0, "",
+                          "Toggle View mode (2D / 3D)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_PROJECTION), KM_MODS(GLR_PROJECTION), 0, "",
+                          "Toggle Projection (Perspective / Ortho)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_CAMERA_ROTATE), KM_MODS(GLR_CAMERA_ROTATE), 0, "",
+                          "Toggle camera auto-rotate");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_FOCUS_ORIGIN), KM_MODS(GLR_FOCUS_ORIGIN), 0, "",
+                          "Focus origin (ease target to 0,0,0)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_RESET_CAMERA), KM_MODS(GLR_RESET_CAMERA), 0, "",
+                          "Reset camera to default (eased)");
+    nk = key_emit(nk, "");
+    nk = key_emit(nk, "GEOMETRY:");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_WIREFRAME), KM_MODS(GLR_WIREFRAME), 0, "",
+                          "Cycle wireframe (Off / Wireframe / Hidden-line)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_WINDING_VIEW), KM_MODS(GLR_WINDING_VIEW), 0, "",
+                          "Toggle winding view");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_DEPTH_VIZ), KM_MODS(GLR_DEPTH_VIZ), 0, "",
+                          "Cycle depth view");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_STENCIL_VIZ), KM_MODS(GLR_STENCIL_VIZ), 0, "",
+                          "Cycle stencil view");
+    nk = key_emit(nk, "");
+    nk = key_emit(nk, "OVERLAYS:");
+    nk = key_emit_config_fkey(nk, 8);
+    nk = key_emit_config_fkey(nk, 7);
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_VERTEX_POINTS), KM_MODS(GLR_VERTEX_POINTS), 0, "",
+                          "Toggle vertex points");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_VERTEX_OUTLINES), KM_MODS(GLR_VERTEX_OUTLINES), 0, "",
+                          "Toggle vertex outlines");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_NORMAL_VECTORS), KM_MODS(GLR_NORMAL_VECTORS), 0, "",
+                          "Toggle normal vectors");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_POLY_HIGHLIGHT), KM_MODS(GLR_POLY_HIGHLIGHT), 0, "",
+                          "Cycle polygon highlight (Off / On / Clipped & culled)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_XFORM_GUIDES), KM_MODS(GLR_XFORM_GUIDES), 0, "",
+                          "Cycle transform guides");
+    nk = key_emit(nk, "");
+    nk = key_emit(nk, "INTERFACE:");
+    nk = key_emit(nk, "  Statusbar buttons    \tUndo/redo, copy/cut, trash, focus/help");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_CONFIG_MENU), KM_MODS(GLR_CONFIG_MENU), 0, "", "Open Config menu");
+    nk = key_emit(nk, "  Left / right-click item\tCycle config entry forward / backward");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_VARIABLE_PANEL), KM_MODS(GLR_VARIABLE_PANEL), 0, "",
+                          "Toggle variable panel");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_CPU_PROFILE), KM_MODS(GLR_CPU_PROFILE), 0, "",
                           "Cycle Compute profile panel");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_MEMORY_PROFILE), KM_MODS(GLR_MEMORY_PROFILE), 0, "",
                           "Cycle memory profile panel");
-    nk = key_emit(nk, "");
-    nk = key_emit(nk, "Scene Overlays:");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_WIREFRAME), KM_MODS(GLR_WIREFRAME), 0, "",
-                          "Cycle wireframe (Off / Wireframe / Hidden-line)");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_NORMAL_VECTORS), KM_MODS(GLR_NORMAL_VECTORS), 0, "",
-                          "Toggle normal vectors");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_VERTEX_OUTLINES), KM_MODS(GLR_VERTEX_OUTLINES), 0, "",
-                          "Toggle vertex outlines");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_VERTEX_POINTS), KM_MODS(GLR_VERTEX_POINTS), 0, "",
-                          "Toggle vertex points");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_POLY_HIGHLIGHT), KM_MODS(GLR_POLY_HIGHLIGHT), 0, "",
-                          "Cycle polygon highlight (Off / On / Clipped & culled)");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_WINDING_VIEW), KM_MODS(GLR_WINDING_VIEW), 0, "",
-                          "Toggle winding view");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_LIGHT_INDICATORS), KM_MODS(GLR_LIGHT_INDICATORS), 0, "",
-                          "Toggle light indicators");
-    nk = key_emit(nk, "");
-    nk = key_emit(nk, HELP_SEP "Interface & Audio");
-    nk = key_emit(nk, "Interface:");
-    nk = key_emit(nk, "  Statusbar buttons    \tUndo/redo, copy/cut, trash, focus/help");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_CONFIG_MENU), KM_MODS(GLR_CONFIG_MENU), 0, "", "Open Config menu");
-    nk = key_emit(nk, "  Left-click item      \tCycle config entry forward");
-    nk = key_emit(nk, "  Right-click item     \tCycle config entry backward");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_VARIABLE_PANEL), KM_MODS(GLR_VARIABLE_PANEL), 0, "",
-                          "Toggle variable panel");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_CODE_PANEL), KM_MODS(GLR_CODE_PANEL), 0, "",
+                          "Cycle code panel layout");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_SYNTAX_HL), KM_MODS(GLR_SYNTAX_HL), 0, "",
                           "Cycle syntax highlight (Off / On / On+Shadow)");
     nk = key_emit(nk, "");
+    nk = key_emit(nk, HELP_SEP "Tours, Session & Audio");
+    nk = key_emit(nk, "Guided Tours (while a Tours-menu tour runs):");
+    nk = key_emit(nk, "  Click tour HUD       \tExpand / collapse transport details");
+    nk = key_emit(nk, "  Space                \tPause / resume (restart from the end)");
+    nk = key_emit(nk, "  Right / Left         \tStep one event / backstep, then pause");
+    nk = key_emit(nk, "  + / -                \tFaster / slower (0.25x .. 16x)");
+    nk = key_emit(nk, "  Esc                  \tExit tour (keeps its result)");
+    nk = key_emit(nk, "Session:");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_HELP), KM_MODS(GLR_HELP), 1, "", "Help overlay");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_NEXT_TUTORIAL), KM_MODS(GLR_NEXT_TUTORIAL), 1, "",
+                          "Next tutorial");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_PREV_TUTORIAL), KM_MODS(GLR_PREV_TUTORIAL), 1, "",
+                          "Previous tutorial");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_NEXT_EXAMPLE), KM_MODS(GLR_NEXT_EXAMPLE), 1, "",
+                          "Next example / scene");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_PREV_EXAMPLE), KM_MODS(GLR_PREV_EXAMPLE), 1, "",
+                          "Previous example / scene");
     nk = key_emit(nk, "Audio:");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_AUDIO), KM_MODS(GLR_AUDIO), 0, "", "Play / pause");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_AUDIO_PREV), KM_MODS(GLR_AUDIO_PREV), 1, "", "Previous track");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_AUDIO_NEXT), KM_MODS(GLR_AUDIO_NEXT), 1, "", "Next track");
     nk = key_emit(nk, "");
-    nk = key_emit(nk, "F-Key Toggles  (Shift+F<n> steps backward):");
-
-    /* F1 - not in g_cfg_items */
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_HELP), KM_MODS(GLR_HELP), 1, "", "Help overlay");
-
-    /* F2-F10 - pulled from the controller-installed provider so this
-     * module stays free of app/ includes. F12 / Shift+F12 are not part
-     * of the config table; they drive the example/scene cycle directly
-     * (forward, and backward with Shift) and are emitted unconditionally
-     * below. */
-    for (int fn = 2; fn <= 10; fn++) {
-        const char *label = (g_fkey_provider && g_fkey_provider->fkey_label)
-                          ? g_fkey_provider->fkey_label(fn)
-                          : NULL;
-        if (!label) continue;
-        nk = key_emit_binding(nk, "", GLUT_KEY_F1 + fn - 1, 0, 1, "", label);
-    }
-
-    /* F11 / Shift+F11 - not in g_cfg_items */
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_NEXT_TUTORIAL), KM_MODS(GLR_NEXT_TUTORIAL), 1, "",
-                          "Next tutorial");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_PREV_TUTORIAL), KM_MODS(GLR_PREV_TUTORIAL), 1, "",
-                          "Previous tutorial");
-
-    /* F12 / Shift+F12 - not in g_cfg_items */
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_NEXT_EXAMPLE), KM_MODS(GLR_NEXT_EXAMPLE), 1, "",
-                          "Next example / scene");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_PREV_EXAMPLE), KM_MODS(GLR_PREV_EXAMPLE), 1, "",
-                          "Previous example / scene");
-
-    nk = key_emit(nk, "");
-    if (nk < HELP_KEYS_MAX)
-        g_tab_keys[nk] = NULL;
-    else
-        g_tab_keys[HELP_KEYS_MAX - 1] = NULL;
+    key_emit_end(nk);
 
     /* Overview leads so a first-time user lands on orientation, not
      * the raw command dump. */
@@ -547,10 +567,12 @@ const ReplHelpContent *repl_help_text_build(void) {
     g_tabs[0].lines = k_tab_overview;
     g_tabs[1].label = "Commands";
     g_tabs[1].lines = g_tab_commands;
-    g_tabs[2].label = "Keys";
-    g_tabs[2].lines = g_tab_keys;
-    g_tabs[3].label = "About";
-    g_tabs[3].lines = k_tab_about;
+    g_tabs[2].label = "Editor";
+    g_tabs[2].lines = g_tab_keys[0];
+    g_tabs[3].label = "Scene";
+    g_tabs[3].lines = g_tab_keys[1];
+    g_tabs[4].label = "About";
+    g_tabs[4].lines = k_tab_about;
 
     g_content.title     = "HELP";
     g_content.tabs      = g_tabs;

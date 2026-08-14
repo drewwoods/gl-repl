@@ -1,4 +1,4 @@
-# Getting Help - the two help surfaces: the F1 overlay (four tabs, clicked
+# Getting Help - the two help surfaces: the F1 overlay (five tabs, clicked
 # through one by one) and the per-command help card a right-click opens on a
 # code-panel row.
 #
@@ -25,10 +25,15 @@ wheel 4                      # scroll down through the command list
 pause 1.6
 wheel -4
 pause 1.2
-glide helptab:keys 0.9
-click                        # Keys tab
+glide helptab:editor 0.9
+click                        # Editor tab
 pause 2.0
-echo scene:0.25,0.76 24 3.4 Keys: the full keyboard and mouse map.
+echo scene:0.25,0.76 24 3.4 Editor: text editing, navigation, and file controls.
+pause 3.4
+glide helptab:scene 0.9
+click                        # Scene tab
+pause 2.0
+echo scene:0.25,0.76 24 3.4 Scene: rendering, camera, replay, and overlays.
 pause 3.4
 glide helptab:about 0.9
 click                        # About tab

@@ -91,6 +91,7 @@ FORBIDDEN_PATTERNS: list[tuple[str, str]] = [
     ("stale AA default passes", "2 passes"),
     ("stale variable limit", "23 user variables"),
     ("stale loop nesting limit", "4 levels"),
+    ("stale syntax-highlight Ctrl+Shift+Y", "Ctrl+Shift+Y"),
 ]
 
 

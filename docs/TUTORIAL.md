@@ -21,6 +21,9 @@ arguments and on the handful of places the REPL's spelling differs.
 - [Stencil masks](#stencil-masks)
 - [Wireframe & decals - glPolygonMode, glPolygonOffset](#wireframe--decals---glpolygonmode-glpolygonoffset)
 - [Math expressions](#math-expressions)
+- [Where expressions differ from C](#where-expressions-differ-from-c)
+- [Planar shadows](#planar-shadows)
+- [Working without state](#working-without-state)
 
 ---
 
@@ -201,8 +204,7 @@ Every numeric argument is a full expression, evaluated when the line runs:
 pair; `rand2` is the same hash mapped to `[-1, 1]` — useful for centered
 jitter. Determinism means particle systems look the same every frame and
 every run — it is the stateless substitute for storing random values, a
-pattern covered in [Working without
-state](USER_GUIDE.md#working-without-state).
+pattern covered in [Working without state](#working-without-state).
 
 `atan2(y, x)` is the inverse of the polar pair: it returns the angle in
 `[-PI, PI]` from the +X axis to `(x, y)`, using both signs to pick the right
@@ -246,6 +248,141 @@ ramps from 1 down to 0.
 (`sign(x) * 0.5` snaps to one side or the other), and it turns a comparison
 into arithmetic without an `if`.
 
-The places this expression language is *not* C - float `%`, division by zero,
-the `==` epsilon, the closed function set - are in [Where expressions differ
-from C](USER_GUIDE.md#where-expressions-differ-from-c).
+The user guide has a concise [“not C”
+reference](USER_GUIDE.md#where-expressions-differ-from-c). Worked versions
+of the most surprising differences live below.
+
+## Where expressions differ from C
+
+`%` is float modulo - `5.5 % 2` is `1.5`, where C's `%` is integer-only
+and would not compile that. It is exactly `fmod`, including the truncation
+described below, so it is *not* GLSL's floored `mod` either.
+
+`fmod` is C's `fmodf`, and the `f` stands for *floating-point*, not for
+*floored*. GLSL's `mod` differs from it in a single operation:
+
+```c
+fmod(x, y)  ==  x - y*trunc(x/y)   // here and in C - quotient toward zero
+mod(x, y)   ==  x - y*floor(x/y)   // GLSL - quotient toward -infinity
+```
+
+`trunc` and `floor` agree whenever `x/y` is positive, so the two are the
+same function until an operand goes negative. Then `fmod` takes the sign of
+the **dividend** and `mod` the sign of the **divisor**: `fmod(-1, 3)` is
+`-1`, where GLSL's `mod(-1, 3)` is `2`. There is no `mod` here (nor a
+`trunc` - `fmod` is already the truncating one), so when you want the
+floored version - wrapping an index or an angle, where a negative input
+should land back inside `[0, y)` - spell out the `floor` form above.
+
+`rem` is the IEEE remainder via `remainderf`, which rounds the quotient to
+nearest rather than toward zero and so can differ in sign from both:
+`rem(5, 3)` is `-1` where `fmod(5, 3)` is `2`.
+
+`lerp` is deliberately **not** clamped (`s` outside `[0, 1]` overshoots), and
+`smoothstep` accepts `e0 > e1`, ramping from 1 down to 0.
+
+### NaN and infinity
+
+The guards listed in the user guide cover the cases that come up while
+editing, not every domain error, so both values remain reachable:
+
+- `log` and `ln` of a negative number return NaN, and of `0` return `-inf` -
+  the guarded `sqrt` has no equivalent here, because a negative logarithm has
+  no sensible substitute the way `sqrt(-4)` has `2`.
+- `pow` with a negative base and a fractional exponent returns NaN, matching
+  C's `powf`.
+- `NAN` and `INFINITY` are constants you can type outright.
+
+A NaN coordinate generally means the geometry using it fails to draw, so a
+shape that vanishes right after an edit to a `log`, `ln`, or `pow` argument is
+worth suspecting first.
+
+Tracking one down is fiddlier than it looks, because the functions differ on
+whether they pass a NaN along:
+
+- Arithmetic propagates it, and so does `clamp` - its comparisons are both
+  false against a NaN, so the value falls through untouched.
+- `min` and `max` **discard** it. They are C's `fminf`/`fmaxf`, which return
+  the other operand when one side is NaN, so `min(x, 1)` quietly yields `1`
+  and the NaN disappears somewhere upstream of the symptom.
+- `sign` returns `0` for a NaN, the same as it does for exactly zero.
+
+## Planar shadows
+
+The classic use of `glMultMatrixf` is the planar shadow projection - the
+matrix that squashes geometry onto a plane as seen from a light, so drawing
+the shape a second time through it draws its shadow. The *Planar shadows
+(glMultMatrixf)* example is this, animated:
+
+```c
+float lx, ly, lz;         // light position, over a floor at y = 0
+lx = 2*cos(t);
+ly = 4;
+lz = 2*sin(t);
+glPushMatrix();
+glMultMatrixf((GLfloat[]){ly, 0, 0, 0, -lx, 0, -lz, -1, 0, 0, ly, 0, 0, 0, 0, ly});
+glColor3f(0.1, 0.1, 0.12);   // draw the geometry again, flattened and dark
+glutSolidTeapot(1);
+glPopMatrix();
+```
+
+The layout is OpenGL's **column-major** order: the first four values are the
+first column, and cells 12, 13, 14 hold the translation. Signatures and the
+scratch-array form live under [Arbitrary
+matrices](USER_GUIDE.md#arbitrary-matrices).
+
+## Working without state
+
+A frame being a pure function of `t` cuts both ways: there is nowhere to
+*accumulate* anything between frames. You cannot write `pos = pos + vel`
+once per frame and expect `pos` to remember where it was - next frame the
+scene re-evaluates from source, not from last frame's values. Scenes that
+would normally keep state use one of three patterns instead. They read a
+little differently from typical game-loop code, but they are not harder
+to write - and they are *easier to debug*, because any moment can be
+reproduced exactly by setting `t`, without replaying history to get there.
+
+**Deterministic randomness instead of stored random state.** Where a
+game loop would roll a particle's attributes once and store them, here
+each particle recomputes them every frame from `rand(seed, iter)` /
+`rand2` - the same (seed, iter) pair always returns the same value, so a
+particle's "random" drift, size, or tint is a stable per-particle
+constant keyed on its index. The *Snowfall particles* example
+derives every flake's drift, fall speed, and depth from `rand(p, slot)`
+with the particle index `p` as the seed; *Swaying grass field (rand + t)*
+does the same per blade (position, height, sway phase, tint), with a
+comment documenting its seed-slot convention so the RNG streams stay
+independent.
+
+**Integrate velocity in closed form.** Physics normally accumulates:
+`vel += accel*dt; pos += vel*dt`. Statelessly, position must instead be
+the *integral* of the velocity function, evaluated at the particle's age.
+For constant acceleration that is the familiar projectile polynomial; for
+dampened (decaying) velocity it is the integral of the decay curve. The
+*Whale (particle system + lit model)* example does both, with the math
+worked out in its comments: `computeVerticalMotion` integrates gravity
+(`launchY + gravityY/2*age^2 + launchVelY*age`), and
+`computeDriftX`/`computeDriftZ` integrate an exponentially decaying
+horizontal velocity (`velX(s) = launchVelX * dragDecay^(dragRate*s)`) to
+get drift-with-drag. Looping lifetimes fall out of `fmod`:
+`age = fmod(t - spawnDelay, particleLife)` respawns each particle forever
+with no bookkeeping.
+
+**Replay the algorithm from the start.** Some scenes really are
+history-dependent - a sort's array order depends on every swap before it.
+The stateless version recomputes that history each frame: start from the
+initial state and re-run the algorithm's steps up to the count implied by
+`t`. The *Bubble sort (scratch arrays)* example re-seeds `A[0..15]` with
+a deterministic shuffle and re-runs its compare-and-swap loops every
+frame, gating each compare on `p*15 + j < steps` where `steps` derives
+from `t` - the bars freeze mid-sort at exactly the right compare, and
+dragging the time slider scrubs the sort forwards *and backwards*.
+
+The payoff of all three is the same: reproducibility. A glitch spotted at
+`t ≈ 7.3` is inspected by pausing and dragging `t` to 7.3 - no waiting,
+no lucky re-run, no divergent state. It is also what makes
+[replay](USER_GUIDE.md#replay), timeline scrubbing, and `--time`-anchored
+captures possible at all. The cost is recomputation - the replay pattern
+in particular redoes work proportional to what `t` implies, every frame -
+see [Performance](USER_GUIDE.md#performance) for where that ceiling
+sits and how export lifts it.

@@ -10,8 +10,8 @@
  * module pulls labels through a controller-installed
  * ReplHelpFkeyProvider so help_text.c doesn't need to #include
  * app/glr_config.h, preserving the REPL/UI layering boundary. The standalone
- * render3d_demo doesn't install a provider, so the F-Key section renders
- * empty there.
+ * render3d_demo doesn't install a provider, so the config-bound F-key rows
+ * are omitted there.
  */
 #ifndef REPL_HELP_TEXT_H
 #define REPL_HELP_TEXT_H

@@ -481,7 +481,8 @@ ASCII PLY mesh, named after the active scene (like Save Scene). The geometry
 way. Authored per-vertex normals are preserved; the rest are smoothly
 synthesized.
 
-Headless / scripted capture:
+Scripted capture (the normal build needs a display; on a machine without one,
+use the [OSMesa build](#headless-rendering-osmesa)):
 
 ```bash
 ./gl-repl --example "Parametric torus (nested for)" --export-ply out.ply                     # capture on frame 1, then exit
@@ -974,7 +975,7 @@ backend audio-device issues:
 
 In-app, the CPU profiler overlay shows per-frame section timings and the
 memory panel shows RSS history - see
-[User Guide → Profiling & Diagnostics](USER_GUIDE.md#profiling--diagnostics).
+[User Guide → Profiling](USER_GUIDE.md#profiling).
 
 ## Keyboard map tooling
 

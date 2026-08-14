@@ -1467,9 +1467,9 @@ codes come from GLUT (`GLUT_KEY_F<n>`). At the top of
 `glr_ctrl_keyboard`, `editor_input_normalize_super_to_ctrl` folds macOS
 Cmd+letter into Ctrl+letter, so downstream layers see one representation.
 
-The F1 help **Keys** tab is the in-app shortcut reference, and
+The F1 help **Editor** and **Scene** tabs are the in-app shortcut reference, and
 [`USER_GUIDE.md`](USER_GUIDE.md#keyboard--mouse-reference) mirrors it outside
-the app. Its F-key rows are generated from the config table through
+the app. The Scene tab's F-key rows are generated from the config table through
 [`ReplHelpFkeyProvider`](../src/repl/help_text.h#L34); `glr_ctrl_help_fkey_label` reads each
 row's label by `key_code`.
 
