@@ -6046,6 +6046,28 @@ static void test_export_light_bridge_reads_app_state(void) {
     }
 }
 
+/* Drive the active tutorial to completion. A lesson mixes commit steps with
+ * showcase steps (NOTE / SET), which carry no expected text and advance on an
+ * ack key instead - so a caller that only commits expected text stalls on the
+ * first note. */
+static void complete_active_tutorial(const char *label) {
+    int guard = 0;
+    while (tutorial_active() && guard++ < 256) {
+        TutorialMatchResult match;
+        const char *expected;
+        TutorialStepKind kind = tutorial_current_step_kind();
+        if (kind == TUTORIAL_STEP_KIND_NOTE || kind == TUTORIAL_STEP_KIND_SET) {
+            ASSERT_TRUE(label, tutorial_handle_ack_key('\r') == 1);
+            continue;
+        }
+        expected = tutorial_current_expected_text();
+        ASSERT_TRUE(label, expected != NULL);
+        ASSERT_TRUE(label, tutorial_handle_commit_attempt(expected, &match));
+        tutorial_advance_after_successful_commit();
+    }
+    ASSERT_TRUE(label, !tutorial_active());
+}
+
 static void test_mouse_routing_and_hit_testing(void) {
     printf("--- imrepl_ctrl mouse routing and hit testing ---\n");
     prepare_display_fixture();
@@ -6237,14 +6259,7 @@ static void test_mouse_routing_and_hit_testing(void) {
          * continue the lesson catalog. The mouse steppers must make the same
          * choice, including both directions. */
         tutorial_start(0);
-        for (int step = 0; step < repl_tutorial_step_count(0); step++) {
-            TutorialMatchResult match;
-            const char *expected = tutorial_current_expected_text();
-            ASSERT_TRUE("completed-pin step has expected input", expected != NULL);
-            ASSERT_TRUE("completed-pin step matches",
-                        tutorial_handle_commit_attempt(expected, &match));
-            tutorial_advance_after_successful_commit();
-        }
+        complete_active_tutorial("completed-pin setup drives the lesson");
         ASSERT_TRUE("tutorial inactive after completed-pin setup",
                     !tutorial_active());
         ASSERT_INT("completed-pin setup retains lesson index",
@@ -6267,14 +6282,7 @@ static void test_mouse_routing_and_hit_testing(void) {
         /* Re-complete lesson 0 to exercise the opposite direction from the
          * same inactive-but-retained state. */
         tutorial_start(0);
-        for (int step = 0; step < repl_tutorial_step_count(0); step++) {
-            TutorialMatchResult match;
-            const char *expected = tutorial_current_expected_text();
-            ASSERT_TRUE("completed-prev step has expected input", expected != NULL);
-            ASSERT_TRUE("completed-prev step matches",
-                        tutorial_handle_commit_attempt(expected, &match));
-            tutorial_advance_after_successful_commit();
-        }
+        complete_active_tutorial("completed-prev setup drives the lesson");
         ASSERT_TRUE("tutorial inactive before completed prev pin",
                     !tutorial_active());
         hit.item_idx = UI_MENU_BAR_PIN_PREV;
@@ -6472,15 +6480,7 @@ static void test_special_key_shortcuts(void) {
 
         /* Completion leaves the tutorial inactive, but F11 must still start
          * at the lesson after the one just completed rather than lesson 0. */
-        for (int step = 0; step < repl_tutorial_step_count(0); step++) {
-            TutorialMatchResult match;
-            const char *expected = tutorial_current_expected_text();
-            ASSERT_TRUE("completed-cycle tutorial step has expected input",
-                        expected != NULL);
-            ASSERT_TRUE("completed-cycle tutorial step matches",
-                        tutorial_handle_commit_attempt(expected, &match));
-            tutorial_advance_after_successful_commit();
-        }
+        complete_active_tutorial("completed-cycle setup drives the lesson");
         ASSERT_INT("tutorial inactive after completion", tutorial_active(), 0);
         ASSERT_INT("completed tutorial index retained", tutorial_state_view().tutorial_idx, 0);
         g_simulated_mods = 0;
