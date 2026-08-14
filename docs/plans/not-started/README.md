@@ -7,7 +7,6 @@ begun. They move to `plans/active/` once implementation starts.
 
 | Plan | Topic |
 |---|---|
-| `app-clarity-review.md` | Reconciled independent review of `src/app` (2026-08-14): targeted work only—compiler-exhaustive `GlrConfigKey` maps, a single-source/tested scene-local config contract, and a deferred modal-enum guard; factual comment cleanup is Low, while controller extraction, prefix/file renames, Host/Bridge churn, and speculative snapshot APIs are explicitly not recommended |
 | `audio-playlist-and-organizer.md` | Audio menu: playlist browser, play/remove, tag organization - browser half **already shipped** by `done/audio-menu.md`; only right-click removal and `tags.txt` tag groups remain |
 | `clang-ast-mutation-analysis.md` | Clang AST pass for mutation analysis |
 | `example-scene-consistency-review.md` | Read-only consistency pass over the 40 shipped `examples/scenes/*.glr`: fourteen ranked findings on filenames, tone, code style and naming accuracy (three underscore filenames whose section IDs are already hyphenated, `for (` spacing the REPL rewrites before it ships, the GL-state group naming its command in 3 of 5 filenames, a stale `snowfall-demo-550-particles` section id, …), plus the derived filename rule and the list of variations checked and found deliberate |

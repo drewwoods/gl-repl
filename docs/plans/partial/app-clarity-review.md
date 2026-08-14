@@ -1,6 +1,25 @@
 # `src/app` Clarity, Consistency & Maintainability Review
 
-## Status — RECONCILED INDEPENDENT ASSESSMENT (2026-08-14)
+## Status — PARTIAL: findings 1-3 landed 2026-08-14; 4-5 deferred
+
+The three ranked items of the execution plan below are implemented on `main`:
+
+| # | Finding | Commit |
+|---|---|---|
+| 1 | `GlrConfigKey` maps are default-less (so `-Werror=switch` enforces them), `glr_config_validate` rejects duplicate actionable keys, config-toggle docs corrected | `app/config: make GlrConfigKey storage maps compiler-exhaustive` |
+| 2 | Scene-local membership derives from `k_cfg_scene_defaults[]` (the duplicate switch is gone), with a subset/defaults slug-set test and a reset-contract test; contract comments corrected in `glr_state.{c,h}` and `CLAUDE.md` | `app/config: single-source the scene-local roster and test its reset` |
+| 3 | `GLR_MODAL_COUNT` + range check in `glr_modal_begin`, all three modal dispatches exhaustive, and a per-kind prompt/typing/commit test | `app/modal: guard the modal-kind extension contract` |
+
+Both new tests were mutation-checked: removing one reset line and emptying one
+prompt arm each fail them.
+
+**Deferred on purpose** — the two Low items, unchanged from the assessment
+below: finding 4 (the factual comment/declaration sweep, safe but Low) and
+finding 5 (the synthetic right-click helper, to be done only when one of those
+three capture hooks is next modified). Everything else in this review is an
+explicit *do not do*.
+
+## Original assessment — RECONCILED INDEPENDENT ASSESSMENT (2026-08-14)
 
 This is a read-only review of `src/app` (33 `.c` and 34 `.h` files, about
 24,300 lines) against the current ownership documentation, tests, and guards.
