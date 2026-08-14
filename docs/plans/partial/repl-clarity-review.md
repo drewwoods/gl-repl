@@ -1,13 +1,42 @@
 # `src/repl` Clarity, Coupling & Extensibility Review
 
-## Status - REVIEWED; REMEDIATION NOT STARTED (2026-08-14)
+## Status - FINDINGS 1-4 LANDED; 5-11 DEFERRED (2026-08-14)
+
+Findings 1, 2, 3 and 4 - the four the sequencing section marks as worth doing
+now - are implemented on branch `repl-cleanup`, one commit each. Everything
+below is left verbatim so the deferred findings keep their context; each
+landed finding carries a **LANDED** note under its heading.
+
+Deferred, with the reason each was deferred rather than done:
+
+| # | Why not now |
+|---|---|
+| 5 (two commit chains) | No cheap ratchet exists. Decide when the next structured form lands - see D3. |
+| 6 (checkpoint invalidation tail) | Ready to do; not in the requested batch. |
+| 7 (`ReplHostEffects` contract) | Comment-only fix, ready to do; the split itself waits for a 17th callback. |
+| 8, 9 (import split, `g_`-prefixed macros) | Ride adjacent work; 8 must not pre-empt `one-scene-loader.md`. |
+| 10 (builtin smoke loop) | Optional; dispatch is already shared by construction. |
+| 11 (transform-scope walk) | Record only; no action recommended. |
+| Architecture-document gaps | Four new `src/repl/ARCHITECTURE.md` sections plus the §12/README reconciliation. Not in the requested batch. |
+
+One correction the work turned up, recorded here because the review's
+finding 1 predicted a different set of source inventories: only two explicit
+lists name `autonormal.c` (`REPL_DEMO_DEP_SRCS` and
+`scripts/callgraph_file_groups.json`). `REPL_SRCS` is a `wildcard`, and the
+state/app-boundary and editor-input guards derive from it, so they needed no
+edit. Verifying `repl_demo` did surface an unrelated pre-existing break:
+`doc_order.c` was missing from `REPL_DEMO_DEP_SRCS`, so the standalone
+boundary proof had not linked since that module landed. Fixed in the same
+commit.
 
 A read-only review of `src/repl` (47 `.c` + 54 `.h`, ~45,300 lines) against
 four questions: are responsibilities clear, is coupling necessary, will the
 interfaces absorb the next feature, and is anything duplicated or overcomplicated.
 
-No code was changed. Every finding below carries a file:line citation so it can
-be re-checked before anyone acts on it.
+No code was changed *by the review*. Every finding below carries a file:line
+citation so it can be re-checked before anyone acts on it - note that the
+citations are as of the review date and the four landed findings have since
+moved some of the lines they name.
 
 **Provenance.** First pass 2026-08-13. Second pass 2026-08-14 independently
 re-read the pipeline, the host bridge, the new-command surface, and the
@@ -170,6 +199,10 @@ judgement calls flagged for the record.
 
 ### 1. `geometry_query.h` has no implementation file; it lives inside `autonormal.c`
 
+> **LANDED** (`3c1dd665`). Moved verbatim to `src/repl/geometry_query.c`; joined
+> `REPL_DEMO_DEP_SRCS` and `callgraph_file_groups.json`. The other inventories
+> this section predicted turned out to derive from the `REPL_SRCS` wildcard.
+
 **What.** Every function declared in `geometry_query.h` — the feeding-state
 lookups, all six bracket matchers, and the three transform-scope walkers — is
 implemented in `autonormal.c`, at lines 730-980:
@@ -213,6 +246,11 @@ guard suite.
 ---
 
 ### 2. The "immediate-mode vertex" subset has no predicate, so six call sites spell it by hand
+
+> **LANDED** (`b057df1b`). `repl_cmd_emits_immediate_vertex()` added, six sites
+> rewritten, `test_replay_walk.c`'s drift guard extended to pin the two
+> predicates to each other. The `edit_overlays.c` re-emission ladder rode along
+> as a file-private helper.
 
 **What.** `command.h:270-282` defines `repl_cmd_emits_vertex()`, covering
 `CMD_VERTEX2F/3F/4F` *and* `CMD_TESS_VERTEX`. But six call sites want the
@@ -266,6 +304,12 @@ boundary make that the wrong abstraction.
 ---
 
 ### 3. The new-command skill is wrong and the canonical checklist is incomplete
+
+> **LANDED** (`2b851964`). All four sub-items done: `docs/ARCHITECTURE.md` is
+> now the single checklist (new steps 3b/3c), the skill points at it, and the
+> `parser.c` / `flatten_range` / `IMPORT_EXPORT_STATE` / `editor_feed_line`
+> claims are gone from the skill, CLAUDE.md and `docs/MODULES.md`. `compile.h`
+> and `compile.c` corrected.
 
 **What.** Adding a command is the module's main extension point, and the skill,
 the canonical checklist, and the last representative state-command change do
@@ -350,6 +394,10 @@ accurate checklist are the extension point the module already has.
 ---
 
 ### 4. The attrib/inspector coverage ratchet is one-directional, and its gate is the switch most likely to be forgotten
+
+> **LANDED** (`a200ce41`). `default:` dropped from `repl_attrib_bits_for_cmd`;
+> the non-attribute-scoped types are enumerated. Verified the guard fires:
+> removing one case now fails the build under `-Werror=switch`.
 
 **What.** `tests/test_repl_state.c:2328-2341` is the sweep that commit
 `4c693a35` (glPolygonMode/glPolygonOffset) credits with catching real gaps. Its

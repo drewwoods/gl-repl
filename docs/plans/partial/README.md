@@ -24,6 +24,13 @@ Current residents:
   per-module doc split and the heavier app/UI + editor/UI edges are
   deferred.
 - `src-repl-simplicity-review.md`
+- `repl-clarity-review.md` - the four top-ranked findings landed
+  (`geometry_query.c` split out of `autonormal.c`,
+  `repl_cmd_emits_immediate_vertex()` replacing six open-coded spellings,
+  one accurate new-command checklist, and the now-exhaustive
+  `repl_attrib_bits_for_cmd` switch). Findings 5-11, the architecture-document
+  gaps, and the `round` doc omission are deferred; 5 and 7 are deliberately
+  gated on a future consumer landing, and 11 is record-only.
 - `app-clarity-review.md` - the three ranked extension guards landed
   (compiler-exhaustive `GlrConfigKey` maps + duplicate-key validation, the
   single-source and now-tested scene-local config roster, the modal-kind
