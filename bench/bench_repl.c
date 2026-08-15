@@ -373,21 +373,20 @@ static BenchResult bench_feed_examples(int iters) {
  * nested-for surface that unrolls to a large flat program). Hardcoded here so
  * the flatten benchmark's workload is fixed regardless of changes to the
  * built-in example list - adding, reordering, or editing examples in
- * src/repl/examples.c can't move this number. The // camera / // @cfg metadata
- * lines are kept so repl_load_example_lines strips them exactly as the
- * real example loader does, preserving an identical post-load command set. */
+ * src/repl/examples.c can't move this number. The @camera / @cfg metadata
+ * lines are kept and ordered as the real example loader expects, so camera
+ * rows are stripped while the post-load command set stays fixed. */
 static const char *const k_flatten_bench_scene[] = {
-    "// camera",
-    "glTranslatef(0.0f, 0.0f, -5.0f);",
-    "glRotatef(20.0f, 1.0f, 0.0f, 0.0f);",
-    "glRotatef(30.0f, 0.0f, 1.0f, 0.0f);",
-    "glTranslatef(0.0f, 0.0f, 0.0f);",
-    "",
     "// @cfg vertex_points = 0",
     "static float grid, extent, x, y, z, invGradMag; // strip cell index, world extent, vertex coords, 1/|gradient|",
     "static float amp = 0.4;    // wave amplitude (peak |y|)",
     "static float freq = 2.5;   // spatial frequency along x and z",
     "static float zPhase = 0.7; // z-axis time phase: z evolves slower than x (<1)",
+    "glTranslatef(0.0f, 0.0f, -5.0f);   // @camera dist",
+    "glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
+    "glRotatef(30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry",
+    "glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan",
+    "",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "// Animated surface: y = sin(freq*x + t) * cos(freq*z + zPhase*t) * amp",
     "// Drawn as a triangle strip per row with analytic per-vertex normals.",
@@ -1357,11 +1356,11 @@ static BenchResult bench_replay_examples(int iters) {
  * flatten-omitted): 12*340 + 3 = 4083. Keeping the loop count fixed makes
  * repeated runs use the same replay workload. */
 static const char *const k_long_replay_scene[] = {
+    "float a;",
+    "float b;",
     "glClearColor(0.05, 0.05, 0.05, 1);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
-    "float a;",
-    "float b;",
     "for(i, 0, 340) {",
         "a = i * 0.05;",
         "b = sin(a) * cos(a);",
@@ -1544,10 +1543,10 @@ static BenchResult bench_replay_anchor(int iters) {
  * setup cmds before it (CMD_VAR_DECLARE rows are flatten-omitted):
  * 11*370 + 2 = 4072. */
 static const char *const k_fade_bench_scene[] = {
-    "glEnable(GL_DEPTH_TEST);",
-    "glEnable(GL_LIGHTING);",
     "float a;",
     "float b;",
+    "glEnable(GL_DEPTH_TEST);",
+    "glEnable(GL_LIGHTING);",
     "for(i, 0, 370) {",
         "a = i * 0.01;",
         "b = sin(a);",
