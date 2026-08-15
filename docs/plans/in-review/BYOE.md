@@ -3,550 +3,505 @@
 ## Goal
 
 Let an external editor (vim, VS Code, …) be a peer author of the live scene,
-in four escalating stages:
+in three planned stages:
 
-1. **Write-triggered sync.** The external editor saves the file → gl-repl
-   reloads it, provided it imports cleanly. gl-repl writes back on explicit
-   save only.
-2. **One incomplete line.** The file may carry one incomplete final row;
-   gl-repl parks it in the live input row with the cursor in it, so the user
-   continues typing there *and gets the edit-guide overlays* for the
-   half-typed command.
+1. **Write-triggered sync.** The external editor saves the bound file →
+   gl-repl reloads it atomically. gl-repl writes back on explicit save only.
+2. **One incomplete final row.** A `.glr` file may end with a half-typed
+   command; gl-repl parks it in the live input row so the user continues
+   typing there *and gets the edit-guide overlays*.
 3. **2.5 — live WIP buffer.** vim publishes a plain-text sidecar on every
-   keystroke and cursor move; gl-repl follows along with no save required and
-   no plugin, protocol, or IPC. The incomplete row becomes *any* row, named by
-   cursor metadata.
-4. **3 — real-time IPC.** The same thing over a socket instead of the disk.
+   keystroke and cursor move; gl-repl follows with no save required and no
+   plugin, protocol, or IPC. The incomplete row becomes *any* row, named by
+   cursor metadata, and `.c` becomes supportable.
+
+**Real-time IPC (the former "stage 3") is not planned and is out of scope.**
+See "Not this plan".
 
 Premises:
 
-- **Outbound is explicit-save only.** Inbound is automatic; Ctrl+S stays the
-  only writer. Halves the conflict surface and avoids fighting vim's own
-  "file changed on disk" prompt on every `;`.
-- **The loader stays strictly atomic.** Zero tolerance: any rejected line
-  fails the whole import, live document untouched. The incomplete-row
-  allowance of stages 2/2.5 is *not* a loader concession — the controller
-  removes that row before handing text to the loader. See "Stage 2".
-- **An inbound reload is undoable, always.** See "Divergence".
+- **Outbound is explicit-save only.** Ctrl+S stays the only writer.
+- **The loader stays strictly atomic.** Any rejected line fails the whole
+  import, live document untouched. The incomplete-row allowance is *not* a
+  loader concession — the controller removes that row first.
+- **Watching is a session mode, not scene config.** `--watch` only.
 
-## Verdict up front
+## Verdict
 
-- **Stage 1 is mostly assembly**, over two design problems that are not:
-  path binding and undoable divergence. A working prototype of the inbound
-  half already ships in the tree.
-- **Stage 2 is a small delta**, once the row-removal framing above replaces
-  the first draft's "allow one rejected line" framing, which was
-  unimplementable (see "Why the loader cannot report the cursor row").
-- **Stage 2.5 is the highest-value step and is smaller than stage 3.** Vim's
-  `.swp` cannot serve it — evidence below, recorded so it is not re-litigated.
-- **Stage 3 may not be worth building.** Once 2.5 lands, IPC only removes the
-  disk round-trip. Speculative until 2.5's reflatten cost is measured.
+Stage 1 is mostly assembly over two design problems — path binding and
+undo/divergence — both now decided below. Stage 2 is a small delta. Stage 2.5
+is the highest-value step and is gated on a measurement, not on new
+architecture.
 
 The friction that bites at every stage and has no cheap fix: **gl-repl
 rewrites the text.** A UX cost to state clearly, not a bug to solve.
 
-## Prior art already in the tree
+## Decisions
+
+These were open questions in the previous draft. They are decided here so the
+stages below can be read as instructions rather than options.
+
+### D1 — Binding record
+
+A slot gains a **binding record**: `{ origin_kind, format, resolved_path }`.
+Watch and Ctrl+S use the *same* resolved path, with the writer selected by the
+binding's `format`. A slot with no path is not watched.
+
+| Origin | Resolved path | Ctrl+S |
+|---|---|---|
+| `./gl-repl --watch foo.glr` | new retained absolute `source_path`, set at bootstrap | **that same path** — not `repl_active_scene_export_path()` |
+| Managed workspace slot | `join(workspace_dir, file_name)` | already `repl_save_active_scene` |
+| `--examples-dir` `.glr` | existing `glr_origin_path` | existing write-back |
+| Built-in example (compiled in) | none | unbind; status bar says so |
+| F12 / scene tab | rebind to the new scene's path, else unbind | follows the bind |
+| File → Open / Save As | rebind to the path just used | same |
+
+Do **not** overload `glr_origin_path` for the CLI case: it is documented as
+catalog `.glr` write-back, bound once and never rewritten (`scenes.h:155-165`).
+Add `source_path` alongside it.
+
+`--watch` is a boolean; the file stays the existing positional argument.
+
+**Closing the CLI Ctrl+S gap is part of stage 1**, not a follow-up: today a
+CLI-loaded document saves to `<slug>.c` / `output.c`, so without this the
+self-write stamp would suppress the wrong file and the loop would break.
+
+### D2 — Workspaces stay `.c`-only; stage 2 is `.glr`-only
+
+Do not teach managed workspaces `.glr` in this plan — that is a separate
+format/product change (manifest, prune rules, `workspace_io_has_c_ext`).
+
+- **Stage 1** watches whatever file is bound, `.c` or `.glr`.
+- **Stage 2** is **`.glr` only.** Its last-row heuristic is meaningless on
+  exported C: the incomplete authored command sits inside `display()` and is
+  followed by generated wrapper rows, so it is never the final non-empty
+  physical row.
+- **Stage 2.5 supports both**, because `@cursor` plus the physical→document
+  mapping makes the row well-defined regardless of scaffolding.
+
+### D3 — The watch path does not apply `@cfg` or `@camera`
+
+Watched reloads replace **program text and variables only**; live cfg and
+camera are preserved. Initial load and explicit Load Scene keep applying
+headers as they do today.
+
+Two payoffs: the undo unit becomes exactly what `EditorUndoSnapshot` already
+stores, and BYOE stops depending on `one-scene-loader.md` step 4 (the
+unresolved "may a file set anything, or only the scene subset?" question).
+An external *text* edit is geometry, not a presentation reset.
+
+### D4 — Undo policy, keyed on live identity
+
+`editor_undo_note_wholesale_replacement()` (`src/editor/undo.h:138`) is **not
+undo** — it clears both rings and bumps the generation so nothing survives.
+Never use it here.
+
+And **"always push" is wrong**, because `editor_undo_push_snapshot()` is the
+auto-promotion hook: it calls `repl_promote_transient_if_needed()` before
+saving (`src/editor/undo.c:241-249`). Pushing unconditionally would promote an
+unedited `--examples-dir` scene into a user slot on the first vim save.
+
+| Live identity | Inbound policy |
+|---|---|
+| User scene (`repl_active_user_scene() >= 0`) | `editor_undo_history_capture()`, push, ATOMIC reload. Failure → history restore. Success → one undoable clobber. |
+| Unedited example / transient | Reload **without** `editor_undo_push_snapshot()`. The file is the source of truth and vim's undo is the undo. No promotion. |
+
+Rollback must be lossless: `EditorUndoRingState` (`src/editor/undo.h:79-85`)
+is head/count/generation only, so with a full ring a push has already
+overwritten the oldest entry and restoring indices cannot bring it back. Use
+`editor_undo_history_capture()` / `_restore()` / `_destroy()`
+(`src/editor/undo.h:100-102`) — heap-backed, copies real entries, already used
+by the tour baseline.
+
+### D5 — A dirty input row defers the reload
+
+`EditorUndoSnapshot` does not carry the in-progress input buffer (the header
+lists the exclusion as deliberate), so a reload landing mid-edit destroys
+typing that Ctrl+Z cannot recover.
+
+**Policy: expose `editor_input_has_uncommitted_change()`; while it is true,
+mark the inbound version *pending* and defer automatic application until the
+row is committed or cancelled.** Status bar shows that a newer external
+version is waiting. This preserves the existing document-only undo contract
+without widening every snapshot.
+
+The parked stage-2/2.5 WIP row is **excluded** from "dirty" — otherwise 2.5
+would stall permanently, since that row is nearly always mid-word.
+
+*(The two reviews split here: the alternative was "file wins, state it." That
+is simpler, but the whole point of this revision is not silently destroying
+work, and an unrecoverable loss is an argument for care rather than against
+it. The pending-version state is cheap and visible.)*
+
+### D6 — Enablement is `--watch` only
+
+No `GlrConfigKey`. Watching is a session/file mode like `--examples-dir`, not
+a scene property. A config key would rewrite every example golden (via
+`glr_export_cfg_fill_all`, `src/app/glr_actions.c:853`) and could travel in an
+`@cfg` row, letting imported content enable its own watcher. Default off; the
+web build ignores the flag and the TU stays inert.
+
+A later non-exported session bit behind a File-menu action is fine, but not in
+this plan.
+
+### D7 — Transient state on successful reload
+
+One controller notification, `glr_extedit_notify_reloaded()`. **Not** a
+generation bump — that would make the undo snapshot just pushed unrestorable.
+
+| Feature | Policy |
+|---|---|
+| Active tutorial or guided tour | **Defer** the reload (same mechanism as D5) |
+| Replay | Stop — flat identity and `replay_exec_limit` do not survive a reflatten |
+| `// @plot` | Force tag rescan through this notification, not `editor_undo_generation()` |
+| Depth snapshot | Invalidate |
+| Color picker, selection, autocomplete, active drag | Clear / cancel |
+| Search | **Preserve the query**, rescan against the new document |
+| Variable panel | Rebuild (what `repl_live_demo` already does) |
+| Camera ease / drag | Settle, then leave the pose — D3 means no `@camera` is applied |
+| Assign-plot series | Follow the `@plot` re-resolve; close if no tags |
+
+**Do not call `glr_ctrl_reset_transients()` (`src/app/glr_ctrl.c:986`)
+blindly** — it calls `glr_camera_settle_target()`,
+`glr_camera_controls_reset()` and `glr_camera_clear_scene_default()`, which
+clobbers exactly the camera state D3 preserves. Use a narrower cousin.
+
+### D8 — Two-level change gate
+
+- **Change token** = nanosecond mtime (`st_mtimespec` / `st_mtim`) + inode +
+  size. Not `time_t` seconds: a same-second final save would be missed
+  *indefinitely*, the 2.5 "sidecar newer than scene file" rule becomes
+  undecidable, and live WIP is impossible. Inode and size also catch the
+  editor-style safe write (temp + `rename`) that may not move the timestamp.
+- **Content token** = hash of the scene payload **with transport metadata
+  removed**. Hashing the raw `.wip` bytes would defeat its own purpose: every
+  `CursorMoved` rewrites the trailing `@cursor` line and changes the hash, so
+  the cursor-only fast path would never fire. Keep a separate cursor token for
+  row/column.
+
+The two levels are what keep the per-frame cost honest: the poll is a bare
+`stat`; the file is only *read and hashed* once the change token moves; the
+document is only *parsed* once the content token moves.
+
+*(The prototype's `time_t` at `repl_live_demo.c:286` is a demo simplification,
+not a design to inherit. This reverses an earlier call to ship seconds and
+document the limit — it does not survive contact with 2.5.)*
+
+## Prior art
 
 `tools/repl_live_demo/repl_live_demo.c` is a working file-watching REPL host
-built for exactly this workflow — its header opens with "The editor is
-external (vim, or anything). This demo never edits text."
+built for this workflow — "The editor is external (vim, or anything). This
+demo never edits text."
 
-- `file_mtime()` (`:286`) — plain `stat` + `st_mtime`.
-- `poll_active_file()` (`:461`), driven by `watch_timer` (`:706`) on a
-  `poll_ms` (default 250) GLUT timer.
-- `import_active_scene()` (`:334`) — resets live state, picks the loader by
-  extension, reflattens, rebuilds the variable panel.
-- `:382-383` — after gl-repl writes the file itself it re-stamps the mtime so
-  the watcher does not self-trigger. Stage 1 needs that trick verbatim.
+- `file_mtime()` (`:286`), `poll_active_file()` (`:461`), `watch_timer`
+  (`:706`, 250 ms), `import_active_scene()` (`:334`).
+- Its header (`:24-33`) is candid that reload is **not** transactional and a
+  malformed save can replace a good scene. That is the gap this plan closes.
 
-Its header (`:24-33`) is candid that reload is **not** transactional and that
-a malformed save can replace a good scene. That is the gap between the demo
-and a shippable feature.
+**Self-write suppression is a new requirement, not a trick to copy from the
+demo.** `:382-383` stamps the mtime after `import_active_scene()` *reads* the
+file, and the demo's writer targets a separate `.roundtrip.<ext>` file — it
+never writes the watched path. Stage 1 must stamp after **every** successful
+gl-repl write to the bound path: `glr_action_save_active_scene`, Save As, a
+workspace save touching that leaf, and `--export-glr` to that path.
 
-## Stage 1
+## Stage 1 — write-triggered sync
 
-### The watched path must be defined before anything else
+### Prerequisite
 
-**This is the first thing to resolve; the rest of stage 1 is meaningless
-without it.** There is no "current file" in gl-repl today. What exists:
+`one-scene-loader.md` **steps 1-3** — explicit format, the `ReplSceneLoadOpts`
+struct, and `ATOMIC` over `SceneSnapshot`. Step 2 only carries `TOLERANT`
+("today's importer behavior spelled out. Pure refactor"); **`ATOMIC` is step
+3**, and that is what BYOE needs.
 
-- CLI bootstrap retains the loaded *document* but **not its source path** —
-  `opts.input_file` aliases argv and `GlrCliOptions` is a `main()` local
-  (`gl_repl.c:257`), dropped after `glr_ctrl_bootstrap_repl()`.
-- `repl_active_scene_export_path(ext)` (`scenes.h:153`) *synthesizes* an
-  export destination from the scene slug. It is a save target, not a record
-  of where the document came from.
-- `glr_origin_path` (`scenes.c:80`) exists **only** for runtime-catalog `.glr`
-  entries under `--examples-dir`, and is documented as bound once at promotion.
+Step 3 must resolve: first-failure abort through the line feed (today
+`import.c` warns and continues, `:268-291`, hard-failing only on read error,
+over-long line, canonical-order violation `:2941-2977`, or zero commands
+`:3045` — and on that last one `@cfg` and camera side effects are *already*
+committed); `SCENE_SNAPSHOT_CAMERA_SNAP` on rollback, never `EASE`
+(`scene_snapshot.c:135-148`); and restore of document, predefs and aliases.
 
-So the plan owes an explicit table, and it must cover the Ctrl+S target too,
-since inbound and outbound have to name the same file or the loop is broken:
+**Step 4 is not needed** — D3 means the watch path never applies the pending
+cfg bag. Do not add a third load policy or `@cursor` fields to that options
+struct.
 
-| Origin | Watched path | Ctrl+S target |
-|---|---|---|
-| `./gl-repl foo.glr` (CLI file) | needs a **new retained path** on the scene slot | ? |
-| Managed workspace slot | manifest scene file | already `repl_save_active_scene` |
-| `--examples-dir` entry | `glr_origin_path` | `repl_active_scene_glr_write_back_path()` |
-| Built-in example (compiled in) | none — no file exists | promotion, then as a workspace slot |
-| After F12 / scene switch | rebind to the new active scene, or refuse | follows the binding |
+### Work
 
-Recommendation: add a retained per-slot source path (generalizing
-`glr_origin_path` beyond the `--examples-dir` case) and make BYOE bind to it,
-refusing to watch when a slot has none. A scene switch rebinds; a scene with
-no file unbinds and says so in the status bar.
+1. `source_path` on the slot (D1) + `repl_reload_active_scene_from_path()`:
+   a sibling to `repl_load_scene_via_loader()` (`scenes.c:976-1025`) that
+   reuses the **active** slot instead of allocating a fresh one and failing
+   `ERR_NO_SLOT` at capacity.
+2. CLI Ctrl+S writes `source_path` (D1).
+3. `src/app/glr_extedit.c` — a thin poller: binding, change token, content
+   token, post-write stamp, per-frame poll dispatching to the reload. Not
+   `src/app/boot/`; `check-app-boot-band` forbids the controller including
+   boot headers.
+4. `glr_extedit_notify_reloaded()` + the D7 table.
+5. `--watch` flag (`src/app/boot/glr_cli.h:34`, positional capture at
+   `glr_cli.c:383`). Web build inert, TU non-empty for the C99 rule.
 
-**Unresolved, and it blocks the format recommendation:** managed workspaces
-are `.c`-only (`workspace_io_has_c_ext`, and unlisted `.c` files are ignored),
-but `.glr` is the format that survives canonicalization best, and the stage-2.5
-vimrc snippet is written against `*.glr`. Either BYOE binds `.c` in workspaces
-and accepts more churn, or workspaces learn `.glr`, or BYOE is scoped to
-non-workspace files first. **Decide this before writing code**; it changes
-which stage-1 path is even reachable.
-
-### The prerequisite runs deeper than the first draft said
-
-`one-scene-loader.md` steps 1-2 are **not** enough. That plan's own step list:
-step 1 is explicit format, step 2 is the `ReplSceneLoadOpts` struct carrying
-**`TOLERANT`** — "today's importer behavior spelled out. Pure refactor."
-**`ATOMIC` is step 3.** BYOE depends through step 3.
-
-And step 3 is not self-contained. Landing it requires resolving:
-
-- **Parse-failure propagation** — today `import.c` warns and continues
-  (`import_state_warn_parse_line`, `:268-291`) and only hard-fails on read
-  error, over-long line, canonical-order violation (`import_finish_load`,
-  `:2941-2977`) or zero commands loaded (`:3045`) — and on that last one the
-  `@cfg` and camera side effects are *already committed*.
-- **Camera-apply mode** on rollback — `SCENE_SNAPSHOT_CAMERA_SNAP` vs `EASE`
-  (`scene_snapshot.h:39-42`); a rollback must use `SNAP` or "Reset camera" is
-  silently redefined (`scene_snapshot.c:135-148`).
-- **The cfg rollback boundary** — `SceneSnapshot` carries only the scene-subset
-  `ReplConfigBag`, and `one-scene-loader.md` step 4 flags the "may a file set
-  anything, or only the scene subset?" question as *explicitly unresolved*.
-  BYOE inherits that question directly (see "What Ctrl+Z cannot restore").
-
-### Divergence: an inbound reload must not destroy local edits
-
-A *valid* external save can overwrite gl-repl-side edits made since the last
-sync; atomic parsing only protects against malformed input. And
-`editor_undo_note_wholesale_replacement()` (`src/editor/undo.h:138`) **is not
-undo** — it clears *both* rings and bumps the generation precisely so nothing
-survives. Using it here would make the clobber unrecoverable.
-
-**Do not try to detect divergence with an edit tick.** The first draft
-proposed one at `editor_undo_push_snapshot()`, on the strength of its "called
-before any mutation" header comment. That comment is about *document*
-mutations: there are only 18 call sites in `src/`, all in editor/repl/app
-document paths, and the header states outright that input-buffer text,
-selection, and scroll are **not** snapshotted. In-progress typing, undo/redo
-navigation, camera movement and config changes all produce state an inbound
-reload would affect without moving that tick.
-
-**Policy instead: every inbound reload conservatively captures complete state
-and is undoable.** No divergence heuristic to get wrong. The common case —
-external editor is the sole author — is handled by the content token
-(below): a reload whose content is unchanged is skipped entirely, so the
-undo ring is not polluted by no-op saves.
-
-#### What Ctrl+Z cannot restore, and what to do about it
-
-`EditorUndoSnapshot` (`src/editor/undo.h:60-71`) carries commands, line text,
-edit line, predef values/names, scratch arrays, func aliases, generation.
-It does **not** carry cfg, camera, or the in-progress input buffer — the
-header says the exclusions are deliberate.
-
-So a naive undoable reload restores the old document **under the new file's
-camera and presentation state**. Options:
-
-1. **Strip `@cfg` / `@camera` on the watch path** (recommended). An external
-   *text* edit rarely intends to change presentation, and this makes the
-   undo unit exactly what the ring already stores. Costs: a file you exported
-   with `@cfg` will not restore it via the watcher.
-2. Keep a separate one-deep pre-reload `SceneSnapshot` (which *does* carry cfg
-   + camera pose) restorable by a dedicated action.
-3. Extend the ring's snapshot type — largest blast radius, affects all undo.
-
-This interacts with `one-scene-loader.md` step 4; resolve them together.
-
-#### Ring rollback must be lossless
-
-If the reload itself then fails, the first draft rewound with
-`editor_undo_ring_state_restore()`. `EditorUndoRingState`
-(`src/editor/undo.h:79-85`) is **head/count/generation only** — indices, not
-entries. With a full ring, the push already overwrote the oldest entry, and
-restoring indices does not bring it back.
-
-Use `editor_undo_history_capture()` / `_restore()` / `_destroy()`
-(`src/editor/undo.h:100-102`) instead — heap-backed, copies the actual ring
-entries, already used by the tour baseline for exactly this reason. Or
-validate the load before pushing.
-
-#### A successful reload needs a transient-state policy
-
-A row-reshaping reload invalidates state keyed by row identity or execution
-shape: tutorial progress, replay, `@plot` series, color picker, depth
-snapshot, selection, scripted input. The plan must say, per feature, whether
-it is **stopped, reset, preserved, or causes the reload to be refused**, and
-route through the controller-owned replacement seams rather than each
-subsystem discovering the change. `@plot` already has a precedent worth
-copying: `glr_assign_plot_sync_tags()` re-resolves from tags on wholesale
-replacement, keyed on `editor_undo_generation()`. An inbound reload needs an
-explicit successful-reload notification that such consumers can hang off.
-
-### Change detection
-
-Use **nanosecond mtime (`st_mtimespec` / `st_mtim`) plus inode and size** from
-stage 1. Not `time_t` seconds.
-
-*(This reverses the first draft, which proposed shipping one-second `st_mtime`
-and documenting the limit. It does not survive contact with the later stages:
-a same-second final save can be missed **indefinitely** rather than briefly;
-the sidecar "newer than the scene file" rule in 2.5 becomes undecidable at
-one-second resolution; and live WIP updates are impossible. The prototype's
-`time_t` is a demo simplification, not a design to inherit.)*
-
-Inode and size also cover the editor-style safe write — write sibling temp,
-`rename` over the target — which changes the inode while the timestamp may
-not distinguish it.
-
-Keep both tests regardless: same-second double write, and a safe-write rename.
-
-Separately, track a **content token** (hash of the bytes read). A sidecar
-whose content is unchanged must not trigger a parse + reflatten — this is what
-keeps cursor-only updates cheap in 2.5, and what keeps no-op saves out of the
-undo ring in stage 1.
-
-### The rest of stage 1
-
-1. **Reload into the *active* slot.** `repl_load_scene_via_loader()`
-   (`scenes.c:976-1025`) allocates a *fresh* slot and fails `ERR_NO_SLOT` when
-   all eight are full — right for "open a file as a new scene", wrong for
-   "this scene's file changed". Needs a sibling reusing the active slot and
-   keeping its name / `file_name` / source-path binding.
-2. **A watcher.** New controller-band TU (`src/app/glr_extedit.c`) holding the
-   bound path, change token, content token, polled once per frame from the
-   `PROF_SCRIPTED_INPUT` slot region (`gl_repl.c:41-51`), before
-   `glr_ctrl_display_frame()`. Not `src/app/boot/` — `check-app-boot-band`
-   forbids the controller including boot headers. Needs its own `ProfSection`
-   (`prof_sections.h`, rows in `src/app/glr_prof.c:106`/`:192`): the `stat` is
-   cheap, the *reload* is not.
-3. **Self-write suppression.** Every gl-repl write to the bound path re-stamps
-   the stored token (`repl_live_demo.c:382`).
-4. **Enablement.** A `GlrConfigKey` toggle (skill `gl-repl-config-toggle`;
-   forces a `@cfg` line into all example goldens) plus a `--watch` CLI flag
-   (`src/app/boot/glr_cli.h:34`, positional capture at `glr_cli.c:383`).
-   Default off.
-5. **Web build inert.** `#ifdef` the TU as `src/app/glr_web_io.c:8` does; keep
-   it non-empty for the C99 rule.
+The poll goes in the `PROF_SCRIPTED_INPUT` region of `gl_repl.c:41-51`, before
+`glr_ctrl_display_frame()`, and gets **its own `ProfSection`**
+(`prof_sections.h`, rows in `src/app/glr_prof.c:106`/`:192`). CLAUDE.md states
+that rule unconditionally for per-frame work in the host callback; one review
+argued a bare `stat` cannot vanish into unattributed remainder and the section
+is unnecessary, but the invariant is a project rule and the section costs an
+enum plus two rows. In steady state it reads ~0, which is itself the useful
+signal.
 
 ### The friction that cannot be designed away
 
-Canonical text is **regenerated from the parsed command** via the spec `fmt`
-(`src/repl/parser.c:472-580`), with indentation re-derived from block scope
-rather than the source line (`repl_source_scope_cmd_indent`,
-`src/repl/source_scope.h:134-148`), and `repl_load_apply_line()` strips C
-float suffixes on the way in (`src/repl/load.c:98-101`). So the first Ctrl+S
-after an external edit rewrites the user's spacing, indentation and `1.0f`
-literals.
+Canonical text is regenerated from the parsed command via the spec `fmt`
+(`src/repl/parser.c:472-580`), indentation re-derived from block scope rather
+than the source line (`repl_source_scope_cmd_indent`,
+`src/repl/source_scope.h:134-148`), and `repl_load_apply_line()` strips C float
+suffixes (`src/repl/load.c:98-101`). The first Ctrl+S after an external edit
+rewrites spacing, indentation and `1.0f` literals.
 
-Mitigations, stated honestly:
-
-- **Fixed-point-after-one-pass is asserted for exactly one construct, not in
-  general.** `tests/test_repl_core_io.c:851-859` asserts a byte-stable
-  re-export — inside the if/else-if/else round-trip block. That is a narrow
-  case, not a document-wide guarantee. *(The first draft cited `:765-800` and
-  generalized it; both were wrong.)* If BYOE is going to promise the file
-  stops churning, **that promise needs a new fixed-point test over the scene
-  corpus**, and it belongs in this plan's test list.
-- **`.glr` survives best** (`src/repl/export_glr.c:36-53` — indent is
-  presentation-only and round-trips exactly) — subject to the unresolved
-  workspace-format question above.
+- **Fixed-point-after-one-pass is asserted for exactly one construct.**
+  `tests/test_repl_core_io.c:851-859` asserts a byte-stable re-export inside
+  the if/else-if/else round-trip block. That is not a document-wide guarantee.
+  If BYOE promises the file stops churning, **that needs a new fixed-point
+  test over the scene corpus** — it is in the test list below.
+- `.glr` survives best (`src/repl/export_glr.c:36-53`; indent is
+  presentation-only and round-trips exactly).
 - Expressions with visible variables keep verbatim text (`preserve_expr` /
   `has_vars`, `src/repl/normalize.h:17-23`).
 
-`repl_document_rebuild()` (`src/repl/replace.c:116`) looks like the right
-primitive and **is not**: it deliberately preserves cfg, camera, scene name
-and workspace binding (`rebuild_reset_live`, `replace.c:38-48`), so it drops
-the `@cfg` / `@camera` headers an external file carries. Model for the
-transaction shape, not the entry point.
+`repl_document_rebuild()` (`src/repl/replace.c:116`) is the model for the
+transaction shape, **not** the entry point: it deliberately preserves cfg,
+camera, scene name and workspace binding (`rebuild_reset_live`, `:38-48`).
 
-## Stage 2 — one incomplete final row
+## Stage 2 — one incomplete final row (`.glr` only)
 
 ### Why the loader cannot report the cursor row
 
-The first draft said: allow exactly one rejected line, and require it to be
-the cursor row. **That is unimplementable**, and `import.c` says so in its own
-comment.
-
-The importer accumulates *physical* lines into a *logical* statement while
-brackets remain open (`import.c:2900-2934`): `complete` requires
+`import.c` accumulates *physical* lines into a *logical* statement while
+brackets are open (`:2900-2934`): `complete` requires
 `depth <= 0 && is_stmt_terminator(last)`. An incomplete `glVertex3f(1,` leaves
-`depth > 0` and **absorbs the following physical lines** until something
-closes at depth 0. The comment at `import.c:2685-2692` describes the exact
-consequence: an unfinished statement "glues the next physical line onto it,
-and reports one joined parse error — losing the following row from the
-document."
+`depth > 0` and **absorbs following physical lines**. The comment at
+`:2685-2692` states the consequence outright — an unfinished statement "glues
+the next physical line onto it, and reports one joined parse error — losing
+the following row from the document."
 
-So what an ATOMIC loader would report is a *joined logical statement*, not a
-physical row, and "the one rejected line is the cursor row" cannot be
-evaluated.
+So an ATOMIC loader reports a *joined logical statement*, never a physical
+row. "Allow one rejected line and require it to be the cursor row" was
+unimplementable.
 
 ### The framing that works
 
-**The controller removes the designated physical row before the import, and
-the loader stays strictly atomic.**
+**The controller removes the designated physical row before the import; the
+loader stays zero-tolerance.** On success the removed text goes into the live
+input row; on failure nothing changes and the status bar says why.
 
-- Controller takes the file text, extracts row *N*, hands `lines minus row N`
-  to a zero-tolerance ATOMIC load.
-- On success, it puts row *N*'s text into the live input row with the cursor
-  in it.
-- On failure, nothing changes; status-bar error.
+Stage 2 needs **no row mapping at all**: after loading "lines minus last",
+park at `edit_line = document_count` so the input row appends — already how
+the code panel renders the trailing live row
+(`repl_code_panel_add_trailing_document_row`). Do not insert a placeholder
+document row.
 
-This removes the need for any `partial_tail` or one-reject allowance in the
-load options, keeps the loader's contract clean, and is the same mechanism at
-both stages — only the choice of *N* differs.
+Order matters: `editor_input_set_text()` ends by snapping the cursor to
+end-of-text (`src/editor/state.c:364-368`), so set text **first**, then
+`editor_cursor_pos_set()` if a column is wanted. Stage 2 has no column, so
+end-of-text is the answer. `editor_state_edit_line_set` is `state.h:391`.
 
-### Which row, and why stage 2 stops at the last one
+### Incomplete-row heuristic
 
-**Stage 2 designates the last non-empty row. Stage 2.5 designates the
-`@cursor` row.**
+Require **lexical evidence of incompleteness** on the last non-empty,
+non-directive row, after trimming:
 
-This is forced: a normal external-editor save carries no cursor metadata, and
-`@cursor` only exists once 2.5's sidecar does. Stage 2 must therefore be
-editor-independent, and "the row being typed is the last one" is the only
-defensible guess for a plain save. Arbitrary-row support arrives with the
-metadata that makes it well-defined. *(The first draft put arbitrary-row
-support in stage 2 while introducing `@cursor` only in 2.5 — a circular
-dependency.)*
+- bracket depth ≠ 0, **or**
+- the last code character is a trailing comma or operator.
 
-Guard against swallowing typos: only treat the final row as incomplete if it
-*looks* incomplete — unbalanced brackets, or a prefix matching a known command
-name. A well-formed-but-wrong final row (`glVertx3f(1,2,3);`) must still be an
-error.
+**A recognized command prefix alone is not sufficient** — too permissive. A
+well-formed-but-wrong row (`glVertx3f(1,2,3);`) must still refuse the whole
+file, as must any *other* row failing ATOMIC.
 
-### When the removed row is structurally significant
+`is_stmt_terminator` (`import.c:2693`) is the right predicate to reuse but is
+a file-static in a `repl_*` TU while the heuristic runs in `src/app/`; it
+needs promoting to a shared header rather than duplicating.
 
-Removing a `for(...) {` or a `}` unbalances the rest of the document, so the
-ATOMIC import of the remainder fails, so the live document is left alone and
-the status bar says so. That falls out of the design rather than needing a
-special case, and it is the right outcome: live sync pauses while a block head
-is half-typed and resumes when it balances. Document it as a known limitation;
-cover it with a test.
+If the removed row is a block delimiter, the remainder unbalances and the
+ATOMIC import fails, leaving the document alone. That falls out of the design;
+document it as a known limitation and test it.
 
 ### Boundary
 
-The incomplete row is **not in the document**, so an outbound write drops it.
-Consistent with outbound being explicit-save only. Placement must live in
-`src/app/`, not a `repl_*` TU — `check-no-load-line-to-input-in-pipeline`
+The incomplete row is not in the document, so an outbound write drops it.
+Placement lives in `src/app/` — `check-no-load-line-to-input-in-pipeline`
 forbids pipeline TUs from touching the input row (`src/editor/input.h:160`).
 
 ### What already works
 
-- Input buffer is programmatically settable: `editor_input_set_text()`
-  (`src/editor/state.c:364`), `editor_cursor_pos_set(col)` (`:404`, clamped),
-  `editor_state_edit_line_set()` (`src/editor/state.h:390`).
+- `editor_input_set_text()` (`state.c:364`), `editor_cursor_pos_set()`
+  (`:404`, clamped), `editor_state_edit_line_set()` (`state.h:391`).
 - Overlays read the **live input text**: `glr_ctrl_build_guide_snapshot()`
-  (`src/app/glr_ctrl.c:560`) pulls `editor_state_input()`;
-  `fill_guide_arg_slots()` (`:449-552`) prefix-matches with `strncmp` and
-  requires no closing paren; `parse_arg_slots()` (`:402-431`) splits with
-  `repl_scan_next_arg_delim()` and records a per-slot `filled[]` bitmask.
-- **Correction to the first draft:** the "renderer fills unset slots with the
-  identity" contract is the **transform** guide's (`xform_filled`, identity 0
-  for translate/rotate and 1 for scale, `guides_shared.h:104-111`), *not* the
-  vertex guide's. For vertex args the documented contract is only that
-  `vertex_n_filled = 0` means "not a vertex call"
-  (`guides_shared.h:88-96`); what a partially-filled vertex renders is not
-  stated there. **Verify by hand before relying on it** — this is why the
-  verification step below is not a formality.
-- Autocomplete follows for free: `ac_try_enum_slot_completion()`
-  (`src/app/glr_completion.c:529`) resolves the active slot from top-level
-  commas before the cursor and already fires mid-line.
+  (`glr_ctrl.c:560`) pulls `editor_state_input()`; `fill_guide_arg_slots()`
+  (`:449-552`) prefix-matches with `strncmp` and needs no closing paren;
+  `parse_arg_slots()` (`:402-431`) records a per-slot `filled[]` bitmask.
+- **Unconfirmed:** the "renderer fills unset slots with the identity" contract
+  is the **transform** guide's (`xform_filled`, `guides_shared.h:104-111`),
+  *not* the vertex guide's. For vertex args the documented contract is only
+  that `vertex_n_filled = 0` means "not a vertex call"
+  (`guides_shared.h:88-96`). **Hand-verify before relying on it** — see
+  Verification 5.
+- Autocomplete follows for free (`ac_try_enum_slot_completion()`,
+  `glr_completion.c:529`).
 
-## Stage 2.5 — live WIP buffer, no plugin, no IPC
+## Stage 2.5 — live WIP buffer
 
 ### Why not the swap file
 
-Checked against the installed vim 9.2's own documentation.
+Checked against the installed vim 9.2 documentation.
 
 | Question | Answer |
 |---|---|
-| Can the format be changed? | **No.** The only swap knobs are `'swapfile'` (on/off, `options.txt:8483`), `'directory'` (location, `:3212`), `'swapsync'` (fsync, `:8505`) and `'updatecount'`/`'updatetime'` (timing, `:9460`). No plaintext option. |
-| Is it documented? | Not as an API. Vim's internal block-paged memline structure. Third-party parsers exist but track vim versions. |
-| Is it written live? | **No.** "updated after typing 200 characters or when you have not typed anything for four seconds" (`recover.txt:102-104`). Tunable via `updatecount`, but at `updatecount=1` every keystroke costs a write **plus an `fsync`** (`'swapsync'` defaults to `"fsync"`). |
-| Does it carry the cursor? | **No** — the disqualifier. `recover.txt` never mentions cursor; block 0 holds file identity, mtime, inode, dirty flag. Cursor lives in shada/viminfo, written at exit. |
+| Can the format be changed? | **No.** Only `'swapfile'` (on/off, `options.txt:8483`), `'directory'` (location, `:3212`), `'swapsync'` (fsync, `:8505`), `'updatecount'`/`'updatetime'` (timing, `:9460`). |
+| Documented as an API? | No — vim's internal block-paged memline structure. |
+| Written live? | **No.** "updated after typing 200 characters or when you have not typed anything for four seconds" (`recover.txt:102-104`); at `updatecount=1` every keystroke costs a write **plus an `fsync`**. |
+| Carries the cursor? | **No** — the disqualifier. Block 0 holds file identity, mtime, inode, dirty flag; cursor lives in shada/viminfo, written at exit. |
 
 Also fatal: the swap updates "only if the buffer was changed, **not when you
-only moved around**" (`recover.txt:104`), so cursor-only motion produces no
-event.
+only moved around**" (`recover.txt:104`).
 
-### The sidecar instead
+### The sidecar
 
-All four events confirmed present (`autocmd.txt:1334-1352`, `:771-793`); the
-`I` variants fire while still in insert mode.
+All four events confirmed (`autocmd.txt:1334-1352`, `:771-793`); the `I`
+variants fire while still in insert mode.
 
-```vim
-autocmd TextChanged,TextChangedI *.glr call s:GlrWip()
-autocmd CursorMoved,CursorMovedI  *.glr call s:GlrWip()
-autocmd VimLeave,BufUnload       *.glr call delete(expand('%') . '.wip')
-```
+**Publication must be atomic** — writing `<file>.wip` in place lets the
+watcher observe it truncated. Write a sibling temp in the same directory and
+`rename()` over it: a same-directory `rename(2)`, atomic, overwriting without
+warning (`builtin.txt:9045-9051`). `writefile()`, `rename()` and `delete()`
+are builtins (`builtin.txt:788`, `:518`, `:154`).
 
-**Publication must be atomic.** Writing `<file>.wip` in place lets the frame
-watcher observe it after truncation and before completion — spurious rejected
-reloads, or a momentarily empty file. `s:GlrWip()` writes a **sibling temp in
-the same directory** and `rename()`s it over the sidecar: a same-directory
-`rename(2)`, atomic, and vim's `rename()` overwrites an existing target
-without warning (`builtin.txt:9045-9051`). `writefile()`, `rename()` and
-`delete()` are all builtins (`builtin.txt:788`, `:518`, `:154`).
+**Ship the full `s:GlrWip()`, not a stub**: read the whole buffer with
+`getline(1,'$')`, append `// @cursor <line> <col>`, `writefile()` to
+`<file>.wip.<pid>.tmp`, `rename()` onto `<file>.wip`, `delete()` the temp on
+failure. Autocmds on `TextChanged,TextChangedI` and `CursorMoved,CursorMovedI`
+for the buffer's file, plus `VimLeave,BufUnload` to delete the sidecar. Run it
+before calling the snippet specified.
 
-Cursor rides as a trailing directive: `// @cursor 42 13`.
+**Stale sidecar is recovery, not sync.** If a crash leaves a `.wip` newer than
+the scene file, do not silently adopt it: surface "External WIP recovered"
+with an action to discard/delete. A `.wip` alone is never a scene.
 
-Stale-sidecar policy: the `VimLeave` / `BufUnload` autocmd removes it on clean
-exit; on a crash it survives, so gl-repl **ignores a `.wip` whose change token
-is not newer than the scene file's** (decidable only with the nanosecond
-token — another reason stage 1 must not ship seconds), and never treats a
-`.wip` alone as a scene.
+### Physical→document row mapping
 
-### Cursor-only updates must not reimport
+Vim reports **physical file rows**. Exported C carries headers, wrappers,
+staged functions and consumed directives; even `.glr` has non-document
+metadata. Physical row *N* is not document row *N*, and the controller cannot
+derive `edit_line` by subtracting a constant.
 
-`CursorMoved` republishes unchanged text with new cursor metadata. Without a
-content comparison every cursor movement costs a full parse + reflatten.
-Compare the **content token** from stage 1 against the previous read: if the
-text is identical, update cursor / input state only and skip the import
-entirely. This is the single most important performance property of 2.5.
+**But the controller has already removed row *N*, so the loader sees a
+compacted stream with no marker there** and cannot map a row it never saw.
 
-### File rows require an explicit document-row mapping
+Mechanism: **substitute a transient consumed marker — `// @cursor-hole` — for
+the removed row rather than deleting it outright.** When the importer reaches
+the marker it records the current document insertion index into the load
+result and emits no row. The controller keeps sole ownership of the
+user-facing `@cursor` directive (it must parse it *before* the load, to know
+which row to remove); the marker is purely the loader's channel for reporting
+where the hole landed. One owner each, no duplication.
 
-Vim reports **physical file rows**. The document is not the file: exported C
-carries header directives, wrappers, staged function definitions and consumed
-metadata, and even `.glr` can carry non-document lines. Physical row *N* is
-not document row *N*, and **the controller cannot derive `edit_line` by
-subtracting a constant.**
+`@cursor` itself must **not** go on `ReplImportResult` as a parsed directive,
+and must never survive canonical export — unlike `@plot`, which rides a row's
+text deliberately, cursor position is transport metadata for one snapshot and
+exporting it would write editor state into the user's scene file.
 
-The loader must **return the document insertion row corresponding to the
-physical cursor row** — it is the only component that knows which physical
-lines produced document rows and which were consumed as metadata. Add that to
-the load result alongside the existing metadata.
+Pin the semantics: **row is 1-based** (`line('.')`), **column is a 1-based
+byte offset** (`col('.')`), both converted at the `src/app/` boundary to
+gl-repl's 0-based `cursor_pos` and to the document row the loader returned.
 
-### Where `@cursor` lives — not in the document
+### Undo at keystroke rate
 
-`@cursor` looks like `@plot` and **must not be treated like it**:
+**Do not reuse stage 1's undo policy.** The content token skips cursor-only
+updates, but every content keystroke is still an inbound reload, and pushing
+per reload would fill the 32-slot ring with vim keystrokes.
 
-- `import.c` must not call `editor_state_edit_line_set()` or
-  `editor_cursor_pos_set()` — the same `src/app/` boundary stage 2 respects.
-- Unlike `@plot`, cursor state must **not** survive canonical export. `@plot`
-  rides a row's text deliberately, because a plot target must survive reformat
-  and export. A cursor position is transport metadata for one snapshot;
-  exporting it would write editor state into the user's scene file.
+Push **at most one "entered live-WIP" snapshot** when the `.wip` first
+appears, then update in place. Ctrl+Z exits WIP back to the last committed
+gl-repl document — not backwards through vim's typing, which vim's own undo
+already owns.
 
-So the importer **consumes** `@cursor` into `ReplImportResult` — which already
-carries exactly this kind of parsed-header metadata (`scene_name`,
-`workspace_dir`, `src/repl/export.h:304-307`) — and the controller applies it.
-Never retained on a row, never exported.
+### Gate
 
-Semantics to pin explicitly: **row is 1-based** (vim's `line('.')`), **column
-is a 1-based byte offset** (vim's `col('.')`), both converted at the
-`src/app/` boundary to gl-repl's 0-based `cursor_pos` and to the document row
-the loader returned. An off-by-one here is invisible until it is infuriating.
+**Measure p95 reflatten on a typical catalog scene before shipping.** If it
+exceeds ~8 ms, do not ship 2.5. This is the one stage gated on a number rather
+than on design.
 
-## Stage 3 — real-time IPC
+## Not this plan
 
-**Correction to the first draft: `src/` is not thread-free.**
-`src/app/glr_audio.c` runs a pthread worker with a mutex and condvar
-(`:1050`, `:1120-1123`, `:1184-1187`). So there is in-tree precedent for a
-background thread and its conventions — which makes a transport *more*
-plausible than the first draft implied, not less.
+Real-time IPC (socket transport, length-prefixed frames, a vim plugin) is
+**not planned**. Recorded only so a later reader knows it was considered and
+what was suggested: one-way vim→gl-repl; debounce of one import per frame
+(the poll already is that); a `0600` Unix-domain socket; plugin location
+undecided until 2.5 has users. Nothing in stages 1-2.5 should be shaped around
+it.
 
-What genuinely does not exist: sockets, kqueue, inotify, FSEvents, mkfifo,
-fork/exec. The only external-process code is `popen("/usr/bin/pbpaste")`
-(`src/app/glr_clipboard.c:101`). GLUT's loop is single-threaded, so either the
-transport is non-blocking and polled from the stage-1 frame slot, or it
-follows the audio worker's threading model and hands frames across a lock.
-
-Stage 3 = transport + line protocol + vim plugin + a second consumer of the
-stage-2 row-removal path.
-
-**Do not build a shared-document / character-granular model.** gl-repl's
-document is a parsed `GLCmd[]` with real structural invariants — declarations
-hoist to the end of the declaration prologue, canonical order is validated,
-indentation derives from block scope, `float x;` scope depends on the
-enclosing `CMD_FUNC_DEF`. Per-keystroke synchronization of arbitrary
-intermediate states is the opposite of the strict one-command-per-line
-pipeline the REPL is built on. The tractable version is 2.5's: push whole
-buffer + cursor, handle as a stage-2 load.
-
-Open questions to record rather than answer: debounce policy; whether
-gl-repl→vim ever pushes (canonicalization would move vim's cursor — recommend
-one-way vim→gl-repl); transport choice; whether the vim plugin ships in-tree.
+Note for anyone who revisits: `src/` is **not** thread-free —
+`src/app/glr_audio.c` runs a pthread worker with mutex and condvar (`:1050`,
+`:1120-1123`, `:1184-1187`), so in-tree threading precedent exists. What does
+not exist: sockets, kqueue, inotify, FSEvents, mkfifo, fork/exec.
 
 ## Steps
 
-0. **Decide the two blocking design questions**: the path-binding table
-   (incl. workspace `.c` vs `.glr`), and the Ctrl+Z-cannot-restore-cfg/camera
-   option. Neither is code.
-1. `one-scene-loader.md` **steps 1-3** — explicit format, options struct,
-   and `ATOMIC` over `SceneSnapshot` — plus its step 4 `@cfg` subset
-   resolution where it touches the rollback boundary. Prerequisite.
-2. Retained per-slot source path; active-slot reload sibling to
-   `repl_load_scene_via_loader()`.
-3. `src/app/glr_extedit.c`: binding, nanosecond+inode+size change token,
-   content token, per-frame poll, `ProfSection`, self-write suppression.
-   Conservative full-state capture; lossless ring rollback via
-   `editor_undo_history_capture()`.
-4. Successful-reload notification + the per-feature transient-state policy.
-5. Enablement: config toggle + `--watch` (+ example-golden regen).
-6. Stage 2: controller-side row removal, incomplete-row heuristic, `src/app/`
-   input-row placement.
-7. Stage 2.5: loader returns the document row for a physical row; `@cursor`
-   into `ReplImportResult`; `.wip` overlay binding + stale rule; content-token
-   short-circuit; the vimrc snippet, shipped only after it has been run.
-8. Measure the reflatten cost. Then decide on stage 3.
+0. Write D1-D8 in as decisions. No code.
+1. `one-scene-loader.md` steps **1-3** only.
+2. `source_path` + `repl_reload_active_scene_from_path()`; CLI Ctrl+S writes
+   `source_path`.
+3. Thin `glr_extedit.c`: two-level gate, post-write stamp, per-frame poll,
+   `ProfSection`. Undo per D4; defer per D5. `--watch` only.
+4. `glr_extedit_notify_reloaded()` + the D7 table.
+5. Stage 2: last-row strip, `.glr` only, append placement, D5 heuristic.
+6. Stage 2.5 only after stage 1 has been used and reflatten is measured:
+   `@cursor-hole` mapping, sidecar + recovery, WIP undo policy, full vimrc.
 
 ## Test impact
 
-All of it in failure and edge behavior, where the suite is thinnest:
+All in failure and edge behavior, where the suite is thinnest:
 
-- **Undoable reload.** Local edit, then a valid external write: reload
-  happened *and* Ctrl+Z restores the pre-reload document. Assert what Ctrl+Z
-  does *not* restore (cfg/camera) matches whichever option step 0 picked.
-- **Lossless ring rollback at capacity.** Fill the undo ring, then fail a
-  reload; assert the oldest entry survives. This is the case
-  `EditorUndoRingState` cannot cover.
-- **Failed reload leaves no trace.** Live document byte-identical, undo
-  history unchanged.
+- **Undo per identity.** User scene: reload is undoable. Unedited example:
+  reload pushes nothing and **does not promote** — assert the slot count.
+- **Lossless ring rollback at capacity.** Fill the ring, fail a reload, assert
+  the oldest entry survives. The case `EditorUndoRingState` cannot cover.
+- **Deferral.** Dirty input row → reload pends, then applies on commit and on
+  cancel. Parked WIP row does **not** defer.
+- **Failed reload leaves no trace** — document, history and input row
+  untouched.
 - **Change token.** Same-second double write; safe-write rename changing the
-  inode; size-only change. Assert each is detected.
-- **Content token.** Cursor-only sidecar update performs no import (assert via
-  a parse/reflatten counter, not by timing).
+  inode; size-only change.
+- **Content token.** Cursor-only sidecar update performs no import (assert a
+  parse/reflatten counter, not timing). Assert the token ignores the `@cursor`
+  line — this is the regression that would silently kill the fast path.
 - **Stage 2 shapes.** Clean file; incomplete final row; well-formed-but-wrong
-  final row (must fail); removed row is a block head, cascading (must fail,
-  live doc intact).
-- **Physical→document row mapping.** A file with headers, `@declare` rows and
-  staged functions: assert the returned document row is right, not
-  off-by-header-count.
-- **`@cursor` boundary.** Import a document carrying `@cursor`, export it,
-  assert the directive does not appear.
+  final row (must fail); removed row is a block head, cascading (must fail).
+- **`@cursor-hole` mapping.** A file with headers, `@declare` rows and staged
+  functions: the returned document row is right, not off-by-header-count.
+- **`@cursor` never exported.**
 - **Sidecar atomicity.** Repeated writes while the watcher reads; no
   empty/truncated reload ever observed.
-- **New: document-wide export fixed point** over the scene corpus, to back the
+- **D7 transients**, per row.
+- **New: document-wide export fixed point** over the scene corpus, backing the
   "the file stops churning" claim that `test_repl_core_io.c:851-859` only
   supports for the if-chain.
 
 ## Verification
 
 1. `make check-state-ownership` (includes `check-c99`, `check-include-style`,
-   `check-app-boot-band`, `check-palette`, …) and
-   `make check-trailing-whitespace`.
+   `check-app-boot-band`, …) and `make check-trailing-whitespace`.
 2. `make test`, `make test-stubs`; `make test-web` must still link with the
    watcher TU inert.
 3. Real GCC: `ssh gracemont 'cd ~/code/openGL/samples/gen-ai/gl-repl && make check-c99 && make test-stubs'`.
 4. End-to-end: `./gl-repl --watch scene.glr`, edit in vim, save, confirm the
    scene updates; edit in gl-repl too, save from vim, confirm Ctrl+Z gets the
-   gl-repl version back.
-5. **Hand-verify the partial-vertex guide claim** before relying on it (see
-   the correction in Stage 2): type `glVertex3f(1,` without committing and
-   observe what the guide actually draws. If it draws nothing, stage 2's
-   user-visible payoff shrinks to autocomplete and the plan needs revisiting.
-6. Run the vimrc snippet before shipping it — confirm `<file>.wip` updates per
-   keystroke and per cursor motion, with a correct `@cursor` line and no
-   observable partial write.
-7. Re-read every `file:line` citation before landing.
+   gl-repl version back and that an unedited example was not promoted.
+5. **Hand-verify the partial-vertex guide claim** before relying on it: type
+   `glVertex3f(1,` without committing and observe what the guide draws. If it
+   draws nothing, stage 2's user-visible payoff shrinks to autocomplete and
+   the stage needs revisiting.
+6. Run the full `s:GlrWip()` before shipping it — confirm per-keystroke and
+   per-cursor-motion updates, a correct `@cursor` line, and no observable
+   partial write.
+7. Measure p95 reflatten (2.5 gate).
+8. Re-read every `file:line` citation before landing.
