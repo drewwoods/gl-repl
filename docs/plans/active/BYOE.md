@@ -1076,7 +1076,7 @@ All in failure and edge behavior, where the suite is thinnest.
 
 **Where they landed.** `tests/test_scene_load.c` (132 assertions) covers the
 loader options, the source-file binding and the row map / cursor hole,
-including continuation-row mapping; `tests/test_glr_extedit.c` (471 native /
+including continuation-row mapping; `tests/test_glr_extedit.c` (484 native /
 5 wasm) covers the watcher and the sidecar, including dismissed-payload
 suppression, failed-WIP undo restoration, indented parked guides, and
 cursor-only movement onto a continuation row; `test_export_glr_fixed_point`
@@ -1188,7 +1188,7 @@ Results for stages 1-2.5, with Stage 2.25 skipped, in the numbering below:
 | # | Result |
 |---|---|
 | 1 | `make check-state-ownership` and `make check-trailing-whitespace` green. `--watch` needed rows in `scripts/completions/` too (`check-completions`). |
-| 2 | `make test-stubs` green (28,929 assertions), and every `HEADLESS_DEMO_TARGETS` demo builds - `repl_demo` / `repl_live_demo` are the load-bearing no-controller proofs and a new `src/repl/*.c` needs a `REPL_DEMO_DEP_SRCS` row they alone catch. `make test-web` is **fully green** (28,049): it links the watcher TU, `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - asserting the *inert* form rather than joining `WEB_TEST_EXCLUDE` - and `bench_extedit` builds and prints its skip line under node. The `test_glr_init_trace` failure this row used to carry as pre-existing is gone. |
+| 2 | `make test-stubs` green (28,942 assertions), and every `HEADLESS_DEMO_TARGETS` demo builds - `repl_demo` / `repl_live_demo` are the load-bearing no-controller proofs and a new `src/repl/*.c` needs a `REPL_DEMO_DEP_SRCS` row they alone catch. `make test-web` is **fully green** (28,049): it links the watcher TU, `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - asserting the *inert* form rather than joining `WEB_TEST_EXCLUDE` - and `bench_extedit` builds and prints its skip line under node. The `test_glr_init_trace` failure this row used to carry as pre-existing is gone. |
 | 3 | gracemont (gcc 13.3, Ubuntu 24.04): `make check-c99`, `make check-state-ownership` and `make test-stubs` green, including the `st_mtim` arm of the change token that macOS never compiles. |
 | 4 | End-to-end, stage 2.5: real vim 9.2 driving the shipped plugin against the real binary - an unsaved buffer replaced the scene (green triangle from bytes never written to disk), the caret followed a cursor-only publication to `Ln 5:8`, and a round trip back onto the parked row restored `glColor3f(1, 1,` at `Ln 9:12`. Stage 1: `./gl-repl --watch scene.glr`, appended a `/* C-style note */`, four complete rows, a trailing `glVertex3f(3,` and a `// still typing` comment under it, all from outside; the session reloaded 7 -> 13 commands, kept both comments as document rows, and parked the incomplete row. Also `--watch new.glr` on a file holding nothing but `glVertex3f(1,`: the startup import fails (bootstrap has no parking), the binding survives, and the next save loads. `--watch` with no positional file exits 1 with a usage error. |
 | 5 | Resolved by reading rather than by hand - see the scope note above. |

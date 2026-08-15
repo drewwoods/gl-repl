@@ -1572,7 +1572,15 @@ static void wip_poll(void) {
         if (g_wip_active || g_wip_hold || g_wip_observed.valid) {
             wip_handle_deleted();
             g_wip_observed.valid = 0;
-            g_wip_offering       = 0;
+            g_wip_recover_offer  = 0;
+            /* A recovery question cannot outlive the sidecar it names. This
+             * also distinguishes a later file appearing on the already-bound
+             * path: that is an ordinary post-bind publication, not the
+             * pre-bind leftover this offer described. */
+            if (g_wip_offering && glr_modal_active() &&
+                glr_modal_kind() == GLR_MODAL_CONFIRM_WIP_RECOVER)
+                glr_modal_cancel();
+            g_wip_offering = 0;
         }
         return;
     }

@@ -2756,7 +2756,7 @@ static void test_repeated_publications_all_land(void) {
     GlrExtEditStats stats;
     int rows_expected;
 
-    printf("--- rapid publication never yields a torn read ---\n");
+    printf("--- repeated complete publications all land ---\n");
 
     begin_wip_session(k_scene_a);
     publish_wip_atomically(k_scene_longer, 4, 1);
@@ -3344,6 +3344,80 @@ static void test_a_live_publication_retracts_the_recovery_prompt(void) {
     (void)unlink(WIP_PATH);
 }
 
+/* A recovery question names one concrete leftover. If that sidecar vanishes,
+ * the question vanishes with it; accepting afterwards would ask the watcher
+ * to follow a file that no longer exists. A later sidecar is a post-bind
+ * publication and therefore ordinary live follow, not another recovery. */
+static void test_sidecar_deletion_retracts_the_recovery_prompt(void) {
+    printf("--- deleting a recovered sidecar retracts its question ---\n");
+
+    glr_extedit_set_enabled(0);
+    glr_modal_cancel();
+    (void)unlink(WIP_PATH);
+    write_lines(WATCH_PATH, k_scene_a);
+    publish_wip(k_scene_b, 4, 1);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+    glr_extedit_set_enabled(1);
+    glr_extedit_poll();
+    ASSERT_INT("the leftover is offered", (int)glr_modal_kind(),
+               (int)GLR_MODAL_CONFIRM_WIP_RECOVER);
+
+    (void)unlink(WIP_PATH);
+    glr_extedit_poll();
+    ASSERT_TRUE("the missing sidecar retracts its question",
+                !glr_modal_active());
+    ASSERT_TRUE("the original scene remains live",
+                document_mentions("0, 0, 0"));
+
+    publish_wip(k_scene_longer, 4, 1);
+    glr_extedit_poll();
+    ASSERT_INT("a later publication follows without another prompt",
+               glr_extedit_stats().wip_updates, 1);
+    ASSERT_TRUE("the later payload is live", document_mentions("3, 3, 3"));
+    ASSERT_TRUE("and no recovery question returned", !glr_modal_active());
+    (void)unlink(WIP_PATH);
+}
+
+/* The same disappearance can happen while another modal prevents the recovery
+ * question from opening. The deferred offer belongs to the vanished file and
+ * must be cleared, while the unrelated modal remains untouched. */
+static void test_sidecar_deletion_clears_an_offer_waiting_behind_a_modal(void) {
+    printf("--- deleting a sidecar clears its deferred recovery offer ---\n");
+
+    glr_extedit_set_enabled(0);
+    glr_modal_cancel();
+    (void)unlink(WIP_PATH);
+    write_lines(WATCH_PATH, k_scene_a);
+    publish_wip(k_scene_b, 4, 1);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+    ASSERT_INT("another modal opens",
+               glr_modal_begin(GLR_MODAL_SCENE_SAVE_AS, "busy", 0,
+                               test_other_modal_commit), 1);
+    glr_extedit_set_enabled(1);
+    glr_extedit_poll();
+    ASSERT_INT("the other modal still owns the keyboard",
+               (int)glr_modal_kind(), (int)GLR_MODAL_SCENE_SAVE_AS);
+
+    (void)unlink(WIP_PATH);
+    glr_extedit_poll();
+    ASSERT_INT("deletion leaves the unrelated modal alone",
+               (int)glr_modal_kind(), (int)GLR_MODAL_SCENE_SAVE_AS);
+    glr_modal_cancel();
+    glr_extedit_poll();
+    ASSERT_TRUE("the vanished recovery offer does not appear",
+                !glr_modal_active());
+
+    publish_wip(k_scene_longer, 4, 1);
+    glr_extedit_poll();
+    ASSERT_INT("a later publication is ordinary live follow",
+               glr_extedit_stats().wip_updates, 1);
+    ASSERT_TRUE("the later payload is live", document_mentions("3, 3, 3"));
+    ASSERT_TRUE("without a recovery prompt", !glr_modal_active());
+    (void)unlink(WIP_PATH);
+}
+
 static void test_an_unparseable_buffer_leaves_the_scene_alone(void) {
     GlrExtEditStats before, after;
 
@@ -3445,6 +3519,8 @@ int main(void) {
     test_a_close_after_the_session_ended_still_drops_the_mark();
     test_the_torn_write_backstop_survives_a_rebind();
     test_a_live_publication_retracts_the_recovery_prompt();
+    test_sidecar_deletion_retracts_the_recovery_prompt();
+    test_sidecar_deletion_clears_an_offer_waiting_behind_a_modal();
     test_an_unparseable_buffer_leaves_the_scene_alone();
     test_exported_c_sidecar_cursor_follows_snippet_row();
     glr_extedit_set_enabled(0);
