@@ -63,6 +63,22 @@ typedef struct ReplSceneLoadOpts {
      * let the next non-watch load inherit a stale accumulator. */
     int                     apply_cfg;
     ReplCameraApplyMode     camera_apply;
+    /* 1 = a document with no commands is a legitimate result, not a failure.
+     *
+     * "No commands loaded" is otherwise reported as an error, and rightly so:
+     * for a file the user asked to open it means an empty or non-REPL file,
+     * and silently landing on a blank document would strand any `@cfg` side
+     * effects on the wrong scene. But the external-editor watcher removes a
+     * trailing half-typed row *before* the load (see glr_extedit.h), and a
+     * brand new scene being typed in vim can consist of nothing else - so
+     * "zero commands" there is the expected outcome of a deliberate removal,
+     * not a broken file. Only that caller sets it, and only when it actually
+     * removed a row.
+     *
+     * This does NOT weaken ATOMIC: a rejected line still fails the whole
+     * import whatever this says. It suppresses one verdict - the count - and
+     * nothing else. */
+    int                     allow_empty;
 } ReplSceneLoadOpts;
 
 /* Suffix sniff, and the only one left in the tree: `.glr` is the authored

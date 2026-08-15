@@ -20,6 +20,7 @@
 #include "app/glr_pointer_script.h"
 #include "config.h"          /* MAX_LINE_LEN / MAX_INPUT_LEN */
 #include "editor/input.h"
+#include "editor/search.h"
 #include "editor/state.h"
 #include "editor/undo.h"
 #include "repl/line_scan.h"   /* the importer's own statement-boundary scan */
@@ -71,6 +72,54 @@ static int                   g_was_in_lesson;
 static char                  g_parked_row[MAX_INPUT_LEN];
 static int                   g_parked_valid;
 static GlrExtEditStats       g_stats;
+
+/* What the live document last came from, remembered *per path* rather than
+ * only for the current binding.
+ *
+ * Binding to a file does not reload it - the document usually already is that
+ * file, and reloading would clobber unsaved slot edits for nothing. But that
+ * reasoning fails on the way back: F12 away, let vim save the file, F12 back,
+ * and stamping the new bytes as "applied" buries the external edit forever.
+ * With one entry per recently-bound path, rebind can tell the two apart -
+ * unchanged since we last applied it, or moved while we were elsewhere.
+ *
+ * Four entries because the case this exists for is a switch away and back. A
+ * path that falls out is treated as never seen, which is the conservative
+ * answer: stamp and do not reload. */
+#define GLR_EXTEDIT_SEEN_MAX 4
+
+typedef struct {
+    char               path[GLR_EXTEDIT_PATH_MAX];
+    unsigned long long content;
+    int                valid;
+} GlrExtEditSeen;
+
+static GlrExtEditSeen g_seen[GLR_EXTEDIT_SEEN_MAX];
+static int            g_seen_next;
+
+static void seen_remember(const char *path, unsigned long long content) {
+    for (int i = 0; i < GLR_EXTEDIT_SEEN_MAX; i++) {
+        if (g_seen[i].valid && strcmp(g_seen[i].path, path) == 0) {
+            g_seen[i].content = content;
+            return;
+        }
+    }
+    snprintf(g_seen[g_seen_next].path, sizeof(g_seen[g_seen_next].path),
+             "%s", path);
+    g_seen[g_seen_next].content = content;
+    g_seen[g_seen_next].valid   = 1;
+    g_seen_next = (g_seen_next + 1) % GLR_EXTEDIT_SEEN_MAX;
+}
+
+static int seen_lookup(const char *path, unsigned long long *out) {
+    for (int i = 0; i < GLR_EXTEDIT_SEEN_MAX; i++) {
+        if (g_seen[i].valid && strcmp(g_seen[i].path, path) == 0) {
+            *out = g_seen[i].content;
+            return 1;
+        }
+    }
+    return 0;
+}
 
 /* ----- tokens ------------------------------------------------------------ */
 
@@ -170,6 +219,8 @@ void glr_extedit_set_enabled(int enabled) {
     g_enabled = enabled ? 1 : 0;
     forget_binding_state();
     g_was_in_lesson = 0;
+    memset(&g_seen, 0, sizeof(g_seen));
+    g_seen_next = 0;
     memset(&g_stats, 0, sizeof(g_stats));
 #if !defined(__EMSCRIPTEN__)
     /* Bind now rather than on the first poll. Arming is a deliberate act with
@@ -187,7 +238,15 @@ void glr_extedit_bind_path(const char *path) {
 #if defined(__EMSCRIPTEN__)
     (void)path;
 #else
+    struct stat st;
+
     if (!g_enabled || !path || !path[0])
+        return;
+    /* A positional argument can also be a managed-workspace directory, and a
+     * directory is not a scene file: it has no content to hash and binding it
+     * would only delay the poll's own resolution to the scene inside. Leave it
+     * unbound and let the first poll resolve it properly. */
+    if (stat(path, &st) != 0 || !S_ISREG(st.st_mode))
         return;
     rebind(path);
 #endif
@@ -224,8 +283,24 @@ static void rebind(const char *path) {
         g_observed.valid = 0;
         return;
     }
+    {
+        unsigned long long previously_applied;
+
+        if (seen_lookup(g_bound, &previously_applied) &&
+            previously_applied != content) {
+            /* We have had this file live before, and it is not the bytes we
+             * left it at - somebody saved it while we were on another scene.
+             * Park it and let the ordinary gate apply it, so coming back to a
+             * watched scene converges instead of silently ignoring the edit. */
+            g_pending         = 1;
+            g_pending_content = content;
+            g_have_defer_fp   = 0;
+            return;
+        }
+    }
     g_applied_content = content;
     g_applied_valid   = 1;
+    seen_remember(g_bound, content);
 }
 
 static void report_missing_once(const char *path) {
@@ -273,6 +348,11 @@ static void glr_extedit_notify_reloaded(void) {
     editor_state_selection_clear();
     editor_input_anchor_clear();
     editor_state_autocomplete_clear();
+    /* D7 preserves the *query* and rescans. Highlights recompute from the live
+     * query on their own, but the match count and the F3 ordinal do not - they
+     * are cached against a document that no longer exists. */
+    if (editor_state_search()->active)
+        editor_search_rescan();
     glr_camera_settle_target();
     /* Force the `// @plot` re-resolve. Keyed through this notification rather
      * than editor_undo_generation(), which a watched reload does not bump -
@@ -494,6 +574,12 @@ static void apply_reload(const char *path) {
                 fl.ptrs[i] = fl.ptrs[i + 1];
             fl.count--;
             fl.ptrs[fl.count] = NULL;
+            /* What is left may be nothing at all - a brand new scene whose
+             * only content is the command being typed. "No commands loaded" is
+             * the right verdict for a file the user asked to open and the
+             * wrong one here, because the emptiness is a removal this code
+             * just performed. A rejected line still fails the import. */
+            opts.allow_empty = 1;
         }
     }
 
@@ -520,6 +606,7 @@ static void apply_reload(const char *path) {
                                                  : g_pending_content;
         g_applied_valid    = 1;
         g_suppressed_valid = 0;
+        seen_remember(path, g_applied_content);
         g_stats.reloads++;
         /* The input row was clean - deferral guarantees it - but it still
          * holds the OLD document's row text. */
@@ -725,6 +812,7 @@ void glr_extedit_note_wrote(const char *path) {
     g_observed        = change_token_from_stat(&st);
     g_applied_content = content;
     g_applied_valid   = 1;
+    seen_remember(g_bound, content);
     /* A save resolves any argument about who wins: the file and the document
      * now agree, so nothing is pending and nothing needs suppressing. */
     g_pending          = 0;

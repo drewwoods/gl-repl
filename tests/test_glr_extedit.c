@@ -42,6 +42,7 @@
 #include "editor/undo.h"
 #include "repl/bootstrap.h"
 #include "repl/example_loader.h"
+#include "repl/examples.h"
 #include "repl/scenes.h"
 #include "repl/state_owners.h"
 #include "subsystems/replay/replay.h"
@@ -55,6 +56,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 #define WATCH_PATH "/tmp/gl_repl_extedit_scene.glr"
 #define SWAP_PATH  "/tmp/gl_repl_extedit_scene.glr.swap"
+#define OTHER_PATH "/tmp/gl_repl_extedit_other.glr"
 
 static const char *const k_scene_a[] = {
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
@@ -469,13 +471,15 @@ static void test_user_scene_reload_is_undoable(void) {
                 document_mentions("0, 0, 0"));
 }
 
-/* editor_undo_push_snapshot() is the transient auto-promotion hook, so pushing
- * unconditionally would turn an unedited catalog scene into a user slot on the
- * first vim save - the exact thing D4's identity split exists to prevent. */
-static void test_example_reload_does_not_promote(void) {
+/* A compiled-in example has no file, so switching to one unbinds the watcher
+ * entirely - saves to the previously watched path stop mattering. This is the
+ * *unbound* half; the no-promotion half needs a scene that is file-backed but
+ * still not a user slot, which is test_catalog_scene_reload_does_not_promote
+ * below. */
+static void test_builtin_example_unbinds_the_watcher(void) {
     int slots_before;
 
-    printf("--- an unedited example is not promoted by a reload ---\n");
+    printf("--- a built-in example unbinds the watcher ---\n");
 
     begin_watched_session(k_scene_a);
     /* Switch to a built-in example: no slot, no file. */
@@ -1079,6 +1083,200 @@ static void test_watch_binds_even_when_armed_during_a_lesson(void) {
                 document_mentions("9, 9, 9"));
 }
 
+/* Stage 2's actual first use: a brand new `.glr`, opened in vim, one command
+ * typed, saved before it is finished. Removing the incomplete row leaves the
+ * loader nothing at all - and "no commands loaded" is a failure under ATOMIC,
+ * so the save was refused and the row was never parked. The whole point of the
+ * stage is that this file is a legitimate work in progress. */
+static void test_file_that_is_only_an_incomplete_row(void) {
+    static const char *const only_tail[] = {
+        "glVertex3f(1,",
+        NULL
+    };
+    static const char *const comment_and_tail[] = {
+        "// starting a new scene",
+        "glVertex3f(1,",
+        NULL
+    };
+
+    printf("--- a file that is nothing but a half-typed row still parks ---\n");
+
+    begin_watched_session(k_scene_a);
+    write_lines(WATCH_PATH, only_tail);
+    glr_extedit_poll();
+
+    ASSERT_INT("the save was not refused", glr_extedit_stats().failures, 0);
+    ASSERT_INT("the row was parked", glr_extedit_stats().parked_rows, 1);
+    ASSERT_TRUE("it is in the input row",
+                strcmp(editor_input_text(), "glVertex3f(1,") == 0);
+    ASSERT_INT("and the document is empty, like the file",
+               repl_state_document_count(), 0);
+
+    /* One comment above it is the same situation with one row to load. */
+    begin_watched_session(k_scene_a);
+    write_lines(WATCH_PATH, comment_and_tail);
+    glr_extedit_poll();
+    ASSERT_INT("with a comment above, also not refused",
+               glr_extedit_stats().failures, 0);
+    ASSERT_INT("also parked", glr_extedit_stats().parked_rows, 1);
+    ASSERT_TRUE("the comment is the document",
+                document_mentions("starting a new scene"));
+
+    /* Finishing the command turns it into an ordinary complete file. */
+    {
+        static const char *const finished[] = {
+            "// starting a new scene",
+            "glVertex3f(1, 2, 3);",
+            NULL
+        };
+        write_lines(WATCH_PATH, finished);
+        glr_extedit_poll();
+        ASSERT_INT("finishing it loads normally",
+                   glr_extedit_stats().parked_rows, 1);  /* still just the one */
+        ASSERT_INT("the input row is released", editor_input_len(), 0);
+        ASSERT_TRUE("and the command is a document row",
+                    document_mentions("glVertex3f(1, 2, 3)"));
+    }
+}
+
+/* Binding does not reload - the document usually already is the file, and
+ * reloading would clobber unsaved slot edits for nothing. That reasoning fails
+ * on the way back: switch away, let the editor save, switch back, and stamping
+ * the new bytes as "applied" buries the external edit permanently. */
+static void test_returning_to_a_scene_picks_up_what_changed(void) {
+    int slot_a;
+
+    printf("--- coming back to a watched scene converges ---\n");
+
+    begin_watched_session(k_scene_a);
+    slot_a = repl_active_user_scene();
+    ASSERT_TRUE("the CLI file is a user scene", slot_a >= 0);
+
+    /* Switch away to a second scene, so the binding leaves WATCH_PATH. */
+    write_lines(OTHER_PATH, k_scene_longer);
+    {
+        ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+        ASSERT_TRUE("a second scene opens",
+                    repl_load_scene_as_new_slot(OTHER_PATH, &reason) >= 0);
+    }
+    glr_extedit_poll();
+    ASSERT_TRUE("the binding followed the switch",
+                glr_extedit_bound_path() != NULL &&
+                strstr(glr_extedit_bound_path(), "other") != NULL);
+
+    /* The editor saves the file we are no longer looking at. */
+    write_lines(WATCH_PATH, k_scene_b);
+    glr_extedit_poll();
+
+    /* Switch back. */
+    ASSERT_TRUE("back to the first scene", repl_load_user_scene_idx(slot_a));
+    glr_extedit_poll();   /* rebinds, and notices the file moved */
+    glr_extedit_poll();   /* the gate applies it */
+
+    ASSERT_TRUE("the edit made while we were away is picked up",
+                document_mentions("9, 9, 9"));
+}
+
+/* And the other half: coming back to a file nobody touched must NOT reload,
+ * or a scene switch would throw away edits made in gl-repl and never saved. */
+static void test_returning_to_an_untouched_scene_keeps_local_edits(void) {
+    int slot_a;
+    int rows;
+
+    printf("--- coming back to an untouched file keeps unsaved work ---\n");
+
+    begin_watched_session(k_scene_a);
+    slot_a = repl_active_user_scene();
+
+    /* An edit that only exists in gl-repl. */
+    editor_state_edit_line_set(repl_state_document_count());
+    ASSERT_TRUE("a local line commits",
+                editor_feed_line("glVertex3f(7, 7, 7);") != 0);
+    editor_input_clear();
+    rows = repl_state_document_count();
+
+    write_lines(OTHER_PATH, k_scene_longer);
+    {
+        ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+        (void)repl_load_scene_as_new_slot(OTHER_PATH, &reason);
+    }
+    glr_extedit_poll();
+    ASSERT_TRUE("back to the first scene", repl_load_user_scene_idx(slot_a));
+    glr_extedit_poll();
+    glr_extedit_poll();
+
+    ASSERT_INT("the unsaved local line is still there",
+               repl_state_document_count(), rows);
+    ASSERT_TRUE("really still there", document_mentions("7, 7, 7"));
+}
+
+/* D4's no-push arm, driven for real. The earlier example test only proves an
+ * *unbound* watcher does nothing - it never reaches apply_reload with no
+ * active user scene. A file-backed `--examples-dir` catalog entry does: the
+ * binding comes from glr_origin_path while the slot index is still -1. */
+static void test_catalog_scene_reload_does_not_promote(void) {
+    char root[512], scenes[512], catalog[512], scene_path[512], err[512];
+    int slots_before;
+
+    printf("--- reloading a catalog scene pushes no undo and no slot ---\n");
+
+    glr_extedit_set_enabled(0);
+    snprintf(root, sizeof(root), "/tmp/gl_repl_extedit_catalog");
+    snprintf(scenes, sizeof(scenes), "%s/scenes", root);
+    snprintf(catalog, sizeof(catalog), "%s/catalog.ini", root);
+    snprintf(scene_path, sizeof(scene_path), "%s/watched.glr", scenes);
+    (void)mkdir(root, 0700);
+    (void)mkdir(scenes, 0700);
+    write_lines(scene_path, k_scene_a);
+    {
+        FILE *f = fopen(catalog, "w");
+        ASSERT_TRUE("catalog written", f != NULL);
+        if (f) {
+            fprintf(f, "[watched]\n"
+                       "file = scenes/watched.glr\n"
+                       "name = Watched catalog scene\n"
+                       "tags = 3D\n"
+                       "group = Runtime\n");
+            fclose(f);
+        }
+    }
+
+    glr_ctrl_reset_all();
+    err[0] = '\0';
+    ASSERT_TRUE("the runtime catalog loads",
+                repl_examples_load_dir(root, err, sizeof(err)));
+    (void)repl_load_example(0);
+    slots_before = repl_user_scene_count();
+    ASSERT_INT("a catalog scene is not a user scene",
+               repl_active_user_scene(), -1);
+
+    glr_extedit_set_enabled(1);
+    glr_extedit_poll();
+    ASSERT_TRUE("the watcher bound to the catalog file",
+                glr_extedit_bound_path() != NULL);
+
+    write_lines(scene_path, k_scene_b);
+    glr_extedit_poll();
+
+    ASSERT_INT("the reload happened", glr_extedit_stats().reloads, 1);
+    ASSERT_TRUE("the new scene is live", document_mentions("9, 9, 9"));
+    /* The two halves of D4's transient arm: no promotion, and no undo entry -
+     * editor_undo_push_snapshot() is the promotion hook, so one implies the
+     * other and both have to be asserted. */
+    ASSERT_INT("no scene slot was created",
+               repl_user_scene_count(), slots_before);
+    ASSERT_INT("still not a user scene", repl_active_user_scene(), -1);
+    ASSERT_TRUE("and nothing was pushed onto the undo ring",
+                !editor_undo_can_undo());
+
+    glr_extedit_set_enabled(0);
+    repl_examples_clear_runtime_catalog();
+    (void)unlink(scene_path);
+    (void)unlink(catalog);
+    (void)rmdir(scenes);
+    (void)rmdir(root);
+}
+
 /* --- disabled ------------------------------------------------------------- */
 
 static void test_disabled_watcher_does_nothing(void) {
@@ -1110,7 +1308,7 @@ int main(void) {
     test_save_supersedes_a_pending_version();
     test_loaded_row_is_not_dirty();
     test_user_scene_reload_is_undoable();
-    test_example_reload_does_not_promote();
+    test_builtin_example_unbinds_the_watcher();
     test_failed_reload_restores_a_full_undo_ring();
     test_watched_reload_preserves_cfg_and_camera();
     test_tutorial_defers_then_dismisses();
@@ -1128,10 +1326,15 @@ int main(void) {
     test_overlong_line_is_refused_not_split();
     test_block_comment_matches_the_plain_loader();
     test_watch_binds_even_when_armed_during_a_lesson();
+    test_file_that_is_only_an_incomplete_row();
+    test_returning_to_a_scene_picks_up_what_changed();
+    test_returning_to_an_untouched_scene_keeps_local_edits();
+    test_catalog_scene_reload_does_not_promote();
     test_disabled_watcher_does_nothing();
     glr_extedit_set_enabled(0);
     (void)unlink(WATCH_PATH);
     (void)unlink(SWAP_PATH);
+    (void)unlink(OTHER_PATH);
     printf("\n=== Results: ");
     return test_harness_report(&g_harness, "glr_extedit");
 }

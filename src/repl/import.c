@@ -2738,6 +2738,7 @@ void repl_scene_load_opts_init(ReplSceneLoadOpts *opts,
     opts->policy       = REPL_SCENE_LOAD_POLICY_TOLERANT;
     opts->apply_cfg    = 1;
     opts->camera_apply = REPL_CAMERA_APPLY_IMPORT;
+    opts->allow_empty  = 0;
 }
 
 static void import_begin_load(ImportState *state,
@@ -3059,7 +3060,7 @@ static int import_finish_load(ImportState *state,
      * that survived. (TOLERANT keeps its historical ordering below: it applies
      * the bag first and reports afterwards.) */
     if (state->opts.policy == REPL_SCENE_LOAD_POLICY_ATOMIC &&
-        state->loaded <= 0) {
+        state->loaded <= 0 && !state->opts.allow_empty) {
         snprintf(msg, sizeof(msg),
                  "Import failed: no commands loaded from %s", label);
         fprintf(stderr, "%s\n", msg);
@@ -3102,7 +3103,7 @@ static int import_finish_load(ImportState *state,
         import_camera_report_missing(&camera_fin, label);
     }
 
-    if (state->loaded > 0) {
+    if (state->loaded > 0 || state->opts.allow_empty) {
         repl_source_scope_depth_cache_invalidate();
         repl_reformat_program();
         /* Publish the post-import cursor to the host. Without this,
@@ -3120,7 +3121,10 @@ static int import_finish_load(ImportState *state,
             snprintf(msg, sizeof(msg),
                      "Loaded %d commands from %s", state->loaded, label);
         repl_set_status(msg);
-        fprintf(stderr, "%s\n", msg);
+        /* An allow_empty caller that loaded nothing has nothing to announce on
+         * stderr - it is mid-keystroke in someone's editor, not a load event. */
+        if (state->loaded > 0)
+            fprintf(stderr, "%s\n", msg);
     } else {
         /* File opened and read cleanly but produced no commands - an empty
          * or non-REPL file, or one whose every line failed to parse. Without
@@ -3137,7 +3141,7 @@ static int import_finish_load(ImportState *state,
         repl_set_status_error(msg);
         fprintf(stderr, "%s\n", msg);
     }
-    ok = state->loaded > 0;
+    ok = state->loaded > 0 || state->opts.allow_empty;
     import_staged_functions_clear(state);
 
 done:
