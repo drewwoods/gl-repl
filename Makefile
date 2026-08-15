@@ -2354,7 +2354,7 @@ check-formatted: ## Verify that example scenes under examples/scenes are formatt
 		exit 1; \
 	)
 
-check-c99: $(GENERATED_EXAMPLES_INC) $(GENERATED_COMMAND_DESCRIPTIONS_INC) $(GENERATED_TOURS_INC) ## C99 build guard: gl-repl + bench + demo sources must syntax-check under gcc -std=c99 (non-pedantic; tests excluded; in the standard gate).
+check-c99: $(GENERATED_EXAMPLES_INC) $(GENERATED_COMMAND_DESCRIPTIONS_INC) $(GENERATED_TOURS_INC) $(GENERATED_BENCH_DATA_INC) ## C99 build guard: gl-repl + bench + demo sources must syntax-check under gcc -std=c99 (non-pedantic; tests excluded; in the standard gate).
 	@C99_SRCS='$(SRCS)' bash scripts/check/check-c99.sh
 
 check-tier-c-function-size: ## Size ratchet: parse_command and flatten_range must not grow past their baselines.

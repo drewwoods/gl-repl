@@ -59,17 +59,21 @@ the plan did not:
 
   Both load-bearing halves of that row survive without deleting anything:
   never auto-apply (the hold is set before the prompt opens, so declining is
-  the default) and ignore it until its change token moves again. The cost is
-  that a `.wip` nobody wants lingers until its editor next opens and closes
-  that file - the plugin's `BufUnload`/`VimLeave` hooks are what clear it in
-  the normal case, and they only failed to run here because the editor died.
+  the default) and ignore it until it moves. The cost is that a `.wip` nobody
+  wants lingers until its editor next opens and closes that file - the
+  plugin's `BufUnload`/`VimLeave` hooks are what clear it in the normal case,
+  and they only failed to run here because the editor died.
 
   What the plan's version *would* have bought is not re-asking, and that has
-  to be paid for separately: a decline is now remembered per path, keyed by
-  the sidecar's bytes, so switching away and back does not re-ask. Keying on
-  content rather than on the path alone is what keeps "ignore it until its
-  change token moves again" true across bindings - the editor waking up and
-  publishing changes the bytes, and that is a new question.
+  to be paid for separately: a decline is remembered per path, keyed by the
+  **payload** hash - the sidecar without its `@cursor` line. Keying on content
+  rather than on the path alone is what lets a genuinely new payload re-ask;
+  keying on the payload rather than the raw bytes is what stops the plugin
+  rewriting `@cursor` on every cursor motion from counting as one, which would
+  make the memory evaporate on the first twitch of the caret. The declined
+  payload is seeded into the live suppression too, so the continuously-bound
+  path agrees rather than applying the declined content on the next token
+  bump. See the amendment under "Recovery is a bind-time question only".
 
 One gap the plan carried into the implementation, found by auditing stage 2.5
 against stage 1 rather than against the plan: **returning to a scene whose
@@ -844,10 +848,29 @@ standing condition it would mean live WIP never runs at all. Split it:
 | Moment | Behavior |
 |---|---|
 | Watch bind / startup | A `.wip` already present → "External WIP recovered", accept or discard. **Never auto-apply.** |
-| Discard at that prompt | Delete the `.wip` and ignore it until its change token moves again (i.e. until vim starts publishing) |
+| Discard at that prompt | Ignore it until its **payload** changes (i.e. until vim publishes something new) |
 | After bind | Any change-token movement on the sidecar is ordinary live follow |
 
 A `.wip` alone is never a scene.
+
+**Amended twice by the implementation, both recorded here so the accepted
+contract and the code cannot be read as disagreeing.**
+
+*Discard does not delete the file* - the reasoning is under "Corrections" in
+the Status section; the load-bearing halves (never auto-apply, then ignore
+until it moves) hold without deleting anything.
+
+*The resume condition is a payload change, not change-token movement.* Written
+as the token, the row is wrong in both directions once the sidecar is real.
+Too sensitive: the plugin rewrites `// @cursor` on every cursor motion, so the
+token moves constantly while a leftover's editor sits open, and a decline
+would evaporate on the first twitch of the caret - re-asking on the next scene
+switch, which is exactly what the memory exists to prevent. Too blunt: a touch
+that rewrites no bytes moves the token too, and that would apply the very
+payload the user just turned down. The payload hash - the buffer without its
+`@cursor` line, the key the rest of this path already uses - is the thing that
+means "vim published something new", which is what the parenthetical was
+reaching for.
 
 ### Physical→document row mapping
 
@@ -1053,7 +1076,7 @@ All in failure and edge behavior, where the suite is thinnest.
 
 **Where they landed.** `tests/test_scene_load.c` (132 assertions) covers the
 loader options, the source-file binding and the row map / cursor hole,
-including continuation-row mapping; `tests/test_glr_extedit.c` (456 native /
+including continuation-row mapping; `tests/test_glr_extedit.c` (471 native /
 5 wasm) covers the watcher and the sidecar, including dismissed-payload
 suppression, failed-WIP undo restoration, indented parked guides, and
 cursor-only movement onto a continuation row; `test_export_glr_fixed_point`
@@ -1165,7 +1188,7 @@ Results for stages 1-2.5, with Stage 2.25 skipped, in the numbering below:
 | # | Result |
 |---|---|
 | 1 | `make check-state-ownership` and `make check-trailing-whitespace` green. `--watch` needed rows in `scripts/completions/` too (`check-completions`). |
-| 2 | `make test` / `make test-stubs` green (28,883 assertions), and every `HEADLESS_DEMO_TARGETS` demo builds - `repl_demo` / `repl_live_demo` are the load-bearing no-controller proofs and a new `src/repl/*.c` needs a `REPL_DEMO_DEP_SRCS` row they alone catch. `make test-web` links the watcher TU and `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - it asserts the *inert* form rather than joining `WEB_TEST_EXCLUDE`. The lane's one remaining failure, `test_glr_init_trace`, fails identically at the pre-BYOE commit and is unrelated. |
+| 2 | `make test-stubs` green (28,929 assertions), and every `HEADLESS_DEMO_TARGETS` demo builds - `repl_demo` / `repl_live_demo` are the load-bearing no-controller proofs and a new `src/repl/*.c` needs a `REPL_DEMO_DEP_SRCS` row they alone catch. `make test-web` is **fully green** (28,049): it links the watcher TU, `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - asserting the *inert* form rather than joining `WEB_TEST_EXCLUDE` - and `bench_extedit` builds and prints its skip line under node. The `test_glr_init_trace` failure this row used to carry as pre-existing is gone. |
 | 3 | gracemont (gcc 13.3, Ubuntu 24.04): `make check-c99`, `make check-state-ownership` and `make test-stubs` green, including the `st_mtim` arm of the change token that macOS never compiles. |
 | 4 | End-to-end, stage 2.5: real vim 9.2 driving the shipped plugin against the real binary - an unsaved buffer replaced the scene (green triangle from bytes never written to disk), the caret followed a cursor-only publication to `Ln 5:8`, and a round trip back onto the parked row restored `glColor3f(1, 1,` at `Ln 9:12`. Stage 1: `./gl-repl --watch scene.glr`, appended a `/* C-style note */`, four complete rows, a trailing `glVertex3f(3,` and a `// still typing` comment under it, all from outside; the session reloaded 7 -> 13 commands, kept both comments as document rows, and parked the incomplete row. Also `--watch new.glr` on a file holding nothing but `glVertex3f(1,`: the startup import fails (bootstrap has no parking), the binding survives, and the next save loads. `--watch` with no positional file exits 1 with a usage error. |
 | 5 | Resolved by reading rather than by hand - see the scope note above. |

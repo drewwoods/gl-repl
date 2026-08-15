@@ -30,9 +30,12 @@ plugin='packaging/editor/glr-wip.vim'
 
 fail=0
 
-# 1. Something must actually rename into place.
-if ! grep -q 'rename(' "$plugin"; then
-    echo "ERROR: $plugin never calls rename() - the sidecar is not published atomically." >&2
+# 1. The temp must be renamed onto *the target*. Requiring merely "a rename()
+#    somewhere" is not the property: rename(l:tmp, l:backup) satisfies that and
+#    never installs the sidecar at all.
+if ! grep -Eq 'rename\([[:space:]]*l:tmp[[:space:]]*,[[:space:]]*l:target[[:space:]]*\)' "$plugin"; then
+    echo "ERROR: $plugin does not rename(l:tmp, l:target) - the temp is never" >&2
+    echo "       installed as the sidecar, so publication is not atomic." >&2
     fail=1
 fi
 

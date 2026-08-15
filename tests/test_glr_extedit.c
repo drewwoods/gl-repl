@@ -3215,6 +3215,135 @@ static void test_a_leftover_after_the_editor_closed_is_offered_again(void) {
     (void)unlink(WIP_PATH);
 }
 
+/* The followed mark has to be dropped on *every* observed disappearance, not
+ * only on one that interrupts a live session. A local commit or a Ctrl+Z ends
+ * the session while deliberately leaving the mark - the editor is still open -
+ * so when that editor later quits, the idle path is the only place that
+ * learns it. Miss it and the next editor's leftovers are resumed into with no
+ * prompt. */
+static void test_a_close_after_the_session_ended_still_drops_the_mark(void) {
+    int slot_a;
+
+    printf("--- an idle close still forgets the editor ---\n");
+
+    begin_wip_session(k_scene_a);
+    slot_a = repl_active_user_scene();
+    publish_wip(k_scene_b, 4, 1);
+    glr_extedit_poll();
+    ASSERT_INT("the session followed", glr_extedit_stats().wip_updates, 1);
+
+    /* Ctrl+Z ends the session; the editor is still open, so the mark stays. */
+    editor_undo_pop_snapshot();
+    set_mtime(WIP_PATH, 70000, 0);
+    publish_wip(k_scene_b, 4, 2);
+    set_mtime(WIP_PATH, 70001, 0);
+    glr_extedit_poll();
+    ASSERT_TRUE("the undo stuck", document_mentions("0, 0, 0"));
+
+    /* Now the editor quits, with no session running to interrupt. */
+    (void)unlink(WIP_PATH);
+    glr_extedit_poll();
+
+    /* Away; a different editor opens the file, dies, and leaves a sidecar. */
+    write_lines(OTHER_PATH, k_scene_longer);
+    {
+        ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+        ASSERT_TRUE("a second scene opens",
+                    repl_load_scene_as_new_slot(OTHER_PATH, &reason) >= 0);
+    }
+    glr_extedit_poll();
+    publish_wip(k_scene_longer, 4, 1);
+
+    ASSERT_TRUE("back to the first scene", repl_load_user_scene_idx(slot_a));
+    glr_extedit_poll();
+    glr_extedit_poll();
+    ASSERT_INT("the stranger's leftover is offered, not applied",
+               (int)glr_modal_kind(), (int)GLR_MODAL_CONFIRM_WIP_RECOVER);
+    ASSERT_TRUE("and nothing of it is live", !document_mentions("3, 3, 3"));
+    glr_modal_cancel();
+    (void)unlink(WIP_PATH);
+}
+
+/* The torn-write backstop is per binding, which is right - it describes the
+ * publisher currently writing this file - but `wip_forget()` clears it on
+ * every rebind, and the reads a bind performs used to throw the observation
+ * away. Accepting a recovery offer is the reachable form: the offer read the
+ * sidecar (trailer and all) to record its payload, then the accept forces a
+ * re-read, and if the publisher tore the file in between there was nothing
+ * left saying it had ever written a trailer.
+ */
+static void test_the_torn_write_backstop_survives_a_rebind(void) {
+    GlrExtEditStats before;
+
+    printf("--- the torn-write backstop survives an accepted recovery ---\n");
+
+    glr_extedit_set_enabled(0);
+    glr_modal_cancel();
+    (void)unlink(WIP_PATH);
+    write_lines(WATCH_PATH, k_scene_a);
+    publish_wip(k_scene_longer, 4, 1);      /* a leftover, with its trailer */
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+    glr_extedit_set_enabled(1);
+    glr_extedit_poll();
+    ASSERT_INT("the leftover is offered", (int)glr_modal_kind(),
+               (int)GLR_MODAL_CONFIRM_WIP_RECOVER);
+    before = glr_extedit_stats();
+
+    glr_modal_handle_key('y');              /* accept: forces a re-read */
+
+    /* The publisher tears the file between the accept and the next frame. */
+    {
+        FILE *f = fopen(WIP_PATH, "w");
+        ASSERT_TRUE("the torn file is written", f != NULL);
+        if (f) {
+            fputs("glClearColor(0.3, 0.3, 0.3, 1.0);\n", f);
+            fputs("glBegin(GL_POIN", f);
+            fclose(f);
+        }
+        set_mtime(WIP_PATH, 71000, 0);
+    }
+    glr_extedit_poll();
+
+    ASSERT_INT("the torn read is refused, not imported",
+               glr_extedit_stats().wip_updates, before.wip_updates);
+    ASSERT_INT("and counted", glr_extedit_stats().failures - before.failures, 1);
+    ASSERT_TRUE("the scene is untouched", document_mentions("0, 0, 0"));
+    (void)unlink(WIP_PATH);
+}
+
+/* A publication that arrives while the recovery prompt is up is ordinary live
+ * follow - the editor is demonstrably alive, which is the resume condition.
+ * The question must not survive being answered by events: it would go on
+ * asking whether to follow content that is already on screen. */
+static void test_a_live_publication_retracts_the_recovery_prompt(void) {
+    printf("--- a new payload retracts the recovery question ---\n");
+
+    glr_extedit_set_enabled(0);
+    glr_modal_cancel();
+    (void)unlink(WIP_PATH);
+    write_lines(WATCH_PATH, k_scene_a);
+    publish_wip(k_scene_b, 4, 1);          /* leftover, present before the bind */
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+    glr_extedit_set_enabled(1);
+    glr_extedit_poll();
+    ASSERT_INT("the leftover is offered", (int)glr_modal_kind(),
+               (int)GLR_MODAL_CONFIRM_WIP_RECOVER);
+
+    /* Without anyone answering, the editor wakes up and publishes. */
+    set_mtime(WIP_PATH, 72000, 0);
+    publish_wip(k_scene_longer, 4, 1);
+    set_mtime(WIP_PATH, 72001, 0);
+    glr_extedit_poll();
+
+    ASSERT_INT("the live payload is followed",
+               glr_extedit_stats().wip_updates, 1);
+    ASSERT_TRUE("its geometry is live", document_mentions("3, 3, 3"));
+    ASSERT_TRUE("and the stale question is retracted", !glr_modal_active());
+    (void)unlink(WIP_PATH);
+}
+
 static void test_an_unparseable_buffer_leaves_the_scene_alone(void) {
     GlrExtEditStats before, after;
 
@@ -3313,6 +3442,9 @@ int main(void) {
     test_a_decline_survives_a_cursor_only_republish();
     test_a_busy_modal_defers_the_offer_rather_than_declining_it();
     test_a_leftover_after_the_editor_closed_is_offered_again();
+    test_a_close_after_the_session_ended_still_drops_the_mark();
+    test_the_torn_write_backstop_survives_a_rebind();
+    test_a_live_publication_retracts_the_recovery_prompt();
     test_an_unparseable_buffer_leaves_the_scene_alone();
     test_exported_c_sidecar_cursor_follows_snippet_row();
     glr_extedit_set_enabled(0);

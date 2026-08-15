@@ -1184,6 +1184,14 @@ static int wip_payload_hash(const char *path, unsigned long long *out) {
     if (!wip_read(path, &w))
         return 0;
     *out = w.payload;
+    /* Learn the trailer here too. `g_wip_saw_cursor` is per binding, which is
+     * right - it is a fact about the publisher currently writing this file -
+     * but a rebind wipes it, and without seeding it from the read a bind
+     * already does, the *first* publication after every scene switch bypasses
+     * the torn-write backstop entirely. That first one is no safer than any
+     * other. */
+    if (w.cursor_row > 0)
+        g_wip_saw_cursor = 1;
     wip_free(&w);
     return 1;
 }
@@ -1218,6 +1226,10 @@ static void wip_bind(void) {
             g_wip_suppressed       = payload;
             g_wip_suppressed_valid = 1;
         } else if (seen_wip_followed(g_bound)) {
+            /* Read for its own sake: nothing here needs the hash, but the
+             * trailer observation it seeds is what keeps the torn-write
+             * backstop armed across the switch. */
+            (void)wip_payload_hash(g_wip_path, &payload);
             /* Coming back to a scene whose editor is still open. Leave the
              * observed token invalid so the next poll reads the sidecar as an
              * ordinary content update and the document converges on whatever
@@ -1227,6 +1239,7 @@ static void wip_bind(void) {
              * elsewhere. */
             g_wip_observed.valid = 0;
         } else {
+            (void)wip_payload_hash(g_wip_path, &payload);   /* as above */
             g_wip_recover_offer = 1;
             g_wip_hold          = 1;
             g_wip_observed      = change_token_from_stat(&st);
@@ -1396,6 +1409,20 @@ static void wip_apply_content(GlrExtEditWip *w) {
     g_wip_map_valid = 1;
     g_wip_active    = 1;
     seen_note_wip_followed(g_bound);
+    /* A payload landed while the recovery prompt was still on screen asking
+     * whether to follow this file. The editor is demonstrably alive and
+     * publishing - which is the resume condition - so following is right, but
+     * leaving the question up is not: it now asks about content that is
+     * already live, and either answer is meaningless. Retract it, and drop the
+     * decline it had pre-recorded, which describes a payload the file has
+     * moved off. */
+    if (g_wip_offering) {
+        g_wip_offering = 0;
+        seen_clear_wip_declined(g_bound);
+        if (glr_modal_active() &&
+            glr_modal_kind() == GLR_MODAL_CONFIRM_WIP_RECOVER)
+            glr_modal_cancel();
+    }
     g_stats.reloads++;
     g_stats.wip_updates++;
     editor_insert_mode_set(0);
@@ -1431,6 +1458,16 @@ static void wip_apply_content(GlrExtEditWip *w) {
 static void wip_handle_deleted(void) {
     int is_user_scene = repl_active_user_scene() >= 0;
 
+    /* Before the idle early-out below, not after it. Following a path is
+     * evidence about one editor, and this is the moment that editor is
+     * observed to be gone - whether or not a session was still live when it
+     * went. A local commit or a Ctrl+Z ends the session and *deliberately*
+     * leaves the mark set, because the editor is still open; if that editor
+     * then quits, this is the only place that learns it. Leaving the mark
+     * would auto-resume the next editor's leftovers with no prompt, which is
+     * exactly what the mark exists to prevent. */
+    seen_clear_wip_followed(g_bound);
+
     if (!g_wip_active) {
         wip_end_session(NULL);
         g_wip_hold = 0;
@@ -1465,12 +1502,6 @@ static void wip_handle_deleted(void) {
     wip_map_release();
     g_wip_payload_valid = 0;
     g_wip_hold          = 0;
-    /* The editor whose liveness justified following this path is gone. A
-     * sidecar found here at some later bind is a *different* editor's, and
-     * whether that one is alive is exactly what the recovery prompt exists to
-     * ask - so drop the followed mark rather than let the next rebind resume
-     * into a stranger's leftovers without asking. */
-    seen_clear_wip_followed(g_bound);
 }
 
 /* Y at the recovery prompt. The sidecar is left exactly as it is; accepting
