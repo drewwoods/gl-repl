@@ -989,12 +989,20 @@ static void test_pending_overtaken_by_a_revert(void) {
     begin_watched_session(k_scene_a);
     begin_typing("glVertex3f(4, 4,");          /* gate shut */
 
+    /* A, B and the revert are all the same byte count and rewrite the same
+     * inode, so the change token rests entirely on the mtime - and three
+     * writes microseconds apart share one timestamp wherever the filesystem's
+     * granularity is coarser than the loop (ext4 in particular). Real saves
+     * are seconds apart; stamp explicit times so this exercises the pending
+     * bookkeeping rather than the clock. */
     write_lines(WATCH_PATH, k_scene_b);
+    set_mtime(WATCH_PATH, 1000000100L, 0L);
     glr_extedit_poll();
     ASSERT_INT("B is parked, not applied", glr_extedit_stats().reloads, 0);
 
     /* vim undoes: the file is byte-identical to what we already have. */
     write_lines(WATCH_PATH, k_scene_a);
+    set_mtime(WATCH_PATH, 1000000200L, 0L);
     glr_extedit_poll();
 
     editor_input_clear();                      /* gate opens */
@@ -1004,6 +1012,7 @@ static void test_pending_overtaken_by_a_revert(void) {
     /* The moment of truth: a real save of B must be followed, not mistaken for
      * gl-repl's own write because a stale hash was stamped as applied. */
     write_lines(WATCH_PATH, k_scene_b);
+    set_mtime(WATCH_PATH, 1000000300L, 0L);
     glr_extedit_poll();
     ASSERT_TRUE("a genuine later save of B is followed",
                 document_mentions("9, 9, 9"));
