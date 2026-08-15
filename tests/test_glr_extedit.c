@@ -29,6 +29,7 @@
 #include <fcntl.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -47,8 +48,10 @@
 #include "repl/eval.h"
 #include "repl/example_loader.h"
 #include "repl/examples.h"
+#include "repl/export.h"
 #include "repl/scenes.h"
 #include "repl/state_owners.h"
+#include "source_document.h"
 #include "ui/app/state.h"
 #include "subsystems/replay/replay.h"
 #include "subsystems/tutorial/tutorial.h"
@@ -63,6 +66,8 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define WATCH_PATH "/tmp/gl_repl_extedit_scene.glr"
 #define SWAP_PATH  "/tmp/gl_repl_extedit_scene.glr.swap"
 #define OTHER_PATH "/tmp/gl_repl_extedit_other.glr"
+#define WATCH_C_PATH "/tmp/gl_repl_extedit_scene.c"
+#define WIP_C_PATH   WATCH_C_PATH ".wip"
 
 static const char *const k_scene_a[] = {
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
@@ -2519,6 +2524,167 @@ static void test_sidecar_cursor_requests_follow_scroll(void) {
     (void)unlink(WIP_PATH);
 }
 
+#define EXPORTED_C_MAX_LINES 512
+
+static int read_c_lines(const char *path, char **out, int max) {
+    char buf[MAX_LINE_LEN * 2];
+    FILE *f = fopen(path, "r");
+    int n = 0;
+
+    if (!f)
+        return 0;
+    while (n < max - 1 && fgets(buf, (int)sizeof(buf), f)) {
+        size_t len = strlen(buf);
+        while (len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r'))
+            buf[--len] = '\0';
+        out[n] = (char *)malloc(len + 1);
+        if (!out[n])
+            break;
+        memcpy(out[n], buf, len + 1);
+        n++;
+    }
+    fclose(f);
+    out[n] = NULL;
+    return n;
+}
+
+static void free_c_lines(char **lines, int n) {
+    int i;
+    for (i = 0; i < n; i++)
+        free(lines[i]);
+}
+
+static int find_c_line_with(char *const *lines, int n, const char *needle) {
+    int i;
+    for (i = 0; i < n; i++)
+        if (strstr(lines[i], needle))
+            return i;
+    return -1;
+}
+
+static int find_doc_row_with(const char *needle) {
+    int i, count = repl_state_document_count();
+    for (i = 0; i < count; i++) {
+        const char *line = editor_buffer_line(i);
+        if (line && strstr(line, needle))
+            return i;
+    }
+    return -1;
+}
+
+/* The WIP sidecar names a *physical* row. Exported C wraps the document in
+ * helpers, a Snippet-start marker, camera rows and display(). The map has
+ * to send vim's cursor on a snippet-body command to the document row it
+ * produced, not leave the caret on whatever row the last .glr session used. */
+static void test_exported_c_sidecar_cursor_follows_snippet_row(void) {
+    char *lines[EXPORTED_C_MAX_LINES];
+    const char *c_ptrs[EXPORTED_C_MAX_LINES];
+    int n, i, phys_vertex, doc_vertex;
+
+    printf("--- exported C sidecar cursor follows a snippet-body row ---\n");
+
+    glr_extedit_set_enabled(0);
+    write_lines(WATCH_PATH, k_scene_a);
+    glr_ctrl_reset_all();
+    ASSERT_TRUE("the .glr source loads",
+                repl_load_initial_commands(WATCH_PATH) != 0);
+    ASSERT_TRUE("and exports as C",
+                repl_export_save_output(WATCH_C_PATH, source_document_view(),
+                                        NULL) != 0);
+
+    n = read_c_lines(WATCH_C_PATH, lines, EXPORTED_C_MAX_LINES);
+    ASSERT_TRUE("the export reads back", n > 0);
+    phys_vertex = find_c_line_with(lines, n, "glVertex3f(0, 0, 0)");
+    ASSERT_TRUE("the vertex is in the exported C", phys_vertex >= 0);
+
+    glr_ctrl_reset_all();
+    ASSERT_TRUE("the exported C loads as the live scene",
+                repl_load_initial_commands(WATCH_C_PATH) != 0);
+    editor_load_line_to_input(editor_state_edit_line());
+    glr_extedit_set_enabled(1);
+    glr_extedit_poll();
+    glr_modal_cancel();
+    ASSERT_TRUE("the watcher bound the .c",
+                glr_extedit_bound_path() != NULL);
+    ASSERT_TRUE("the bound path is the exported C",
+                strstr(glr_extedit_bound_path(), ".c") != NULL);
+
+    for (i = 0; i < n; i++)
+        c_ptrs[i] = lines[i];
+    c_ptrs[n] = NULL;
+
+    /* Exported snippet-body rows are indented (`    glVertex3f`). vim's
+     * col('.') counts those spaces; the live input does not. Col 5 is the
+     * 'g' of glVertex3f. */
+    publish_wip_at(WIP_C_PATH, c_ptrs, phys_vertex + 1, 5);
+    glr_extedit_poll();
+
+    doc_vertex = find_doc_row_with("glVertex3f(0, 0, 0)");
+    ASSERT_TRUE("the vertex is still in the document", doc_vertex >= 0);
+    ASSERT_INT("the sidecar cursor landed on that document row",
+               editor_state_edit_line(), doc_vertex);
+    ASSERT_INT("as a content update, not a failed C import",
+               glr_extedit_stats().failures, 0);
+    ASSERT_INT("and not as a no-op on an unmapped physical row",
+               glr_extedit_stats().wip_updates, 1);
+    ASSERT_INT("the caret is on the 'g', not still in the C indent",
+               editor_cursor_pos(), 0);
+
+    /* Cursor-only onto glEnd, which is a different document row. */
+    {
+        int phys_end = find_c_line_with(lines, n, "glEnd();");
+        int doc_end = find_doc_row_with("glEnd();");
+        int lead = 0;
+        ASSERT_TRUE("glEnd is in the file", phys_end >= 0);
+        ASSERT_TRUE("and in the document", doc_end >= 0);
+        while (lines[phys_end][lead] == ' ' || lines[phys_end][lead] == '\t')
+            lead++;
+        set_mtime(WIP_C_PATH, 40000, 0);
+        publish_wip_at(WIP_C_PATH, c_ptrs, phys_end + 1, lead + 1);
+        set_mtime(WIP_C_PATH, 40100, 0);
+        glr_extedit_poll();
+        ASSERT_INT("no reimport for a cursor-only C move",
+                   glr_extedit_stats().wip_updates, 1);
+        ASSERT_INT("physical glEnd is the document glEnd",
+                   editor_state_edit_line(), doc_end);
+        ASSERT_INT("and the caret is at the start of glEnd, not in its indent",
+                   editor_cursor_pos(), 0);
+    }
+
+    /* Half-typed inside the snippet: the C import must park the hole, not
+     * fail the whole file, and the caret must sit on the typed column. */
+    {
+        char parked_src[64];
+        int lead = 0;
+        while (lines[phys_vertex][lead] == ' ' ||
+               lines[phys_vertex][lead] == '\t')
+            lead++;
+        snprintf(parked_src, sizeof(parked_src), "%.*sglVertex3f(0,",
+                 lead, lines[phys_vertex]);
+        free(lines[phys_vertex]);
+        lines[phys_vertex] = (char *)malloc(strlen(parked_src) + 1);
+        ASSERT_TRUE("the parked C row fits", lines[phys_vertex] != NULL);
+        memcpy(lines[phys_vertex], parked_src, strlen(parked_src) + 1);
+        c_ptrs[phys_vertex] = lines[phys_vertex];
+        set_mtime(WIP_C_PATH, 40200, 0);
+        /* vim insert-at-end is one past the last byte, indent included. */
+        publish_wip_at(WIP_C_PATH, c_ptrs, phys_vertex + 1,
+                       lead + (int)strlen("glVertex3f(0,") + 1);
+        set_mtime(WIP_C_PATH, 40300, 0);
+        glr_extedit_poll();
+        ASSERT_INT("the incomplete C row did not fail the import",
+                   glr_extedit_stats().failures, 0);
+        ASSERT_STR("it is parked without the C indent",
+                   editor_input_text(), "glVertex3f(0,");
+        ASSERT_INT("and the caret is at the typed end",
+                   editor_cursor_pos(), (int)strlen("glVertex3f(0,"));
+    }
+
+    free_c_lines(lines, n);
+    (void)unlink(WIP_C_PATH);
+    (void)unlink(WATCH_C_PATH);
+}
+
 /* A buffer that will not parse is the normal state of a file being typed. It
  * must not be retried every frame, and it must not damage what is live. */
 static void test_an_unparseable_buffer_leaves_the_scene_alone(void) {
@@ -2609,12 +2775,15 @@ int main(void) {
     test_wip_reload_preserves_visible_t();
     test_sidecar_cursor_requests_follow_scroll();
     test_an_unparseable_buffer_leaves_the_scene_alone();
+    test_exported_c_sidecar_cursor_follows_snippet_row();
     glr_extedit_set_enabled(0);
     glr_modal_cancel();
     (void)unlink(WIP_PATH);
     (void)unlink(WATCH_PATH);
     (void)unlink(SWAP_PATH);
     (void)unlink(OTHER_PATH);
+    (void)unlink(WIP_C_PATH);
+    (void)unlink(WATCH_C_PATH);
     printf("\n=== Results: ");
     return test_harness_report(&g_harness, "glr_extedit");
 }

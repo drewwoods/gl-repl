@@ -1099,6 +1099,19 @@ static int row_is_incomplete(const char *const *lines, int row) {
     return !(depth <= 0 && repl_is_stmt_terminator(last));
 }
 
+/* vim's col('.') counts leading spaces/tabs. The live input is canonical
+ * (editor_load_line_to_input / park_incomplete_row strip them), so the
+ * published column has to be mapped off that lead. Exported C is the
+ * usual case: snippet-body rows are indented inside draw_scene(). */
+static int physical_line_lead(const char *line) {
+    int n = 0;
+    if (!line)
+        return 0;
+    while (line[n] == ' ' || line[n] == '\t')
+        n++;
+    return n;
+}
+
 /* Move the live cursor to wherever physical row `row` ended up.
  *
  * Three answers, and the third is why the map records a sentinel rather than
@@ -1107,8 +1120,12 @@ static int row_is_incomplete(const char *const *lines, int row) {
  * at all - a header, a directive, exported C's scaffolding - and the honest
  * response is to leave the cursor where it is. A placement that actually
  * moves the caret also requests follow-scroll; an unmapped row does not
- * touch the viewport. */
-static void wip_place_cursor(int row, int col) {
+ * touch the viewport.
+ *
+ * `phys_line` is the sidecar text of that physical row (indent included)
+ * so a mapped placement can convert vim's column the same way a parked
+ * one does. NULL means no indent to subtract. */
+static void wip_place_cursor(int row, int col, const char *phys_line) {
     int doc_row;
 
     if (!g_wip_map_valid || row < 1 || row > g_wip_map.count)
@@ -1151,7 +1168,7 @@ static void wip_place_cursor(int row, int col) {
     editor_load_line_to_input(editor_state_edit_line());
     {
         int len = (int)strlen(editor_input_text());
-        int pos = col - 1;
+        int pos = col - 1 - physical_line_lead(phys_line);
         if (pos < 0)   pos = 0;
         if (pos > len) pos = len;
         editor_cursor_pos_set(pos);
@@ -1266,7 +1283,9 @@ static void wip_apply_content(GlrExtEditWip *w) {
         park_incomplete_row(parked, g_wip_map.hole_doc_row);
         g_stats.parked_rows++;
     }
-    wip_place_cursor(w->cursor_row, w->cursor_col);
+    wip_place_cursor(w->cursor_row, w->cursor_col,
+                     (w->cursor_row >= 1 && w->cursor_row <= w->lines.count)
+                         ? w->lines.ptrs[w->cursor_row - 1] : NULL);
     glr_extedit_notify_reloaded();
     /* The scene file on disk still holds the last saved version, and the
      * document no longer matches it. Forget the applied stamp so a later `:w`
@@ -1449,7 +1468,9 @@ static void wip_poll(void) {
     if (g_wip_payload_valid && w.payload == g_wip_payload) {
         /* Cursor-only. No import, no undo entry, no notification: the document
          * did not change, and the caret is the only thing that did. */
-        wip_place_cursor(w.cursor_row, w.cursor_col);
+        wip_place_cursor(w.cursor_row, w.cursor_col,
+                         (w.cursor_row >= 1 && w.cursor_row <= w.lines.count)
+                             ? w.lines.ptrs[w.cursor_row - 1] : NULL);
         g_stats.cursor_moves++;
         wip_free(&w);
         wip_stamp_document();

@@ -41,10 +41,11 @@ endif
 let g:loaded_glr_wip = 1
 
 if !exists('g:glr_wip_patterns')
-  " `.glr` only by default. An exported `.c` works too - gl-repl maps physical
-  " rows through the same table - but it is generated, and following one by
-  " accident is more surprising than useful.
-  let g:glr_wip_patterns = ['*.glr']
+  " Both authored formats. `.glr` is the usual one; exported `.c` is what
+  " Ctrl+S writes when the scene has no .glr home, and --watch scene.c
+  " follows that file. Without `*.c` here the sidecar is never published
+  " and live cursor follow is silently just `:w`.
+  let g:glr_wip_patterns = ['*.glr', '*.c']
 endif
 
 " The sidecar for a file, or '' for a buffer with no name on disk (a scratch
