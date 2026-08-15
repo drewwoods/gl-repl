@@ -100,6 +100,13 @@ typedef struct {
 
 typedef struct ImportStagedFuncLine {
     char text[MAX_LINE_LEN];
+    /* The physical file row this line came from. Staging is why it has to be
+     * carried: a pre-snippet function body is buffered here and replayed long
+     * after its rows went by, so at flush time `ImportState.line_no` names the
+     * flush point instead. Restoring it is what lets the row map - and a
+     * warning about a rejected body line - name the row the user is looking
+     * at. 0 for a line the importer synthesized rather than read. */
+    int  line_no;
     struct ImportStagedFuncLine *next;
 } ImportStagedFuncLine;
 
@@ -151,6 +158,7 @@ struct ImportState {
     int edit_line;                    /* caller-owned cursor */
     ImportWorkspaceAccum workspace;
     char pending_comments[IMPORT_MAX_PENDING_COMMENTS][MAX_LINE_LEN];
+    int  pending_comment_line[IMPORT_MAX_PENDING_COMMENTS];
     int  pending_comment_count;
     int  pending_blank_run;
     int  line_no;
@@ -309,7 +317,7 @@ static void import_flush_staged_function(ImportState *s, int slot);
 static void import_flush_all_staged_functions(ImportState *s);
 
 static int import_staged_func_append_line(ImportState *s, int slot,
-                                          const char *line) {
+                                          const char *line, int line_no) {
     ImportStagedFunction *fn;
     ImportStagedFuncLine *node;
 
@@ -323,6 +331,7 @@ static int import_staged_func_append_line(ImportState *s, int slot,
         return 0;
     }
     snprintf(node->text, sizeof(node->text), "%s", line ? line : "");
+    node->line_no = line_no;
     node->next = NULL;
 
     if (fn->tail)
@@ -2030,6 +2039,126 @@ static void import_restore_auto_normal(int before) {
  * ATOMIC it latches the abort that stops the walk and rolls the document back.
  * Only the FIRST failure is retained - it is the one the user has to fix, and
  * every later line in an aborted walk is unreached rather than judged. */
+/* ----- physical -> document row map (BYOE stage 2.5) ---------------------- */
+
+static void import_row_map_clear(ReplSceneRowMap *map) {
+    int i;
+
+    if (!map)
+        return;
+    map->count        = 0;
+    map->hole_row     = -1;
+    map->hole_doc_row = -1;
+    for (i = 0; i < map->cap && map->doc_row; i++)
+        map->doc_row[i] = REPL_ROW_MAP_NONE;
+}
+
+void repl_scene_row_map_init(ReplSceneRowMap *map, int *storage, int cap,
+                             unsigned long hole_nonce) {
+    if (!map)
+        return;
+    map->doc_row    = storage;
+    map->cap        = storage ? cap : 0;
+    map->hole_nonce = hole_nonce;
+    import_row_map_clear(map);
+}
+
+int repl_scene_cursor_hole_line(char *buf, int buf_size, unsigned long nonce) {
+    int n;
+
+    if (!buf || buf_size <= 0)
+        return 0;
+    n = snprintf(buf, (size_t)buf_size, "// %s %lu",
+                 REPL_CURSOR_HOLE_MARKER, nonce);
+    if (n < 0 || n >= buf_size) {
+        buf[0] = '\0';
+        return 0;
+    }
+    return n;
+}
+
+/* Physical row `line_no` (1-based) produced its first document row at
+ * `doc_row`. First writer wins: a physical row that somehow yields several
+ * document rows should place the cursor on the first of them. */
+static void import_row_map_note(ImportState *s, int line_no, int doc_row) {
+    ReplSceneRowMap *map = s->opts.row_map;
+
+    if (!map || !map->doc_row)
+        return;
+    if (line_no < 1 || line_no > map->cap)
+        return;
+    if (map->doc_row[line_no - 1] == REPL_ROW_MAP_NONE)
+        map->doc_row[line_no - 1] = doc_row;
+    if (line_no > map->count)
+        map->count = line_no;
+}
+
+/* Record where the rows a just-applied line produced actually landed.
+ *
+ * `before` is the document count taken before the apply, and that is also
+ * where the rows went: **the importer only ever appends.** Every insertion
+ * position it uses is the document end - the plain-command tail clamps to
+ * `document_count`, `import_decl_insert_pos` returns the count outright, and
+ * `// Snippet start` resets the cursor there. Read order and document order
+ * can still differ (a staged function body is buffered and replayed later, and
+ * pending comments are held until the header they belong to), but *feed* order
+ * and document order cannot - which is what makes recording at feed time
+ * enough, with no fixup pass over rows already written.
+ *
+ * If a mid-document insert ever joins the import path, this is the function
+ * that has to grow one: every recorded entry at or past the insert point
+ * would need shifting, and nothing here would notice on its own. */
+static void import_row_map_note_applied(ImportState *s, int before) {
+    if (!s->opts.row_map || repl_state_document_count() <= before)
+        return;
+    import_row_map_note(s, s->line_no, before);
+}
+
+/* The transport marker the controller substituted for the row it removed.
+ *
+ * Consumed only when a nonce was requested and matches, so this is inert on
+ * every load path but the watcher's, and a hand-written `// @cursor-hole`
+ * stays an ordinary comment even on the watcher's. Anything trailing the
+ * number disqualifies the line for the same reason. */
+static int import_take_cursor_hole(ImportState *s, const char *line) {
+    ReplSceneRowMap *map = s->opts.row_map;
+    const char *p = line;
+    char *end;
+    unsigned long nonce;
+    size_t marker_len = strlen(REPL_CURSOR_HOLE_MARKER);
+
+    if (!map || map->hole_nonce == 0 || !line)
+        return 0;
+    while (*p == ' ' || *p == '\t')
+        p++;
+    if (p[0] != '/' || p[1] != '/')
+        return 0;
+    p += 2;
+    while (*p == ' ' || *p == '\t')
+        p++;
+    if (strncmp(p, REPL_CURSOR_HOLE_MARKER, marker_len) != 0)
+        return 0;
+    p += marker_len;
+    if (*p != ' ' && *p != '\t')
+        return 0;
+    nonce = strtoul(p, &end, 10);
+    if (end == p || nonce != map->hole_nonce)
+        return 0;
+    while (*end == ' ' || *end == '\t')
+        end++;
+    if (*end != '\0')
+        return 0;
+    /* The hole lands wherever the next row would be inserted. Reading it here
+     * rather than at the physical line is what makes a hole inside a staged
+     * function body come out right: the marker travelled the staging list with
+     * the rows around it and is replayed at their position, not at the row
+     * where the file happened to mention it. */
+    map->hole_row     = s->line_no;
+    map->hole_doc_row = s->edit_line;
+    import_row_map_note(s, s->line_no, s->edit_line);
+    return 1;
+}
+
 static void import_note_line_rejected(ImportState *s, int line_no) {
     if (!s || s->opts.policy != REPL_SCENE_LOAD_POLICY_ATOMIC)
         return;
@@ -2056,6 +2185,11 @@ static int import_feed_one_line(ImportState *s, const char *line) {
     if (s->load_failed)
         return 0;
 
+    /* Before every other reading of the line: the controller put this here in
+     * place of a row it removed, and it must produce no document row. */
+    if (import_take_cursor_hole(s, line))
+        return 1;
+
     /* Snippet directives such as @declare are written by
      * write_canonical_cmd_as_c() and must be handled before the generic
      * C-to-REPL path. */
@@ -2079,6 +2213,7 @@ static int import_feed_one_line(ImportState *s, const char *line) {
         import_restore_auto_normal(before);
 
     if (repl_state_document_count() > before) s->loaded += (repl_state_document_count() - before);
+    import_row_map_note_applied(s, before);
     if (!handled) {
         /* Surface repl_load_apply_line's per-line diagnostic (e.g.
          * "command store at capacity", a parse-error reason)
@@ -2102,8 +2237,15 @@ static void import_flush_staged_function(ImportState *s, int slot) {
     if (!fn->present || fn->flushed)
         return;
 
-    for (ImportStagedFuncLine *line = fn->head; line; line = line->next)
+    for (ImportStagedFuncLine *line = fn->head; line; line = line->next) {
+        int saved = s->line_no;
+        /* Replay under the row the line was read from, not the flush point -
+         * see ImportStagedFuncLine.line_no. */
+        if (line->line_no > 0)
+            s->line_no = line->line_no;
         import_feed_one_line(s, line->text);
+        s->line_no = saved;
+    }
     fn->flushed = 1;
 }
 
@@ -2134,10 +2276,14 @@ static void import_reset_pending_function_prelude(ImportState *s) {
     s->pending_blank_run = 0;
 }
 
+/* `line_no` is 0 for the synthesized blank rows below, which stand in for
+ * export's formatting blanks and correspond to no physical row. */
 static void import_append_pending_function_prelude(ImportState *s,
-                                                   const char *line) {
+                                                   const char *line,
+                                                   int line_no) {
     if (s->pending_comment_count >= IMPORT_MAX_PENDING_COMMENTS)
         return;
+    s->pending_comment_line[s->pending_comment_count] = line_no;
     snprintf(s->pending_comments[s->pending_comment_count++],
              MAX_LINE_LEN, "%s", line);
 }
@@ -2154,7 +2300,7 @@ static void import_flush_pending_blank_run(ImportState *s) {
      * blank immediately before the next non-empty line. */
     logical_blank_count = (s->pending_blank_run - 1) / 2;
     for (int blank_idx = 0; blank_idx < logical_blank_count; blank_idx++)
-        import_append_pending_function_prelude(s, "");
+        import_append_pending_function_prelude(s, "", 0);
     s->pending_blank_run = 0;
 }
 
@@ -2223,7 +2369,8 @@ static int import_try_function_body(ImportState *s, const char *p) {
     if (s->active_staged_func_slot >= 0) {
         char repl_line[MAX_LINE_LEN];
         import_translate_repl_line(p, repl_line, sizeof(repl_line));
-        import_staged_func_append_line(s, s->active_staged_func_slot, repl_line);
+        import_staged_func_append_line(s, s->active_staged_func_slot, repl_line,
+                                       s->line_no);
     } else {
         import_feed_one_line(s, p);
     }
@@ -2242,23 +2389,31 @@ static int import_try_function_header(ImportState *s, const char *p, const char 
         int slot = import_repl_func_line_slot(repl_func_line);
         if (slot >= 0) {
             for (int comment_idx = 0; comment_idx < s->pending_comment_count; comment_idx++)
-                import_staged_func_append_line(s, slot, s->pending_comments[comment_idx]);
+                import_staged_func_append_line(s, slot,
+                                               s->pending_comments[comment_idx],
+                                               s->pending_comment_line[comment_idx]);
             import_reset_pending_function_prelude(s);
-            import_staged_func_append_line(s, slot, repl_func_line);
+            import_staged_func_append_line(s, slot, repl_func_line, s->line_no);
             s->func_depth = 1;
             s->active_staged_func_slot = slot;
             return 1;
         }
     }
     /* Feed accumulated pending comments before the function header. */
-    for (int comment_idx = 0; comment_idx < s->pending_comment_count; comment_idx++)
+    for (int comment_idx = 0; comment_idx < s->pending_comment_count; comment_idx++) {
+        int saved = s->line_no;
+        if (s->pending_comment_line[comment_idx] > 0)
+            s->line_no = s->pending_comment_line[comment_idx];
         import_feed_one_line(s, s->pending_comments[comment_idx]);
+        s->line_no = saved;
+    }
     import_reset_pending_function_prelude(s);
     int before = repl_state_document_count();
     char load_err[REPL_STATUS_TEXT_MAX] = "";
     int handled = repl_load_apply_line(repl_func_line, load_err, (int)sizeof(load_err),
                                        &s->edit_line);
     if (repl_state_document_count() > before) s->loaded += (repl_state_document_count() - before);
+    import_row_map_note_applied(s, before);
     if (!handled) {
         /* See import_feed_one_line for the load_err rationale. */
         import_state_warn_parse_line(s, raw, load_err);
@@ -2294,7 +2449,7 @@ static int import_try_pending_comment(ImportState *s, const char *p) {
         s->pending_blank_run++;
     } else if (p[0] == '/' && p[1] == '/') {
         import_flush_pending_blank_run(s);
-        import_append_pending_function_prelude(s, p);
+        import_append_pending_function_prelude(s, p, s->line_no);
     } else {
         /* Any non-empty, non-comment line resets the pending buffer so stray
          * comments don't leak onto unrelated lines that follow. */
@@ -2739,6 +2894,8 @@ void repl_scene_load_opts_init(ReplSceneLoadOpts *opts,
     opts->apply_cfg    = 1;
     opts->camera_apply = REPL_CAMERA_APPLY_IMPORT;
     opts->allow_empty  = 0;
+    opts->quiet        = 0;
+    opts->row_map      = NULL;
 }
 
 static void import_begin_load(ImportState *state,
@@ -2766,6 +2923,7 @@ static void import_begin_load(ImportState *state,
             scene_snapshot_capture_live(state->atomic_stash);
     }
 
+    import_row_map_clear(state->opts.row_map);
     repl_camera_header_init(&state->camera);
     repl_doc_order_init(&state->order);
     repl_func_alias_clear_all();
@@ -2990,6 +3148,9 @@ static void import_process_physical_line(ImportState *state,
 static int import_fail_load(ImportState *state, const char *msg) {
     import_workspace_accum_reset(&state->workspace);
     import_clear_pending_result_fields();
+    /* The rows this described no longer exist - ATOMIC put the old document
+     * back, and under TOLERANT the caller is discarding the load anyway. */
+    import_row_map_clear(state->opts.row_map);
     repl_set_status_error(msg);
     /* Order matters: clear the staged buffers before restoring, so nothing is
      * holding a pointer into a document that is about to be replaced. */
@@ -3122,8 +3283,10 @@ static int import_finish_load(ImportState *state,
                      "Loaded %d commands from %s", state->loaded, label);
         repl_set_status(msg);
         /* An allow_empty caller that loaded nothing has nothing to announce on
-         * stderr - it is mid-keystroke in someone's editor, not a load event. */
-        if (state->loaded > 0)
+         * stderr - it is mid-keystroke in someone's editor, not a load event.
+         * `quiet` says the same thing about a caller that loaded plenty: at
+         * WIP typing rate this line is scrollback, not news. */
+        if (state->loaded > 0 && !state->opts.quiet)
             fprintf(stderr, "%s\n", msg);
     } else {
         /* File opened and read cleanly but produced no commands - an empty

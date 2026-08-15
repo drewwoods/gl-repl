@@ -664,6 +664,329 @@ static void test_open_path_wins_over_an_existing_workspace(void) {
     repl_set_workspace_dir(NULL);
 }
 
+/* ----- physical -> document row map (BYOE stage 2.5) ---------------------- */
+
+/* Everything that pushes a physical row away from its document row: a consumed
+ * directive, a declaration, a blank and a comment, all before the geometry. */
+static const char *const k_mapped_scene[] = {
+    "// @scene-name Mapped",           /* 1: consumed, no document row */
+    "static float wob;",               /* 2: doc 0 */
+    "",                                /* 3: doc 1 */
+    "// a note",                       /* 4: doc 2 */
+    "glClearColor(0, 0, 0, 1);",       /* 5: doc 3 */
+    "glClear(GL_COLOR_BUFFER_BIT);",   /* 6: doc 4 */
+    "glBegin(GL_POINTS);",             /* 7: doc 5 */
+    "glVertex3f(0, 0, 0);",            /* 8: doc 6 */
+    "glEnd();",                        /* 9: doc 7 */
+    NULL
+};
+
+#define ROW_MAP_CAP 512   /* an exported .c runs to hundreds of physical rows */
+
+/* Document rows carry the indentation the reformatter derived from block
+ * scope, so a body row reads "  glEnd();". The tests below are about which row
+ * landed where, not about how it is spelled. */
+static const char *unindented(int doc_row) {
+    const char *p = editor_buffer_line(doc_row);
+    while (p && (*p == ' ' || *p == '\t'))
+        p++;
+    return p ? p : "";
+}
+
+typedef struct {
+    ReplSceneRowMap map;
+    int             storage[ROW_MAP_CAP];
+} TestRowMap;
+
+static void row_map_reset(TestRowMap *t, unsigned long nonce) {
+    repl_scene_row_map_init(&t->map, t->storage, ROW_MAP_CAP, nonce);
+}
+
+/* 1-based physical row -> document row, or REPL_ROW_MAP_NONE. */
+static int mapped(const TestRowMap *t, int physical_row) {
+    if (physical_row < 1 || physical_row > t->map.cap)
+        return REPL_ROW_MAP_NONE;
+    return t->map.doc_row[physical_row - 1];
+}
+
+static void test_row_map_survives_headers_and_directives(void) {
+    TestRowMap t;
+
+    printf("--- the row map counts document rows, not file rows ---\n");
+
+    glr_ctrl_reset_all();
+    row_map_reset(&t, 0);
+    {
+        ReplSceneLoadOpts opts = opts_for(REPL_EXAMPLE_SOURCE_GLR,
+                                          REPL_SCENE_LOAD_POLICY_ATOMIC);
+        opts.row_map = &t.map;
+        ASSERT_INT("the file loads",
+                   repl_scene_load_from_lines(k_mapped_scene, "mapped.glr",
+                                              &opts, NULL), 1);
+    }
+    ASSERT_INT("eight document rows", repl_state_document_count(), 8);
+    /* The directive is the whole point: without a map, "physical 5" would be
+     * read as document 5 and land two rows past the clear colour. */
+    ASSERT_INT("the consumed directive maps to nothing", mapped(&t, 1),
+               REPL_ROW_MAP_NONE);
+    ASSERT_INT("the declaration is document row 0", mapped(&t, 2), 0);
+    ASSERT_INT("the blank is a document row too", mapped(&t, 3), 1);
+    ASSERT_INT("so is the comment", mapped(&t, 4), 2);
+    ASSERT_INT("glClearColor is document row 3", mapped(&t, 5), 3);
+    ASSERT_INT("glEnd is document row 7", mapped(&t, 9), 7);
+    ASSERT_INT("nine physical rows were walked", t.map.count, 9);
+    ASSERT_INT("no hole was asked for", t.map.hole_row, -1);
+}
+
+/* Read a file into a NULL-terminated line array. Owned by the caller; freed by
+ * free_lines(). */
+#define MAX_FIXTURE_LINES 512
+
+static int read_lines(const char *path, char **out, int max) {
+    char buf[MAX_LINE_LEN * 2];
+    FILE *f = fopen(path, "r");
+    int n = 0;
+
+    if (!f)
+        return 0;
+    while (n < max - 1 && fgets(buf, (int)sizeof(buf), f)) {
+        size_t len = strlen(buf);
+        while (len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r'))
+            buf[--len] = '\0';
+        out[n] = (char *)malloc(len + 1);
+        if (!out[n])
+            break;
+        memcpy(out[n], buf, len + 1);
+        n++;
+    }
+    fclose(f);
+    out[n] = NULL;
+    return n;
+}
+
+static void free_lines(char **lines, int n) {
+    for (int i = 0; i < n; i++)
+        free(lines[i]);
+}
+
+static int find_line_with(char *const *lines, int n, const char *needle) {
+    for (int i = 0; i < n; i++)
+        if (strstr(lines[i], needle))
+            return i;
+    return -1;
+}
+
+static int find_doc_row_with(const char *needle) {
+    int count = repl_state_document_count();
+    for (int i = 0; i < count; i++) {
+        const char *line = editor_buffer_line(i);
+        if (line && strstr(line, needle))
+            return i;
+    }
+    return -1;
+}
+
+/* Exported C stages a pre-snippet function body: the reader buffers the whole
+ * body and replays it at `// Snippet start`, long after those physical rows
+ * went by. So the row a body line was *read* at and the point it is *fed* at
+ * are different, and an entry recorded at read time would name whatever the
+ * document happened to hold then.
+ *
+ * Built by exporting a real document rather than by hand, so the fixture
+ * cannot drift from what the writer actually emits, and asserted by finding
+ * both ends by text - the test is about the map connecting them, not about
+ * where the exporter chose to put its scaffolding. */
+static void test_row_map_records_feed_order_not_read_order(void) {
+    TestRowMap t;
+    char *lines[MAX_FIXTURE_LINES];
+    const char *path = "/tmp/gl_repl_scene_load_staged.c";
+    int n, phys_body, doc_body;
+    static const char *const with_func[] = {
+        "func0(s) {",
+        "glVertex3f(s, 0, 0);",
+        "}",
+        "glBegin(GL_POINTS);",
+        "func0(1);",
+        "glEnd();",
+        NULL
+    };
+
+    printf("--- the map records where a staged row was fed ---\n");
+
+    glr_ctrl_reset_all();
+    ASSERT_INT("the source document loads",
+               repl_scene_load_from_lines(with_func, "src.glr", NULL, NULL), 1);
+    ASSERT_TRUE("and exports as C",
+                repl_export_save_output(path, source_document_view(), NULL) != 0);
+
+    n = read_lines(path, lines, MAX_FIXTURE_LINES);
+    ASSERT_TRUE("the export reads back", n > 0);
+    phys_body = find_line_with(lines, n, "glVertex3f(s, 0, 0)");
+    ASSERT_TRUE("the function body is in the file", phys_body >= 0);
+
+    glr_ctrl_reset_all();
+    row_map_reset(&t, 0);
+    {
+        ReplSceneLoadOpts opts = opts_for(REPL_EXAMPLE_SOURCE_C,
+                                          REPL_SCENE_LOAD_POLICY_ATOMIC);
+        opts.row_map = &t.map;
+        ASSERT_INT("the exported C re-imports",
+                   repl_scene_load_from_lines((const char *const *)lines, path,
+                                              &opts, NULL), 1);
+    }
+    doc_body = find_doc_row_with("glVertex3f(s, 0, 0)");
+    ASSERT_TRUE("the body row came back", doc_body >= 0);
+    /* The claim: the physical row deep in the file resolves to the document
+     * row the staged replay actually produced. Off-by-scaffolding here is
+     * exactly the failure the map exists to prevent. */
+    ASSERT_INT("the map connects the two", mapped(&t, phys_body + 1), doc_body);
+    ASSERT_TRUE("and the file really did have scaffolding above it",
+                phys_body + 1 > doc_body);
+
+    free_lines(lines, n);
+    (void)remove(path);
+}
+
+/* The hole: the controller removed a physical row and left a nonce-bearing
+ * marker where it was, so the reader can say where it would have landed. */
+static void test_cursor_hole_reports_where_the_row_would_have_gone(void) {
+    TestRowMap t;
+    static const char *const holed[] = {
+        "// @scene-name Holed",
+        "glClearColor(0, 0, 0, 1);",
+        "glClear(GL_COLOR_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "// @cursor-hole 4242",           /* row 5: was glVertex3f(0, 0, */
+        "glEnd();",
+        NULL
+    };
+
+    printf("--- a cursor hole names its document position ---\n");
+
+    glr_ctrl_reset_all();
+    row_map_reset(&t, 4242UL);
+    {
+        ReplSceneLoadOpts opts = opts_for(REPL_EXAMPLE_SOURCE_GLR,
+                                          REPL_SCENE_LOAD_POLICY_ATOMIC);
+        opts.row_map = &t.map;
+        ASSERT_INT("the file loads",
+                   repl_scene_load_from_lines(holed, "holed.glr", &opts, NULL),
+                   1);
+    }
+    ASSERT_INT("the marker produced no document row",
+               repl_state_document_count(), 4);
+    ASSERT_INT("the hole is physical row 5", t.map.hole_row, 5);
+    ASSERT_INT("and would have been document row 3", t.map.hole_doc_row, 3);
+    ASSERT_INT("the map agrees", mapped(&t, 5), 3);
+    ASSERT_STR("the row after it kept its place", unindented(3),
+               "glEnd();");
+}
+
+/* Two ways the marker must stay an ordinary comment: no nonce was requested,
+ * and a different nonce was. Both are the case of a user who happens to have
+ * written the words. */
+static void test_cursor_hole_needs_its_nonce(void) {
+    TestRowMap t;
+    static const char *const holed[] = {
+        "glClearColor(0, 0, 0, 1);",
+        "glClear(GL_COLOR_BUFFER_BIT);",
+        "// @cursor-hole 4242",
+        NULL
+    };
+
+    printf("--- only the nonce-bearing marker is transport ---\n");
+
+    glr_ctrl_reset_all();
+    row_map_reset(&t, 0);   /* no hole requested at all */
+    {
+        ReplSceneLoadOpts opts = opts_for(REPL_EXAMPLE_SOURCE_GLR,
+                                          REPL_SCENE_LOAD_POLICY_ATOMIC);
+        opts.row_map = &t.map;
+        ASSERT_INT("the file loads",
+                   repl_scene_load_from_lines(holed, "holed.glr", &opts, NULL),
+                   1);
+    }
+    ASSERT_INT("the marker stayed an ordinary comment row",
+               repl_state_document_count(), 3);
+    ASSERT_STR("with its text intact", unindented(2),
+               "// @cursor-hole 4242");
+    ASSERT_INT("nothing was reported as a hole", t.map.hole_row, -1);
+
+    glr_ctrl_reset_all();
+    row_map_reset(&t, 99UL);   /* a hole, but not this one */
+    {
+        ReplSceneLoadOpts opts = opts_for(REPL_EXAMPLE_SOURCE_GLR,
+                                          REPL_SCENE_LOAD_POLICY_ATOMIC);
+        opts.row_map = &t.map;
+        ASSERT_INT("the file loads again",
+                   repl_scene_load_from_lines(holed, "holed.glr", &opts, NULL),
+                   1);
+    }
+    ASSERT_INT("a mismatched nonce is not consumed either",
+               repl_state_document_count(), 3);
+    ASSERT_INT("and reports no hole", t.map.hole_row, -1);
+}
+
+/* A hole inside a function body is the case the staging path exists for: the
+ * body is buffered whole and replayed later, so a marker that recorded its
+ * position when it was *read* would name a row from before the function was
+ * emitted. */
+static void test_cursor_hole_inside_a_staged_function(void) {
+    TestRowMap t;
+    static const char *const staged[] = {
+        "func0(s) {",
+        "glVertex3f(s, 0, 0);",
+        "// @cursor-hole 7",              /* row 3: inside the body */
+        "}",
+        "glBegin(GL_POINTS);",
+        "func0(1);",
+        "glEnd();",
+        NULL
+    };
+
+    printf("--- a hole inside a function body lands in the body ---\n");
+
+    glr_ctrl_reset_all();
+    row_map_reset(&t, 7UL);
+    {
+        ReplSceneLoadOpts opts = opts_for(REPL_EXAMPLE_SOURCE_GLR,
+                                          REPL_SCENE_LOAD_POLICY_ATOMIC);
+        opts.row_map = &t.map;
+        ASSERT_INT("the file loads",
+                   repl_scene_load_from_lines(staged, "staged.glr", &opts,
+                                              NULL), 1);
+    }
+    ASSERT_INT("the marker produced no document row",
+               repl_state_document_count(), 6);
+    ASSERT_INT("the hole is physical row 3", t.map.hole_row, 3);
+    /* func0(s) { = 0, glVertex3f = 1, the hole = 2, } = 3. Reported from where
+     * the staged replay put it, not from where the file mentioned it. */
+    ASSERT_INT("and sits inside the body at document row 2",
+               t.map.hole_doc_row, 2);
+    ASSERT_STR("the closing brace follows it", unindented(2), "}");
+}
+
+/* A load that fails describes a document that no longer exists. */
+static void test_row_map_is_cleared_by_a_failed_load(void) {
+    TestRowMap t;
+
+    printf("--- a failed load leaves no map behind ---\n");
+
+    glr_ctrl_reset_all();
+    row_map_reset(&t, 0);
+    {
+        ReplSceneLoadOpts opts = opts_for(REPL_EXAMPLE_SOURCE_GLR,
+                                          REPL_SCENE_LOAD_POLICY_ATOMIC);
+        opts.row_map = &t.map;
+        ASSERT_INT("the load fails",
+                   repl_scene_load_from_lines(k_scene_with_one_bad_row,
+                                              "bad.glr", &opts, NULL), 0);
+    }
+    ASSERT_INT("no rows are claimed", t.map.count, 0);
+    ASSERT_INT("and the rows read before the failure are cleared",
+               mapped(&t, 1), REPL_ROW_MAP_NONE);
+}
+
 int main(void) {
     printf("=== scene load options ===\n");
     test_format_drives_order_check();
@@ -685,6 +1008,12 @@ int main(void) {
     test_reload_cannot_rebind_the_slot();
     test_open_binds_its_own_path();
     test_open_path_wins_over_an_existing_workspace();
+    test_row_map_survives_headers_and_directives();
+    test_row_map_records_feed_order_not_read_order();
+    test_cursor_hole_reports_where_the_row_would_have_gone();
+    test_cursor_hole_needs_its_nonce();
+    test_cursor_hole_inside_a_staged_function();
+    test_row_map_is_cleared_by_a_failed_load();
     printf("\n=== Results: ");
     return test_harness_report(&g_harness, "scene_load");
 }

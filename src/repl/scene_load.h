@@ -52,6 +52,72 @@ typedef enum {
     REPL_SCENE_LOAD_POLICY_ATOMIC        /* first bad line aborts, restore */
 } ReplSceneLoadPolicy;
 
+/* --- physical -> document row map (BYOE stage 2.5) -------------------------
+ *
+ * An external editor reports the cursor as a **physical file row**. Physical
+ * row N is not document row N and no constant relates them: headers, `@cfg` /
+ * `@camera` / `@declare` directives, block comments, exported C's wrappers and
+ * its staged function bodies all occupy file rows that either produce no
+ * editable row at all or produce one somewhere else entirely. So the reader
+ * records the correspondence for every physical row it walks, and the caller
+ * indexes it instead of subtracting.
+ *
+ * Why a *cached* map and not just "where did the cursor row land": the whole
+ * point of the watcher's content token is that a cursor-only update skips the
+ * import. By then the cursor may name a row for which no answer was ever
+ * computed, and the two ways out without a map are both wrong - reimport on
+ * every cursor twitch, or place the cursor by guesswork. The map is filled by
+ * one content import and stays valid until the next one.
+ *
+ * Memory is the caller's: `doc_row` must have room for at least one entry per
+ * physical row, and the reader never keeps a pointer to it past return.
+ *
+ * Entries are written as rows are fed, with no fixup pass, because the
+ * importer only ever appends - see import_row_map_note_applied() for why that
+ * holds and what would have to change if it stopped.
+ */
+
+/* A physical row with no editable document row of its own - the honest answer
+ * for a header, a consumed directive, or exported-C scaffolding, and
+ * deliberately distinguishable from document row 0. */
+#define REPL_ROW_MAP_NONE (-1)
+
+/* Spelled once. The `//` and the nonce are added by
+ * repl_scene_cursor_hole_line() below. */
+#define REPL_CURSOR_HOLE_MARKER "@cursor-hole"
+
+typedef struct ReplSceneRowMap {
+    int *doc_row;       /* [cap], 0-based document row or REPL_ROW_MAP_NONE */
+    int  cap;           /* entries available; physical rows past it are dropped */
+    int  count;         /* highest 1-based physical row the reader recorded */
+
+    /* Nonzero enables consumption of one `// @cursor-hole <nonce>` line
+     * carrying exactly this value: the reader emits no document row for it and
+     * reports where it landed below.
+     *
+     * The nonce is what keeps this from being a new comment syntax users can
+     * trip over. A genuine `// @cursor-hole` written by hand carries no
+     * matching number and stays an ordinary comment, and every other load path
+     * leaves this zero, so an ordinary File -> Open cannot punch a hole in a
+     * document no matter what the file says. */
+    unsigned long hole_nonce;
+    int           hole_row;      /* 1-based physical row of the marker, or -1 */
+    int           hole_doc_row;  /* document row the hole landed at, or -1 */
+} ReplSceneRowMap;
+
+/* Point a map at caller-owned storage and clear it. Safe to call again to
+ * reuse the same buffer for a later load; the reader also re-clears at
+ * begin-load, so a map handed to two loads cannot carry the first one's rows
+ * into the second. */
+void repl_scene_row_map_init(ReplSceneRowMap *map, int *storage, int cap,
+                             unsigned long hole_nonce);
+
+/* The one spelling of the transport marker, so the controller that writes it
+ * and the reader that consumes it cannot disagree. Writes
+ * `// @cursor-hole <nonce>` and returns its length, or 0 if it would not fit.
+ */
+int repl_scene_cursor_hole_line(char *buf, int buf_size, unsigned long nonce);
+
 /* Tagged so headers that only pass it by pointer - repl/scenes.h - can
  * forward-declare `struct ReplSceneLoadOpts` instead of pulling this header
  * (and export.h behind it) into every one of their consumers. */
@@ -79,6 +145,15 @@ typedef struct ReplSceneLoadOpts {
      * import whatever this says. It suppresses one verdict - the count - and
      * nothing else. */
     int                     allow_empty;
+    /* 1 = do not announce the load on stderr. A `.glr` save is a load event
+     * worth a line; a keystroke arriving through the WIP sidecar is not, and
+     * at typing rate the announcement is thousands of lines of scrollback. The
+     * status bar still gets its message either way. */
+    int                     quiet;
+    /* Optional out-channel: where to record the physical -> document row
+     * correspondence, and whether to consume a cursor-hole marker. NULL - the
+     * default - means neither. See ReplSceneRowMap above. */
+    ReplSceneRowMap        *row_map;
 } ReplSceneLoadOpts;
 
 /* Suffix sniff, and the only one left in the tree: `.glr` is the authored
