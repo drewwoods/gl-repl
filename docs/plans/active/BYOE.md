@@ -1,5 +1,48 @@
 # BYOE — bring your own editor
 
+## Status
+
+**Active.** D1-D8 below are **accepted decisions**, not open options: read the
+whole "Decisions" section as instructions. Implementation follows the numbered
+list in "Steps"; the per-step state is tracked here.
+
+| Step | State |
+|---|---|
+| 0 — write D1-D8 in as decisions | done |
+| 1 — `one-scene-loader.md` steps 1-3 | done |
+| 2 — `source_path` + `repl_reload_active_scene_from_path()` | done |
+| 3 — D3 metadata policy on `ReplSceneLoadOpts` | done |
+| 4 — `glr_extedit.c`, `--watch` | done |
+| 5 — `glr_extedit_notify_reloaded()` + D7 table | done |
+| 6 — stage 2, one incomplete final row | done |
+| 7 — stage 2.5, live WIP buffer | **not started — gated** (see below) |
+
+Step 7 is deliberately not implemented. Its gate is a measurement, and the
+plan states the precondition plainly: *"Stage 2.5 only after stage 1 has been
+used and the total content-update latency is measured."* Neither half is
+satisfiable from the implementation seat - "has been used" is a human
+condition, and Verification 7 wants p95 across small / typical / large scenes
+under real editing. Everything 2.5 needs from stages 1-2 (the two-level gate,
+the three-state tracking, the deferral state machine, the notification hook) is
+in place; what is missing is the number.
+
+Scope notes taken while implementing, so a later reader does not have to
+re-derive them:
+
+- **`one-scene-loader.md` steps 1-3 means exactly the three things the
+  Prerequisite section names** - explicit format, the options struct, and
+  `ATOMIC` over `SceneSnapshot`. That plan's step 3 also mentions the body-line
+  cap and the presentation reset; those belong to its *catalog reroute* (its
+  steps 4-6), have no caller until the reroute lands, and are not built here.
+  `example_loader.c` keeps its own `.glr` walk and
+  `test_camera_header_parity.c` stays green.
+- **`REPL_CAMERA_APPLY_NONE` is honoured inside `repl_camera_header_finish()`**,
+  not at the `import_finish_load()` call site. D3 warned that a `NONE` reaching
+  `cam_apply_pose` would snap the camera; making the reader itself refuse the
+  bridge call for `NONE` means no bridge implementation - present or future -
+  can be handed the mode at all, while the header's own diagnostics
+  (missing-role notes) still run.
+
 ## Goal
 
 Let an external editor (vim, VS Code, …) be a peer author of the live scene,
