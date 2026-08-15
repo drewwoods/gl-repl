@@ -52,12 +52,12 @@ drawn with additive blending and **depth writes off** - `glDepthMask(GL_FALSE)`,
 the classic translucency trick that stops the bell's far side from z-fighting
 its near side.
 
-<!-- images/showcase/jellyfish.gif
+<!-- images/showcase/jellyfish.png
      Shot: the translucent bell pulsing while the tentacles sway.
      Generate: scripts/docs-assets.sh sc-jellyfish
      Intent: the glow + glDepthMask ordering trick reads as a single creature. -->
 <div align="center">
-<img src="images/showcase/jellyfish.gif" alt="A translucent, pulsing jellyfish" width="70%">
+<img src="images/showcase/jellyfish.png" alt="A translucent, pulsing jellyfish" width="70%">
 </div>
 
 ```c
@@ -202,7 +202,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 </td>
 <td width="33%" align="center">
 
-<img src="images/animated-ring.gif" alt="Animated ring" width="100%">
+<img src="images/animated-ring.png" alt="Animated ring" width="100%">
 
 **[Animated ring](../examples/scenes/animated-ring-for-t.glr)**
 <br><sub>`for` + `t`, line loop + fan; see also the [2D assignment sketch](../examples/scenes/2d-assignment-sketch-vars-only.glr)</sub>
@@ -456,7 +456,7 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 </td>
 <td width="33%" align="center">
 
-<img src="images/clip-plane-sweep.gif" alt="A clip plane sweeping through solid geometry" width="100%">
+<img src="images/clip-plane-sweep.png" alt="A clip plane sweeping through solid geometry" width="100%">
 
 **[Clip planes carve solids](../examples/scenes/clip-planes-carve-solids.glr)**
 <br><sub>`glClipPlane` reveals the section through a solid</sub>

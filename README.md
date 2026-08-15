@@ -53,7 +53,7 @@ glEnd();
 
 <div align="center">
 
-<a href="docs/SHOWCASE.md"><img src="docs/images/animated-ring.gif" alt="Animated ring example" width="31%"></a>
+<a href="docs/SHOWCASE.md"><img src="docs/images/animated-ring.png" alt="Animated ring example" width="31%"></a>
 &nbsp;
 <a href="docs/SHOWCASE.md"><img src="docs/images/transform-stress.png" alt="Transform guides" width="31%"></a>
 &nbsp;

@@ -32,7 +32,7 @@ scripts/docs-assets.sh --list             # asset names
 | `ringed-planet.gif` | `sc-ringed-planet` | Ringed planet (nebula skies) - replaces the retired "Procedural terrain" |
 | `gl-repl-logo.png` | `sc-gl-repl-logo` | gl-repl Logo |
 | `grass.gif` | `sc-grass` | Swaying grass field (rand + t) |
-| `jellyfish.gif` | `sc-jellyfish` | Jellyfish (glDepthMask translucency) |
+| `jellyfish.png` | `sc-jellyfish` | Jellyfish (glDepthMask translucency) |
 | `function-demo.png` | `sc-function-demo` | Function demo (named func) |
 | `function-polygons.png` | `sc-function-polygons` | Function polygons (args + for) |
 | `conditional-colors.gif` | `sc-conditional-colors` | Conditional colors (if + t) |
@@ -50,5 +50,5 @@ Stand-ins (the ideal shot needs an external tool we can't drive headlessly):
 | `feature-sliders.gif` | _(none)_ | SHOWCASE points at `images/variable-panel.png`. Ideal: a variable-panel slider drag with the scene responding live. |
 
 Already covered by existing `docs/images/` assets (no showcase capture needed):
-`animated-ring.gif`, `glow-sprites.png`, `labels-orrery.png`, `glu-tess.png`,
+`animated-ring.png`, `glow-sprites.png`, `labels-orrery.png`, `glu-tess.png`,
 `transform-stress.png`, `replay.gif`, `xform-guide.gif`, `variable-panel.png`.

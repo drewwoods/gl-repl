@@ -74,7 +74,7 @@ just like they position geometry.
 Coefficients are full expressions, so a plane can animate - a `d` driven by
 `t` sweeps a live cross-section through the scene:
 
-![An animated clip plane sweeping a torus](images/clip-plane-sweep.gif)
+![An animated clip plane sweeping a torus](images/clip-plane-sweep.png)
 
 A plane equation is hard to picture from four numbers, so the cursor draws
 it for you - see [the clip-plane guide](USER_GUIDE.md#the-clip-plane-guide).

@@ -909,7 +909,7 @@ A trailing comment on a `float` declaration can also carry a tag:
 
 ## Making It Move
 
-![The Animated ring example](images/animated-ring.gif)
+![The Animated ring example](images/animated-ring.png)
 
 `t` is the one predefined variable - it exists in every session without a
 declaration, starts at `0`, and while playing advances a fixed 1/60 s per
@@ -1002,7 +1002,7 @@ menu) switches between the 3D perspective camera and a flat 2D orthographic
 projection - useful for plots, sketches, and UI-like drawings. Examples that
 declare `@cfg view_mode = RENDER3D_VIEW_2D` start in 2D automatically.
 
-![Animation: toggling View mode between 3D perspective and 2D ortho on the wave surface](images/view-mode-2d.png)
+![Animation: toggling View mode between 3D perspective and 2D ortho on the wave surface](images/view-mode-2d.gif)
 
 **Projection.** *Projection* (Ctrl+Shift+E) toggles between perspective and
 orthographic projection while keeping the free, interactive camera. Unlike
