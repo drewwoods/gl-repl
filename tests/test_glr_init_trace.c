@@ -6,7 +6,8 @@
  * detailed-phase gate (glr_init_trace always emits; glr_init_trace_detail
  * emits only while the detailed flag is set). Emission is observed by
  * capturing stderr to a temp file, since the trace format is the contract
- * the startup-stall diagnostics are read with.
+ * the startup-stall diagnostics are read with. Native stamps
+ * `[init +N.NNNs]`; the web build matches gl4es as `GLREPL: +N.NNNs`.
  *
  * Standalone: links only src/app/glr_init_trace.o - no GL, no controller.
  */
@@ -95,7 +96,13 @@ static void test_baseline_phase_always_emits(void) {
     capture_end(buf, sizeof(buf));
 
     ASSERT_TRUE("baseline phase emitted", strstr(buf, "PHASE_ALPHA") != NULL);
+#if defined(__EMSCRIPTEN__)
+    /* packaging/web/shell.html routes stderr by this tag (GLR_LOG_TAG). */
+    ASSERT_TRUE("trace carries GLREPL: + prefix",
+                strstr(buf, "GLREPL: +") != NULL);
+#else
     ASSERT_TRUE("trace carries [init + prefix", strstr(buf, "[init +") != NULL);
+#endif
     ASSERT_TRUE("detail phase suppressed when flag off",
                 strstr(buf, "PHASE_BETA") == NULL);
 }
