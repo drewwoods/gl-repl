@@ -48,12 +48,28 @@ the plan did not:
   and a row half-typed and then navigated away from would otherwise freeze the
   whole scene behind a row nobody is on.
 - **Declining the recovery offer does not delete the `.wip`.** The plan's table
-  says delete; leaving it is the smaller surprise - gl-repl did not create the
-  file, the editor's own `VimLeave` hook removes it, and both load-bearing
-  halves of that row (never auto-apply, then ignore until the token moves) are
-  honoured without deleting anything. Esc has no commit callback, so "delete"
-  would also have meant adding a cancel hook to the shared modal for one
-  caller.
+  says delete. Three reasons not to, in order of weight: the file is unsaved
+  work from an editor that died, so it may be the only copy, and deleting it
+  on a *dismissal* destroys it on the least deliberate keystroke available;
+  gl-repl did not create it, and a watcher that deletes files it merely reads
+  is a surprising thing to have on; and Esc has no commit callback, so
+  implementing it would mean adding a cancel hook to the shared modal for one
+  caller - with `glr_modal_cancel()` also being what runs after a *successful*
+  commit, so the naive version would fire on accept too.
+
+  Both load-bearing halves of that row survive without deleting anything:
+  never auto-apply (the hold is set before the prompt opens, so declining is
+  the default) and ignore it until its change token moves again. The cost is
+  that a `.wip` nobody wants lingers until its editor next opens and closes
+  that file - the plugin's `BufUnload`/`VimLeave` hooks are what clear it in
+  the normal case, and they only failed to run here because the editor died.
+
+  What the plan's version *would* have bought is not re-asking, and that has
+  to be paid for separately: a decline is now remembered per path, keyed by
+  the sidecar's bytes, so switching away and back does not re-ask. Keying on
+  content rather than on the path alone is what keeps "ignore it until its
+  change token moves again" true across bindings - the editor waking up and
+  publishing changes the bytes, and that is a new question.
 
 One gap the plan carried into the implementation, found by auditing stage 2.5
 against stage 1 rather than against the plan: **returning to a scene whose

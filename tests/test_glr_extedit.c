@@ -2970,6 +2970,61 @@ static void test_returning_to_a_live_session_is_not_a_recovery(void) {
     (void)unlink(WIP_PATH);
 }
 
+/* Declining the recovery offer has to survive a scene switch. gl-repl does
+ * not delete the `.wip` on decline - it did not create that file, and it may
+ * be the only copy of the work - so the file is still sitting there on the way
+ * back, and without a memory of the answer every F12 round trip re-asks a
+ * question the user already answered. Keyed by the sidecar's bytes, so the
+ * editor waking up and publishing is what lifts it: the plan's "ignore it
+ * until its change token moves again", made to outlive one binding the same
+ * way a dismissed scene-file payload does. */
+static void test_declining_the_offer_survives_a_scene_switch(void) {
+    int slot_a;
+
+    printf("--- a declined sidecar stays declined across a switch ---\n");
+
+    glr_extedit_set_enabled(0);
+    glr_modal_cancel();
+    (void)unlink(WIP_PATH);
+    write_lines(WATCH_PATH, k_scene_a);
+    publish_wip(k_scene_b, 4, 1);          /* present before the bind */
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+    glr_extedit_set_enabled(1);
+    glr_extedit_poll();
+    ASSERT_TRUE("the leftover sidecar is offered", glr_modal_active());
+    glr_modal_cancel();                    /* decline */
+    slot_a = repl_active_user_scene();
+    ASSERT_TRUE("the CLI file is a user scene", slot_a >= 0);
+
+    /* Away and back, with the sidecar untouched on disk throughout. */
+    write_lines(OTHER_PATH, k_scene_longer);
+    {
+        ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+        ASSERT_TRUE("a second scene opens",
+                    repl_load_scene_as_new_slot(OTHER_PATH, &reason) >= 0);
+    }
+    glr_extedit_poll();
+    ASSERT_TRUE("back to the first scene", repl_load_user_scene_idx(slot_a));
+    glr_extedit_poll();
+    glr_extedit_poll();
+
+    ASSERT_TRUE("the answer is remembered, not re-asked", !glr_modal_active());
+    ASSERT_INT("and nothing was followed behind their back",
+               glr_extedit_stats().wip_updates, 0);
+    ASSERT_TRUE("the scene is still the file", document_mentions("0, 0, 0"));
+
+    /* The editor waking up is what lifts it: new bytes are a new question. */
+    set_mtime(WIP_PATH, 40000, 0);
+    publish_wip(k_scene_longer, 4, 1);
+    set_mtime(WIP_PATH, 40001, 0);
+    glr_extedit_poll();
+    ASSERT_INT("a publication after the decline is followed",
+               glr_extedit_stats().wip_updates, 1);
+    ASSERT_TRUE("with its geometry", document_mentions("3, 3, 3"));
+    (void)unlink(WIP_PATH);
+}
+
 static void test_an_unparseable_buffer_leaves_the_scene_alone(void) {
     GlrExtEditStats before, after;
 
@@ -3063,6 +3118,7 @@ int main(void) {
     test_a_lesson_holds_the_sidecar_and_drops_what_it_missed();
     test_switching_scenes_ends_the_session();
     test_returning_to_a_live_session_is_not_a_recovery();
+    test_declining_the_offer_survives_a_scene_switch();
     test_an_unparseable_buffer_leaves_the_scene_alone();
     test_exported_c_sidecar_cursor_follows_snippet_row();
     glr_extedit_set_enabled(0);

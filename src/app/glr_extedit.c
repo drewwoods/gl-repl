@@ -113,6 +113,15 @@ typedef struct {
      * `content` above, and for the same reason: binding state is wiped on
      * rebind, so the memory has to live per path. */
     int                wip_followed;
+    /* A sidecar the user turned down at the recovery prompt, keyed by its
+     * bytes. Same reason `suppressed` exists for the scene file: a decision
+     * the user already made must survive a scene switch, or coming back
+     * re-asks it. Keyed by content rather than by path alone so that the
+     * editor waking up and publishing - which changes the bytes - is what
+     * lifts it, which is the plan's "ignore it until its change token moves
+     * again". */
+    unsigned long long wip_declined;
+    int                wip_declined_valid;
     int                valid;
 } GlrExtEditSeen;
 
@@ -271,6 +280,32 @@ static int seen_wip_followed(const char *path) {
     const GlrExtEditSeen *e = seen_find(path);
 
     return e && e->wip_followed;
+}
+
+/* Recorded when the prompt *opens*, not when it is answered: Esc has no
+ * callback, so declining is the default and accepting is what clears it. */
+static void seen_note_wip_declined(const char *path, unsigned long long content) {
+    GlrExtEditSeen *e = seen_find(path);
+
+    if (!e)
+        e = seen_add(path);
+    if (!e)
+        return;
+    e->wip_declined       = content;
+    e->wip_declined_valid = 1;
+}
+
+static void seen_clear_wip_declined(const char *path) {
+    GlrExtEditSeen *e = seen_find(path);
+
+    if (e)
+        e->wip_declined_valid = 0;
+}
+
+static int seen_wip_declined(const char *path, unsigned long long content) {
+    const GlrExtEditSeen *e = seen_find(path);
+
+    return e && e->wip_declined_valid && e->wip_declined == content;
 }
 
 static int seen_lookup_suppressed(const char *path, unsigned long long *out) {
@@ -1047,7 +1082,17 @@ static void wip_bind(void) {
         return;
     }
     if (stat(g_wip_path, &st) == 0 && S_ISREG(st.st_mode)) {
-        if (seen_wip_followed(g_bound)) {
+        unsigned long long content;
+
+        if (!seen_wip_followed(g_bound) &&
+            hash_file_content(g_wip_path, &content) &&
+            seen_wip_declined(g_bound, content)) {
+            /* Already turned down, and unchanged since. Asking again on every
+             * scene switch would make the answer worthless. Hold, and let the
+             * editor waking up lift it. */
+            g_wip_hold     = 1;
+            g_wip_observed = change_token_from_stat(&st);
+        } else if (seen_wip_followed(g_bound)) {
             /* Coming back to a scene whose editor is still open. Leave the
              * observed token invalid so the next poll reads the sidecar as an
              * ordinary content update and the document converges on whatever
@@ -1389,6 +1434,7 @@ static int wip_recover_commit(GlrModalKind kind, const char *text, int context) 
     (void)context;
     g_wip_hold     = 0;
     g_wip_offering = 0;
+    seen_clear_wip_declined(g_bound);
     /* Force the read: the observed token was stamped when the offer was made,
      * so nothing has "moved" since. */
     g_wip_observed.valid = 0;
@@ -1411,6 +1457,11 @@ static void wip_offer_recovery(void) {
      * owning the keyboard is not a reason to keep asking every frame, and the
      * hold means declining is the safe default. */
     g_wip_recover_offer = 0;
+    {
+        unsigned long long content;
+        if (hash_file_content(g_wip_path, &content))
+            seen_note_wip_declined(g_bound, content);
+    }
     if (glr_modal_active())
         return;
     snprintf(question, sizeof(question),
