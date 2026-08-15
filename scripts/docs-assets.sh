@@ -188,7 +188,9 @@ Options:
   --list             List selected asset names and exit (all by default).
   --formats          List the selected CLIPS with their current format (GIF or
                      APNG), size and path, then exit. Stills are skipped: only
-                     a clip has a format to report.
+                     a clip has a format to report. With --to-apng/--to-gif it
+                     also shows the target format and changes nothing, so it
+                     doubles as a dry run of a migration.
   --to-apng          Write the selected clips as APNG instead of GIF: repoint
                      every Markdown reference at the .png and delete the
                      superseded .gif. On its own it selects every clip, not
@@ -197,9 +199,15 @@ Options:
   -j, --jobs N       Regenerate up to N assets in parallel (default: 1).
   -h, --help         Show this help and exit.
 
-Without --to-apng/--to-gif each clip keeps the format it is already in (whichever
-of <name>.gif / <name>.png exists; a brand-new clip defaults to GIF), so an
-ordinary regeneration never changes formats or touches the docs.
+Clip formats:
+  A clip's format is per-clip state, read from what is on disk: <name>.png
+  means APNG, <name>.gif means GIF, and a clip with neither (a newly added
+  one) is written as GIF. So a plain `scripts/docs-assets.sh`, or --gifs, or
+  a named clip, REPRODUCES EACH CLIP IN THE FORMAT IT IS ALREADY IN — an APNG
+  clip is regenerated as an APNG — and never changes a format or edits a doc.
+  Only --to-apng/--to-gif change a format. --formats reports the current one,
+  and shown together with --to-apng/--to-gif it is a dry run of that
+  migration.
 
 Environment:
   BIN=<path>         gl-repl binary (default: build/release/gl-repl).
@@ -348,24 +356,39 @@ clip_base() {
 }
 
 if [[ "$FORMATS" -eq 1 ]]; then
-    n_gif=0; n_apng=0; kb_gif=0; kb_apng=0
+    # Target differs from current only under --to-apng/--to-gif, which makes
+    # this a dry run of that migration: the column says what a real run would
+    # write, and nothing is rendered or retargeted here.
+    n_gif=0; n_apng=0; kb_gif=0; kb_apng=0; n_change=0
+    printf '%-7s %-7s %8s  %-24s %s\n' CURRENT TARGET SIZE ASSET PATH
     while read -r a; do
         base="$(clip_base "$a")"
         [[ -n "$base" ]] || continue   # not a clip: stills have no format
         if [[ -f "$base.png" ]]; then
-            kb=$(( $(wc -c <"$base.png") / 1024 ))
-            n_apng=$((n_apng + 1)); kb_apng=$((kb_apng + kb))
-            printf '%-6s %6s KB  %-24s %s\n' APNG "$kb" "$a" "${base#$ROOT/}.png"
+            cur=APNG; kb=$(( $(wc -c <"$base.png") / 1024 ))
+            n_apng=$((n_apng + 1)); kb_apng=$((kb_apng + kb)); path="${base#$ROOT/}.png"
         elif [[ -f "$base.gif" ]]; then
-            kb=$(( $(wc -c <"$base.gif") / 1024 ))
-            n_gif=$((n_gif + 1)); kb_gif=$((kb_gif + kb))
-            printf '%-6s %6s KB  %-24s %s\n' GIF "$kb" "$a" "${base#$ROOT/}.gif"
+            cur=GIF; kb=$(( $(wc -c <"$base.gif") / 1024 ))
+            n_gif=$((n_gif + 1)); kb_gif=$((kb_gif + kb)); path="${base#$ROOT/}.gif"
         else
-            printf '%-6s %6s     %-24s %s\n' '-' '' "$a" "${base#$ROOT/}.{gif,png} (never generated)"
+            cur='-'; kb=0; path="${base#$ROOT/}.{gif,png} (never generated)"
         fi
+        # No migration flag: the target IS the current format — that is the
+        # whole promise of a plain regeneration.
+        if [[ -n "$CLIP_FORMAT" ]]; then
+            tgt=$(printf '%s' "$CLIP_FORMAT" | tr '[:lower:]' '[:upper:]')
+        elif [[ "$cur" == '-' ]]; then
+            tgt=GIF
+        else
+            tgt=$cur
+        fi
+        [[ "$tgt" == "$cur" ]] || n_change=$((n_change + 1))
+        printf '%-7s %-7s %5s KB  %-24s %s\n' "$cur" "$tgt" "$kb" "$a" "$path"
     done < <(printf '%s\n' "${WANTED[@]}" | sort)
     printf '\n%d clip(s): %d GIF (%d KB), %d APNG (%d KB)\n' \
         "$((n_gif + n_apng))" "$n_gif" "$kb_gif" "$n_apng" "$kb_apng"
+    [[ "$n_change" -eq 0 ]] || printf '%d would change format on `--to-%s` (nothing written: --formats is read-only)\n' \
+        "$n_change" "$CLIP_FORMAT"
     exit 0
 fi
 

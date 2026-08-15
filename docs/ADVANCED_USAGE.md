@@ -397,8 +397,11 @@ unloaded machine.
 
 **Animated clips: GIF or APNG, per clip.** A clip's format is not a property
 of its call site - it is whichever file is already on disk (`<name>.gif` or
-`<name>.png`; a brand-new clip defaults to GIF). An ordinary regeneration
-keeps it, so formats and doc links never move on their own.
+`<name>.png`; a brand-new clip defaults to GIF). **A plain regeneration
+reproduces each clip in the format it is already in**, so
+`scripts/docs-assets.sh` with no options rebuilds an APNG clip as an APNG and
+a GIF clip as a GIF, and formats and doc links never move on their own. Only
+`--to-apng` / `--to-gif` change a format.
 
 `--to-apng` and `--to-gif` migrate the selected clips:
 
@@ -410,8 +413,10 @@ scripts/docs-assets.sh --to-apng              # every clip
 ```
 
 `--formats` is the companion to those: it lists the selected clips with their
-current format, size and path, so a subset can be chosen from what is actually
-on disk rather than guessed. It reports clips only - a still has no format to
+current and target format, size and path, so a subset can be chosen from what
+is actually on disk rather than guessed. Target equals current unless a
+migration flag is present, which makes `--formats --to-apng <clips>` a **dry
+run** - it prints what a real run would write and changes nothing. It reports clips only - a still has no format to
 convert - and it reads each clip's path out of its own `clip` call site, so it
 cannot drift from what the script would actually write. `--list` deliberately
 stays bare names: the shell completions parse it.
