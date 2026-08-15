@@ -92,6 +92,26 @@ allocation-failure guard is explicit at the mutation boundary:
 - **A not-yet-created file is watchable.** `--watch new.glr` before the editor
   has written it: the bootstrap import fails, the seeded New Scene carries the
   path, and the first poll after the file appears picks it up.
+- **One read per reload.** Hashing the file and then loading it left a window
+  where a save between the two stamped an applied content describing bytes
+  never loaded. The reader returns the bytes, their hash and the line pointers
+  together; the path loader survives only as a fallback for a file too large to
+  buffer, and re-hashes there.
+- **A dismissal is remembered per file, not per binding.** `rebind()` wipes the
+  live binding state, so switching away and back re-offered a version the
+  user's own commit had already beaten. The suppression rides the per-path
+  history now.
+- **A missing relative path is resolved through its parent.** `realpath()`
+  fails on a leaf that does not exist - the supported `--watch new.glr` case -
+  and keeping the relative path left the binding at the mercy of the working
+  directory.
+- **The 2048-physical-line cap was unreachable for `.glr`, not a silent stage-2
+  cutoff.** `MAX_EDITOR_COMMANDS` is 1024, so a `.glr` with more rows than that
+  cannot load at all. The cap bit exported `.c` only, where it forced the
+  fallback path and its separate hash. It is gone for that reason; no test
+  accompanies it because no discriminating one exists, and a large-file test
+  written first passed for the wrong reason (document capacity) and was removed
+  rather than kept.
 - **`REPL_DEMO_DEP_SRCS` needs a row for every new `src/repl/*.c`.** It is an
   explicit list; the binary and the tests use `$(wildcard)`, so a missing row
   is invisible to `make test` and to `check-c99`. `repl_demo` and
@@ -880,7 +900,7 @@ All in failure and edge behavior, where the suite is thinnest.
 
 **Where they landed.** `tests/test_scene_load.c` (new, 79 assertions) covers
 the loader options and the source-file binding; `tests/test_glr_extedit.c`
-(new, 209 native / 5 wasm) covers the watcher; `test_export_glr_fixed_point`
+(new, 214 native / 5 wasm) covers the watcher; `test_export_glr_fixed_point`
 in `tests/test_repl_core_examples.c` covers the last bullet. The Stage 2.5
 rows below are **not** written yet. Everything else in the list is covered.
 
@@ -950,7 +970,7 @@ in the numbering below:
 | # | Result |
 |---|---|
 | 1 | `make check-state-ownership` and `make check-trailing-whitespace` green. `--watch` needed rows in `scripts/completions/` too (`check-completions`). |
-| 2 | `make test` / `make test-stubs` green (28,569 assertions), and every `HEADLESS_DEMO_TARGETS` demo builds - `repl_demo` / `repl_live_demo` are the load-bearing no-controller proofs and a new `src/repl/*.c` needs a `REPL_DEMO_DEP_SRCS` row they alone catch. `make test-web` links the watcher TU and `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - it asserts the *inert* form rather than joining `WEB_TEST_EXCLUDE`. The lane's one remaining failure, `test_glr_init_trace`, fails identically at the pre-BYOE commit and is unrelated. |
+| 2 | `make test` / `make test-stubs` green (28,599 assertions), and every `HEADLESS_DEMO_TARGETS` demo builds - `repl_demo` / `repl_live_demo` are the load-bearing no-controller proofs and a new `src/repl/*.c` needs a `REPL_DEMO_DEP_SRCS` row they alone catch. `make test-web` links the watcher TU and `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - it asserts the *inert* form rather than joining `WEB_TEST_EXCLUDE`. The lane's one remaining failure, `test_glr_init_trace`, fails identically at the pre-BYOE commit and is unrelated. |
 | 3 | gracemont (gcc 13.3, Ubuntu 24.04): `make check-c99` and `make test-stubs` green, including the `st_mtim` arm of the change token that macOS never compiles. |
 | 4 | End-to-end: `./gl-repl --watch scene.glr`, appended a `/* C-style note */`, four complete rows, a trailing `glVertex3f(3,` and a `// still typing` comment under it, all from outside; the session reloaded 7 -> 13 commands, kept both comments as document rows, and parked the incomplete row. Also `--watch new.glr` on a file holding nothing but `glVertex3f(1,`: the startup import fails (bootstrap has no parking), the binding survives, and the next save loads. `--watch` with no positional file exits 1 with a usage error. |
 | 5 | Resolved by reading rather than by hand - see the scope note above. |
