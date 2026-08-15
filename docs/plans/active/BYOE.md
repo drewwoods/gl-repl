@@ -26,6 +26,40 @@ under real editing. Everything 2.5 needs from stages 1-2 (the two-level gate,
 the three-state tracking, the deferral state machine, the notification hook) is
 in place; what is missing is the number.
 
+Corrections made after review, kept here because each was a real defect the
+first pass shipped and each now has a test that fails without the fix:
+
+- **The applied stamp must come from the bytes the reload read**, not from the
+  parked token. D8 says a deferred version is re-read when the gate opens, so
+  the two can differ - and stamping the stale one made the watcher permanently
+  deaf to a later, genuine save of exactly those bytes. A revert to
+  already-known content also clears anything parked.
+- **The parked row is removed, not truncated at.** It is the last row with
+  *code*, so trailing comments and blanks sit after it and were being thrown
+  away with it.
+- **An over-long physical line is refused, not split.** `fgets` into
+  `MAX_LINE_LEN` turned one long line into two short ones, atomically loading
+  a document the path reader rejects outright.
+- **`repl_scan_code_line` carries block-comment state.** `import.c` strips
+  `/* ... */` upstream, so the scanner never needed it; the watcher scans *raw*
+  physical lines and has no upstream, and a trailing C-style comment therefore
+  had no terminator and was parked as a half-typed command. The two callers
+  disagreeing about a comment is exactly what the shared header exists to
+  prevent.
+- **`--watch FILE --tutorial N` never bound.** The lesson had already parked
+  the document in a slot-less transient before the watcher armed, and pinning
+  an *empty* binding protected nothing. The pin now applies only once something
+  is bound, and `--watch` seeds the CLI path outright.
+- **The lesson-end token restamp is dropped.** D7 asks for it so old movement
+  is not re-read as new - but that holds only for a design that ignores
+  activity *without reading*. This poll reads and stamps on every change,
+  lesson included, so the token is already current; restamping additionally
+  swallowed a save that landed between the lesson ending and the next poll.
+- **`REPL_DEMO_DEP_SRCS` needs a row for every new `src/repl/*.c`.** It is an
+  explicit list; the binary and the tests use `$(wildcard)`, so a missing row
+  is invisible to `make test` and to `check-c99`. `repl_demo` and
+  `repl_live_demo` are gated by `test-full`'s `HEADLESS_DEMO_TARGETS` - run it.
+
 Scope notes taken while implementing, so a later reader does not have to
 re-derive them:
 
@@ -821,9 +855,9 @@ Results for stages 1-2, in the numbering below:
 | # | Result |
 |---|---|
 | 1 | `make check-state-ownership` and `make check-trailing-whitespace` green. `--watch` needed rows in `scripts/completions/` too (`check-completions`). |
-| 2 | `make test` / `make test-stubs` green (28,491 assertions). `make test-web` links the watcher TU and `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - it asserts the *inert* form rather than joining `WEB_TEST_EXCLUDE`. The lane's one remaining failure, `test_glr_init_trace`, fails identically at the pre-BYOE commit and is unrelated. |
+| 2 | `make test` / `make test-stubs` green (28,508 assertions), and every `HEADLESS_DEMO_TARGETS` demo builds - `repl_demo` / `repl_live_demo` are the load-bearing no-controller proofs and a new `src/repl/*.c` needs a `REPL_DEMO_DEP_SRCS` row they alone catch. `make test-web` links the watcher TU and `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - it asserts the *inert* form rather than joining `WEB_TEST_EXCLUDE`. The lane's one remaining failure, `test_glr_init_trace`, fails identically at the pre-BYOE commit and is unrelated. |
 | 3 | gracemont (gcc 13.3, Ubuntu 24.04): `make check-c99` and `make test-stubs` green, including the `st_mtim` arm of the change token that macOS never compiles. |
-| 4 | End-to-end: `./gl-repl --watch scene.glr`, appended four rows plus a trailing `glVertex3f(3,` from outside; the session reloaded 7 -> 11 commands and parked the incomplete row. `--watch` with no positional file exits 1 with a usage error. |
+| 4 | End-to-end: `./gl-repl --watch scene.glr`, appended a `/* C-style note */`, four complete rows, a trailing `glVertex3f(3,` and a `// still typing` comment under it, all from outside; the session reloaded 7 -> 13 commands, kept both comments as document rows, and parked the incomplete row. `--watch` with no positional file exits 1 with a usage error. |
 | 5 | Resolved by reading rather than by hand - see the scope note above. |
 | 6-7 | Stage 2.5 only; not reached. |
 
