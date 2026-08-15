@@ -20,8 +20,10 @@ list in "Steps"; the per-step state is tracked here.
 
 Both halves of step 7's precondition were satisfied before it was built. Stage
 1 was used against a real editor, and the latency gate was measured rather than
-estimated: `make bench-extedit`, p95 **5.5 ms** on the largest catalog scene
-against the 8 ms budget, ~1 ms on small and typical ones. The numbers and what
+estimated. The first pass timed the saved-file proxy; `bench_extedit` now
+publishes `.wip` updates and asserts `wip_updates`. Native release, 200
+content updates: p95 **5.1 ms** on the largest catalog scene against the 8 ms
+budget, well under 0.5 ms on small and typical ones. The numbers and what
 they imply for a per-keystroke path are under "Gate" below.
 
 Stage 2.25 stayed skipped, and the reason held up: 2.5 receives an explicit
@@ -159,6 +161,38 @@ allocation-failure guard is explicit at the mutation boundary:
   heap-backed history copy cannot be allocated; otherwise a failed import can
   still clear redo or evict the oldest undo entry.
 
+Post-review correctness on the 2.5 range (the feature was complete; these
+were the remaining state/undo/mapping holes):
+
+- **A dismissed WIP payload stays dismissed until its hash changes.** After
+  a local commit or Ctrl+Z the poll used to drop one publication and clear
+  `g_wip_payload_valid`, so a later `CursorMoved` of the same vim buffer
+  looked like new content and overwrote the local document. A separate
+  suppressed WIP hash now ignores both content and cursor updates for those
+  bytes. Commit and undo are not the same pause: undo also drops the
+  publication that first observed it; commit falls through so a genuinely
+  new payload is followed immediately (D5).
+- **A failed first WIP import must not mutate undo history.** The session
+  snapshot was pushed before the atomic load; failure restored the document
+  but left the push, clearing redo and evicting the oldest ring entry. The
+  path now captures and restores the heap-backed history the way a failed
+  saved-file reload already did.
+- **Continuation rows belong on the row map.** A multi-line statement reset
+  `line_no` to its first physical row, so every later code-bearing row
+  stayed `REPL_ROW_MAP_NONE` and a cursor-only move onto it did nothing.
+- **Parked WIP input is canonical.** An indented `    glVertex3f(1,` kept
+  its leading whitespace, and live guides prefix-match at byte zero, so a
+  typical partial vertex never grew a plane/line/point. Park through
+  `repl_canonical_input_view` and subtract the stripped lead from vim's
+  column.
+- **The vim sidecar must resolve symlinks.** gl-repl binds through
+  `realpath()`; the plugin only made the buffer name absolute, so a
+  symlink scene published `<link>.wip` while gl-repl watched
+  `<target>.wip`.
+- **The latency gate times the shipped `.wip` path.** The first bench
+  rewrote the saved file. It now publishes atomically and asserts
+  `wip_updates`; `--saved` keeps the proxy.
+
 Scope notes taken while implementing, so a later reader does not have to
 re-derive them:
 
@@ -239,12 +273,14 @@ Premises:
 
 ## Verdict
 
-Stage 1 is mostly assembly over two design problems — path binding and
-undo/divergence — both now decided below. Stage 2 is a small delta. Stage 2.25
-is skipped: only its hole-placement idea is reusable, while failure discovery
-and strict retry are not needed once the sidecar names the active row. Stage
-2.5 is the highest-value next step and is gated on a measurement, not on new
-architecture.
+Stages 1, 2 and 2.5 have landed. Stage 2.25 stayed skipped: only its
+hole-placement idea is reusable, while failure discovery and strict retry
+are not needed once the sidecar names the active row. Post-review
+correctness on the 2.5 range - dismissed-payload suppression, failed-WIP
+undo restoration, continuation-row mapping, indented parked guides,
+symlink-resolved sidecars, and a bench of the shipped `.wip` path - is
+folded into the implementation notes below rather than opened as another
+stage.
 
 The friction that bites at every stage and has no cheap fix: **gl-repl
 rewrites the text.** A UX cost to state clearly, not a bug to solve.
@@ -859,7 +895,8 @@ deliberate ring-only, no-promotion helper is added for the purpose.
 
 | Exit | Behavior |
 |---|---|
-| Ctrl+Z out of WIP | Restore the base version, clear WIP-active, and **ignore the sidecar until its change token moves again** — otherwise the next poll re-enters WIP and the undo does not stick |
+| Ctrl+Z out of WIP | Restore the base version, clear WIP-active, **drop the publication that first observed the undo** (the sidecar may have been written before or after the key), and **suppress the dismissed payload hash** so a later `CursorMoved` of those bytes cannot undo the undo. Resume when the payload changes. |
+| Local commit during WIP | Same suppressed-payload hash (D5). The observing publication is *not* dropped if it is already a new payload - that one is followed immediately. |
 | Sidecar deleted (`VimLeave`) | Clear WIP-active, then **split on identity** (below) |
 | Next WIP session | Captures a fresh entry snapshot, subject to the identity split above |
 
@@ -889,18 +926,25 @@ rather than on design.
 
 #### Result — the gate passes
 
-`bench/bench_extedit.c` (`make bench-extedit`), 2026-08-15, macOS release
-build, three runs of 300 content updates per case. Cases are the smallest,
-median and largest shipped catalog scenes by authored line count, so the three
-rows keep meaning small / typical / large as the catalog grows. `poll` is the
-extedit section alone; `frame` adds the reflatten the reload forces onto the
-same frame, and is the number the 8 ms budget is about.
+`bench/bench_extedit.c` (`make bench-extedit`; default is the shipped
+`.wip` path, `--saved` keeps the stage-1 file-reload proxy). 2026-08-15,
+macOS native release, 200 atomic sidecar publications per case. Cases are
+the smallest, median and largest shipped catalog scenes by authored line
+count, so the three rows keep meaning small / typical / large as the
+catalog grows. `poll` is the extedit section alone; `frame` adds the
+reflatten the reload forces onto the same frame, and is the number the
+8 ms budget is about. The harness asserts `wip_updates` so a deferred or
+failed publication cannot flatten p95.
 
 | Case | Scene | Doc rows | p50 | **p95** | max |
 |---|---|---|---|---|---|
-| small | 2D assignment sketch (vars only) | 19 | 0.57 | **0.96** | 1.4 |
-| typical | Annotated orbit plot (labels) | 54 | 0.80 | **1.14** | 1.7 |
-| large | Orrery (labels track 3D orbits) | 447 | 5.22 | **5.54** | 7.2 |
+| small | 2D assignment sketch (vars only) | 19 | 0.15 | **0.20** | 0.26 |
+| typical | Annotated orbit plot (labels) | 54 | 0.39 | **0.44** | 0.51 |
+| large | Orrery (labels track 3D orbits) | 447 | 4.81 | **5.09** | 7.6 |
+
+An earlier measurement of the saved-file proxy sat at 5.54 ms p95 on the
+same large scene; the shipped path is the same order of magnitude and
+still inside the budget. `--saved` is there to re-take that proxy.
 
 Two things the number does not say on its own:
 
@@ -974,11 +1018,14 @@ not exist: sockets, kqueue, inotify, FSEvents, mkfifo, fork/exec.
 
 All in failure and edge behavior, where the suite is thinnest.
 
-**Where they landed.** `tests/test_scene_load.c` (118 assertions) covers the
-loader options, the source-file binding and the row map / cursor hole;
-`tests/test_glr_extedit.c` (270 native / 5 wasm) covers the watcher and the
-sidecar; `test_export_glr_fixed_point` in `tests/test_repl_core_examples.c`
-covers the last bullet. Everything in the list below is covered.
+**Where they landed.** `tests/test_scene_load.c` (127 assertions) covers the
+loader options, the source-file binding and the row map / cursor hole,
+including continuation-row mapping; `tests/test_glr_extedit.c` (307 native /
+5 wasm) covers the watcher and the sidecar, including dismissed-payload
+suppression, failed-WIP undo restoration, indented parked guides, and
+cursor-only movement onto a continuation row; `test_export_glr_fixed_point`
+in `tests/test_repl_core_examples.c` covers the last bullet. Everything in
+the list below is covered.
 
 - **Undo per identity.** User scene: reload is undoable. Unedited example:
   reload pushes nothing and **does not promote** — assert the slot count.
@@ -1042,13 +1089,12 @@ covers the last bullet. Everything in the list below is covered.
 
 ## Verification
 
-Results for stages 1-2, with Stage 2.25 skipped and Stage 2.5 still pending,
-in the numbering below:
+Results for stages 1-2.5, with Stage 2.25 skipped, in the numbering below:
 
 | # | Result |
 |---|---|
 | 1 | `make check-state-ownership` and `make check-trailing-whitespace` green. `--watch` needed rows in `scripts/completions/` too (`check-completions`). |
-| 2 | `make test` / `make test-stubs` green (28,599 assertions), and every `HEADLESS_DEMO_TARGETS` demo builds - `repl_demo` / `repl_live_demo` are the load-bearing no-controller proofs and a new `src/repl/*.c` needs a `REPL_DEMO_DEP_SRCS` row they alone catch. `make test-web` links the watcher TU and `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - it asserts the *inert* form rather than joining `WEB_TEST_EXCLUDE`. The lane's one remaining failure, `test_glr_init_trace`, fails identically at the pre-BYOE commit and is unrelated. |
+| 2 | `make test` / `make test-stubs` green (28,749 assertions), and every `HEADLESS_DEMO_TARGETS` demo builds - `repl_demo` / `repl_live_demo` are the load-bearing no-controller proofs and a new `src/repl/*.c` needs a `REPL_DEMO_DEP_SRCS` row they alone catch. `make test-web` links the watcher TU and `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - it asserts the *inert* form rather than joining `WEB_TEST_EXCLUDE`. The lane's one remaining failure, `test_glr_init_trace`, fails identically at the pre-BYOE commit and is unrelated. |
 | 3 | gracemont (gcc 13.3, Ubuntu 24.04): `make check-c99` and `make test-stubs` green, including the `st_mtim` arm of the change token that macOS never compiles. |
 | 4 | End-to-end: `./gl-repl --watch scene.glr`, appended a `/* C-style note */`, four complete rows, a trailing `glVertex3f(3,` and a `// still typing` comment under it, all from outside; the session reloaded 7 -> 13 commands, kept both comments as document rows, and parked the incomplete row. Also `--watch new.glr` on a file holding nothing but `glVertex3f(1,`: the startup import fails (bootstrap has no parking), the binding survives, and the next save loads. `--watch` with no positional file exits 1 with a usage error. |
 | 5 | Resolved by reading rather than by hand - see the scope note above. |
@@ -1072,6 +1118,8 @@ in the numbering below:
    partial write.
 7. Measure p95 **total content-update latency** in the extedit section,
    sampled only on real content updates, across small / typical / large
-   scenes (2.5 gate; ~8 ms total main-thread budget). **Done** -
-   `make bench-extedit`; results and caveats under "Gate".
+   scenes (2.5 gate; ~8 ms total main-thread budget). **Done** on the
+   shipped `.wip` path - `make bench-extedit` (default publishes the
+   sidecar and asserts `wip_updates`; `--saved` is the file-reload
+   proxy). Results and caveats under "Gate".
 8. Re-read every `file:line` citation before landing.

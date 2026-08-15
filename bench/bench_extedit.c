@@ -23,9 +23,12 @@
  *     whose reload count does not match its sample count fails the run.
  *
  * Under stage 2.5 this cost is paid **per keystroke**, not per `:w`, which is
- * why the number matters at all. Nothing here simulates the sidecar - it does
- * not exist yet, and the machinery it would reuse (read, hash, ATOMIC import,
- * park, notify) is exactly what stage 1 already runs on every save.
+ * why the number matters at all. The default case publishes `<file>.wip`
+ * atomically (temp + rename, trailing `// @cursor`) and asserts
+ * `wip_updates` so the timed frames are the shipped content-update path:
+ * row-map init, hole substitution, quiet import, one session snapshot,
+ * not the saved-file proxy that stage 1 already ran. `--saved` keeps that
+ * proxy for comparison.
  *
  * Scene sizes come from the shipped catalog rather than from synthetic
  * documents: "typical" has to mean something, and the catalog is the only
@@ -50,6 +53,7 @@
 
 #include "app/glr_ctrl.h"
 #include "app/glr_extedit.h"
+#include "app/glr_modal.h"
 #include "config.h"
 #include "editor/state.h"
 #include "repl/bootstrap.h"
@@ -62,6 +66,8 @@
 #include "repl/state_views.h"
 
 #define BENCH_SCENE_PATH "/tmp/gl_repl_bench_extedit.glr"
+#define BENCH_WIP_PATH   BENCH_SCENE_PATH ".wip"
+#define BENCH_WIP_TMP    BENCH_WIP_PATH ".tmp"
 #define BENCH_MAX_LINES  (MAX_EDITOR_COMMANDS + 64)
 #define BENCH_MAX_SAMPLES 4096
 
@@ -72,6 +78,9 @@ static double now_seconds(void) {
 }
 
 static int g_csv = 0;
+/* Default is the shipped Stage 2.5 sidecar. `--saved` times the `:w` proxy
+ * instead, which skips row-map init / hole substitution / quiet import. */
+static int g_saved = 0;
 /* A case that cannot be measured invalidates the answer, so it fails the run
  * rather than printing a row nobody can tell apart from a fast one. */
 static int g_broken = 0;
@@ -195,6 +204,33 @@ static int bench_file_write(const BenchFile *bf, const char *path,
     return 1;
 }
 
+/* The shipped sidecar: the same mutated payload, then `// @cursor`, written
+ * to a sibling temp and renamed over `<file>.wip` so the watcher never
+ * observes a truncate. */
+static int bench_wip_write(const BenchFile *bf, int mutate_idx, int seq) {
+    FILE *f = fopen(BENCH_WIP_TMP, "w");
+    int i;
+
+    if (!f)
+        return 0;
+    for (i = 0; i < bf->count; i++) {
+        if (i == mutate_idx)
+            fprintf(f, "// bench %06d\n", seq);
+        else
+            fprintf(f, "%s\n", bf->line[i]);
+    }
+    fprintf(f, "// @cursor 1 1\n");
+    if (fclose(f) != 0) {
+        (void)unlink(BENCH_WIP_TMP);
+        return 0;
+    }
+    if (rename(BENCH_WIP_TMP, BENCH_WIP_PATH) != 0) {
+        (void)unlink(BENCH_WIP_TMP);
+        return 0;
+    }
+    return 1;
+}
+
 /* Which row can be overwritten with a comment without changing whether the
  * file parses? A row that already is a comment, and not one of the export's
  * own `@` directives - those carry scene metadata the reader consumes.
@@ -280,7 +316,10 @@ static void run_case(const char *label, int example_idx, int iters) {
 
     /* Adopt the exported file as the live scene, then arm. Binding stamps what
      * is on disk without reloading, so the first timed iteration is a genuine
-     * external change and not a bind. */
+     * external change and not a bind. A leftover sidecar at bind time is a
+     * recovery offer, not a content update - delete it first. */
+    (void)unlink(BENCH_WIP_PATH);
+    (void)unlink(BENCH_WIP_TMP);
     glr_ctrl_reset_all();
     if (!repl_load_initial_commands(BENCH_SCENE_PATH)) {
         fprintf(stderr, "ERROR: %s: could not load %s as the live scene\n",
@@ -292,13 +331,17 @@ static void run_case(const char *label, int example_idx, int iters) {
     doc_rows = repl_state_document_count();
     glr_extedit_set_enabled(1);
     glr_extedit_poll();
+    glr_modal_cancel();
     settle_frame_work();
 
     before = glr_extedit_stats();
     for (i = 0; i < iters; i++) {
         double t0, t1, t2;
+        int wrote = g_saved
+            ? bench_file_write(&bf, BENCH_SCENE_PATH, mutate_idx, i + 1)
+            : bench_wip_write(&bf, mutate_idx, i + 1);
 
-        if (!bench_file_write(&bf, BENCH_SCENE_PATH, mutate_idx, i + 1)) {
+        if (!wrote) {
             fprintf(stderr, "ERROR: %s: write failed at iteration %d\n", label,
                     i);
             g_broken = 1;
@@ -314,15 +357,28 @@ static void run_case(const char *label, int example_idx, int iters) {
     }
     after = glr_extedit_stats();
 
-    /* Every iteration must have been a reload. A silently-deferred or
-     * silently-failed save would otherwise be timed as a fast frame and pull
-     * p95 down - the exact way this measurement could flatter itself. */
-    if (after.reloads - before.reloads != poll_s.n) {
+    /* Every iteration must have been a content update. A silently-deferred or
+     * silently-failed publication would otherwise be timed as a fast frame
+     * and pull p95 down - the exact way this measurement could flatter
+     * itself. The WIP path asserts wip_updates; the saved-file proxy
+     * asserts reloads. */
+    if (g_saved) {
+        if (after.reloads - before.reloads != poll_s.n) {
+            fprintf(stderr,
+                    "ERROR: %s: %d samples but %d reloads (%d failures) - "
+                    "the timed frames were not all content updates\n",
+                    label, poll_s.n, after.reloads - before.reloads,
+                    after.failures - before.failures);
+            g_broken = 1;
+        }
+    } else if (after.wip_updates - before.wip_updates != poll_s.n) {
         fprintf(stderr,
-                "ERROR: %s: %d samples but %d reloads (%d failures) - "
-                "the timed frames were not all content updates\n",
-                label, poll_s.n, after.reloads - before.reloads,
-                after.failures - before.failures);
+                "ERROR: %s: %d samples but %d wip_updates (%d failures, "
+                "%d reloads) - the timed frames were not all sidecar "
+                "content updates\n",
+                label, poll_s.n, after.wip_updates - before.wip_updates,
+                after.failures - before.failures,
+                after.reloads - before.reloads);
         g_broken = 1;
     }
 
@@ -401,8 +457,11 @@ int main(int argc, char **argv) {
                 iters = 1;
             if (iters > BENCH_MAX_SAMPLES)
                 iters = BENCH_MAX_SAMPLES;
+        } else if (strcmp(argv[i], "--saved") == 0) {
+            g_saved = 1;
         } else {
-            fprintf(stderr, "usage: %s [--csv] [--iters N]\n", argv[0]);
+            fprintf(stderr, "usage: %s [--csv] [--iters N] [--saved]\n",
+                    argv[0]);
             return 2;
         }
     }
@@ -417,13 +476,16 @@ int main(int argc, char **argv) {
         printf("size,scene,phase,doc_rows,samples,mean_ms,p50_ms,p95_ms,max_ms\n");
     else
         printf("=== external-editor content-update latency "
-               "(BYOE stage-2.5 gate, budget 8.000 ms) ===\n");
+               "(BYOE stage-2.5 gate, %s path, budget 8.000 ms) ===\n",
+               g_saved ? "saved-file" : "WIP sidecar");
 
     run_case("small", small_idx, iters);
     run_case("typical", typical_idx, iters);
     run_case("large", large_idx, iters);
 
     (void)unlink(BENCH_SCENE_PATH);
+    (void)unlink(BENCH_WIP_PATH);
+    (void)unlink(BENCH_WIP_TMP);
     return g_broken ? 1 : 0;
 }
 

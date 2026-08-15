@@ -49,12 +49,20 @@ endif
 
 " The sidecar for a file, or '' for a buffer with no name on disk (a scratch
 " buffer has nothing gl-repl could be bound to).
+"
+" gl-repl binds through realpath(); :p is only absolute. Opening a scene
+" through a symlink would otherwise publish <link>.wip while gl-repl watches
+" <resolved-target>.wip and live follow would never see it.
 function! GlrWipSidecar(name) abort
   let l:path = fnamemodify(a:name, ':p')
   if empty(l:path) || isdirectory(l:path)
     return ''
   endif
-  return l:path . '.wip'
+  let l:resolved = resolve(l:path)
+  if empty(l:resolved)
+    let l:resolved = l:path
+  endif
+  return l:resolved . '.wip'
 endfunction
 
 function! GlrWipPublish() abort
