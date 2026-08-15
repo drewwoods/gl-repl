@@ -12,6 +12,7 @@
 #include "repl/state_owners.h"
 #include <math.h>
 #include "repl/export.h"
+#include "repl/scene_load.h"   /* ReplSceneLoadOpts */
 #include "repl/scenes.h"       /* repl_reload_active_scene_from_path */
 #include "source_document.h"
 #include "repl/text_helpers.h"
@@ -2032,7 +2033,18 @@ static void test_export_glr_fixed_point(const char *temp_dir) {
          * exactly as every real file-load caller does. */
         pin_code_panel_state();
         snprintf(label, sizeof(label), "scene %02d re-imports its own export", idx);
-        ASSERT_TRUE(label, repl_reload_active_scene_from_path(first_path, NULL));
+        {
+            /* The watched shape: `.glr`, atomic, through the reload entry
+             * point a save from an external editor takes. `apply_cfg` and the
+             * camera mode are the two things a watched reload deliberately
+             * does NOT do - but they are exactly what has to round-trip for
+             * the second export to be comparable, so they stay on here. */
+            ReplSceneLoadOpts opts;
+            repl_scene_load_opts_init(&opts, REPL_EXAMPLE_SOURCE_GLR);
+            opts.policy = REPL_SCENE_LOAD_POLICY_ATOMIC;
+            ASSERT_TRUE(label,
+                        repl_reload_active_scene_from_path(first_path, &opts));
+        }
         settle_camera_transition_for_test();
         snprintf(label, sizeof(label), "scene %02d exports .glr twice", idx);
         ASSERT_TRUE(label,

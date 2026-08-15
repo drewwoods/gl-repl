@@ -10,63 +10,49 @@
  * Outbound is explicit-save only - Ctrl+S stays the only writer, and this
  * module never writes the file. Inbound is one `stat()` per frame.
  *
- * WHAT IT IS BOUND TO (D1). Not a path of its own: the watcher follows
- * `repl_active_scene_bound_path()`, which is the same file Ctrl+S writes.
- * That is deliberate and load-bearing - watching a file gl-repl would not
- * write, or writing one it does not watch, breaks the round trip and leaves
- * the self-write stamp with nothing to suppress. A scene switch (F12, scene
- * tab, File -> Open) therefore re-binds for free, and a built-in example -
- * which has no file - unbinds.
+ * The decisions behind all of this are D1-D8 in the plan; what follows is the
+ * short form of the ones a caller has to know, plus the traps that are not
+ * obvious from the code.
  *
- * THE TWO-LEVEL GATE (D8). Per frame: `stat()`. The file is read and hashed
- * only once the *change token* (nanosecond mtime + inode + size) moves; the
- * document is re-parsed only once the *content token* (a hash of the payload)
- * moves. Nanoseconds rather than `time_t` seconds because a same-second final
- * save would otherwise be missed indefinitely; inode and size because an
- * editor's safe write (temp file + rename) need not move the timestamp at all.
+ * BOUND TO (D1) `repl_active_scene_bound_path()` - the same file Ctrl+S
+ * writes, never a path of its own. Watching a file gl-repl would not write, or
+ * writing one it does not watch, breaks the round trip and leaves the
+ * self-write stamp with nothing to suppress. A scene switch therefore re-binds
+ * for free, and a built-in example - which has no file - unbinds.
+ * `glr_extedit_bind_path()` seeds it outright for `--watch FILE`.
  *
- * ...and three pieces of state, because one token cannot carry it (D8):
- *   observed    the change token of the last successful *read*, stamped even
- *               when the parse then fails - or a malformed file is re-read
- *               and re-parsed every frame until the user fixes it.
- *   applied     the content the live document actually came from. gl-repl's
- *               own writes stamp this (glr_extedit_note_wrote), so a save can
- *               never come back at us as an inbound change.
- *   pending     a newer version seen while the gate is shut. Only the newest
- *               is retained, and the file is re-read when the gate opens
- *               rather than replayed from stale bytes.
- *   suppressed  a payload the user's own commit beat. Distinct from
- *               "applied", because the live document is NOT that payload -
- *               calling it applied would make a later cursor-only update
- *               reason about a document that was never loaded.
+ * TWO-LEVEL GATE (D8) One `stat()` per frame; read + hash only when the change
+ * token (nanosecond mtime + inode + size, not `time_t` seconds) moves; parse
+ * only when the content hash does.
  *
- * DEFERRAL (D5/D7). A reload lands as a wholesale document replacement, and
- * `EditorUndoSnapshot` deliberately does not carry the in-progress input row -
- * so a reload arriving mid-typing destroys work Ctrl+Z cannot recover. While
- * the input row is dirty, or a tutorial or guided tour is running, the inbound
- * version is held pending instead.
+ * FOUR TOKENS, and the one that is easy to get wrong:
+ *   observed    stamped after every read, *before* the parse can fail - or a
+ *               malformed file is re-read every frame until it is fixed.
+ *   applied     what the live document came from. Stamped from the bytes the
+ *               reload actually read, NOT from the parked token: a deferred
+ *               version is re-read when the gate opens, so the two can differ,
+ *               and stamping the stale one makes the watcher deaf to a later
+ *               genuine save of exactly those bytes.
+ *   pending     a newer version seen while the gate was shut. Cleared when the
+ *               file moves back to `applied` or `suppressed` content, because
+ *               it then describes a payload the file no longer holds.
+ *   suppressed  a payload the user's own commit beat. Deliberately not
+ *               `applied`: the live document is not that payload.
  *
- * How the wait ends is decided by *what the document did*, not by which key
- * was pressed: if the live document is unchanged when the gate opens, the row
- * was abandoned and the pending version applies; if it moved, the user
- * committed something, and applying would destroy exactly what they typed - so
- * the payload is dismissed into `suppressed` and the local document wins until
- * the external editor saves again. Deriving it from the document rather than
- * from commit/cancel hooks means there is no ordering to get wrong and no
- * router call site to forget.
+ * DEFERRAL (D5/D7) A reload is a wholesale document replacement, and
+ * `EditorUndoSnapshot` excludes the input row - so one landing mid-typing
+ * destroys work Ctrl+Z cannot recover. Held while the input row is dirty or a
+ * lesson is running. How the wait ends is read off the *document*, not off
+ * which key was pressed: unchanged means the row was abandoned, so the pending
+ * version applies; changed means the user committed, so it is dismissed.
  *
- * UNDO (D4), keyed on live identity rather than applied uniformly:
- *   user scene       history captured, snapshot pushed, reload; a failure
- *                    restores the history, a success leaves one undoable
- *                    clobber. The capture is the heap-backed history, not
- *                    EditorUndoRingState - with a full ring the push has
- *                    already overwritten the oldest entry and head/count
- *                    cannot bring it back.
- *   example/transient no push at all. `editor_undo_push_snapshot()` is the
- *                    transient auto-promotion hook, so pushing here would
- *                    promote an unedited catalog scene into a user slot on
- *                    the first vim save. The file is the source of truth and
- *                    vim's own undo is the undo.
+ * UNDO (D4) keyed on live identity. A user scene: history captured, snapshot
+ * pushed, one undoable clobber; the capture is the heap-backed history, not
+ * `EditorUndoRingState`, because on a full ring the push has already evicted
+ * the oldest entry and head/count cannot bring it back. An example or
+ * transient: no push at all - `editor_undo_push_snapshot()` is the transient
+ * auto-promotion hook, so pushing would promote an unedited catalog scene into
+ * a user slot on the first vim save.
  *
  * ONE INCOMPLETE FINAL ROW (`.glr` only). A file may end with a half-typed
  * command; it lands in the live input row, where the user keeps typing it and
@@ -108,6 +94,15 @@
  * its own watcher. */
 void glr_extedit_set_enabled(int enabled);
 int  glr_extedit_enabled(void);
+
+/* Seed the binding with a path the caller names outright, rather than letting
+ * it be resolved from the active scene. `--watch FILE` uses this, and needs
+ * to: a `--tutorial` / `--tour` on the same command line has already parked
+ * the document in a slot-less transient by the time the watcher arms, so there
+ * is no active scene to resolve a path from - and the binding would never
+ * form. No-op when the watcher is disabled. Afterwards the binding follows
+ * scene switches as usual. */
+void glr_extedit_bind_path(const char *path);
 
 /* The file currently being followed, or NULL when nothing is. Re-resolved
  * every poll, so this is a query, not a setting. */

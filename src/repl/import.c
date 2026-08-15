@@ -2953,7 +2953,10 @@ static void import_process_physical_line(ImportState *state,
     }
 
     int code_len = 0;
-    char last = repl_scan_code_line(app, &acc->depth, &code_len);
+    /* NULL block-comment state: import_strip_block_comment_span already ran
+     * on this line and owns that policy, so nothing here can be inside a
+     * block comment. A caller scanning raw lines must pass real state. */
+    char last = repl_scan_code_line(app, &acc->depth, NULL, &code_len);
     /* Complete when no bracket is open and the last code char closes
      * a statement (`;`), opens/closes a block (`{`/`}`), or is a stray
      * `:` (see repl_is_stmt_terminator). The depth gate is what stops a split
@@ -3147,6 +3150,17 @@ int repl_scene_load_from_lines(const char *const *lines,
                                const ReplSceneLoadOpts *opts,
                                ReplImportResult *result) {
     ImportState state;
+    ReplSceneLoadOpts fallback;
+
+    /* NULL means "the defaults for this source", not "the defaults for
+     * exported C": a caller that passes NULL for a `.glr` must not silently
+     * lose canonical-order checking, which is the very dropout the explicit
+     * format exists to close. */
+    if (!opts) {
+        repl_scene_load_opts_init(&fallback,
+                                  repl_scene_format_from_path(source_name));
+        opts = &fallback;
+    }
     import_begin_load(&state, opts, result);
     import_set_source(&state, source_name);
     state.allow_raw_scene = !import_lines_have_snippet_marker(lines);
@@ -3231,7 +3245,15 @@ static int import_load_seekable_stream(FILE *f, const char *source_name,
 int repl_scene_load_from_file(const char *filename,
                               const ReplSceneLoadOpts *opts,
                               ReplImportResult *result) {
-    FILE *f = fopen(filename, "r");
+    ReplSceneLoadOpts fallback;
+    FILE *f;
+
+    if (!opts) {   /* see repl_scene_load_from_lines */
+        repl_scene_load_opts_init(&fallback,
+                                  repl_scene_format_from_path(filename));
+        opts = &fallback;
+    }
+    f = fopen(filename, "r");
     if (!f) {
         char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Error: cannot open %s: %s",

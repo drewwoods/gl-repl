@@ -19,12 +19,22 @@
 #ifndef REPL_LINE_SCAN_H
 #define REPL_LINE_SCAN_H
 
-/* Scan one physical line's *code* portion - everything up to an unquoted `//`
- * line comment - advancing the running bracket-nesting depth while skipping
- * string and char literals so brackets and slashes inside them cannot confuse
- * the scan.
+/* Scan one physical line's *code* portion - everything that is not inside a
+ * comment or a literal - advancing the running bracket-nesting depth while
+ * skipping string and char literals so brackets and slashes inside them cannot
+ * confuse the scan.
  *
  * `*depth` is in/out and must persist across the lines of one statement.
+ *
+ * `*in_block_comment` is in/out and must persist across *all* lines, because a
+ * `/ * ... * /` span is not required to close on the line it opened. Pass NULL
+ * only when the caller has already removed block comments upstream - which is
+ * exactly what `import.c` does (`import_strip_block_comment_span` runs before
+ * the accumulator, and owns the richer comment-preservation policy). A caller
+ * scanning *raw* physical lines must pass real state, or a trailing
+ * `/ * note * /` reads as code with no statement terminator and looks like a
+ * half-typed command.
+ *
  * `*code_len` receives the trimmed code length (trailing whitespace removed),
  * which is 0 for a blank line, a pure comment, or a directive - so "the last
  * row with code" falls out of it without a second classifier.
@@ -32,7 +42,8 @@
  * Returns the last non-space code character, or '\0' when the line has no
  * code. Together, depth and that character tell a continued statement (an open
  * bracket, or no terminator yet) from a complete one. */
-char repl_scan_code_line(const char *line, int *depth, int *code_len);
+char repl_scan_code_line(const char *line, int *depth, int *in_block_comment,
+                         int *code_len);
 
 /* Every REPL statement ends in one of `; { } :`.
  *

@@ -362,6 +362,16 @@ int main(int argc, char **argv) {
      * lesson once bootstrap has installed its host bridges. Do this before
      * capture-env posing so hooks such as GLR_EDIT_LINE address the tutorial
      * document, just as they address a selected example. */
+    /* --watch: arm BEFORE the tutorial / tour below. Those replace the document
+     * with a slot-less transient, so from that point on there is no active
+     * scene to resolve a file from - arming afterwards would leave the watcher
+     * with nothing bound for the whole session. Seeded with the positional
+     * argument outright, which is the file `--watch` names; the binding
+     * follows scene switches from there. */
+    if (opts.watch) {
+        glr_extedit_set_enabled(1);
+        glr_extedit_bind_path(opts.input_file);
+    }
     if (opts.tutorial_index >= 0) {
         splash_skip();
         glr_ctrl_start_tutorial(opts.tutorial_index);
@@ -382,12 +392,6 @@ int main(int argc, char **argv) {
         splash_skip();       /* start clean - no splash band over the tour */
         glr_ctrl_start_tour(opts.tour_index);
     }
-    /* --watch: arm the external-editor poll last, after every load path above
-     * has settled. Armed earlier it would bind to whatever document the
-     * bootstrap happened to be holding at the time; armed here its first poll
-     * resolves the binding from the scene the session actually starts on. */
-    if (opts.watch)
-        glr_extedit_set_enabled(1);
     glr_init_trace("REPL bootstrap done");
     glr_ctrl_set_accum(opts.use_accum);
 

@@ -153,6 +153,8 @@ static unsigned long long document_fingerprint(void) {
 
 /* ----- state ------------------------------------------------------------- */
 
+static void rebind(const char *path);
+
 static void forget_binding_state(void) {
     g_bound[0]           = '\0';
     g_observed.valid     = 0;
@@ -169,6 +171,26 @@ void glr_extedit_set_enabled(int enabled) {
     forget_binding_state();
     g_was_in_lesson = 0;
     memset(&g_stats, 0, sizeof(g_stats));
+#if !defined(__EMSCRIPTEN__)
+    /* Bind now rather than on the first poll. Arming is a deliberate act with
+     * a document already loaded, and binding eagerly means the answer does not
+     * depend on what happens between here and the next frame. */
+    if (g_enabled) {
+        const char *path = repl_active_scene_bound_path();
+        if (path && path[0])
+            rebind(path);
+    }
+#endif
+}
+
+void glr_extedit_bind_path(const char *path) {
+#if defined(__EMSCRIPTEN__)
+    (void)path;
+#else
+    if (!g_enabled || !path || !path[0])
+        return;
+    rebind(path);
+#endif
 }
 
 int glr_extedit_enabled(void) {
@@ -304,12 +326,22 @@ static int file_lines_read(const char *path, GlrExtEditFileLines *fl) {
     while (fgets(buf, (int)sizeof(buf), f)) {
         char *dst;
         size_t len = strlen(buf);
+        /* An over-long physical line would arrive here as two shorter ones, and
+         * the watcher would then atomically load a document the file reader
+         * refuses outright ("line too long"). Bail instead: the caller falls
+         * back to the path loader, which reports it properly. */
+        if (len > 0 && buf[len - 1] != '\n' && buf[len - 1] != '\r' &&
+            !feof(f)) {
+            fclose(f);
+            file_lines_free(fl);
+            return 0;
+        }
         while (len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r'))
             buf[--len] = '\0';
         if (fl->count >= GLR_EXTEDIT_MAX_LINES) {
             fclose(f);
             file_lines_free(fl);
-            return 0;   /* too long: the caller falls back to the path loader */
+            return 0;   /* too many lines: same fallback */
         }
         dst = fl->storage + (size_t)fl->count * MAX_LINE_LEN;
         memcpy(dst, buf, len + 1);
@@ -352,11 +384,18 @@ static int file_lines_read(const char *path, GlrExtEditFileLines *fl) {
  * matches this stage's scope exactly. */
 static int find_incomplete_final_row(const char *const *lines, int count) {
     int depth = 0, started = 0, stmt_start = -1, last_code = -1;
+    /* Persists across every line, not just the lines of one statement: a
+     * `/ * ... * /` span need not close on the line it opened, and these are
+     * RAW physical lines - unlike the importer, nothing stripped comments for
+     * us first. Without it a trailing C-style comment has no statement
+     * terminator and reads as a half-typed command. */
+    int in_block_comment = 0;
 
     for (int i = 0; i < count; i++) {
         int code_len = 0;
         int d = started ? depth : 0;
-        char last = repl_scan_code_line(lines[i], &d, &code_len);
+        char last = repl_scan_code_line(lines[i], &d, &in_block_comment,
+                                        &code_len);
 
         if (code_len == 0)
             continue;                 /* blank / comment / directive */
@@ -395,7 +434,13 @@ static void park_incomplete_row(const char *text) {
 
 /* Is the input row dirty in the sense that matters - typing that a reload
  * would destroy and Ctrl+Z could not recover? A parked WIP row is the
- * watcher's own text, so it does not count until the user changes it. */
+ * watcher's own text, so it does not count until the user changes it.
+ *
+ * Ownership is tracked by text, which D5 sanctions ("the input text (or an
+ * input revision)"). The gap a revision number would close - edit the parked
+ * row, then retype it character-for-character - costs nothing when it fires:
+ * what a reload would overwrite is byte-identical to what it replaces it
+ * with. */
 static int input_row_is_dirty(void) {
     if (!editor_input_has_uncommitted_change())
         return 0;
@@ -409,9 +454,18 @@ static void apply_reload(const char *path) {
     EditorUndoHistorySnapshot *history = NULL;
     GlrExtEditFileLines fl = { NULL, NULL, 0 };
     char parked[MAX_INPUT_LEN];
+    unsigned long long loaded_content;
+    int have_loaded_content;
     int have_parked = 0;
     int is_user_scene = repl_active_user_scene() >= 0;
     int ok;
+
+    /* Hash what is on disk NOW, because that is what the load below reads.
+     * D8 says a deferred version is re-read when the gate opens rather than
+     * replayed from stale bytes - so the token that was parked may describe a
+     * payload the file no longer holds, and stamping it as "applied" would
+     * make the watcher deaf to a later, genuine save of those exact bytes. */
+    have_loaded_content = hash_file_content(path, &loaded_content);
 
     repl_scene_load_opts_init(&opts, repl_scene_format_from_path(path));
     /* The loader stays strictly atomic: any rejected line fails the whole
@@ -432,7 +486,14 @@ static void apply_reload(const char *path) {
         if (row >= 0) {
             snprintf(parked, sizeof(parked), "%s", fl.ptrs[row]);
             have_parked = 1;
-            fl.ptrs[row] = NULL;   /* truncate: the loader sees lines minus it */
+            /* Remove that ONE row and close the gap. Truncating the list here
+             * instead would also throw away whatever follows it - the selected
+             * row is the last row with *code*, so a note written underneath a
+             * half-typed command is exactly what sits after it. */
+            for (int i = row; i < fl.count - 1; i++)
+                fl.ptrs[i] = fl.ptrs[i + 1];
+            fl.count--;
+            fl.ptrs[fl.count] = NULL;
         }
     }
 
@@ -455,8 +516,9 @@ static void apply_reload(const char *path) {
             (void)editor_undo_history_restore(history);
         g_stats.failures++;
     } else {
-        g_applied_content = g_pending_content;
-        g_applied_valid   = 1;
+        g_applied_content  = have_loaded_content ? loaded_content
+                                                 : g_pending_content;
+        g_applied_valid    = 1;
         g_suppressed_valid = 0;
         g_stats.reloads++;
         /* The input row was clean - deferral guarantees it - but it still
@@ -501,6 +563,12 @@ static int gate_is_shut(void) {
  * into a real slot, and unbinding is then the honest answer: the promoted
  * scene is no longer the file on disk. */
 static int binding_is_pinned(void) {
+    /* Nothing bound yet means there is nothing to protect - and refusing to
+     * resolve in that state left `--watch scene.glr --tutorial N` deaf for the
+     * whole session, because the lesson was already up when the watcher armed.
+     * A pin over an empty binding protects nothing and costs everything. */
+    if (!g_bound[0])
+        return 0;
     return lesson_running() || repl_state_tutorial_origin_idx() >= 0;
 }
 
@@ -550,16 +618,21 @@ void glr_extedit_poll(void) {
     if (!g_bound[0])
         return;
 
-    /* D7: at the end of a lesson, clear the pending version AND stamp what is
-     * on disk as observed. Ignoring activity without stamping it would make
-     * the first poll afterwards see that old movement as new and apply it -
-     * defeating the dismiss-on-end rule the ignoring exists to serve. */
+    /* D7: at the end of a lesson, discard the version parked during it. A
+     * payload computed against the pre-lesson document has no business landing
+     * on the document the lesson left behind.
+     *
+     * D7 also asks for the observed token to be stamped here, so old movement
+     * is not re-read as new afterwards. That requirement is already met
+     * structurally and must NOT be met again by re-stamping from disk: this
+     * poll loop reads and stamps `g_observed` on every change *including*
+     * during a lesson (it defers rather than ignoring), so the token is always
+     * current. Re-stamping would additionally swallow a save that landed
+     * between the lesson ending and this poll - a real edit, discarded for
+     * having arrived at the wrong millisecond. */
     in_lesson = lesson_running();
-    if (g_was_in_lesson && !in_lesson) {
+    if (g_was_in_lesson && !in_lesson)
         dismiss_pending("external change discarded at lesson end");
-        if (stat(g_bound, &st) == 0)
-            g_observed = change_token_from_stat(&st);
-    }
     g_was_in_lesson = in_lesson;
 
     if (stat(g_bound, &st) != 0) {
@@ -580,10 +653,20 @@ void glr_extedit_poll(void) {
             report_missing_once(g_bound);
             return;
         }
-        if (g_applied_valid && content == g_applied_content)
-            return;   /* our own write, or a touch that changed no bytes */
-        if (g_suppressed_valid && content == g_suppressed_content)
-            return;   /* the payload a local commit already outvoted */
+        /* The file now holds something already accounted for - gl-repl's own
+         * write, a touch that changed no bytes, or a payload a local commit
+         * dismissed. Either way it overtakes anything still parked: a pending
+         * version describes a payload the file has since moved off. */
+        if (g_applied_valid && content == g_applied_content) {
+            g_pending       = 0;
+            g_have_defer_fp = 0;
+            return;
+        }
+        if (g_suppressed_valid && content == g_suppressed_content) {
+            g_pending       = 0;
+            g_have_defer_fp = 0;
+            return;
+        }
         g_pending         = 1;
         g_pending_content = content;
         g_have_defer_fp   = 0;

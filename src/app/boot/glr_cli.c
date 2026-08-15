@@ -391,13 +391,16 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
     }
 
     /* `--watch` is a boolean over the existing positional argument, so with no
-     * file there is nothing to watch. Say so at parse time rather than
-     * starting a watcher that can never fire: the user asked for a mode the
+     * file there is nothing to watch. `-` is a stream, not a file: it has no
+     * path to stat and never binds, so accepting it would arm a watcher that
+     * can never fire. Say so at parse time rather than starting a mode the
      * command line does not describe. */
-    if (out->watch && !out->input_file) {
+    if (out->watch &&
+        (!out->input_file || strcmp(out->input_file, "-") == 0)) {
         fprintf(stderr,
-                "gl-repl: --watch needs a scene file "
-                "(e.g. gl-repl --watch scene.glr)\n");
+                "gl-repl: --watch needs a scene file, not %s "
+                "(e.g. gl-repl --watch scene.glr)\n",
+                out->input_file ? "stdin" : "nothing");
         *exit_code = 1;
         return 0;
     }

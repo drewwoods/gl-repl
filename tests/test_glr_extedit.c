@@ -915,6 +915,170 @@ static void test_parked_row_defers_only_once_the_user_touches_it(void) {
                 strcmp(editor_input_text(), "glVertex3f(2, 3,") == 0);
 }
 
+/* --- regressions found in review ------------------------------------------ */
+
+/* A parked version can be overtaken by a *later* save that puts the file back
+ * to something already known - the content we last applied, or a payload a
+ * commit already dismissed. Both of those return early, so the stale pending
+ * version used to survive; the reload that eventually ran then read the
+ * current file but stamped the *stale* hash as "applied". After that, a
+ * genuine save of those bytes looked like our own write and was ignored - the
+ * watcher went deaf to one particular version of the file. */
+static void test_pending_overtaken_by_a_revert(void) {
+    printf("--- a revert clears the parked version, and the stamp is honest ---\n");
+
+    begin_watched_session(k_scene_a);
+    begin_typing("glVertex3f(4, 4,");          /* gate shut */
+
+    write_lines(WATCH_PATH, k_scene_b);
+    glr_extedit_poll();
+    ASSERT_INT("B is parked, not applied", glr_extedit_stats().reloads, 0);
+
+    /* vim undoes: the file is byte-identical to what we already have. */
+    write_lines(WATCH_PATH, k_scene_a);
+    glr_extedit_poll();
+
+    editor_input_clear();                      /* gate opens */
+    glr_extedit_poll();
+    ASSERT_TRUE("the live document is still A", document_mentions("0, 0, 0"));
+
+    /* The moment of truth: a real save of B must be followed, not mistaken for
+     * gl-repl's own write because a stale hash was stamped as applied. */
+    write_lines(WATCH_PATH, k_scene_b);
+    glr_extedit_poll();
+    ASSERT_TRUE("a genuine later save of B is followed",
+                document_mentions("9, 9, 9"));
+}
+
+/* find_incomplete_final_row selects the last row with *code*; blanks and
+ * comments after it are not statements. Truncating the line list at that row
+ * threw them away, so a note written under a half-typed command vanished from
+ * the document until the next complete save. */
+static void test_comment_after_the_parked_row_survives(void) {
+    static const char *const trailing[] = {
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(0, 0, 0);",
+        "glEnd();",
+        "glVertex3f(1,",
+        "// still thinking about this one",
+        NULL
+    };
+
+    printf("--- a comment below the parked row is not swallowed ---\n");
+
+    begin_watched_session(k_scene_a);
+    write_lines(WATCH_PATH, trailing);
+    glr_extedit_poll();
+
+    ASSERT_INT("the reload succeeded", glr_extedit_stats().reloads, 1);
+    ASSERT_INT("the half-typed row is parked", glr_extedit_stats().parked_rows, 1);
+    ASSERT_TRUE("and it is the vertex",
+                strcmp(editor_input_text(), "glVertex3f(1,") == 0);
+    ASSERT_TRUE("the comment below it is still a document row",
+                document_mentions("still thinking about this one"));
+}
+
+/* The path/stream reader hard-fails an over-long physical line. The watcher
+ * reads with fgets into the same buffer, so an over-long line arrived as two
+ * shorter ones - loading, atomically, a document the file reader would have
+ * refused outright. */
+static void test_overlong_line_is_refused_not_split(void) {
+    char huge[MAX_LINE_LEN * 2];
+    FILE *f;
+
+    printf("--- an over-long physical line is refused, not split ---\n");
+
+    begin_watched_session(k_scene_a);
+
+    memset(huge, 'x', sizeof(huge));
+    huge[sizeof(huge) - 1] = '\0';
+    f = fopen(WATCH_PATH, "w");
+    ASSERT_TRUE("fixture opens", f != NULL);
+    if (f) {
+        fprintf(f, "glClearColor(0.1, 0.1, 0.1, 1.0);\n");
+        fprintf(f, "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);\n");
+        fprintf(f, "// %s\n", huge);
+        fprintf(f, "glBegin(GL_POINTS);\n");
+        fprintf(f, "glVertex3f(0, 0, 0);\n");
+        fprintf(f, "glEnd();\n");
+        fclose(f);
+    }
+    glr_extedit_poll();
+
+    ASSERT_INT("nothing was loaded from it", glr_extedit_stats().reloads, 0);
+    ASSERT_INT("it was refused", glr_extedit_stats().failures, 1);
+    ASSERT_TRUE("the previous scene survives", document_mentions("0, 0, 0"));
+}
+
+/* The watcher's heuristic reads raw physical lines; the importer strips
+ * C-style block-comment spans before its accumulator ever sees them. A shared scanner
+ * that does not know about block comments therefore disagrees with the loader
+ * it is supposed to agree with: a trailing C-style comment has no statement
+ * terminator, so it looked like a half-typed command.
+ *
+ * Asserted as an equivalence rather than against a hard-coded row count: the
+ * watcher's document must be what the plain file loader would have produced,
+ * whatever that is. */
+static void test_block_comment_matches_the_plain_loader(void) {
+    static const char *const with_block_comment[] = {
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(0, 0, 0);",
+        "glEnd();",
+        "/* a note in C style */",
+        NULL
+    };
+    int loader_rows;
+
+    printf("--- a trailing C-style comment is not a half-typed command ---\n");
+
+    /* What the ordinary file loader makes of it. */
+    write_lines(WATCH_PATH, with_block_comment);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+    loader_rows = repl_state_document_count();
+
+    begin_watched_session(k_scene_a);
+    write_lines(WATCH_PATH, with_block_comment);
+    glr_extedit_poll();
+
+    ASSERT_INT("the reload succeeded", glr_extedit_stats().reloads, 1);
+    ASSERT_INT("nothing was parked", glr_extedit_stats().parked_rows, 0);
+    ASSERT_INT("and the watcher agrees with the plain loader",
+               repl_state_document_count(), loader_rows);
+}
+
+/* `--watch scene.glr --tutorial N` arms the watcher after the lesson has
+ * already replaced the document with a slot-less transient. The binding is
+ * pinned during a lesson so it cannot be *lost* - but with nothing bound yet
+ * there was nothing to pin, and the watcher stayed deaf for the whole session,
+ * lesson included and afterwards. */
+static void test_watch_binds_even_when_armed_during_a_lesson(void) {
+    printf("--- arming during a lesson still binds ---\n");
+
+    glr_extedit_set_enabled(0);
+    write_lines(WATCH_PATH, k_scene_a);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+    tutorial_start(0);
+    ASSERT_TRUE("the tutorial is running", tutorial_active());
+
+    glr_extedit_set_enabled(1);       /* what main() does for --watch */
+    glr_extedit_bind_path(WATCH_PATH);
+    glr_extedit_poll();
+    ASSERT_TRUE("the watcher found the file anyway",
+                glr_extedit_bound_path() != NULL);
+
+    tutorial_stop();
+    write_lines(WATCH_PATH, k_scene_b);
+    glr_extedit_poll();
+    ASSERT_TRUE("and follows saves once the lesson is over",
+                document_mentions("9, 9, 9"));
+}
+
 /* --- disabled ------------------------------------------------------------- */
 
 static void test_disabled_watcher_does_nothing(void) {
@@ -959,6 +1123,11 @@ int main(void) {
     test_block_rows_are_never_parked();
     test_multi_row_incomplete_statement_is_refused();
     test_parked_row_defers_only_once_the_user_touches_it();
+    test_pending_overtaken_by_a_revert();
+    test_comment_after_the_parked_row_survives();
+    test_overlong_line_is_refused_not_split();
+    test_block_comment_matches_the_plain_loader();
+    test_watch_binds_even_when_armed_during_a_lesson();
     test_disabled_watcher_does_nothing();
     glr_extedit_set_enabled(0);
     (void)unlink(WATCH_PATH);

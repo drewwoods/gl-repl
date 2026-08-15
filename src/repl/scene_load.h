@@ -79,7 +79,12 @@ void repl_scene_load_opts_init(ReplSceneLoadOpts *opts,
 /* Reader entry points that take the options bag. The repl_export_load_from_*
  * trio in export.h are thin wrappers over these carrying the defaults above,
  * with `format` derived from the source label's suffix - which is exactly the
- * behavior those callers had before the format became explicit. */
+ * behavior those callers had before the format became explicit.
+ *
+ * A NULL `opts` means the same thing those wrappers mean: the defaults above,
+ * with `format` derived from the path or label. It does NOT mean "exported C",
+ * which would quietly drop canonical-order checking on a `.glr` - the dropout
+ * the explicit format was introduced to close. */
 int repl_scene_load_from_file(const char *filename,
                               const ReplSceneLoadOpts *opts,
                               ReplImportResult *result);
