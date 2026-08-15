@@ -125,6 +125,14 @@ typedef enum {
      * boot/controller seam that only the host file bridges (a boot-band call
      * plus a controller-band one), so no single callee can own the bracket. */
     PROF_SCRIPTED_INPUT,   /* capture-env frame hook + pointer-script events */
+    /* glr_extedit_poll(): the `--watch` external-editor gate. Bracketed from
+     * the host because it is a host-band stage like the two around it, and it
+     * has a row of its own for the same reason they do - per-frame work inside
+     * PROF_FRAME_WORK with no section shows up only as unattributed remainder.
+     * In steady state it is one `stat()` and reads ~0, which is itself the
+     * useful signal: it is what says the watcher costs nothing until the file
+     * moves, and it is the row stage 2.5's latency gate is measured in. */
+    PROF_EXTERNAL_EDIT,
     PROF_HOST_OVERLAYS,    /* post-composite host draws (aggregate) */
     PROF_HOST_SPLASH,      /* splash_render() - startup banner only. Bracketed
                             * from the host too, so splash.c stays free of the

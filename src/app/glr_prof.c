@@ -104,6 +104,7 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_COMPOSITOR]                        = { "Compositor FX",   0, 0 },
     [PROF_FRAME_RESTORE]                     = { "Frame Restore",   0, 0 },
     [PROF_SCRIPTED_INPUT]                    = { "Scripted Input",  0, 0 },
+    [PROF_EXTERNAL_EDIT]                     = { "External Edit",   0, 0 },
     [PROF_HOST_OVERLAYS]                     = { "Host Overlays",   0, 0 },
     [PROF_HOST_SPLASH]                       = { "splash",          1, 0 },
     [PROF_TOUR_OVERLAY]                      = { "tour overlay",    1, 0 },

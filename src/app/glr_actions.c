@@ -7,6 +7,7 @@
  * item actions that touch scenes, files, replay, audio, or presentation state.
  */
 #include "app/glr_actions.h"
+#include "app/glr_extedit.h"
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
@@ -169,9 +170,13 @@ static int save_workspace_including_visible_scene(
     int promotable = repl_active_user_scene() < 0 &&
         (repl_state_active_example_idx() >= 0 ||
          repl_state_tutorial_origin_idx() >= 0);
+    int written;
     if (promotable && repl_promote_transient_if_needed() < 0)
         return -1;
-    return repl_save_workspace(dir, layout);
+    written = repl_save_workspace(dir, layout);
+    if (written >= 0)
+        glr_extedit_note_saved();
+    return written;
 }
 
 /* Unified audio cfg: two-state on/off toggle.
@@ -1415,7 +1420,10 @@ int glr_action_save_active_scene(void) {
     if (repl_workspace_is_managed())
         return save_workspace_including_visible_scene(
                    repl_workspace_dir(), &layout) >= 0;
-    return repl_save_active_scene(&layout);
+    if (!repl_save_active_scene(&layout))
+        return 0;
+    glr_extedit_note_saved();
+    return 1;
 }
 
 static int glr_action_reveal_workspace(void) {
@@ -1596,7 +1604,8 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
              * bound for this path - the catalog dir is the destination. */
             const char *write_back = repl_active_scene_glr_write_back_path();
             if (write_back) {
-                repl_export_save_glr(write_back, source_document_view());
+                if (repl_export_save_glr(write_back, source_document_view()))
+                    glr_extedit_note_wrote(write_back);
                 return 1;
             }
             /* Otherwise: same target directory and base name as Save Scene /
@@ -1604,8 +1613,15 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
              * into examples/scenes/ instead of a standalone C program. */
             if (!bind_app_workspace_for_scene_save_if_needed())
                 return 1;
-            repl_export_save_glr(repl_active_scene_export_path("glr"),
-                                 source_document_view());
+            {
+                const char *glr_path = repl_active_scene_export_path("glr");
+                char owned[SCENE_GLR_ORIGIN_PATH_MAX];
+                /* export_path returns a rotating static buffer the writer's
+                 * own status formatting can reuse; copy before handing it on. */
+                snprintf(owned, sizeof(owned), "%s", glr_path);
+                if (repl_export_save_glr(owned, source_document_view()))
+                    glr_extedit_note_wrote(owned);
+            }
             return 1;
         }
         case GLR_FILE_ITEM_LOAD_SCENE:

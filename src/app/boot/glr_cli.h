@@ -47,6 +47,12 @@ typedef struct GlrCliOptions {
     int dump_state_layout;         /* --dump-state-layout                       */
 
     int no_audio;                  /* --no-audio                                */
+    /* --watch: follow the positional file, re-reading it whenever an external
+     * editor saves. A session mode, not scene config - deliberately NOT a
+     * GlrConfigKey, which would rewrite every example golden and could travel
+     * in an `@cfg` row, letting imported content enable its own watcher
+     * (docs/plans/active/BYOE.md, D6). */
+    int watch;                     /* --watch                                   */
     int use_accum;                 /* --accum / --no-accum / AUTO (default)     */
     int detailed_prof;             /* --detailed-prof (also GLR_DETAILED_PROF)  */
 

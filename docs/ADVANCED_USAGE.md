@@ -15,7 +15,7 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--tutorial name|n]
         [--export-c out.c] [--export-glr out.glr]
         [--export-ply out.ply [--export-ply-srgb]]
         [--accum | --no-accum]
-        [--assets dir] [--examples-dir dir] [--no-audio]
+        [--assets dir] [--examples-dir dir] [--no-audio] [--watch]
         [--dump-code] [--dump-flat] [--flat-histogram]
         [--dump-state-layout] [--detailed-prof]
         [--list-examples] [--list-tutorials] [--list-tours] [--list-config]
@@ -49,6 +49,7 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--tutorial name|n]
 | `--accum` | Force the accumulation buffer on. Without either flag the feature auto-disables on renderers that emulate `glAccum` on the CPU - anything reporting Mesa / llvmpipe / softpipe / swrast, where each pass costs a full scene re-render *plus* a host-side read-add-write of the color buffer. Hardware renderers and the web build (gl4es accumulates in a real FBO - see [`packaging/web/patches/gl4es-accum-fbo.patch`](../packaging/web/patches/gl4es-accum-fbo.patch)) stay on by default. Needed for accum-AA captures under the headless OSMesa build, which is Mesa by construction. |
 | `--assets` *dir* | Scan *dir* for `*.mp3` instead of `./assets`. Beats `GLR_ASSETS_DIR`. |
 | `--no-audio` | Skip audio initialization entirely (also isolates startup stalls). |
+| `--watch` | Follow the positional file: whenever an external editor saves it, gl-repl re-reads it and the scene updates. See [Bring your own editor](#bring-your-own-editor). Requires a positional file - `--watch` on its own is an error. |
 | `--dump-code` | Load the session and print the editor buffer to stdout, then exit. |
 | `--dump-flat` | Load the session and print the flattened command list, then exit. |
 | `--flat-histogram` | Print per-function / per-line flat-command budget costs. Honors `--example`. |
@@ -589,6 +590,63 @@ Moving those ~20 snapshots off the stack is the real fix; forcing it on the
 shipping build for the sake of an experimental target is not. If you raise the
 caps further, re-check with
 `-Wframe-larger-than=131072` — that is how the overflow was found.
+
+## Bring your own editor
+
+```bash
+./gl-repl --watch scene.glr     # then edit scene.glr in vim, VS Code, anything
+```
+
+`--watch` makes an external editor a peer author of the live scene. gl-repl
+re-reads the bound file whenever it is saved, so the scene updates without
+leaving the editor. Outbound stays explicit-save only: Ctrl+S is the only
+thing that writes the file, and it writes **that** file - the same path the
+watcher follows - rather than exporting a name-derived copy somewhere else.
+
+`--watch` is a boolean over the existing positional argument, and it is a
+session mode rather than scene configuration: there is no config toggle and no
+`@cfg` slug, so a scene file cannot switch its own watcher on.
+
+**What a save replaces, and what it leaves alone.** A watched reload replaces
+the program text and its variables. Live config and the camera are preserved
+even if the file carries `@cfg` or `@camera` rows - an external *text* edit is
+geometry, not a presentation reset. `@scene-name` and `@workspace-dir` are read
+and discarded too: a watched reload changes the program, never the slot's
+identity or which file is being watched.
+
+**The loader stays strictly atomic.** One rejected line fails the whole import
+and the live document is untouched, with the offending row named in the status
+bar. A file that will not parse is attempted once, not once per frame; fixing
+it resumes the loop.
+
+**When a save has to wait.** A reload is a wholesale document replacement, and
+undo does not carry the in-progress input row - so a save arriving while you
+are halfway through typing a line is held, and the status bar says a newer
+version is waiting. What happens next depends on what you do with the line:
+
+| You... | The waiting version |
+|---|---|
+| abandon the line | is applied |
+| commit the line | is discarded - your commit wins until the editor saves again |
+
+A tutorial or a guided tour holds saves the same way, and discards them when
+the lesson ends: a version computed against the pre-lesson document has no
+business landing on the document the lesson left behind.
+
+**Undo.** On a user scene, a reload is one undoable clobber - Ctrl+Z gets the
+gl-repl version back. On an unedited example or a transient document there is
+no undo entry and no scene slot is created: the file is the source of truth and
+the editor's own undo is the undo.
+
+**Cost.** One `stat()` per frame. The file is read only when its
+mtime/inode/size moves, and re-parsed only when the bytes actually differ; the
+profile panel's **External Edit** row reads ~0 in steady state.
+
+**The one friction that does not go away.** gl-repl rewrites the text it saves:
+canonical spacing, indentation re-derived from block scope, and C float
+suffixes stripped (`1.0f` becomes `1.0`). The first Ctrl+S after an external
+edit therefore reformats the file under the editor. `.glr` survives best;
+expressions that reference variables keep their verbatim text.
 
 ## Scene-file headers
 

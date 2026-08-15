@@ -1824,6 +1824,26 @@ static void keyboard_func(unsigned char key, int x, int y) {
  * repl_parse_and_normalize_strict + the
  * repl_command_store_* primitives so parse/apply semantics stay in
  * lockstep even though the surrounding transaction policy differs. */
+int editor_input_has_uncommitted_change(void) {
+    EditorInputView in = editor_state_input();
+    int line  = editor_state_edit_line();
+    int count = repl_state_document_count();
+    const char *canonical;
+    int canonical_len;
+
+    if (in.input_len <= 0)
+        return 0;
+    /* A new line: nothing on the document side to compare against. */
+    if (in.insert_mode || line < 0 || line >= count)
+        return 1;
+
+    repl_canonical_input_view(editor_buffer_line(line),
+                              &canonical, &canonical_len);
+    if (canonical_len != in.input_len)
+        return 1;
+    return memcmp(in.input, canonical, (size_t)canonical_len) != 0;
+}
+
 int editor_feed_line(const char *line) {
     editor_input_set_text(line);
 

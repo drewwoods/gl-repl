@@ -117,6 +117,10 @@ void glr_assign_plot_install_host(void) {
 static unsigned int g_glr_ap_synced_gen;
 static int          g_glr_ap_have_synced;
 
+void glr_assign_plot_invalidate_tag_sync(void) {
+    g_glr_ap_have_synced = 0;
+}
+
 void glr_assign_plot_sync_tags(void) {
     unsigned int gen = editor_undo_generation();
     int rows[MAX_ASSIGN_PLOT_SERIES];

@@ -17,4 +17,15 @@ void glr_assign_plot_install_host(void);
  * would refuse a compatible pair. */
 void glr_assign_plot_sync_tags(void);
 
+/* Force the next glr_assign_plot_sync_tags() to actually run.
+ *
+ * The sync is normally keyed on `editor_undo_generation()`, and a document
+ * replacement that does NOT bump it - the external-editor watcher's reload,
+ * which deliberately keeps the undo history restorable - would otherwise leave
+ * the plot pointing at row indices that now address someone else's rows. The
+ * caller invalidates; the frame path still owns *when* the rescan happens,
+ * because the series-compatibility check has to read a current flat program.
+ */
+void glr_assign_plot_invalidate_tag_sync(void);
+
 #endif /* GLR_ASSIGN_PLOT_BRIDGE_H */

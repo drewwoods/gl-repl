@@ -4,6 +4,7 @@
 #include "app/boot/glr_cli.h"
 #include "app/boot/glr_boot_dumps.h"
 #include "app/glr_audio.h"
+#include "app/glr_extedit.h"
 #include "app/boot/glr_frame_pacer.h"
 #include "app/boot/glr_init_trace.h"
 #include "app/glr_mesh_export.h"
@@ -49,6 +50,15 @@ static void display_func(void) {
      * scripted commit's parse/flatten cost lands in this section. */
     glr_ctrl_run_scripted_input_frame();
     prof_end(PROF_SCRIPTED_INPUT);
+
+    /* `--watch`: has the external editor saved the bound scene file? Before
+     * the controller's frame, so a reload renders this frame rather than the
+     * next one. Its own section, not a child of Scripted Input - it is a peer
+     * host-band stage, and the number is what stage 2.5's latency gate is
+     * measured against. A bare stat() when nothing moved. */
+    prof_begin(PROF_EXTERNAL_EDIT);
+    glr_extedit_poll();
+    prof_end(PROF_EXTERNAL_EDIT);
     /* Trace the first two frames separately (gated on the init-trace
      * detailed flag - see --detailed-prof / GLR_DETAILED_PROF). The first frame
      * pays one-shot costs (GLUT solid-shape display-list compile,
@@ -372,6 +382,12 @@ int main(int argc, char **argv) {
         splash_skip();       /* start clean - no splash band over the tour */
         glr_ctrl_start_tour(opts.tour_index);
     }
+    /* --watch: arm the external-editor poll last, after every load path above
+     * has settled. Armed earlier it would bind to whatever document the
+     * bootstrap happened to be holding at the time; armed here its first poll
+     * resolves the binding from the scene the session actually starts on. */
+    if (opts.watch)
+        glr_extedit_set_enabled(1);
     glr_init_trace("REPL bootstrap done");
     glr_ctrl_set_accum(opts.use_accum);
 

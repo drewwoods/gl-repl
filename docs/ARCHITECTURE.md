@@ -134,7 +134,8 @@ belongs to the controller:
 flowchart TD
     cb["gl_repl.c GLUT display callback"] --> fb["glr_frame_begin<br/><i>opens PROF_FRAME_TOTAL + PROF_FRAME_WORK</i>"]
     fb --> si["capture hook + glr_ctrl scripted-input stage<br/><i>PROF_SCRIPTED_INPUT</i>"]
-    si --> frame["glr_ctrl_display_frame<br/>(called directly; no shim)"]
+    si --> we["glr_extedit_poll - the --watch gate<br/><i>PROF_EXTERNAL_EDIT</i>"]
+    we --> frame["glr_ctrl_display_frame<br/>(called directly; no shim)"]
     frame --> s1["tick profiling"]
     s1 --> s2["rebuild autonormals if dirty"]
     s2 --> s3["rebuild flat program if dirty<br/><i>PROF_FLATTEN</i>"]
@@ -185,6 +186,13 @@ so the host callback names the stage and nothing more. Only
 itself, because each spans a boot-band call plus a controller-band one and
 `gl_repl.c` is the only file allowed to bridge the two (`PROF_HOST_SPLASH`
 stays with them so `splash.c` keeps its minimal test link).
+
+`PROF_EXTERNAL_EDIT` - the `--watch` poll - is bracketed there too, for a
+different reason: it is a peer host-band stage rather than a child of the
+scripted-input one, and its row is the number the external-editor work is
+budgeted against. In steady state it is a single `stat()` and reads ~0, which
+is itself the useful signal: it says the watcher costs nothing until the file
+moves.
 
 **Three summary rows out of two spans.** `PROF_FRAME_TOTAL` runs the whole
 callback and is the **Frame Time** row; `PROF_FRAME_WORK` is the same span

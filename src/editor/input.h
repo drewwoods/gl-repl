@@ -195,6 +195,26 @@ void editor_load_line_to_input_readonly(int idx);
  * `src/repl/load.h` instead. */
 int editor_feed_line(const char *line);
 
+/* Is there typing in the input row that no document row carries yet?
+ *
+ * The question a caller about to replace the whole document has to ask:
+ * `EditorUndoSnapshot` deliberately excludes the input buffer (see undo.h), so
+ * a wholesale replacement landing mid-edit destroys work Ctrl+Z cannot
+ * recover. The external-editor watcher defers on this rather than widening
+ * every snapshot.
+ *
+ * Three cases, and the middle one is the trap:
+ *   - insert mode, or the cursor past the last row: the input is a *new* line,
+ *     so any text at all is uncommitted.
+ *   - the cursor on an existing row: dirty iff the input differs from that
+ *     row's text compared through `repl_canonical_input_view` - NOT a raw
+ *     `editor_buffer_line` compare. Document rows are stored with the trailing
+ *     `;` while `editor_load_line_to_input` strips it, so a raw compare would
+ *     call every normally-loaded row dirty and a deferral would never lift.
+ *     Merely arrowing onto a row *loads* it, and is therefore not dirty.
+ *   - an empty input row is never dirty. */
+int editor_input_has_uncommitted_change(void);
+
 /* Walk left/right from char_idx in (text, len) over the word-character
  * class [A-Za-z0-9_] and return the half-open range [out_start, out_end)
  * covering the word. If text[char_idx] is not a word character, or

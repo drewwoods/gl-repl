@@ -40,6 +40,7 @@ _gl_repl() {
         '(--no-accum)--accum[force accum effects on even when emulated in software]' \
         '(--accum)--no-accum[disable accumulation-buffer effects]' \
         '--no-audio[skip audio init]' \
+        '--watch[re-read the scene file when an external editor saves it]' \
         '--dump-code[print the loaded program and exit]' \
         '--dump-flat[print the flattened program and exit]' \
         '--flat-histogram[print flat-command statistics and exit]' \

@@ -66,6 +66,10 @@ static void print_usage(const char *prog) {
             "               index). Space play/pause, arrows step, Esc exit.\n"
             "  --list-tours  Print the built-in guided tours and exit\n"
             "  --list-config  Print config labels and stable @cfg slugs and exit\n"
+            "  --watch      Re-read the positional file whenever an external\n"
+            "               editor saves it, so vim (or anything) can author\n"
+            "               the live scene. Ctrl+S still writes that same\n"
+            "               file, and is the only thing that writes it\n"
             "  --time <secs>  Set the initial animation time t at startup\n"
             "               (else GLR_TIME; --time wins). Start animations later.\n"
             "  --window <WxH>  Initial window size (default 1200x800). Headless\n"
@@ -320,6 +324,8 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
             out->use_accum = GLR_CLI_ACCUM_ON;
         else if (strcmp(argv[i], "--no-audio") == 0)
             out->no_audio = 1;
+        else if (strcmp(argv[i], "--watch") == 0)
+            out->watch = 1;
         else if (strcmp(argv[i], "--dump-code") == 0)
             out->dump_code = 1;
         else if (strcmp(argv[i], "--dump-flat") == 0)
@@ -382,6 +388,18 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
         }
         else if (!out->input_file)
             out->input_file = argv[i];
+    }
+
+    /* `--watch` is a boolean over the existing positional argument, so with no
+     * file there is nothing to watch. Say so at parse time rather than
+     * starting a watcher that can never fire: the user asked for a mode the
+     * command line does not describe. */
+    if (out->watch && !out->input_file) {
+        fprintf(stderr,
+                "gl-repl: --watch needs a scene file "
+                "(e.g. gl-repl --watch scene.glr)\n");
+        *exit_code = 1;
+        return 0;
     }
 
     if (out->examples_dir) {
