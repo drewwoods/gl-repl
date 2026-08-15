@@ -1053,7 +1053,7 @@ All in failure and edge behavior, where the suite is thinnest.
 
 **Where they landed.** `tests/test_scene_load.c` (132 assertions) covers the
 loader options, the source-file binding and the row map / cursor hole,
-including continuation-row mapping; `tests/test_glr_extedit.c` (425 native /
+including continuation-row mapping; `tests/test_glr_extedit.c` (456 native /
 5 wasm) covers the watcher and the sidecar, including dismissed-payload
 suppression, failed-WIP undo restoration, indented parked guides, and
 cursor-only movement onto a continuation row; `test_export_glr_fixed_point`
@@ -1120,10 +1120,25 @@ the list below is covered.
   either. True by construction (the line is stripped before the load), which
   is exactly why it is worth pinning: `@plot` deliberately rides a row's text
   through export, so "this one must not" is a rule nothing else enforces.
-- **Sidecar atomicity.** Repeated writes while the watcher reads; no
-  empty/truncated reload ever observed. Driven through the same temp-plus-
-  rename the plugin uses, forty publications deep, asserting the document
-  never shrinks and no publication fails to parse.
+- **Sidecar atomicity**, and the honest reading of what a test can show here.
+  A test drives its own publisher, so it goes on passing after the plugin
+  regresses to an in-place write - which means the property cannot be tested,
+  only guarded. Three pieces instead of one:
+  `make check-wip-plugin-atomic` holds the plugin to a sibling temp plus
+  `rename()`; a forty-publication run asserts every complete publication lands
+  and the document never shrinks (named for that, not for atomicity); and a
+  deliberately half-written sidecar asserts the backstop below.
+
+  Writing that last one is what showed the rename is not
+  belt-and-braces but the *only* protection: a torn file loaded **cleanly**,
+  two rows adopted and the severed `glBegin(` parked as an ordinary half-typed
+  row, because a prefix of a valid program is usually a valid program. The
+  watcher now refuses a publication that has lost its `// @cursor` trailer
+  after previously having one - the plugin writes it last, so its absence is
+  the one cheap signal that a read landed mid-write. Conditional on having
+  seen one, so an integration that never publishes a trailer is not refused
+  outright; and still a heuristic, since a cut just after a complete trailer
+  is indistinguishable.
 - **D7 transients**, per row. D7 also reaches the *sidecar*, by a different
   route than it reaches a save: there is no parked version to dismiss, so the
   assertion is that a lesson observes-and-drops each publication, that nothing

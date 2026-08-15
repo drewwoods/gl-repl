@@ -2277,6 +2277,9 @@ check-web-glut-get: ## Hard guard: web-reachable glutGet() enums are ones Emscri
 check-log-prefix-single-source: ## Hard guard: gl-repl's log prefix/tag is spelled only in src/app/glr_log_prefix.h.
 	@bash scripts/check/check-log-prefix-single-source.sh
 
+check-wip-plugin-atomic: ## Hard guard: the editor plugin publishes its .wip sidecar via a sibling temp + rename.
+	@bash scripts/check/check-wip-plugin-atomic.sh
+
 check-doc-links: ## Validate local Markdown file links and line anchors.
 	@python3 scripts/check/check-doc-links.py
 

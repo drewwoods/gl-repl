@@ -2741,10 +2741,18 @@ static void test_the_cursor_directive_never_reaches_a_saved_file(void) {
     (void)unlink(WIP_PATH);
 }
 
-/* The publication is a rename, so every read sees a whole file. Driven hard
- * enough that a torn read would have to show up as a parse failure or a
- * shorter document, neither of which may ever happen. */
-static void test_repeated_atomic_publications_are_never_torn(void) {
+/* Forty back-to-back publications all land, and the document never ends up
+ * shorter than the one before.
+ *
+ * Named for what it proves, which is *not* atomicity: the helper finishes its
+ * rename before the poll runs, so no read/write interleaving is possible here,
+ * and it drives its own publisher rather than the shipped plugin. What
+ * actually keeps a torn read off the table is the plugin's sibling-temp-plus-
+ * rename, and the thing that holds it there is `make check-wip-plugin-atomic`
+ * - a test cannot, because a test writes its own file. The companion below
+ * covers the other half: what happens if some publisher gets it wrong anyway.
+ */
+static void test_repeated_publications_all_land(void) {
     GlrExtEditStats stats;
     int rows_expected;
 
@@ -2781,6 +2789,61 @@ static void test_repeated_atomic_publications_are_never_torn(void) {
     ASSERT_INT("no publication failed to parse", stats.failures, 0);
     ASSERT_INT("every one of them landed", stats.wip_updates, 41);
     ASSERT_TRUE("and the last one is live", document_mentions("39, 39, 39"));
+    (void)unlink(WIP_PATH);
+}
+
+/* The failure the rename exists to prevent, forced directly: a sidecar that
+ * *is* half-written. A publisher without the temp-and-rename discipline - a
+ * different editor, a shell redirect, a plugin regression the guard did not
+ * catch - can produce exactly this, and what must not happen is a clean
+ * atomic import of the truncated prefix silently replacing the scene.
+ *
+ * The signal is the missing `// @cursor` trailer, not the cut token: a prefix
+ * of a valid program is usually itself a valid program, and before this the
+ * torn file loaded *cleanly* - two rows adopted and the severed `glBegin(`
+ * parked as an ordinary half-typed row. The truncation is only detectable
+ * because the plugin always writes the trailer last. A cut that happens to
+ * land just after a complete trailer is indistinguishable, which is why the
+ * rename is the real protection and this is the backstop under it. */
+static void test_a_torn_publication_cannot_damage_the_scene(void) {
+    GlrExtEditStats before, after;
+
+    printf("--- a half-written sidecar cannot replace the scene ---\n");
+
+    begin_wip_session(k_scene_a);
+    publish_wip(k_scene_longer, 4, 1);
+    glr_extedit_poll();
+    ASSERT_TRUE("a session is running", document_mentions("3, 3, 3"));
+    before = glr_extedit_stats();
+
+    /* Straight into the target with no rename, cut off inside a command. */
+    {
+        FILE *f = fopen(WIP_PATH, "w");
+        ASSERT_TRUE("the torn file is written", f != NULL);
+        if (f) {
+            fputs("glClearColor(0.3, 0.3, 0.3, 1.0);\n", f);
+            fputs("glClear(GL_COLOR_BUFFER_BIT);\n", f);
+            fputs("glBegin(GL_POIN", f);        /* cut mid-token */
+            fclose(f);
+        }
+        set_mtime(WIP_PATH, 60000, 0);
+    }
+    glr_extedit_poll();
+    after = glr_extedit_stats();
+
+    ASSERT_INT("the torn payload is refused", after.wip_updates,
+               before.wip_updates);
+    ASSERT_INT("and refused loudly", after.failures - before.failures, 1);
+    ASSERT_TRUE("the live scene is intact", document_mentions("3, 3, 3"));
+
+    /* And the editor finishing the job is followed normally. */
+    set_mtime(WIP_PATH, 60002, 0);
+    publish_wip(k_scene_b, 4, 1);
+    set_mtime(WIP_PATH, 60003, 0);
+    glr_extedit_poll();
+    ASSERT_INT("the completed publication lands",
+               glr_extedit_stats().wip_updates, before.wip_updates + 1);
+    ASSERT_TRUE("with its geometry", document_mentions("9, 9, 9"));
     (void)unlink(WIP_PATH);
 }
 
@@ -3025,6 +3088,133 @@ static void test_declining_the_offer_survives_a_scene_switch(void) {
     (void)unlink(WIP_PATH);
 }
 
+/* The decline is keyed on the *payload*, not the raw bytes, and that is what
+ * makes it useful. The usual leftover comes from an editor that is still open,
+ * and the plugin rewrites `// @cursor` on every cursor motion - so keying on
+ * raw bytes would make any twitch of the caret look like a new question and
+ * re-ask on the next scene switch. */
+static void test_a_decline_survives_a_cursor_only_republish(void) {
+    int slot_a;
+
+    printf("--- a decline outlives the editor moving its caret ---\n");
+
+    glr_extedit_set_enabled(0);
+    glr_modal_cancel();
+    (void)unlink(WIP_PATH);
+    write_lines(WATCH_PATH, k_scene_a);
+    publish_wip(k_scene_b, 4, 1);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+    glr_extedit_set_enabled(1);
+    glr_extedit_poll();
+    ASSERT_TRUE("the leftover is offered", glr_modal_active());
+    glr_modal_cancel();                     /* decline */
+    slot_a = repl_active_user_scene();
+
+    /* Away, and while we are away the still-open editor moves its cursor:
+     * same buffer, different `@cursor` line, different bytes on disk. */
+    write_lines(OTHER_PATH, k_scene_longer);
+    {
+        ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+        ASSERT_TRUE("a second scene opens",
+                    repl_load_scene_as_new_slot(OTHER_PATH, &reason) >= 0);
+    }
+    glr_extedit_poll();
+    set_mtime(WIP_PATH, 50000, 0);
+    publish_wip(k_scene_b, 2, 9);           /* payload identical, caret moved */
+    set_mtime(WIP_PATH, 50001, 0);
+
+    ASSERT_TRUE("back to the first scene", repl_load_user_scene_idx(slot_a));
+    glr_extedit_poll();
+    glr_extedit_poll();
+    ASSERT_TRUE("a caret move is not a new question", !glr_modal_active());
+    ASSERT_INT("and nothing was followed", glr_extedit_stats().wip_updates, 0);
+    ASSERT_TRUE("the scene is still the file", document_mentions("0, 0, 0"));
+    (void)unlink(WIP_PATH);
+}
+
+/* Being unable to ask is not an answer. If another modal owns the keyboard
+ * when the offer comes up, the question has to wait for it - recording the
+ * default decline anyway would answer on the user's behalf, durably, and they
+ * would never see the prompt at all. */
+static int test_other_modal_commit(GlrModalKind kind, const char *text,
+                                   int context) {
+    (void)kind; (void)text; (void)context;
+    return 1;
+}
+
+static void test_a_busy_modal_defers_the_offer_rather_than_declining_it(void) {
+    printf("--- a busy modal postpones the offer, it does not answer it ---\n");
+
+    glr_extedit_set_enabled(0);
+    glr_modal_cancel();
+    (void)unlink(WIP_PATH);
+    write_lines(WATCH_PATH, k_scene_a);
+    publish_wip(k_scene_b, 4, 1);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+
+    /* Something else is already on screen when the watcher arms. */
+    ASSERT_INT("another modal opens",
+               glr_modal_begin(GLR_MODAL_SCENE_SAVE_AS, "busy", 0,
+                               test_other_modal_commit), 1);
+    glr_extedit_set_enabled(1);
+    for (int i = 0; i < 5; i++)
+        glr_extedit_poll();
+    ASSERT_INT("the other modal still owns the keyboard",
+               (int)glr_modal_kind(), (int)GLR_MODAL_SCENE_SAVE_AS);
+    ASSERT_INT("and nothing was followed behind it",
+               glr_extedit_stats().wip_updates, 0);
+
+    /* It closes. The question is still owed. */
+    glr_modal_cancel();
+    glr_extedit_poll();
+    ASSERT_INT("now the offer is made", (int)glr_modal_kind(),
+               (int)GLR_MODAL_CONFIRM_WIP_RECOVER);
+    glr_modal_cancel();
+    (void)unlink(WIP_PATH);
+}
+
+/* Following a path's sidecar is evidence about *that* editor, and it dies with
+ * it. A sidecar found at a later bind belongs to a different editor whose
+ * liveness is unknown - which is the question the prompt exists to ask, so it
+ * must be asked again rather than resumed into. */
+static void test_a_leftover_after_the_editor_closed_is_offered_again(void) {
+    int slot_a;
+
+    printf("--- a new leftover after a close is offered, not resumed ---\n");
+
+    begin_wip_session(k_scene_a);
+    slot_a = repl_active_user_scene();
+    publish_wip(k_scene_b, 4, 1);
+    glr_extedit_poll();
+    ASSERT_INT("the session followed", glr_extedit_stats().wip_updates, 1);
+
+    /* The editor exits: VimLeave removes the sidecar, and we observe it. */
+    (void)unlink(WIP_PATH);
+    glr_extedit_poll();
+
+    /* Away, and while we are away another editor opens the file and dies,
+     * leaving a sidecar behind. */
+    write_lines(OTHER_PATH, k_scene_longer);
+    {
+        ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+        ASSERT_TRUE("a second scene opens",
+                    repl_load_scene_as_new_slot(OTHER_PATH, &reason) >= 0);
+    }
+    glr_extedit_poll();
+    publish_wip(k_scene_longer, 4, 1);
+
+    ASSERT_TRUE("back to the first scene", repl_load_user_scene_idx(slot_a));
+    glr_extedit_poll();
+    glr_extedit_poll();
+    ASSERT_INT("the stranger's leftover is offered, not applied",
+               (int)glr_modal_kind(), (int)GLR_MODAL_CONFIRM_WIP_RECOVER);
+    ASSERT_TRUE("and nothing of it is live", !document_mentions("3, 3, 3"));
+    glr_modal_cancel();
+    (void)unlink(WIP_PATH);
+}
+
 static void test_an_unparseable_buffer_leaves_the_scene_alone(void) {
     GlrExtEditStats before, after;
 
@@ -3113,12 +3303,16 @@ int main(void) {
     test_wip_reload_preserves_visible_t();
     test_sidecar_cursor_requests_follow_scroll();
     test_the_cursor_directive_never_reaches_a_saved_file();
-    test_repeated_atomic_publications_are_never_torn();
+    test_repeated_publications_all_land();
+    test_a_torn_publication_cannot_damage_the_scene();
     test_a_second_session_takes_its_own_entry_snapshot();
     test_a_lesson_holds_the_sidecar_and_drops_what_it_missed();
     test_switching_scenes_ends_the_session();
     test_returning_to_a_live_session_is_not_a_recovery();
     test_declining_the_offer_survives_a_scene_switch();
+    test_a_decline_survives_a_cursor_only_republish();
+    test_a_busy_modal_defers_the_offer_rather_than_declining_it();
+    test_a_leftover_after_the_editor_closed_is_offered_again();
     test_an_unparseable_buffer_leaves_the_scene_alone();
     test_exported_c_sidecar_cursor_follows_snippet_row();
     glr_extedit_set_enabled(0);

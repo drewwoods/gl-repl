@@ -114,12 +114,17 @@ typedef struct {
      * rebind, so the memory has to live per path. */
     int                wip_followed;
     /* A sidecar the user turned down at the recovery prompt, keyed by its
-     * bytes. Same reason `suppressed` exists for the scene file: a decision
-     * the user already made must survive a scene switch, or coming back
-     * re-asks it. Keyed by content rather than by path alone so that the
-     * editor waking up and publishing - which changes the bytes - is what
-     * lifts it, which is the plan's "ignore it until its change token moves
-     * again". */
+     * **payload** hash - the buffer without the trailing `@cursor` line, the
+     * same key `g_wip_payload` and `g_wip_suppressed` use.
+     *
+     * Same reason `suppressed` exists for the scene file: a decision the user
+     * already made must survive a scene switch, or coming back re-asks it.
+     * Keying on content rather than on the path alone is what lets a genuinely
+     * new payload re-ask; keying on the *payload* rather than the raw bytes is
+     * what stops the plugin rewriting `// @cursor` on every cursor motion from
+     * counting as one. A leftover from a still-open editor gets its cursor
+     * line rewritten constantly, and that is exactly the case this memory
+     * exists for. */
     unsigned long long wip_declined;
     int                wip_declined_valid;
     int                valid;
@@ -165,6 +170,12 @@ static int                   g_wip_hold;
  * is the editor having died. Only the second is a recovery. */
 static int                   g_wip_recover_offer;
 static int                   g_wip_offering;      /* the recovery modal is up */
+/* This binding's sidecar has produced a parseable `// @cursor` trailer at
+ * least once. The plugin always writes one last, so its sudden absence is the
+ * one cheap signal that a publication was read half-written - see
+ * wip_poll(). Per binding, not per path: it is a fact about the publisher
+ * currently writing the file. */
+static int                   g_wip_saw_cursor;
 static int                   g_wip_entry_pushed;  /* the one per-session snapshot */
 /* The live document as this module last left it. A mismatch means somebody
  * else moved it - Ctrl+Z, or a commit - and the session is over. Same
@@ -293,6 +304,13 @@ static void seen_note_wip_declined(const char *path, unsigned long long content)
         return;
     e->wip_declined       = content;
     e->wip_declined_valid = 1;
+}
+
+static void seen_clear_wip_followed(const char *path) {
+    GlrExtEditSeen *e = seen_find(path);
+
+    if (e)
+        e->wip_followed = 0;
 }
 
 static void seen_clear_wip_declined(const char *path) {
@@ -1042,6 +1060,7 @@ static void wip_forget(void) {
     g_wip_hold           = 0;
     g_wip_recover_offer  = 0;
     g_wip_offering       = 0;
+    g_wip_saw_cursor     = 0;
     g_wip_entry_pushed   = 0;
     g_wip_have_doc_fp    = 0;
     wip_map_release();
@@ -1070,44 +1089,6 @@ static int wip_map_reserve(int rows) {
     return 1;
 }
 
-static void wip_bind(void) {
-    struct stat st;
-
-    wip_forget();
-    if (!g_bound[0])
-        return;
-    if (snprintf(g_wip_path, sizeof(g_wip_path), "%s.wip", g_bound) >=
-        (int)sizeof(g_wip_path)) {
-        g_wip_path[0] = '\0';   /* no room: this binding gets no sidecar */
-        return;
-    }
-    if (stat(g_wip_path, &st) == 0 && S_ISREG(st.st_mode)) {
-        unsigned long long content;
-
-        if (!seen_wip_followed(g_bound) &&
-            hash_file_content(g_wip_path, &content) &&
-            seen_wip_declined(g_bound, content)) {
-            /* Already turned down, and unchanged since. Asking again on every
-             * scene switch would make the answer worthless. Hold, and let the
-             * editor waking up lift it. */
-            g_wip_hold     = 1;
-            g_wip_observed = change_token_from_stat(&st);
-        } else if (seen_wip_followed(g_bound)) {
-            /* Coming back to a scene whose editor is still open. Leave the
-             * observed token invalid so the next poll reads the sidecar as an
-             * ordinary content update and the document converges on whatever
-             * the editor now holds - the same answer the scene file's own
-             * per-path memory gives on the way back, and for the same reason:
-             * the slot's text and the buffer can have diverged while we were
-             * elsewhere. */
-            g_wip_observed.valid = 0;
-        } else {
-            g_wip_recover_offer = 1;
-            g_wip_hold          = 1;
-            g_wip_observed      = change_token_from_stat(&st);
-        }
-    }
-}
 
 /* The document as this module last left it, so a later poll can tell "nobody
  * touched it" from "the user undid or committed something". */
@@ -1191,6 +1172,66 @@ static int physical_line_lead(const char *line) {
     while (line[n] == ' ' || line[n] == '\t')
         n++;
     return n;
+}
+
+/* The sidecar's payload hash - its bytes without the trailing `@cursor` line.
+ * Defined against wip_read() so it cannot drift from the hash the live path
+ * compares against; the read is one-off (a bind, or a recovery prompt), not
+ * per frame. Returns 0 if the file cannot be read. */
+static int wip_payload_hash(const char *path, unsigned long long *out) {
+    GlrExtEditWip w;
+
+    if (!wip_read(path, &w))
+        return 0;
+    *out = w.payload;
+    wip_free(&w);
+    return 1;
+}
+
+static void wip_bind(void) {
+    struct stat st;
+
+    wip_forget();
+    if (!g_bound[0])
+        return;
+    if (snprintf(g_wip_path, sizeof(g_wip_path), "%s.wip", g_bound) >=
+        (int)sizeof(g_wip_path)) {
+        g_wip_path[0] = '\0';   /* no room: this binding gets no sidecar */
+        return;
+    }
+    if (stat(g_wip_path, &st) == 0 && S_ISREG(st.st_mode)) {
+        unsigned long long payload;
+
+        if (!seen_wip_followed(g_bound) &&
+            wip_payload_hash(g_wip_path, &payload) &&
+            seen_wip_declined(g_bound, payload)) {
+            /* Already turned down, and the payload is unchanged since. Asking
+             * again on every scene switch would make the answer worthless.
+             * Hold, and let a genuinely new payload lift it.
+             *
+             * Restored into the live suppression too, so the continuously-
+             * bound path agrees: without it, the first change-token movement
+             * lifts the hold and applies the very payload they declined -
+             * which a touch that rewrites no bytes is enough to trigger. */
+            g_wip_hold             = 1;
+            g_wip_observed         = change_token_from_stat(&st);
+            g_wip_suppressed       = payload;
+            g_wip_suppressed_valid = 1;
+        } else if (seen_wip_followed(g_bound)) {
+            /* Coming back to a scene whose editor is still open. Leave the
+             * observed token invalid so the next poll reads the sidecar as an
+             * ordinary content update and the document converges on whatever
+             * the editor now holds - the same answer the scene file's own
+             * per-path memory gives on the way back, and for the same reason:
+             * the slot's text and the buffer can have diverged while we were
+             * elsewhere. */
+            g_wip_observed.valid = 0;
+        } else {
+            g_wip_recover_offer = 1;
+            g_wip_hold          = 1;
+            g_wip_observed      = change_token_from_stat(&st);
+        }
+    }
 }
 
 /* Move the live cursor to wherever physical row `row` ended up.
@@ -1424,6 +1465,12 @@ static void wip_handle_deleted(void) {
     wip_map_release();
     g_wip_payload_valid = 0;
     g_wip_hold          = 0;
+    /* The editor whose liveness justified following this path is gone. A
+     * sidecar found here at some later bind is a *different* editor's, and
+     * whether that one is alive is exactly what the recovery prompt exists to
+     * ask - so drop the followed mark rather than let the next rebind resume
+     * into a stranger's leftovers without asking. */
+    seen_clear_wip_followed(g_bound);
 }
 
 /* Y at the recovery prompt. The sidecar is left exactly as it is; accepting
@@ -1435,6 +1482,7 @@ static int wip_recover_commit(GlrModalKind kind, const char *text, int context) 
     g_wip_hold     = 0;
     g_wip_offering = 0;
     seen_clear_wip_declined(g_bound);
+    g_wip_suppressed_valid = 0;
     /* Force the read: the observed token was stamped when the offer was made,
      * so nothing has "moved" since. */
     g_wip_observed.valid = 0;
@@ -1452,23 +1500,32 @@ static int wip_recover_commit(GlrModalKind kind, const char *text, int context) 
  * honoured by the hold this sets before the prompt opens. */
 static void wip_offer_recovery(void) {
     char question[GLR_EXTEDIT_PATH_MAX + 64];
+    unsigned long long payload;
 
-    /* One offer per binding, whether or not it opened: another modal already
-     * owning the keyboard is not a reason to keep asking every frame, and the
-     * hold means declining is the safe default. */
-    g_wip_recover_offer = 0;
-    {
-        unsigned long long content;
-        if (hash_file_content(g_wip_path, &content))
-            seen_note_wip_declined(g_bound, content);
-    }
+    /* Another modal owns the keyboard. Leave the offer standing and ask when
+     * it closes: the hold keeps the sidecar unapplied meanwhile, so waiting
+     * costs nothing, and the alternative is worse than it looks - the decline
+     * recorded below is durable, so treating "could not ask" as one answers
+     * the question on the user's behalf and never asks again. */
     if (glr_modal_active())
         return;
+
+    g_wip_recover_offer = 0;
     snprintf(question, sizeof(question),
              "External WIP recovered from %s. Follow it?", g_wip_path);
-    if (glr_modal_begin(GLR_MODAL_CONFIRM_WIP_RECOVER, question, 0,
-                        wip_recover_commit))
-        g_wip_offering = 1;
+    if (!glr_modal_begin(GLR_MODAL_CONFIRM_WIP_RECOVER, question, 0,
+                         wip_recover_commit))
+        return;     /* refused for a reason retrying cannot fix */
+    g_wip_offering = 1;
+
+    /* Recorded now the prompt is actually on screen, not when it is answered:
+     * Esc has no callback, so declining is the default and accepting is what
+     * clears it. A question nobody was asked has no answer worth keeping. */
+    if (wip_payload_hash(g_wip_path, &payload)) {
+        seen_note_wip_declined(g_bound, payload);
+        g_wip_suppressed       = payload;
+        g_wip_suppressed_valid = 1;
+    }
 }
 
 /* One frame of sidecar watching, run after the scene file's own poll. */
@@ -1544,6 +1601,28 @@ static void wip_poll(void) {
             return;
         }
     }
+
+    /* A publisher that has been appending `// @cursor` and suddenly is not is
+     * almost certainly not a publisher at all: it is this file being read
+     * between the truncate and the last byte of an in-place write. Adopting
+     * that prefix would replace the scene with however much of it had reached
+     * the disk - and it would do so *cleanly*, because a prefix of a valid
+     * program is usually a valid program, with the cut row parked as an
+     * ordinary half-typed one.
+     *
+     * A heuristic, and only a backstop: truncation that happens to land after
+     * a complete trailer is indistinguishable, and the real protection is the
+     * plugin's sibling-temp-and-rename (`make check-wip-plugin-atomic`). It is
+     * conditional on having seen a trailer before so that an integration which
+     * never writes one is not refused outright. */
+    if (g_wip_saw_cursor && w.cursor_row == 0) {
+        g_stats.failures++;
+        repl_set_status_error("Watch: ignored a truncated editor buffer");
+        wip_free(&w);
+        return;
+    }
+    if (w.cursor_row > 0)
+        g_wip_saw_cursor = 1;
 
     if (g_wip_suppressed_valid && w.payload == g_wip_suppressed) {
         /* Dismissed payload: ignore both a reimport and a cursor-only
