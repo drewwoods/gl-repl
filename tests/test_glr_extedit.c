@@ -1941,7 +1941,16 @@ static void test_a_session_costs_one_undo_entry(void) {
  * NULL if the fixture could not be built.
  *
  * `sidecar_out` receives the sidecar path, which is derived from the *bound*
- * path and so is not WIP_PATH here. */
+ * path and so is not WIP_PATH here.
+ *
+ * NOTE for whoever adds a test after one of these: this **replaces the example
+ * catalog for the rest of the run** and nothing puts the built-in one back. So
+ * `repl_load_example(0)` below here loads this one-entry catalog's file-backed
+ * scene, not a built-in - which has a binding, where a built-in has none. The
+ * one test that needs a built-in
+ * (test_builtin_example_unbinds_the_watcher) is ordered ahead of every
+ * catalog install for exactly that reason; keep it that way, or assert against
+ * whichever catalog is actually loaded. */
 static const char *begin_catalog_session(char *sidecar_out, size_t sidecar_sz) {
     static char scene_path[512];
     char root[512], scenes[512], catalog[512], err[512];
@@ -2687,6 +2696,280 @@ static void test_exported_c_sidecar_cursor_follows_snippet_row(void) {
 
 /* A buffer that will not parse is the normal state of a file being typed. It
  * must not be retried every frame, and it must not damage what is live. */
+/* Publish the way the editor plugin does: a sibling temp in the same
+ * directory, renamed over the target. The rename is the atomicity - an
+ * in-place write lets the watcher read the file between the truncate and the
+ * last byte. */
+static void publish_wip_atomically(const char *const *lines, int row, int col) {
+    char tmp[600];
+
+    snprintf(tmp, sizeof(tmp), "%s.%d.tmp", WIP_PATH, (int)getpid());
+    publish_wip_at(tmp, lines, row, col);
+    if (rename(tmp, WIP_PATH) != 0)
+        (void)unlink(tmp);
+}
+
+/* The transport line is stripped before the load, so it can never reach the
+ * document - and therefore can never reach a file gl-repl writes. Worth
+ * pinning rather than trusting: `@plot` deliberately rides a row's text
+ * through export, and the difference between the two is a rule nothing else
+ * enforces. A cursor position written into somebody's scene file would come
+ * back on every later load. */
+static void test_the_cursor_directive_never_reaches_a_saved_file(void) {
+    printf("--- @cursor never survives into a saved scene ---\n");
+
+    begin_wip_session(k_scene_a);
+    publish_wip(k_scene_b, 4, 7);
+    glr_extedit_poll();
+    ASSERT_INT("the buffer was followed", glr_extedit_stats().wip_updates, 1);
+
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        const char *line = editor_buffer_line(i);
+        ASSERT_TRUE("no document row mentions @cursor",
+                    !line || strstr(line, "@cursor") == NULL);
+    }
+
+    /* And out through the writer, which is the half that would do the damage.
+     * Ctrl+S during a session writes the document - the parked row is
+     * deliberately not in it, and neither is the transport line. */
+    ASSERT_TRUE("Ctrl+S writes the bound file",
+                repl_save_active_scene(NULL) != 0);
+    ASSERT_TRUE("the saved file carries the geometry",
+                file_contains(WATCH_PATH, "9, 9, 9"));
+    ASSERT_TRUE("and no cursor directive",
+                !file_contains(WATCH_PATH, "@cursor"));
+    (void)unlink(WIP_PATH);
+}
+
+/* The publication is a rename, so every read sees a whole file. Driven hard
+ * enough that a torn read would have to show up as a parse failure or a
+ * shorter document, neither of which may ever happen. */
+static void test_repeated_atomic_publications_are_never_torn(void) {
+    GlrExtEditStats stats;
+    int rows_expected;
+
+    printf("--- rapid publication never yields a torn read ---\n");
+
+    begin_wip_session(k_scene_a);
+    publish_wip_atomically(k_scene_longer, 4, 1);
+    glr_extedit_poll();
+    rows_expected = repl_state_document_count();
+    ASSERT_TRUE("the first publication landed", rows_expected > 0);
+
+    for (int i = 0; i < 40; i++) {
+        char line[64];
+        const char *buf[8];
+        int n = 0;
+
+        for (; k_scene_longer[n]; n++)
+            buf[n] = k_scene_longer[n];
+        snprintf(line, sizeof(line), "glVertex3f(%d, %d, %d);", i, i, i);
+        buf[4] = line;             /* one row differs per publication */
+        buf[n] = NULL;
+        /* Pinned mtimes: 40 same-size writes to one inode land inside a
+         * single filesystem timestamp tick on ext4, and the change token
+         * would then not move. */
+        set_mtime(WIP_PATH, 20000 + i * 2, 0);
+        publish_wip_atomically(buf, 4, 1);
+        set_mtime(WIP_PATH, 20001 + i * 2, 0);
+        glr_extedit_poll();
+        ASSERT_INT("the document never shrinks mid-publication",
+                   repl_state_document_count(), rows_expected);
+    }
+
+    stats = glr_extedit_stats();
+    ASSERT_INT("no publication failed to parse", stats.failures, 0);
+    ASSERT_INT("every one of them landed", stats.wip_updates, 41);
+    ASSERT_TRUE("and the last one is live", document_mentions("39, 39, 39"));
+    (void)unlink(WIP_PATH);
+}
+
+/* The third row of the plan's session-exit table: a session that ended takes a
+ * *fresh* entry snapshot when the next one starts, rather than reusing the
+ * first one's - which would make the second Ctrl+Z land wherever the first
+ * session began. */
+static void test_a_second_session_takes_its_own_entry_snapshot(void) {
+    printf("--- a second session gets its own undo entry ---\n");
+
+    begin_wip_session(k_scene_a);
+    ASSERT_TRUE("a user scene", repl_active_user_scene() >= 0);
+
+    /* Session one. */
+    publish_wip(k_scene_b, 4, 1);
+    glr_extedit_poll();
+    ASSERT_TRUE("session one is live", document_mentions("9, 9, 9"));
+
+    /* End it the way `:q` does, on a user scene: the text is kept. */
+    (void)unlink(WIP_PATH);
+    glr_extedit_poll();
+    ASSERT_TRUE("the text survives the editor closing",
+                document_mentions("9, 9, 9"));
+
+    /* Session two, from a document that is no longer the one session one
+     * started from. */
+    publish_wip(k_scene_longer, 4, 1);
+    glr_extedit_poll();
+    ASSERT_TRUE("session two is live", document_mentions("3, 3, 3"));
+
+    /* One undo has to reach session two's *own* starting point - scene B -
+     * not scene A, which is where session one began. */
+    editor_undo_pop_snapshot();
+    ASSERT_TRUE("undo lands on where session two started",
+                document_mentions("9, 9, 9"));
+    ASSERT_TRUE("not on where session one did", !document_mentions("0, 0, 0"));
+    (void)unlink(WIP_PATH);
+}
+
+/* D7 reaches the sidecar too, and by a different route than it reaches a
+ * save. A lesson drives the document itself, so a payload the editor computed
+ * against the *pre*-lesson document must not land on what the lesson left
+ * behind. There is no parked version to dismiss here - the gate simply
+ * observes each publication and drops it - so what has to be asserted is that
+ * nothing lands during the lesson, nothing lands after it either, and
+ * following resumes only on a publication written after the lesson ended. */
+static void test_a_lesson_holds_the_sidecar_and_drops_what_it_missed(void) {
+    int rows_after_lesson;
+
+    printf("--- a lesson holds the sidecar, and drops what it missed ---\n");
+
+    begin_wip_session(k_scene_a);
+    tutorial_start(0);
+    ASSERT_TRUE("the tutorial is running", tutorial_active());
+
+    publish_wip(k_scene_b, 4, 1);
+    for (int i = 0; i < 5; i++)
+        glr_extedit_poll();
+    ASSERT_INT("nothing followed during the lesson",
+               glr_extedit_stats().wip_updates, 0);
+
+    tutorial_stop();
+    rows_after_lesson = repl_state_document_count();
+
+    /* The publication that arrived during the lesson stays dropped: the
+     * observed token moved while the gate was shut, so there is nothing left
+     * to re-read. */
+    for (int i = 0; i < 5; i++)
+        glr_extedit_poll();
+    ASSERT_INT("and it does not land afterwards",
+               glr_extedit_stats().wip_updates, 0);
+    ASSERT_INT("the document the lesson left behind is untouched",
+               repl_state_document_count(), rows_after_lesson);
+
+    /* A publication written *after* the lesson is ordinary live follow. */
+    set_mtime(WIP_PATH, 30000, 0);
+    publish_wip(k_scene_longer, 4, 1);
+    set_mtime(WIP_PATH, 30001, 0);
+    glr_extedit_poll();
+    ASSERT_INT("following resumes on the next real publication",
+               glr_extedit_stats().wip_updates, 1);
+    (void)unlink(WIP_PATH);
+}
+
+/* D1: the sidecar is derived from the binding, so a scene switch has to take
+ * it with it. Leaving the old session running would mean the next keystroke in
+ * an editor pointed at the *previous* scene silently overwrote the new one.
+ *
+ * Switching to another file-backed scene rather than to a built-in example on
+ * purpose: it is the case where a binding still exists afterwards, so it
+ * actually tests that the sidecar path was re-derived instead of that
+ * everything was torn down. It is also the only form that does not depend on
+ * whether some earlier test left a runtime catalog installed, which decides
+ * whether "example 0" has a file. */
+static void test_switching_scenes_ends_the_session(void) {
+    GlrExtEditStats before, after;
+    char sidecar[600];
+    char bound_before[512];
+
+    printf("--- switching scenes ends the session and moves the sidecar ---\n");
+
+    begin_wip_session(k_scene_a);
+    publish_wip(k_scene_b, 4, 1);
+    glr_extedit_poll();
+    ASSERT_TRUE("a session is running", document_mentions("9, 9, 9"));
+    snprintf(bound_before, sizeof(bound_before), "%s",
+             glr_extedit_bound_path() ? glr_extedit_bound_path() : "");
+
+    /* Away to a different file-backed scene. */
+    if (!begin_catalog_session(sidecar, sizeof(sidecar))) {
+        ASSERT_TRUE("the runtime catalog fixture builds", 0);
+        return;
+    }
+    ASSERT_TRUE("the binding followed the switch",
+                glr_extedit_bound_path() != NULL &&
+                strcmp(glr_extedit_bound_path(), bound_before) != 0);
+
+    before = glr_extedit_stats();
+    /* The editor keeps typing at the old file. Nothing may follow: that
+     * sidecar belongs to a scene which is no longer live. */
+    set_mtime(WIP_PATH, 31000, 0);
+    publish_wip(k_scene_longer, 4, 1);
+    set_mtime(WIP_PATH, 31001, 0);
+    for (int i = 0; i < 5; i++)
+        glr_extedit_poll();
+    after = glr_extedit_stats();
+    ASSERT_INT("the orphaned sidecar is not followed",
+               after.wip_updates - before.wip_updates, 0);
+    ASSERT_TRUE("and the new scene is untouched", !document_mentions("3, 3, 3"));
+
+    /* The new binding has a sidecar of its own, and that one is followed. */
+    publish_wip_at(sidecar, k_scene_longer, 4, 1);
+    glr_extedit_poll();
+    ASSERT_INT("the new scene's own sidecar is",
+               glr_extedit_stats().wip_updates - before.wip_updates, 1);
+    ASSERT_TRUE("with its geometry", document_mentions("3, 3, 3"));
+    (void)unlink(sidecar);
+    (void)unlink(WIP_PATH);
+}
+
+/* Switching away and back while the editor is still open must not look like a
+ * recovery. The prompt is for a `.wip` left behind by an editor that died
+ * before gl-repl started; one this session was following seconds ago is not
+ * that, and prompting would put a modal in front of every F12 round trip.
+ *
+ * This is the sidecar's version of a bug the scene file already had and the
+ * per-path memory already fixed - see "coming back to a watched scene
+ * converges" above - so it is fixed the same way and asserted the same way: no
+ * prompt, and the document converges on what the editor now holds.
+ *
+ * The switch is a scene load with the watcher left armed, which is what the
+ * app does. Toggling glr_extedit_set_enabled() would clear the per-path
+ * memory and prove nothing. */
+static void test_returning_to_a_live_session_is_not_a_recovery(void) {
+    int slot_a;
+
+    printf("--- coming back to an open editor is not a recovery ---\n");
+
+    begin_wip_session(k_scene_a);
+    slot_a = repl_active_user_scene();
+    ASSERT_TRUE("the CLI file is a user scene", slot_a >= 0);
+    publish_wip(k_scene_b, 4, 1);
+    glr_extedit_poll();
+    ASSERT_INT("the session followed once", glr_extedit_stats().wip_updates, 1);
+
+    /* Away to a second scene. The sidecar stays on disk the whole time,
+     * because the editor never closed. */
+    write_lines(OTHER_PATH, k_scene_longer);
+    {
+        ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+        ASSERT_TRUE("a second scene opens",
+                    repl_load_scene_as_new_slot(OTHER_PATH, &reason) >= 0);
+    }
+    glr_extedit_poll();
+    ASSERT_TRUE("the binding followed the switch",
+                glr_extedit_bound_path() != NULL &&
+                strstr(glr_extedit_bound_path(), "other") != NULL);
+
+    /* And back. */
+    ASSERT_TRUE("back to the first scene", repl_load_user_scene_idx(slot_a));
+    glr_extedit_poll();   /* rebinds */
+    glr_extedit_poll();   /* and follows */
+
+    ASSERT_TRUE("no recovery prompt on the way back", !glr_modal_active());
+    ASSERT_TRUE("the editor's buffer is live again",
+                document_mentions("9, 9, 9"));
+    (void)unlink(WIP_PATH);
+}
+
 static void test_an_unparseable_buffer_leaves_the_scene_alone(void) {
     GlrExtEditStats before, after;
 
@@ -2774,6 +3057,12 @@ int main(void) {
     test_cursor_follows_onto_a_continuation_row();
     test_wip_reload_preserves_visible_t();
     test_sidecar_cursor_requests_follow_scroll();
+    test_the_cursor_directive_never_reaches_a_saved_file();
+    test_repeated_atomic_publications_are_never_torn();
+    test_a_second_session_takes_its_own_entry_snapshot();
+    test_a_lesson_holds_the_sidecar_and_drops_what_it_missed();
+    test_switching_scenes_ends_the_session();
+    test_returning_to_a_live_session_is_not_a_recovery();
     test_an_unparseable_buffer_leaves_the_scene_alone();
     test_exported_c_sidecar_cursor_follows_snippet_row();
     glr_extedit_set_enabled(0);

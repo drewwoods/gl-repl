@@ -55,6 +55,15 @@ the plan did not:
   would also have meant adding a cancel hook to the shared modal for one
   caller.
 
+One gap the plan carried into the implementation, found by auditing stage 2.5
+against stage 1 rather than against the plan: **returning to a scene whose
+editor is still open re-offered the sidecar as a recovery.** It is the same bug
+"Returning to a watched scene converges" fixed for the scene file, and it wants
+the same answer - the per-path memory now records that this session has
+followed a path's sidecar, and a bind to a path so marked resumes following
+instead of prompting. Without it every F12 round trip during live editing put a
+modal on screen.
+
 One defect the build surfaced that no amount of reading would have: placing the
 caret on a document row **must load that row into the input buffer**. An empty
 input buffer sitting on an occupied row reads as a pending deletion to
@@ -1028,7 +1037,7 @@ All in failure and edge behavior, where the suite is thinnest.
 
 **Where they landed.** `tests/test_scene_load.c` (132 assertions) covers the
 loader options, the source-file binding and the row map / cursor hole,
-including continuation-row mapping; `tests/test_glr_extedit.c` (327 native /
+including continuation-row mapping; `tests/test_glr_extedit.c` (425 native /
 5 wasm) covers the watcher and the sidecar, including dismissed-payload
 suppression, failed-WIP undo restoration, indented parked guides, and
 cursor-only movement onto a continuation row; `test_export_glr_fixed_point`
@@ -1081,16 +1090,39 @@ the list below is covered.
   unedited catalog scene (assert no promotion); Ctrl+Z out of WIP sticks and
   does not re-enter on the next poll; sidecar deletion clears WIP-active and
   **splits on identity** — a user scene retains the text, a transient reloads
-  the base file rather than adopting it as the catalog scene.
+  the base file rather than adopting it as the catalog scene. Plus the row of
+  that table the first pass left untested: a *second* session takes its own
+  entry snapshot, so its Ctrl+Z lands where **it** started rather than where
+  the first session did.
 - **D3 wiring.** `camera_apply = NONE` does not snap the camera (the
   `cam_apply_pose` fall-through), and `apply_cfg = 0` still leaves the pending
   cfg bag cleared for the next non-watch load.
 - **Trailing comment is not parked.** A file ending in `// note` after a
   complete command loads whole, with the comment as a document row.
-- **`@cursor` never exported.**
+- **`@cursor` never exported.** Asserted at both ends - no document row
+  mentions it, and Ctrl+S during a live session writes a file that does not
+  either. True by construction (the line is stripped before the load), which
+  is exactly why it is worth pinning: `@plot` deliberately rides a row's text
+  through export, so "this one must not" is a rule nothing else enforces.
 - **Sidecar atomicity.** Repeated writes while the watcher reads; no
-  empty/truncated reload ever observed.
-- **D7 transients**, per row.
+  empty/truncated reload ever observed. Driven through the same temp-plus-
+  rename the plugin uses, forty publications deep, asserting the document
+  never shrinks and no publication fails to parse.
+- **D7 transients**, per row. D7 also reaches the *sidecar*, by a different
+  route than it reaches a save: there is no parked version to dismiss, so the
+  assertion is that a lesson observes-and-drops each publication, that nothing
+  lands after the lesson either, and that following resumes only on a
+  publication written afterwards.
+- **A scene switch moves the sidecar with the binding** (D1). Switching to
+  another *file-backed* scene rather than to a built-in example, because that
+  is the case where a binding still exists afterwards and so actually tests
+  re-derivation rather than teardown - the old sidecar goes unfollowed and the
+  new scene's own is picked up.
+- **Coming back to an open editor is not a recovery.** Switch away and back
+  with the editor still running and the `.wip` still on disk: no prompt, and
+  the document converges on the buffer. Asserted through a scene load with the
+  watcher left armed - toggling it clears the per-path memory and would prove
+  nothing.
 - **New: document-wide export fixed point** over the scene corpus, backing the
   "the file stops churning" claim that `test_repl_core_io.c:851-859` only
   supports for the if-chain.
@@ -1102,9 +1134,9 @@ Results for stages 1-2.5, with Stage 2.25 skipped, in the numbering below:
 | # | Result |
 |---|---|
 | 1 | `make check-state-ownership` and `make check-trailing-whitespace` green. `--watch` needed rows in `scripts/completions/` too (`check-completions`). |
-| 2 | `make test` / `make test-stubs` green (28,774 assertions), and every `HEADLESS_DEMO_TARGETS` demo builds - `repl_demo` / `repl_live_demo` are the load-bearing no-controller proofs and a new `src/repl/*.c` needs a `REPL_DEMO_DEP_SRCS` row they alone catch. `make test-web` links the watcher TU and `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - it asserts the *inert* form rather than joining `WEB_TEST_EXCLUDE`. The lane's one remaining failure, `test_glr_init_trace`, fails identically at the pre-BYOE commit and is unrelated. |
-| 3 | gracemont (gcc 13.3, Ubuntu 24.04): `make check-c99` and `make test-stubs` green, including the `st_mtim` arm of the change token that macOS never compiles. |
-| 4 | End-to-end: `./gl-repl --watch scene.glr`, appended a `/* C-style note */`, four complete rows, a trailing `glVertex3f(3,` and a `// still typing` comment under it, all from outside; the session reloaded 7 -> 13 commands, kept both comments as document rows, and parked the incomplete row. Also `--watch new.glr` on a file holding nothing but `glVertex3f(1,`: the startup import fails (bootstrap has no parking), the binding survives, and the next save loads. `--watch` with no positional file exits 1 with a usage error. |
+| 2 | `make test` / `make test-stubs` green (28,883 assertions), and every `HEADLESS_DEMO_TARGETS` demo builds - `repl_demo` / `repl_live_demo` are the load-bearing no-controller proofs and a new `src/repl/*.c` needs a `REPL_DEMO_DEP_SRCS` row they alone catch. `make test-web` links the watcher TU and `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - it asserts the *inert* form rather than joining `WEB_TEST_EXCLUDE`. The lane's one remaining failure, `test_glr_init_trace`, fails identically at the pre-BYOE commit and is unrelated. |
+| 3 | gracemont (gcc 13.3, Ubuntu 24.04): `make check-c99`, `make check-state-ownership` and `make test-stubs` green, including the `st_mtim` arm of the change token that macOS never compiles. |
+| 4 | End-to-end, stage 2.5: real vim 9.2 driving the shipped plugin against the real binary - an unsaved buffer replaced the scene (green triangle from bytes never written to disk), the caret followed a cursor-only publication to `Ln 5:8`, and a round trip back onto the parked row restored `glColor3f(1, 1,` at `Ln 9:12`. Stage 1: `./gl-repl --watch scene.glr`, appended a `/* C-style note */`, four complete rows, a trailing `glVertex3f(3,` and a `// still typing` comment under it, all from outside; the session reloaded 7 -> 13 commands, kept both comments as document rows, and parked the incomplete row. Also `--watch new.glr` on a file holding nothing but `glVertex3f(1,`: the startup import fails (bootstrap has no parking), the binding survives, and the next save loads. `--watch` with no positional file exits 1 with a usage error. |
 | 5 | Resolved by reading rather than by hand - see the scope note above. |
 | 6 | Done - see Verification 6 above. |
 | 7 | Done - `make bench-extedit && build/release/bench_extedit --iters 200`; results and caveats under "Gate". |

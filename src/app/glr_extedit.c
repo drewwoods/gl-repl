@@ -105,6 +105,14 @@ typedef struct {
      * rebind() deliberately wipes. */
     unsigned long long suppressed;
     int                suppressed_valid;
+    /* This session has followed this path's sidecar at least once. The
+     * recovery offer exists for a `.wip` left behind by an editor that died
+     * *before* gl-repl started; one we were following ten seconds ago is
+     * self-evidently not that, and re-offering it on every scene switch would
+     * put a modal in front of an ordinary F12 round trip. Same shape as
+     * `content` above, and for the same reason: binding state is wiped on
+     * rebind, so the memory has to live per path. */
+    int                wip_followed;
     int                valid;
 } GlrExtEditSeen;
 
@@ -246,6 +254,23 @@ static void seen_remember_suppressed(const char *path,
         return;
     e->suppressed       = content;
     e->suppressed_valid = 1;
+}
+
+/* Best effort, like seen_remember_suppressed: failing to record it costs one
+ * redundant recovery prompt, not correctness. */
+static void seen_note_wip_followed(const char *path) {
+    GlrExtEditSeen *e = seen_find(path);
+
+    if (!e)
+        e = seen_add(path);
+    if (e)
+        e->wip_followed = 1;
+}
+
+static int seen_wip_followed(const char *path) {
+    const GlrExtEditSeen *e = seen_find(path);
+
+    return e && e->wip_followed;
 }
 
 static int seen_lookup_suppressed(const char *path, unsigned long long *out) {
@@ -1022,9 +1047,20 @@ static void wip_bind(void) {
         return;
     }
     if (stat(g_wip_path, &st) == 0 && S_ISREG(st.st_mode)) {
-        g_wip_recover_offer = 1;
-        g_wip_hold          = 1;
-        g_wip_observed      = change_token_from_stat(&st);
+        if (seen_wip_followed(g_bound)) {
+            /* Coming back to a scene whose editor is still open. Leave the
+             * observed token invalid so the next poll reads the sidecar as an
+             * ordinary content update and the document converges on whatever
+             * the editor now holds - the same answer the scene file's own
+             * per-path memory gives on the way back, and for the same reason:
+             * the slot's text and the buffer can have diverged while we were
+             * elsewhere. */
+            g_wip_observed.valid = 0;
+        } else {
+            g_wip_recover_offer = 1;
+            g_wip_hold          = 1;
+            g_wip_observed      = change_token_from_stat(&st);
+        }
     }
 }
 
@@ -1273,6 +1309,7 @@ static void wip_apply_content(GlrExtEditWip *w) {
 
     g_wip_map_valid = 1;
     g_wip_active    = 1;
+    seen_note_wip_followed(g_bound);
     g_stats.reloads++;
     g_stats.wip_updates++;
     editor_insert_mode_set(0);
