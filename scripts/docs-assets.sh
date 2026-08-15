@@ -2516,7 +2516,7 @@ fi
 
 if want clip-plane-sweep; then
     ( export GLR_EDIT_LINE=6
-      clip "$OUT/clip-plane-sweep" 126 1 20 720 "$(stage_clip_sweep)" )
+      clip "$OUT/clip-plane-sweep" 126 2 20 560 "$(stage_clip_sweep)" )
 fi
 
 if want xform-guide; then
