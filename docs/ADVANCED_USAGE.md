@@ -403,9 +403,18 @@ keeps it, so formats and doc links never move on their own.
 `--to-apng` and `--to-gif` migrate the selected clips:
 
 ```bash
-scripts/docs-assets.sh --to-apng view-mode-2d   # one clip
-scripts/docs-assets.sh --to-apng --gifs         # every clip
+scripts/docs-assets.sh --formats              # what each clip is now
+scripts/docs-assets.sh --to-apng view-mode-2d # one clip
+scripts/docs-assets.sh --to-apng sc-whale replay
+scripts/docs-assets.sh --to-apng              # every clip
 ```
+
+`--formats` is the companion to those: it lists the selected clips with their
+current format, size and path, so a subset can be chosen from what is actually
+on disk rather than guessed. It reports clips only - a still has no format to
+convert - and it reads each clip's path out of its own `clip` call site, so it
+cannot drift from what the script would actually write. `--list` deliberately
+stays bare names: the shell completions parse it.
 
 Either flag re-encodes, **repoints every Markdown reference** at the new
 extension, and deletes the superseded file. It is symmetric, so a migration

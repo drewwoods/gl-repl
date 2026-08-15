@@ -186,6 +186,9 @@ Options:
   --pngs             Regenerate all PNG assets (gl-repl).
   --demos            Regenerate the standalone-demo stills (tools/ binaries).
   --list             List selected asset names and exit (all by default).
+  --formats          List the selected CLIPS with their current format (GIF or
+                     APNG), size and path, then exit. Stills are skipped: only
+                     a clip has a format to report.
   --to-apng          Write the selected clips as APNG instead of GIF: repoint
                      every Markdown reference at the .png and delete the
                      superseded .gif. On its own it selects every clip, not
@@ -216,6 +219,7 @@ Examples:
   scripts/docs-assets.sh --demos
   scripts/docs-assets.sh --list --gifs
   scripts/docs-assets.sh hero replay demo-render3d
+  scripts/docs-assets.sh --formats               # which clips are which format
   scripts/docs-assets.sh --to-apng view-mode-2d  # migrate one clip to APNG
   scripts/docs-assets.sh --to-apng --gifs        # migrate every clip
 EOF
@@ -234,6 +238,7 @@ SELECT_GIFS=0
 SELECT_PNGS=0
 SELECT_DEMOS=0
 LIST=0
+FORMATS=0
 # Empty = each clip keeps whatever format it is already in; --to-apng /
 # --to-gif force it and migrate. Deliberately NOT spelled --apng/--gif: --gif
 # would sit one letter from the --gifs CATEGORY selector and mean something
@@ -243,6 +248,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         -h|--help) usage; exit 0 ;;
         --list) LIST=1; shift ;;
+        --formats) FORMATS=1; shift ;;
         --gifs) SELECT_GIFS=1; shift ;;
         --pngs) SELECT_PNGS=1; shift ;;
         --demos) SELECT_DEMOS=1; shift ;;
@@ -319,6 +325,47 @@ fi
 
 if [[ "$LIST" -eq 1 ]]; then
     printf '%s\n' "${WANTED[@]}" | sort
+    exit 0
+fi
+
+# clip_base <asset> — the extension-less output path of a clip asset, read out
+# of that asset's own `clip` call site.
+#
+# Deliberately NOT a second table, and not derived from the name: the mapping
+# is conventional (sc-torus-knot -> $SHOW/torus-knot) but nothing enforces the
+# convention, so a table or a rule would be free to drift from the call site
+# it claims to describe and would then misreport a clip's format in --formats.
+# Reading the call site cannot be wrong. Prints nothing if the asset has none.
+clip_base() {
+    local body base
+    body=$(sed -n "/^if want $1; then\$/,/^fi\$/p" "$0")
+    base=$(printf '%s\n' "$body" | sed -nE 's/^[[:space:]]*clip "\$(OUT|SHOW)\/([a-z0-9-]+)".*/\1 \2/p' | head -1)
+    [[ -n "$base" ]] || return 0
+    case "${base%% *}" in
+        OUT)  printf '%s/%s\n' "$OUT"  "${base##* }" ;;
+        SHOW) printf '%s/%s\n' "$SHOW" "${base##* }" ;;
+    esac
+}
+
+if [[ "$FORMATS" -eq 1 ]]; then
+    n_gif=0; n_apng=0; kb_gif=0; kb_apng=0
+    while read -r a; do
+        base="$(clip_base "$a")"
+        [[ -n "$base" ]] || continue   # not a clip: stills have no format
+        if [[ -f "$base.png" ]]; then
+            kb=$(( $(wc -c <"$base.png") / 1024 ))
+            n_apng=$((n_apng + 1)); kb_apng=$((kb_apng + kb))
+            printf '%-6s %6s KB  %-24s %s\n' APNG "$kb" "$a" "${base#$ROOT/}.png"
+        elif [[ -f "$base.gif" ]]; then
+            kb=$(( $(wc -c <"$base.gif") / 1024 ))
+            n_gif=$((n_gif + 1)); kb_gif=$((kb_gif + kb))
+            printf '%-6s %6s KB  %-24s %s\n' GIF "$kb" "$a" "${base#$ROOT/}.gif"
+        else
+            printf '%-6s %6s     %-24s %s\n' '-' '' "$a" "${base#$ROOT/}.{gif,png} (never generated)"
+        fi
+    done < <(printf '%s\n' "${WANTED[@]}" | sort)
+    printf '\n%d clip(s): %d GIF (%d KB), %d APNG (%d KB)\n' \
+        "$((n_gif + n_apng))" "$n_gif" "$kb_gif" "$n_apng" "$kb_apng"
     exit 0
 fi
 

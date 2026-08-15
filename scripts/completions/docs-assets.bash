@@ -22,7 +22,7 @@ _docs_assets_complete() {
     esac
 
     if [[ "$cur" == -* ]]; then
-        COMPREPLY=( $(compgen -W '--gifs --pngs --demos --list --to-apng --to-gif -j --jobs -h --help' -- "$cur") )
+        COMPREPLY=( $(compgen -W '--gifs --pngs --demos --list --formats --to-apng --to-gif -j --jobs -h --help' -- "$cur") )
         return 0
     fi
 
