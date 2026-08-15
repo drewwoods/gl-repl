@@ -3428,15 +3428,15 @@ int main() {
         ASSERT_STR("clear_all: color material mode",
                    editor_buffer_line(2),
                    "  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);");
-        ASSERT_STR("clear_all: two-sided lighting",
-                   editor_buffer_line(3),
-                   "  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);");
         ASSERT_STR("clear_all: material specular",
-                   editor_buffer_line(4),
+                   editor_buffer_line(3),
                    "  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});");
         ASSERT_STR("clear_all: material shininess",
-                   editor_buffer_line(5),
+                   editor_buffer_line(4),
                    "  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);");
+        ASSERT_STR("clear_all: two-sided lighting",
+                   editor_buffer_line(5),
+                   "  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);");
         ASSERT_INT("clear_all: edit_line follows baseline", editor_state_edit_line(), 6);
         ASSERT_INT("clear_all: inserting is 0", editor_insert_mode(), 0);
         ASSERT_INT("clear_all: input is empty", editor_state_input().input[0], 0);
