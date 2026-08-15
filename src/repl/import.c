@@ -67,6 +67,8 @@
 #include "repl/parser.h"
 #include "repl/util.h"            /* repl_format_fits / _copy_string_fits / _append_clamped */
 #include "repl/pipeline.h"
+#include "repl/scene_load.h"      /* ReplSceneLoadOpts - explicit load policy */
+#include "repl/scene_snapshot.h"  /* ATOMIC rollback */
 #include "repl/source_scope.h"
 
 #include "repl/cfg_baseline.h"
@@ -121,8 +123,20 @@ typedef struct {
 struct ImportState {
     ReplCameraHeader camera;          /* the one camera-header reader */
     ReplDocOrder     order;           /* canonical document order (.glr only) */
+    ReplSceneLoadOpts opts;           /* format / policy / metadata policy */
     int              check_order;     /* .glr source: the authored format */
     int              order_failed;
+    /* ATOMIC only. `load_failed` latches the first rejected line and stops the
+     * walk; `atomic_stash` is the pre-load document the abort restores. The
+     * stash is NULL under TOLERANT (nothing to roll back to) and also when the
+     * ~1.2 MB allocation fails - the load then still runs and still aborts at
+     * the first bad line, it just cannot undo the rows already inserted. That
+     * degradation is deliberate: refusing to load at all because a scratch
+     * buffer would not fit is worse than the partial document the caller's own
+     * stash (repl_load_scene_via_loader, glr_extedit) already covers. */
+    int              load_failed;
+    int              failed_line_no;
+    SceneSnapshot   *atomic_stash;
     const char      *source_label;    /* for diagnostics; never retained */
     int in_snippet;
     int past_snippet;
@@ -1644,6 +1658,10 @@ static void import_state_init(ImportState *s) {
     s->func_block_comment = 0;
     s->check_order = 0;
     s->order_failed = 0;
+    s->load_failed = 0;
+    s->failed_line_no = 0;
+    s->atomic_stash = NULL;
+    repl_scene_load_opts_init(&s->opts, REPL_EXAMPLE_SOURCE_C);
     s->source_label = NULL;
     s->allow_raw_scene = 0;
     s->has_func_body_markers = 0;
@@ -2006,18 +2024,42 @@ static void import_restore_auto_normal(int before) {
     repl_command_store_replace_one(&store, before, &marked);
 }
 
-static void import_feed_one_line(ImportState *s, const char *line) {
+/* Record a rejected line. Under TOLERANT this is only a counter bump (the
+ * caller has already emitted the per-line diagnostic and carries on); under
+ * ATOMIC it latches the abort that stops the walk and rolls the document back.
+ * Only the FIRST failure is retained - it is the one the user has to fix, and
+ * every later line in an aborted walk is unreached rather than judged. */
+static void import_note_line_rejected(ImportState *s, int line_no) {
+    if (!s || s->opts.policy != REPL_SCENE_LOAD_POLICY_ATOMIC)
+        return;
+    if (s->load_failed)
+        return;
+    s->load_failed    = 1;
+    s->failed_line_no = line_no;
+}
+
+/* Feed one already-translated source line into the document. Returns 1 when
+ * the line was accepted (or consumed as a snippet directive), 0 when
+ * repl_load_apply_line rejected it. Callers that only consume the line do not
+ * need the result; the ATOMIC latch is set here regardless. */
+static int import_feed_one_line(ImportState *s, const char *line) {
     char repl_line[MAX_LINE_LEN];
     char unmarked[MAX_LINE_LEN];
     int before = repl_state_document_count();
     int handled = 0;
     int was_auto;
 
+    /* ATOMIC has already rejected the file. Guarded here rather than only in
+     * import_process_line because import_flush_staged_function replays
+     * buffered function bodies straight into this function. */
+    if (s->load_failed)
+        return 0;
+
     /* Snippet directives such as @declare are written by
      * write_canonical_cmd_as_c() and must be handled before the generic
      * C-to-REPL path. */
     if (import_parse_snippet_directive(s, line))
-        return;
+        return 1;
 
     was_auto = import_take_auto_normal_marker(line, unmarked, sizeof(unmarked));
     if (was_auto)
@@ -2044,7 +2086,9 @@ static void import_feed_one_line(ImportState *s, const char *line) {
          * and similar import failures showed up as the generic
          * "could not parse line" with no clue why. */
         import_state_warn_parse_line(s, line, load_err);
+        import_note_line_rejected(s, s->line_no);
     }
+    return handled;
 }
 
 static void import_flush_staged_function(ImportState *s, int slot) {
@@ -2217,6 +2261,7 @@ static int import_try_function_header(ImportState *s, const char *p, const char 
     if (!handled) {
         /* See import_feed_one_line for the load_err rationale. */
         import_state_warn_parse_line(s, raw, load_err);
+        import_note_line_rejected(s, s->line_no);
     }
     s->func_depth = 1;
     return 1;
@@ -2437,6 +2482,12 @@ static const ImportLineHandlerSpec IMPORT_SNIPPET_HANDLERS[] = {
 static void import_process_line(ImportState *s, const char *p, const char *raw) {
     /* Everything after Snippet end is discarded. */
     if (s->past_snippet)
+        return;
+    /* ATOMIC has already rejected the file; the rest of it is unreached, not
+     * judged. Stopping here rather than at the read loop alone also covers the
+     * staged-function flush, which replays buffered lines through this path
+     * long after their physical rows went by. */
+    if (s->load_failed)
         return;
 
     if (!s->in_snippet) {
@@ -2715,31 +2766,71 @@ static void import_flush_accum(ImportState *s, char *accum, int accum_line_no,
     *truncated = 0;
 }
 
-static void import_begin_load(ImportState *state, ReplImportResult *result) {
+ReplExampleSourceFormat repl_scene_format_from_path(const char *path) {
+    size_t len = path ? strlen(path) : 0;
+
+    return (len > 4 && strcmp(path + len - 4, ".glr") == 0)
+        ? REPL_EXAMPLE_SOURCE_GLR
+        : REPL_EXAMPLE_SOURCE_C;
+}
+
+void repl_scene_load_opts_init(ReplSceneLoadOpts *opts,
+                               ReplExampleSourceFormat format) {
+    if (!opts)
+        return;
+    opts->format       = format;
+    opts->policy       = REPL_SCENE_LOAD_POLICY_TOLERANT;
+    opts->apply_cfg    = 1;
+    opts->camera_apply = REPL_CAMERA_APPLY_IMPORT;
+}
+
+static void import_begin_load(ImportState *state,
+                              const ReplSceneLoadOpts *opts,
+                              ReplImportResult *result) {
     if (result) {
         result->scene_name[0]    = '\0';
         result->workspace_dir[0] = '\0';
     }
     import_clear_pending_result_fields();
     import_state_init(state);
+    if (opts)
+        state->opts = *opts;
+
+    /* Capture BEFORE the func-alias wipe below and before the caller's first
+     * inserted row, so the rollback target is the document as it stood when
+     * the load was asked for. Callers that clear live state first (the scene
+     * slot loaders, the example loader) therefore roll back to *their* cleared
+     * state - which is still the right answer at this layer: the reader
+     * guarantees "no partially-loaded document", and restoring the previous
+     * scene is the caller's own transaction. */
+    if (state->opts.policy == REPL_SCENE_LOAD_POLICY_ATOMIC) {
+        state->atomic_stash = (SceneSnapshot *)malloc(sizeof(SceneSnapshot));
+        if (state->atomic_stash)
+            scene_snapshot_capture_live(state->atomic_stash);
+    }
+
     repl_camera_header_init(&state->camera);
     repl_doc_order_init(&state->order);
     repl_func_alias_clear_all();
 }
 
-/* Name the source and decide whether the canonical document order applies.
+/* Name the source. Whether the canonical document order applies is decided by
+ * the caller-supplied format, not by this label.
  *
  * It applies to `.glr` - the *authored* format - and not to an exported `.c`,
  * whose layout the exporter fixes and which legitimately violates the phases:
  * reshape() and main() are emitted after display(), so a machine that
  * classified every line would reject every file this project writes. A
  * generated `.c` is canonical by construction; a hand-edited one is already
- * outside the format's guarantees. */
+ * outside the format's guarantees.
+ *
+ * The label used to decide it, by sniffing `.glr` off its end. That works for
+ * a filesystem path and silently fails for everything else: a catalog entry
+ * labelled "Torus Knot" got check_order = 0 and lost canonical-order
+ * validation with no diagnostic. */
 static void import_set_source(ImportState *s, const char *label) {
-    size_t len = label ? strlen(label) : 0;
-
     s->source_label = label;
-    s->check_order  = (len > 4 && strcmp(label + len - 4, ".glr") == 0);
+    s->check_order  = (s->opts.format == REPL_EXAMPLE_SOURCE_GLR);
     repl_camera_header_set_sink(&s->camera, import_camera_diag,
                                 (void *)label);
     repl_doc_order_set_sink(&s->order, import_order_diag, (void *)label);
@@ -2933,6 +3024,30 @@ static void import_process_physical_line(ImportState *state,
     }
 }
 
+/* Every failure exit runs through here: report, drop the accumulators, and -
+ * under ATOMIC - put the document back the way it was found. Returns 0 so
+ * call sites read `return import_fail_load(...)`. */
+static int import_fail_load(ImportState *state, const char *msg) {
+    import_workspace_accum_reset(&state->workspace);
+    import_clear_pending_result_fields();
+    repl_set_status_error(msg);
+    /* Order matters: clear the staged buffers before restoring, so nothing is
+     * holding a pointer into a document that is about to be replaced. */
+    import_staged_functions_clear(state);
+    if (state->atomic_stash) {
+        (void)scene_snapshot_apply_live(state->atomic_stash,
+                                        SCENE_SNAPSHOT_CAMERA_SNAP);
+        repl_source_scope_depth_cache_invalidate();
+        repl_mark_source_dirty();
+    }
+    return 0;
+}
+
+static void import_release_atomic_stash(ImportState *state) {
+    free(state->atomic_stash);
+    state->atomic_stash = NULL;
+}
+
 static int import_finish_load(ImportState *state,
                               ReplImportResult *result,
                               const char *source_name,
@@ -2941,44 +3056,56 @@ static int import_finish_load(ImportState *state,
                               int truncated_line,
                               ImportAccum *acc) {
     const char *label = source_name && source_name[0] ? source_name : "<memory>";
+    char msg[REPL_STATUS_TEXT_MAX];
     int ok;
 
-    if (!truncated_line)
+    if (!truncated_line && !state->load_failed)
         import_flush_accum(state, acc->accum, acc->line_no, &acc->truncated);
 
     /* Caller passes the results of read/close checks from the file-based reader. */
     if (had_read_err || close_failed) {
-        import_workspace_accum_reset(&state->workspace);
-        import_clear_pending_result_fields();
-        char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Error: cannot read %s", label);
-        repl_set_status_error(msg);
-        import_staged_functions_clear(state);
-        return 0;
+        ok = import_fail_load(state, msg);
+        goto done;
     }
     if (truncated_line) {
-        import_workspace_accum_reset(&state->workspace);
-        import_clear_pending_result_fields();
-        char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg), "Import failed: line too long in %s", label);
-        repl_set_status_error(msg);
-        import_staged_functions_clear(state);
-        return 0;
+        ok = import_fail_load(state, msg);
+        goto done;
     }
     /* Rejection, not a warning: the whole point of a canonical form is that
      * non-canonical files do not accumulate. Every violation has already been
      * reported through the sink, so the summary here just names the count -
      * the migration worklist is the sink's output, not this line. */
     if (state->order_failed) {
-        import_workspace_accum_reset(&state->workspace);
-        import_clear_pending_result_fields();
-        char msg[REPL_STATUS_TEXT_MAX];
         snprintf(msg, sizeof(msg),
                  "Import failed: %s is not in canonical order (%d violations)",
                  label, state->order.violations);
-        repl_set_status_error(msg);
-        import_staged_functions_clear(state);
-        return 0;
+        ok = import_fail_load(state, msg);
+        goto done;
+    }
+    /* ATOMIC's own verdict. The offending line already produced its per-line
+     * diagnostic through the warn sink; this names the file and the row so the
+     * status bar says which one to go fix. */
+    if (state->load_failed) {
+        snprintf(msg, sizeof(msg),
+                 "Import failed: %s:%d rejected (nothing loaded)",
+                 label, state->failed_line_no);
+        ok = import_fail_load(state, msg);
+        goto done;
+    }
+    /* A file that parsed cleanly but yielded no document is a failure under
+     * either policy - checked here, ahead of the cfg drain, so an ATOMIC load
+     * cannot leave a rejected file's `@cfg` side effects behind on the scene
+     * that survived. (TOLERANT keeps its historical ordering below: it applies
+     * the bag first and reports afterwards.) */
+    if (state->opts.policy == REPL_SCENE_LOAD_POLICY_ATOMIC &&
+        state->loaded <= 0) {
+        snprintf(msg, sizeof(msg),
+                 "Import failed: no commands loaded from %s", label);
+        fprintf(stderr, "%s\n", msg);
+        ok = import_fail_load(state, msg);
+        goto done;
     }
 
     /* Values are restored directly when @declare is parsed from the stash. */
@@ -2987,8 +3114,15 @@ static int import_finish_load(ImportState *state,
      * controller-installed bridge, which knows how to apply each slug
      * to its owner's state. Without a bridge (the demo case), the
      * accumulator is dropped silently - that's the architectural goal
-     * (no glr_config dependency from src/repl/import.c). */
-    import_workspace_cfg_apply_and_reset(&state->workspace);
+     * (no glr_config dependency from src/repl/import.c).
+     *
+     * apply_cfg = 0 (the watched-reload policy, BYOE D3) skips the *apply* and
+     * keeps the *reset*. Skipping the whole call would leave a stale
+     * accumulator for the next non-watch load to inherit. */
+    if (state->opts.apply_cfg)
+        import_workspace_cfg_apply_and_reset(&state->workspace);
+    else
+        import_workspace_accum_reset(&state->workspace);
 
     if (result) {
         snprintf(result->scene_name, sizeof(result->scene_name),
@@ -3000,10 +3134,12 @@ static int import_finish_load(ImportState *state,
     /* Resolve and apply the camera exactly once, after the whole file has
      * been offered. IMPORT snaps and adopts the pose as the scene default -
      * what "Reset camera" returns to - which a header-less file must not do,
-     * and finish() handles by making no bridge call at all. */
+     * and finish() handles by making no bridge call at all. NONE (the watched
+     * reload) still runs the reader's own validation and notes, and still
+     * makes no bridge call - see ReplCameraApplyMode. */
     {
         ReplCameraFinish camera_fin =
-            repl_camera_header_finish(&state->camera, REPL_CAMERA_APPLY_IMPORT);
+            repl_camera_header_finish(&state->camera, state->opts.camera_apply);
         import_camera_report_missing(&camera_fin, label);
     }
 
@@ -3017,7 +3153,6 @@ static int import_finish_load(ImportState *state,
          * File parked at line 0 with insert mode off, so the next
          * commit replaces the first imported command instead of appending. */
         repl_dispatch_edit_line_set(state->edit_line);
-        char msg[REPL_STATUS_TEXT_MAX];
         if (state->warnings > 0)
             snprintf(msg, sizeof(msg),
                      "Loaded %d commands from %s (%d warnings)",
@@ -3033,7 +3168,6 @@ static int import_finish_load(ImportState *state,
          * this the caller (repl_load_initial_commands) silently falls back to
          * the default example, stranding any @cfg side effects already
          * applied above (e.g. a light theme) on the wrong scene. */
-        char msg[REPL_STATUS_TEXT_MAX];
         if (state->warnings > 0)
             snprintf(msg, sizeof(msg),
                      "Import failed: no commands loaded from %s (%d unparsed line%s)",
@@ -3046,14 +3180,18 @@ static int import_finish_load(ImportState *state,
     }
     ok = state->loaded > 0;
     import_staged_functions_clear(state);
+
+done:
+    import_release_atomic_stash(state);
     return ok;
 }
 
-int repl_export_load_from_lines(const char *const *lines,
-                                const char *source_name,
-                                ReplImportResult *result) {
+int repl_scene_load_from_lines(const char *const *lines,
+                               const char *source_name,
+                               const ReplSceneLoadOpts *opts,
+                               ReplImportResult *result) {
     ImportState state;
-    import_begin_load(&state, result);
+    import_begin_load(&state, opts, result);
     import_set_source(&state, source_name);
     state.allow_raw_scene = !import_lines_have_snippet_marker(lines);
     state.has_func_body_markers = import_lines_have_func_body_marker(lines);
@@ -3071,19 +3209,30 @@ int repl_export_load_from_lines(const char *const *lines,
         memcpy(line, lines[i], raw_len + 1);
         state.line_no++;
         import_process_physical_line(&state, line, &acc);
+        if (state.load_failed)
+            break;   /* ATOMIC: the rest of the file is unreached */
     }
 
     return import_finish_load(&state, result, source_name,
                               0, 0, truncated_line, &acc);
 }
 
+int repl_export_load_from_lines(const char *const *lines,
+                                const char *source_name,
+                                ReplImportResult *result) {
+    ReplSceneLoadOpts opts;
+    repl_scene_load_opts_init(&opts, repl_scene_format_from_path(source_name));
+    return repl_scene_load_from_lines(lines, source_name, &opts, result);
+}
+
 /* Parse an already-open seekable stream and take ownership of it. Both named
  * files and stdin's anonymous spool land here, so marker scans, long-line
  * handling, diagnostics, and close-error behavior stay identical. */
 static int import_load_seekable_stream(FILE *f, const char *source_name,
+                                       const ReplSceneLoadOpts *opts,
                                        ReplImportResult *result) {
     ImportState state;
-    import_begin_load(&state, result);
+    import_begin_load(&state, opts, result);
     import_set_source(&state, source_name);
     state.allow_raw_scene = !import_file_has_snippet_marker(f);
     state.has_func_body_markers = import_file_has_func_body_marker(f);
@@ -3109,6 +3258,8 @@ static int import_load_seekable_stream(FILE *f, const char *source_name,
             line[--len] = '\0';
 
         import_process_physical_line(&state, line, &acc);
+        if (state.load_failed)
+            break;   /* ATOMIC: the rest of the file is unreached */
     }
 
     /* Mirror the save-side ferror/fclose pair: fgets returning NULL
@@ -3121,7 +3272,9 @@ static int import_load_seekable_stream(FILE *f, const char *source_name,
                               &acc);
 }
 
-int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
+int repl_scene_load_from_file(const char *filename,
+                              const ReplSceneLoadOpts *opts,
+                              ReplImportResult *result) {
     FILE *f = fopen(filename, "r");
     if (!f) {
         char msg[REPL_STATUS_TEXT_MAX];
@@ -3131,7 +3284,15 @@ int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
         fprintf(stderr, "%s\n", msg);
         return 0;
     }
-    return import_load_seekable_stream(f, filename, result);
+    return import_load_seekable_stream(f, filename, opts, result);
+}
+
+int repl_export_load_from_file(const char *filename, ReplImportResult *result) {
+    ReplSceneLoadOpts opts;
+    /* The filesystem adapter: the one place a format is still derived from a
+     * suffix, because a path is all this caller has. */
+    repl_scene_load_opts_init(&opts, repl_scene_format_from_path(filename));
+    return repl_scene_load_from_file(filename, &opts, result);
 }
 
 int repl_export_load_from_stream(FILE *input, const char *source_name,
@@ -3193,5 +3354,11 @@ int repl_export_load_from_stream(FILE *input, const char *source_name,
         return 0;
     }
 
-    return import_load_seekable_stream(spool, label, result);
+    {
+        ReplSceneLoadOpts opts;
+        /* A stream label is not a path, but it is all there is; `<stdin>`
+         * resolves to exported-C, matching the pre-explicit-format sniff. */
+        repl_scene_load_opts_init(&opts, repl_scene_format_from_path(label));
+        return import_load_seekable_stream(spool, label, &opts, result);
+    }
 }

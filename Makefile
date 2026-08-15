@@ -911,6 +911,7 @@ TEST_BINS = \
 	test_repl_core_format \
 	test_repl_core_commit \
 	test_repl_core_io \
+	test_scene_load \
 	test_repl_export_all_commands \
 	test_repl_export_lights \
 	test_repl_export_clearcolor \

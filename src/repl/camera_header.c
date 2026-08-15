@@ -596,7 +596,12 @@ ReplCameraFinish repl_camera_header_finish(ReplCameraHeader *hdr,
     out.diag_count    = hdr->diag_count;
     out.diag_overflow = hdr->diag_overflow;
 
-    if (bridge && bridge->apply_pose) {
+    /* NONE stops here, at the one place that can stop it: the merged pose is
+     * still reported in `out` (callers may want to log or compare it) and
+     * `pose_applied` stays 0, but no bridge sees the mode. See
+     * ReplCameraApplyMode for why the refusal lives here and not at the call
+     * site. */
+    if (mode != REPL_CAMERA_APPLY_NONE && bridge && bridge->apply_pose) {
         bridge->apply_pose(&merged, mode);
         out.pose_applied = 1;
     }

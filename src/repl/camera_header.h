@@ -50,13 +50,27 @@ typedef struct {
  *   IMPORT   snap, adopt as scene default   file / workspace load
  *   RESTORE  snap, leave scene default      scene snapshot restore
  *   EXAMPLE  ease, adopt as scene default   example / tutorial scaffold
+ *   NONE     read and diagnose, apply nothing
  *
- * The fourth combination (ease without adopting) has no caller and is
- * deliberately not defined. */
+ * The fourth transition/default combination (ease without adopting) has no
+ * caller and is deliberately not defined.
+ *
+ * NONE is not a fourth point on those two axes - it is "there is no
+ * application", for the external-editor watch path, where an inbound *text*
+ * edit must leave the live camera exactly as the user left it
+ * (docs/plans/active/BYOE.md, D3). It is honoured **here**, in
+ * repl_camera_header_finish: the reader makes no bridge call at all, so no
+ * ReplExportCameraBridge implementation - present or future - is ever handed
+ * the mode and can mis-handle it. (glr_camera_export.c's apply_pose snaps for
+ * anything that is not EXAMPLE, so a NONE that reached it would snap the
+ * camera and violate the very rule it names.) Header validation, role
+ * diagnostics and the missing-role notes still run, so a watched reload
+ * reports a malformed `@camera` row the same way every other load does. */
 typedef enum {
     REPL_CAMERA_APPLY_IMPORT = 0,
     REPL_CAMERA_APPLY_RESTORE,
-    REPL_CAMERA_APPLY_EXAMPLE
+    REPL_CAMERA_APPLY_EXAMPLE,
+    REPL_CAMERA_APPLY_NONE
 } ReplCameraApplyMode;
 
 /* Roles, in canonical emit order. `spin` is write-only: it carries no
