@@ -1010,6 +1010,52 @@ static void test_row_map_covers_continuation_rows(void) {
                find_doc_row_with("1, 2, 3"), 3);
 }
 
+/* Keep the continuation map complete for unusually tall but still valid
+ * logical statements. This expression is split one token per physical row:
+ * it remains well below MAX_LINE_LEN after joining, but crosses the old
+ * 64-row bookkeeping cap. */
+static void test_row_map_covers_more_than_64_continuation_rows(void) {
+    enum { PIECES = 67, MAX_LINES = 3 + 1 + PIECES + 1 + 1 + 1 };
+    const char *lines[MAX_LINES];
+    TestRowMap t;
+    int n = 0;
+    int late_piece_row;
+    int closer_row;
+
+    printf("--- continuation mapping has no separate 64-row cap ---\n");
+
+    lines[n++] = "glClearColor(0, 0, 0, 1);";
+    lines[n++] = "glClear(GL_COLOR_BUFFER_BIT);";
+    lines[n++] = "glBegin(GL_POINTS);";
+    lines[n++] = "glVertex3f(";
+    for (int i = 0; i < PIECES; i++)
+        lines[n++] = (i & 1) ? "+" : "0";
+    late_piece_row = n; /* 1-based row of the final piece, beyond the old cap. */
+    lines[n++] = ", 0, 0);";
+    closer_row = n;
+    lines[n++] = "glEnd();";
+    lines[n] = NULL;
+
+    glr_ctrl_reset_all();
+    row_map_reset(&t, 0);
+    {
+        ReplSceneLoadOpts opts = opts_for(REPL_EXAMPLE_SOURCE_GLR,
+                                          REPL_SCENE_LOAD_POLICY_ATOMIC);
+        opts.row_map = &t.map;
+        ASSERT_INT("the tall statement loads",
+                   repl_scene_load_from_lines(lines, "tall.glr", &opts, NULL),
+                   1);
+    }
+    ASSERT_INT("the tall statement still produces five document rows",
+               repl_state_document_count(), 5);
+    ASSERT_TRUE("the checked piece is beyond physical row 64",
+                late_piece_row > 64);
+    ASSERT_INT("a continuation beyond the old cap maps to the vertex row",
+               mapped(&t, late_piece_row), 3);
+    ASSERT_INT("the closer beyond the old cap maps too",
+               mapped(&t, closer_row), 3);
+}
+
 /* A load that fails describes a document that no longer exists. */
 static void test_row_map_is_cleared_by_a_failed_load(void) {
     TestRowMap t;
@@ -1058,6 +1104,7 @@ int main(void) {
     test_cursor_hole_needs_its_nonce();
     test_cursor_hole_inside_a_staged_function();
     test_row_map_covers_continuation_rows();
+    test_row_map_covers_more_than_64_continuation_rows();
     test_row_map_is_cleared_by_a_failed_load();
     printf("\n=== Results: ");
     return test_harness_report(&g_harness, "scene_load");

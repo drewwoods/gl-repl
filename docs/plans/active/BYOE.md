@@ -1026,9 +1026,9 @@ not exist: sockets, kqueue, inotify, FSEvents, mkfifo, fork/exec.
 
 All in failure and edge behavior, where the suite is thinnest.
 
-**Where they landed.** `tests/test_scene_load.c` (127 assertions) covers the
+**Where they landed.** `tests/test_scene_load.c` (132 assertions) covers the
 loader options, the source-file binding and the row map / cursor hole,
-including continuation-row mapping; `tests/test_glr_extedit.c` (307 native /
+including continuation-row mapping; `tests/test_glr_extedit.c` (327 native /
 5 wasm) covers the watcher and the sidecar, including dismissed-payload
 suppression, failed-WIP undo restoration, indented parked guides, and
 cursor-only movement onto a continuation row; `test_export_glr_fixed_point`
@@ -1102,12 +1102,12 @@ Results for stages 1-2.5, with Stage 2.25 skipped, in the numbering below:
 | # | Result |
 |---|---|
 | 1 | `make check-state-ownership` and `make check-trailing-whitespace` green. `--watch` needed rows in `scripts/completions/` too (`check-completions`). |
-| 2 | `make test` / `make test-stubs` green (28,749 assertions), and every `HEADLESS_DEMO_TARGETS` demo builds - `repl_demo` / `repl_live_demo` are the load-bearing no-controller proofs and a new `src/repl/*.c` needs a `REPL_DEMO_DEP_SRCS` row they alone catch. `make test-web` links the watcher TU and `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - it asserts the *inert* form rather than joining `WEB_TEST_EXCLUDE`. The lane's one remaining failure, `test_glr_init_trace`, fails identically at the pre-BYOE commit and is unrelated. |
+| 2 | `make test` / `make test-stubs` green (28,774 assertions), and every `HEADLESS_DEMO_TARGETS` demo builds - `repl_demo` / `repl_live_demo` are the load-bearing no-controller proofs and a new `src/repl/*.c` needs a `REPL_DEMO_DEP_SRCS` row they alone catch. `make test-web` links the watcher TU and `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - it asserts the *inert* form rather than joining `WEB_TEST_EXCLUDE`. The lane's one remaining failure, `test_glr_init_trace`, fails identically at the pre-BYOE commit and is unrelated. |
 | 3 | gracemont (gcc 13.3, Ubuntu 24.04): `make check-c99` and `make test-stubs` green, including the `st_mtim` arm of the change token that macOS never compiles. |
 | 4 | End-to-end: `./gl-repl --watch scene.glr`, appended a `/* C-style note */`, four complete rows, a trailing `glVertex3f(3,` and a `// still typing` comment under it, all from outside; the session reloaded 7 -> 13 commands, kept both comments as document rows, and parked the incomplete row. Also `--watch new.glr` on a file holding nothing but `glVertex3f(1,`: the startup import fails (bootstrap has no parking), the binding survives, and the next save loads. `--watch` with no positional file exits 1 with a usage error. |
 | 5 | Resolved by reading rather than by hand - see the scope note above. |
 | 6 | Done - see Verification 6 above. |
-| 7 | Done - `make bench-extedit`; results and caveats under "Gate". |
+| 7 | Done - `make bench-extedit && build/release/bench_extedit --iters 200`; results and caveats under "Gate". |
 
 1. `make check-state-ownership` (includes `check-c99`, `check-include-style`,
    `check-app-boot-band`, …) and `make check-trailing-whitespace`.
@@ -1127,7 +1127,8 @@ Results for stages 1-2.5, with Stage 2.25 skipped, in the numbering below:
 7. Measure p95 **total content-update latency** in the extedit section,
    sampled only on real content updates, across small / typical / large
    scenes (2.5 gate; ~8 ms total main-thread budget). **Done** on the
-   shipped `.wip` path - `make bench-extedit` (default publishes the
-   sidecar and asserts `wip_updates`; `--saved` is the file-reload
-   proxy). Results and caveats under "Gate".
+   shipped `.wip` path - `make bench-extedit &&
+   build/release/bench_extedit --iters 200` (the binary publishes the sidecar
+   and asserts `wip_updates`; `--saved` is the file-reload proxy). Results and
+   caveats under "Gate".
 8. Re-read every `file:line` citation before landing.

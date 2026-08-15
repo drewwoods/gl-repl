@@ -2856,12 +2856,12 @@ static int is_line_comment_or_directive(const char *line) {
     return 0;
 }
 
-/* Physical rows folded into one logical statement. Sized past any
- * authored wrap - a 4x4 matrix plus a handful of comment lines - so a
- * genuine overflow is a generated file, not a typical `.glr`. Extra
- * rows past the cap stay REPL_ROW_MAP_NONE rather than inventing a
- * mapping. */
-#define IMPORT_ACCUM_PHYS_MAX 64
+/* A continuation row is known before the logical statement has been parsed,
+ * so its final document row is not available yet. Mark it in the caller-owned
+ * physical-row map and resolve it when the accumulator flushes. Keeping the
+ * marker in that already-per-physical-row storage avoids a second capped row
+ * list: every row the caller gave the map can be represented. */
+#define IMPORT_ROW_MAP_CONTINUATION (-2)
 
 typedef struct {
     char accum[MAX_LINE_LEN];
@@ -2870,15 +2870,40 @@ typedef struct {
     int truncated;
     int in_block_comment;
     int preserve_block_comment;
-    int phys_rows[IMPORT_ACCUM_PHYS_MAX];
-    int phys_n;
 } ImportAccum;
 
-static void import_accum_note_phys(ImportAccum *acc, int line_no) {
-    if (!acc || line_no < 1)
+static void import_row_map_mark_continuation(ImportState *s, int line_no) {
+    ReplSceneRowMap *map;
+
+    if (!s)
         return;
-    if (acc->phys_n < IMPORT_ACCUM_PHYS_MAX)
-        acc->phys_rows[acc->phys_n++] = line_no;
+    map = s->opts.row_map;
+    if (!map || !map->doc_row || line_no < 1 || line_no > map->cap)
+        return;
+    if (map->doc_row[line_no - 1] == REPL_ROW_MAP_NONE)
+        map->doc_row[line_no - 1] = IMPORT_ROW_MAP_CONTINUATION;
+    if (line_no > map->count)
+        map->count = line_no;
+}
+
+static void import_row_map_resolve_continuations(ImportState *s,
+                                                  int first_line,
+                                                  int last_line,
+                                                  int doc_row) {
+    ReplSceneRowMap *map;
+    int line_no;
+
+    if (!s)
+        return;
+    map = s->opts.row_map;
+    if (!map || !map->doc_row)
+        return;
+    if (last_line > map->cap)
+        last_line = map->cap;
+    for (line_no = first_line + 1; line_no <= last_line; line_no++) {
+        if (map->doc_row[line_no - 1] == IMPORT_ROW_MAP_CONTINUATION)
+            map->doc_row[line_no - 1] = doc_row;
+    }
 }
 
 /* Emit the accumulated logical statement through import_process_line,
@@ -2906,19 +2931,14 @@ static void import_flush_accum(ImportState *s, ImportAccum *acc) {
                                        (int)MAX_LINE_LEN);
     }
     import_process_line(s, acc->accum, acc->accum);
-    if (s->opts.row_map && acc->phys_n > 1 &&
+    if (s->opts.row_map &&
         acc->line_no >= 1 && acc->line_no <= s->opts.row_map->cap) {
         doc = s->opts.row_map->doc_row[acc->line_no - 1];
-        if (doc != REPL_ROW_MAP_NONE) {
-            int i;
-            for (i = 1; i < acc->phys_n; i++)
-                import_row_map_note(s, acc->phys_rows[i], doc);
-        }
+        import_row_map_resolve_continuations(s, acc->line_no, saved, doc);
     }
     s->line_no = saved;
     acc->accum[0]   = '\0';
     acc->truncated  = 0;
-    acc->phys_n     = 0;
 }
 
 ReplExampleSourceFormat repl_scene_format_from_path(const char *path) {
@@ -3134,10 +3154,8 @@ static void import_process_physical_line(ImportState *state,
         acc->line_no = state->line_no;
         acc->depth = 0;
         acc->truncated = 0;
-        acc->phys_n = 0;
-        import_accum_note_phys(acc, state->line_no);
     } else {
-        import_accum_note_phys(acc, state->line_no);
+        import_row_map_mark_continuation(state, state->line_no);
     }
 
     size_t accum_len = strlen(acc->accum);
