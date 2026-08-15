@@ -105,15 +105,6 @@ static void write_lines(const char *path, const char *const *lines) {
     fclose(f);
 }
 
-/* Pin a file's mtime so a test can say "same second" or "same instant" and
- * mean it, instead of sleeping and hoping. */
-static void set_mtime(const char *path, long sec, long nsec) {
-    struct timespec times[2];
-    times[0].tv_sec = sec; times[0].tv_nsec = nsec;   /* atime */
-    times[1].tv_sec = sec; times[1].tv_nsec = nsec;   /* mtime */
-    (void)utimensat(AT_FDCWD, path, times, 0);
-}
-
 /* Start a session whose active scene is WATCH_PATH, with the watcher armed and
  * bound (the first poll adopts the binding without reloading). */
 static void begin_watched_session(const char *const *initial) {
@@ -135,6 +126,59 @@ static int document_mentions(const char *needle) {
             return 1;
     }
     return 0;
+}
+
+#if defined(__EMSCRIPTEN__)
+
+/* The web build has no external editor and no filesystem worth watching, so
+ * glr_extedit_poll() compiles to a no-op and `--watch` is ignored. That
+ * inertness IS the web form of this feature, so the binary stays in the wasm
+ * lane rather than joining WEB_TEST_EXCLUDE: the TU keeps linking, and the
+ * claim keeps being one somebody checks. */
+static void test_web_watcher_is_inert(void) {
+    printf("--- the web build watches nothing ---\n");
+
+    write_lines(WATCH_PATH, k_scene_a);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+    glr_extedit_set_enabled(1);
+
+    /* The flag is accepted - nothing refuses it - and then does nothing. */
+    ASSERT_TRUE("the flag is still recorded", glr_extedit_enabled());
+    for (int i = 0; i < 5; i++)
+        glr_extedit_poll();
+    ASSERT_TRUE("nothing is bound", glr_extedit_bound_path() == NULL);
+    ASSERT_INT("nothing is read", glr_extedit_stats().reads, 0);
+
+    write_lines(WATCH_PATH, k_scene_b);
+    for (int i = 0; i < 5; i++)
+        glr_extedit_poll();
+    ASSERT_INT("and a save changes nothing", glr_extedit_stats().reloads, 0);
+    ASSERT_TRUE("the loaded scene is untouched", document_mentions("0, 0, 0"));
+
+    /* The self-write stamp is equally inert, and equally must not crash. */
+    glr_extedit_note_saved();
+    glr_extedit_note_wrote(WATCH_PATH);
+}
+
+int main(void) {
+    printf("=== external-editor watch (web) ===\n");
+    test_web_watcher_is_inert();
+    glr_extedit_set_enabled(0);
+    (void)unlink(WATCH_PATH);
+    printf("\n=== Results: ");
+    return test_harness_report(&g_harness, "glr_extedit");
+}
+
+#else
+
+/* Pin a file's mtime so a test can say "same second" or "same instant" and
+ * mean it, instead of sleeping and hoping. */
+static void set_mtime(const char *path, long sec, long nsec) {
+    struct timespec times[2];
+    times[0].tv_sec = sec; times[0].tv_nsec = nsec;   /* atime */
+    times[1].tv_sec = sec; times[1].tv_nsec = nsec;   /* mtime */
+    (void)utimensat(AT_FDCWD, path, times, 0);
 }
 
 /* ----- binding ----------------------------------------------------------- */
@@ -863,3 +907,5 @@ int main(void) {
     printf("\n=== Results: ");
     return test_harness_report(&g_harness, "glr_extedit");
 }
+
+#endif /* __EMSCRIPTEN__ */
