@@ -254,6 +254,19 @@ hard-failing guards: `check-duplicate-api-decls` and
 `check-trailing-whitespace` (commits since `origin/main`; also in
 `test-stubs` and the pre-push hook).
 
+### Agent note - output size
+
+`make test` / `test-stubs` / `test-full` / `web` / a cold `gl-repl` are the
+verbose targets: a warm `test-stubs` is already ~340 lines / 21 KB, and a cold
+build multiplies that by the compile lines for 76 test binaries. **Redirect
+them to a file in the scratchpad and grep the file** - `make test-stubs
+>/tmp/.../t.log 2>&1; grep -nE 'FAIL|Error|error:' t.log` - then read only the
+hits. Streaming a full build into the transcript buys nothing: the signal is a
+handful of lines and the exit status.
+
+The guards are the opposite and need no ceremony - `check-c99` is 5 lines,
+`check-state-ownership` 144. Run those straight.
+
 Design/audit rationale too big for a commit message goes in `docs/plans/`;
 root docs describe the current design first and link plans for background.
 
