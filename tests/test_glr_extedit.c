@@ -1537,6 +1537,46 @@ static void test_save_between_lesson_end_and_poll_is_not_swallowed(void) {
     ASSERT_TRUE("the saved scene is live", document_mentions("9, 9, 9"));
 }
 
+/* A dismissed payload is per file, not per binding. Switching away and back
+ * used to clear the suppression and re-offer the very version the user's own
+ * commit had already beaten. */
+static void test_dismissal_survives_a_scene_switch(void) {
+    int slot_a;
+    int rows_after_commit;
+
+    printf("--- a dismissed version stays dismissed across a switch ---\n");
+
+    begin_watched_session(k_scene_a);
+    slot_a = repl_active_user_scene();
+
+    /* Defer a save, then commit over it so it is dismissed. */
+    begin_typing("glVertex3f(4, 4, 4);");
+    write_lines(WATCH_PATH, k_scene_b);
+    glr_extedit_poll();
+    ASSERT_TRUE("the line commits", editor_feed_line("glVertex3f(4, 4, 4);") != 0);
+    editor_input_clear();
+    rows_after_commit = repl_state_document_count();
+    glr_extedit_poll();
+    ASSERT_INT("it was dismissed", glr_extedit_stats().dismissals, 1);
+
+    /* Away and back. */
+    write_lines(OTHER_PATH, k_scene_longer);
+    {
+        ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+        (void)repl_load_scene_as_new_slot(OTHER_PATH, &reason);
+    }
+    glr_extedit_poll();
+    ASSERT_TRUE("back to the first scene", repl_load_user_scene_idx(slot_a));
+    glr_extedit_poll();
+    glr_extedit_poll();
+
+    ASSERT_INT("the dismissed version is not resurrected",
+               repl_state_document_count(), rows_after_commit);
+    ASSERT_TRUE("the committed line is still there",
+                document_mentions("4, 4, 4"));
+    (void)unlink(OTHER_PATH);
+}
+
 /* --- disabled ------------------------------------------------------------- */
 
 static void test_disabled_watcher_does_nothing(void) {
@@ -1594,6 +1634,7 @@ int main(void) {
     test_seen_history_outlasts_the_scene_catalog();
     test_seen_history_covers_runtime_catalog();
     test_save_between_lesson_end_and_poll_is_not_swallowed();
+    test_dismissal_survives_a_scene_switch();
     test_returning_to_a_scene_picks_up_what_changed();
     test_returning_to_an_untouched_scene_keeps_local_edits();
     test_catalog_scene_reload_does_not_promote();

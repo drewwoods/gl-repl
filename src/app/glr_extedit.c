@@ -92,6 +92,12 @@ static GlrExtEditStats       g_stats;
 typedef struct {
     char               path[GLR_EXTEDIT_PATH_MAX];
     unsigned long long content;
+    /* A payload the user's own commit beat, remembered per path for the same
+     * reason `content` is: switching away and back must not resurrect a
+     * version they already rejected. Kept out of the binding state, which
+     * rebind() deliberately wipes. */
+    unsigned long long suppressed;
+    int                suppressed_valid;
     int                valid;
 } GlrExtEditSeen;
 
@@ -132,31 +138,73 @@ static int seen_reserve(size_t wanted) {
     return 1;
 }
 
-static int seen_remember(const char *path, unsigned long long content) {
+static GlrExtEditSeen *seen_find(const char *path) {
     for (size_t i = 0; i < g_seen_count; i++) {
-        if (g_seen[i].valid && strcmp(g_seen[i].path, path) == 0) {
-            g_seen[i].content = content;
-            return 1;
-        }
+        if (g_seen[i].valid && strcmp(g_seen[i].path, path) == 0)
+            return &g_seen[i];
     }
+    return NULL;
+}
+
+/* Append an entry for `path`, or NULL if the history cannot grow. */
+static GlrExtEditSeen *seen_add(const char *path) {
+    GlrExtEditSeen *e;
+
     if (g_seen_count == (size_t)-1 || !seen_reserve(g_seen_count + 1))
-        return 0;
-    snprintf(g_seen[g_seen_count].path, sizeof(g_seen[g_seen_count].path),
-             "%s", path);
-    g_seen[g_seen_count].content = content;
-    g_seen[g_seen_count].valid   = 1;
+        return NULL;
+    e = &g_seen[g_seen_count];
+    memset(e, 0, sizeof(*e));
+    snprintf(e->path, sizeof(e->path), "%s", path);
+    e->valid = 1;
     g_seen_count++;
+    return e;
+}
+
+static int seen_remember(const char *path, unsigned long long content) {
+    GlrExtEditSeen *e = seen_find(path);
+
+    if (!e)
+        e = seen_add(path);
+    if (!e)
+        return 0;
+    e->content = content;
+    /* Applying content settles any argument about this file: a version the
+     * user dismissed earlier is no longer the thing being argued over. */
+    e->suppressed_valid = 0;
+    return 1;
+}
+
+/* Remember that the user's own commit beat `content` for this path. Best
+ * effort: failing to record it only costs one redundant re-offer later, so it
+ * does not stop the watcher the way losing `content` history does. */
+static void seen_remember_suppressed(const char *path,
+                                     unsigned long long content) {
+    GlrExtEditSeen *e = seen_find(path);
+
+    if (!e)
+        e = seen_add(path);
+    if (!e)
+        return;
+    e->suppressed       = content;
+    e->suppressed_valid = 1;
+}
+
+static int seen_lookup_suppressed(const char *path, unsigned long long *out) {
+    const GlrExtEditSeen *e = seen_find(path);
+
+    if (!e || !e->suppressed_valid)
+        return 0;
+    *out = e->suppressed;
     return 1;
 }
 
 static int seen_lookup(const char *path, unsigned long long *out) {
-    for (size_t i = 0; i < g_seen_count; i++) {
-        if (g_seen[i].valid && strcmp(g_seen[i].path, path) == 0) {
-            *out = g_seen[i].content;
-            return 1;
-        }
-    }
-    return 0;
+    const GlrExtEditSeen *e = seen_find(path);
+
+    if (!e)
+        return 0;
+    *out = e->content;
+    return 1;
 }
 
 /* ----- tokens ------------------------------------------------------------ */
@@ -334,11 +382,20 @@ static void rebind(const char *path) {
         g_observed.valid = 0;
         return;
     }
+    /* Restore what the user already rejected for this path before deciding
+     * whether the file moved: forget_binding_state() above wiped the live
+     * copy, and without this a switch away and back re-offers a version they
+     * dismissed. */
+    if (seen_lookup_suppressed(g_bound, &g_suppressed_content))
+        g_suppressed_valid = 1;
+
     {
         unsigned long long previously_applied;
 
-        if (seen_lookup(g_bound, &previously_applied) &&
-            previously_applied != content) {
+        if (g_suppressed_valid && content == g_suppressed_content) {
+            /* Still the payload they turned down; nothing to offer. */
+        } else if (seen_lookup(g_bound, &previously_applied) &&
+                   previously_applied != content) {
             /* We have had this file live before, and it is not the bytes we
              * left it at - somebody saved it while we were on another scene.
              * Park it and let the ordinary gate apply it, so coming back to a
@@ -421,78 +478,125 @@ static void glr_extedit_notify_reloaded(void) {
 
 /* ----- stage 2: one incomplete final row ---------------------------------- */
 
-/* A file the watcher read, as physical lines. Heap-backed rather than static
- * BSS: `--watch` is off by default, and half a megabyte of always-resident
- * line buffer for a feature nobody armed is not a trade worth making. */
+/* A file the watcher read: the raw bytes, the hash of exactly those bytes, and
+ * pointers to each physical line within them.
+ *
+ * One read, one hash, one parse of the same bytes. Hashing separately from
+ * loading leaves a window in which a save lands between the two, and the
+ * content stamped as "applied" then describes a payload that was never
+ * loaded - the same class of bug as stamping a stale parked token, just
+ * narrower.
+ *
+ * Sized from the file rather than from a fixed line cap. The old 2048-line cap
+ * was reported as "stage 2 silently stops parking in large files"; that is not
+ * quite what it did, and the difference is worth writing down so nobody
+ * restores it believing it protected something. MAX_EDITOR_COMMANDS is 1024,
+ * so a `.glr` with more physical rows than that cannot load at all - the cap
+ * was unreachable for every `.glr` that could. Where it did bite was exported
+ * `.c`, whose scaffolding runs long while the document stays small: those
+ * files took the fallback path and paid the separate-hash race below. Removing
+ * the cap is about that race, not about parking. */
 typedef struct {
-    char        *storage;   /* GLR_EXTEDIT_MAX_LINES * MAX_LINE_LEN */
-    const char **ptrs;      /* NULL-terminated, into storage */
-    int          count;
+    char               *bytes;    /* whole file, NUL-terminated and split */
+    const char        **ptrs;     /* NULL-terminated, into bytes */
+    int                 count;
+    unsigned long long  content;  /* hash of the bytes as they were read */
 } GlrExtEditFileLines;
 
-/* Beyond this the watcher falls back to letting the loader read the path
- * itself: the incomplete-row heuristic is a convenience, and a scene file this
- * long is a generated one nobody is hand-typing the tail of. */
-#define GLR_EXTEDIT_MAX_LINES 2048
+/* A refusal, not a budget: past this the watcher hands the path to the loader
+ * rather than buffering it. Any scene file near this is generated, and the
+ * loader has its own capacity limits well below it. */
+#define GLR_EXTEDIT_MAX_BYTES (8u * 1024u * 1024u)
 
 static void file_lines_free(GlrExtEditFileLines *fl) {
-    free(fl->storage);
+    free(fl->bytes);
     free((void *)fl->ptrs);
-    fl->storage = NULL;
-    fl->ptrs    = NULL;
-    fl->count   = 0;
+    fl->bytes = NULL;
+    fl->ptrs  = NULL;
+    fl->count = 0;
+}
+
+/* Split `fl->bytes` in place at newlines, filling fl->ptrs. Returns 0 if any
+ * physical line is too long for the importer, which hard-fails such a file -
+ * splitting it into two shorter rows here would atomically load a document
+ * the path reader refuses outright. */
+static int file_lines_split(GlrExtEditFileLines *fl, size_t len) {
+    size_t line_start = 0;
+    int    cap = 0;
+
+    for (size_t i = 0; i <= len; i++) {
+        if (i != len && fl->bytes[i] != '\n')
+            continue;
+        cap++;
+        line_start = i + 1;
+    }
+    (void)line_start;
+    fl->ptrs = (const char **)malloc((size_t)(cap + 1) * sizeof(*fl->ptrs));
+    if (!fl->ptrs)
+        return 0;
+
+    line_start = 0;
+    fl->count  = 0;
+    for (size_t i = 0; i <= len; i++) {
+        size_t line_len;
+        if (i != len && fl->bytes[i] != '\n')
+            continue;
+        /* A trailing newline ends the last line; it does not start an empty
+         * one, which is what the fgets-based reader produced too. */
+        if (i == len && i == line_start)
+            break;
+        fl->bytes[i] = '\0';
+        line_len = i - line_start;
+        while (line_len > 0 && fl->bytes[line_start + line_len - 1] == '\r')
+            fl->bytes[line_start + --line_len] = '\0';
+        if (line_len >= (size_t)MAX_LINE_LEN)
+            return 0;
+        fl->ptrs[fl->count++] = fl->bytes + line_start;
+        line_start = i + 1;
+    }
+    fl->ptrs[fl->count] = NULL;
+    return 1;
 }
 
 static int file_lines_read(const char *path, GlrExtEditFileLines *fl) {
-    FILE *f;
-    char buf[MAX_LINE_LEN];
+    FILE  *f;
+    long   size;
+    size_t len;
 
-    fl->storage = (char *)malloc((size_t)GLR_EXTEDIT_MAX_LINES * MAX_LINE_LEN);
-    fl->ptrs    = (const char **)malloc((size_t)(GLR_EXTEDIT_MAX_LINES + 1) *
-                                        sizeof(*fl->ptrs));
+    fl->bytes   = NULL;
+    fl->ptrs    = NULL;
     fl->count   = 0;
-    if (!fl->storage || !fl->ptrs) {
-        file_lines_free(fl);
-        return 0;
-    }
+    fl->content = 0;
 
-    f = fopen(path, "r");
-    if (!f) {
-        file_lines_free(fl);
+    f = fopen(path, "rb");
+    if (!f)
+        return 0;
+    if (fseek(f, 0, SEEK_END) != 0 || (size = ftell(f)) < 0 ||
+        fseek(f, 0, SEEK_SET) != 0 || (unsigned long)size > GLR_EXTEDIT_MAX_BYTES) {
+        fclose(f);
         return 0;
     }
-    while (fgets(buf, (int)sizeof(buf), f)) {
-        char *dst;
-        size_t len = strlen(buf);
-        /* An over-long physical line would arrive here as two shorter ones, and
-         * the watcher would then atomically load a document the file reader
-         * refuses outright ("line too long"). Bail instead: the caller falls
-         * back to the path loader, which reports it properly. */
-        if (len > 0 && buf[len - 1] != '\n' && buf[len - 1] != '\r' &&
-            !feof(f)) {
-            fclose(f);
-            file_lines_free(fl);
-            return 0;
-        }
-        while (len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r'))
-            buf[--len] = '\0';
-        if (fl->count >= GLR_EXTEDIT_MAX_LINES) {
-            fclose(f);
-            file_lines_free(fl);
-            return 0;   /* too many lines: same fallback */
-        }
-        dst = fl->storage + (size_t)fl->count * MAX_LINE_LEN;
-        memcpy(dst, buf, len + 1);
-        fl->ptrs[fl->count] = dst;
-        fl->count++;
+    fl->bytes = (char *)malloc((size_t)size + 1);
+    if (!fl->bytes) {
+        fclose(f);
+        return 0;
     }
+    len = fread(fl->bytes, 1, (size_t)size, f);
     if (ferror(f)) {
         fclose(f);
         file_lines_free(fl);
         return 0;
     }
     fclose(f);
-    fl->ptrs[fl->count] = NULL;
+    fl->bytes[len] = '\0';
+    /* Hashed here, before the split writes NULs over the newlines, so this is
+     * the hash of the file's own bytes - the same value hash_file_content()
+     * would produce, and the value the load below is actually built from. */
+    fl->content = hash_bytes(hash_init(), fl->bytes, len);
+    if (!file_lines_split(fl, len)) {
+        file_lines_free(fl);
+        return 0;
+    }
     return 1;
 }
 
@@ -590,21 +694,14 @@ static int input_row_is_dirty(void) {
 static void apply_reload(const char *path) {
     ReplSceneLoadOpts opts;
     EditorUndoHistorySnapshot *history = NULL;
-    GlrExtEditFileLines fl = { NULL, NULL, 0 };
+    GlrExtEditFileLines fl = { NULL, NULL, 0, 0 };
     char parked[MAX_INPUT_LEN];
-    unsigned long long loaded_content;
-    int have_loaded_content;
+    unsigned long long loaded_content = 0;
+    int have_loaded_content = 0;
     int have_parked = 0;
     int is_user_scene = repl_active_user_scene() >= 0;
     int history_ok = 1;
     int ok;
-
-    /* Hash what is on disk NOW, because that is what the load below reads.
-     * D8 says a deferred version is re-read when the gate opens rather than
-     * replayed from stale bytes - so the token that was parked may describe a
-     * payload the file no longer holds, and stamping it as "applied" would
-     * make the watcher deaf to a later, genuine save of those exact bytes. */
-    have_loaded_content = hash_file_content(path, &loaded_content);
 
     repl_scene_load_opts_init(&opts, repl_scene_format_from_path(path));
     /* The loader stays strictly atomic: any rejected line fails the whole
@@ -616,11 +713,23 @@ static void apply_reload(const char *path) {
     opts.apply_cfg    = 0;
     opts.camera_apply = REPL_CAMERA_APPLY_NONE;
 
-    /* Stage 2 is `.glr` only. The heuristic is meaningless on exported C: the
-     * incomplete authored command sits inside display() and is followed by
-     * generated wrapper rows, so it is never the final non-empty physical
-     * row. */
-    if (opts.format == REPL_EXAMPLE_SOURCE_GLR && file_lines_read(path, &fl)) {
+    /* Read once: the load below is built from these bytes and the applied stamp
+     * is the hash of these bytes, so no save can slip between the two.
+     *
+     * Both formats are read, but only `.glr` gets the incomplete-row search:
+     * the heuristic is meaningless on exported C, where the authored command
+     * sits inside display() followed by generated wrapper rows and is never
+     * the final non-empty physical row. Falling back to the path loader (a
+     * file too large to buffer, an over-long line, a read error) reopens the
+     * hash/load window, which is why that fallback also re-hashes below. */
+    if (file_lines_read(path, &fl)) {
+        loaded_content      = fl.content;
+        have_loaded_content = 1;
+    } else {
+        have_loaded_content = hash_file_content(path, &loaded_content);
+    }
+
+    if (opts.format == REPL_EXAMPLE_SOURCE_GLR && fl.ptrs) {
         int row = find_incomplete_final_row(fl.ptrs, fl.count);
         if (row >= 0) {
             snprintf(parked, sizeof(parked), "%s", fl.ptrs[row]);
@@ -738,6 +847,7 @@ static void dismiss_pending(const char *why) {
      * that was never loaded. */
     g_suppressed_content = g_pending_content;
     g_suppressed_valid   = 1;
+    seen_remember_suppressed(g_bound, g_pending_content);
     g_pending            = 0;
     g_have_defer_fp      = 0;
     g_stats.dismissals++;

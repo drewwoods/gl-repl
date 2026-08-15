@@ -237,12 +237,46 @@ static void bind_glr_origin_from_example(int slot, int example_idx) {
         s->glr_origin_path[0] = '\0';
 }
 
+/* Resolve a path whose file does not exist yet.
+ *
+ * `realpath()` fails outright on a missing leaf, which matters because
+ * `gl-repl --watch new.glr` is a supported thing to ask for - the editor is
+ * about to create the file. Keeping the caller's relative path would leave the
+ * binding at the mercy of the working directory, so resolve the *parent*
+ * (which does exist) and re-attach the leaf. Returns 0 when even that fails,
+ * and the caller keeps the path verbatim as a last resort. */
+static int resolve_missing_path(const char *path, char *out, size_t out_sz) {
+    char dir[PATH_MAX];
+    char dir_real[PATH_MAX];
+    const char *slash = strrchr(path, '/');
+    const char *leaf  = slash ? slash + 1 : path;
+    size_t dir_len    = slash ? (size_t)(slash - path) : 0;
+
+    if (!leaf[0])
+        return 0;                       /* a trailing slash: not a file */
+    if (!slash) {
+        if (!getcwd(dir_real, sizeof(dir_real)))
+            return 0;
+    } else {
+        /* "/x" has a zero-length parent that still means the root. */
+        if (dir_len == 0)
+            snprintf(dir, sizeof(dir), "/");
+        else if (dir_len >= sizeof(dir))
+            return 0;
+        else
+            snprintf(dir, sizeof(dir), "%.*s", (int)dir_len, path);
+        if (!realpath(dir, dir_real))
+            return 0;
+    }
+    if (strcmp(dir_real, "/") == 0)
+        return snprintf(out, out_sz, "/%s", leaf) < (int)out_sz;
+    return snprintf(out, out_sz, "%s/%s", dir_real, leaf) < (int)out_sz;
+}
+
 /* Resolve `path` to an absolute one and store it in `slot`'s source_path.
  * A path that will not fit leaves the slot unbound rather than truncated: a
  * truncated path names a real but wrong file, and this one is a *write*
- * target. realpath() failing (the file was deleted between load and bind) is
- * not fatal - the caller's own path is kept, because the binding still has to
- * name the file the user asked for. */
+ * target. */
 static void bind_source_path(int slot, const char *path) {
     UserScene *s;
     char resolved[PATH_MAX];
@@ -253,7 +287,8 @@ static void bind_source_path(int slot, const char *path) {
     s->source_path[0] = '\0';
     if (!path || !path[0])
         return;
-    if (!realpath(path, resolved))
+    if (!realpath(path, resolved) &&
+        !resolve_missing_path(path, resolved, sizeof(resolved)))
         snprintf(resolved, sizeof(resolved), "%s", path);
     if (snprintf(s->source_path, sizeof(s->source_path), "%s", resolved) >=
         (int)sizeof(s->source_path))
