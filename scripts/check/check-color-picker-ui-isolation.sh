@@ -73,8 +73,9 @@ for hdr in src/ui/subsystems/color_picker.h; do
         sig_line=$(grep -nE "^\s*(void|UiHit)\s+${fn}\s*\(" src/ui/subsystems/color_picker.h src/ui/subsystems/color_picker.c 2>/dev/null | head -n1 || true)
         [ -z "$sig_line" ] && continue
         sig=${sig_line#*:*:}
-        if ! printf '%s\n' "$sig" \
-             | grep -Eq '^\s*(void|UiHit)\s+'"$fn"'\s*\(\s*const\s+(ColorPickerView|UiTransformer|Ui[A-Za-z0-9_]+(View|State|Snapshot))\s*\*'; then
+        # Here-string, not a pipe: grep -q + pipefail can invert this.
+        # See check-prof-sections-instrumented.sh.
+        if ! grep -Eq '^\s*(void|UiHit)\s+'"$fn"'\s*\(\s*const\s+(ColorPickerView|UiTransformer|Ui[A-Za-z0-9_]+(View|State|Snapshot))\s*\*' <<<"$sig"; then
             echo "ERROR: color-picker-ui renderer signature shape invalid for $fn" >&2
             echo "  found: $sig" >&2
             sig_bad=1

@@ -39,7 +39,9 @@ violations=""
 for ln in $used_zero_lines; do
     end=$((ln + 5))
     snippet=$(sed -n "${ln},${end}p" "$file")
-    if ! echo "$snippet" | grep -q 'scene_cfg_clear'; then
+    # Here-string, not a pipe: see check-prof-sections-instrumented.sh —
+    # grep -q + pipefail can invert the condition and fabricate a violation.
+    if ! grep -q 'scene_cfg_clear' <<<"$snippet"; then
         violations+="${file}:${ln}: used = 0 without paired scene_cfg_clear\n"
     fi
 done

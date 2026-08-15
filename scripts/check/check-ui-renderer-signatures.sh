@@ -30,7 +30,9 @@ while IFS= read -r fn; do
   two_arg='^\s*void\s+'"$fn"'\s*\(\s*const\s+Ui[A-Za-z0-9_]+(View|State|Snapshot)\s*\*\s*([A-Za-z_][A-Za-z0-9_]*)?\s*,\s*Ui[A-Za-z0-9_]+Output\s*\*\s*([A-Za-z_][A-Za-z0-9_]*)?\s*\)\s*[;{]\s*$'
   trailing_arg='^\s*void\s+'"$fn"'\s*\(\s*const\s+Ui[A-Za-z0-9_]+(View|State|Snapshot)\s*\*\s*([A-Za-z_][A-Za-z0-9_]*)?\s*,'
 
-  if ! printf '%s\n' "$sig" | grep -Eq "$one_arg|$two_arg|$trailing_arg"; then
+  # Here-string, not a pipe: grep -q + pipefail can invert this and report
+  # a valid signature as invalid. See check-prof-sections-instrumented.sh.
+  if ! grep -Eq "$one_arg|$two_arg|$trailing_arg" <<<"$sig"; then
     echo "ERROR: renderer signature shape invalid for $fn" >&2
     echo "  found: $sig" >&2
     bad=1

@@ -37,7 +37,12 @@ for s in $sections; do
         PROF_SECTION_COUNT) continue ;;          # array size, not a section
         *_LAST) continue ;;                      # range alias
     esac
-    if ! printf '%s\n' "$instrumented" | grep -qxF "$s"; then
+    # Here-string, not `printf … | grep -q`: grep -q exits at the first
+    # match, SIGPIPEs the writer, and `set -o pipefail` then reports the
+    # pipeline as failed even though the name WAS found — inverting this
+    # condition into a spurious "zombie row" ERROR. Intermittent by nature:
+    # it needs grep to leave before the writer finishes.
+    if ! grep -qxF "$s" <<<"$instrumented"; then
         echo "ERROR: catalog section ${s} has no prof_begin() or" >&2
         echo "       prof_section_record_us() site (zombie row in the Compute" >&2
         echo "       Profile panel). Instrument it or remove it from" >&2
