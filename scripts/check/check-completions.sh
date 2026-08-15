@@ -110,4 +110,76 @@ EOF
     exit 1
 fi
 
-echo "completions OK ($(printf '%s\n' "$help_opts" | grep -c .) options; help = parser = zsh = bash)"
+echo "completions OK ($(printf '%s\n' "$help_opts" | grep -c .) gl-repl options; help = parser = zsh = bash)"
+
+# ===========================================================================
+# docs-assets.sh — the same four-way agreement, different sources. This
+# script's flags are a user-facing surface too, and its completions went
+# stale silently before this block existed.
+# ===========================================================================
+
+DA_SRC=scripts/docs-assets.sh
+DA_ZSH=scripts/completions/_docs-assets.sh
+DA_BASH=scripts/completions/docs-assets.bash
+
+for f in "$DA_SRC" "$DA_ZSH" "$DA_BASH"; do
+    if [ ! -f "$f" ]; then
+        echo "ERROR: missing $f" >&2
+        exit 1
+    fi
+done
+
+# --- help ------------------------------------------------------------------
+# Option lines in the usage heredoc start with two spaces and a dash. Read
+# ONLY the option field — everything up to the first run of 2+ spaces — so a
+# flag named inside another's description ("The reverse of --to-apng: …")
+# isn't mistaken for a declaration of its own.
+da_help_opts=$(sed -n '/^usage() {/,/^}/p' "$DA_SRC" \
+    | grep -E '^  -' \
+    | sed -E 's/^  //; s/   +.*//' \
+    | grep -oE -- '-{1,2}[a-z][a-z0-9-]*' \
+    | sort -u)
+
+# --- parser ----------------------------------------------------------------
+# The case arms of the option loop. Three arms are shell syntax rather than
+# documented options and are excluded by name: `-j*` (the glued -j4 form of
+# --jobs), `--` (end-of-options), and `-*` (the unknown-option catch-all).
+da_parser_opts=$(sed -n '/^while \[\[ \$# -gt 0 \]\]; do/,/^done/p' "$DA_SRC" \
+    | grep -E '^ +-[^)]*\)' \
+    | sed -E 's/^ +//; s/\).*//' \
+    | tr '|' '\n' \
+    | grep -E '^-{1,2}[a-z][a-z0-9-]*$' \
+    | sort -u)
+
+# --- zsh -------------------------------------------------------------------
+da_zsh_opts=$(sed -n '/_arguments/,/^$/p' "$DA_ZSH" \
+    | grep -E "^[[:space:]]*'[-(]" \
+    | sed -E "s/^[[:space:]]*'//; s/\[.*//; s/^\([^)]*\)//" \
+    | tr -d "'{}" | tr ', ' '\n\n' \
+    | grep -E '^-' \
+    | sed -E 's/\+$//' \
+    | sort -u)
+
+# --- bash ------------------------------------------------------------------
+da_bash_opts=$(grep -oE "compgen -W '[^']*'" "$DA_BASH" \
+    | sed -E "s/compgen -W '//; s/'$//" \
+    | tr ' ' '\n' \
+    | grep -E '^-' \
+    | sort -u)
+
+report "docs-assets help vs parser" "$da_help_opts" "$da_parser_opts"
+report "docs-assets help vs zsh"    "$da_help_opts" "$da_zsh_opts"
+report "docs-assets help vs bash"   "$da_help_opts" "$da_bash_opts"
+
+if [ "$fail" -ne 0 ]; then
+    cat >&2 <<EOF
+
+A docs-assets option must appear in all four places:
+  $DA_SRC   usage() text + the case arm
+  $DA_ZSH     _arguments spec
+  $DA_BASH   the compgen -W word list
+EOF
+    exit 1
+fi
+
+echo "completions OK ($(printf '%s\n' "$da_help_opts" | grep -c .) docs-assets options; help = parser = zsh = bash)"

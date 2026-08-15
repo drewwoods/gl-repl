@@ -395,6 +395,43 @@ time without dropping animation states. The `profile-panels` screenshot still
 reflects live rendering performance and should be regenerated on an otherwise
 unloaded machine.
 
+**Animated clips: GIF or APNG, per clip.** A clip's format is not a property
+of its call site - it is whichever file is already on disk (`<name>.gif` or
+`<name>.png`; a brand-new clip defaults to GIF). An ordinary regeneration
+keeps it, so formats and doc links never move on their own.
+
+`--to-apng` and `--to-gif` migrate the selected clips:
+
+```bash
+scripts/docs-assets.sh --to-apng view-mode-2d   # one clip
+scripts/docs-assets.sh --to-apng --gifs         # every clip
+```
+
+Either flag re-encodes, **repoints every Markdown reference** at the new
+extension, and deletes the superseded file. It is symmetric, so a migration
+you don't like is undone by running the other flag. Because it rewrites
+shared docs it forces `-j 1`.
+
+The two formats are tuned separately, because they fail differently:
+
+| | palette | dither | post |
+|---|---|---|---|
+| GIF | 128 | none | `magick -fuzz 4% -layers Optimize` |
+| APNG | 192, `stats_mode=diff` | `atkinson`, `diff_mode=rectangle` | `oxipng -o max` |
+
+GIF gets no dither because dithering *and* the lossy `-fuzz` delta together
+speckle the flat blacks. APNG can afford both more colours and a dither
+precisely because its deltas are exact - there is no lossy step downstream to
+turn the dither into permanent speckle - and `oxipng` then takes ~8% back
+losslessly. APNG clips need `apngasm` **and** `oxipng`
+(`brew install apngasm oxipng`); a run that touches no APNG clip needs
+neither. Note that `ffmpeg`'s own APNG encoder is not a substitute for
+`apngasm`: it barely deltas between frames (3x the size).
+
+An APNG is a `.png` to every consumer, so nothing in the Markdown marks it as
+animated: say "Animation:" in the alt text. The script prints a reminder on
+each migration.
+
 Each asset is a staged snippet scene with optional `@cfg` headers, `@camera`-tagged
 rows, and sometimes `GLR_EDIT_LINE` to pose cursor-bound overlays. Captures use
 record mode and keep the last frame, so theme fades and other frame-based

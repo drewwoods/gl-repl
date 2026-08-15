@@ -23,6 +23,8 @@ _docs_assets() {
         '--pngs[regenerate all PNG assets]' \
         '--demos[regenerate the standalone-demo stills]' \
         '--list[list selected asset names and exit]' \
+        '(--to-gif)--to-apng[write the selected clips as APNG and repoint the docs]' \
+        '(--to-apng)--to-gif[write the selected clips as GIF and repoint the docs]' \
         '(-j --jobs)'{-j+,--jobs}'[regenerate up to N assets in parallel]:count:' \
         '(-h --help)'{-h,--help}'[show help and exit]' \
         '*:asset:->assets'

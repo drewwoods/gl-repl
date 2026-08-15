@@ -22,7 +22,7 @@ _docs_assets_complete() {
     esac
 
     if [[ "$cur" == -* ]]; then
-        COMPREPLY=( $(compgen -W '--gifs --pngs --demos --list -j --jobs -h --help' -- "$cur") )
+        COMPREPLY=( $(compgen -W '--gifs --pngs --demos --list --to-apng --to-gif -j --jobs -h --help' -- "$cur") )
         return 0
     fi
 
@@ -35,6 +35,7 @@ _docs_assets_complete() {
         else
             case "$w" in
                 --gifs|--pngs|--demos) cats="$cats $w" ;;
+                --to-apng|--to-gif) ;;
                 -j|--jobs)     skip=1 ;;
                 -*|"")         ;;
                 *)             typed="$typed$w " ;;

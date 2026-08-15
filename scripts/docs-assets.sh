@@ -13,7 +13,8 @@
 # the default of 1 unless you don't mind the screen churn. Default 1.
 #
 # Requires a NATIVE build (make gl-repl) plus ImageMagick (magick) and
-# ffmpeg. Override the binary with BIN=<path>.
+# ffmpeg. Override the binary with BIN=<path>. Clips in APNG form additionally
+# need apngasm + oxipng; a run that touches no APNG clip does not.
 #
 # Native vs OSMesa:
 #   This script drives the NATIVE windowed backend, not the headless OSMesa
@@ -185,8 +186,16 @@ Options:
   --pngs             Regenerate all PNG assets (gl-repl).
   --demos            Regenerate the standalone-demo stills (tools/ binaries).
   --list             List selected asset names and exit (all by default).
+  --to-apng          Write the selected clips as APNG instead of GIF: repoint
+                     every Markdown reference at the .png and delete the
+                     superseded .gif. Needs apngasm + oxipng.
+  --to-gif           The reverse of --to-apng: back to GIF, delete the .png.
   -j, --jobs N       Regenerate up to N assets in parallel (default: 1).
   -h, --help         Show this help and exit.
+
+Without --to-apng/--to-gif each clip keeps the format it is already in (whichever
+of <name>.gif / <name>.png exists; a brand-new clip defaults to GIF), so an
+ordinary regeneration never changes formats or touches the docs.
 
 Environment:
   BIN=<path>         gl-repl binary (default: build/release/gl-repl).
@@ -206,6 +215,8 @@ Examples:
   scripts/docs-assets.sh --demos
   scripts/docs-assets.sh --list --gifs
   scripts/docs-assets.sh hero replay demo-render3d
+  scripts/docs-assets.sh --to-apng view-mode-2d  # migrate one clip to APNG
+  scripts/docs-assets.sh --to-apng --gifs        # migrate every clip
 EOF
 }
 
@@ -222,6 +233,11 @@ SELECT_GIFS=0
 SELECT_PNGS=0
 SELECT_DEMOS=0
 LIST=0
+# Empty = each clip keeps whatever format it is already in; --to-apng /
+# --to-gif force it and migrate. Deliberately NOT spelled --apng/--gif: --gif
+# would sit one letter from the --gifs CATEGORY selector and mean something
+# entirely different. The 'to-' prefix reads as the conversion it performs.
+CLIP_FORMAT=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -h|--help) usage; exit 0 ;;
@@ -229,6 +245,8 @@ while [[ $# -gt 0 ]]; do
         --gifs) SELECT_GIFS=1; shift ;;
         --pngs) SELECT_PNGS=1; shift ;;
         --demos) SELECT_DEMOS=1; shift ;;
+        --to-apng) CLIP_FORMAT=apng; shift ;;
+        --to-gif)  CLIP_FORMAT=gif;  shift ;;
         -j|--jobs)
             [[ $# -ge 2 ]] || {
                 echo "docs-assets: option '$1' requires a count (try --help)" >&2
@@ -310,6 +328,14 @@ if [[ "$NEED_GL_REPL" -eq 1 ]]; then
         echo "docs-assets: gl-repl binary not found at '$BIN'" >&2
         echo "             build it first: make gl-repl" >&2
         exit 1; }
+fi
+
+# A format migration rewrites shared Markdown files, so it cannot run
+# concurrently: two children retargeting different clips would race on the
+# same doc. Captures still cost the same; only the fan-out is given up.
+if [[ -n "$CLIP_FORMAT" && "$JOBS" -gt 1 ]]; then
+    echo "docs-assets: --to-$CLIP_FORMAT rewrites shared docs; forcing -j 1" >&2
+    JOBS=1
 fi
 
 # Parallel mode: re-exec ourselves one asset per process via xargs -P.
@@ -520,9 +546,8 @@ demo_one_shot_still() {
     echo "docs-assets: wrote $out"
 }
 
-# gif <out.gif> <frames> <step> <fps> <width> <args...> — record, take
-# every <step>th frame, assemble a palette-optimized looping GIF. The kept
-# frame count (frames/step) and fps set the clip length.
+# clip_frames <frames> <step> <args...> — record a clip and subsample every
+# <step>th frame into $WORK/sub as g-%04d.ppm. Shared by gif() and apng().
 #
 # --example clips additionally render WARM_EXAMPLE extra leading frames and discard
 # them (the camera-ease warmup, see WARM_EXAMPLE), so the clip starts settled while
@@ -530,8 +555,8 @@ demo_one_shot_still() {
 # past the settle. Staged scenes have no load ease, and replay's draw-by-draw
 # assembly IS the content, so a clip with no --example keeps frame 0. An
 # explicit WARM at the call site overrides both defaults.
-gif() {
-    local out=$1 frames=$2 step=$3 fps=$4 width=$5; shift 5
+clip_frames() {
+    local frames=$1 step=$2; shift 2
     local skip=${WARM:-0} a
     for a in "$@"; do [[ "$a" == "--example" ]] && { skip=${WARM:-$WARM_EXAMPLE}; break; }; done
     # Offline animation clock: one fixed-dt simulation step per captured
@@ -546,10 +571,120 @@ gif() {
         n=$((n + 1))
     done
     rm -rf "$FRDIR"  # subsampled into sub/; drop the full capture (still parity)
+}
+
+# --- clip quantization -------------------------------------------------------
+#
+# Both writers quantize to ONE palette for the whole clip, so a GIF and an
+# APNG of the same capture differ only in container. The two formats do NOT
+# share settings, because they fail differently:
+#
+#   GIF  — 128 colors, no dither. Dither was measured worse on both axes: it
+#          laid a visible crosshatch over the backdrop gradients and the dark
+#          UI bars (mean SSIM 0.95 against the un-encoded frames with none,
+#          0.79 with bayer) and cost bytes doing it.
+#   APNG — 192 colors, atkinson dither, palette weighted toward the moving
+#          part of the frame. It can afford the extra colors because its
+#          inter-frame deltas are exact, and the dither pays here where it
+#          does not in GIF: there is no lossy delta step downstream to turn
+#          the dither pattern into permanent speckle.
+#
+# Numbers behind these: docs/plans/done/ has none — the measurements are in
+# the git history of this file's review. Re-run them with the standalone
+# lab harness rather than editing values here on a hunch.
+GIF_QUANT='split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=none'
+APNG_QUANT='split[s0][s1];[s0]palettegen=max_colors=192:stats_mode=diff[p];[s1][p]paletteuse=dither=atkinson:diff_mode=rectangle'
+
+# clip <out-without-extension> <frames> <step> <fps> <width> <args...> —
+# record and write the clip in whichever format it is currently in. Call
+# sites pass NO extension: the format is not a property of the call site, it
+# is per-clip state that --to-apng / --to-gif migrate (see clip_format).
+clip() {
+    local base=$1; shift
+    case "$(clip_format "$base")" in
+        apng) write_apng "$base.png" "$@"; clip_retarget "$base" gif png ;;
+        *)    write_gif  "$base.gif" "$@"; clip_retarget "$base" png gif ;;
+    esac
+}
+
+# clip_format <base> — gif | apng. --to-apng/--to-gif force it (and migrate);
+# otherwise it is whichever file is already on disk, defaulting to GIF so a
+# newly added clip needs no ceremony.
+clip_format() {
+    [[ "$CLIP_FORMAT" == "apng" ]] && { echo apng; return; }
+    [[ "$CLIP_FORMAT" == "gif"  ]] && { echo gif;  return; }
+    [[ -f "$1.png" ]] && { echo apng; return; }
+    echo gif
+}
+
+# clip_retarget <base> <old-ext> <new-ext> — drop the superseded file and
+# repoint every Markdown reference at the one we just wrote. A no-op unless
+# the old file is actually there, so an ordinary regeneration does nothing.
+#
+# Rewriting by BASENAME covers all four reference spellings in the docs
+# (Markdown `images/x.gif`, README's `docs/images/x.gif`, SHOWCASE's HTML
+# <img src>, and the bare filenames in the showcase README's table) without
+# needing to know which one a given doc uses.
+clip_retarget() {
+    local base=$1 old=$2 new=$3
+    [[ -f "$base.$old" ]] || return 0
+    local name; name="$(basename "$base")"
+    rm -f "$base.$old"
+    local md
+    for md in $(grep -rl "$name\.$old" "$ROOT" --include='*.md' 2>/dev/null); do
+        # The literal '.' is the only regex metacharacter an asset name can
+        # contain, and it is escaped; names are otherwise [a-z0-9-].
+        gsed -i "s/${name}\.${old}/${name}.${new}/g" "$md" 2>/dev/null \
+            || sed -i '' "s/${name}\.${old}/${name}.${new}/g" "$md"
+        echo "docs-assets: retargeted $(basename "$md") -> $name.$new"
+    done
+    [[ "$new" == png ]] && echo "docs-assets: NOTE an APNG is a .png to Markdown — say \"Animation:\" in the alt text of $name.png"
+    return 0
+}
+
+# write_gif <out.gif> <frames> <step> <fps> <width> <args...> — record, take
+# every <step>th frame, assemble a palette-optimized looping GIF. The kept
+# frame count (frames/step) and fps set the clip length.
+write_gif() {
+    local out=$1 frames=$2 step=$3 fps=$4 width=$5; shift 5
+    clip_frames "$frames" "$step" "$@"
     ffmpeg -y -framerate "$fps" -i "$WORK/sub/g-%04d.ppm" \
-        -vf "scale=$width:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer" \
+        -vf "scale=$width:-1:flags=lanczos,$GIF_QUANT" \
         -loop 0 "$WORK/raw.gif" >/dev/null 2>&1
+    # -fuzz is a LOSSY delta step: it quantizes changed pixels to win
+    # compression, and it is what speckles a GIF's flat blacks. It is also
+    # what makes GIF competitive on size at all here, so it stays — the clips
+    # that can't afford it are the ones that should be APNG.
     magick "$WORK/raw.gif" -fuzz "$GIF_FUZZ" -layers Optimize "$out"
+    echo "docs-assets: wrote $out"
+}
+
+# write_apng <out.png> <frames> <step> <fps> <width> <args...> — the APNG twin
+# of write_gif(), same arguments.
+#
+# ffmpeg's own APNG encoder is NOT a substitute for apngasm: it barely deltas
+# between frames (6 MB against apngasm's 2 MB on the same 63 frames), which is
+# why apngasm is a dependency rather than another `-f apng` output.
+write_apng() {
+    local out=$1 frames=$2 step=$3 fps=$4 width=$5; shift 5
+    for tool in apngasm oxipng; do
+        command -v "$tool" >/dev/null || {
+            echo "docs-assets: '$tool' not found (brew install $tool), needed for APNG clips" >&2
+            exit 1; }
+    done
+    clip_frames "$frames" "$step" "$@"
+    rm -rf "$WORK/aq"; mkdir -p "$WORK/aq"
+    ffmpeg -y -i "$WORK/sub/g-%04d.ppm" \
+        -vf "scale=$width:-1:flags=lanczos,$APNG_QUANT" \
+        "$WORK/aq/f-%04d.png" >/dev/null 2>&1
+    # apngasm takes the frame delay in MILLISECONDS (rounded to nearest);
+    # -l 0 loops forever. A GIF's delay field is centiseconds, so this is the
+    # finer of the two clocks — 18 fps is 56ms here against GIF's 6cs.
+    local delay=$(( (1000 + fps / 2) / fps ))
+    apngasm -F -o "$out" "$WORK"/aq/f-*.png -d "$delay" -l 0 >/dev/null 2>&1
+    # Lossless, ~8% off, and it preserves acTL/fcTL. `--zopfli` finds another
+    # 3% for 20x the time — not worth it across a whole regeneration.
+    oxipng -o max "$out" >/dev/null 2>&1
     echo "docs-assets: wrote $out"
 }
 
@@ -1866,8 +2001,11 @@ if want view-mode-2d; then
     # kept frames in, i.e. output time (S*60 - WARM_EXAMPLE)/(step*fps) s. With
     # step=2 fps=20: clock 4s -> 1.5s into the clip (3D->2D), clock 6s -> 4.5s
     # (2D->3D). The 6s clip then holds ~1.5s of 3D before it loops.
+    #
+    # APNG, not GIF: the wave surface is most of the frame and its shaded
+    # gradient is exactly what the GIF delta path degrades. See apng().
     ( export GLR_VIEW_TOGGLE_AT=4,6
-      gif "$OUT/view-mode-2d.gif" 240 2 20 560 \
+      clip "$OUT/view-mode-2d" 240 2 20 560 \
           --example "Wave surface (analytic normals)" )
 fi
 
@@ -2282,22 +2420,22 @@ fi
 
 if want clip-plane-sweep; then
     ( export GLR_EDIT_LINE=6
-      gif "$OUT/clip-plane-sweep.gif" 126 1 20 720 "$(stage_clip_sweep)" )
+      clip "$OUT/clip-plane-sweep" 126 1 20 720 "$(stage_clip_sweep)" )
 fi
 
 if want xform-guide; then
     ( export GLR_EDIT_LINE=6
-      gif "$OUT/xform-guide.gif" 120 1 20 720 "$(stage_guide)" )
+      clip "$OUT/xform-guide" 120 1 20 720 "$(stage_guide)" )
 fi
 
 if want replay; then
     # Replay advances a few commands per second; 500 frames subsampled
     # 3x shows the whole pinwheel assembling at a watchable pace.
-    gif "$OUT/replay.gif" 575 3 24 720 "$(stage_replay)"
+    clip "$OUT/replay" 575 3 24 720 "$(stage_replay)"
 fi
 
 if want animated-ring; then
-    gif "$OUT/animated-ring.gif" 126 2 18 560 --example "$EX_RING"
+    clip "$OUT/animated-ring" 126 2 18 560 --example "$EX_RING"
 fi
 
 # ---- showcase assets (docs/images/showcase/) ----------------------------
@@ -2308,10 +2446,10 @@ fi
 
 # Featured.
 if want sc-torus-knot; then
-    gif "$SHOW/torus-knot.gif" 200 2 20 720 --example "Torus knot"
+    clip "$SHOW/torus-knot" 200 2 20 720 --example "Torus knot"
 fi
 if want sc-snowfall; then
-    gif "$SHOW/snowfall.gif" 220 2 22 720 --example "Snowfall particles"
+    clip "$SHOW/snowfall" 220 2 22 720 --example "Snowfall particles"
 fi
 if want sc-parametric-torus; then
     # Static geometry (nested for, no t) — a still, not a frozen GIF.
@@ -2319,23 +2457,23 @@ if want sc-parametric-torus; then
         --example "Parametric torus (nested for)"
 fi
 if want sc-recursive-tree; then
-    gif "$SHOW/recursive-tree.gif" 200 2 20 720 \
+    clip "$SHOW/recursive-tree" 200 2 20 720 \
         --example "3D tree (func + recursion)"
 fi
 
 # Curves & line art.
 if want sc-spirograph; then
-    gif "$SHOW/spirograph.gif" 200 2 20 560 --example "Spirograph curve"
+    clip "$SHOW/spirograph" 200 2 20 560 --example "Spirograph curve"
 fi
 if want sc-ripple-ring; then
-    gif "$SHOW/ripple-ring.gif" 200 2 20 560 --example "Traveling ripple ring"
+    clip "$SHOW/ripple-ring" 200 2 20 560 --example "Traveling ripple ring"
 fi
 if want sc-bezier; then
     still "$SHOW/bezier.png" 16 --example "Bezier curve with guides"
 fi
 if want sc-bubble-sort; then
     ( WARM=20
-      gif "$SHOW/bubble-sort.gif" 160 2 20 560 \
+      clip "$SHOW/bubble-sort" 160 2 20 560 \
           --example "Bubble sort (scratch arrays)" )
 fi
 
@@ -2345,14 +2483,14 @@ if want sc-orbit-plot; then
 fi
 
 if want sc-wave-surface; then
-    gif "$SHOW/wave-surface.gif" 200 2 20 560 \
+    clip "$SHOW/wave-surface" 200 2 20 560 \
         --example "Wave surface (analytic normals)"
 fi
 
 # Surfaces. (The old "Procedural terrain" example is gone; the new "Ringed
 # planet" stands in for the third surface tile.)
 if want sc-ringed-planet; then
-    gif "$SHOW/ringed-planet.gif" 200 2 20 560 --example "Ringed planet (nebula skies)"
+    clip "$SHOW/ringed-planet" 200 2 20 560 --example "Ringed planet (nebula skies)"
 fi
 if want sc-gl-repl-logo; then
     (
@@ -2363,10 +2501,10 @@ fi
 
 # Particles & effects.
 if want sc-grass; then
-    gif "$SHOW/grass.gif" 200 2 20 560 --example "Swaying grass field (rand + t)"
+    clip "$SHOW/grass" 200 2 20 560 --example "Swaying grass field (rand + t)"
 fi
 if want sc-jellyfish; then
-    gif "$SHOW/jellyfish.gif" 220 2 22 560 --example "Jellyfish (glDepthMask translucency)"
+    clip "$SHOW/jellyfish" 220 2 22 560 --example "Jellyfish (glDepthMask translucency)"
 fi
 
 # Functions, branching & recursion.
@@ -2378,54 +2516,54 @@ if want sc-function-polygons; then
         --example "Function polygons (args + for)"
 fi
 if want sc-conditional-colors; then
-    gif "$SHOW/conditional-colors.gif" 200 2 20 560 --example "Conditional colors (if + t)"
+    clip "$SHOW/conditional-colors" 200 2 20 560 --example "Conditional colors (if + t)"
 fi
 if want sc-sierpinski-carpet; then
-    gif "$SHOW/sierpinski-carpet.gif" 200 2 20 560 \
+    clip "$SHOW/sierpinski-carpet" 200 2 20 560 \
         --example "Sierpinski carpet (2D recursion)"
 fi
 if want sc-sierpinski-sponge; then
-    gif "$SHOW/sierpinski-sponge.gif" 200 2 20 560 \
+    clip "$SHOW/sierpinski-sponge" 200 2 20 560 \
         --example "Sierpinski sponge (3D recursion)"
 fi
 
 # Big scenes.
 if want sc-whale; then
-    gif "$SHOW/whale.gif" 240 2 22 560 --example "Whale (particle system + lit model)"
+    clip "$SHOW/whale" 240 2 22 560 --example "Whale (particle system + lit model)"
 fi
 if want sc-stress-test; then
-    gif "$SHOW/stress-test.gif" 240 2 22 560 \
+    clip "$SHOW/stress-test" 240 2 22 560 \
         --example "Dusk lighthouse atoll (stress test)"
 fi
 if want sc-lantern-festival; then
     # The lanterns rise on a 15-unit wrap, so a 240-frame clip catches the
     # flock mid-ascent with reflections and glints already running.
-    gif "$SHOW/lantern-festival.gif" 240 2 22 560 \
+    clip "$SHOW/lantern-festival" 240 2 22 560 \
         --example "Lantern festival (additive glow + reflections)"
 fi
 if want sc-aurora-observatory; then
     # Post-warm clip spans t in [3, 6.3]: one coral beacon blink (period
     # ~3.9 s) rides mid-clip while the dish drifts and the pulses cycle.
-    gif "$SHOW/aurora-observatory.gif" 200 2 20 560 \
+    clip "$SHOW/aurora-observatory" 200 2 20 560 \
         --example "Aurora observatory (dish tracks the sky)"
 fi
 
 # Transforms & GL state.
 if want sc-planar-shadows; then
     ( export GLR_EDIT_LINE=3
-    gif "$SHOW/planar-shadows.gif" 200 2 20 560 \
+    clip "$SHOW/planar-shadows" 200 2 20 560 \
         --example "Planar shadows (glMultMatrixf)" )
 fi
 if want sc-fog-ring-tunnel; then
-    gif "$SHOW/fog-ring-tunnel.gif" 200 2 20 560 \
+    clip "$SHOW/fog-ring-tunnel" 200 2 20 560 \
         --example "Fog ring tunnel"
 fi
 if want sc-pulse-bars; then
-    gif "$SHOW/pulse-bars.gif" 200 2 20 560 \
+    clip "$SHOW/pulse-bars" 200 2 20 560 \
         --example "Pulse bars (easing)"
 fi
 if want sc-stencil-mask; then
-    gif "$SHOW/stencil-mask.gif" 200 2 20 560 \
+    clip "$SHOW/stencil-mask" 200 2 20 560 \
         --example "Stencil mask window (glStencilOp)"
 fi
 
@@ -2436,7 +2574,7 @@ fi
 # representative scene still as a stand-in; the SHOWCASE comments document the
 # ideal shot.
 if want sc-feature-time; then
-    gif "$SHOW/feature-time.gif" 200 2 20 560 --example "Conditional colors (if + t)"
+    clip "$SHOW/feature-time" 200 2 20 560 --example "Conditional colors (if + t)"
 fi
 if want sc-feature-ply; then
     # Stand-in: the parametric torus is the canonical --export-ply scene.
