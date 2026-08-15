@@ -1,0 +1,58 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// Fog fades geometry toward the fog color with eye-space distance.
+// glFogi picks the equation: GL_EXP2 (used here) and GL_EXP fall off
+// exponentially with GL_FOG_DENSITY; GL_LINEAR instead ramps between
+// glFogf(GL_FOG_START, ...) and glFogf(GL_FOG_END, ...) distances.
+// Matching GL_FOG_COLOR to glClearColor makes far rings dissolve into
+// the background, which is what hides each ring's respawn at the far
+// end of this endless tunnel. Drag `fogDensity` to thicken or clear it.
+// The tunnel snakes: each ring's center sits on a fixed curve
+// (bendX, bendY) of its depth ringZ, and the ring is yawed/pitched to
+// face along the curve's tangent, so rings sweep around the bends as
+// they approach. Drag `twist` to straighten or sharpen the curve.
+static float fogDensity = 0.055; // @tune
+static float twist = 1.2; // @tune
+static float rings = 12; // @tune
+static float ringZ; // eye-space distance of the current ring
+static float bendX; // tunnel centerline x at this depth
+static float bendY; // tunnel centerline y at this depth
+
+glTranslatef(0.0000f, 0.0000f, -1.0000f);   // @camera dist
+glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_FOG);
+glFogi(GL_FOG_MODE, GL_EXP2);
+glFogfv(GL_FOG_COLOR, (GLfloat[]){0.05, 0.06, 0.08, 1});
+glFogf(GL_FOG_DENSITY, fogDensity);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+
+for(i, 0, rings) {
+  ringZ = 37 - fmod(3 * t + 3 * i, 37);
+  bendX = twist * sin(0.24 * ringZ);
+  bendY = 0.7 * twist * (cos(0.31 * ringZ) - 1);
+  glPushMatrix();
+    glTranslatef(bendX, bendY, 0 - ringZ);
+    glRotatef(0 - 14 * twist * cos(0.24 * ringZ), 0, 1, 0);
+    glRotatef(0 - 12 * twist * sin(0.31 * ringZ), 1, 0, 0);
+    glRotatef(8 * ringZ, 0, 0, 1);
+    if(fmod(i, 3) < 1) {
+      glColor3f(0.1, 0.95, 0.85);
+    } else if(fmod(i, 3) < 2) {
+      glColor3f(0.15, 0.55, 1);
+    } else {
+      glColor3f(0.95, 0.25, 1);
+    }
+    glutSolidTorus(0.09, 1.7, 10, 28);
+  glPopMatrix();
+}

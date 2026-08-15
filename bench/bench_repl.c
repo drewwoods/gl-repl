@@ -20,13 +20,11 @@
  * replay_long but ~2.2x on normalize_large_doc, which is enough to reorder
  * what looks expensive. Three things to know before reading those numbers:
  *
- *   - They are comparable web-to-web only. The web build compiles the reduced
- *     examples/catalog-emscripten.ini (31 examples vs 38), so every
- *     example-driven row - parse_lines and feed_examples totals, and the
- *     flatten_corpus_NN indices - is measuring a different corpus than the
- *     native run. The synthetic-document rows (source_scope_*,
- *     normalize_large_doc, reformat_large_doc, replay_long) build their own
- *     input and are the ones that cross-compare honestly.
+ *   - They are comparable web-to-web only. Every example-driven row uses the
+ *     same frozen 40-scene corpus from bench/bench-data, so native and web runs do
+ *     not drift when the live examples catalog changes. The synthetic-document
+ *     rows (source_scope_*, normalize_large_doc, reformat_large_doc,
+ *     replay_long) build their own input as before.
  *   - fade_batches does not run. node has no GPU and no WebGL context, so the
  *     one sub-benchmark that emits real draw calls skips itself. Nothing here
  *     sees the gl4es -> WebGL2 -> browser-GL cost of the actual draw path.
@@ -44,7 +42,7 @@
  *                       built-in, resolved by display name
  *   flatten_orrery    - full flatten of the "Orrery (labels track 3D orbits)"
  *                       built-in, resolved by display name
- *   flatten_corpus    - full flatten of every built-in, one row per catalog
+ *   flatten_corpus    - full flatten of every frozen benchmark scene
  *                       index (human output sorted by minimum time)
  *   flatten_phases    - per-phase split (reparse / scalar assign / scratch
  *                       assign / derived remainder) of a full flatten, read
@@ -100,7 +98,7 @@
 #include "repl/state_notify.h"
 #include "repl/eval.h"
 #include "repl/example_loader.h"  /* repl_load_example_lines */
-#include "repl/examples.h"
+#include "bench-data/bench_examples.h"
 #include "repl/executor.h"
 #include "repl/load.h"           /* repl_load_apply_line - uncapped doc build */
 #include "repl/normalize.h"      /* repl_parse_and_normalize_strict */
@@ -215,35 +213,41 @@ static void fresh_repl(void) {
     declare_test_idents();
 }
 
-/* Set when a named real-scene case cannot be resolved. main() returns
- * non-zero so a renamed/removed built-in fails the run loudly instead of
+/* Set when a named frozen-scene case cannot be resolved. main() returns
+ * non-zero so a damaged benchmark snapshot fails the run loudly instead of
  * silently dropping a benchmark row. */
 static int g_case_missing = 0;
 
-/* Resolve a benchmark case by its exact catalog display name. Indices are
- * deliberately not hard-coded: the catalog is reordered whenever an example
- * is added.
- *
- * Absence is a hard error natively (that is the whole point of g_case_missing
- * - a renamed built-in must fail `make bench`, not quietly drop a row), but a
- * skip under Emscripten. The web build compiles examples/catalog-emscripten.ini,
- * a deliberate subset: Orrery and Whale are simply not in it, so several named
- * cases cannot resolve there no matter how healthy the catalog is. `make bench`
- * still runs against the full catalog, so a real rename is still caught. */
+/* The benchmark corpus is intentionally separate from the live example
+ * catalog. These accessors keep the benchmark loops readable while making
+ * it impossible for a live-catalog edit to change their workload. */
+static int bench_example_count(void) {
+    return g_bench_example_count;
+}
+
+static const char *const *bench_example_lines(int idx) {
+    return (idx >= 0 && idx < g_bench_example_count)
+        ? g_bench_examples[idx].lines : NULL;
+}
+
+static const char *bench_example_name(int idx) {
+    return (idx >= 0 && idx < g_bench_example_count)
+        ? g_bench_examples[idx].name : NULL;
+}
+
+/* Resolve a benchmark case by its exact frozen-corpus display name. Indices are
+ * deliberately not hard-coded: the frozen manifest owns their order. Absence
+ * is always a hard error - a damaged benchmark snapshot must not silently drop
+ * a row. */
 static int example_index_by_name(const char *display_name) {
-    int n = repl_example_count();
+    int n = bench_example_count();
     for (int i = 0; i < n; i++) {
-        const char *name = repl_example_name(i);
+        const char *name = bench_example_name(i);
         if (name && strcmp(name, display_name) == 0)
             return i;
     }
-#if defined(__EMSCRIPTEN__)
-    fprintf(stderr, "SKIP: \"%s\" is not in the web example catalog\n",
-            display_name);
-#else
     fprintf(stderr, "ERROR: benchmark case not found: \"%s\"\n", display_name);
     g_case_missing = 1;
-#endif
     return -1;
 }
 
@@ -268,7 +272,7 @@ static void baseline_restore(const BenchBaseline *b) {
 }
 
 static int example_line_count(int idx) {
-    const char *const *lines = repl_example_lines(idx);
+    const char *const *lines = bench_example_lines(idx);
     int n = 0;
     if (!lines) return 0;
     while (lines[n]) n++;
@@ -277,7 +281,7 @@ static int example_line_count(int idx) {
 
 static long long total_example_lines(void) {
     long long total = 0;
-    int n = repl_example_count();
+    int n = bench_example_count();
     for (int i = 0; i < n; i++)
         total += example_line_count(i);
     return total;
@@ -292,12 +296,12 @@ static BenchResult bench_parse_lines(int iters) {
     /* Build a flat array of lines from every example so we touch every
      * grammar branch (vertices, transforms, gluXxx, for, func, if, vars,
      * comments, blank lines). */
-    int n_examples = repl_example_count();
+    int n_examples = bench_example_count();
     long long total_lines = total_example_lines();
     const char **flat = (const char **)malloc(sizeof(*flat) * (size_t)total_lines);
     long long flat_n = 0;
     for (int e = 0; e < n_examples; e++) {
-        const char *const *ls = repl_example_lines(e);
+        const char *const *ls = bench_example_lines(e);
         if (!ls) continue;
         for (int i = 0; ls[i]; i++)
             flat[flat_n++] = ls[i];
@@ -338,7 +342,7 @@ static BenchResult bench_parse_lines(int iters) {
 /* ---- bench: full editor_feed_line path on every example ---------------------- */
 
 static BenchResult bench_feed_examples(int iters) {
-    int n_examples = repl_example_count();
+    int n_examples = bench_example_count();
     long long lines_per_iter = total_example_lines();
 
     BenchResult r = { .name = "feed_examples", .unit = "lines",
@@ -352,7 +356,7 @@ static BenchResult bench_feed_examples(int iters) {
     for (int it = 0; it < iters; it++) {
         double t0 = now_seconds();
         for (int e = 0; e < n_examples; e++) {
-            repl_load_example_lines(repl_example_lines(e));
+            repl_load_example_lines(bench_example_lines(e));
         }
         double dt = now_seconds() - t0;
         if (dt < r.min_sec) r.min_sec = dt;
@@ -479,10 +483,10 @@ static BenchResult bench_flatten_examples(int iters) {
     return r;
 }
 
-/* ---- bench: full flatten of the real built-in scenes ------------------- */
+/* ---- bench: full flatten of the frozen benchmark scenes ---------------- */
 
-/* Shared kernel for the named real-scene cases, flatten_corpus, and
- * flatten_phases: load one built-in, then time `inner` full flattens per
+/* Shared kernel for the named frozen-scene cases, flatten_corpus, and
+ * flatten_phases: load one frozen scene, then time `inner` full flattens per
  * timer sample, each starting from the identical post-load baseline. */
 static BenchResult bench_flatten_one(const char *bench_name, int example_idx,
                                      int iters, int inner, int *flat_cmds_out) {
@@ -490,7 +494,7 @@ static BenchResult bench_flatten_one(const char *bench_name, int example_idx,
                       .min_sec = 1e18 };
     BenchBaseline base;
 
-    repl_load_example_lines(repl_example_lines(example_idx));
+    repl_load_example_lines(bench_example_lines(example_idx));
     baseline_capture(&base);
     /* One warm flatten outside the timer so the source-scope depth cache is
      * built and the first timed sample isn't billed for it. */
@@ -531,7 +535,7 @@ static BenchResult bench_flatten_one_cold(const char *bench_name,
                       .min_sec = 1e18 };
     BenchBaseline base;
 
-    repl_load_example_lines(repl_example_lines(example_idx));
+    repl_load_example_lines(bench_example_lines(example_idx));
     baseline_capture(&base);
     repl_flatten_commands(editor_state_edit_line());
 
@@ -575,7 +579,7 @@ static void run_named_flatten(const char *bench_name, const char *display_name,
     report(bench_flatten_one_cold(cold_name, idx, iters, 16, NULL));
 }
 
-/* ---- bench: full flatten of every built-in ---------------------------- */
+/* ---- bench: full flatten of every frozen benchmark scene --------------- */
 
 #define CORPUS_ROW_NAME_MAX 32
 
@@ -601,13 +605,13 @@ static int corpus_case_cmp_slower_first(const void *a, const void *b) {
     return 0;
 }
 
-/* Time a full flatten of every built-in. Human output lists all cases sorted
- * slowest-first by minimum per-flatten time; CSV emits one row per catalog
- * index in catalog order, preceded by a `#` comment carrying the display name
- * so the existing CSV columns stay unchanged. */
+/* Time a full flatten of every frozen benchmark scene. Human output lists all
+ * cases sorted slowest-first by minimum per-flatten time; CSV emits one row per
+ * frozen-corpus index in manifest order, preceded by a `#` comment carrying
+ * the display name so the existing CSV columns stay unchanged. */
 static void bench_flatten_corpus(int iters) {
     enum { CORPUS_INNER = 8 };
-    int n = repl_example_count();
+    int n = bench_example_count();
     CorpusCase *cases = (CorpusCase *)malloc(sizeof(*cases) * (size_t)n);
     if (!cases)
         return;
@@ -636,7 +640,7 @@ static void bench_flatten_corpus(int iters) {
     if (g_csv) {
         for (int e = 0; e < n; e++) {
             printf("# %s = %s (flat_cmds=%d)\n", cases[e].row_name,
-                   repl_example_name(e), cases[e].flat_cmds);
+                   bench_example_name(e), cases[e].flat_cmds);
             report(cases[e].result);
         }
     } else {
@@ -647,7 +651,7 @@ static void bench_flatten_corpus(int iters) {
         for (int e = 0; e < n; e++) {
             printf("  # %s = %s (flat_cmds=%d, min-per-flatten=%.3f us)\n",
                    cases[e].row_name,
-                   repl_example_name(cases[e].example_idx),
+                   bench_example_name(cases[e].example_idx),
                    cases[e].flat_cmds, cases[e].min_op_us);
             report(cases[e].result);
         }
@@ -678,7 +682,7 @@ static void bench_flatten_phases_case(const char *label, int example_idx,
                                  .min_sec = 1e18 };
     }
 
-    repl_load_example_lines(repl_example_lines(example_idx));
+    repl_load_example_lines(bench_example_lines(example_idx));
     baseline_capture(&base);
     repl_flatten_commands(editor_state_edit_line());
 
@@ -722,10 +726,11 @@ static void bench_flatten_phases(int iters) {
     }
 }
 
-/* ---- bench: production refresh boundary on real animated scenes -------- */
+/* ---- bench: production refresh boundary on frozen animated scenes ------ */
 
 static BenchResult bench_flatten_refresh_one(const char *name,
-                                             int example_idx, int iters) {
+                                             const char *const *scene,
+                                             int iters) {
     enum { INNER = 32 };
     BenchResult r = { .name = name, .unit = "refreshes", .min_sec = 1e18 };
     BenchBaseline base;
@@ -735,7 +740,7 @@ static BenchResult bench_flatten_refresh_one(const char *name,
     int t_structural;
     int rebake_ok;
 
-    repl_load_example_lines(repl_example_lines(example_idx));
+    repl_load_example_lines(scene);
     baseline_capture(&base);
     repl_flatten_commands(editor_state_edit_line());
     repl_state_flat_program_clear_dirty();
@@ -807,7 +812,8 @@ static void bench_flatten_refresh(int iters) {
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         int idx = example_index_by_name(cases[i].display);
         if (idx >= 0)
-            report(bench_flatten_refresh_one(cases[i].row, idx, iters));
+            report(bench_flatten_refresh_one(cases[i].row,
+                                             bench_example_lines(idx), iters));
     }
 }
 
@@ -819,7 +825,7 @@ static void bench_flatten_refresh(int iters) {
  * takes a full flatten; a value-only global can rebake in place. The printed
  * route is the part to watch, and the timing shows its cost. */
 static BenchResult bench_refresh_slider_one(const char *name,
-                                            int example_idx,
+                                            const char *const *scene,
                                             const char *var_name,
                                             ReplFlatRefreshKind expected,
                                             int iters) {
@@ -830,7 +836,7 @@ static BenchResult bench_refresh_slider_one(const char *name,
     ReplExprDepMask bit;
     int structural, slot;
 
-    repl_load_example_lines(repl_example_lines(example_idx));
+    repl_load_example_lines(scene);
     baseline_capture(&base);
     repl_flatten_commands(editor_state_edit_line());
     repl_state_flat_program_clear_dirty();
@@ -909,7 +915,7 @@ static void bench_refresh_slider(int iters) {
          * "everything became structural" regression would leave every route
          * assertion satisfied because every pinned expectation would be FULL.
          *
-         * Wave's `amp` scales already-emitted vertex/normal/colour arguments
+         * Wave's `amplitude` scales already-emitted vertex/normal/colour arguments
          * through global scratch only - no local, no loop bound, no condition
          * - so it is genuinely value-only.
          *
@@ -918,7 +924,7 @@ static void bench_refresh_slider(int iters) {
          * *directly*, while ORB_SCALE reaches planet()'s local `th` only
          * transitively, by way of the global `orbitR` that `th` reads. */
         { "slider_wave_value", "Wave surface (analytic normals)",
-          "amp", REPL_FLAT_REFRESH_REBAKE },
+          "amplitude", REPL_FLAT_REFRESH_REBAKE },
         { "slider_orrery_local", "Orrery (labels track 3D orbits)",
           "EARTH_RATE", REPL_FLAT_REFRESH_FULL },
         { "slider_orrery_transitive", "Orrery (labels track 3D orbits)",
@@ -929,8 +935,10 @@ static void bench_refresh_slider(int iters) {
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         int idx = example_index_by_name(cases[i].display);
         if (idx >= 0)
-            report(bench_refresh_slider_one(cases[i].row, idx, cases[i].var,
-                                            cases[i].expected, iters));
+            report(bench_refresh_slider_one(cases[i].row,
+                                            bench_example_lines(idx),
+                                            cases[i].var, cases[i].expected,
+                                            iters));
     }
 }
 
@@ -956,7 +964,7 @@ static void bench_flatten_whale(int iters) {
     if (idx < 0)
         return;
 
-    repl_load_example_lines(repl_example_lines(idx));
+    repl_load_example_lines(bench_example_lines(idx));
     baseline_capture(&base);
     repl_set_time(k_times[0]);
     repl_flatten_commands(editor_state_edit_line());
@@ -1243,7 +1251,7 @@ static BenchResult bench_flat_cost_query(int iters) {
  * total / mean / minimum time so regressions remain visible.
  */
 static BenchResult bench_spike_flatten_largest(int iters) {
-    int n_examples = repl_example_count();
+    int n_examples = bench_example_count();
     int worst_idx = 0;
     int worst_flat = 0;
     float saved_vals[MAX_PREDEF_VARS];
@@ -1252,7 +1260,7 @@ static BenchResult bench_spike_flatten_largest(int iters) {
      * "Lines" alone underestimates: a short for-loop unrolls into many
      * flat commands, and that's what flatten actually walks. */
     for (int e = 0; e < n_examples; e++) {
-        repl_load_example_lines(repl_example_lines(e));
+        repl_load_example_lines(bench_example_lines(e));
         repl_flatten_commands(editor_state_edit_line());
         int n = repl_state_flat_program_count();
         if (n > worst_flat) {
@@ -1262,7 +1270,7 @@ static BenchResult bench_spike_flatten_largest(int iters) {
     }
 
     /* Reload the chosen example as the timed fixture. */
-    repl_load_example_lines(repl_example_lines(worst_idx));
+    repl_load_example_lines(bench_example_lines(worst_idx));
 
     int saved_n = g_num_predef_vars;
     for (int i = 0; i < saved_n; i++)
@@ -1302,7 +1310,7 @@ static BenchResult bench_spike_flatten_largest(int iters) {
 /* ---- bench: replay every example end-to-end --------------------------- */
 
 static BenchResult bench_replay_examples(int iters) {
-    int n_examples = repl_example_count();
+    int n_examples = bench_example_count();
 
     BenchResult r = { .name = "replay_examples", .unit = "steps",
                       .min_sec = 1e18 };
@@ -1315,7 +1323,7 @@ static BenchResult bench_replay_examples(int iters) {
         long long steps = 0;
         double t0 = now_seconds();
         for (int e = 0; e < n_examples; e++) {
-            repl_load_example_lines(repl_example_lines(e));
+            repl_load_example_lines(bench_example_lines(e));
 
             replay_start();
             int safety = repl_state_flat_program_count() + 1;
@@ -2343,7 +2351,7 @@ static void usage(const char *prog) {
         "                      expression cache inside the timer)\n"
         "    flatten_orrery    full flatten of \"Orrery (labels track 3D orbits)\"\n"
         "                      (same warm + _cold pair)\n"
-        "    flatten_corpus    full flatten of every built-in, one row per index\n"
+        "    flatten_corpus    full flatten of every frozen benchmark scene\n"
         "    flatten_phases    reparse / assign / remainder split of a full flatten\n"
         "    flatten_refresh   production t refresh of Grass/Orrery/Wave (route shown)\n"
         "    refresh_slider    production refresh for one variable-panel drag step\n"
@@ -2468,7 +2476,7 @@ int main(int argc, char **argv) {
     } else {
         print_machine_info();
         printf("REPL benchmarks (iters=%d, examples=%d, total_lines=%lld)\n",
-               iters, repl_example_count(), total_example_lines());
+               iters, bench_example_count(), total_example_lines());
     }
 
     if (wants(only, "parse_lines"))
@@ -2526,8 +2534,8 @@ int main(int argc, char **argv) {
             report(bench_fade_batches(iters));
     }
 
-    /* A named case that no longer resolves (renamed/removed built-in), or a
-     * Whale scene that stopped varying its flat count with t, invalidates the
+    /* A named case that no longer resolves in the frozen corpus, or a Whale
+     * scene that stopped varying its flat count with t, invalidates the
      * comparison this suite exists to support. Fail loudly. */
     return g_case_missing ? 1 : 0;
 }

@@ -1,0 +1,37 @@
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
+static float R = 2;  // major radius (ring center to tube center)
+static float r = 1;  // minor radius (tube thickness)
+static float n = 20; // @config segment count around both u and v
+static float u, v, s;  // current major/minor angles, color mix factor
+static float tr;       // tube-offset radius R + r*cos(v), read twice per vertex line
+
+glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
+glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(35.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+glClearColor(0.05, 0.06, 0.08, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+glEnable(GL_DEPTH_TEST);
+// Flat vertex-colored torus (no lighting): GL_SMOOTH still Gouraud-
+// interpolates the per-vertex glColor gradient across each quad.
+glShadeModel(GL_SMOOTH);
+n = floor(n); // keep n an integer
+n = clamp(n, 3, 20); // clamp to avoid exceeding cmd limit
+for(i, 0, n) {
+  glBegin(GL_QUAD_STRIP);
+    for(j, 0, n+1) {
+      // step v across the tube; emit two vertices, one at u=i and one at u=i+1
+      v = j*TAU/n;
+      tr = R + r*cos(v); // tube offset is the same for both vertices below
+      u = i*TAU/n;
+      s = 0.5 + 0.5 * sin(u + v);
+      glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
+      glVertex3f(tr*cos(u), tr*sin(u), r*sin(v));
+      u = (i+1)*TAU/n;
+      s = 0.5 + 0.5 * sin(u + v);
+      glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
+      glVertex3f(tr*cos(u), tr*sin(u), r*sin(v));
+    }
+  glEnd();
+}

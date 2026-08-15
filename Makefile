@@ -19,6 +19,7 @@ SRC_DIR := $(abspath src)
 GL_STUB_INCLUDE := $(abspath tests/gl-stubs/include)
 TEST_DIR := tests
 BENCH_DIR := bench
+BENCH_DATA_DIR := $(BENCH_DIR)/bench-data
 ZSHRC ?= $(HOME)/.zshrc
 ZSH_COMPLETIONS_DIR := $(PROJECT_ROOT)/scripts/completions
 
@@ -645,6 +646,9 @@ EXAMPLES_CATALOG ?= examples/catalog.ini
 endif
 EXAMPLE_SCENE_SRCS = $(wildcard $(dir $(EXAMPLES_CATALOG))scenes/*.glr) $(wildcard $(dir $(EXAMPLES_CATALOG))scenes/*.c)
 GENERATED_EXAMPLES_INC = build/generated/repl_examples_data.inc
+BENCH_DATA_CATALOG = $(BENCH_DATA_DIR)/catalog.ini
+BENCH_DATA_SCENE_SRCS = $(wildcard $(BENCH_DATA_DIR)/scenes/*.glr)
+GENERATED_BENCH_DATA_INC = build/generated/bench_repl_data.inc
 ifeq ($(WEB)$(USE_GL_STUBS),1)
 TOURS_CATALOG = tours/catalog-emscripten.ini
 else
@@ -1066,6 +1070,7 @@ endef
 
 $(foreach test,$(CORE_TEST_BINS),$(eval $(call core_test_binary,$(test))))
 $(foreach bin,$(BENCH_BINS),$(eval $(call bench_binary,$(bin))))
+bench_repl_OBJS += $(OBJDIR)/$(BENCH_DATA_DIR)/bench_examples.o
 
 # WEB=1: benchmarks link the wasm GL stack without the app-page glue, so they
 # can run headless under node. See BENCH_WEB_LDFLAGS and `make bench-web`.
@@ -1343,6 +1348,12 @@ $(GENERATED_EXAMPLES_INC): FORCE scripts/gen_examples.py $(EXAMPLES_CATALOG) $(E
 	python3 scripts/gen_examples.py --catalog $(EXAMPLES_CATALOG) --out $@
 
 $(OBJDIR)/src/repl/examples.o: $(GENERATED_EXAMPLES_INC)
+
+$(GENERATED_BENCH_DATA_INC): scripts/gen_bench_examples.py $(BENCH_DATA_CATALOG) $(BENCH_DATA_SCENE_SRCS)
+	@mkdir -p $(dir $@)
+	python3 scripts/gen_bench_examples.py --catalog $(BENCH_DATA_CATALOG) --out $@
+
+$(OBJDIR)/$(BENCH_DATA_DIR)/bench_examples.o: $(GENERATED_BENCH_DATA_INC)
 
 $(GENERATED_TOURS_INC): FORCE scripts/gen_tours.py $(TOURS_CATALOG) $(TOUR_SCRIPT_SRCS)
 	@mkdir -p $(dir $@)

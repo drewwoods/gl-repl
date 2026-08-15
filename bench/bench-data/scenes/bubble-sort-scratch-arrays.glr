@@ -1,0 +1,75 @@
+// @cfg view_mode = RENDER3D_VIEW_2D
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
+// @cfg vertex_outlines = 0
+// @cfg vertex_points = 0
+// @cfg polygon_highlight = 0
+static float rate = 45; // compare steps per second @tune
+static float hold = 1.5; // seconds to rest on the sorted bars @tune
+static float period, cycle, steps; // seconds per cycle; shuffle index; compares done so far
+static float tmp; // swap scratch
+static float x, h, s; // bar center x, bar height, palette mix
+static float cur; // bar index under the compare marker
+
+glTranslatef(0.0f, 0.0f, -8.5f);   // @camera dist
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+// Bubble sort, scrubbed by t. A[0..15] holds 16 bar heights; the nested
+// loops below are the classic compare-and-swap, but each compare only
+// runs once enough time has passed (its overall index p*15 + j must stay
+// under steps). Every frame re-seeds and re-sorts from scratch, so the
+// bars freeze mid-algorithm at exactly floor(steps) compares -- drag the
+// time slider or replay to scrub the sort.
+glClearColor(0.05, 0.06, 0.08, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_POINT_SMOOTH);
+period = 225/rate + hold;
+cycle = floor(t/period);
+steps = fmod(t, period)*rate;
+// A fresh deterministic shuffle each cycle
+for(i, 0, 16) {
+  A[i] = rand(i, cycle);
+}
+// Pass p bubbles the largest unsorted value to the right
+for(p, 0, 15) {
+  for(j, 0, 15) {
+    if(p*15 + j < steps && A[j] > A[j+1]) {
+      tmp = A[j];
+      A[j] = A[j+1];
+      A[j+1] = tmp;
+    }
+  }
+}
+// Bars: height and color both follow the value, so sorted reads as a
+// staircase with a smooth left-to-right gradient
+glBegin(GL_QUADS);
+  for(i, 0, 16) {
+    s = A[i];
+    glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
+    x = (i - 7.5)*0.42;
+    h = 0.3 + 2.4*s;
+    glVertex3f(x - 0.15, -1.5, 0);
+    glVertex3f(x + 0.15, -1.5, 0);
+    glVertex3f(x + 0.15, -1.5 + h, 0);
+    glVertex3f(x - 0.15, -1.5 + h, 0);
+  }
+glEnd();
+if(steps < 225) {
+  // Two dots mark the pair the sort is comparing right now
+  cur = fmod(floor(steps), 15);
+  glPointSize(7);
+  glColor3f(1, 0.85, 0.15);
+  glBegin(GL_POINTS);
+    glVertex3f((cur - 7.5)*0.42, -1.75, 0);
+    glVertex3f((cur - 6.5)*0.42, -1.75, 0);
+  glEnd();
+  glColor3f(0.92, 0.95, 0.98);
+  glRasterPos3f(-3.4, 1.7, 0);
+  label("pass %f of 15", floor(steps/15) + 1);
+} else {
+  glColor3f(0.92, 0.95, 0.98);
+  glRasterPos3f(-3.4, 1.7, 0);
+  label("sorted");
+}

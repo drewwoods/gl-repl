@@ -1,0 +1,40 @@
+// @cfg view_mode = RENDER3D_VIEW_2D
+// @cfg vertex_outlines = 0
+// @cfg vertex_points = 0
+// Traveling ripple ring: for + fmod + conditional deformation
+// ang is this segment's angle around the ring, named because all three
+// lines below need it; bump is the radial swell inside the ripple arc,
+// applied to x and y alike so the ring bulges outward, not sideways.
+static float phase, width, delta, amp, ang, bump, x, y;
+static float n = 400; // ring segment count
+
+glTranslatef(0.0f, 0.0f, -3.50f);   // @camera dist
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+glClearColor(0.05, 0.06, 0.08, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
+amp = 0.1 * sin(t * TAU);
+phase = fmod(t / 3, TAU);
+width = PI / 8;
+glBegin(GL_LINE_LOOP);
+  for(i, 0, n) {
+    glColor3f(0.15, 0.55, 1);
+    ang = TAU * i / n;
+    x = cos(ang);
+    y = sin(ang);
+    delta = fmod(ang - phase + TAU, TAU);
+    if(delta < width) {
+      glColor3f(1, 0.85, 0.15);
+      bump = amp * sin(delta * TAU / width);
+      x = x + bump * x;
+      y = y + bump * y;
+    }
+    glVertex3f(x, y, 0);
+  }
+glEnd();

@@ -1,0 +1,26 @@
+// @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
+// @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX
+// @cfg view_mode = RENDER3D_VIEW_2D
+// 2D sketch driven purely by variable assignment: x accumulates across
+// loop iterations (x = x + 0.07) to sweep a running plot, and y is a
+// function of x and t -- no goto, no scratch arrays, just var = expr.
+static float x, y, s; // s = palette mix in [0,1]
+
+glTranslatef(0.0f, 0.0f, -2.50f);   // @camera dist
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+glClearColor(0.05, 0.06, 0.08, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+glDisable(GL_LIGHTING);
+x = -1.7;
+glBegin(GL_LINE_STRIP);
+  for(i, 0, 48) {
+    x = x + 0.07;
+    y = sin(x*2.5 + t)*0.52 + cos(i*0.25 + t*0.6)*0.16;
+    s = i/47.0;
+    glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
+    glVertex3f(x, y, 0);
+  }
+glEnd();

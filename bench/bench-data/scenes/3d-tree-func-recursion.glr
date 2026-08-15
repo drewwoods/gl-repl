@@ -1,0 +1,86 @@
+// @cfg grid = GRID_THEME_SOIL
+// @cfg grid_extent = GRID_EXTENT_CLOSE
+// @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// A 3D recursive tree. One call draws one limb as a tapered pentagonal
+// tube, caps the joint with a knuckle sphere, walks to the tip, and
+// forks into three children 120 degrees apart -- so the whole
+// trunk-to-twig structure is the same few lines applied at five scales.
+static float depth = 4; // @tune
+static float len = 2.1; // @tune
+static float rad = 0.26; // @tune
+static float randSeed = 0.31; // @tune
+
+limb(depth, len, rad, seed) {
+  float u, rtop, s, side, w;
+  // Top radius matches the children's base radius, so the joints meet.
+  rtop = rad*0.7;
+  // Bark (a dimmed CORAL) at the trunk, foliage TEAL out at the twigs.
+  u = pow((4 - depth)*0.25, 2.2);
+  glColor3f(lerp(0.26, 0.16, u), lerp(0.13, 0.80, u), lerp(0.09, 0.70, u));
+  glBegin(GL_QUAD_STRIP);
+    for(i, 0, 6) {
+      glNormal3f(cos(i*TAU/5), 0.3, sin(i*TAU/5));
+      glVertex3f(rad*cos(i*TAU/5), 0, rad*sin(i*TAU/5));
+      glVertex3f(rtop*cos(i*TAU/5), len, rtop*sin(i*TAU/5));
+    }
+  glEnd();
+  glTranslatef(0, len, 0);
+  glutSolidSphere(rtop, 6, 4);
+  // Base case vs recursive case as a complementary if pair (an if/else):
+  // depth 0 caps the twig with a leaf cluster, otherwise it forks.
+  if(depth <= 0) {
+    // Three flattened blades per twig, fanned around it. Their tint
+    // slides TEAL -> AZURE with the twig's own rand(), so the canopy
+    // reads as many leaves rather than one repeated one.
+    w = rand(seed + 7, 0);
+    glColor3f(lerp(0.10, 0.15, w), lerp(0.95, 0.72, w), lerp(0.85, 1.00, w));
+    for(j, 0, 3) {
+      glPushMatrix();
+        glRotatef(120*j + seed*140, 0, 1, 0);
+        glRotatef(46, 0, 0, 1);
+        glTranslatef(0, rad*2.1, 0);
+        glScalef(1.3, 0.4, 1.3);
+        glutSolidSphere(rad*1.8, 6, 4);
+      glPopMatrix();
+    }
+  }
+  if(depth > 0) {
+    for(i, 0, 3) {
+      // rand() keeps the three children from being clones: each gets its
+      // own length and spread, stable per limb because the seed is.
+      s = rand(seed + i);
+      // Child 0 is the leader -- near-vertical and long, so the trunk
+      // keeps climbing; 1 and 2 are the side limbs that swing out.
+      side = min(i, 1);
+      glPushMatrix();
+        glRotatef(137.5*i + seed*95, 0, 1, 0);
+        glRotatef(9 + 26*side + 15*s + (5 - depth)*1.5*sin(t*1.1 + seed*3 + i), 0, 0, 1);
+        limb(depth - 1, len*(0.78 - 0.2*side + 0.1*s), rtop, seed + i*0.37 + 0.11);
+      glPopMatrix();
+    }
+  }
+}
+
+glTranslatef(0.0000f, 0.0000f, -10.0000f);   // @camera dist
+glRotatef(8.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(24.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.0000f, -3.1000f, -0.0000f);   // @camera pan
+
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_NORMALIZE);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT1);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.25, 0.3, 0.3, 1});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 18);
+
+glRotatef(sin(t*0.3)*4, 0, 0, 1);
+limb(depth, len, rad, randSeed);

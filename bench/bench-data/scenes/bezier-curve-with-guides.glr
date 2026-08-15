@@ -1,0 +1,76 @@
+// @cfg view_mode = RENDER3D_VIEW_2D
+// @cfg grid_brightness = GRID_BRIGHTNESS_BRIGHT
+// @cfg vertex_outlines = 0
+// @cfg vertex_points = 0
+// @cfg light_indicators = 0
+// @cfg polygon_highlight = 0
+// @cfg msaa = 0
+// @cfg line_smooth = 1
+// Quadratic Bezier control points A=(ax,ay), B=(bx,by), C=(cx,cy).
+// ax/ay/cy are intentionally left at their implicit 0 -> A=(0,0), C=(2,0).
+static float ax, ay, bx = 1, by = 1, cx = 2, cy;
+static float x, y; // bezier() output: the curve point at parameter u
+static float period = 5;
+static float x_a, x_b, y_a, y_b;
+// current progress
+static float t0;
+
+bezier(u) {
+  x = pow(1-u, 2) * ax + 2 * (1-u)*u * bx + u*u * cx;
+  y = pow(1-u, 2) * ay + 2 * (1-u)*u * by + u*u * cy;
+}
+
+glTranslatef(0.0f, 0.0f, -3.5f);   // @camera dist
+glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-1.0f, -0.5f, 0.0f);   // @camera pan
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glDisable(GL_LIGHTING);
+glDisable(GL_MULTISAMPLE);
+glEnable(GL_LINE_SMOOTH);
+glEnable(GL_POINT_SMOOTH);
+glEnable(GL_BLEND);
+glPointSize(8);
+glColor4f(1, 0.85, 0.15, 0.95);
+glLineWidth(1.3);
+t0 = (fmod(t, period)) / period;
+glBegin(GL_POINTS);
+  glVertex2f(ax, ay);
+  glVertex2f(bx, by);
+  glVertex2f(cx, cy);
+  bezier(t0);
+  glColor3f(1, 0.35, 0.2);
+  glVertex2f(x, y);
+glEnd();
+glColor4f(0.92, 0.95, 0.98, 0.95);
+glBegin(GL_LINE_STRIP);
+  for(u, 0, 1, 0.01) {
+    bezier(u);
+    glVertex2f(x, y);
+  }
+glEnd();
+glColor4f(0.55, 0.3, 1, 0.40);
+// De Casteljau level-1 points: lerp along each control leg (A->B and
+// B->C) by t0. The "Derived Line" between them (drawn below) is tangent
+// to the curve, and the curve point at t0 sits on it.
+x_a = ax*(1-t0) + bx*t0;
+y_a = ay*(1-t0) + by*t0;
+x_b = bx*(1-t0) + cx*t0;
+y_b = by*(1-t0) + cy*t0;
+glBegin(GL_POINTS);
+  glVertex2f(x_a, y_a);
+  glVertex2f(x_b, y_b);
+glEnd();
+glBegin(GL_LINES);
+  // Guide Line 1
+  glVertex2f(ax, ay);
+  glVertex2f(bx, by);
+  // Guide Line 2
+  glVertex2f(bx, by);
+  glVertex2f(cx, cy);
+  // Derived Line
+  glVertex2f(x_a, y_a);
+  glVertex2f(x_b, y_b);
+glEnd();

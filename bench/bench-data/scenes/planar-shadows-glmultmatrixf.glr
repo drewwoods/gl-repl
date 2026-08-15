@@ -1,0 +1,87 @@
+// @cfg grid = GRID_THEME_CLASSIC
+// @cfg grid_brightness = GRID_BRIGHTNESS_DIM
+// @cfg light_theme = LIGHT_THEME_HEADLIGHT
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+static float lx, ly, lz; // orbiting lamp position, read by the matrix and the marker
+
+// The caster, drawn twice: once squashed by the shadow matrix, once for
+// real. One definition means the two can never drift apart.
+caster() {
+  glPushMatrix();
+    glTranslatef(0, 1.05, 0);
+    glRotatef(26*t, 0, 1, 0);
+    glutSolidTeapot(0.62);
+  glPopMatrix();
+}
+
+glTranslatef(0.0f, 0.0f, -7.90f);   // @camera dist
+glRotatef(24.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(-28.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, -1.15f, 0.0f);   // @camera pan
+// Translate, rotate and scale cannot flatten a solid onto a plane -- that
+// takes a matrix of their own. glMultMatrixf posts one onto the modelview
+// stack: 16 column-major cells, either inline as below or read from a
+// scratch array with glMultMatrixf(A).
+//
+// These cells are the classic planar shadow projection for the ground
+// plane y = 0 and a point light at (lx, ly, lz). It maps every point to
+// where the ray from the lamp through it crosses the floor, so drawing
+// the SAME geometry under it draws the object's shadow. Cells are
+// ordinary expressions, re-evaluated every frame, so moving the lamp
+// moves the shadow -- no rebuild of the caster.
+
+glClearColor(0.05, 0.06, 0.08, 1);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_NORMALIZE);
+glShadeModel(GL_SMOOTH);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+lx = 2.4*cos(0.5*t);
+ly = 3.4;
+lz = 2.4*sin(0.5*t);
+
+// Floor first, so the shadow has something to land on.
+glColor3f(0.92, 0.95, 0.98);
+glBegin(GL_QUADS);
+  glNormal3f(0, 1, 0);
+  glVertex3f(-3.5, 0, -3.5);
+  glVertex3f(-3.5, 0, 3.5);
+  glVertex3f(3.5, 0, 3.5);
+  glVertex3f(3.5, 0, -3.5);
+glEnd();
+
+// Shadow pass. The projection is singular -- it collapses y to 0 -- so
+// the result lands exactly on the floor and would z-fight it. Painting
+// with the depth test off and depth writes masked settles that: the
+// shadow covers the floor it follows, and the lit pass below still
+// draws over the shadow.
+glDisable(GL_DEPTH_TEST);
+glDepthMask(GL_FALSE);
+glDisable(GL_LIGHTING);
+glColor3f(0.05, 0.06, 0.08);
+glPushMatrix();
+  glMultMatrixf((GLfloat[]){ly, 0, 0, 0, -lx, 0, -lz, -1, 0, 0, ly, 0, 0, 0, 0, ly});
+  caster();
+glPopMatrix();
+glEnable(GL_LIGHTING);
+glDepthMask(GL_TRUE);
+glEnable(GL_DEPTH_TEST);
+
+// The caster itself, in the frame the shadow was cast from.
+glColor3f(1, 0.35, 0.2);
+caster();
+
+// The lamp, so the sweep of the shadow reads as a light moving.
+glDisable(GL_LIGHTING);
+glColor3f(1, 0.85, 0.15);
+glPushMatrix();
+  glTranslatef(lx, ly, lz);
+  glutSolidSphere(0.13, 12, 10);
+glPopMatrix();
+glEnable(GL_LIGHTING);

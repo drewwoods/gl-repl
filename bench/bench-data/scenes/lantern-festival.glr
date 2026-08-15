@@ -1,0 +1,197 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg axes = AXES_THEME_OFF
+// @cfg backdrop = RENDER3D_BACKDROP_OFF
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// @cfg variable_panel = 1
+static float bright = 1.0;  // @tune @config overall lantern intensity
+static float spread = 12;   // @tune horizontal scatter of the flock and its glints
+static float rise = 0.55;   // @tune @config ascent speed
+static float lanterns = 20; // @tune @config number of lanterns in the flock
+
+// Dusk gradient backdrop: warm afterglow at the horizon, ink at zenith.
+// Three stops down the palette: CORAL at a third strength, VIOLET at a
+// quarter, then the canvas ink itself.
+sky() {
+  float low, mid;
+  low = 0.36;
+  mid = 0.24;
+  glBegin(GL_QUADS);
+    glColor4f(1.0 * low, 0.35 * low, 0.2 * low, 1);
+    glVertex3f(-160, 0, -55);
+    glVertex3f(160, 0, -55);
+    glColor4f(0.55 * mid, 0.3 * mid, 1.0 * mid, 1);
+    glVertex3f(160, 9, -55);
+    glVertex3f(-160, 9, -55);
+    glColor4f(0.55 * mid, 0.3 * mid, 1.0 * mid, 1);
+    glVertex3f(-160, 9, -55);
+    glVertex3f(160, 9, -55);
+    glColor4f(0.05, 0.06, 0.08, 1);
+    glVertex3f(160, 60, -55);
+    glVertex3f(-160, 60, -55);
+  glEnd();
+}
+
+// Stars twinkle out of phase; they dissolve into the bright horizon.
+stars() {
+  float sy, tw;
+  glPointSize(5);
+  glBegin(GL_POINTS);
+    for(k, 0, 90) {
+      sy = 3 + 40 * rand(42, k);
+      tw = 0.55 + 0.45 * sin(2.3 * t + 6.28 * rand(43, k));
+      glColor4f(0.92, 0.95, 0.98, 0.75 * tw * smoothstep(3, 10, sy));
+      glVertex3f(150 * rand2(41, k), sy, -54);
+    }
+  glEnd();
+}
+
+// Translucent water: near edge stays clear so reflections read through,
+// the far edge goes opaque and mirrors the sunset to hide the seam.
+water() {
+  float far;
+  far = 0.3;
+  glBegin(GL_QUADS);
+    glColor4f(1.0 * far, 0.35 * far, 0.2 * far, 0.95);
+    glVertex3f(-160, 0, -55);
+    glVertex3f(160, 0, -55);
+    glColor4f(0.05, 0.06, 0.08, 0.55);
+    glVertex3f(160, 0, 14);
+    glVertex3f(-160, 0, 14);
+  glEnd();
+}
+
+// Sparse firelight glints: pow() gates the sine so each spark spends
+// most of its cycle dark, then flashes. The glint field tracks `spread`
+// a third wider than the flock, so the sparks always fringe the water
+// under the lanterns instead of clumping when the flock scatters.
+glints() {
+  float gx, gz, gp, ga;
+  glPointSize(6);
+  glBegin(GL_POINTS);
+    for(k, 0, lanterns*2) {
+      gx = 1.33 * spread * rand2(51, k);
+      gz = 0 - 3 - 26 * rand(52, k);
+      gp = TAU * rand(53, k);
+      ga = pow(0.5 + 0.5 * sin(1.8 * t + gp), 6);
+      glColor4f(1.0, 0.85, 0.15, 0.85 * ga);
+      glVertex3f(gx + 0.3 * sin(0.9 * t + gp), 0.04, gz);
+    }
+  glEnd();
+}
+
+// One lantern: two triangle fans make the paper bipyramid - dim CORAL
+// crown, AMBER flame-lit base - plus a flame point and a soft halo. All
+// five tints are one anchor scaled by `glow`, so a lantern fades as a
+// unit instead of drifting off-hue.
+lantern(px, py, pz, s, glow) {
+  float ax;
+  glPushMatrix();
+    glTranslatef(px, py, pz);
+    glScalef(s, s, s);
+    glRotatef(14 * sin(0.8 * t + px + pz), 1, 0, 0.3);
+    glBegin(GL_TRIANGLE_FAN);
+      glColor4f(0.5 * glow, 0.175 * glow, 0.1 * glow, 0.9);
+      glVertex3f(0, 1.35, 0);
+      glColor4f(glow, 0.35 * glow, 0.2 * glow, 0.9);
+      for(k, 0, 7) {
+        ax = TAU * k / 6;
+        glVertex3f(0.6 * cos(ax), 0.42, 0.6 * sin(ax));
+      }
+    glEnd();
+    glBegin(GL_TRIANGLE_FAN);
+      glColor4f(glow, 0.85 * glow, 0.15 * glow, 0.95);
+      glVertex3f(0, 0, 0);
+      glColor4f(glow, 0.35 * glow, 0.2 * glow, 0.9);
+      for(k, 0, 7) {
+        ax = TAU * k / 6;
+        glVertex3f(0.6 * cos(ax), 0.42, 0.6 * sin(ax));
+      }
+    glEnd();
+    glPointSize(7);
+    glBegin(GL_POINTS);
+      glColor4f(glow, 0.85 * glow, 0.15 * glow, 0.9);
+      glVertex3f(0, 0.12, 0);
+    glEnd();
+    glPointSize(26);
+    glBegin(GL_POINTS);
+      glColor4f(0.9 * glow, 0.315 * glow, 0.18 * glow, 0.22);
+      glVertex3f(0, 0.5, 0);
+    glEnd();
+  glPopMatrix();
+}
+
+// Per-lantern flight: seeded phase/speed/size, a 15-unit rise that
+// wraps, and a cycle counter that reshuffles x/z each lap (the wrap
+// lands while fade = 0, so respawns are invisible). mirror > 0.5 draws
+// the reflection copy instead, dimmed and wobbled by the water.
+launch(i, mirror) {
+  float ph, spd, riseT, ypos, cyc, xpos, zpos;
+  float fade, flick, dim, sz, g;
+  ph = TAU * rand(11, i);
+  spd = rise * (0.7 + 0.6 * rand(12, i));
+  riseT = spd * t + 15 * rand(13, i);
+  ypos = fmod(riseT, 15);
+  cyc = floor(riseT / 15);
+  xpos = spread * rand2(21, i + 9 * cyc) + 0.9 * sin(0.31 * t + ph);
+  zpos = 0 - 5 - 20 * rand(22, i + 9 * cyc) + 0.7 * cos(0.23 * t + ph);
+  fade = smoothstep(0, 2.5, ypos) * (1 - smoothstep(11, 15, ypos));
+  flick = 0.82 + 0.18 * sin(5 * t + 6 * ph);
+  dim = 1 - 0.6 * smoothstep(6, 26, 0 - zpos);
+  sz = 0.5 + 0.35 * rand(23, i);
+  g = bright * fade * flick * dim;
+  if(mirror > 0.5) {
+    glPushMatrix();
+      glScalef(1, -1, 1);
+      lantern(xpos + 0.18 * sin(1.6 * t + 0.7 * zpos), ypos + 0.35, zpos, sz, 0.5 * g);
+    glPopMatrix();
+  } else {
+    lantern(xpos, ypos + 0.35, zpos, sz, g);
+  }
+}
+
+glTranslatef(0.0f, 0.0f, -24.0f);   // @camera dist
+glRotatef(6.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, -5.0f, 0.0f);   // @camera pan
+// Keep config sensible
+rise = clamp(rise, 0.1, 2.0);
+bright = clamp(bright, 0.1, 10.0);
+lanterns = max(0, round(lanterns));
+
+// Lantern Festival - first night.
+// Paper lanterns rise off dark water into a dusk sky: additive glow,
+// wobbling reflections under a translucent water plane, twinkling
+// stars, and firelight glints riding the ripples. Every lantern is
+// deterministic - rand(seed, i) - so the flock repeats exactly, and a
+// wrapped lantern respawns at a reshuffled spot while faded to zero.
+
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glDisable(GL_LIGHTING);
+glEnable(GL_BLEND);
+glEnable(GL_POINT_SMOOTH);
+glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){0.3, 0, 0.004});
+
+sky();
+stars();
+// Reflections go down first, under the water plane...
+glDepthMask(GL_FALSE);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+for(i, 0, lanterns) {
+  launch(i, 1);
+}
+// ...then the translucent surface seals them in...
+glDepthMask(GL_TRUE);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+water();
+// ...and the real flock burns additively above it.
+glDepthMask(GL_FALSE);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+glints();
+for(i, 0, lanterns) {
+  launch(i, 0);
+}
+glDepthMask(GL_TRUE);

@@ -1,0 +1,73 @@
+// @cfg grid = GRID_THEME_CLASSIC
+// @cfg grid_extent = GRID_EXTENT_CLOSE
+// @cfg grid_brightness = GRID_BRIGHTNESS_DIM
+// @cfg light_theme = LIGHT_THEME_HEADLIGHT
+// @cfg projection = PROJ_ORTHO
+// @cfg vertex_points = 0
+// @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD_INVERTED
+glTranslatef(0.0000f, 0.0000f, -6.5000f);   // @camera dist
+glRotatef(35.2500f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(45.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+//
+// gl-repl Logo
+// An open cube rendered with two-sided lighting.
+//
+glClearColor(0.05, 0.06, 0.08, 1);
+glEnable(GL_DEPTH_TEST);
+
+// --- Model Transform ----------------
+// Move the cube up by one unit so its bottom rests on the grid plane (Y=0).
+glTranslatef(0, 1, 0);
+
+// --- Lighting -----------------------
+// The headlight theme provides four lights; light 0 moves with the camera.
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT1);
+glEnable(GL_LIGHT2);
+glEnable(GL_LIGHT3);
+
+// --- Material Colors ----------------
+// Both sides of each face are visible through the open cube, so light and
+// color them independently.
+glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_COLOR_MATERIAL);
+// Give every exterior face the same near-white material color.
+glColor3f(0.92, 0.95, 0.98);
+glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
+// Route subsequent glColor calls to the back-face material so each interior
+// face can use its own accent color.
+glColorMaterial(GL_BACK, GL_AMBIENT_AND_DIFFUSE);
+
+// --- Cube Geometry ------------------
+// Each face uses a single normal, producing crisp, flat-lit facets.
+glBegin(GL_QUADS);
+  // +Y face
+  glColor3f(0.95, 0.25, 1);
+  glNormal3f(0, 1, 0);
+  glVertex3f(-1, 1, 1);
+  glVertex3f(1, 1, 1);
+  glVertex3f(1, 1, -1);
+  glVertex3f(-1, 1, -1);
+  // -Y face
+  glNormal3f(0, -1, 0);
+  glVertex3f(-1, -1, -1);
+  glVertex3f(1, -1, -1);
+  glVertex3f(1, -1, 1);
+  glVertex3f(-1, -1, 1);
+  // +Z face
+  glColor3f(0.25, 0.675, 1);
+  glNormal3f(0, 0, 1);
+  glVertex3f(-1, -1, 1);
+  glVertex3f(1, -1, 1);
+  glVertex3f(1, 1, 1);
+  glVertex3f(-1, 1, 1);
+  // -Z face
+  glNormal3f(0, 0, -1);
+  glVertex3f(1, -1, -1);
+  glVertex3f(-1, -1, -1);
+  glVertex3f(-1, 1, -1);
+  glVertex3f(1, 1, -1);
+glEnd();

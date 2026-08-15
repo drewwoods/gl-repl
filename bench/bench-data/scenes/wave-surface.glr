@@ -1,0 +1,50 @@
+// @cfg grid = GRID_THEME_CLASSIC
+// @cfg grid_brightness = GRID_BRIGHTNESS_DIM
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
+// @cfg vertex_outlines = 0
+// @cfg vertex_points = 0
+static float size = 3; // surface width and depth @tune
+static float steps = 15; // strips across the surface @tune
+static float amplitude = 0.4; // wave height @tune
+static float frequency = 2.5; // wave density @tune
+static float z_phase = 0.7; // z waves animate more slowly @tune
+static float step_size;
+static float half;
+static float x0, x1, z, y0, y1;
+static float color0, color1;
+
+glTranslatef(0.0f, 0.0f, -5.0f);   // @camera dist
+glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+// Animated surface built from one triangle strip per x step.
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+step_size = size / steps;
+half = size * 0.5;
+
+for(i, 0, steps) {
+  x0 = -half + i * step_size;
+  x1 = x0 + step_size;
+
+  glBegin(GL_TRIANGLE_STRIP);
+    for(j, 0, steps + 1) {
+      z = -half + j * step_size;
+
+      y0 = amplitude * sin(x0 * frequency + t) * cos(z * frequency + z_phase * t);
+      y1 = amplitude * sin(x1 * frequency + t) * cos(z * frequency + z_phase * t);
+
+      // Emit the high-x edge first so the upward-facing triangles are CCW.
+      color1 = 0.5 + 0.5 * y1 / amplitude;
+      glColor3f(1 - 0.85 * color1, 0.35 + 0.2 * color1, 0.2 + 0.8 * color1); // CORAL -> AZURE
+      glVertex3f(x1, y1, z);
+
+      color0 = 0.5 + 0.5 * y0 / amplitude;
+      glColor3f(1 - 0.85 * color0, 0.35 + 0.2 * color0, 0.2 + 0.8 * color0); // CORAL -> AZURE
+      glVertex3f(x0, y0, z);
+    }
+  glEnd();
+}

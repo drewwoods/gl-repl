@@ -1,0 +1,143 @@
+// @cfg grid = GRID_THEME_TRON
+// @cfg grid_brightness = GRID_BRIGHTNESS_DIM
+// @cfg light_theme = LIGHT_THEME_HEADLIGHT
+static float z;
+
+glTranslatef(0.0f, 0.0f, -6.00f);   // @camera dist
+glRotatef(10.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(15.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+glClearColor(0.05, 0.06, 0.08, 1.0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_NORMALIZE);
+glEnable(GL_LIGHT3);
+glEnable(GL_LIGHT2);
+glEnable(GL_LIGHT0);
+glShadeModel(GL_SMOOTH);
+glFrontFace(GL_CW);
+z = -0.55;
+glRotatef(10*t, 0, 0, 1);
+// The cutout arrow from the previous example, extruded. The clever bit:
+// each "Side N" block emits BOTH a wall quad (the two glVertex3f into the
+// GL_QUAD_STRIP that extrudes the outline to depth z) AND the flat tess
+// contour vertex (gluVertex) for the same corner. The two primitive
+// streams are interleaved, so one pass builds the extruded side walls and
+// the tessellated front face together.
+gluBegin(GLU_POLYGON);
+  gluBegin(GLU_CONTOUR);
+    glBegin(GL_QUAD_STRIP);
+    gluNormal(0, 0, 1);
+      // Side 0
+    gluColor(0.36, 0.7, 0.98, 1);
+      glColor3f(0.36, 0.7, 0.98);
+      glNormal3f(-1, 0, 0);
+      glVertex3f(-1.2, -0.45, 0);
+      glVertex3f(-1.2, -0.45, z);
+    gluVertex(-1.2, -0.45, 0);
+      // Side 1
+    gluColor(0.36, 0.7, 0.98, 1);
+      glColor3f(0.36, 0.7, 0.98);
+      glNormal3f(0, 1, 0);
+      glVertex3f(-1.2, 0.45, 0);
+      glVertex3f(-1.2, 0.45, z);
+    gluVertex(-1.2, 0.45, 0);
+      // Side 2
+    gluColor(0.62, 0.52, 0.95, 1);
+      glColor3f(0.62, 0.52, 0.95);
+      glNormal3f(-1, 1, 0);
+      glVertex3f(0, 0.45, 0);
+      glVertex3f(0, 0.45, z);
+    gluVertex(0, 0.45, 0);
+      // Side 3
+    gluColor(0.98, 0.46, 0.36, 1);
+      glColor3f(0.98, 0.46, 0.36);
+      glNormal3f(0, 1, 0);
+      glVertex3f(0, 1.1, 0);
+      glVertex3f(0, 1.1, z);
+    gluVertex(0, 1.1, 0);
+      // Side 4
+    gluColor(0.98, 0.76, 0.36, 1);
+      glColor3f(0.98, 0.76, 0.36);
+      glNormal3f(1, 0, 0);
+      glVertex3f(1.3, 0, 0);
+      glVertex3f(1.3, 0, z);
+    gluVertex(1.3, 0, 0);
+      // Side 5
+    gluColor(0.98, 0.46, 0.36, 1);
+      glColor3f(0.98, 0.46, 0.36);
+      glNormal3f(0, -1, 0);
+      glVertex3f(0, -1.1, 0);
+      glVertex3f(0, -1.1, z);
+    gluVertex(0, -1.1, 0);
+      // Side 6
+    gluColor(0.62, 0.52, 0.95, 1);
+      glColor3f(0.62, 0.52, 0.95);
+      glNormal3f(-1, -1, 0);
+      glVertex3f(0, -0.45, 0);
+      glVertex3f(0, -0.45, z);
+    gluVertex(0, -0.45, 0);
+      // Quad side 7
+      glColor3f(0.36, 0.7, 0.98);
+      glNormal3f(0, -1, 0);
+      glVertex3f(-1.2, -0.45, 0);
+      glVertex3f(-1.2, -0.45, z);
+    glEnd();
+  gluEnd();
+  // Inner contour = the cutout (the tessellator's odd winding rule leaves
+  // the region inside both contours unfilled).
+  gluBegin(GLU_CONTOUR);
+    glBegin(GL_QUAD_STRIP);
+      // Grey both parts of the cutout: glColor tints the extruded walls,
+      // gluColor tints the tessellated front face around the hole edge.
+      glColor3f(0.45, 0.49, 0.58);
+    gluColor(0.45, 0.49, 0.58, 1);
+    gluNormal(0, 0, 1);
+      // Side 0
+      glNormal3f(-1, 0, 0);
+      glVertex3f(-0.6, -0.225, 0);
+      glVertex3f(-0.6, -0.225, z);
+    gluVertex(-0.6, -0.225, 0);
+      // Side 1
+      glNormal3f(0, 1, 0);
+      glVertex3f(-0.6, 0.225, 0);
+      glVertex3f(-0.6, 0.225, z);
+    gluVertex(-0.6, 0.225, 0);
+      // Side 2
+      glNormal3f(-1, 1, 0);
+      glVertex3f(0.2, 0.225, 0);
+      glVertex3f(0.2, 0.225, z);
+    gluVertex(0.2, 0.225, 0);
+      // Side 3
+      glNormal3f(-1, 0, 0);
+      glVertex3f(0.2, 0.55, 0);
+      glVertex3f(0.2, 0.55, z);
+    gluVertex(0.2, 0.55, 0);
+      // Side 4
+      glNormal3f(1, 0, 0);
+      glVertex3f(0.85, 0, 0);
+      glVertex3f(0.85, 0, z);
+    gluVertex(0.85, 0, 0);
+      // Side 5
+      glNormal3f(-1, 0, 0);
+      glVertex3f(0.2, -0.55, 0);
+      glVertex3f(0.2, -0.55, z);
+    gluVertex(0.2, -0.55, 0);
+      // Side 6
+      glNormal3f(-1, -1, 0);
+      glVertex3f(0.2, -0.225, 0);
+      glVertex3f(0.2, -0.225, z);
+    gluVertex(0.2, -0.225, 0);
+      // Quad side 7
+      glNormal3f(0, -1, 0);
+      glVertex3f(-0.6, -0.225, 0);
+      glVertex3f(-0.6, -0.225, z);
+    glEnd();
+  gluEnd();
+gluEnd();
