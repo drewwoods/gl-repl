@@ -90,6 +90,19 @@ stores, and BYOE stops depending on `one-scene-loader.md` step 4 (the
 unresolved "may a file set anything, or only the scene subset?" question).
 An external *text* edit is geometry, not a presentation reset.
 
+**This needs a mechanism, not an omission.** Ignoring `ReplImportResult` is
+not enough: `import_finish_load` applies the pending cfg bag and camera
+*internally* before returning (`import_workspace_cfg_apply_and_reset`,
+`REPL_CAMERA_APPLY_IMPORT`). Add an explicit metadata policy to
+`ReplSceneLoadOpts` — `apply_cfg = 0`, `camera_apply = NONE` — as **option
+fields, not a third load policy**. Declarations, function aliases and other
+*program* metadata are still consumed normally.
+
+Also state it plainly: **`@scene-name` and `@workspace-dir` cannot rebind or
+rename an already-bound watched slot.** A watched reload changes the program,
+never the slot's identity or its binding record (D1). Otherwise an external
+file could silently retarget the very path being watched.
+
 ### D4 — Undo policy, keyed on live identity
 
 `editor_undo_note_wholesale_replacement()` (`src/editor/undo.h:138`) is **not
@@ -120,18 +133,43 @@ lists the exclusion as deliberate), so a reload landing mid-edit destroys
 typing that Ctrl+Z cannot recover.
 
 **Policy: expose `editor_input_has_uncommitted_change()`; while it is true,
-mark the inbound version *pending* and defer automatic application until the
-row is committed or cancelled.** Status bar shows that a newer external
-version is waiting. This preserves the existing document-only undo contract
-without widening every snapshot.
+mark the inbound version *pending* and defer automatic application.** Status
+bar shows that a newer external version is waiting. This preserves the
+existing document-only undo contract without widening every snapshot.
 
-The parked stage-2/2.5 WIP row is **excluded** from "dirty" — otherwise 2.5
-would stall permanently, since that row is nearly always mid-word.
+`editor_input_has_uncommitted_change()` does not exist today. Define it:
 
-*(The two reviews split here: the alternative was "file wins, state it." That
-is simpler, but the whole point of this revision is not silently destroying
-work, and an unrecoverable loss is an argument for care rather than against
-it. The pending-version state is cheap and visible.)*
+- `edit_line < count` → dirty iff the input differs from the canonical text of
+  that document row. Arrowing onto a row *loads* it and is therefore not
+  dirty.
+- `edit_line == count` (trailing row) → dirty iff `input_len > 0`, except a
+  parked WIP row still owned by the watcher (below).
+
+**Commit and cancel resolve the pending version differently**, and conflating
+them is a bug:
+
+| Event | Pending |
+|---|---|
+| Cancel / escape the input row | **Apply** — the row was abandoned |
+| Commit `;` | **Dismiss**, and advance the content token to the dismissed hash so the same bytes do not re-trigger next frame |
+
+Applying on commit would destroy the line just committed: both sides hold *A*,
+vim saves *B* while the user is typing *L*, the user commits so the document
+is *A+L*, deferral lifts, *B* lands and *L* is gone. Ctrl+Z could recover it
+only on the user-scene path, and the user still watches their commit vanish a
+frame later. Dismiss instead — the local document wins until vim saves again.
+
+**The parked WIP-row exclusion is conditional, not blanket.** Record the input
+text (or an input revision) when the watcher parks the row; exclude it from
+"dirty" **only while it is unchanged locally**. The first gl-repl keystroke in
+that row transfers ownership back to the user and re-arms normal deferral —
+otherwise the next sidecar update would overwrite local typing that undo
+cannot restore.
+
+*(The two reviews split on the base policy: the alternative was "file wins,
+state it." That is simpler, but the point of this revision is not silently
+destroying work, and an unrecoverable loss argues for care rather than
+against it.)*
 
 ### D6 — Enablement is `--watch` only
 
@@ -151,7 +189,7 @@ generation bump — that would make the undo snapshot just pushed unrestorable.
 
 | Feature | Policy |
 |---|---|
-| Active tutorial or guided tour | **Defer** the reload (same mechanism as D5) |
+| Active tutorial or guided tour | **Defer** the reload (D5 mechanism), and **dismiss the pending version when the lesson/tour ends** — never auto-apply it |
 | Replay | Stop — flat identity and `replay_exec_limit` do not survive a reflatten |
 | `// @plot` | Force tag rescan through this notification, not `editor_undo_generation()` |
 | Depth snapshot | Invalidate |
@@ -166,6 +204,14 @@ blindly** — it calls `glr_camera_settle_target()`,
 `glr_camera_controls_reset()` and `glr_camera_clear_scene_default()`, which
 clobbers exactly the camera state D3 preserves. Use a narrower cousin.
 
+*(Reviews split on the tutorial row: the alternative was a hard refuse that
+never queues. Deferral is kept because it still shows the user that an
+external change is waiting, but the dismiss-on-end rule is mandatory — a
+pending version computed against the pre-lesson document must never land on
+the document `tutorial_end_keep_view` leaves behind. During a tutorial or tour
+the sidecar is ignored outright; a tour and the watcher must not both mutate
+one document.)*
+
 ### D8 — Two-level change gate
 
 - **Change token** = nanosecond mtime (`st_mtimespec` / `st_mtim`) + inode +
@@ -178,6 +224,21 @@ clobbers exactly the camera state D3 preserves. Use a narrower cousin.
   `CursorMoved` rewrites the trailing `@cursor` line and changes the hash, so
   the cursor-only fast path would never fire. Keep a separate cursor token for
   row/column.
+
+**One token is not enough state.** The watcher tracks three things:
+
+- **last observed** — updated after a successful *read*, even when the parse
+  then fails. Otherwise a malformed file is re-read and re-parsed every frame
+  until the user fixes it.
+- **last successfully applied content** — what the live document came from.
+- **pending** — set while deferred (D5/D7). Retain only the newest token, and
+  **re-read the file when the gate opens** rather than replaying stale bytes.
+
+A successful same-path Ctrl+S clears any pending version and restamps all
+three, so gl-repl's own write can never come back at it as an inbound change.
+
+Missing or unreadable file: preserve the last good scene, report **once**, and
+resume when the path reappears. Do not spam the status bar per frame.
 
 The two levels are what keep the per-frame cost honest: the poll is a bare
 `stat`; the file is only *read and hashed* once the change token moves; the
@@ -308,14 +369,27 @@ end-of-text is the answer. `editor_state_edit_line_set` is `state.h:391`.
 ### Incomplete-row heuristic
 
 Require **lexical evidence of incompleteness** on the last non-empty,
-non-directive row, after trimming:
+non-directive row, after trimming. Treat it as incomplete iff:
 
 - bracket depth ≠ 0, **or**
-- the last code character is a trailing comma or operator.
+- the last code character is **not a statement terminator** — reuse
+  `is_stmt_terminator` (`; { } :`, `import.c:2693`).
+
+**The terminator is the test, not "a trailing comma or operator."** That
+weaker rule misses the most common half-typed line of all:
+`glVertex3f(1, 2, 3)` with the `;` not yet typed has depth 0 and ends in `)`,
+so it would not be stripped — and it does not fail either.
+`import_finish_load` flushes the accumulator at EOF (`import.c:2946-2947`),
+and the parser *adds* the trailing `;` when rebuilding canonical text
+(`parser.c:2432-2434`; the interactive `;` key never reaches the buffer, so
+no-semicolon lines are normal input). The almost-finished command would
+silently commit as a document row and stage 2's overlay payoff would never
+fire for the case it exists to serve.
 
 **A recognized command prefix alone is not sufficient** — too permissive. A
-well-formed-but-wrong row (`glVertx3f(1,2,3);`) must still refuse the whole
-file, as must any *other* row failing ATOMIC.
+well-formed-but-wrong row (`glVertx3f(1,2,3);`) has a terminator, so it is not
+stripped, ATOMIC rejects it, and the whole file is refused — which is correct.
+Any *other* row failing ATOMIC refuses the file too.
 
 `is_stmt_terminator` (`import.c:2693`) is the right predicate to reuse but is
 a file-static in a `repl_*` TU while the heuristic runs in `src/app/`; it
@@ -382,9 +456,18 @@ failure. Autocmds on `TextChanged,TextChangedI` and `CursorMoved,CursorMovedI`
 for the buffer's file, plus `VimLeave,BufUnload` to delete the sidecar. Run it
 before calling the snippet specified.
 
-**Stale sidecar is recovery, not sync.** If a crash leaves a `.wip` newer than
-the scene file, do not silently adopt it: surface "External WIP recovered"
-with an action to discard/delete. A `.wip` alone is never a scene.
+**Recovery is a bind-time question only.** "A `.wip` newer than the scene file
+means recover, don't adopt" cannot be the steady-state rule: during live 2.5
+the sidecar is *always* newer, because vim is typing and has not `:w`. As a
+standing condition it would mean live WIP never runs at all. Split it:
+
+| Moment | Behavior |
+|---|---|
+| Watch bind / startup | A `.wip` already present → "External WIP recovered", accept or discard. **Never auto-apply.** |
+| Discard at that prompt | Delete the `.wip` and ignore it until its change token moves again (i.e. until vim starts publishing) |
+| After bind | Any change-token movement on the sidecar is ordinary live follow |
+
+A `.wip` alone is never a scene.
 
 ### Physical→document row mapping
 
@@ -397,12 +480,27 @@ derive `edit_line` by subtracting a constant.
 compacted stream with no marker there** and cannot map a row it never saw.
 
 Mechanism: **substitute a transient consumed marker — `// @cursor-hole` — for
-the removed row rather than deleting it outright.** When the importer reaches
-the marker it records the current document insertion index into the load
-result and emits no row. The controller keeps sole ownership of the
-user-facing `@cursor` directive (it must parse it *before* the load, to know
-which row to remove); the marker is purely the loader's channel for reporting
-where the hole landed. One owner each, no duplication.
+the removed row rather than deleting it outright.** The controller keeps sole
+ownership of the user-facing `@cursor` directive (it must parse it *before*
+the load, to know which row to remove); the marker is purely the loader's
+channel for reporting where the hole landed. One owner each, no duplication.
+
+Three constraints on the marker, all of which bite:
+
+- **It must travel the staging path.** Recording the document index at the
+  moment the marker is *encountered* is wrong for function rows, which the
+  importer stages and emits later. The marker has to move through the same
+  staging as the rows around it and record its index when that staged
+  position is committed to final document order.
+- **Consumption is scoped to the watch load path**, requested through a
+  load option. Otherwise a genuine user comment reading `// @cursor-hole`
+  would silently punch a hole in an ordinary File → Open.
+- **Carry a per-load nonce** in the marker, so even on the watch path a
+  user comment cannot be mistaken for transport metadata.
+
+`// @cursor-hole` is a `//` line, which today becomes a `CMD_COMMENT` via the
+raw-scene feed path. The importer must consume it *before* the feed, record
+the row, and emit nothing.
 
 `@cursor` itself must **not** go on `ReplImportResult` as a parsed directive,
 and must never survive canonical export — unlike `@plot`, which rides a row's
@@ -424,11 +522,33 @@ appears, then update in place. Ctrl+Z exits WIP back to the last committed
 gl-repl document — not backwards through vim's typing, which vim's own undo
 already owns.
 
+**D4's identity split applies here too.** "Push when the `.wip` first appears"
+must not mean a bare `editor_undo_push_snapshot()`: that is the promotion
+hook, so on an unedited `--examples-dir` scene the first vim keystroke would
+promote it into a user slot — exactly what D4 exists to prevent. So: user
+scene gets the one entry snapshot; transient/example gets none, unless a
+deliberate ring-only, no-promotion helper is added for the purpose.
+
+**WIP-session exit must be defined, or the state machine leaks:**
+
+| Exit | Behavior |
+|---|---|
+| Ctrl+Z out of WIP | Restore the base version, clear WIP-active, and **ignore the sidecar until its change token moves again** — otherwise the next poll re-enters WIP and the undo does not stick |
+| Sidecar deleted (`VimLeave`) | Clear WIP-active; keep the current document |
+| Next WIP session | Captures a fresh entry snapshot, subject to the identity split above |
+
 ### Gate
 
-**Measure p95 reflatten on a typical catalog scene before shipping.** If it
-exceeds ~8 ms, do not ship 2.5. This is the one stage gated on a number rather
-than on design.
+**Measure the extedit section's total content-update latency** — not reflatten
+alone. Reflatten excludes the file read and hash, the atomic import, the
+snapshots, row mapping, variable-panel rebuild and the D7 notifications, which
+together are most of the work.
+
+Sample **only on actual content updates**, or steady-state zero-cost frames
+dominate the distribution and p95 becomes meaningless. Measure representative
+small, typical and large catalog scenes. Keep **~8 ms as the total main-thread
+budget**; over that, do not ship 2.5. This is the one stage gated on a number
+rather than on design.
 
 ## Not this plan
 
@@ -450,12 +570,17 @@ not exist: sockets, kqueue, inotify, FSEvents, mkfifo, fork/exec.
 1. `one-scene-loader.md` steps **1-3** only.
 2. `source_path` + `repl_reload_active_scene_from_path()`; CLI Ctrl+S writes
    `source_path`.
-3. Thin `glr_extedit.c`: two-level gate, post-write stamp, per-frame poll,
-   `ProfSection`. Undo per D4; defer per D5. `--watch` only.
-4. `glr_extedit_notify_reloaded()` + the D7 table.
-5. Stage 2: last-row strip, `.glr` only, append placement, D5 heuristic.
-6. Stage 2.5 only after stage 1 has been used and reflatten is measured:
-   `@cursor-hole` mapping, sidecar + recovery, WIP undo policy, full vimrc.
+3. D3 metadata policy on `ReplSceneLoadOpts` (`apply_cfg = 0`,
+   `camera_apply = NONE`) + the no-rebind rule.
+4. Thin `glr_extedit.c`: two-level gate, three-state tracking, post-write
+   stamp, per-frame poll, `ProfSection`. Undo per D4; defer per D5.
+   `--watch` only.
+5. `glr_extedit_notify_reloaded()` + the D7 table.
+6. Stage 2: last-row strip, `.glr` only, append placement, terminator
+   heuristic (`is_stmt_terminator` promoted to a shared header).
+7. Stage 2.5 only after stage 1 has been used and the total content-update
+   latency is measured: `@cursor-hole` staging + nonce, bind-time recovery vs
+   live follow, WIP undo/exit policy, full `s:GlrWip()`.
 
 ## Test impact
 
@@ -465,8 +590,17 @@ All in failure and edge behavior, where the suite is thinnest:
   reload pushes nothing and **does not promote** — assert the slot count.
 - **Lossless ring rollback at capacity.** Fill the ring, fail a reload, assert
   the oldest entry survives. The case `EditorUndoRingState` cannot cover.
-- **Deferral.** Dirty input row → reload pends, then applies on commit and on
-  cancel. Parked WIP row does **not** defer.
+- **Deferral.** Dirty input row → reload pends; **cancel applies it, commit
+  dismisses it** and the same bytes do not re-trigger. A pending version is
+  superseded by a same-path Ctrl+S. An untouched parked WIP row does not
+  defer; a **locally edited** parked WIP row does.
+- **D3 metadata preservation** across both successful and failed watched
+  reloads: cfg, camera, scene name, workspace binding and `source_path` all
+  unchanged.
+- **Malformed file is not retried every frame** — assert the read/parse
+  counters settle after one attempt.
+- **Tutorial / tour.** Inbound defers, and the pending version is **dismissed**
+  at lesson end rather than landing on the leftover document.
 - **Failed reload leaves no trace** — document, history and input row
   untouched.
 - **Change token.** Same-second double write; safe-write rename changing the
@@ -474,10 +608,17 @@ All in failure and edge behavior, where the suite is thinnest:
 - **Content token.** Cursor-only sidecar update performs no import (assert a
   parse/reflatten counter, not timing). Assert the token ignores the `@cursor`
   line — this is the regression that would silently kill the fast path.
-- **Stage 2 shapes.** Clean file; incomplete final row; well-formed-but-wrong
-  final row (must fail); removed row is a block head, cascading (must fail).
+- **Stage 2 shapes.** Clean file; incomplete final row; **balanced final row
+  missing only its `;`** (must be treated as incomplete — the case the weaker
+  heuristic missed); well-formed-but-wrong final row (must fail); removed row
+  is a block head, cascading (must fail).
 - **`@cursor-hole` mapping.** A file with headers, `@declare` rows and staged
   functions: the returned document row is right, not off-by-header-count.
+  Include a hole **inside a staged function body**, and a marker-collision
+  case where a genuine user comment spells `// @cursor-hole`.
+- **WIP entry/exit.** Entry snapshot on a user scene but **not** on an
+  unedited catalog scene (assert no promotion); Ctrl+Z out of WIP sticks and
+  does not re-enter on the next poll; sidecar deletion clears WIP-active.
 - **`@cursor` never exported.**
 - **Sidecar atomicity.** Repeated writes while the watcher reads; no
   empty/truncated reload ever observed.
@@ -503,5 +644,7 @@ All in failure and edge behavior, where the suite is thinnest:
 6. Run the full `s:GlrWip()` before shipping it — confirm per-keystroke and
    per-cursor-motion updates, a correct `@cursor` line, and no observable
    partial write.
-7. Measure p95 reflatten (2.5 gate).
+7. Measure p95 **total content-update latency** in the extedit section,
+   sampled only on real content updates, across small / typical / large
+   scenes (2.5 gate; ~8 ms total main-thread budget).
 8. Re-read every `file:line` citation before landing.
