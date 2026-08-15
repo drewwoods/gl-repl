@@ -100,6 +100,7 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
+  // --- Functions ----------------------
   triangle() {
     glBegin(GL_TRIANGLES);
       glNormal3f(0, 0, 1);
@@ -109,10 +110,12 @@ void display(void) {
     glEnd();
   }
 
+  // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
   glEnable(GL_DEPTH_TEST);
+
+  // --- Scene Geometry -----------------
   glColor3f(1, 0.35, 0.2);
   triangle();
   glTranslatef(2, 0, 0);

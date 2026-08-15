@@ -125,6 +125,7 @@ void display(void) {
     glPopMatrix();
   }
 
+  // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
   glEnable(GL_DEPTH_TEST);
@@ -135,9 +136,10 @@ void display(void) {
   glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
   glEnable(GL_STENCIL_TEST);
 
+  // --- Scene Geometry -----------------
   spin = t * 20;
 
-  // --- Pass 1: stamp -------------------------------------------------
+  // --- Pass 1: stamp ---
   // Writes are off for color and depth, so the quad leaves no trace in
   // the frame. All it does is set stencil = 1 under its own footprint.
   // GL_ALWAYS means "never fail the comparison"; GL_REPLACE on the pass
@@ -149,7 +151,7 @@ void display(void) {
   glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
   maskWindow();
 
-  // --- Pass 2: payload, clipped to the stamp -------------------------
+  // --- Pass 2: payload, clipped to the stamp ---
   // GL_EQUAL, 1 admits only the stamped pixels. glStencilMask(0) makes
   // this pass read-only against the stencil buffer, so the teapot cannot
   // smear the mask it is being cut by.
@@ -164,7 +166,7 @@ void display(void) {
     glutSolidTeapot(0.85);
   glPopMatrix();
 
-  // --- Pass 3: show the window ---------------------------------------
+  // --- Pass 3: show the window ---
   // Test off and depth off, so the outline always draws over everything -
   // including the part of the teapot the mask just removed.
   glDisable(GL_STENCIL_TEST);

@@ -119,6 +119,7 @@ void display(void) {
   // Tip: park the cursor on a glClipPlane line to see its plane guide.
   static float d; // sliding cut offset for the animated cutaway
 
+  // --- Render State -------------------
   glClearColor(0.04, 0.05, 0.08, 1);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_LIGHTING);
@@ -137,6 +138,7 @@ void display(void) {
   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
+  // --- Scene Geometry -----------------
   // 1) Dome - one plane. (0, 1, 0, 0) keeps y >= 0: the sphere's top
   // half. The plane rides the translated frame, so it cuts through the
   // sphere's own equator, not the world origin.

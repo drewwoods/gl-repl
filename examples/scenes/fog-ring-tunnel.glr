@@ -19,24 +19,27 @@ static float rings = 12; // @tune
 static float ringZ; // eye-space distance of the current ring
 static float bendX; // tunnel centerline x at this depth
 static float bendY; // tunnel centerline y at this depth
-
 glTranslatef(0.0000f, 0.0000f, -1.0000f);   // @camera dist
 glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
 glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
+// --- Render State -------------------
 glClearColor(0.05, 0.06, 0.08, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_DEPTH_TEST);
-glEnable(GL_FOG);
-glFogi(GL_FOG_MODE, GL_EXP2);
-glFogfv(GL_FOG_COLOR, (GLfloat[]){0.05, 0.06, 0.08, 1});
-glFogf(GL_FOG_DENSITY, fogDensity);
+
 glEnable(GL_LIGHTING);
 glEnable(GL_LIGHT0);
 glEnable(GL_COLOR_MATERIAL);
 glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+// --- Fog Config ---------------------
+glEnable(GL_FOG);
+glFogi(GL_FOG_MODE, GL_EXP2);
+glFogfv(GL_FOG_COLOR, (GLfloat[]){0.05, 0.06, 0.08, 1});
+glFogf(GL_FOG_DENSITY, fogDensity);
 
+// --- Scene Geometry -----------------
 for(i, 0, rings) {
   ringZ = 37 - fmod(3 * t + 3 * i, 37);
   bendX = twist * sin(0.24 * ringZ);

@@ -100,6 +100,7 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
+  // --- Functions ----------------------
   shape(scale, phase) {
     // Two mutually-exclusive guards on the same arg -- an if/else written as
     // a complementary pair (else/else-if exist too; kept explicit here so each
@@ -125,11 +126,14 @@ void display(void) {
     }
   }
 
+  // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_NORMALIZE);
+
+  // --- Scene Geometry -----------------
   glPushMatrix();
     glTranslatef(-2.2, 0, 0);
     shape(0.9, t);

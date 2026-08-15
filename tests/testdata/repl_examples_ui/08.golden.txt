@@ -100,15 +100,18 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
+  // --- Description --------------------
   // 2D sketch driven purely by variable assignment: x accumulates across
   // loop iterations (x = x + 0.07) to sweep a running plot, and y is a
   // function of x and t -- no goto, no scratch arrays, just var = expr.
+
   static float x, y, s; // s = palette mix in [0,1]
 
+  // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  glDisable(GL_LIGHTING);
+  // --- Scene Geometry -----------------
   x = -1.7;
   glBegin(GL_LINE_STRIP);
     for(i, 0, 48) {

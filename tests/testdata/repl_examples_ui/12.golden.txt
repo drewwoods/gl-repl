@@ -102,6 +102,7 @@ void display(void) {
 --- source ---
   static float n, r, x, y, phase, sample;
 
+  // --- Render State -------------------
   glClearColor(0.06, 0.07, 0.09, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -109,6 +110,8 @@ void display(void) {
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glEnable(GL_POINT_SMOOTH);
   glLineWidth(1.4);
+
+  // --- Scene Geometry -----------------
   // Annotation demo: geometry plus live numeric labels.
   phase = fmod(t*0.2, 1);
   n = 72;

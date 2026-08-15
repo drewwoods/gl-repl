@@ -1,11 +1,8 @@
-// @cfg grid = GRID_THEME_CLASSIC
-// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CHECKER
+// @cfg grid_brightness = GRID_BRIGHTNESS_BRIGHT
 // @cfg backdrop = RENDER3D_BACKDROP_CITY_AND_STARS
-// @cfg light_theme = LIGHT_THEME_DEFAULT
-// @cfg normal_vectors = 0
-// @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
-// @cfg light_indicators = 0
+// @cfg vertex_outlines = 0
 static float spinRate = 0.06; // revolutions per second
 static float seats = 8;
 static float bulbs = 28;
@@ -47,16 +44,16 @@ drawSeat(ang) {
     glPopMatrix();
   glPopMatrix();
 }
+glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
+glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(24.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.0000f, -1.2000f, -0.0000f);   // @camera pan
 
-glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
-glRotatef(10.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(24.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, -1.20f, 0.0f);   // @camera pan
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_COLOR_MATERIAL);
 glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
 glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
 glEnable(GL_DEPTH_TEST);
