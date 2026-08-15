@@ -966,6 +966,50 @@ static void test_cursor_hole_inside_a_staged_function(void) {
     ASSERT_STR("the closing brace follows it", unindented(2), "}");
 }
 
+/* A multi-line logical statement is fed with line_no reset to its first
+ * physical row, so only that row used to be recorded. Cursor-only movement
+ * onto a continuation row then resolved to REPL_ROW_MAP_NONE and did nothing.
+ * Every code-bearing physical row of the statement maps to the produced
+ * document row; a comment dropped while the statement was open stays NONE. */
+static void test_row_map_covers_continuation_rows(void) {
+    TestRowMap t;
+    static const char *const continued[] = {
+        "glClearColor(0, 0, 0, 1);",     /* 1 → 0 */
+        "glClear(GL_COLOR_BUFFER_BIT);", /* 2 → 1 */
+        "glBegin(GL_POINTS);",           /* 3 → 2 */
+        "glVertex3f(",                   /* 4 ─┐ */
+        "    1,",                        /* 5  │ one document row */
+        "    // mid",                    /* 6  │ comment: dropped, NONE */
+        "    2,",                        /* 7  │ */
+        "    3);",                       /* 8 ─┘ → 3 */
+        "glEnd();",                      /* 9 → 4 */
+        NULL
+    };
+
+    printf("--- continuation rows share the statement's document row ---\n");
+
+    glr_ctrl_reset_all();
+    row_map_reset(&t, 0);
+    {
+        ReplSceneLoadOpts opts = opts_for(REPL_EXAMPLE_SOURCE_GLR,
+                                          REPL_SCENE_LOAD_POLICY_ATOMIC);
+        opts.row_map = &t.map;
+        ASSERT_INT("the file loads",
+                   repl_scene_load_from_lines(continued, "continued.glr",
+                                              &opts, NULL), 1);
+    }
+    ASSERT_INT("five document rows", repl_state_document_count(), 5);
+    ASSERT_INT("the opener maps to the vertex row", mapped(&t, 4), 3);
+    ASSERT_INT("so does the first continuation", mapped(&t, 5), 3);
+    ASSERT_INT("a comment inside the statement maps to nothing",
+               mapped(&t, 6), REPL_ROW_MAP_NONE);
+    ASSERT_INT("so does the later continuation", mapped(&t, 7), 3);
+    ASSERT_INT("and the closer", mapped(&t, 8), 3);
+    ASSERT_INT("glEnd is the next document row", mapped(&t, 9), 4);
+    ASSERT_INT("the joined statement is one document row",
+               find_doc_row_with("1, 2, 3"), 3);
+}
+
 /* A load that fails describes a document that no longer exists. */
 static void test_row_map_is_cleared_by_a_failed_load(void) {
     TestRowMap t;
@@ -1013,6 +1057,7 @@ int main(void) {
     test_cursor_hole_reports_where_the_row_would_have_gone();
     test_cursor_hole_needs_its_nonce();
     test_cursor_hole_inside_a_staged_function();
+    test_row_map_covers_continuation_rows();
     test_row_map_is_cleared_by_a_failed_load();
     printf("\n=== Results: ");
     return test_harness_report(&g_harness, "scene_load");

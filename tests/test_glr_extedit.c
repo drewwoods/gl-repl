@@ -1870,8 +1870,9 @@ static void test_undo_exits_the_session_and_sticks(void) {
         glr_extedit_poll();
     ASSERT_TRUE("and the undo sticks", document_mentions("0, 0, 0"));
 
-    /* One more keystroke in the editor lifts the hold; the update that lifts
-     * it is dropped, and following resumes after that. */
+    /* Ctrl+Z drops the next publication (it may have been written before or
+     * after the undo). The dismissed payload stays suppressed; a genuinely
+     * new payload is followed on the publication after that. */
     set_mtime(WIP_PATH, 7000, 0);
     publish_wip(k_scene_longer, 4, 1);
     set_mtime(WIP_PATH, 8000, 0);
@@ -2155,6 +2156,173 @@ static void test_sidecar_is_geometry_not_presentation(void) {
     (void)unlink(WIP_PATH);
 }
 
+/* D5: a local commit dismisses the live sidecar payload. A later CursorMoved
+ * of those same bytes must not look like new content and overwrite the line
+ * just committed. Following resumes only when the payload hash changes. */
+static void test_local_commit_suppresses_the_dismissed_wip_payload(void) {
+    GlrExtEditStats after_commit, after_cursor, after_new;
+    int rows_after_commit;
+
+    printf("--- a local commit suppresses the dismissed WIP payload ---\n");
+
+    begin_wip_session(k_scene_a);
+    publish_wip(k_scene_b, 4, 1);
+    glr_extedit_poll();
+    ASSERT_TRUE("the sidecar is live", document_mentions("9, 9, 9"));
+
+    editor_state_edit_line_set(repl_state_document_count());
+    ASSERT_TRUE("the line commits",
+                editor_feed_line("glVertex3f(4, 4, 4);") != 0);
+    editor_input_clear();
+    rows_after_commit = repl_state_document_count();
+
+    /* Same buffer, caret moved - the publication that first sees the
+     * fingerprint change, then another one after the session has ended. */
+    set_mtime(WIP_PATH, 18000, 0);
+    publish_wip(k_scene_b, 2, 1);
+    set_mtime(WIP_PATH, 19000, 0);
+    glr_extedit_poll();
+    after_commit = glr_extedit_stats();
+    ASSERT_INT("the committed line survives the first CursorMoved",
+               repl_state_document_count(), rows_after_commit);
+    ASSERT_TRUE("and is really there", document_mentions("4, 4, 4"));
+    ASSERT_INT("that payload was dismissed", after_commit.dismissals, 1);
+    ASSERT_INT("and was not reimported", after_commit.wip_updates, 1);
+
+    set_mtime(WIP_PATH, 20000, 0);
+    publish_wip(k_scene_b, 3, 1);
+    set_mtime(WIP_PATH, 21000, 0);
+    glr_extedit_poll();
+    after_cursor = glr_extedit_stats();
+    ASSERT_INT("a second CursorMoved of the same bytes still does not import",
+               after_cursor.wip_updates, 1);
+    ASSERT_TRUE("the committed line is still live", document_mentions("4, 4, 4"));
+    ASSERT_INT("and is not a cursor-only placement onto B's map either",
+               after_cursor.cursor_moves, 0);
+
+    set_mtime(WIP_PATH, 22000, 0);
+    publish_wip(k_scene_longer, 4, 1);
+    set_mtime(WIP_PATH, 23000, 0);
+    glr_extedit_poll();
+    after_new = glr_extedit_stats();
+    ASSERT_INT("a new payload is followed immediately",
+               after_new.wip_updates, 2);
+    ASSERT_TRUE("and is live", document_mentions("3, 3, 3"));
+    (void)unlink(WIP_PATH);
+}
+
+/* Ctrl+Z drops the publication that first observes the undo (the sidecar
+ * may have been written before or after the key), then keeps suppressing
+ * the dismissed payload so a later CursorMoved cannot undo the undo. */
+static void test_undo_same_payload_cursor_does_not_reimport(void) {
+    printf("--- undo does not let the same payload CursorMoved back in ---\n");
+
+    begin_wip_session(k_scene_a);
+    publish_wip(k_scene_b, 4, 1);
+    glr_extedit_poll();
+    ASSERT_TRUE("the sidecar was applied", document_mentions("9, 9, 9"));
+
+    editor_undo_pop_snapshot();
+    ASSERT_TRUE("undo restores the pre-session document",
+                document_mentions("0, 0, 0"));
+
+    set_mtime(WIP_PATH, 24000, 0);
+    publish_wip(k_scene_b, 2, 1);
+    set_mtime(WIP_PATH, 25000, 0);
+    glr_extedit_poll();
+    ASSERT_TRUE("the observing publication is dropped",
+                document_mentions("0, 0, 0"));
+
+    set_mtime(WIP_PATH, 26000, 0);
+    publish_wip(k_scene_b, 3, 1);
+    set_mtime(WIP_PATH, 27000, 0);
+    glr_extedit_poll();
+    ASSERT_TRUE("a second CursorMoved of the dismissed bytes stays out",
+                document_mentions("0, 0, 0"));
+    ASSERT_INT("neither was a content update",
+               glr_extedit_stats().wip_updates, 1);
+    (void)unlink(WIP_PATH);
+}
+
+/* The first WIP update of a user scene pushes an undo snapshot before the
+ * import. A malformed first payload must not leave that push behind: it
+ * would clear redo and, on a full ring, evict the oldest entry even though
+ * no content landed. */
+static void test_failed_wip_import_restores_the_undo_ring(void) {
+    char probe[64];
+    int base_rows;
+    int popped = 0;
+
+    printf("--- a failed first WIP update restores the undo ring ---\n");
+
+    begin_wip_session(k_scene_a);
+    base_rows = repl_state_document_count();
+
+    for (int i = 0; i < UNDO_RING_SLOTS; i++) {
+        editor_state_edit_line_set(repl_state_document_count());
+        snprintf(probe, sizeof(probe), "glVertex3f(%d, 0, 0);", i);
+        editor_undo_push_snapshot();
+        (void)editor_feed_line(probe);
+        editor_input_clear();
+    }
+    ASSERT_INT("the ring is full and the document grew",
+               repl_state_document_count(), base_rows + UNDO_RING_SLOTS);
+
+    publish_wip(k_scene_broken, 1, 1);
+    glr_extedit_poll();
+    ASSERT_INT("the import failed", glr_extedit_stats().failures, 1);
+    ASSERT_INT("the document is untouched",
+               repl_state_document_count(), base_rows + UNDO_RING_SLOTS);
+    ASSERT_INT("and no WIP session started", glr_extedit_stats().wip_updates, 0);
+
+    while (editor_undo_can_undo() && popped < UNDO_RING_SLOTS) {
+        editor_undo_pop_snapshot();
+        popped++;
+    }
+    ASSERT_INT("all 32 entries are still there", popped, UNDO_RING_SLOTS);
+    ASSERT_INT("and the oldest one survived the failed push",
+               repl_state_document_count(), base_rows);
+    (void)unlink(WIP_PATH);
+}
+
+/* Cursor-only movement onto a physical continuation row has to resolve
+ * through the map. Recording only the statement's first row left every
+ * later physical row as REPL_ROW_MAP_NONE, so the caret did not move. */
+static void test_cursor_follows_onto_a_continuation_row(void) {
+    static const char *const continued[] = {
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(",
+        "    1,",
+        "    2,",
+        "    3);",
+        "glEnd();",
+        NULL
+    };
+
+    printf("--- the caret follows onto a continuation row ---\n");
+
+    begin_wip_session(k_scene_a);
+    /* Cursor on a finished row so the multi-line statement is imported
+     * whole, not parked at its opener (which would leave `1,` as a
+     * free-standing parse error). */
+    publish_wip(continued, 8, 1);
+    glr_extedit_poll();
+    ASSERT_TRUE("the joined statement is live", document_mentions("1, 2, 3"));
+    ASSERT_INT("physical 8 is glEnd", editor_state_edit_line(), 4);
+
+    set_mtime(WIP_PATH, 28000, 0);
+    publish_wip(continued, 6, 1);
+    set_mtime(WIP_PATH, 29000, 0);
+    glr_extedit_poll();
+    ASSERT_INT("no import for a cursor move",
+               glr_extedit_stats().wip_updates, 1);
+    ASSERT_INT("physical 6 is the vertex document row",
+               editor_state_edit_line(), 3);
+    (void)unlink(WIP_PATH);
+}
+
 /* A buffer that will not parse is the normal state of a file being typed. It
  * must not be retried every frame, and it must not damage what is live. */
 static void test_an_unparseable_buffer_leaves_the_scene_alone(void) {
@@ -2238,6 +2406,10 @@ int main(void) {
     test_accepting_the_offer_starts_following();
     test_saving_during_a_session_is_not_a_second_reload();
     test_sidecar_is_geometry_not_presentation();
+    test_local_commit_suppresses_the_dismissed_wip_payload();
+    test_undo_same_payload_cursor_does_not_reimport();
+    test_failed_wip_import_restores_the_undo_ring();
+    test_cursor_follows_onto_a_continuation_row();
     test_an_unparseable_buffer_leaves_the_scene_alone();
     glr_extedit_set_enabled(0);
     glr_modal_cancel();

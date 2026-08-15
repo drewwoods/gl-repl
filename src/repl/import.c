@@ -2856,25 +2856,69 @@ static int is_line_comment_or_directive(const char *line) {
     return 0;
 }
 
+/* Physical rows folded into one logical statement. Sized past any
+ * authored wrap - a 4x4 matrix plus a handful of comment lines - so a
+ * genuine overflow is a generated file, not a typical `.glr`. Extra
+ * rows past the cap stay REPL_ROW_MAP_NONE rather than inventing a
+ * mapping. */
+#define IMPORT_ACCUM_PHYS_MAX 64
+
+typedef struct {
+    char accum[MAX_LINE_LEN];
+    int line_no;
+    int depth;
+    int truncated;
+    int in_block_comment;
+    int preserve_block_comment;
+    int phys_rows[IMPORT_ACCUM_PHYS_MAX];
+    int phys_n;
+} ImportAccum;
+
+static void import_accum_note_phys(ImportAccum *acc, int line_no) {
+    if (!acc || line_no < 1)
+        return;
+    if (acc->phys_n < IMPORT_ACCUM_PHYS_MAX)
+        acc->phys_rows[acc->phys_n++] = line_no;
+}
+
 /* Emit the accumulated logical statement through import_process_line,
  * restoring the line number to where the statement began so a warning
  * points at its first physical line. accum is built from already
  * left-trimmed segments, so no leading-whitespace skip is needed.
+ *
+ * import_process_line records the map against s->line_no, which is the
+ * first physical row. Every later code-bearing continuation row produced
+ * the same document row and has to be mapped too, or a cursor-only move
+ * onto those physical rows is a no-op. Comment / blank lines dropped
+ * while the statement was open stay REPL_ROW_MAP_NONE.
  * Clears the accumulator (and its truncation flag). */
-static void import_flush_accum(ImportState *s, char *accum, int accum_line_no,
-                               int *truncated) {
-    if (!accum[0]) return;
-    int saved = s->line_no;
-    s->line_no = accum_line_no;
-    if (*truncated) {
-        import_state_warn_parse_status(s, accum_line_no,
+static void import_flush_accum(ImportState *s, ImportAccum *acc) {
+    int saved;
+    int doc;
+
+    if (!acc || !acc->accum[0])
+        return;
+    saved = s->line_no;
+    s->line_no = acc->line_no;
+    if (acc->truncated) {
+        import_state_warn_parse_status(s, acc->line_no,
                                        "statement exceeded %d chars, truncated",
                                        (int)MAX_LINE_LEN);
     }
-    import_process_line(s, accum, accum);
+    import_process_line(s, acc->accum, acc->accum);
+    if (s->opts.row_map && acc->phys_n > 1 &&
+        acc->line_no >= 1 && acc->line_no <= s->opts.row_map->cap) {
+        doc = s->opts.row_map->doc_row[acc->line_no - 1];
+        if (doc != REPL_ROW_MAP_NONE) {
+            int i;
+            for (i = 1; i < acc->phys_n; i++)
+                import_row_map_note(s, acc->phys_rows[i], doc);
+        }
+    }
     s->line_no = saved;
-    accum[0]   = '\0';
-    *truncated = 0;
+    acc->accum[0]   = '\0';
+    acc->truncated  = 0;
+    acc->phys_n     = 0;
 }
 
 ReplExampleSourceFormat repl_scene_format_from_path(const char *path) {
@@ -2950,15 +2994,6 @@ static void import_set_source(ImportState *s, const char *label) {
                                 (void *)label);
     repl_doc_order_set_sink(&s->order, import_order_diag, (void *)label);
 }
-
-typedef struct {
-    char accum[MAX_LINE_LEN];
-    int line_no;
-    int depth;
-    int truncated;
-    int in_block_comment;
-    int preserve_block_comment;
-} ImportAccum;
 
 static int import_line_has_snippet_marker(const char *line) {
     return line && strstr(line, "Snippet start") != NULL;
@@ -3099,6 +3134,10 @@ static void import_process_physical_line(ImportState *state,
         acc->line_no = state->line_no;
         acc->depth = 0;
         acc->truncated = 0;
+        acc->phys_n = 0;
+        import_accum_note_phys(acc, state->line_no);
+    } else {
+        import_accum_note_phys(acc, state->line_no);
     }
 
     size_t accum_len = strlen(acc->accum);
@@ -3137,7 +3176,7 @@ static void import_process_physical_line(ImportState *state,
     acc->accum[accum_len + take] = '\0';
 
     if (complete) {
-        import_flush_accum(state, acc->accum, acc->line_no, &acc->truncated);
+        import_flush_accum(state, acc);
         acc->depth = 0;
     }
 }
@@ -3181,7 +3220,7 @@ static int import_finish_load(ImportState *state,
     int ok;
 
     if (!truncated_line && !state->load_failed)
-        import_flush_accum(state, acc->accum, acc->line_no, &acc->truncated);
+        import_flush_accum(state, acc);
 
     /* Caller passes the results of read/close checks from the file-based reader. */
     if (had_read_err || close_failed) {

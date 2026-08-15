@@ -115,6 +115,16 @@
  *   split still applies, so an unedited example gets no snapshot and is not
  *   promoted by someone else's typing.
  *
+ *   A LOCAL COMMIT AND CTRL+Z ARE NOT THE SAME EXIT. Both notice that the
+ *   document moved without this module moving it, and both remember the last
+ *   applied sidecar payload as a suppressed hash so a later CursorMoved of
+ *   those bytes cannot look like new content and overwrite the local
+ *   document (D5: ignore content *and* cursor until the payload hash
+ *   changes). Ctrl+Z also drops the publication that first observed the
+ *   undo - the sidecar may have been written before or after the key - and
+ *   then follows the same suppression. A commit falls through: same payload
+ *   is ignored, a genuinely new one is followed immediately.
+ *
  *   THE SIDECAR IS NOT A SCENE. Found at bind time it means the editor died
  *   holding unsaved work, and it is offered for recovery rather than applied -
  *   accepting is a keystroke, declining leaves the file alone and stops

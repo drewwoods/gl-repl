@@ -123,6 +123,17 @@ static GlrExtEditChangeToken g_wip_observed;
  * is what makes a cursor move cost a stat and a hash instead of a reimport. */
 static unsigned long long    g_wip_payload;
 static int                   g_wip_payload_valid;
+/* A payload the user's own commit or undo beat. Distinct from
+ * g_wip_payload_valid: clearing the latter is what used to let a later
+ * CursorMoved of the same bytes look like new content and reimport. While
+ * this matches, both content and cursor updates are ignored (D5). */
+static unsigned long long    g_wip_suppressed;
+static int                   g_wip_suppressed_valid;
+/* The live document as the session's one undo snapshot captured it. Equal
+ * after Ctrl+Z; a local commit produces something else. That is how the two
+ * exits are told apart without a hook on either key. */
+static unsigned long long    g_wip_entry_fp;
+static int                   g_wip_have_entry_fp;
 /* A session runs from the first content update to the sidecar's disappearance
  * or the user's own edit. It exists to make "push one undo snapshot" and "who
  * owns the document" answerable. */
@@ -965,6 +976,8 @@ static void wip_forget(void) {
     g_wip_path[0]       = '\0';
     g_wip_observed.valid = 0;
     g_wip_payload_valid  = 0;
+    g_wip_suppressed_valid = 0;
+    g_wip_have_entry_fp  = 0;
     g_wip_active         = 0;
     g_wip_hold           = 0;
     g_wip_recover_offer  = 0;
@@ -1025,9 +1038,10 @@ static void wip_stamp_document(void) {
 /* A WIP session ends. `why` is shown; NULL says nothing (the caller has its
  * own message, or the session simply never started). */
 static void wip_end_session(const char *why) {
-    g_wip_active       = 0;
-    g_wip_entry_pushed = 0;
-    g_wip_have_doc_fp  = 0;
+    g_wip_active        = 0;
+    g_wip_entry_pushed  = 0;
+    g_wip_have_doc_fp   = 0;
+    g_wip_have_entry_fp = 0;
     if (why)
         repl_set_status(why);
 }
@@ -1153,6 +1167,7 @@ static void wip_place_cursor(int row, int col) {
  * take its geometry out of the scene while the user is looking at it. */
 static void wip_apply_content(GlrExtEditWip *w) {
     ReplSceneLoadOpts opts;
+    EditorUndoHistorySnapshot *history = NULL;
     char marker[MAX_LINE_LEN];
     char parked[MAX_INPUT_LEN];
     int  have_parked = 0;
@@ -1197,22 +1212,43 @@ static void wip_apply_content(GlrExtEditWip *w) {
         }
     }
 
-    /* D4, unchanged, and once per session rather than once per keystroke: the
-     * 32-slot ring is not a place to store somebody's typing. */
+    /* D4, once per session rather than once per keystroke: the 32-slot ring
+     * is not a place to store somebody's typing. The history capture is the
+     * same heap-backed one apply_reload() uses: ATOMIC restores the document
+     * on failure, but a push that already evicted the oldest undo entry
+     * cannot be undone by putting the document back. */
     if (is_user_scene && !g_wip_entry_pushed) {
+        g_wip_entry_fp      = document_fingerprint();
+        g_wip_have_entry_fp = 1;
+        history = editor_undo_history_capture();
+        if (!history) {
+            repl_set_status_error("Watch: out of memory preserving undo history");
+            g_stats.failures++;
+            return;
+        }
         editor_undo_push_snapshot();
         g_wip_entry_pushed = 1;
     }
 
     ok = repl_reload_active_scene_from_lines(w->lines.ptrs, g_bound, &opts);
     if (!ok) {
+        if (history) {
+            (void)editor_undo_history_restore(history);
+            /* The push never landed; the next successful update is still
+             * the session's first and must take a fresh snapshot. */
+            g_wip_entry_pushed  = 0;
+            g_wip_have_entry_fp = 0;
+        }
+        editor_undo_history_destroy(history);
         g_stats.failures++;
-        /* Deliberately still "active": the editor is mid-thought and the next
-         * keystroke usually fixes it. The document was rolled back, so the
-         * fingerprint below still describes what is live. */
+        /* Deliberately still "active" if a session had already started: the
+         * editor is mid-thought and the next keystroke usually fixes it. The
+         * document was rolled back, so the fingerprint below still describes
+         * what is live. */
         wip_stamp_document();
         return;
     }
+    editor_undo_history_destroy(history);
 
     g_wip_map_valid = 1;
     g_wip_active    = 1;
@@ -1365,23 +1401,46 @@ static void wip_poll(void) {
     if (gate_is_shut())
         return;
 
-    /* Somebody else moved the document since the last update - Ctrl+Z, or a
-     * commit. Their version wins until the editor publishes again, which is
-     * the same rule a dismissed save follows. */
-    if (g_wip_active && g_wip_have_doc_fp &&
-        document_fingerprint() != g_wip_doc_fp) {
-        /* This publication is dropped, and only this one. Whether the user
-         * undid before or after the editor wrote is not knowable from here, so
-         * the tie goes to the user - and the next thing they type in the
-         * editor resumes following. */
-        wip_end_session("Watch: kept your edit; live follow paused");
-        g_wip_payload_valid = 0;
-        return;
-    }
-
     g_stats.reads++;
     if (!wip_read(g_wip_path, &w))
         return;
+
+    /* Somebody else moved the document since the last update - Ctrl+Z, or a
+     * commit. The two exits share a suppressed-payload hash (D5) so a later
+     * CursorMoved of the dismissed bytes cannot look like new content, but
+     * they are not the same pause:
+     *
+     *   Ctrl+Z   the sidecar may have been written before or after the key,
+     *            so this publication is dropped regardless of its payload.
+     *            Following resumes on the next publication whose hash is
+     *            not the dismissed one.
+     *   commit   fall through. Same payload is ignored below; a genuinely
+     *            new payload is followed immediately. */
+    if (g_wip_active && g_wip_have_doc_fp &&
+        document_fingerprint() != g_wip_doc_fp) {
+        int is_undo = g_wip_have_entry_fp &&
+                      document_fingerprint() == g_wip_entry_fp;
+
+        if (g_wip_payload_valid) {
+            g_wip_suppressed       = g_wip_payload;
+            g_wip_suppressed_valid = 1;
+            g_stats.dismissals++;
+        }
+        wip_end_session("Watch: kept your edit; live follow paused");
+        g_wip_payload_valid = 0;
+        if (is_undo) {
+            wip_free(&w);
+            return;
+        }
+    }
+
+    if (g_wip_suppressed_valid && w.payload == g_wip_suppressed) {
+        /* Dismissed payload: ignore both a reimport and a cursor-only
+         * placement derived from a map that was never loaded for this
+         * document. */
+        wip_free(&w);
+        return;
+    }
 
     if (g_wip_payload_valid && w.payload == g_wip_payload) {
         /* Cursor-only. No import, no undo entry, no notification: the document
@@ -1394,8 +1453,9 @@ static void wip_poll(void) {
     }
 
     wip_apply_content(&w);
-    g_wip_payload       = w.payload;
-    g_wip_payload_valid = 1;
+    g_wip_payload          = w.payload;
+    g_wip_payload_valid    = 1;
+    g_wip_suppressed_valid = 0;
     wip_free(&w);
 }
 

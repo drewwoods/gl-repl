@@ -74,7 +74,10 @@ typedef enum {
  *
  * Entries are written as rows are fed, with no fixup pass, because the
  * importer only ever appends - see import_row_map_note_applied() for why that
- * holds and what would have to change if it stopped.
+ * holds and what would have to change if it stopped. A multi-line logical
+ * statement maps every code-bearing physical row that was folded into it,
+ * not only the first: a cursor-only move onto a continuation row has to
+ * resolve.
  */
 
 /* A physical row with no editable document row of its own - the honest answer
