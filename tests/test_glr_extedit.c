@@ -1277,6 +1277,130 @@ static void test_catalog_scene_reload_does_not_promote(void) {
     (void)rmdir(root);
 }
 
+/* Startup has no stage-2 parking - `repl_load_initial_commands` uses the
+ * ordinary loader - so a brand new `.glr` holding only a half-typed command
+ * fails to import and lands on a seeded New Scene. That is fine; what is not
+ * fine is losing the file. The session is still about the path the user named,
+ * so the empty scene is bound to it and the watcher recovers on the next save.
+ */
+static void test_watch_survives_a_failed_startup_import(void) {
+    static const char *const only_tail[] = { "glVertex3f(1,", NULL };
+
+    printf("--- a file that fails at startup is still watched ---\n");
+
+    glr_extedit_set_enabled(0);
+    write_lines(WATCH_PATH, only_tail);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+    ASSERT_TRUE("the failed import still bound the file",
+                repl_active_scene_source_path() != NULL);
+
+    glr_extedit_set_enabled(1);
+    glr_extedit_bind_path(WATCH_PATH);
+    glr_extedit_poll();
+    ASSERT_TRUE("and the watcher is following it",
+                glr_extedit_bound_path() != NULL);
+
+    write_lines(WATCH_PATH, k_scene_b);
+    glr_extedit_poll();
+    ASSERT_INT("the next save loads", glr_extedit_stats().reloads, 1);
+    ASSERT_TRUE("the scene is live", document_mentions("9, 9, 9"));
+}
+
+/* `gl-repl --watch new.glr` where new.glr does not exist yet - about to be
+ * created in the editor. The bootstrap import fails, a seeded New Scene takes
+ * over, and the binding has to survive on the *slot* (the watcher follows the
+ * active scene, so a binding that is not the active scene's file is
+ * overwritten on the next poll by design). */
+static void test_watching_a_file_that_does_not_exist_yet(void) {
+    printf("--- a file created after launch is picked up ---\n");
+
+    glr_extedit_set_enabled(0);
+    (void)unlink(OTHER_PATH);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(OTHER_PATH);   /* no such file */
+    ASSERT_TRUE("a seeded scene took over",
+                repl_active_user_scene() >= 0);
+    ASSERT_TRUE("bound to the file that does not exist yet",
+                repl_active_scene_source_path() != NULL &&
+                strstr(repl_active_scene_source_path(), "other") != NULL);
+
+    glr_extedit_set_enabled(1);
+    glr_extedit_bind_path(OTHER_PATH);
+    for (int i = 0; i < 3; i++)
+        glr_extedit_poll();
+    ASSERT_TRUE("the watcher is following it anyway",
+                glr_extedit_bound_path() != NULL &&
+                strstr(glr_extedit_bound_path(), "other") != NULL);
+    ASSERT_INT("nothing loaded while it is absent",
+               glr_extedit_stats().reloads, 0);
+
+    write_lines(OTHER_PATH, k_scene_b);
+    glr_extedit_poll();
+    ASSERT_INT("creating it is picked up", glr_extedit_stats().reloads, 1);
+    ASSERT_TRUE("and its contents are live", document_mentions("9, 9, 9"));
+    (void)unlink(OTHER_PATH);
+}
+
+/* The seen table must outlast the scene catalog, or a switch tour through
+ * every slot evicts the file you started on and the next external save to it
+ * is stamped as already-applied and silently lost. */
+static void test_seen_history_outlasts_the_scene_catalog(void) {
+    char paths[MAX_USER_SCENES][64];
+    int slot_a;
+
+    printf("--- the per-path memory covers a full catalog of scenes ---\n");
+
+    begin_watched_session(k_scene_a);
+    slot_a = repl_active_user_scene();
+
+    /* Fill the rest of the catalog, binding a different file each time. */
+    for (int i = 0; i < MAX_USER_SCENES - 1; i++) {
+        ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+        snprintf(paths[i], sizeof(paths[i]),
+                 "/tmp/gl_repl_extedit_seen_%d.glr", i);
+        write_lines(paths[i], k_scene_longer);
+        if (repl_load_scene_as_new_slot(paths[i], &reason) < 0)
+            break;
+        glr_extedit_poll();
+    }
+
+    /* Somebody saves the very first file while we are away at the far end. */
+    write_lines(WATCH_PATH, k_scene_b);
+    ASSERT_TRUE("back to the first scene", repl_load_user_scene_idx(slot_a));
+    glr_extedit_poll();
+    glr_extedit_poll();
+    ASSERT_TRUE("the save is not lost to an evicted history entry",
+                document_mentions("9, 9, 9"));
+
+    for (int i = 0; i < MAX_USER_SCENES - 1; i++)
+        (void)unlink(paths[i]);
+}
+
+/* D7 asks for the observed token to be stamped at lesson end. This code does
+ * not, and the divergence is deliberate (see glr_extedit_poll and the plan's
+ * Status section): the poll already stamps on every change, lesson included,
+ * so the token is current - and restamping additionally swallows a save that
+ * lands between the lesson ending and the next poll. That window is the whole
+ * reason for the divergence, so it gets a guard of its own. */
+static void test_save_between_lesson_end_and_poll_is_not_swallowed(void) {
+    printf("--- a save right after a lesson ends is not discarded ---\n");
+
+    begin_watched_session(k_scene_a);
+    tutorial_start(0);
+    glr_extedit_poll();
+    tutorial_stop();
+
+    /* No poll has run since the lesson ended - exactly the window a restamp
+     * would close over. */
+    write_lines(WATCH_PATH, k_scene_b);
+    glr_extedit_poll();
+
+    ASSERT_INT("it is applied, not stamped away",
+               glr_extedit_stats().reloads, 1);
+    ASSERT_TRUE("the saved scene is live", document_mentions("9, 9, 9"));
+}
+
 /* --- disabled ------------------------------------------------------------- */
 
 static void test_disabled_watcher_does_nothing(void) {
@@ -1327,6 +1451,10 @@ int main(void) {
     test_block_comment_matches_the_plain_loader();
     test_watch_binds_even_when_armed_during_a_lesson();
     test_file_that_is_only_an_incomplete_row();
+    test_watch_survives_a_failed_startup_import();
+    test_watching_a_file_that_does_not_exist_yet();
+    test_seen_history_outlasts_the_scene_catalog();
+    test_save_between_lesson_end_and_poll_is_not_swallowed();
     test_returning_to_a_scene_picks_up_what_changed();
     test_returning_to_an_untouched_scene_keeps_local_edits();
     test_catalog_scene_reload_does_not_promote();

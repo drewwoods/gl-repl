@@ -25,7 +25,7 @@
 #include "editor/undo.h"
 #include "repl/line_scan.h"   /* the importer's own statement-boundary scan */
 #include "repl/scene_load.h"
-#include "repl/scenes.h"
+#include "repl/scenes.h"     /* MAX_USER_SCENES sizes the seen table */
 #include "repl/host_effects.h"   /* repl_set_status / _error */
 #include "repl/state_owners.h"
 #include "subsystems/color_picker/color_picker_state.h"
@@ -83,10 +83,15 @@ static GlrExtEditStats       g_stats;
  * With one entry per recently-bound path, rebind can tell the two apart -
  * unchanged since we last applied it, or moved while we were elsewhere.
  *
- * Four entries because the case this exists for is a switch away and back. A
- * path that falls out is treated as never seen, which is the conservative
- * answer: stamp and do not reload. */
-#define GLR_EXTEDIT_SEEN_MAX 4
+ * Sized to the number of files that can be bound in one session rather than to
+ * a guessed working set: eight user-scene slots, plus a catalog example's
+ * write-back path, plus one for churn. Four entries was arbitrary and lossy -
+ * with eight scenes, visiting a fifth evicted the first, and eviction reads as
+ * "never seen", which stamps and does not reload. That is the right answer for
+ * a file genuinely seen for the first time and the wrong one for a file whose
+ * history was simply forgotten, so the table has to outlast the scene
+ * catalog. */
+#define GLR_EXTEDIT_SEEN_MAX (MAX_USER_SCENES + 2)
 
 typedef struct {
     char               path[GLR_EXTEDIT_PATH_MAX];
@@ -245,8 +250,14 @@ void glr_extedit_bind_path(const char *path) {
     /* A positional argument can also be a managed-workspace directory, and a
      * directory is not a scene file: it has no content to hash and binding it
      * would only delay the poll's own resolution to the scene inside. Leave it
-     * unbound and let the first poll resolve it properly. */
-    if (stat(path, &st) != 0 || !S_ISREG(st.st_mode))
+     * unbound and let the first poll resolve it properly.
+     *
+     * A path that does not exist yet is NOT refused. `--watch new.glr` before
+     * the file has been created is a reasonable thing to ask for - the editor
+     * is about to write it - and rebind() copes: the stat fails, the observed
+     * token stays invalid, and the first poll after the file appears sees it
+     * as new. */
+    if (stat(path, &st) == 0 && !S_ISREG(st.st_mode))
         return;
     rebind(path);
 #endif

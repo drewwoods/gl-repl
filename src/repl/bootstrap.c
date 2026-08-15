@@ -42,12 +42,18 @@ static void scroll_to_display_function(void) {
     repl_dispatch_scroll_to_line(target);
 }
 
-static int activate_new_scene_after_failed_import(void) {
+static int activate_new_scene_after_failed_import(const char *source_path) {
     /* A positional file is an explicit request to edit a scene. If it cannot
      * be loaded, keep that workflow useful by opening the same seeded,
      * editable user scene as File -> New Scene rather than a detached empty
      * transient document. */
     (void)repl_scenes_create_empty_user_scene();
+    /* Bind it to the file the user named anyway. The scene is empty *because*
+     * that file would not load - it may be one someone is still typing in an
+     * external editor - and the session is still about it: Ctrl+S must write
+     * there rather than to a name-derived `<slug>.c`, and `--watch` must keep
+     * following it instead of losing the binding to a slot with no path. */
+    repl_scenes_bind_active_source_path(source_path);
     return repl_state_document_count();
 }
 
@@ -73,7 +79,7 @@ int repl_load_initial_commands(const char *import_file) {
             ReplImportResult import_result;
             if (repl_export_load_from_stream(stdin, "<stdin>", &import_result))
                 return activate_initial_document(&import_result, NULL);
-            return activate_new_scene_after_failed_import();
+            return activate_new_scene_after_failed_import(NULL);
         }
 
         struct stat st;
@@ -94,7 +100,11 @@ int repl_load_initial_commands(const char *import_file) {
             if (repl_export_load_from_file(import_file, &import_result))
                 return activate_initial_document(&import_result, import_file);
         }
-        return activate_new_scene_after_failed_import();
+        /* NULL for a directory: a workspace that failed to load names no
+         * single scene file. */
+        return activate_new_scene_after_failed_import(
+            (stat(import_file, &st) == 0 && S_ISDIR(st.st_mode)) ? NULL
+                                                                 : import_file);
     }
 
     /* Show the startup demo as an example. A user scene is created only when

@@ -50,11 +50,39 @@ first pass shipped and each now has a test that fails without the fix:
   the document in a slot-less transient before the watcher armed, and pinning
   an *empty* binding protected nothing. The pin now applies only once something
   is bound, and `--watch` seeds the CLI path outright.
-- **The lesson-end token restamp is dropped.** D7 asks for it so old movement
-  is not re-read as new - but that holds only for a design that ignores
-  activity *without reading*. This poll reads and stamps on every change,
-  lesson included, so the token is already current; restamping additionally
-  swallowed a save that landed between the lesson ending and the next poll.
+- **The lesson-end token restamp is dropped, and D7 is amended to say so.**
+  The rule assumed a design that ignores activity *without reading*; this poll
+  reads and stamps on every change, lesson included, so the token is already
+  current and restamping only swallowed saves arriving just after the lesson.
+  The amendment is written into D7 itself rather than left as a note here, so
+  the accepted contract and the code cannot be read as disagreeing.
+- **A file that is *only* the half-typed row must still park.** Stage 2's
+  actual first use - new `.glr`, one command typed, saved unfinished - left
+  the loader nothing after the removal, and "no commands loaded" is an ATOMIC
+  failure, so the save was refused. `ReplSceneLoadOpts.allow_empty` says the
+  emptiness was a removal this code performed; the watcher sets it only when it
+  actually removed a row, and a rejected line still fails the import. Every
+  stage-2 fixture had complete commands before the tail, which is why the first
+  suite missed it.
+- **Returning to a watched scene converges.** Binding does not reload - the
+  document usually already is the file, and reloading would clobber unsaved
+  slot edits - but that reasoning fails on the way back: switch away, let vim
+  save, switch back, and stamping the new bytes as applied buried the edit
+  permanently. A four-entry per-path memory of what the document last came from
+  separates "unchanged since we left it" from "moved while we were elsewhere".
+- **A named file stays bound even when its import fails.** Startup has no
+  stage-2 parking, so a new `.glr` holding only a half-typed command lands on a
+  seeded New Scene - which used to have no path, so `--watch` lost the file it
+  was told to watch. The empty scene is now bound to it, which also makes
+  Ctrl+S write there rather than to a name-derived `<slug>.c`.
+- **The per-path content memory is sized to the scene catalog**
+  (`MAX_USER_SCENES + 2`), not to a guessed working set. At four entries a
+  session that visited five watched files evicted the first, and eviction reads
+  as "never seen" - which stamps and does not reload, silently losing the next
+  external save to it.
+- **A not-yet-created file is watchable.** `--watch new.glr` before the editor
+  has written it: the bootstrap import fails, the seeded New Scene carries the
+  path, and the first poll after the file appears picks it up.
 - **`REPL_DEMO_DEP_SRCS` needs a row for every new `src/repl/*.c`.** It is an
   explicit list; the binary and the tests use `$(wildcard)`, so a missing row
   is invisible to `make test` and to `check-c99`. `repl_demo` and
@@ -353,12 +381,27 @@ the document `tutorial_end_keep_view` leaves behind. During a tutorial or tour
 the sidecar is ignored outright; a tour and the watcher must not both mutate
 one document.)*
 
-**Ignoring is not enough — stamp the tokens at lesson end.** If sidecar and
+**Ignoring is not enough — the observed tokens must not lag.** If sidecar and
 base activity are ignored *without* advancing the observed tokens, the first
 poll after the lesson sees that old movement as new and applies it, defeating
-the dismiss-on-end rule. At tutorial/tour end: clear pending state and stamp
-the current base **and** sidecar change tokens as observed. Live following
-resumes only on a *subsequent* token movement.
+the dismiss-on-end rule.
+
+**AMENDED after implementation — this is the accepted contract, and the code
+matches it.** The original rule was "at tutorial/tour end, clear pending state
+and stamp the current base and sidecar change tokens as observed". That is
+right for a design which ignores activity *without reading it*. The
+implementation does not: during a lesson the poll still stats, reads and stamps
+`observed` on every change, and merely **defers** rather than ignoring — so the
+token is already current at lesson end and the requirement is met
+structurally. Re-stamping from disk on top of that is not a no-op, it is
+harmful: it also swallows a save that landed between the lesson ending and the
+next poll, discarding a real edit for having arrived at the wrong millisecond.
+
+So: **at lesson end, clear the pending version and stamp nothing.** Live
+following resumes on the next token movement, which now correctly includes one
+that happened moments before the resume. Guarded by
+`test_save_between_lesson_end_and_poll_is_not_swallowed` alongside the
+dismiss-on-end test, so neither half can regress into the other.
 
 **Stay bound across the lesson.** `tutorial_start` →
 `repl_scenes_enter_transient_scene()` sets the active user scene to -1, so the
@@ -855,9 +898,9 @@ Results for stages 1-2, in the numbering below:
 | # | Result |
 |---|---|
 | 1 | `make check-state-ownership` and `make check-trailing-whitespace` green. `--watch` needed rows in `scripts/completions/` too (`check-completions`). |
-| 2 | `make test` / `make test-stubs` green (28,508 assertions), and every `HEADLESS_DEMO_TARGETS` demo builds - `repl_demo` / `repl_live_demo` are the load-bearing no-controller proofs and a new `src/repl/*.c` needs a `REPL_DEMO_DEP_SRCS` row they alone catch. `make test-web` links the watcher TU and `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - it asserts the *inert* form rather than joining `WEB_TEST_EXCLUDE`. The lane's one remaining failure, `test_glr_init_trace`, fails identically at the pre-BYOE commit and is unrelated. |
+| 2 | `make test` / `make test-stubs` green (28,550 assertions), and every `HEADLESS_DEMO_TARGETS` demo builds - `repl_demo` / `repl_live_demo` are the load-bearing no-controller proofs and a new `src/repl/*.c` needs a `REPL_DEMO_DEP_SRCS` row they alone catch. `make test-web` links the watcher TU and `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - it asserts the *inert* form rather than joining `WEB_TEST_EXCLUDE`. The lane's one remaining failure, `test_glr_init_trace`, fails identically at the pre-BYOE commit and is unrelated. |
 | 3 | gracemont (gcc 13.3, Ubuntu 24.04): `make check-c99` and `make test-stubs` green, including the `st_mtim` arm of the change token that macOS never compiles. |
-| 4 | End-to-end: `./gl-repl --watch scene.glr`, appended a `/* C-style note */`, four complete rows, a trailing `glVertex3f(3,` and a `// still typing` comment under it, all from outside; the session reloaded 7 -> 13 commands, kept both comments as document rows, and parked the incomplete row. `--watch` with no positional file exits 1 with a usage error. |
+| 4 | End-to-end: `./gl-repl --watch scene.glr`, appended a `/* C-style note */`, four complete rows, a trailing `glVertex3f(3,` and a `// still typing` comment under it, all from outside; the session reloaded 7 -> 13 commands, kept both comments as document rows, and parked the incomplete row. Also `--watch new.glr` on a file holding nothing but `glVertex3f(1,`: the startup import fails (bootstrap has no parking), the binding survives, and the next save loads. `--watch` with no positional file exits 1 with a usage error. |
 | 5 | Resolved by reading rather than by hand - see the scope note above. |
 | 6-7 | Stage 2.5 only; not reached. |
 
