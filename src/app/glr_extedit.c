@@ -1174,22 +1174,28 @@ static int physical_line_lead(const char *line) {
     return n;
 }
 
-/* The sidecar's payload hash - its bytes without the trailing `@cursor` line.
- * Defined against wip_read() so it cannot drift from the hash the live path
- * compares against; the read is one-off (a bind, or a recovery prompt), not
- * per frame. Returns 0 if the file cannot be read. */
-static int wip_payload_hash(const char *path, unsigned long long *out) {
+/* Look at the sidecar once, off the frame path (a bind, or a recovery
+ * prompt), and take both things a look is worth. Named for the looking rather
+ * than for the hash because it does two things, and a caller that wanted only
+ * a hash would be surprised by the second:
+ *
+ *   *out            the payload hash - the bytes without the trailing
+ *                   `@cursor` line. Defined against wip_read() so it cannot
+ *                   drift from the hash the live path compares against.
+ *   g_wip_saw_cursor set if this file carries a trailer. The flag is per
+ *                   binding, which is right - it describes the publisher
+ *                   currently writing this file - but `wip_forget()` clears it
+ *                   on every rebind, so without recording it here the *first*
+ *                   publication after a scene switch bypasses the torn-write
+ *                   backstop. That one is no safer than any other.
+ *
+ * Returns 0 if the file cannot be read, in which case neither happens. */
+static int wip_probe(const char *path, unsigned long long *out) {
     GlrExtEditWip w;
 
     if (!wip_read(path, &w))
         return 0;
     *out = w.payload;
-    /* Learn the trailer here too. `g_wip_saw_cursor` is per binding, which is
-     * right - it is a fact about the publisher currently writing this file -
-     * but a rebind wipes it, and without seeding it from the read a bind
-     * already does, the *first* publication after every scene switch bypasses
-     * the torn-write backstop entirely. That first one is no safer than any
-     * other. */
     if (w.cursor_row > 0)
         g_wip_saw_cursor = 1;
     wip_free(&w);
@@ -1209,9 +1215,13 @@ static void wip_bind(void) {
     }
     if (stat(g_wip_path, &st) == 0 && S_ISREG(st.st_mode)) {
         unsigned long long payload;
+        /* Once, before the branch. Every arm below wants the look taken - the
+         * declined arm for the hash, the other two for the trailer
+         * observation - and reading inside the condition would skip it
+         * wherever the `&&` short-circuits. */
+        int probed = wip_probe(g_wip_path, &payload);
 
-        if (!seen_wip_followed(g_bound) &&
-            wip_payload_hash(g_wip_path, &payload) &&
+        if (probed && !seen_wip_followed(g_bound) &&
             seen_wip_declined(g_bound, payload)) {
             /* Already turned down, and the payload is unchanged since. Asking
              * again on every scene switch would make the answer worthless.
@@ -1226,10 +1236,6 @@ static void wip_bind(void) {
             g_wip_suppressed       = payload;
             g_wip_suppressed_valid = 1;
         } else if (seen_wip_followed(g_bound)) {
-            /* Read for its own sake: nothing here needs the hash, but the
-             * trailer observation it seeds is what keeps the torn-write
-             * backstop armed across the switch. */
-            (void)wip_payload_hash(g_wip_path, &payload);
             /* Coming back to a scene whose editor is still open. Leave the
              * observed token invalid so the next poll reads the sidecar as an
              * ordinary content update and the document converges on whatever
@@ -1239,7 +1245,6 @@ static void wip_bind(void) {
              * elsewhere. */
             g_wip_observed.valid = 0;
         } else {
-            (void)wip_payload_hash(g_wip_path, &payload);   /* as above */
             g_wip_recover_offer = 1;
             g_wip_hold          = 1;
             g_wip_observed      = change_token_from_stat(&st);
@@ -1321,6 +1326,22 @@ static void wip_place_cursor(int row, int col, const char *phys_line) {
  * instead of failing the import. It is still only removed when it is
  * incomplete: a finished command belongs in the document, and parking it would
  * take its geometry out of the scene while the user is looking at it. */
+/* Take the recovery question back off the screen because events answered it.
+ * A payload landing while the prompt is open means the editor is alive and
+ * publishing - the resume condition - so following it is right, but leaving
+ * the question up is not: it now asks whether to follow content that is
+ * already live, and either answer is meaningless. The pre-recorded decline
+ * goes with it; it describes a payload the file has moved off. */
+static void wip_retract_offer(void) {
+    if (!g_wip_offering)
+        return;
+    g_wip_offering = 0;
+    seen_clear_wip_declined(g_bound);
+    if (glr_modal_active() &&
+        glr_modal_kind() == GLR_MODAL_CONFIRM_WIP_RECOVER)
+        glr_modal_cancel();
+}
+
 static void wip_apply_content(GlrExtEditWip *w) {
     ReplSceneLoadOpts opts;
     EditorUndoHistorySnapshot *history = NULL;
@@ -1409,20 +1430,7 @@ static void wip_apply_content(GlrExtEditWip *w) {
     g_wip_map_valid = 1;
     g_wip_active    = 1;
     seen_note_wip_followed(g_bound);
-    /* A payload landed while the recovery prompt was still on screen asking
-     * whether to follow this file. The editor is demonstrably alive and
-     * publishing - which is the resume condition - so following is right, but
-     * leaving the question up is not: it now asks about content that is
-     * already live, and either answer is meaningless. Retract it, and drop the
-     * decline it had pre-recorded, which describes a payload the file has
-     * moved off. */
-    if (g_wip_offering) {
-        g_wip_offering = 0;
-        seen_clear_wip_declined(g_bound);
-        if (glr_modal_active() &&
-            glr_modal_kind() == GLR_MODAL_CONFIRM_WIP_RECOVER)
-            glr_modal_cancel();
-    }
+    wip_retract_offer();
     g_stats.reloads++;
     g_stats.wip_updates++;
     editor_insert_mode_set(0);
@@ -1552,7 +1560,7 @@ static void wip_offer_recovery(void) {
     /* Recorded now the prompt is actually on screen, not when it is answered:
      * Esc has no callback, so declining is the default and accepting is what
      * clears it. A question nobody was asked has no answer worth keeping. */
-    if (wip_payload_hash(g_wip_path, &payload)) {
+    if (wip_probe(g_wip_path, &payload)) {
         seen_note_wip_declined(g_bound, payload);
         g_wip_suppressed       = payload;
         g_wip_suppressed_valid = 1;
