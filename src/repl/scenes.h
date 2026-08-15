@@ -207,8 +207,10 @@ const char *repl_active_scene_bound_path(void);
  * Any `@scene-name` / `@workspace-dir` the file carries is deliberately
  * ignored: a watched reload changes the program, never the slot's identity or
  * its binding, or an external file could silently retarget the very path
- * being watched (D3). Returns 1 on success, 0 with the live document
- * untouched on failure. */
+ * being watched (D3). The visible `t` binding is restored after a successful
+ * load (the initializer recreates it at 0); `anim_time` and play/pause are
+ * left alone, so an animated scene does not restart on every keystroke.
+ * Returns 1 on success, 0 with the live document untouched on failure. */
 struct ReplSceneLoadOpts;
 int  repl_reload_active_scene_from_path(const char *path,
                                         const struct ReplSceneLoadOpts *opts);

@@ -1105,7 +1105,9 @@ static int row_is_incomplete(const char *const *lines, int row) {
  * guessing: the row is the parked one (put the caret at the typed column), the
  * row has a document row (move the edit line), or the row has no editable row
  * at all - a header, a directive, exported C's scaffolding - and the honest
- * response is to leave the cursor where it is. */
+ * response is to leave the cursor where it is. A placement that actually
+ * moves the caret also requests follow-scroll; an unmapped row does not
+ * touch the viewport. */
 static void wip_place_cursor(int row, int col) {
     int doc_row;
 
@@ -1126,6 +1128,7 @@ static void wip_place_cursor(int row, int col) {
         if (pos < 0)   pos = 0;
         if (pos > len) pos = len;
         editor_cursor_pos_set(pos);
+        editor_scroll_follow_cursor_set(1);
         return;
     }
     doc_row = g_wip_map.doc_row[row - 1];
@@ -1153,6 +1156,7 @@ static void wip_place_cursor(int row, int col) {
         if (pos > len) pos = len;
         editor_cursor_pos_set(pos);
     }
+    editor_scroll_follow_cursor_set(1);
 }
 
 /* One content update: replace the document from the sidecar's payload, parking

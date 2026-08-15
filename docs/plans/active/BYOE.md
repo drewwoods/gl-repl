@@ -192,6 +192,14 @@ were the remaining state/undo/mapping holes):
 - **The latency gate times the shipped `.wip` path.** The first bench
   rewrote the saved file. It now publishes atomically and asserts
   `wip_updates`; `--saved` keeps the proxy.
+- **A same-scene watched reload keeps the visible `t` binding.** The
+  import initializer recreates `t` at 0; restoring through
+  `repl_state_time_set()` would also reset the free-running `anim_time`.
+  Play/pause already survived. Restore `t` only.
+- **Sidecar cursor placement requests follow-scroll.** Moving the row
+  and column without raising `editor_scroll_follow_cursor` left an
+  offscreen caret invisible. Mapped rows and the parked hole request
+  follow; an unmapped physical row still leaves the viewport alone.
 
 Scope notes taken while implementing, so a later reader does not have to
 re-derive them:

@@ -27,6 +27,7 @@
  * change token and not a race.
  */
 #include <fcntl.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -43,10 +44,12 @@
 #include "editor/state.h"
 #include "editor/undo.h"
 #include "repl/bootstrap.h"
+#include "repl/eval.h"
 #include "repl/example_loader.h"
 #include "repl/examples.h"
 #include "repl/scenes.h"
 #include "repl/state_owners.h"
+#include "ui/app/state.h"
 #include "subsystems/replay/replay.h"
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
@@ -2323,6 +2326,199 @@ static void test_cursor_follows_onto_a_continuation_row(void) {
     (void)unlink(WIP_PATH);
 }
 
+static float live_t(void) {
+    int idx = repl_eval_find_predef_var_idx("t");
+    return idx >= 0 ? g_predef_vars[idx].value : -1.0f;
+}
+
+/* A same-scene WIP content update re-inits the predef table and used to
+ * recreate `t` at 0, so an animated scene restarted on every keystroke.
+ * anim_time and play/pause already survived; restoration must not go
+ * through repl_state_time_set(), which would slam the free-running clock. */
+static void test_wip_reload_preserves_visible_t(void) {
+    ReplVariableView vars;
+    int t_idx;
+    int i;
+
+    printf("--- a WIP content update keeps t, anim_time and play state ---\n");
+
+    begin_wip_session(k_scene_a);
+    t_idx = repl_eval_find_predef_var_idx("t");
+    ASSERT_TRUE("t is bound", t_idx >= 0);
+    repl_state_time_set(5.25f);
+    repl_state_time_set_playing(0);
+    repl_state_variables_mut()->anim_time = 12.5f;
+    ASSERT_TRUE("t is the paused visible clock",
+                fabsf(live_t() - 5.25f) < 1e-5f);
+    ASSERT_INT("paused before any sidecar write",
+               repl_state_variables().time_playing, 0);
+    ASSERT_TRUE("anim_time has been allowed to drift",
+                fabsf(repl_state_variables().anim_time - 12.5f) < 1e-5f);
+
+    for (i = 0; i < 3; i++) {
+        char mutated[64];
+        const char *buf[6];
+        int n = 0;
+
+        for (; k_scene_b[n]; n++)
+            buf[n] = k_scene_b[n];
+        snprintf(mutated, sizeof(mutated), "glVertex3f(%d, 9, 9);", 7 + i);
+        buf[3] = mutated;
+        buf[n] = NULL;
+        set_mtime(WIP_PATH, 30000 + i * 2, 0);
+        publish_wip(buf, 4, 1);
+        set_mtime(WIP_PATH, 30001 + i * 2, 0);
+        glr_extedit_poll();
+    }
+    ASSERT_INT("three content updates landed", glr_extedit_stats().wip_updates, 3);
+    ASSERT_TRUE("visible t is unchanged", fabsf(live_t() - 5.25f) < 1e-5f);
+    vars = repl_state_variables();
+    ASSERT_TRUE("anim_time was not reset to match t",
+                fabsf(vars.anim_time - 12.5f) < 1e-5f);
+    ASSERT_INT("pause survived", vars.time_playing, 0);
+
+    repl_state_time_set_playing(1);
+    set_mtime(WIP_PATH, 30100, 0);
+    publish_wip(k_scene_longer, 4, 1);
+    set_mtime(WIP_PATH, 30200, 0);
+    glr_extedit_poll();
+    ASSERT_TRUE("t is still the pre-reload value while playing",
+                fabsf(live_t() - 5.25f) < 1e-5f);
+    ASSERT_INT("play survived", repl_state_variables().time_playing, 1);
+    ASSERT_TRUE("anim_time is still the drifted clock",
+                fabsf(repl_state_variables().anim_time - 12.5f) < 1e-5f);
+    (void)unlink(WIP_PATH);
+}
+
+#define LONG_WIP_VERTS 36
+#define LONG_WIP_ROWS  (3 + LONG_WIP_VERTS + 1)
+
+static int fill_long_wip(char storage[][64], const char **ptrs,
+                         int incomplete_phys) {
+    int n = 0;
+    int i;
+
+    snprintf(storage[n], 64, "glClearColor(0.1, 0.1, 0.1, 1.0);");
+    ptrs[n] = storage[n];
+    n++;
+    snprintf(storage[n], 64, "glClear(GL_COLOR_BUFFER_BIT);");
+    ptrs[n] = storage[n];
+    n++;
+    snprintf(storage[n], 64, "glBegin(GL_POINTS);");
+    ptrs[n] = storage[n];
+    n++;
+    for (i = 0; i < LONG_WIP_VERTS; i++) {
+        int phys = n + 1;
+        if (phys == incomplete_phys)
+            snprintf(storage[n], 64, "glVertex3f(%d,", i);
+        else
+            snprintf(storage[n], 64, "glVertex3f(%d, 0, 0);", i);
+        ptrs[n] = storage[n];
+        n++;
+    }
+    snprintf(storage[n], 64, "glEnd();");
+    ptrs[n] = storage[n];
+    n++;
+    ptrs[n] = NULL;
+    return n;
+}
+
+static int cursor_row_visible_after_layout(int *out_follow, int *out_visible) {
+    UiRenderSnapshot snap;
+
+    ui_state_viewport_set_size(800, 220);
+    glr_ctrl_build_ui_snapshot(&snap);
+    return glr_ctrl_code_panel_apply_scroll_follow_for_test(
+        &snap, out_follow, out_visible);
+}
+
+/* Sidecar cursor placement used to change the row and never raise
+ * editor_scroll_follow_cursor, so an offscreen caret stayed offscreen.
+ * A mapped committed row and a parked hole both request follow; an
+ * unmapped physical row leaves the viewport alone. */
+static void test_sidecar_cursor_requests_follow_scroll(void) {
+    char storage[LONG_WIP_ROWS + 1][64];
+    const char *ptrs[LONG_WIP_ROWS + 2];
+    static const char *const with_header[] = {
+        "// @scene-name Scroll",
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(5, 5, 5);",
+        "glEnd();",
+        NULL
+    };
+    int follow = -1, visible = 0;
+    int scroll_before;
+    int n;
+    int last_phys;
+
+    printf("--- a sidecar cursor move follows the caret into view ---\n");
+
+    n = fill_long_wip(storage, ptrs, 0);
+    last_phys = n;
+    begin_wip_session(k_scene_a);
+    publish_wip(ptrs, 1, 1);
+    glr_extedit_poll();
+    ASSERT_INT("the long buffer was adopted",
+               glr_extedit_stats().wip_updates, 1);
+
+    editor_scroll_set(0);
+    editor_scroll_follow_cursor_set(0);
+    set_mtime(WIP_PATH, 31000, 0);
+    publish_wip(ptrs, last_phys, 1);
+    set_mtime(WIP_PATH, 31100, 0);
+    glr_extedit_poll();
+    ASSERT_INT("a mapped row requests follow-scroll",
+               editor_scroll_follow_cursor(), 1);
+    ASSERT_INT("the caret is on the last document row",
+               editor_state_edit_line(), repl_state_document_count() - 1);
+    ASSERT_TRUE("and layout reveals that row",
+                cursor_row_visible_after_layout(&follow, &visible));
+
+    /* Parked hole: import with an incomplete mid-file row, navigate away,
+     * then come back. */
+    n = fill_long_wip(storage, ptrs, 20);
+    set_mtime(WIP_PATH, 31200, 0);
+    publish_wip(ptrs, 20, 10);
+    set_mtime(WIP_PATH, 31300, 0);
+    glr_extedit_poll();
+    ASSERT_TRUE("the hole is parked",
+                strncmp(editor_input_text(), "glVertex3f(", 11) == 0);
+
+    set_mtime(WIP_PATH, 31400, 0);
+    publish_wip(ptrs, 3, 1);
+    set_mtime(WIP_PATH, 31500, 0);
+    glr_extedit_poll();
+    editor_scroll_set(0);
+    editor_scroll_follow_cursor_set(0);
+    set_mtime(WIP_PATH, 31600, 0);
+    publish_wip(ptrs, 20, 10);
+    set_mtime(WIP_PATH, 31700, 0);
+    glr_extedit_poll();
+    ASSERT_INT("returning to the parked row requests follow",
+               editor_scroll_follow_cursor(), 1);
+    ASSERT_TRUE("and layout reveals the hole",
+                cursor_row_visible_after_layout(&follow, &visible));
+
+    /* Unmapped physical row: a consumed header. Scroll and follow stay put. */
+    begin_wip_session(k_scene_a);
+    publish_wip(with_header, 5, 1);
+    glr_extedit_poll();
+    editor_scroll_set(2);
+    editor_scroll_follow_cursor_set(0);
+    scroll_before = editor_scroll();
+    set_mtime(WIP_PATH, 31800, 0);
+    publish_wip(with_header, 1, 1);
+    set_mtime(WIP_PATH, 31900, 0);
+    glr_extedit_poll();
+    ASSERT_INT("an unmapped row does not request follow",
+               editor_scroll_follow_cursor(), 0);
+    ASSERT_INT("and does not move the viewport",
+               editor_scroll(), scroll_before);
+    (void)unlink(WIP_PATH);
+}
+
 /* A buffer that will not parse is the normal state of a file being typed. It
  * must not be retried every frame, and it must not damage what is live. */
 static void test_an_unparseable_buffer_leaves_the_scene_alone(void) {
@@ -2410,6 +2606,8 @@ int main(void) {
     test_undo_same_payload_cursor_does_not_reimport();
     test_failed_wip_import_restores_the_undo_ring();
     test_cursor_follows_onto_a_continuation_row();
+    test_wip_reload_preserves_visible_t();
+    test_sidecar_cursor_requests_follow_scroll();
     test_an_unparseable_buffer_leaves_the_scene_alone();
     glr_extedit_set_enabled(0);
     glr_modal_cancel();

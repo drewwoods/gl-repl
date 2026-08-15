@@ -1227,16 +1227,35 @@ int repl_load_scene_as_new_slot(const char *path,
  * is. */
 typedef int (*SceneReloadFn)(void *ctx, ReplImportResult *result);
 
+/* Visible `t` only: the reserved binding, not the free-running clock.
+ * A same-scene reload recreates the predef table (and `t` at 0); putting
+ * the previous value back through repl_state_time_set() would also slam
+ * anim_time, which a pause has already allowed to drift. */
+static float live_visible_t(void) {
+    ReplVariableView v = repl_state_variables();
+    int idx = v.time_var_idx;
+
+    if (idx < 0 || idx >= v.var_count)
+        idx = repl_eval_find_predef_var_idx("t");
+    if (idx < 0 || idx >= v.var_count || !v.vars)
+        return 0.0f;
+    return v.vars[idx].value;
+}
+
 static int reload_active_scene(SceneReloadFn load, void *ctx) {
     SceneSnapshot *stash;
     ReplImportResult import_result;
     int slot = g_active_user_scene;
+    float saved_t;
+    int saved_playing;
     int ok;
 
     stash = scene_snapshot_scratch_alloc();
     if (!stash)
         return 0;
     stash_live_state(stash);
+    saved_t = live_visible_t();
+    saved_playing = repl_state_variables().time_playing;
 
     reset_live_for_scene_import();
     ok = load(ctx, &import_result);
@@ -1246,6 +1265,13 @@ static int reload_active_scene(SceneReloadFn load, void *ctx) {
         return 0;
     }
     scene_snapshot_scratch_free(stash);
+    /* The import initializer recreated `t` at 0. Restore the visible
+     * binding only - not through repl_state_time_set(), which would
+     * also slam the free-running anim_time. Play/pause is restated
+     * so a later reader cannot mistake it for something the reset
+     * is allowed to touch. */
+    repl_state_time_set_transient(saved_t);
+    repl_state_time_set_playing(saved_playing);
 
     /* D3's no-rebind rule, and the reason it is enforced here rather than
      * trusted to the loader: `import_result` carries whatever `@scene-name` /

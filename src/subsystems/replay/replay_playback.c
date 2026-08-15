@@ -543,7 +543,11 @@ void replay_start(void) {
 
 void replay_stop(void) {
     ReplayRuntimeState *state = replay_state_mut();
-    repl_dispatch_set_time_playing(state->saved_t_playing);
+    /* saved_t_playing is only meaningful after replay_start snapshotted it.
+     * A no-op stop (the watcher's notify_reloaded calls this every
+     * content update) must not restore the default of 1 and un-pause t. */
+    if (state->active)
+        repl_dispatch_set_time_playing(state->saved_t_playing);
     state->active = 0;
     state->state = REPLAY_OFF;
     state->focus_call_depth = 0;
