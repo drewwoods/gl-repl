@@ -1584,6 +1584,11 @@ static int glr_action_modal_commit(GlrModalKind kind, const char *text,
     }
     case GLR_MODAL_CONFIRM_DELETE_SCENE:
         return glr_action_delete_scene_commit(context);
+    case GLR_MODAL_CONFIRM_WIP_RECOVER:
+        /* Opened by src/app/glr_extedit.c with its own commit callback, so it
+         * never reaches this dispatcher. The arm exists because the switch is
+         * default-less on purpose. */
+        return 0;
     case GLR_MODAL_NONE:
     case GLR_MODAL_COUNT:
         return 0;   /* not open: glr_modal_begin() rejects these */

@@ -82,6 +82,47 @@
  * remains - a block delimiter, say - the ATOMIC import fails and the live
  * document is left alone, which is the correct outcome and falls out of the
  * design rather than being special-cased.
+ *
+ * THE LIVE WIP SIDECAR (stage 2.5) turns "on save" into "as you type". The
+ * editor publishes its unsaved buffer to `<file>.wip` on every change and
+ * cursor move, and the watcher follows that instead of waiting for `:w`. The
+ * scene file itself is still what Ctrl+S writes and still what the binding
+ * names; the sidecar is a shadow of the buffer, never a scene of its own.
+ *
+ * Four things about it that are not obvious from the code:
+ *
+ *   THE CURSOR ROW IS NAMED, NOT GUESSED. The sidecar's last line is
+ *   `// @cursor <row> <col>` (1-based row, 1-based byte column, vim's
+ *   `line('.')` / `col('.')`). That lifts stage 2's restriction to a single
+ *   *trailing* incomplete row: the half-typed row can be anywhere, because the
+ *   editor says which one it is. The row is still only parked when it is
+ *   lexically incomplete - parking a finished command would take its geometry
+ *   out of the scene while the user looks straight at it.
+ *
+ *   A CURSOR MOVE MUST NOT RE-IMPORT. The content hash is taken over the
+ *   payload *without* the `@cursor` line, so scrolling around in vim costs one
+ *   stat and one hash. This is a correctness requirement, not a saving: a
+ *   content update costs milliseconds and stage 2.5 pays it per keystroke
+ *   (bench/bench_extedit.c). Following the cursor then needs a physical ->
+ *   document row map, because the row it names may be one no import ever
+ *   resolved; the reader caches one per content import (repl/scene_load.h).
+ *
+ *   UNDO IS PER SESSION, NOT PER KEYSTROKE. One snapshot when a WIP session
+ *   starts, then nothing - 32 slots of vim keystrokes would be worthless, and
+ *   vim owns undo of its own typing. Ctrl+Z therefore exits WIP back to the
+ *   last gl-repl document. It is detected the same way an abandoned input row
+ *   is: the document moved and this module did not move it. The D4 identity
+ *   split still applies, so an unedited example gets no snapshot and is not
+ *   promoted by someone else's typing.
+ *
+ *   THE SIDECAR IS NOT A SCENE. Found at bind time it means the editor died
+ *   holding unsaved work, and it is offered for recovery rather than applied -
+ *   accepting is a keystroke, declining leaves the file alone and stops
+ *   following it until the editor touches it again. When it *disappears*
+ *   mid-session (`:q`), what happens splits on identity for the same reason
+ *   D4 does: a user scene keeps the text as unsaved local work, and a
+ *   transient or unedited example goes back to the file on disk rather than
+ *   silently becoming a scene made of discarded editor text.
  */
 #ifndef GLR_EXTEDIT_H
 #define GLR_EXTEDIT_H
@@ -131,12 +172,17 @@ void glr_extedit_note_saved(void);
  * not re-parse - and a counter is the only way to assert them without timing.
  */
 typedef struct {
-    int reads;       /* file read + hashed (change token moved) */
-    int reloads;     /* documents actually replaced */
-    int failures;    /* reload attempts the loader rejected */
-    int deferrals;   /* times a version was parked behind a shut gate */
-    int dismissals;  /* parked versions the local document outvoted */
-    int parked_rows; /* reloads that put an incomplete final row in the input */
+    int reads;        /* file read + hashed (change token moved) */
+    int reloads;      /* documents actually replaced */
+    int failures;     /* reload attempts the loader rejected */
+    int deferrals;    /* times a version was parked behind a shut gate */
+    int dismissals;   /* parked versions the local document outvoted */
+    int parked_rows;  /* reloads that put an incomplete row in the input */
+    int wip_updates;  /* sidecar content updates that replaced the document */
+    int cursor_moves; /* sidecar updates that moved only the caret. The
+                       * assertion the fast path needs: this rising while
+                       * `reloads` does not is what "a cursor move costs no
+                       * import" means, and it is not observable by timing. */
 } GlrExtEditStats;
 
 GlrExtEditStats glr_extedit_stats(void);

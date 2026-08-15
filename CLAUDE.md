@@ -198,6 +198,7 @@ keep stubs minimal no-op. After touching stubs verify: `make test-stubs`,
 ./gl-repl --list-examples | --list-tours | --dump-code
 ./gl-repl --no-audio       # Skip audio init (isolates ma_engine_init stalls)
 ./gl-repl --watch scene.glr # Re-read the file when an external editor saves it
+                           # (+ packaging/editor/glr-wip.vim: follow it per keystroke)
 ```
 
 Full CLI + the `GLR_*` headless-capture env hooks, OSMesa builds, screenshot /

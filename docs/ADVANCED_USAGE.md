@@ -647,6 +647,55 @@ for the watcher section alone and for the whole frame. On this machine that is
 ~1 ms for a typical scene and ~5.5 ms p95 for the largest one, which is nearly
 all document re-parse: reading and hashing the file is under 1% of it.
 
+### Following the editor live
+
+`--watch` alone reacts to `:w`. With one plugin it reacts to every keystroke
+instead:
+
+```vim
+" ~/.vim/plugin/glr-wip.vim  (copy it, or :source it from the checkout)
+```
+
+[`packaging/editor/glr-wip.vim`](../packaging/editor/glr-wip.vim) publishes the
+unsaved buffer to `<file>.wip` on every change and every cursor move, and
+gl-repl mirrors it: the geometry updates as you type, the caret follows the row
+you are on, and a half-typed command lands in gl-repl's own input line where
+the edit guides and autocomplete can see it. Nothing writes the scene file
+except `:w` and Ctrl+S; the sidecar is a shadow of the buffer, and it is
+deleted when the buffer unloads or vim exits.
+
+By default only `*.glr` is published - set `g:glr_wip_patterns` to widen it.
+
+| What happens | What gl-repl does |
+|---|---|
+| you type | the scene follows, with no save |
+| you move the cursor | the caret follows, with **no** re-parse |
+| the row you are on is half-typed | it is parked in the input line, wherever it sits in the file |
+| you press Ctrl+Z in gl-repl | live follow pauses and your version stands, until you type in the editor again |
+| you edit in gl-repl instead | same: the local edit wins until the editor publishes again |
+| vim exits | a scene you own keeps the unsaved text; a catalog scene goes back to the file |
+| a `.wip` is already there when gl-repl starts | vim died holding unsaved work: gl-repl offers to follow it, and never applies it unasked |
+
+Two things worth knowing about the shape of this:
+
+- **A cursor move is deliberately cheap.** gl-repl hashes the buffer *without*
+  its `// @cursor` line, so scrolling around costs a `stat` and a hash instead
+  of a document re-parse. Following the caret across a re-parse boundary then
+  needs a real physical-row-to-document-row map, because a `.glr` header row or
+  an exported `.c` wrapper occupies a file row the document does not have; that
+  map is built once per content update and indexed for free afterwards.
+- **Undo is per session, not per keystroke.** One gl-repl undo entry when a
+  session starts, then none - so Ctrl+Z exits live follow back to the last
+  gl-repl document rather than stepping backwards through your typing, which
+  vim's own undo already owns. On an unedited example gl-repl pushes nothing
+  and creates no scene slot: typing in vim must not silently promote a catalog
+  scene into one of your eight.
+
+Any editor can drive this - the sidecar is a plain text file whose last line is
+`// @cursor <line> <col>`, 1-based row and 1-based byte column. Write it
+atomically (temp file in the same directory, then `rename`), or gl-repl may
+read it half-written.
+
 **The one friction that does not go away.** gl-repl rewrites the text it saves:
 canonical spacing, indentation re-derived from block scope, and C float
 suffixes stripped (`1.0f` becomes `1.0`). The first Ctrl+S after an external

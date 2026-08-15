@@ -16,19 +16,49 @@ list in "Steps"; the per-step state is tracked here.
 | 5 — `glr_extedit_notify_reloaded()` + D7 table | done |
 | 6 — stage 2, one incomplete final row | done |
 | 6.5 — stage 2.25, one recoverable failed row anywhere | **skipped — do not implement** |
-| 7 — stage 2.5, live WIP buffer | **gate taken and passed** (see below); building |
+| 7 — stage 2.5, live WIP buffer | done |
 
-Both halves of step 7's precondition are now satisfied. Stage 1 has been used
-against a real editor, and the latency gate has been measured rather than
+Both halves of step 7's precondition were satisfied before it was built. Stage
+1 was used against a real editor, and the latency gate was measured rather than
 estimated: `make bench-extedit`, p95 **5.5 ms** on the largest catalog scene
 against the 8 ms budget, ~1 ms on small and typical ones. The numbers and what
 they imply for a per-keystroke path are under "Gate" below.
 
-Everything 2.5 needs from stages 1-2 (the two-level gate, the three-state
-tracking, the deferral state machine, and the notification hook) was already in
-place. Stage 2.25 stays skipped: its automatic first-failure recovery is mostly
-throwaway work for 2.5, which receives an explicit cursor row and needs a
-complete physical-to-document map anyway.
+Stage 2.25 stayed skipped, and the reason held up: 2.5 receives an explicit
+cursor row and needs a complete physical-to-document map anyway, so the
+automatic first-failure recovery would have been throwaway work.
+
+Where stage 2.5 landed, and the three places the implementation says something
+the plan did not:
+
+- **`ReplSceneRowMap`** (`src/repl/scene_load.h`) is the map plus the
+  nonce-scoped `@cursor-hole` channel, requested through `ReplSceneLoadOpts`
+  and off on every other load path. It needed **no fixup pass** over rows
+  already recorded: the importer only ever appends, so feed order and document
+  order cannot diverge even though read order and feed order do (staged
+  function bodies, pending comments). Making the staged path record honestly
+  meant giving `ImportStagedFuncLine` its physical row - which also fixed a
+  warning about a rejected body line naming the flush point.
+- **The removed row is the cursor row only when it is incomplete**, and stage
+  2's trailing-row heuristic remains as the fallback when it is not. The plan
+  says "the row to remove" as though it were unconditional; parking a *finished*
+  command would take its geometry out of the scene while the user looks at it,
+  and a row half-typed and then navigated away from would otherwise freeze the
+  whole scene behind a row nobody is on.
+- **Declining the recovery offer does not delete the `.wip`.** The plan's table
+  says delete; leaving it is the smaller surprise - gl-repl did not create the
+  file, the editor's own `VimLeave` hook removes it, and both load-bearing
+  halves of that row (never auto-apply, then ignore until the token moves) are
+  honoured without deleting anything. Esc has no commit callback, so "delete"
+  would also have meant adding a cancel hook to the shared modal for one
+  caller.
+
+One defect the build surfaced that no amount of reading would have: placing the
+caret on a document row **must load that row into the input buffer**. An empty
+input buffer sitting on an occupied row reads as a pending deletion to
+`editor_input_has_uncommitted_change()`, which shuts the deferral gate - so
+following the cursor stopped the following. Arrowing onto a row loads it; the
+mirror has to do the same thing for the same reason.
 
 Corrections made after review, kept here because each was a real defect the
 first pass shipped. The behavioral cases have regression coverage; the
@@ -944,11 +974,11 @@ not exist: sockets, kqueue, inotify, FSEvents, mkfifo, fork/exec.
 
 All in failure and edge behavior, where the suite is thinnest.
 
-**Where they landed.** `tests/test_scene_load.c` (new, 79 assertions) covers
-the loader options and the source-file binding; `tests/test_glr_extedit.c`
-(new, 214 native / 5 wasm) covers the watcher; `test_export_glr_fixed_point`
-in `tests/test_repl_core_examples.c` covers the last bullet. The Stage 2.5
-rows below are **not** written yet. Everything else in the list is covered.
+**Where they landed.** `tests/test_scene_load.c` (118 assertions) covers the
+loader options, the source-file binding and the row map / cursor hole;
+`tests/test_glr_extedit.c` (270 native / 5 wasm) covers the watcher and the
+sidecar; `test_export_glr_fixed_point` in `tests/test_repl_core_examples.c`
+covers the last bullet. Everything in the list below is covered.
 
 - **Undo per identity.** User scene: reload is undoable. Unedited example:
   reload pushes nothing and **does not promote** — assert the slot count.
@@ -989,7 +1019,9 @@ rows below are **not** written yet. Everything else in the list is covered.
   functions: the returned document row is right, not off-by-header-count.
   Include a hole **inside a staged function body**. A genuine user comment
   spelling `// @cursor-hole` remains an ordinary comment; only the active,
-  nonce-bearing transport marker is consumed. This belongs to Stage 2.5.
+  nonce-bearing transport marker is consumed. The staged-function case is
+  driven off a *real* export rather than a hand-written fixture, so it cannot
+  drift from what the writer emits.
 - **WIP entry/exit.** Entry snapshot on a user scene but **not** on an
   unedited catalog scene (assert no promotion); Ctrl+Z out of WIP sticks and
   does not re-enter on the next poll; sidecar deletion clears WIP-active and
@@ -1020,7 +1052,8 @@ in the numbering below:
 | 3 | gracemont (gcc 13.3, Ubuntu 24.04): `make check-c99` and `make test-stubs` green, including the `st_mtim` arm of the change token that macOS never compiles. |
 | 4 | End-to-end: `./gl-repl --watch scene.glr`, appended a `/* C-style note */`, four complete rows, a trailing `glVertex3f(3,` and a `// still typing` comment under it, all from outside; the session reloaded 7 -> 13 commands, kept both comments as document rows, and parked the incomplete row. Also `--watch new.glr` on a file holding nothing but `glVertex3f(1,`: the startup import fails (bootstrap has no parking), the binding survives, and the next save loads. `--watch` with no positional file exits 1 with a usage error. |
 | 5 | Resolved by reading rather than by hand - see the scope note above. |
-| 6-7 | Stage 2.5 only; not reached. |
+| 6 | Done - see Verification 6 above. |
+| 7 | Done - `make bench-extedit`; results and caveats under "Gate". |
 
 1. `make check-state-ownership` (includes `check-c99`, `check-include-style`,
    `check-app-boot-band`, …) and `make check-trailing-whitespace`.

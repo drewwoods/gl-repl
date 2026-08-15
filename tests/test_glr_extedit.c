@@ -38,6 +38,7 @@
 #include "app/glr_config.h"
 #include "app/glr_ctrl.h"
 #include "app/glr_extedit.h"
+#include "app/glr_modal.h"
 #include "editor/input.h"
 #include "editor/state.h"
 #include "editor/undo.h"
@@ -54,6 +55,7 @@
 static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_TRUE(label, cond)      TEST_ASSERT_TRUE(&g_harness, label, cond)
 #define ASSERT_INT(label, got, want)  TEST_ASSERT_INT(&g_harness, label, got, want)
+#define ASSERT_STR(label, got, want)  TEST_ASSERT_STR(&g_harness, label, got, want)
 
 #define WATCH_PATH "/tmp/gl_repl_extedit_scene.glr"
 #define SWAP_PATH  "/tmp/gl_repl_extedit_scene.glr.swap"
@@ -100,6 +102,19 @@ static const char *const k_scene_broken[] = {
     "glEnd();",
     NULL
 };
+
+static int file_contains(const char *path, const char *needle) {
+    char buf[512];
+    FILE *f = fopen(path, "r");
+    int found = 0;
+
+    if (!f)
+        return 0;
+    while (!found && fgets(buf, (int)sizeof(buf), f))
+        found = strstr(buf, needle) != NULL;
+    fclose(f);
+    return found;
+}
 
 static void write_lines(const char *path, const char *const *lines) {
     FILE *f = fopen(path, "w");
@@ -1602,6 +1617,531 @@ static void test_disabled_watcher_does_nothing(void) {
     ASSERT_TRUE("the scene did not change", document_mentions("0, 0, 0"));
 }
 
+/* --- stage 2.5: the live WIP sidecar -------------------------------------- */
+
+#define WIP_PATH WATCH_PATH ".wip"
+
+/* Publish a buffer the way the editor's autocmd does: the whole buffer, then
+ * one `// @cursor <row> <col>` line. `row` 0 omits the directive. */
+static void publish_wip_at(const char *path, const char *const *lines,
+                           int row, int col) {
+    FILE *f = fopen(path, "w");
+    if (!f)
+        return;
+    for (int i = 0; lines && lines[i]; i++)
+        fprintf(f, "%s\n", lines[i]);
+    if (row > 0)
+        fprintf(f, "// @cursor %d %d\n", row, col);
+    fclose(f);
+}
+
+static void publish_wip(const char *const *lines, int row, int col) {
+    publish_wip_at(WIP_PATH, lines, row, col);
+}
+
+/* The published buffer and the scene file start out identical, so anything the
+ * sidecar does afterwards is visibly the sidecar's doing. */
+static void begin_wip_session(const char *const *initial) {
+    (void)unlink(WIP_PATH);
+    begin_watched_session(initial);
+    glr_modal_cancel();
+}
+
+static void test_sidecar_content_update_follows_without_saving(void) {
+    GlrExtEditStats stats;
+
+    printf("--- the sidecar updates the scene without a save ---\n");
+
+    begin_wip_session(k_scene_a);
+    ASSERT_TRUE("the session starts on scene A", document_mentions("0, 0, 0"));
+
+    /* vim has NOT written the scene file - only the sidecar moved. */
+    publish_wip(k_scene_b, 4, 1);
+    glr_extedit_poll();
+
+    stats = glr_extedit_stats();
+    ASSERT_INT("one content update", stats.wip_updates, 1);
+    ASSERT_TRUE("the scene followed the unsaved buffer",
+                document_mentions("9, 9, 9"));
+    ASSERT_TRUE("and the file on disk is untouched",
+                !file_contains(WATCH_PATH, "9, 9, 9"));
+    (void)unlink(WIP_PATH);
+}
+
+/* The whole reason the payload hash excludes the `@cursor` line. */
+static void test_cursor_only_update_does_not_reimport(void) {
+    GlrExtEditStats before, after;
+
+    printf("--- moving the cursor costs no import ---\n");
+
+    begin_wip_session(k_scene_a);
+    publish_wip(k_scene_b, 4, 1);
+    glr_extedit_poll();
+    before = glr_extedit_stats();
+
+    /* Same buffer, cursor moved. Five times, so a per-frame reimport would be
+     * unmissable in the counters. */
+    for (int i = 0; i < 5; i++) {
+        set_mtime(WIP_PATH, 1000 + i, 0);
+        publish_wip(k_scene_b, 1 + (i % 4), 1);
+        set_mtime(WIP_PATH, 2000 + i, 0);
+        glr_extedit_poll();
+    }
+    after = glr_extedit_stats();
+
+    ASSERT_INT("no further content updates",
+               after.wip_updates - before.wip_updates, 0);
+    ASSERT_INT("no further reloads", after.reloads - before.reloads, 0);
+    ASSERT_INT("five cursor moves", after.cursor_moves - before.cursor_moves, 5);
+    (void)unlink(WIP_PATH);
+}
+
+/* The cursor row resolves through the cached map, not by subtracting a
+ * constant - the file has a directive row the document does not. */
+static void test_cursor_follows_through_the_row_map(void) {
+    static const char *const with_header[] = {
+        "// @scene-name Sidecar",          /* physical 1: no document row */
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",/* physical 2 -> document 0 */
+        "glClear(GL_COLOR_BUFFER_BIT);",   /* physical 3 -> document 1 */
+        "glBegin(GL_POINTS);",             /* physical 4 -> document 2 */
+        "glVertex3f(5, 5, 5);",            /* physical 5 -> document 3 */
+        "glEnd();",                        /* physical 6 -> document 4 */
+        NULL
+    };
+
+    printf("--- the caret lands through the row map ---\n");
+
+    begin_wip_session(k_scene_a);
+    publish_wip(with_header, 5, 1);
+    glr_extedit_poll();
+    ASSERT_TRUE("the buffer was adopted", document_mentions("5, 5, 5"));
+    ASSERT_INT("physical 5 is document 3", editor_state_edit_line(), 3);
+
+    /* Cursor-only, onto a row the content import did resolve but which is one
+     * further off from its physical index. */
+    set_mtime(WIP_PATH, 3000, 0);
+    publish_wip(with_header, 6, 1);
+    set_mtime(WIP_PATH, 4000, 0);
+    glr_extedit_poll();
+    ASSERT_INT("physical 6 is document 4", editor_state_edit_line(), 4);
+
+    /* And onto the directive, which has no editable row at all. The honest
+     * answer is to leave the caret alone, not to guess. */
+    set_mtime(WIP_PATH, 5000, 0);
+    publish_wip(with_header, 1, 1);
+    set_mtime(WIP_PATH, 6000, 0);
+    glr_extedit_poll();
+    ASSERT_INT("a row with no document row moves nothing",
+               editor_state_edit_line(), 4);
+    (void)unlink(WIP_PATH);
+}
+
+/* Stage 2 could only park the trailing row. The sidecar names the row, so a
+ * half-typed command in the middle of the file is followable. */
+static void test_a_mid_file_half_typed_row_is_parked(void) {
+    static const char *const mid_typing[] = {
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(1, 1,",                 /* physical 4: being typed */
+        "glVertex3f(2, 2, 2);",
+        "glEnd();",
+        NULL
+    };
+
+    printf("--- a half-typed row in the middle of the file parks ---\n");
+
+    begin_wip_session(k_scene_a);
+    publish_wip(mid_typing, 4, 15);
+    glr_extedit_poll();
+
+    ASSERT_INT("the import succeeded", glr_extedit_stats().failures, 0);
+    ASSERT_STR("the half-typed row is in the input buffer",
+               editor_input_text(), "glVertex3f(1, 1,");
+    ASSERT_TRUE("the rows after it are in the document",
+                document_mentions("2, 2, 2"));
+    ASSERT_TRUE("and so is the closing glEnd", document_mentions("glEnd"));
+    /* Parked between glBegin (document 2) and glVertex3f(2,2,2) - not at the
+     * end, which is all stage 2 could do. */
+    ASSERT_INT("parked at the row it came from", editor_state_edit_line(), 3);
+    ASSERT_INT("the caret sits at the typed column", editor_cursor_pos(), 14);
+    (void)unlink(WIP_PATH);
+}
+
+/* The input buffer holds one row at a time, so navigating away from the parked
+ * row in the editor overwrites it with the row navigated to - and coming back
+ * has to restore it rather than leave whatever was last loaded. */
+static void test_leaving_and_returning_to_the_parked_row(void) {
+    static const char *const mid_typing[] = {
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(1, 1,",                 /* physical 4: being typed */
+        "glVertex3f(2, 2, 2);",
+        "glEnd();",
+        NULL
+    };
+
+    printf("--- the parked row survives a trip away from it ---\n");
+
+    begin_wip_session(k_scene_a);
+    publish_wip(mid_typing, 4, 15);
+    glr_extedit_poll();
+    ASSERT_STR("parked to begin with", editor_input_text(), "glVertex3f(1, 1,");
+
+    /* Cursor-only, onto an ordinary row. */
+    set_mtime(WIP_PATH, 14000, 0);
+    publish_wip(mid_typing, 5, 1);
+    set_mtime(WIP_PATH, 15000, 0);
+    glr_extedit_poll();
+    ASSERT_INT("no import for a cursor move",
+               glr_extedit_stats().wip_updates, 1);
+    ASSERT_TRUE("the caret is on the ordinary row now",
+                strstr(editor_input_text(), "2, 2, 2") != NULL);
+
+    /* And back. */
+    set_mtime(WIP_PATH, 16000, 0);
+    publish_wip(mid_typing, 4, 10);
+    set_mtime(WIP_PATH, 17000, 0);
+    glr_extedit_poll();
+    ASSERT_INT("both moves were cursor-only", glr_extedit_stats().cursor_moves, 2);
+    ASSERT_STR("the half-typed row is restored, not lost",
+               editor_input_text(), "glVertex3f(1, 1,");
+    ASSERT_INT("at the column the editor published", editor_cursor_pos(), 9);
+    ASSERT_INT("and still with no import", glr_extedit_stats().wip_updates, 1);
+    (void)unlink(WIP_PATH);
+}
+
+/* Ctrl+Z during a session goes back to the pre-session document and stays
+ * there - the session does not immediately re-apply itself. */
+static void test_undo_exits_the_session_and_sticks(void) {
+    printf("--- undo leaves live follow, and stays left ---\n");
+
+    begin_wip_session(k_scene_a);
+    /* A user scene, so D4 says the session gets its one snapshot. */
+    ASSERT_TRUE("the live scene is a user scene", repl_active_user_scene() >= 0);
+
+    publish_wip(k_scene_b, 4, 1);
+    glr_extedit_poll();
+    ASSERT_TRUE("the sidecar was applied", document_mentions("9, 9, 9"));
+
+    editor_undo_pop_snapshot();
+    ASSERT_TRUE("undo restores the pre-session document",
+                document_mentions("0, 0, 0"));
+
+    /* The sidecar has not moved, so nothing should re-apply. */
+    for (int i = 0; i < 5; i++)
+        glr_extedit_poll();
+    ASSERT_TRUE("and the undo sticks", document_mentions("0, 0, 0"));
+
+    /* One more keystroke in the editor lifts the hold; the update that lifts
+     * it is dropped, and following resumes after that. */
+    set_mtime(WIP_PATH, 7000, 0);
+    publish_wip(k_scene_longer, 4, 1);
+    set_mtime(WIP_PATH, 8000, 0);
+    glr_extedit_poll();
+    ASSERT_TRUE("the publication that lifts the hold is not applied",
+                document_mentions("0, 0, 0"));
+    set_mtime(WIP_PATH, 9000, 0);
+    publish_wip(k_scene_longer, 4, 1);
+    set_mtime(WIP_PATH, 10000, 0);
+    glr_extedit_poll();
+    ASSERT_TRUE("the next one is", document_mentions("3, 3, 3"));
+    (void)unlink(WIP_PATH);
+}
+
+/* One snapshot per session, not one per keystroke: the 32-slot ring is not a
+ * place to store somebody's typing. */
+static void test_a_session_costs_one_undo_entry(void) {
+    printf("--- a session is one undo entry, not one per keystroke ---\n");
+
+    begin_wip_session(k_scene_a);
+    for (int i = 0; i < 6; i++) {
+        static const char *const step[] = {
+            "glClearColor(0.1, 0.1, 0.1, 1.0);",
+            "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+            "glBegin(GL_POINTS);",
+            "glVertex3f(0, 0, 0);",
+            "glEnd();",
+            NULL
+        };
+        char line[64];
+        const char *buf[7];
+        int n = 0;
+        for (; step[n]; n++)
+            buf[n] = step[n];
+        snprintf(line, sizeof(line), "glVertex3f(%d, %d, %d);", i, i, i);
+        buf[3] = line;
+        buf[n] = NULL;
+        set_mtime(WIP_PATH, 11000 + i * 2, 0);
+        publish_wip(buf, 4, 1);
+        set_mtime(WIP_PATH, 11001 + i * 2, 0);
+        glr_extedit_poll();
+    }
+    ASSERT_INT("six content updates", glr_extedit_stats().wip_updates, 6);
+    ASSERT_TRUE("the last one is live", document_mentions("5, 5, 5"));
+
+    /* One undo, and we are back before the session started - not five steps
+     * back through vim's typing, which vim's own undo owns. */
+    editor_undo_pop_snapshot();
+    ASSERT_TRUE("one undo reaches the pre-session document",
+                document_mentions("0, 0, 0"));
+    (void)unlink(WIP_PATH);
+}
+
+/* A bound document that is NOT a user scene. A built-in example cannot be
+ * one - it has no file, so the watcher unbinds and the sidecar never runs. A
+ * file-backed `--examples-dir` entry is the real shape: a binding from
+ * glr_origin_path with the slot index still -1. Returns the scene path, or
+ * NULL if the fixture could not be built.
+ *
+ * `sidecar_out` receives the sidecar path, which is derived from the *bound*
+ * path and so is not WIP_PATH here. */
+static const char *begin_catalog_session(char *sidecar_out, size_t sidecar_sz) {
+    static char scene_path[512];
+    char root[512], scenes[512], catalog[512], err[512];
+
+    glr_extedit_set_enabled(0);
+    snprintf(root, sizeof(root), "/tmp/gl_repl_extedit_wip_catalog");
+    snprintf(scenes, sizeof(scenes), "%s/scenes", root);
+    snprintf(catalog, sizeof(catalog), "%s/catalog.ini", root);
+    snprintf(scene_path, sizeof(scene_path), "%s/watched.glr", scenes);
+    snprintf(sidecar_out, sidecar_sz, "%s.wip", scene_path);
+    (void)mkdir(root, 0700);
+    (void)mkdir(scenes, 0700);
+    (void)unlink(sidecar_out);
+    write_lines(scene_path, k_scene_a);
+    {
+        FILE *f = fopen(catalog, "w");
+        if (!f)
+            return NULL;
+        fprintf(f, "[watched]\n"
+                   "file = scenes/watched.glr\n"
+                   "name = Watched catalog scene\n"
+                   "tags = 3D\n"
+                   "group = Runtime\n");
+        fclose(f);
+    }
+    glr_ctrl_reset_all();
+    err[0] = '\0';
+    if (!repl_examples_load_dir(root, err, sizeof(err)))
+        return NULL;
+    (void)repl_load_example(0);
+    /* The production scene action refreshes the input row after the pipeline
+     * load; the low-level loader used here does not. */
+    editor_load_line_to_input(editor_state_edit_line());
+    glr_extedit_set_enabled(1);
+    glr_extedit_poll();
+    glr_modal_cancel();
+    return scene_path;
+}
+
+/* D4's identity split, from the sidecar's side: typing in vim must not turn an
+ * unedited catalog scene into a user scene. */
+static void test_sidecar_does_not_promote_a_catalog_scene(void) {
+    char sidecar[600];
+    int slots_before;
+
+    printf("--- vim typing does not promote a catalog scene ---\n");
+
+    if (!begin_catalog_session(sidecar, sizeof(sidecar))) {
+        ASSERT_TRUE("the runtime catalog fixture builds", 0);
+        return;
+    }
+    ASSERT_INT("a catalog scene is not a user scene",
+               repl_active_user_scene(), -1);
+    ASSERT_TRUE("but it is bound", glr_extedit_bound_path() != NULL);
+    slots_before = repl_user_scene_count();
+
+    publish_wip_at(sidecar, k_scene_b, 4, 1);
+    glr_extedit_poll();
+
+    /* Non-vacuous: the update has to have *happened* for the absence of a
+     * promotion to mean anything. */
+    ASSERT_INT("the buffer was followed", glr_extedit_stats().wip_updates, 1);
+    ASSERT_TRUE("the new geometry is live", document_mentions("9, 9, 9"));
+    ASSERT_INT("and no scene slot was created", repl_user_scene_count(),
+               slots_before);
+    (void)unlink(sidecar);
+}
+
+/* `:q` while a session is running. A user scene keeps the text; a transient
+ * goes back to the file, because keeping it would silently convert discarded
+ * editor buffer into the live scene. */
+static void test_sidecar_deletion_splits_on_identity(void) {
+    printf("--- losing the sidecar splits on who owns the document ---\n");
+
+    begin_wip_session(k_scene_a);
+    ASSERT_TRUE("a user scene", repl_active_user_scene() >= 0);
+    publish_wip(k_scene_b, 4, 1);
+    glr_extedit_poll();
+    ASSERT_TRUE("the buffer is live", document_mentions("9, 9, 9"));
+
+    (void)unlink(WIP_PATH);
+    glr_extedit_poll();
+    ASSERT_TRUE("a user scene keeps the unsaved text",
+                document_mentions("9, 9, 9"));
+
+    /* Now a catalog scene, which owns nothing: D4 gave it no slot and no undo
+     * entry, so keeping the text would make discarded editor buffer the live
+     * scene with no way back. */
+    {
+        char sidecar[600];
+        if (!begin_catalog_session(sidecar, sizeof(sidecar))) {
+            ASSERT_TRUE("the runtime catalog fixture builds", 0);
+            return;
+        }
+        publish_wip_at(sidecar, k_scene_b, 4, 1);
+        glr_extedit_poll();
+        ASSERT_TRUE("the catalog scene followed the buffer",
+                    document_mentions("9, 9, 9"));
+
+        (void)unlink(sidecar);
+        glr_extedit_poll();
+        ASSERT_TRUE("but on close it goes back to the file",
+                    document_mentions("0, 0, 0"));
+        ASSERT_TRUE("not the discarded buffer", !document_mentions("9, 9, 9"));
+    }
+}
+
+/* A sidecar that is there before the binding forms is unsaved work from a dead
+ * editor, and is offered rather than applied. */
+static void test_a_sidecar_found_at_bind_time_is_offered(void) {
+    printf("--- a leftover sidecar is offered, never applied ---\n");
+
+    glr_extedit_set_enabled(0);
+    glr_modal_cancel();
+    write_lines(WATCH_PATH, k_scene_a);
+    publish_wip(k_scene_b, 4, 1);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+    glr_extedit_set_enabled(1);
+    glr_extedit_poll();
+
+    ASSERT_TRUE("the scene is still the file", document_mentions("0, 0, 0"));
+    ASSERT_INT("nothing was applied", glr_extedit_stats().wip_updates, 0);
+    ASSERT_TRUE("a prompt is up", glr_modal_active());
+    ASSERT_INT("and it is the recovery prompt", (int)glr_modal_kind(),
+               (int)GLR_MODAL_CONFIRM_WIP_RECOVER);
+
+    /* Decline. The file stays on disk - gl-repl did not create it - and the
+     * watcher stops following it. */
+    glr_modal_cancel();
+    for (int i = 0; i < 5; i++)
+        glr_extedit_poll();
+    ASSERT_TRUE("declining leaves the scene alone",
+                document_mentions("0, 0, 0"));
+    ASSERT_TRUE("and leaves the sidecar on disk",
+                file_contains(WIP_PATH, "9, 9, 9"));
+    ASSERT_TRUE("with no second prompt", !glr_modal_active());
+    (void)unlink(WIP_PATH);
+}
+
+static void test_accepting_the_offer_starts_following(void) {
+    printf("--- accepting the offer starts live follow ---\n");
+
+    glr_extedit_set_enabled(0);
+    glr_modal_cancel();
+    write_lines(WATCH_PATH, k_scene_a);
+    publish_wip(k_scene_b, 4, 1);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+    glr_extedit_set_enabled(1);
+    glr_extedit_poll();
+    ASSERT_TRUE("the prompt is up", glr_modal_active());
+
+    glr_modal_handle_key('y');
+    glr_extedit_poll();
+    ASSERT_TRUE("the recovered buffer is now live",
+                document_mentions("9, 9, 9"));
+    ASSERT_TRUE("and the prompt is gone", !glr_modal_active());
+    (void)unlink(WIP_PATH);
+}
+
+/* A `:w` writes out the very buffer the sidecar has been feeding us. Reloading
+ * it would clear the input row and the caret for nothing. */
+static void test_saving_during_a_session_is_not_a_second_reload(void) {
+    GlrExtEditStats before, after;
+
+    printf("--- a save during a session is already applied ---\n");
+
+    begin_wip_session(k_scene_a);
+    publish_wip(k_scene_b, 4, 1);
+    glr_extedit_poll();
+    before = glr_extedit_stats();
+
+    /* vim writes the same buffer to the scene file. */
+    set_mtime(WATCH_PATH, 12000, 0);
+    write_lines(WATCH_PATH, k_scene_b);
+    set_mtime(WATCH_PATH, 13000, 0);
+    glr_extedit_poll();
+
+    after = glr_extedit_stats();
+    ASSERT_INT("the save triggers no reload", after.reloads - before.reloads, 0);
+    ASSERT_TRUE("the scene is still the buffer", document_mentions("9, 9, 9"));
+    (void)unlink(WIP_PATH);
+}
+
+/* The sidecar is not a scene: no `@cfg`, no camera, no rename - the same D3
+ * policy a watched save follows, for the same reason. */
+static void test_sidecar_is_geometry_not_presentation(void) {
+    static const char *const with_metadata[] = {
+        "// @scene-name Renamed By Vim",
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(7, 7, 7);",
+        "glEnd();",
+        NULL
+    };
+    int slot;
+    char name_before[USER_SCENE_NAME_MAX];
+    char path_before[512];
+
+    printf("--- the sidecar carries geometry, not identity ---\n");
+
+    begin_wip_session(k_scene_a);
+    slot = repl_active_user_scene();
+    ASSERT_TRUE("a user scene", slot >= 0);
+    snprintf(name_before, sizeof(name_before), "%s", repl_user_scene_name(slot));
+    /* Captured rather than spelled: the binding holds the *resolved* path, and
+     * on macOS /tmp resolves through /private. */
+    snprintf(path_before, sizeof(path_before), "%s",
+             repl_active_scene_bound_path());
+
+    publish_wip(with_metadata, 5, 1);
+    glr_extedit_poll();
+
+    ASSERT_TRUE("the geometry followed", document_mentions("7, 7, 7"));
+    ASSERT_STR("the scene keeps its name", repl_user_scene_name(slot),
+               name_before);
+    ASSERT_STR("and its file", repl_active_scene_bound_path(), path_before);
+    (void)unlink(WIP_PATH);
+}
+
+/* A buffer that will not parse is the normal state of a file being typed. It
+ * must not be retried every frame, and it must not damage what is live. */
+static void test_an_unparseable_buffer_leaves_the_scene_alone(void) {
+    GlrExtEditStats before, after;
+
+    printf("--- a buffer mid-thought does not damage the scene ---\n");
+
+    begin_wip_session(k_scene_a);
+    publish_wip(k_scene_broken, 1, 1);
+    glr_extedit_poll();
+    before = glr_extedit_stats();
+
+    ASSERT_INT("the import failed", before.failures, 1);
+    ASSERT_TRUE("the live scene is untouched", document_mentions("0, 0, 0"));
+
+    for (int i = 0; i < 5; i++)
+        glr_extedit_poll();
+    after = glr_extedit_stats();
+    ASSERT_INT("and it is not retried every frame",
+               after.failures - before.failures, 0);
+    (void)unlink(WIP_PATH);
+}
+
 int main(void) {
     printf("=== external-editor watch ===\n");
     test_bind_adopts_without_reloading();
@@ -1648,7 +2188,23 @@ int main(void) {
     test_returning_to_an_untouched_scene_keeps_local_edits();
     test_catalog_scene_reload_does_not_promote();
     test_disabled_watcher_does_nothing();
+    test_sidecar_content_update_follows_without_saving();
+    test_cursor_only_update_does_not_reimport();
+    test_cursor_follows_through_the_row_map();
+    test_a_mid_file_half_typed_row_is_parked();
+    test_leaving_and_returning_to_the_parked_row();
+    test_undo_exits_the_session_and_sticks();
+    test_a_session_costs_one_undo_entry();
+    test_sidecar_does_not_promote_a_catalog_scene();
+    test_sidecar_deletion_splits_on_identity();
+    test_a_sidecar_found_at_bind_time_is_offered();
+    test_accepting_the_offer_starts_following();
+    test_saving_during_a_session_is_not_a_second_reload();
+    test_sidecar_is_geometry_not_presentation();
+    test_an_unparseable_buffer_leaves_the_scene_alone();
     glr_extedit_set_enabled(0);
+    glr_modal_cancel();
+    (void)unlink(WIP_PATH);
     (void)unlink(WATCH_PATH);
     (void)unlink(SWAP_PATH);
     (void)unlink(OTHER_PATH);

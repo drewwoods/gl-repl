@@ -2394,6 +2394,14 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
                      "%s   %s%s[Y] delete   [Esc] cancel", text,
                      error[0] ? error : "", error[0] ? "   " : "");
             break;
+        case GLR_MODAL_CONFIRM_WIP_RECOVER:
+            /* Esc is "leave it alone", not "cancel": the sidecar stays on
+             * disk and the watcher stops following it until the editor
+             * touches it again. Nothing is deleted either way. */
+            snprintf(snap->app_modal_message, sizeof(snap->app_modal_message),
+                     "%s   %s%s[Y] follow it   [Esc] ignore it", text,
+                     error[0] ? error : "", error[0] ? "   " : "");
+            break;
         case GLR_MODAL_NONE:
         case GLR_MODAL_COUNT:
             break;   /* not open: glr_modal_active() already excluded these */

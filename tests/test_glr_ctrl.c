@@ -5796,6 +5796,7 @@ static const ModalKindPolicy k_modal_policies[] = {
     { GLR_MODAL_WORKSPACE_OPEN_PATH,     1, '\r' },
     { GLR_MODAL_SCENE_SAVE_AS,           1, '\r' },
     { GLR_MODAL_CONFIRM_DELETE_SCENE,    0, 'y'  },
+    { GLR_MODAL_CONFIRM_WIP_RECOVER,     0, 'y'  },
 };
 
 static GlrModalKind g_modal_commit_kind;

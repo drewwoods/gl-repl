@@ -17,6 +17,7 @@
 #include "app/glr_assign_plot_bridge.h"
 #include "app/glr_camera.h"
 #include "app/glr_ctrl.h"
+#include "app/glr_modal.h"
 #include "app/glr_pointer_script.h"
 #include "config.h"          /* MAX_LINE_LEN / MAX_INPUT_LEN */
 #include "editor/input.h"
@@ -104,6 +105,47 @@ typedef struct {
 static GlrExtEditSeen *g_seen;
 static size_t          g_seen_count;
 static size_t          g_seen_capacity;
+
+/* ----- stage 2.5: the live WIP sidecar ------------------------------------ */
+
+/* `<bound>.wip`, the editor's unsaved buffer. Derived from the binding, never
+ * named separately: a sidecar the watcher followed but Ctrl+S would not write
+ * over is a second source of truth. */
+static char                  g_wip_path[GLR_EXTEDIT_PATH_MAX];
+static GlrExtEditChangeToken g_wip_observed;
+/* The buffer WITHOUT its trailing `@cursor` line. Splitting the hash this way
+ * is what makes a cursor move cost a stat and a hash instead of a reimport. */
+static unsigned long long    g_wip_payload;
+static int                   g_wip_payload_valid;
+/* A session runs from the first content update to the sidecar's disappearance
+ * or the user's own edit. It exists to make "push one undo snapshot" and "who
+ * owns the document" answerable. */
+static int                   g_wip_active;
+/* The user declined the recovery offer. Cleared when the editor next touches
+ * the file, which is the plan's "ignore it until its change token moves again"
+ * - a decline is about this file as it stands, not about following at all. */
+static int                   g_wip_hold;
+/* A sidecar that was *already there* when the binding formed. The distinction
+ * matters and is not observable later: the same file appearing five seconds
+ * after gl-repl started is the editor opening, and appearing before it started
+ * is the editor having died. Only the second is a recovery. */
+static int                   g_wip_recover_offer;
+static int                   g_wip_offering;      /* the recovery modal is up */
+static int                   g_wip_entry_pushed;  /* the one per-session snapshot */
+/* The live document as this module last left it. A mismatch means somebody
+ * else moved it - Ctrl+Z, or a commit - and the session is over. Same
+ * mechanism as the deferral gate, for the same reason: reading the document
+ * beats hooking every key that could have changed it. */
+static unsigned long long    g_wip_doc_fp;
+static int                   g_wip_have_doc_fp;
+/* The row map the last content import produced, and the cursor row it was
+ * computed against. Grown to the file's physical row count; a cursor-only
+ * update indexes it instead of importing. */
+static int                  *g_wip_rows;
+static int                   g_wip_rows_cap;
+static ReplSceneRowMap       g_wip_map;
+static int                   g_wip_map_valid;
+static unsigned long         g_wip_nonce;
 
 static void forget_binding_state(void);
 
@@ -272,6 +314,21 @@ static int hash_file_content(const char *path, unsigned long long *out) {
     return 1;
 }
 
+/* Hash a line array as if it were the file those lines came from - one
+ * trailing newline each. Used for the sidecar payload, where the bytes on disk
+ * and the bytes that matter differ by exactly the `@cursor` row. */
+static unsigned long long hash_lines(const char *const *lines, int count) {
+    unsigned long long h = hash_init();
+    int i;
+
+    for (i = 0; i < count; i++) {
+        if (lines[i])
+            h = hash_bytes(h, lines[i], strlen(lines[i]));
+        h = hash_bytes(h, "\n", 1);
+    }
+    return h;
+}
+
 static unsigned long long document_fingerprint(void) {
     unsigned long long h = hash_init();
     int count = repl_state_document_count();
@@ -289,6 +346,7 @@ static unsigned long long document_fingerprint(void) {
 /* ----- state ------------------------------------------------------------- */
 
 static void rebind(const char *path);
+static void wip_forget(void);
 
 static void forget_binding_state(void) {
     g_bound[0]           = '\0';
@@ -299,6 +357,7 @@ static void forget_binding_state(void) {
     g_have_defer_fp      = 0;
     g_reported_missing   = 0;
     g_parked_valid       = 0;
+    wip_forget();
 }
 
 static void stop_after_seen_history_oom(void) {
@@ -368,12 +427,15 @@ GlrExtEditStats glr_extedit_stats(void) {
  * (this is reached at startup and on every scene switch), so a reload would be
  * a pointless wholesale replacement that clears the undo ring and the input
  * row for nothing. */
+static void wip_bind(void);
+
 static void rebind(const char *path) {
     struct stat st;
     unsigned long long content;
 
     forget_binding_state();
     snprintf(g_bound, sizeof(g_bound), "%s", path);
+    wip_bind();
     if (stat(g_bound, &st) != 0)
         return;
     g_observed = change_token_from_stat(&st);
@@ -658,17 +720,28 @@ static int find_incomplete_final_row(const char *const *lines, int count) {
 
 /* ----- reload ------------------------------------------------------------- */
 
-static void park_incomplete_row(const char *text) {
+/* `doc_row` is where the row belongs in the document, or -1 for "past the end"
+ * - which is the only answer stage 2 can give, because a saved file says
+ * nothing about where the user is and the row it parks is the trailing one.
+ * The sidecar knows better and passes the mapped position.
+ *
+ * Insert mode follows from that. Parked at the end, the input row appends,
+ * which is how the code panel already renders the trailing live row. Parked
+ * between two rows, a local commit has to *insert* there - overwrite would
+ * eat the row below, which is a row the editor still has. */
+static void park_incomplete_row(const char *text, int doc_row) {
+    int count = repl_state_document_count();
+
+    if (doc_row < 0 || doc_row > count)
+        doc_row = count;
     /* Order matters: editor_input_set_text() ends by snapping the cursor to
      * end-of-text, so text first. Stage 2 carries no column, and end-of-text
      * is the right answer for a row the user is still typing.
      *
-     * `edit_line = document_count` parks past the last row so the input row
-     * appends - which is already how the code panel renders the trailing live
-     * row. No placeholder document row is inserted; the row is deliberately
-     * NOT in the document, so an outbound write drops it. */
-    editor_insert_mode_set(0);
-    editor_state_edit_line_set(repl_state_document_count());
+     * No placeholder document row is inserted; the row is deliberately NOT in
+     * the document, so an outbound write drops it. */
+    editor_insert_mode_set(doc_row < count);
+    editor_state_edit_line_set(doc_row);
     editor_input_set_text(text);
     snprintf(g_parked_row, sizeof(g_parked_row), "%s", text);
     g_parked_valid = 1;
@@ -791,7 +864,7 @@ static void apply_reload(const char *path) {
         editor_state_edit_line_clamp();
         g_parked_valid = 0;
         if (have_parked) {
-            park_incomplete_row(parked);
+            park_incomplete_row(parked, -1);
             g_stats.parked_rows++;
         }
         glr_extedit_notify_reloaded();
@@ -802,6 +875,497 @@ static void apply_reload(const char *path) {
     g_have_defer_fp = 0;
     if (!history_ok)
         stop_after_seen_history_oom();
+}
+
+/* ----- stage 2.5: the live WIP sidecar ------------------------------------ */
+
+static int gate_is_shut(void);
+static void park_incomplete_row(const char *text, int doc_row);
+
+/* One `// @cursor <row> <col>` line, 1-based row and 1-based byte column, as
+ * vim's line('.') / col('.') report them. Returns 0 for anything else, so a
+ * buffer that merely mentions the word is not mistaken for the directive. */
+static int parse_cursor_directive(const char *line, int *row, int *col) {
+    const char *p = line;
+    char *end;
+    long r, c;
+
+    if (!line)
+        return 0;
+    while (*p == ' ' || *p == '\t')
+        p++;
+    if (p[0] != '/' || p[1] != '/')
+        return 0;
+    p += 2;
+    while (*p == ' ' || *p == '\t')
+        p++;
+    if (strncmp(p, "@cursor", 7) != 0)
+        return 0;
+    p += 7;
+    if (*p != ' ' && *p != '\t')
+        return 0;
+    r = strtol(p, &end, 10);
+    if (end == p)
+        return 0;
+    p = end;
+    c = strtol(p, &end, 10);
+    if (end == p)
+        return 0;
+    while (*end == ' ' || *end == '\t')
+        end++;
+    if (*end != '\0')
+        return 0;
+    if (r < 1 || c < 1)
+        return 0;
+    *row = (int)r;
+    *col = (int)c;
+    return 1;
+}
+
+static void wip_map_release(void) {
+    free(g_wip_rows);
+    g_wip_rows     = NULL;
+    g_wip_rows_cap = 0;
+    g_wip_map_valid = 0;
+    repl_scene_row_map_init(&g_wip_map, NULL, 0, 0);
+}
+
+static void wip_forget(void) {
+    g_wip_path[0]       = '\0';
+    g_wip_observed.valid = 0;
+    g_wip_payload_valid  = 0;
+    g_wip_active         = 0;
+    g_wip_hold           = 0;
+    g_wip_recover_offer  = 0;
+    g_wip_offering       = 0;
+    g_wip_entry_pushed   = 0;
+    g_wip_have_doc_fp    = 0;
+    wip_map_release();
+}
+
+/* Grow the cached map to hold one entry per physical row, and hand it a fresh
+ * nonce. Returns 0 only on allocation failure, where the caller falls back to
+ * not following the cursor rather than to following it wrongly. */
+static int wip_map_reserve(int rows) {
+    if (rows > g_wip_rows_cap) {
+        int  want = rows < 256 ? 256 : rows;
+        int *grown = (int *)realloc(g_wip_rows, (size_t)want * sizeof(*grown));
+        if (!grown)
+            return 0;
+        g_wip_rows     = grown;
+        g_wip_rows_cap = want;
+    }
+    /* Never zero: zero is the reader's "no hole requested". Bumped per import
+     * so a marker left in a file by an earlier one cannot be consumed by a
+     * later one. */
+    if (++g_wip_nonce == 0)
+        g_wip_nonce = 1;
+    repl_scene_row_map_init(&g_wip_map, g_wip_rows, g_wip_rows_cap,
+                            g_wip_nonce);
+    g_wip_map_valid = 0;
+    return 1;
+}
+
+static void wip_bind(void) {
+    struct stat st;
+
+    wip_forget();
+    if (!g_bound[0])
+        return;
+    if (snprintf(g_wip_path, sizeof(g_wip_path), "%s.wip", g_bound) >=
+        (int)sizeof(g_wip_path)) {
+        g_wip_path[0] = '\0';   /* no room: this binding gets no sidecar */
+        return;
+    }
+    if (stat(g_wip_path, &st) == 0 && S_ISREG(st.st_mode)) {
+        g_wip_recover_offer = 1;
+        g_wip_hold          = 1;
+        g_wip_observed      = change_token_from_stat(&st);
+    }
+}
+
+/* The document as this module last left it, so a later poll can tell "nobody
+ * touched it" from "the user undid or committed something". */
+static void wip_stamp_document(void) {
+    g_wip_doc_fp      = document_fingerprint();
+    g_wip_have_doc_fp = 1;
+}
+
+/* A WIP session ends. `why` is shown; NULL says nothing (the caller has its
+ * own message, or the session simply never started). */
+static void wip_end_session(const char *why) {
+    g_wip_active       = 0;
+    g_wip_entry_pushed = 0;
+    g_wip_have_doc_fp  = 0;
+    if (why)
+        repl_set_status(why);
+}
+
+/* The sidecar, read and split the same way the scene file is, plus the two
+ * things only it carries: the cursor it names and the hash of everything
+ * else. */
+typedef struct {
+    GlrExtEditFileLines lines;    /* payload only - the @cursor row is removed */
+    unsigned long long  payload;  /* hash of the payload, cursor row excluded */
+    int                 cursor_row;   /* 1-based, or 0 when the file has none */
+    int                 cursor_col;   /* 1-based byte column */
+} GlrExtEditWip;
+
+static void wip_free(GlrExtEditWip *w) {
+    file_lines_free(&w->lines);
+}
+
+/* Read the sidecar. The payload hash deliberately excludes the trailing
+ * `@cursor` line - that exclusion is the whole fast path, and getting it wrong
+ * turns every cursor keypress into a document reimport.
+ *
+ * Only the *last* line is considered, because that is where the publisher puts
+ * it: a buffer whose body happens to contain the same text keeps it as
+ * ordinary content. */
+static int wip_read(const char *path, GlrExtEditWip *w) {
+    w->payload    = 0;
+    w->cursor_row = 0;
+    w->cursor_col = 1;
+    if (!file_lines_read(path, &w->lines))
+        return 0;
+    if (w->lines.count > 0 &&
+        parse_cursor_directive(w->lines.ptrs[w->lines.count - 1],
+                               &w->cursor_row, &w->cursor_col)) {
+        w->lines.count--;
+        w->lines.ptrs[w->lines.count] = NULL;
+    }
+    w->payload = hash_lines(w->lines.ptrs, w->lines.count);
+    return 1;
+}
+
+/* Is physical row `row` (1-based) a statement the user has not finished?
+ *
+ * The same evidence stage 2 uses on the trailing row - the importer's own
+ * scanner, bracket depth back to zero AND a last code character that closes
+ * the statement - applied at a row the editor named instead of one this code
+ * guessed. Rows with no code are not statements and are never parked. */
+static int row_is_incomplete(const char *const *lines, int row) {
+    int depth = 0, code_len = 0, in_block = 0;
+    char last;
+
+    last = repl_scan_code_line(lines[row - 1], &depth, &in_block, &code_len);
+    if (code_len == 0)
+        return 0;
+    return !(depth <= 0 && repl_is_stmt_terminator(last));
+}
+
+/* Move the live cursor to wherever physical row `row` ended up.
+ *
+ * Three answers, and the third is why the map records a sentinel rather than
+ * guessing: the row is the parked one (put the caret at the typed column), the
+ * row has a document row (move the edit line), or the row has no editable row
+ * at all - a header, a directive, exported C's scaffolding - and the honest
+ * response is to leave the cursor where it is. */
+static void wip_place_cursor(int row, int col) {
+    int doc_row;
+
+    if (!g_wip_map_valid || row < 1 || row > g_wip_map.count)
+        return;
+    if (g_wip_map.hole_row == row && g_parked_valid) {
+        int len, pos;
+        /* Re-park rather than assume the text is still there. The input buffer
+         * holds one row at a time, so moving the caret onto an ordinary row
+         * below loaded that row over the parked one; coming back has to put it
+         * back, or the half-typed command silently becomes whatever row the
+         * caret last visited. A locally-edited parked row cannot reach this -
+         * the gate is shut while it is dirty. */
+        if (strcmp(editor_input_text(), g_parked_row) != 0)
+            park_incomplete_row(g_parked_row, g_wip_map.hole_doc_row);
+        len = (int)strlen(editor_input_text());
+        pos = col - 1;
+        if (pos < 0)   pos = 0;
+        if (pos > len) pos = len;
+        editor_cursor_pos_set(pos);
+        return;
+    }
+    doc_row = g_wip_map.doc_row[row - 1];
+    if (doc_row == REPL_ROW_MAP_NONE)
+        return;
+    /* Insert mode off first, and both halves matter. A row that *exists* is
+     * being edited in place, not inserted before - and while insert mode is on,
+     * any non-empty input counts as uncommitted whatever the row underneath
+     * says, so leaving it on after a mid-file park would shut the deferral gate
+     * the moment the caret moved to an ordinary row and stop the following
+     * entirely. editor_load_line_to_input() does not clear it. */
+    editor_insert_mode_set(0);
+    editor_state_edit_line_set(doc_row);
+    editor_state_edit_line_clamp();
+    /* Load the row, exactly as arrowing onto it would. Not cosmetic either: the
+     * input buffer is compared against the row under the cursor, and parking an
+     * *empty* buffer on an occupied row reads as a pending deletion - which
+     * shuts the same gate. Loading also makes the mirror honest: the row the
+     * editor says you are on is the row gl-repl offers to edit. */
+    editor_load_line_to_input(editor_state_edit_line());
+    {
+        int len = (int)strlen(editor_input_text());
+        int pos = col - 1;
+        if (pos < 0)   pos = 0;
+        if (pos > len) pos = len;
+        editor_cursor_pos_set(pos);
+    }
+}
+
+/* One content update: replace the document from the sidecar's payload, parking
+ * the named row when it is half-typed.
+ *
+ * The difference from apply_reload() is entirely in *which* row is removed.
+ * Stage 2 guesses - the last row with code - because a saved file says
+ * nothing about where the user is. Here the editor says, so the row can be
+ * anywhere, and an incomplete row in the middle of a file becomes followable
+ * instead of failing the import. It is still only removed when it is
+ * incomplete: a finished command belongs in the document, and parking it would
+ * take its geometry out of the scene while the user is looking at it. */
+static void wip_apply_content(GlrExtEditWip *w) {
+    ReplSceneLoadOpts opts;
+    char marker[MAX_LINE_LEN];
+    char parked[MAX_INPUT_LEN];
+    int  have_parked = 0;
+    int  is_user_scene = repl_active_user_scene() >= 0;
+    int  row = w->cursor_row;
+    int  ok;
+
+    repl_scene_load_opts_init(&opts, repl_scene_format_from_path(g_bound));
+    opts.policy       = REPL_SCENE_LOAD_POLICY_ATOMIC;
+    opts.apply_cfg    = 0;
+    opts.camera_apply = REPL_CAMERA_APPLY_NONE;
+    /* A keystroke is not a load event; see ReplSceneLoadOpts.quiet. */
+    opts.quiet        = 1;
+
+    if (!wip_map_reserve(w->lines.count > 0 ? w->lines.count : 1)) {
+        repl_set_status_error("Watch: out of memory following the editor");
+        return;
+    }
+    opts.row_map = &g_wip_map;
+
+    if (row < 1 || row > w->lines.count || !row_is_incomplete(w->lines.ptrs,
+                                                              row)) {
+        /* The cursor is not on a half-typed row. It can still be true that the
+         * *trailing* row is one - typed, then navigated away from - and stage
+         * 2's heuristic is exactly the answer for that shape. Without this
+         * fallback the whole scene would freeze behind a row the user is no
+         * longer looking at. */
+        row = find_incomplete_final_row(w->lines.ptrs, w->lines.count) + 1;
+    }
+    if (row >= 1) {
+        snprintf(parked, sizeof(parked), "%s", w->lines.ptrs[row - 1]);
+        have_parked = 1;
+        /* Substituted, not deleted: the reader cannot report where a row it
+         * never saw would have gone, and that position is where the input row
+         * has to sit. */
+        if (repl_scene_cursor_hole_line(marker, (int)sizeof(marker),
+                                        g_wip_nonce) > 0) {
+            w->lines.ptrs[row - 1] = marker;
+            opts.allow_empty = 1;   /* the buffer may be only this row */
+        } else {
+            have_parked = 0;
+        }
+    }
+
+    /* D4, unchanged, and once per session rather than once per keystroke: the
+     * 32-slot ring is not a place to store somebody's typing. */
+    if (is_user_scene && !g_wip_entry_pushed) {
+        editor_undo_push_snapshot();
+        g_wip_entry_pushed = 1;
+    }
+
+    ok = repl_reload_active_scene_from_lines(w->lines.ptrs, g_bound, &opts);
+    if (!ok) {
+        g_stats.failures++;
+        /* Deliberately still "active": the editor is mid-thought and the next
+         * keystroke usually fixes it. The document was rolled back, so the
+         * fingerprint below still describes what is live. */
+        wip_stamp_document();
+        return;
+    }
+
+    g_wip_map_valid = 1;
+    g_wip_active    = 1;
+    g_stats.reloads++;
+    g_stats.wip_updates++;
+    editor_insert_mode_set(0);
+    editor_input_clear();
+    editor_state_edit_line_clamp();
+    g_parked_valid = 0;
+    if (have_parked) {
+        park_incomplete_row(parked, g_wip_map.hole_doc_row);
+        g_stats.parked_rows++;
+    }
+    wip_place_cursor(w->cursor_row, w->cursor_col);
+    glr_extedit_notify_reloaded();
+    /* The scene file on disk still holds the last saved version, and the
+     * document no longer matches it. Forget the applied stamp so a later `:w`
+     * of exactly these bytes is not mistaken for something already loaded -
+     * and so returning to this scene later re-reads it. */
+    g_pending       = 0;
+    g_have_defer_fp = 0;
+    wip_stamp_document();
+}
+
+/* The sidecar vanished - `:q`, `VimLeave`, or someone deleting it.
+ *
+ * The split is D4's, arrived at from the other side. A user scene owns its
+ * document, so the typed text stays as unsaved local work and Ctrl+Z still
+ * reaches the pre-session version. A transient or an unedited example does
+ * not: D4 deliberately created no slot and pushed no undo entry, so keeping
+ * the text would convert discarded editor buffer into the live catalog scene,
+ * under an example's identity, with its source gone. That one goes back to the
+ * file. */
+static void wip_handle_deleted(void) {
+    int is_user_scene = repl_active_user_scene() >= 0;
+
+    if (!g_wip_active) {
+        wip_end_session(NULL);
+        g_wip_hold = 0;
+        return;
+    }
+    if (is_user_scene) {
+        wip_end_session("Watch: editor closed; unsaved WIP text kept");
+    } else {
+        ReplSceneLoadOpts opts;
+        repl_scene_load_opts_init(&opts, repl_scene_format_from_path(g_bound));
+        opts.policy       = REPL_SCENE_LOAD_POLICY_ATOMIC;
+        opts.apply_cfg    = 0;
+        opts.camera_apply = REPL_CAMERA_APPLY_NONE;
+        editor_insert_mode_set(0);
+        editor_input_clear();
+        g_parked_valid = 0;
+        if (repl_reload_active_scene_from_path(g_bound, &opts)) {
+            g_stats.reloads++;
+            editor_state_edit_line_clamp();
+            glr_extedit_notify_reloaded();
+            wip_end_session("Watch: editor closed; reloaded the saved file");
+        } else {
+            g_stats.failures++;
+            wip_end_session("Watch: editor closed; could not reload the file");
+        }
+        /* Whatever the file holds is now what the document holds - or the
+         * reload failed and the applied stamp is honest either way only if we
+         * re-derive it. Cheapest correct answer: let the main-file poll
+         * re-read it by dropping the stamp. */
+        g_applied_valid = 0;
+    }
+    wip_map_release();
+    g_wip_payload_valid = 0;
+    g_wip_hold          = 0;
+}
+
+/* Y at the recovery prompt. The sidecar is left exactly as it is; accepting
+ * only says "follow it", and the next poll does the reading. */
+static int wip_recover_commit(GlrModalKind kind, const char *text, int context) {
+    (void)kind;
+    (void)text;
+    (void)context;
+    g_wip_hold     = 0;
+    g_wip_offering = 0;
+    /* Force the read: the observed token was stamped when the offer was made,
+     * so nothing has "moved" since. */
+    g_wip_observed.valid = 0;
+    return 1;
+}
+
+/* A sidecar that is already there when the watcher binds means the editor died
+ * holding unsaved work. Never applied on sight (that would let a stale file
+ * from days ago replace the scene the user just opened); offered once.
+ *
+ * Declining is Esc, and it does NOT delete the file. The plan's table says
+ * delete; leaving it is the smaller surprise - gl-repl did not create it, the
+ * editor's own VimLeave hook is what removes it, and the load-bearing halves
+ * of that row (never auto-apply, then ignore until the token moves) are both
+ * honoured by the hold this sets before the prompt opens. */
+static void wip_offer_recovery(void) {
+    char question[GLR_EXTEDIT_PATH_MAX + 64];
+
+    /* One offer per binding, whether or not it opened: another modal already
+     * owning the keyboard is not a reason to keep asking every frame, and the
+     * hold means declining is the safe default. */
+    g_wip_recover_offer = 0;
+    if (glr_modal_active())
+        return;
+    snprintf(question, sizeof(question),
+             "External WIP recovered from %s. Follow it?", g_wip_path);
+    if (glr_modal_begin(GLR_MODAL_CONFIRM_WIP_RECOVER, question, 0,
+                        wip_recover_commit))
+        g_wip_offering = 1;
+}
+
+/* One frame of sidecar watching, run after the scene file's own poll. */
+static void wip_poll(void) {
+    struct stat st;
+    GlrExtEditChangeToken token;
+    GlrExtEditWip w;
+
+    if (!g_wip_path[0])
+        return;
+
+    if (stat(g_wip_path, &st) != 0) {
+        if (g_wip_active || g_wip_hold || g_wip_observed.valid) {
+            wip_handle_deleted();
+            g_wip_observed.valid = 0;
+            g_wip_offering       = 0;
+        }
+        return;
+    }
+
+    if (g_wip_recover_offer) {
+        wip_offer_recovery();
+        return;
+    }
+
+    token = change_token_from_stat(&st);
+    if (change_token_equal(&token, &g_wip_observed))
+        return;
+    g_wip_observed = token;
+
+    /* The editor is publishing again, which is exactly the condition a hold
+     * waits for: it was set by declining the recovery offer, and declining
+     * means "not this file as it stands", not "never". Following resumes with
+     * this update rather than the one after - the local-edit case below is
+     * where a publication is deliberately dropped, and doing it in both places
+     * would cost two. */
+    g_wip_hold = 0;
+
+    /* The same gate the scene file waits on: a lesson owns the document, and
+     * so does a half-typed local line the user has not finished. */
+    if (gate_is_shut())
+        return;
+
+    /* Somebody else moved the document since the last update - Ctrl+Z, or a
+     * commit. Their version wins until the editor publishes again, which is
+     * the same rule a dismissed save follows. */
+    if (g_wip_active && g_wip_have_doc_fp &&
+        document_fingerprint() != g_wip_doc_fp) {
+        /* This publication is dropped, and only this one. Whether the user
+         * undid before or after the editor wrote is not knowable from here, so
+         * the tie goes to the user - and the next thing they type in the
+         * editor resumes following. */
+        wip_end_session("Watch: kept your edit; live follow paused");
+        g_wip_payload_valid = 0;
+        return;
+    }
+
+    g_stats.reads++;
+    if (!wip_read(g_wip_path, &w))
+        return;
+
+    if (g_wip_payload_valid && w.payload == g_wip_payload) {
+        /* Cursor-only. No import, no undo entry, no notification: the document
+         * did not change, and the caret is the only thing that did. */
+        wip_place_cursor(w.cursor_row, w.cursor_col);
+        g_stats.cursor_moves++;
+        wip_free(&w);
+        wip_stamp_document();
+        return;
+    }
+
+    wip_apply_content(&w);
+    g_wip_payload       = w.payload;
+    g_wip_payload_valid = 1;
+    wip_free(&w);
 }
 
 /* ----- poll --------------------------------------------------------------- */
@@ -855,19 +1419,15 @@ static void dismiss_pending(const char *why) {
     repl_set_status(msg);
 }
 
-void glr_extedit_poll(void) {
-#if defined(__EMSCRIPTEN__)
-    /* No external editor in a browser tab, and no filesystem worth watching.
-     * The TU stays non-empty for the C99 rule and the flag is ignored. */
-    return;
-#else
+#if !defined(__EMSCRIPTEN__)
+/* The scene file's half of a frame: everything `--watch` did before the
+ * sidecar existed. Split out so the sidecar runs on every frame this one
+ * returns early from - and it returns early a lot. */
+static void scene_file_poll(void) {
     const char *path;
     struct stat st;
     GlrExtEditChangeToken token;
     int in_lesson;
-
-    if (!g_enabled)
-        return;
 
     if (!binding_is_pinned()) {
         path = repl_active_scene_bound_path();
@@ -933,6 +1493,19 @@ void glr_extedit_poll(void) {
             g_have_defer_fp = 0;
             return;
         }
+        /* A `:w` during a live session: the editor wrote out the very buffer
+         * the sidecar has already been feeding us, so the document is that
+         * payload already (bar the parked row, which is not the file's to
+         * hold). Reloading would clear the input row and the caret for
+         * nothing. Stamp it as applied and move on. */
+        if (g_wip_payload_valid && content == g_wip_payload) {
+            g_applied_content = content;
+            g_applied_valid   = 1;
+            (void)seen_remember(g_bound, content);
+            g_pending       = 0;
+            g_have_defer_fp = 0;
+            return;
+        }
         g_pending         = 1;
         g_pending_content = content;
         g_have_defer_fp   = 0;
@@ -962,6 +1535,19 @@ void glr_extedit_poll(void) {
     }
 
     apply_reload(g_bound);
+}
+#endif
+
+void glr_extedit_poll(void) {
+#if defined(__EMSCRIPTEN__)
+    /* No external editor in a browser tab, and no filesystem worth watching.
+     * The TU stays non-empty for the C99 rule and the flag is ignored. */
+    return;
+#else
+    if (!g_enabled)
+        return;
+    scene_file_poll();
+    wip_poll();
 #endif
 }
 

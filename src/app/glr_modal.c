@@ -69,6 +69,7 @@ static int modal_char_ok(unsigned char c) {
         /* A single name that becomes a directory/file entry. */
         return c != '/' && c != '\\' && c != ':';
     case GLR_MODAL_CONFIRM_DELETE_SCENE:
+    case GLR_MODAL_CONFIRM_WIP_RECOVER:
         return 0;   /* y/N confirmation: nothing is typed into it */
     case GLR_MODAL_NONE:
     case GLR_MODAL_COUNT:
@@ -84,7 +85,8 @@ int glr_modal_handle_key(unsigned char key) {
         glr_modal_cancel();
         return 1;
     }
-    if (g_kind == GLR_MODAL_CONFIRM_DELETE_SCENE) {
+    if (g_kind == GLR_MODAL_CONFIRM_DELETE_SCENE ||
+        g_kind == GLR_MODAL_CONFIRM_WIP_RECOVER) {
         if ((key == 'y' || key == 'Y') && g_commit &&
             g_commit(g_kind, g_text, g_context))
             glr_modal_cancel();
