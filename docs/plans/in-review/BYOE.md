@@ -98,6 +98,21 @@ not enough: `import_finish_load` applies the pending cfg bag and camera
 fields, not a third load policy**. Declarations, function aliases and other
 *program* metadata are still consumed normally.
 
+Two traps in wiring those two fields:
+
+- **`camera_apply = NONE` must skip the apply, not fall through it.**
+  `ReplCameraApplyMode` today has only `IMPORT` / `RESTORE` / `EXAMPLE`
+  (`camera_header.h:56-60`), and `cam_apply_pose` **snaps for anything that is
+  not `EXAMPLE`** (`glr_camera_export.c:116-124`). A new `NONE` handed to that
+  function would snap the camera and violate D3 outright. Either
+  `import_finish_load` skips `repl_camera_header_finish` entirely, or `NONE`
+  becomes an explicit no-op arm in the bridge *and* in every default-less
+  switch over the enum.
+- **`apply_cfg = 0` must still clear the pending bag.**
+  `import_workspace_cfg_apply_and_reset` (`import.c:168-176`) applies *and*
+  clears. Skipping the whole call leaves a stale accumulator for the next
+  non-watch load to inherit. Skip the apply; keep the reset.
+
 Also state it plainly: **`@scene-name` and `@workspace-dir` cannot rebind or
 rename an already-bound watched slot.** A watched reload changes the program,
 never the slot's identity or its binding record (D1). Otherwise an external
@@ -140,8 +155,13 @@ existing document-only undo contract without widening every snapshot.
 `editor_input_has_uncommitted_change()` does not exist today. Define it:
 
 - `edit_line < count` → dirty iff the input differs from the canonical text of
-  that document row. Arrowing onto a row *loads* it and is therefore not
-  dirty.
+  that document row, compared **through `repl_canonical_input_view()`**
+  (`src/repl/text_helpers.h:19`). Not a raw `editor_buffer_line()` compare:
+  document rows are stored with the trailing `;` while
+  `editor_load_line_to_input()` strips it (`src/editor/input.c:414` uses
+  exactly this view), so a raw compare would mark every normally loaded
+  command dirty and deferral would never lift. Arrowing onto a row *loads*
+  it and is therefore not dirty.
 - `edit_line == count` (trailing row) → dirty iff `input_len > 0`, except a
   parked WIP row still owned by the watcher (below).
 
@@ -151,13 +171,22 @@ them is a bug:
 | Event | Pending |
 |---|---|
 | Cancel / escape the input row | **Apply** — the row was abandoned |
-| Commit `;` | **Dismiss**, and advance the content token to the dismissed hash so the same bytes do not re-trigger next frame |
+| Commit `;` | **Dismiss** into a separate *suppressed-content* hash (see below) so the same bytes do not re-trigger |
 
 Applying on commit would destroy the line just committed: both sides hold *A*,
 vim saves *B* while the user is typing *L*, the user commits so the document
 is *A+L*, deferral lifts, *B* lands and *L* is gone. Ctrl+Z could recover it
 only on the user-scene path, and the user still watches their commit vanish a
 frame later. Dismiss instead — the local document wins until vim saves again.
+
+**Dismissal is a third state, not "successfully applied."** Advancing the
+*content* token to the dismissed payload *B* would be wrong: the live document
+is *A+L*, and the next `CursorMoved` would then look like a cursor-only update
+(payload unchanged) and apply cursor/row mapping derived from *B* — which was
+never loaded — onto *A+L*. Keep a distinct **suppressed-content hash**: while
+the sidecar payload still equals dismissed *B*, ignore **both** content and
+cursor updates. Resume only when vim changes the scene payload. *B* is never
+recorded as applied.
 
 **The parked WIP-row exclusion is conditional, not blanket.** Record the input
 text (or an input revision) when the watcher parks the row; exclude it from
@@ -211,6 +240,20 @@ pending version computed against the pre-lesson document must never land on
 the document `tutorial_end_keep_view` leaves behind. During a tutorial or tour
 the sidecar is ignored outright; a tour and the watcher must not both mutate
 one document.)*
+
+**Ignoring is not enough — stamp the tokens at lesson end.** If sidecar and
+base activity are ignored *without* advancing the observed tokens, the first
+poll after the lesson sees that old movement as new and applies it, defeating
+the dismiss-on-end rule. At tutorial/tour end: clear pending state and stamp
+the current base **and** sidecar change tokens as observed. Live following
+resumes only on a *subsequent* token movement.
+
+**Stay bound across the lesson.** `tutorial_start` →
+`repl_scenes_enter_transient_scene()` sets the active user scene to -1, so the
+slot has no path. The binding must nonetheless remain the pre-lesson file —
+otherwise the "external change waiting" status has nothing to point at. Do not
+unbind. After the lesson the next genuine save of that file replaces whatever
+the lesson left behind; that is ordinary watch behavior, not a leak.
 
 ### D8 — Two-level change gate
 
@@ -368,12 +411,26 @@ end-of-text is the answer. `editor_state_edit_line_set` is `state.h:391`.
 
 ### Incomplete-row heuristic
 
-Require **lexical evidence of incompleteness** on the last non-empty,
-non-directive row, after trimming. Treat it as incomplete iff:
+Require **lexical evidence of incompleteness** on the last non-empty **code**
+row, after trimming. Treat it as incomplete iff:
 
 - bracket depth ≠ 0, **or**
-- the last code character is **not a statement terminator** — reuse
-  `is_stmt_terminator` (`; { } :`, `import.c:2693`).
+- the last code character is **not a statement terminator** (`; { } :`).
+
+**Promote `scan_code_line` (`import.c:2663-2682`), not just
+`is_stmt_terminator`.** The heuristic needs *both* the running bracket depth
+and the last code character, and depth is not a naive paren count:
+`scan_code_line` skips string and char literals, stops at an unquoted `//`,
+and counts `()` and `[]` but **not** `{}` (which delimit blocks). A `src/app/`
+reimplementation would drift from the importer that has to agree with it.
+Promote one helper returning `{depth, last, code_len}` — or an
+`is_complete()` over them — and use it on both sides.
+
+That same helper also settles "which row": a pure comment or directive line
+yields `code_len == 0`, so **selecting the last row with code skips trailing
+comments for free**. Without that, an ordinary trailing `// note` has no
+terminator and would be parked as a half-typed command. Valid trailing
+comments stay in the atomic document.
 
 **The terminator is the test, not "a trailing comma or operator."** That
 weaker rule misses the most common half-typed line of all:
@@ -391,9 +448,9 @@ well-formed-but-wrong row (`glVertx3f(1,2,3);`) has a terminator, so it is not
 stripped, ATOMIC rejects it, and the whole file is refused — which is correct.
 Any *other* row failing ATOMIC refuses the file too.
 
-`is_stmt_terminator` (`import.c:2693`) is the right predicate to reuse but is
-a file-static in a `repl_*` TU while the heuristic runs in `src/app/`; it
-needs promoting to a shared header rather than duplicating.
+Both `scan_code_line` and `is_stmt_terminator` (`import.c:2693`) are
+file-statics in a `repl_*` TU while the heuristic runs in `src/app/`, so the
+promotion above is a shared header, not a copy.
 
 If the removed row is a block delimiter, the remainder unbalances and the
 ATOMIC import fails, leaving the document alone. That falls out of the design;
@@ -502,6 +559,21 @@ Three constraints on the marker, all of which bite:
 raw-scene feed path. The importer must consume it *before* the feed, record
 the row, and emit nothing.
 
+**The hole alone is not enough — cache a complete row map.** The marker
+resolves the row that was active during a *content* import. But the whole
+point of the content token is that a cursor-only update **skips the import**,
+and by then the cursor may name a *different* physical row for which no
+mapping was ever produced. Without more, the fast path and `.c` support cannot
+coexist: either every cursor move forces a reimport, or `.c` cursor moves land
+on the wrong row.
+
+So **each successful content import caches a physical→document map for every
+physical row**, including an explicit classification for rows that have no
+editable REPL row (headers, wrappers, staged-function scaffolding, consumed
+directives). The hole marker supplies the entry for the removed row; a
+cursor-only update just indexes the cached map. The map is invalidated by the
+next content import.
+
 `@cursor` itself must **not** go on `ReplImportResult` as a parsed directive,
 and must never survive canonical export — unlike `@plot`, which rides a row's
 text deliberately, cursor position is transport metadata for one snapshot and
@@ -534,8 +606,19 @@ deliberate ring-only, no-promotion helper is added for the purpose.
 | Exit | Behavior |
 |---|---|
 | Ctrl+Z out of WIP | Restore the base version, clear WIP-active, and **ignore the sidecar until its change token moves again** — otherwise the next poll re-enters WIP and the undo does not stick |
-| Sidecar deleted (`VimLeave`) | Clear WIP-active; keep the current document |
+| Sidecar deleted (`VimLeave`) | Clear WIP-active, then **split on identity** (below) |
 | Next WIP session | Captures a fresh entry snapshot, subject to the identity split above |
+
+**Sidecar deletion cannot unconditionally retain the WIP text.** Retaining is
+safe for an established user scene, but not for an unedited catalog/transient
+scene: D4 deliberately created no slot and no undo entry, so a forced `:q!`
+would silently convert discarded editor text into the active catalog scene
+under an example identity, with its external source gone.
+
+| Identity at deletion | Behavior |
+|---|---|
+| User scene | Retain the WIP text as local unsaved work, with a clear status |
+| Transient / unedited example | **Reload the bound base file**, or require an explicit promotion — never silently adopt |
 
 ### Gate
 
@@ -577,7 +660,8 @@ not exist: sockets, kqueue, inotify, FSEvents, mkfifo, fork/exec.
    `--watch` only.
 5. `glr_extedit_notify_reloaded()` + the D7 table.
 6. Stage 2: last-row strip, `.glr` only, append placement, terminator
-   heuristic (`is_stmt_terminator` promoted to a shared header).
+   heuristic (`scan_code_line` + `is_stmt_terminator` promoted to a shared
+   header; last **code** row, so trailing comments are skipped).
 7. Stage 2.5 only after stage 1 has been used and the total content-update
    latency is measured: `@cursor-hole` staging + nonce, bind-time recovery vs
    live follow, WIP undo/exit policy, full `s:GlrWip()`.
@@ -599,8 +683,17 @@ All in failure and edge behavior, where the suite is thinnest:
   unchanged.
 - **Malformed file is not retried every frame** — assert the read/parse
   counters settle after one attempt.
-- **Tutorial / tour.** Inbound defers, and the pending version is **dismissed**
-  at lesson end rather than landing on the leftover document.
+- **Tutorial / tour.** Inbound defers; the pending version is **dismissed** at
+  lesson end rather than landing on the leftover document; and **no reload
+  occurs after the lesson without a further external edit** (the token-stamping
+  case). The binding still names the pre-lesson file throughout.
+- **Dismissed content suppresses cursor follow.** After a commit dismisses
+  *B*, a subsequent cursor-only sidecar update must not apply *B*-derived row
+  mapping to the live document; following resumes only when the payload
+  changes.
+- **Cursor-only move to an unmapped row.** With `.c` scaffolding, move the
+  cursor to a row not active during the last content import and assert it
+  resolves through the cached map — no reimport, no wrong row.
 - **Failed reload leaves no trace** — document, history and input row
   untouched.
 - **Change token.** Same-second double write; safe-write rename changing the
@@ -618,7 +711,14 @@ All in failure and edge behavior, where the suite is thinnest:
   case where a genuine user comment spells `// @cursor-hole`.
 - **WIP entry/exit.** Entry snapshot on a user scene but **not** on an
   unedited catalog scene (assert no promotion); Ctrl+Z out of WIP sticks and
-  does not re-enter on the next poll; sidecar deletion clears WIP-active.
+  does not re-enter on the next poll; sidecar deletion clears WIP-active and
+  **splits on identity** — a user scene retains the text, a transient reloads
+  the base file rather than adopting it as the catalog scene.
+- **D3 wiring.** `camera_apply = NONE` does not snap the camera (the
+  `cam_apply_pose` fall-through), and `apply_cfg = 0` still leaves the pending
+  cfg bag cleared for the next non-watch load.
+- **Trailing comment is not parked.** A file ending in `// note` after a
+  complete command loads whole, with the comment as a document row.
 - **`@cursor` never exported.**
 - **Sidecar atomicity.** Repeated writes while the watcher reads; no
   empty/truncated reload ever observed.
