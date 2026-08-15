@@ -33,6 +33,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "app/glr_camera.h"
+#include "app/glr_config.h"
 #include "app/glr_ctrl.h"
 #include "app/glr_extedit.h"
 #include "editor/input.h"
@@ -542,6 +544,62 @@ static void test_failed_reload_restores_a_full_undo_ring(void) {
                repl_state_document_count(), base_rows);
 }
 
+/* --- D3: what a watched reload must NOT touch ----------------------------- */
+
+/* An external *text* edit is geometry, not a presentation reset. A file that
+ * carries `@cfg` and `@camera` rows still gets to say what the program is -
+ * and gets no say at all over the live view the user has set up. Asserted on
+ * both outcomes, because a failed reload must be just as inert. */
+static void test_watched_reload_preserves_cfg_and_camera(void) {
+    static const char *const with_metadata[] = {
+        "// @cfg grid = GRID_THEME_SOIL",
+        "glTranslatef(0.0f, 0.0f, -42.0f);   // @camera dist",
+        "glRotatef(31.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
+        "glRotatef(41.0f, 0.0f, 1.0f, 0.0f);   // @camera ry",
+        "glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(6, 6, 6);",
+        "glEnd();",
+        NULL
+    };
+    static const char *const with_metadata_broken[] = {
+        "// @cfg grid = GRID_THEME_SOIL",
+        "glTranslatef(0.0f, 0.0f, -99.0f);   // @camera dist",
+        "glBegin(GL_POINTS);",
+        "glColor3f(1, 0, 0); glVertex3f(0, 0, 0);",
+        "glEnd();",
+        NULL
+    };
+    int grid_before;
+    float dist_before;
+
+    printf("--- a watched reload leaves cfg and camera alone ---\n");
+
+    begin_watched_session(k_scene_a);
+    grid_before = glr_config_get(GLR_CONFIG_GRID_THEME);
+    dist_before = glr_camera_destination().dist;
+
+    write_lines(WATCH_PATH, with_metadata);
+    glr_extedit_poll();
+    ASSERT_INT("the reload succeeded", glr_extedit_stats().reloads, 1);
+    ASSERT_TRUE("the new program is live", document_mentions("6, 6, 6"));
+    ASSERT_INT("but its @cfg did not apply",
+               glr_config_get(GLR_CONFIG_GRID_THEME), grid_before);
+    ASSERT_TRUE("and its @camera did not move the camera",
+                glr_camera_destination().dist == dist_before);
+
+    /* Same again on the failure path. */
+    write_lines(WATCH_PATH, with_metadata_broken);
+    glr_extedit_poll();
+    ASSERT_INT("the second reload failed", glr_extedit_stats().failures, 1);
+    ASSERT_INT("cfg is still untouched",
+               glr_config_get(GLR_CONFIG_GRID_THEME), grid_before);
+    ASSERT_TRUE("and so is the camera",
+                glr_camera_destination().dist == dist_before);
+    ASSERT_TRUE("with the previous program still live",
+                document_mentions("6, 6, 6"));
+}
+
 /* --- lessons (D7) --------------------------------------------------------- */
 
 /* A tutorial drives the document itself, and two writers on one document is
@@ -890,6 +948,7 @@ int main(void) {
     test_user_scene_reload_is_undoable();
     test_example_reload_does_not_promote();
     test_failed_reload_restores_a_full_undo_ring();
+    test_watched_reload_preserves_cfg_and_camera();
     test_tutorial_defers_then_dismisses();
     test_reload_stops_replay();
     test_reload_clears_the_input_row();

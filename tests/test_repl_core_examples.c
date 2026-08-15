@@ -12,6 +12,7 @@
 #include "repl/state_owners.h"
 #include <math.h>
 #include "repl/export.h"
+#include "repl/scenes.h"       /* repl_reload_active_scene_from_path */
 #include "source_document.h"
 #include "repl/text_helpers.h"
 #include "repl/util.h"
@@ -1985,6 +1986,76 @@ static void test_scene_dir_exports_compile(const char *dir, const char *tag,
     repl_examples_clear_runtime_catalog();
 }
 
+/* Does a `.glr` stop changing once it has been through gl-repl once?
+ *
+ * The external-editor workflow (docs/plans/active/BYOE.md) lives with a real
+ * friction: gl-repl regenerates canonical text on save - spacing from the
+ * command spec, indentation from block scope, C float suffixes stripped - so
+ * the first Ctrl+S after an external edit reformats the file under the
+ * editor. That is a stated UX cost. What must NOT happen is that it keeps
+ * reformatting: a file that churns on every save is unusable with a watcher,
+ * because each save is a fresh diff in the editor's buffer.
+ *
+ * Byte-stability after one pass was only ever asserted for a single construct
+ * (the if/else-if/else round-trip in test_repl_core_io.c). This is the
+ * document-wide version, over the shipped catalog: export, re-load the
+ * exported file, export again, and require the two files to be identical.
+ * Re-loading through the *file* path rather than the catalog is deliberate -
+ * that is the path a watched reload takes. */
+static void test_export_glr_fixed_point(const char *temp_dir) {
+    int count = repl_example_count();
+
+    printf("--- .glr export reaches a fixed point after one pass (%d scenes) ---\n",
+           count);
+
+    for (int idx = 0; idx < count; idx++) {
+        char first_path[512], second_path[512], label[192];
+        char *first = NULL, *second = NULL;
+        const char *name = repl_example_name(idx);
+
+        snprintf(first_path, sizeof(first_path), "%s/fixed_%02d_a.glr",
+                 temp_dir, idx);
+        snprintf(second_path, sizeof(second_path), "%s/fixed_%02d_b.glr",
+                 temp_dir, idx);
+
+        load_example_for_test(idx);
+        snprintf(label, sizeof(label), "scene %02d exports .glr once", idx);
+        ASSERT_TRUE(label,
+                    repl_export_save_glr(first_path, source_document_view()));
+
+        /* Straight back in through the reload path a watched save takes, then
+         * straight back out. Deliberately NOT preceded by declare_test_vars():
+         * that harness helper pre-declares x/y/z/i/j/k/a/b/c/n, which would
+         * collide with a scene's own `static float x, y, s;` and make the
+         * round trip look lossy when the collision is the test's doing.
+         * repl_reload_active_scene_from_path resets the predef table first,
+         * exactly as every real file-load caller does. */
+        pin_code_panel_state();
+        snprintf(label, sizeof(label), "scene %02d re-imports its own export", idx);
+        ASSERT_TRUE(label, repl_reload_active_scene_from_path(first_path, NULL));
+        settle_camera_transition_for_test();
+        snprintf(label, sizeof(label), "scene %02d exports .glr twice", idx);
+        ASSERT_TRUE(label,
+                    repl_export_save_glr(second_path, source_document_view()));
+
+        first  = slurp_path(first_path);
+        second = slurp_path(second_path);
+        snprintf(label, sizeof(label), "scene %02d .glr is a fixed point", idx);
+        if (first && second && strcmp(first, second) != 0) {
+            printf("DETAIL [.glr churns on re-export] %s\n  first:  %s\n  second: %s\n",
+                   name ? name : "(unnamed)", first_path, second_path);
+        }
+        ASSERT_TRUE(label, first && second && strcmp(first, second) == 0);
+        free(first);
+        free(second);
+
+        if (!g_keep_temp) {
+            remove(first_path);
+            remove(second_path);
+        }
+    }
+}
+
 int main(int argc, char **argv) {
     char temp_dir[] = "/tmp/repl_examples_export.XXXXXX";
     const char *verbose_env = getenv("REPL_EXPORT_VERBOSE");
@@ -2073,6 +2144,7 @@ int main(int argc, char **argv) {
     test_example_tag_default_dispatch();
     test_example_cfg_uses_symbolic_names();
     test_example_clear_color_precedes_clear();
+    test_export_glr_fixed_point(temp_dir);
 
     {
         static const char *const no_cfg_reset_example[] = {

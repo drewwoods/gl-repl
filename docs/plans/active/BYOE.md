@@ -59,6 +59,17 @@ re-derive them:
   rule: `{` and `}` *are* statement terminators, so a block-delimiter row is
   complete by construction and is never the selected row. Kept as an assertion
   (`test_block_rows_are_never_parked`) rather than a documented limitation.
+- **The fixed-point test found nothing, which is the useful result.** The
+  "Test impact" list asks for a document-wide export fixed point over the
+  scene corpus, backing the claim that a watched file stops churning.
+  `test_export_glr_fixed_point` (in `test_repl_core_examples.c`) exports each
+  of the 40 catalog scenes to `.glr`, re-reads it through
+  `repl_reload_active_scene_from_path` - the path a watched save takes - and
+  re-exports; all 40 are byte-identical. So the friction is exactly one
+  reformat, not per-save churn. (Its first run reported 15 "failures" that
+  were the harness's own `declare_test_vars()` pre-declaring `x`/`y`/`n` and
+  colliding with the scenes' declarations; the test now skips it, and that
+  collision is worth remembering before adding any other round-trip walk.)
 - **Verification 5 was resolved by reading, not by hand.** The partial-vertex
   guide draws: `draw_vertex_guides()` renders a plane at one filled slot and a
   line at two (`src/render3d/guides/geometry_guides.c`), and
@@ -735,7 +746,16 @@ not exist: sockets, kqueue, inotify, FSEvents, mkfifo, fork/exec.
 
 ## Test impact
 
-All in failure and edge behavior, where the suite is thinnest:
+All in failure and edge behavior, where the suite is thinnest.
+
+**Where they landed.** `tests/test_scene_load.c` (new, 73 assertions) covers
+the loader options and the source-file binding; `tests/test_glr_extedit.c`
+(new, 122 native / 5 wasm) covers the watcher; `test_export_glr_fixed_point`
+in `tests/test_repl_core_examples.c` covers the last bullet. Six rows below
+are stage-2.5 only and are **not** written: the `@cursor-hole` mapping, the
+cursor-only move to an unmapped row, the dismissed-content cursor-follow
+suppression, WIP entry/exit, sidecar atomicity, and `@cursor` never being
+exported. Everything else in the list is covered.
 
 - **Undo per identity.** User scene: reload is undoable. Unedited example:
   reload pushes nothing and **does not promote** — assert the slot count.
@@ -795,6 +815,17 @@ All in failure and edge behavior, where the suite is thinnest:
   supports for the if-chain.
 
 ## Verification
+
+Results for stages 1-2, in the numbering below:
+
+| # | Result |
+|---|---|
+| 1 | `make check-state-ownership` and `make check-trailing-whitespace` green. `--watch` needed rows in `scripts/completions/` too (`check-completions`). |
+| 2 | `make test` / `make test-stubs` green (28,491 assertions). `make test-web` links the watcher TU and `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - it asserts the *inert* form rather than joining `WEB_TEST_EXCLUDE`. The lane's one remaining failure, `test_glr_init_trace`, fails identically at the pre-BYOE commit and is unrelated. |
+| 3 | gracemont (gcc 13.3, Ubuntu 24.04): `make check-c99` and `make test-stubs` green, including the `st_mtim` arm of the change token that macOS never compiles. |
+| 4 | End-to-end: `./gl-repl --watch scene.glr`, appended four rows plus a trailing `glVertex3f(3,` from outside; the session reloaded 7 -> 11 commands and parked the incomplete row. `--watch` with no positional file exits 1 with a usage error. |
+| 5 | Resolved by reading rather than by hand - see the scope note above. |
+| 6-7 | Stage 2.5 only; not reached. |
 
 1. `make check-state-ownership` (includes `check-c99`, `check-include-style`,
    `check-app-boot-band`, …) and `make check-trailing-whitespace`.
