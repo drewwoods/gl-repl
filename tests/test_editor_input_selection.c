@@ -791,14 +791,42 @@ int main(void) {
         ASSERT_INT("promotion drops the partial char selection",
                    editor_input_anchor(), -1);
 
-        /* Promotion is one-way: further motion stays line-range, and
-         * dragging back onto the press row narrows to that single line
-         * rather than restoring the original character span. */
+        /* Returning to the press row demotes: the line-range is
+         * dropped and the character span is rebuilt from the original
+         * press column to the current pointer column (not the span
+         * that was live when the pointer first left the row). */
         handled = glr_ctrl_router_apply_input_row_drag(0, 12);
-        ASSERT_INT("char path stays disarmed after promotion",
-                   handled, 0);
+        ASSERT_INT("back-on-row motion demotes to char drag", handled, 1);
+        ASSERT_TRUE("line-range cleared on return to press row",
+                    !editor_clipboard_sel_active());
+        ASSERT_INT("demote restores char origin at press column",
+                   editor_input_anchor(), 4);
+        ASSERT_INT("demote extends to current pointer column",
+                   editor_cursor_pos(), 12);
+        ASSERT_INT("edit line is back on the press row",
+                   editor_state_edit_line(), 0);
         ASSERT_INT("back-on-row motion re-promotes nothing",
                    glr_ctrl_router_promote_char_drag_to_line_range(0), 0);
+
+        /* Leaving again re-promotes; the gesture can flip models
+         * each time the pointer crosses the press-row boundary. */
+        handled = glr_ctrl_router_promote_char_drag_to_line_range(1);
+        ASSERT_INT("leaving again re-promotes", handled, 1);
+        ASSERT_TRUE("re-promote opens a line-range",
+                    editor_clipboard_sel_active());
+        ASSERT_INT("re-promote drops the live char selection",
+                   editor_input_anchor(), -1);
+
+        /* Landing exactly on the press column is an empty character
+         * span and must still invalidate the multi-line highlight. */
+        handled = glr_ctrl_router_apply_input_row_drag(0, 4);
+        ASSERT_INT("return to press column is handled", handled, 1);
+        ASSERT_TRUE("empty char sel at the press column",
+                    !editor_input_selection_active());
+        ASSERT_TRUE("line-range still invalidated at press column",
+                    !editor_clipboard_sel_active());
+        ASSERT_INT("cursor parked at the press column",
+                   editor_cursor_pos(), 4);
 
         glr_ctrl_router_reset_code_panel_drag();
     }

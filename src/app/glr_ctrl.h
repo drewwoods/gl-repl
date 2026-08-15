@@ -428,8 +428,12 @@ void glr_ctrl_router_reset_code_panel_drag(void);
 
 /* Apply an input-row drag motion. With the drag-anchor state armed by
  * a prior code-panel press, if (target_line, target_char) still hits
- * the active edit row, grow the input-buffer selection toward
- * target_char and return 1. Returns 0 when the motion should fall
+ * the press row, grow the input-buffer selection toward target_char
+ * and return 1. If a previous motion promoted this gesture to
+ * line-range, returning to the press row demotes: the line-range is
+ * cleared, the edit cursor navigates back, and the character span is
+ * rebuilt from the original press column (or the pinned input-buffer
+ * origin) to target_char. Returns 0 when the motion should fall
  * through to the line-range path - drag wandered off the press row,
  * the press wasn't on a code-text row, or no drag is armed. The
  * production drag handler calls this after ui_panels_hit_test; tests
@@ -439,11 +443,12 @@ int glr_ctrl_router_apply_input_row_drag(int target_line, int target_char);
 
 /* Promote an armed character-anchored drag to whole-line range
  * selection, for motion that crossed off the press row. Clears the
- * press row's input-buffer selection and extends a line range from the
- * press row to target_line. Returns 1 if a promotion happened, 0 when
- * no char-anchored drag is armed or target_line is the press row (the
- * caller keeps the character path in that case). One-way: after this
- * the drag stays line-range for the rest of the gesture. */
+ * press row's live input-buffer selection and extends a line range
+ * from the press row to target_line. The press-column / char origin
+ * stays armed so a later motion back onto the press row can demote
+ * through apply_input_row_drag. Returns 1 if a promotion happened, 0
+ * when no char-anchored drag is armed or target_line is the press
+ * row (the caller keeps the character path in that case). */
 int glr_ctrl_router_promote_char_drag_to_line_range(int target_line);
 
 /* Select the word at (line_idx, char_idx) as an input-buffer
