@@ -16,10 +16,12 @@
 #include "repl/state_notify.h"
 #include "repl/cfg_baseline.h"   /* ReplConfigBag + bridge for per-scene cfg */
 #include "repl/export.h"          /* ReplExportCameraBlock + camera bridge */
+#include "repl/scene_load.h"      /* ReplSceneLoadOpts + repl_scene_load_from_file */
 #include "repl/state_owners.h"
 #include "source_document.h" /* source_document_view */
 #include "config.h"          /* REPL_DIAG_TEXT_MAX */
 
+#include <limits.h>          /* PATH_MAX for realpath() */
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -78,6 +80,14 @@ typedef struct {
      * rename changes the display name, not which file the scene came out of.
      * See repl_active_scene_glr_write_back_path(). */
     char          glr_origin_path[SCENE_GLR_ORIGIN_PATH_MAX];
+    /* Absolute path of an *arbitrary* file this scene was read from - the
+     * positional CLI argument, or File -> Open. Deliberately NOT folded into
+     * glr_origin_path, which is documented as catalog `.glr` write-back, bound
+     * once at promotion and never rewritten. This one is the user's own file
+     * and is what Ctrl+S writes and what `--watch` follows
+     * (docs/plans/active/BYOE.md, D1). Empty when the scene has no such file:
+     * a built-in example, a New Scene, a promoted transient. */
+    char          source_path[SCENE_GLR_ORIGIN_PATH_MAX];
     uint32_t      last_touch;
     SceneSnapshot snapshot;
 } UserScene;
@@ -193,9 +203,12 @@ static void save_scene_to_slot(int idx, const char *name, int edit_line) {
     }
     /* A freshly claimed slot starts unbound; every path that takes a free slot
      * lands here, so this is the one place that has to forget the previous
-     * occupant's catalog origin. Re-saving a live slot must NOT clear it. */
-    if (!s->used)
+     * occupant's catalog origin and source file. Re-saving a live slot must
+     * NOT clear either. */
+    if (!s->used) {
         s->glr_origin_path[0] = '\0';
+        s->source_path[0]     = '\0';
+    }
     s->used       = 1;
     s->last_touch = next_user_scene_tick();
 }
@@ -222,6 +235,41 @@ static void bind_glr_origin_from_example(int slot, int example_idx) {
     if (snprintf(s->glr_origin_path, sizeof(s->glr_origin_path), "%s", src) >=
         (int)sizeof(s->glr_origin_path))
         s->glr_origin_path[0] = '\0';
+}
+
+/* Resolve `path` to an absolute one and store it in `slot`'s source_path.
+ * A path that will not fit leaves the slot unbound rather than truncated: a
+ * truncated path names a real but wrong file, and this one is a *write*
+ * target. realpath() failing (the file was deleted between load and bind) is
+ * not fatal - the caller's own path is kept, because the binding still has to
+ * name the file the user asked for. */
+static void bind_source_path(int slot, const char *path) {
+    UserScene *s;
+    char resolved[PATH_MAX];
+
+    if (slot < 0 || slot >= MAX_USER_SCENES)
+        return;
+    s = &g_user_scenes[slot];
+    s->source_path[0] = '\0';
+    if (!path || !path[0])
+        return;
+    if (!realpath(path, resolved))
+        snprintf(resolved, sizeof(resolved), "%s", path);
+    if (snprintf(s->source_path, sizeof(s->source_path), "%s", resolved) >=
+        (int)sizeof(s->source_path))
+        s->source_path[0] = '\0';
+}
+
+void repl_scenes_bind_active_source_path(const char *path) {
+    bind_source_path(g_active_user_scene, path);
+}
+
+const char *repl_active_scene_source_path(void) {
+    int slot = g_active_user_scene;
+    if (slot < 0 || slot >= MAX_USER_SCENES || !g_user_scenes[slot].used)
+        return NULL;
+    return g_user_scenes[slot].source_path[0] ? g_user_scenes[slot].source_path
+                                              : NULL;
 }
 
 void repl_scenes_save_active_scene_if_any(void);
@@ -665,6 +713,33 @@ static void format_scene_path(const char *ext, const char *workspace_dir,
         snprintf(out, out_sz, "%s", leaf);
 }
 
+/* Write the active scene to `path`, choosing the writer from the path's own
+ * extension: the two formats are not interchangeable, and a `.glr` overwritten
+ * with a standalone C program stops being loadable by the catalog. */
+static int save_active_scene_to_bound_path(const char *path,
+                                           const ReplExportLayout *layout) {
+    int slot = g_active_user_scene;
+    int ok;
+
+    IMPORT_EXPORT_WRITABLE->export_scene_name_hint = g_user_scenes[slot].name;
+    if (repl_scene_format_from_path(path) == REPL_EXAMPLE_SOURCE_GLR)
+        ok = repl_export_save_glr(path, source_document_view());
+    else
+        ok = repl_export_save_output(path, source_document_view(), layout);
+    IMPORT_EXPORT_WRITABLE->export_scene_name_hint = NULL;
+    if (!ok)
+        return 0;
+
+    /* Both writers set their own success status naming a path this caller
+     * chose for them (export_save_output hardcodes "...output.c"), so restate
+     * the real one. */
+    char msg[SCENE_GLR_ORIGIN_PATH_MAX + 48];
+    snprintf(msg, sizeof(msg), "Saved %s (%d commands)",
+             path, repl_state_document_count());
+    repl_set_status(msg);
+    return 1;
+}
+
 int repl_save_active_scene(const ReplExportLayout *layout) {
     int slot = g_active_user_scene;
 
@@ -675,6 +750,20 @@ int repl_save_active_scene(const ReplExportLayout *layout) {
     }
 
     const char *workspace_dir = g_workspace_dir[0] ? g_workspace_dir : NULL;
+
+    /* A scene the user opened by path saves back to that path - the gap D1
+     * closes. Without this, `./gl-repl --watch foo.glr` writes `<slug>.c` on
+     * Ctrl+S: the watched file never changes, gl-repl's own write is not the
+     * write the self-write stamp suppresses, and the round trip is broken in
+     * both directions at once.
+     *
+     * A bound managed workspace wins, because it is the stronger and more
+     * recent statement of where this scene lives: `repl_save_workspace` owns
+     * the whole directory, prunes files by manifest, and would leave a scene
+     * saved elsewhere out of it. */
+    if (!workspace_dir && g_user_scenes[slot].source_path[0])
+        return save_active_scene_to_bound_path(g_user_scenes[slot].source_path,
+                                               layout);
 
     /* Save aborts if a bound workspace dir can't be created. */
     if (workspace_dir && workspace_dir[0] && !workspace_io_ensure_dir(workspace_dir)) {
@@ -735,6 +824,33 @@ const char *repl_active_scene_glr_write_back_path(void) {
         ? g_user_scenes[slot].glr_origin_path
         : NULL;
 }
+
+const char *repl_active_scene_bound_path(void) {
+    int slot = g_active_user_scene;
+
+    /* Resolution order is D1's table, and it is the SAME order Ctrl+S
+     * resolves - that is the whole point of one function. Watching a file
+     * gl-repl would not write, or writing one it does not watch, is how the
+     * self-write stamp goes wrong. */
+    if (slot >= 0 && slot < MAX_USER_SCENES && g_user_scenes[slot].used) {
+        static char path[REPL_WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
+
+        /* A managed workspace slot: the leaf Save Scene writes. Formatted
+         * rather than stored, so a rename moves the binding with the file the
+         * next save will produce. */
+        if (g_workspace_dir[0]) {
+            format_scene_path("c", g_workspace_dir, path, sizeof(path));
+            return path;
+        }
+        if (g_user_scenes[slot].source_path[0])
+            return g_user_scenes[slot].source_path;
+    }
+
+    /* A runtime-catalog `.glr`, either still being viewed or through the slot
+     * the first edit promoted it into. Save Scene as .glr writes here. */
+    return repl_active_scene_glr_write_back_path();
+}
+
 
 static void reset_live_for_scene_import(void) {
     scene_snapshot_load_live_commands(NULL, NULL, 0, 0);
@@ -1048,8 +1164,69 @@ int repl_load_scene_as_new_slot(const char *path,
         return -1;
     }
 
-    SceneFileLoadCtx ctx = { path };
-    return repl_load_scene_via_loader(scene_file_loader, &ctx, out_reason);
+    {
+        SceneFileLoadCtx ctx = { path };
+        int slot = repl_load_scene_via_loader(scene_file_loader, &ctx,
+                                              out_reason);
+        /* File -> Open names a file the user chose, so that file becomes the
+         * scene's home: Ctrl+S writes it and --watch follows it (D1). Bound
+         * after the loader, on the slot it actually produced. */
+        if (slot >= 0)
+            bind_source_path(slot, path);
+        return slot;
+    }
+}
+
+int repl_reload_active_scene_from_path(const char *path,
+                                       const ReplSceneLoadOpts *opts) {
+    SceneSnapshot *stash;
+    ReplImportResult import_result;
+    int slot = g_active_user_scene;
+    int ok;
+
+    if (!path || !path[0])
+        return 0;
+
+    /* Deliberately NOT repl_load_scene_via_loader: that allocates a *fresh*
+     * slot and fails REPL_SCENE_LOAD_ERR_NO_SLOT at capacity. An external
+     * editor saving the file the user is already editing must reuse the slot
+     * they are in - a save is not a new scene, and eight saves are not eight
+     * scenes. When there is no slot at all (a built-in example being viewed)
+     * the reload still runs; it just replaces the transient document, which
+     * is what an unpromoted example is. */
+    stash = scene_snapshot_scratch_alloc();
+    if (!stash)
+        return 0;
+    stash_live_state(stash);
+
+    reset_live_for_scene_import();
+    ok = repl_scene_load_from_file(path, opts, &import_result);
+    if (!ok) {
+        restore_live_from_stash(stash);
+        scene_snapshot_scratch_free(stash);
+        return 0;
+    }
+    scene_snapshot_scratch_free(stash);
+
+    /* D3's no-rebind rule, and the reason it is enforced here rather than
+     * trusted to the loader: `import_result` carries whatever `@scene-name` /
+     * `@workspace-dir` the file declared, and every other caller acts on them.
+     * A watched reload must not - the file being watched could otherwise
+     * retarget the very binding that is watching it, or rename the slot out
+     * from under the scene tabs. The program changed; the slot's identity did
+     * not. */
+    (void)import_result;
+
+    /* Keep the slot's stored copy in step with the live document, exactly as
+     * an edit would: without this the next scene switch writes the PRE-reload
+     * snapshot back over the file the user just saved from vim. */
+    if (slot >= 0 && slot < MAX_USER_SCENES && g_user_scenes[slot].used)
+        save_scene_to_slot(slot, g_user_scenes[slot].name,
+                           repl_dispatch_edit_line_get());
+
+    repl_state_flat_program_set_count(0);
+    repl_mark_source_dirty();
+    return 1;
 }
 
 static int split_scene_text_lines(const char *text,

@@ -18,17 +18,24 @@
  * The suite is deliberately weighted toward *failure*: every one of these
  * options only differs from the old behavior when something goes wrong, and
  * the failure paths are where the coverage was thinnest.
+ *
+ * The second half covers the *binding* those options are for (BYOE D1): which
+ * file the active scene lives in, that Ctrl+S writes that file, and that
+ * re-reading it reuses the active slot instead of allocating a ninth scene.
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#include "app/glr_camera.h"
 #include "app/glr_config.h"
 #include "app/glr_ctrl.h"
+#include "repl/bootstrap.h"
 #include "repl/camera_header.h"
 #include "repl/examples.h"
+#include "repl/example_loader.h"
 #include "repl/export.h"
 #include "repl/scene_load.h"
+#include "repl/scenes.h"
 #include "repl/state_owners.h"
 #include "repl/state_views.h"
 #include "source_document.h"
@@ -388,6 +395,237 @@ static void test_camera_apply_none_never_reaches_the_bridge(void) {
                (int)REPL_CAMERA_APPLY_IMPORT);
 }
 
+/* ----- source-file binding (BYOE D1) ------------------------------------ */
+
+#define WATCH_PATH "/tmp/gl_repl_scene_load_bound.glr"
+#define OTHER_PATH "/tmp/gl_repl_scene_load_other.glr"
+
+static void write_file(const char *path, const char *const *lines) {
+    FILE *f = fopen(path, "w");
+    if (!f)
+        return;
+    for (int i = 0; lines && lines[i]; i++)
+        fprintf(f, "%s\n", lines[i]);
+    fclose(f);
+}
+
+static int file_contains(const char *path, const char *needle) {
+    char buf[8192];
+    size_t n;
+    FILE *f = fopen(path, "r");
+
+    if (!f)
+        return 0;
+    n = fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    buf[n] = '\0';
+    return strstr(buf, needle) != NULL;
+}
+
+static ReplSceneLoadOpts watch_opts(void) {
+    ReplSceneLoadOpts opts = opts_for(REPL_EXAMPLE_SOURCE_GLR,
+                                      REPL_SCENE_LOAD_POLICY_ATOMIC);
+    opts.apply_cfg    = 0;
+    opts.camera_apply = REPL_CAMERA_APPLY_NONE;
+    return opts;
+}
+
+static void test_cli_positional_binds_the_file(void) {
+    printf("--- the positional CLI file becomes the scene's home ---\n");
+
+    write_file(WATCH_PATH, k_good_scene);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+
+    ASSERT_TRUE("a slot is active", repl_active_user_scene() >= 0);
+    ASSERT_TRUE("the slot names the file",
+                repl_active_scene_source_path() != NULL);
+    /* Absolute, so a later chdir - or a relative argument like `./x.glr` -
+     * cannot make the binding name a different file than the one loaded. */
+    ASSERT_TRUE("the bound path is absolute",
+                repl_active_scene_source_path() &&
+                repl_active_scene_source_path()[0] == '/');
+    ASSERT_STR("and it is what --watch would follow",
+               repl_active_scene_bound_path(),
+               repl_active_scene_source_path());
+}
+
+/* The gap D1 closes: without this, `./gl-repl foo.glr` saves to `<slug>.c` in
+ * the cwd, so the watched file never changes and the round trip is broken in
+ * both directions at once. */
+static void test_ctrl_s_writes_the_bound_file(void) {
+    printf("--- Ctrl+S writes the bound file ---\n");
+
+    write_file(WATCH_PATH, k_good_scene);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+
+    ASSERT_TRUE("the scene loaded", repl_state_document_count() > 0);
+    ASSERT_TRUE("save succeeds", repl_save_active_scene(NULL) != 0);
+    ASSERT_TRUE("the bound file carries the document",
+                file_contains(WATCH_PATH, "glVertex3f"));
+    /* The writer is chosen from the binding's own extension: a `.glr` must not
+     * come back as a standalone C program, or the catalog can no longer read
+     * the file it just rewrote. */
+    ASSERT_TRUE("a .glr binding got the .glr writer, not exported C",
+                !file_contains(WATCH_PATH, "void display(void)"));
+}
+
+static void test_example_has_no_binding(void) {
+    printf("--- a built-in example is not bound to anything ---\n");
+
+    glr_ctrl_reset_all();
+    (void)repl_load_example(0);
+    ASSERT_TRUE("no source path", repl_active_scene_source_path() == NULL);
+    /* A compiled-in example has no file at all; a runtime `--examples-dir`
+     * entry would resolve through glr_origin_path instead, which this build's
+     * catalog does not have. */
+    ASSERT_TRUE("and nothing for --watch to follow",
+                repl_active_scene_bound_path() == NULL);
+}
+
+/* A save is not a new scene. Allocating a slot per reload would exhaust all
+ * eight in eight keystrokes and then fail with ERR_NO_SLOT - the reason this
+ * is not repl_load_scene_as_new_slot. */
+static void test_reload_reuses_the_active_slot(void) {
+    static const char *const revised[] = {
+        "glClearColor(0.2, 0.2, 0.2, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(9, 9, 9);",
+        "glEnd();",
+        NULL
+    };
+    int slot;
+    int count;
+
+    printf("--- reload reuses the active slot ---\n");
+
+    write_file(WATCH_PATH, k_good_scene);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+    slot = repl_active_user_scene();
+    count = repl_user_scene_count();
+
+    write_file(WATCH_PATH, revised);
+    for (int i = 0; i < 12; i++) {
+        ReplSceneLoadOpts opts = watch_opts();
+        ASSERT_TRUE("each reload succeeds",
+                    repl_reload_active_scene_from_path(WATCH_PATH, &opts) != 0);
+    }
+
+    ASSERT_INT("twelve reloads created no new scenes",
+               repl_user_scene_count(), count);
+    ASSERT_INT("and stayed in the same slot", repl_active_user_scene(), slot);
+    ASSERT_INT("the document is the revised one",
+               repl_state_document_count(), 5);
+
+    /* The slot's stored copy has to move with the live document, or the next
+     * scene switch writes the pre-reload snapshot back over it. */
+    (void)repl_scenes_create_empty_user_scene();
+    (void)repl_load_user_scene_idx(slot);
+    ASSERT_INT("switching away and back keeps the reloaded document",
+               repl_state_document_count(), 5);
+}
+
+static void test_failed_reload_leaves_no_trace(void) {
+    char before[4096];
+    char after[4096];
+    int slot;
+
+    printf("--- a failed reload leaves no trace ---\n");
+
+    write_file(WATCH_PATH, k_good_scene);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+    slot = repl_active_user_scene();
+    capture_document(before, sizeof(before));
+
+    write_file(WATCH_PATH, k_scene_with_one_bad_row);
+    {
+        ReplSceneLoadOpts opts = watch_opts();
+        ASSERT_INT("the reload fails",
+                   repl_reload_active_scene_from_path(WATCH_PATH, &opts), 0);
+    }
+
+    capture_document(after, sizeof(after));
+    ASSERT_STR("the document is untouched", after, before);
+    ASSERT_INT("the slot is unchanged", repl_active_user_scene(), slot);
+    ASSERT_STR("and so is the binding",
+               repl_active_scene_bound_path(),
+               repl_active_scene_source_path());
+}
+
+/* D3's no-rebind rule. An external file must not be able to rename the slot
+ * or retarget the very path being watched. */
+static void test_reload_cannot_rebind_the_slot(void) {
+    static const char *const renaming[] = {
+        "// @scene-name Hijacked",
+        "// @workspace-dir /tmp/gl_repl_scene_load_hijack",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(0, 0, 0);",
+        "glEnd();",
+        NULL
+    };
+    char name_before[USER_SCENE_NAME_MAX];
+    char path_before[1024];
+    int slot;
+
+    printf("--- a watched reload cannot rename or retarget the slot ---\n");
+
+    write_file(WATCH_PATH, k_good_scene);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+    slot = repl_active_user_scene();
+    snprintf(name_before, sizeof(name_before), "%s",
+             repl_user_scene_name(slot) ? repl_user_scene_name(slot) : "");
+    snprintf(path_before, sizeof(path_before), "%s",
+             repl_active_scene_source_path() ? repl_active_scene_source_path()
+                                             : "");
+
+    write_file(WATCH_PATH, renaming);
+    {
+        ReplSceneLoadOpts opts = watch_opts();
+        ASSERT_TRUE("the reload succeeds",
+                    repl_reload_active_scene_from_path(WATCH_PATH, &opts) != 0);
+    }
+
+    ASSERT_STR("the scene name is unchanged",
+               repl_user_scene_name(slot) ? repl_user_scene_name(slot) : "",
+               name_before);
+    ASSERT_STR("the bound path is unchanged",
+               repl_active_scene_source_path()
+                   ? repl_active_scene_source_path() : "",
+               path_before);
+    ASSERT_STR("no workspace was bound", repl_workspace_dir(), "");
+    ASSERT_TRUE("the new program did land",
+                repl_state_document_count() == 3);
+}
+
+/* Loading a *different* file as a new scene is still a new scene, and it
+ * binds to its own path - proof the reload path is the special case, not the
+ * general one. */
+static void test_open_binds_its_own_path(void) {
+    ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+    int slot;
+
+    printf("--- File -> Open binds the file it opened ---\n");
+
+    write_file(WATCH_PATH, k_good_scene);
+    write_file(OTHER_PATH, k_good_scene);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+
+    slot = repl_load_scene_as_new_slot(OTHER_PATH, &reason);
+    ASSERT_TRUE("the open succeeded", slot >= 0);
+    ASSERT_TRUE("the new slot names the file it came from",
+                repl_active_scene_source_path() &&
+                strstr(repl_active_scene_source_path(),
+                       "gl_repl_scene_load_other.glr") != NULL);
+    ASSERT_INT("and it is a different slot than the CLI file's",
+               slot != 0, 1);
+}
+
 int main(void) {
     printf("=== scene load options ===\n");
     test_format_drives_order_check();
@@ -401,6 +639,13 @@ int main(void) {
     test_apply_cfg_off_leaves_live_config();
     test_apply_cfg_on_is_still_the_default();
     test_camera_apply_none_never_reaches_the_bridge();
+    test_cli_positional_binds_the_file();
+    test_ctrl_s_writes_the_bound_file();
+    test_example_has_no_binding();
+    test_reload_reuses_the_active_slot();
+    test_failed_reload_leaves_no_trace();
+    test_reload_cannot_rebind_the_slot();
+    test_open_binds_its_own_path();
     printf("\n=== Results: ");
     return test_harness_report(&g_harness, "scene_load");
 }

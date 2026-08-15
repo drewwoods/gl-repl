@@ -51,8 +51,16 @@ static int activate_new_scene_after_failed_import(void) {
     return repl_state_document_count();
 }
 
-static int activate_initial_document(const ReplImportResult *import_result) {
+/* `source_path` is NULL for the stdin route: `-` is a stream, not a file, so
+ * there is nothing for Ctrl+S to write back to or for --watch to follow. */
+static int activate_initial_document(const ReplImportResult *import_result,
+                                     const char *source_path) {
     repl_scenes_activate_loaded_document_slot(import_result->scene_name);
+    /* The positional argument is the file this session is *about*: bind it so
+     * Ctrl+S rewrites it instead of exporting to a name-derived `<slug>.c`
+     * somewhere else, which is also what makes an external editor's save and
+     * gl-repl's save name the same file (docs/plans/active/BYOE.md, D1). */
+    repl_scenes_bind_active_source_path(source_path);
     scroll_to_display_function();
     return repl_state_document_count();
 }
@@ -64,7 +72,7 @@ int repl_load_initial_commands(const char *import_file) {
         if (strcmp(import_file, "-") == 0) {
             ReplImportResult import_result;
             if (repl_export_load_from_stream(stdin, "<stdin>", &import_result))
-                return activate_initial_document(&import_result);
+                return activate_initial_document(&import_result, NULL);
             return activate_new_scene_after_failed_import();
         }
 
@@ -84,7 +92,7 @@ int repl_load_initial_commands(const char *import_file) {
         } else {
             ReplImportResult import_result;
             if (repl_export_load_from_file(import_file, &import_result))
-                return activate_initial_document(&import_result);
+                return activate_initial_document(&import_result, import_file);
         }
         return activate_new_scene_after_failed_import();
     }

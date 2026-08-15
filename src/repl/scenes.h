@@ -165,6 +165,51 @@ const char *repl_active_scene_export_path(const char *ext);
  * slot or the runtime catalog; copy it before doing either. */
 const char *repl_active_scene_glr_write_back_path(void);
 
+/* --- Source-file binding (docs/plans/active/BYOE.md, D1) ------------------
+ *
+ * The file the active scene *lives in*: what Ctrl+S writes, and what
+ * `--watch` follows. One resolution order, used by both, because a watcher
+ * following a file gl-repl would not write - or a writer targeting a file
+ * nothing watches - breaks the round trip and defeats the self-write stamp.
+ *
+ *   1. a bound managed workspace -> the leaf Save Scene writes there
+ *   2. else the active slot's `source_path` - an arbitrary file the user
+ *      named on the command line or through File -> Open
+ *   3. else `repl_active_scene_glr_write_back_path()` - a runtime-catalog
+ *      `.glr`, viewed or promoted
+ *   4. else NULL: a built-in example or a transient has no file
+ *
+ * `repl_scenes_bind_active_source_path` resolves the path to an absolute one
+ * and stores it on the active slot; a path that will not fit leaves the slot
+ * unbound rather than truncated. The binding is cleared when the slot is
+ * reused for a different scene, and survives a rename - the scene keeps
+ * living in its file, and the new display name travels inside it as
+ * `@scene-name`.
+ *
+ * Returned pointers are owned by the slot or by a rotating static buffer;
+ * copy before the next call or the next scene mutation. */
+void        repl_scenes_bind_active_source_path(const char *path);
+const char *repl_active_scene_source_path(void);
+const char *repl_active_scene_bound_path(void);
+
+/* Re-read `path` into the *active* slot rather than a fresh one.
+ *
+ * The external-editor entry point: a save from vim replaces the program the
+ * user is already editing, so allocating a new slot per save would exhaust
+ * all eight of them in eight keystrokes and fail with ERR_NO_SLOT. Wholly
+ * transactional - the live document, predefs, aliases and camera are stashed
+ * first and restored verbatim if the load fails, on top of whatever the
+ * options' own policy does.
+ *
+ * Any `@scene-name` / `@workspace-dir` the file carries is deliberately
+ * ignored: a watched reload changes the program, never the slot's identity or
+ * its binding, or an external file could silently retarget the very path
+ * being watched (D3). Returns 1 on success, 0 with the live document
+ * untouched on failure. */
+struct ReplSceneLoadOpts;
+int  repl_reload_active_scene_from_path(const char *path,
+                                        const struct ReplSceneLoadOpts *opts);
+
 const char *repl_user_scene_file_name(int slot);
 int  repl_user_scene_delete(int slot);
 int  repl_workspace_is_managed(void);

@@ -52,7 +52,10 @@ typedef enum {
     REPL_SCENE_LOAD_POLICY_ATOMIC        /* first bad line aborts, restore */
 } ReplSceneLoadPolicy;
 
-typedef struct {
+/* Tagged so headers that only pass it by pointer - repl/scenes.h - can
+ * forward-declare `struct ReplSceneLoadOpts` instead of pulling this header
+ * (and export.h behind it) into every one of their consumers. */
+typedef struct ReplSceneLoadOpts {
     ReplExampleSourceFormat format;
     ReplSceneLoadPolicy     policy;
     /* 0 = do not hand the parsed `@cfg` bag to the config bridge. The bag is
