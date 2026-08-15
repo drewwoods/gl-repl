@@ -29,6 +29,7 @@
 #include "repl/scenes.h"
 #include "repl/host_effects.h"   /* repl_set_status / _error */
 #include "repl/state_owners.h"
+#include "repl/text_helpers.h"   /* parked input is canonical (no leading ws) */
 #include "subsystems/color_picker/color_picker_state.h"
 #include "subsystems/replay/replay.h"
 #include "subsystems/tutorial/tutorial_state.h"
@@ -72,6 +73,11 @@ static int                   g_was_in_lesson;
  * save would overwrite typing undo cannot restore. */
 static char                  g_parked_row[MAX_INPUT_LEN];
 static int                   g_parked_valid;
+/* Leading spaces/tabs stripped when the row was parked from sidecar text.
+ * vim's col('.') counts those bytes; the live input does not. Kept across a
+ * re-park of the already-canonical g_parked_row so a cursor-only return to
+ * the hole still maps the published column. */
+static int                   g_parked_lead;
 static GlrExtEditStats       g_stats;
 
 /* What the live document last came from, remembered *per path* rather than
@@ -357,6 +363,7 @@ static void forget_binding_state(void) {
     g_have_defer_fp      = 0;
     g_reported_missing   = 0;
     g_parked_valid       = 0;
+    g_parked_lead        = 0;
     wip_forget();
 }
 
@@ -730,8 +737,31 @@ static int find_incomplete_final_row(const char *const *lines, int count) {
  * between two rows, a local commit has to *insert* there - overwrite would
  * eat the row below, which is a row the editor still has. */
 static void park_incomplete_row(const char *text, int doc_row) {
-    int count = repl_state_document_count();
+    const char *canon;
+    int canon_len, lead, count;
+    char stripped[MAX_INPUT_LEN];
 
+    if (!text)
+        text = "";
+    /* Editor input, live guides, and autocomplete all require the command
+     * prefix at byte 0. Sidecar / .glr rows keep their file indent; strip it
+     * the same way editor_load_line_to_input does. vim's col('.') still
+     * counts the indent, so remember how much we removed. */
+    lead = 0;
+    while (text[lead] == ' ' || text[lead] == '\t')
+        lead++;
+    repl_canonical_input_view(text, &canon, &canon_len);
+    if (canon_len >= MAX_INPUT_LEN)
+        canon_len = MAX_INPUT_LEN - 1;
+    memcpy(stripped, canon, (size_t)canon_len);
+    stripped[canon_len] = '\0';
+    /* Re-parking the already-canonical copy must keep the original lead, or
+     * a cursor-only return to the hole maps the published column as if the
+     * indent were still in the buffer. */
+    if (lead == 0 && g_parked_valid && strcmp(text, g_parked_row) == 0)
+        lead = g_parked_lead;
+
+    count = repl_state_document_count();
     if (doc_row < 0 || doc_row > count)
         doc_row = count;
     /* Order matters: editor_input_set_text() ends by snapping the cursor to
@@ -742,8 +772,9 @@ static void park_incomplete_row(const char *text, int doc_row) {
      * the document, so an outbound write drops it. */
     editor_insert_mode_set(doc_row < count);
     editor_state_edit_line_set(doc_row);
-    editor_input_set_text(text);
-    snprintf(g_parked_row, sizeof(g_parked_row), "%s", text);
+    editor_input_set_text(stripped);
+    snprintf(g_parked_row, sizeof(g_parked_row), "%s", stripped);
+    g_parked_lead  = lead;
     g_parked_valid = 1;
 }
 
@@ -1077,7 +1108,7 @@ static void wip_place_cursor(int row, int col) {
         if (strcmp(editor_input_text(), g_parked_row) != 0)
             park_incomplete_row(g_parked_row, g_wip_map.hole_doc_row);
         len = (int)strlen(editor_input_text());
-        pos = col - 1;
+        pos = col - 1 - g_parked_lead;
         if (pos < 0)   pos = 0;
         if (pos > len) pos = len;
         editor_cursor_pos_set(pos);

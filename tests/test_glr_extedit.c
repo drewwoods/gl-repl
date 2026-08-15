@@ -1768,6 +1768,42 @@ static void test_a_mid_file_half_typed_row_is_parked(void) {
     (void)unlink(WIP_PATH);
 }
 
+/* Live guides and autocomplete prefix-match at byte 0 (`glVertex3f(`). A
+ * typical sidecar row is indented inside a block; parking it verbatim left
+ * the prefix at column 4 and the plane/line/point guide never appeared.
+ * Canonicalize like editor_load_line_to_input, and map vim's 1-based column
+ * (which still counts the indent) onto the stripped buffer. */
+static void test_indented_parked_row_is_canonical_for_guides(void) {
+    static const char *const indented[] = {
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "    glVertex3f(1,",                 /* physical 4: four-space indent */
+        "    glVertex3f(2, 2, 2);",
+        "glEnd();",
+        NULL
+    };
+    const char *input;
+
+    printf("--- an indented half-typed row parks without its indent ---\n");
+
+    begin_wip_session(k_scene_a);
+    /* vim col 16 is the '1' in "    glVertex3f(1," (1-based, indent included). */
+    publish_wip(indented, 4, 16);
+    glr_extedit_poll();
+
+    input = editor_input_text();
+    ASSERT_INT("the import succeeded", glr_extedit_stats().failures, 0);
+    ASSERT_STR("the parked text is the canonical command",
+               input, "glVertex3f(1,");
+    ASSERT_TRUE("the prefix the live guides match sits at byte 0",
+                input && strncmp(input, "glVertex3f(", 11) == 0);
+    /* col 16 - 1 - 4 indent = 11, the '1'. */
+    ASSERT_INT("the caret is on the '1', not still in the stripped indent",
+               editor_cursor_pos(), 11);
+    (void)unlink(WIP_PATH);
+}
+
 /* The input buffer holds one row at a time, so navigating away from the parked
  * row in the editor overwrites it with the row navigated to - and coming back
  * has to restore it rather than leave whatever was last loaded. */
@@ -2192,6 +2228,7 @@ int main(void) {
     test_cursor_only_update_does_not_reimport();
     test_cursor_follows_through_the_row_map();
     test_a_mid_file_half_typed_row_is_parked();
+    test_indented_parked_row_is_canonical_for_guides();
     test_leaving_and_returning_to_the_parked_row();
     test_undo_exits_the_session_and_sticks();
     test_a_session_costs_one_undo_entry();
