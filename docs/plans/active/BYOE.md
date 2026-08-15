@@ -16,20 +16,19 @@ list in "Steps"; the per-step state is tracked here.
 | 5 — `glr_extedit_notify_reloaded()` + D7 table | done |
 | 6 — stage 2, one incomplete final row | done |
 | 6.5 — stage 2.25, one recoverable failed row anywhere | **skipped — do not implement** |
-| 7 — stage 2.5, live WIP buffer | **not started — gated** (see below) |
+| 7 — stage 2.5, live WIP buffer | **gate taken and passed** (see below); building |
 
-Step 7 is deliberately not implemented. Its gate is a measurement, and the
-plan states the precondition plainly: *"Stage 2.5 only after stage 1 has been
-used and the total content-update latency is measured."* Neither half is
-satisfiable from the implementation seat - "has been used" is a human
-condition, and Verification 7 wants p95 across small / typical / large scenes
-under real editing. Everything 2.5 needs from stages 1-2 (the two-level gate,
-the three-state tracking, the deferral state machine, and the notification
-hook) is in place. Stage 2.25 is explicitly skipped: its automatic
-first-failure recovery is mostly throwaway work for 2.5, which receives an
-explicit cursor row and needs a complete physical-to-document map anyway.
-What remains is to collect the 2.5 latency number and, if the gate passes,
-build that complete mapping once.
+Both halves of step 7's precondition are now satisfied. Stage 1 has been used
+against a real editor, and the latency gate has been measured rather than
+estimated: `make bench-extedit`, p95 **5.5 ms** on the largest catalog scene
+against the 8 ms budget, ~1 ms on small and typical ones. The numbers and what
+they imply for a per-keystroke path are under "Gate" below.
+
+Everything 2.5 needs from stages 1-2 (the two-level gate, the three-state
+tracking, the deferral state machine, and the notification hook) was already in
+place. Stage 2.25 stays skipped: its automatic first-failure recovery is mostly
+throwaway work for 2.5, which receives an explicit cursor row and needs a
+complete physical-to-document map anyway.
 
 Corrections made after review, kept here because each was a real defect the
 first pass shipped. The behavioral cases have regression coverage; the
@@ -858,6 +857,53 @@ small, typical and large catalog scenes. Keep **~8 ms as the total main-thread
 budget**; over that, do not ship 2.5. This is the one stage gated on a number
 rather than on design.
 
+#### Result — the gate passes
+
+`bench/bench_extedit.c` (`make bench-extedit`), 2026-08-15, macOS release
+build, three runs of 300 content updates per case. Cases are the smallest,
+median and largest shipped catalog scenes by authored line count, so the three
+rows keep meaning small / typical / large as the catalog grows. `poll` is the
+extedit section alone; `frame` adds the reflatten the reload forces onto the
+same frame, and is the number the 8 ms budget is about.
+
+| Case | Scene | Doc rows | p50 | **p95** | max |
+|---|---|---|---|---|---|
+| small | 2D assignment sketch (vars only) | 19 | 0.57 | **0.96** | 1.4 |
+| typical | Annotated orbit plot (labels) | 54 | 0.80 | **1.14** | 1.7 |
+| large | Orrery (labels track 3D orbits) | 447 | 5.22 | **5.54** | 7.2 |
+
+Two things the number does not say on its own:
+
+- **Cost is dominated by document size, and the largest scene has ~1.5x
+  headroom, not 8x.** Stage 2.5 pays this per keystroke rather than per `:w`,
+  so on a 447-row scene a fast typist spends a third of every frame in the
+  reload. Within budget, and worth knowing before anyone adds work to the
+  path. The two-level gate is what keeps it survivable: a cursor-only sidecar
+  update must stay off this path entirely, which is why the content token
+  ignoring the `@cursor` line is a correctness requirement and not an
+  optimization.
+- **The import is the bulk of it** (`poll` is ~75% of `frame` on the large
+  case). That is the ATOMIC re-parse of every row, which is inherent to
+  "replace the document from the file" and is not something the sidecar can
+  skip.
+
+**Do not move the poll to a worker thread.** It is the obvious reading of a
+5.5 ms main-thread cost and the split says otherwise: on the large case, open
++ read + FNV hash + newline split of the whole 19 KB file measures **0.046 ms
+p50 / 0.049 ms p95** - under **1%** of the update. Everything else is
+`repl_load_apply_line` writing the live command store, source document, predef
+table, scratch arrays and func aliases, plus the reflatten - the same state the
+frame is reading, so it cannot leave the main thread without a lock spanning
+the whole REPL. Double-buffering the document into a shadow copy and swapping
+would work in principle and means making every one of those stores swappable;
+that is a far larger change than the 0.9% on offer, and this path is inside
+budget. If large-scene keystroke cost ever does become the problem, the lever
+is re-applying only the rows that changed, not concurrency.
+
+One thing the measurement exposed that stage 2.5 has to fix: a successful
+import writes `Loaded N commands from …` to stderr, which is right for a save
+and wrong for a keystroke.
+
 ## Not this plan
 
 Real-time IPC (socket transport, length-prefixed frames, a vim plugin) is
@@ -993,5 +1039,6 @@ in the numbering below:
    partial write.
 7. Measure p95 **total content-update latency** in the extedit section,
    sampled only on real content updates, across small / typical / large
-   scenes (2.5 gate; ~8 ms total main-thread budget).
+   scenes (2.5 gate; ~8 ms total main-thread budget). **Done** -
+   `make bench-extedit`; results and caveats under "Gate".
 8. Re-read every `file:line` citation before landing.

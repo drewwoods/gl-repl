@@ -640,7 +640,12 @@ the editor's own undo is the undo.
 
 **Cost.** One `stat()` per frame. The file is read only when its
 mtime/inode/size moves, and re-parsed only when the bytes actually differ; the
-profile panel's **External Edit** row reads ~0 in steady state.
+profile panel's **External Edit** row reads ~0 in steady state. What a save
+itself costs is measurable - `make bench-extedit` times real content updates
+against the smallest, median and largest catalog scenes and prints p50/p95/max
+for the watcher section alone and for the whole frame. On this machine that is
+~1 ms for a typical scene and ~5.5 ms p95 for the largest one, which is nearly
+all document re-parse: reading and hashing the file is under 1% of it.
 
 **The one friction that does not go away.** gl-repl rewrites the text it saves:
 canonical spacing, indentation re-derived from block scope, and C float

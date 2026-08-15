@@ -1021,7 +1021,7 @@ CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof t
 # (they reuse CORE_TEST_OBJS so they work in both real-GL and stubs builds),
 # but they are intentionally NOT in TEST_BINS so `make test` does not run
 # them - benchmarks are timing-sensitive and should be invoked explicitly.
-BENCH_BINS = bench_repl
+BENCH_BINS = bench_repl bench_extedit
 
 ROOT_BIN_LINKS = gl-repl gl-repl-unchained render3d_demo render3d_hot_demo repl_demo repl_live_demo editor_demo memprof_demo variable_panel_demo color_picker_demo assign_plot_demo cpuprof_demo render3d-asset-builder
 
