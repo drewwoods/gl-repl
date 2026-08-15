@@ -25,7 +25,7 @@
 #include "editor/undo.h"
 #include "repl/line_scan.h"   /* the importer's own statement-boundary scan */
 #include "repl/scene_load.h"
-#include "repl/scenes.h"     /* MAX_USER_SCENES sizes the seen table */
+#include "repl/scenes.h"
 #include "repl/host_effects.h"   /* repl_set_status / _error */
 #include "repl/state_owners.h"
 #include "subsystems/color_picker/color_picker_state.h"
@@ -80,18 +80,14 @@ static GlrExtEditStats       g_stats;
  * file, and reloading would clobber unsaved slot edits for nothing. But that
  * reasoning fails on the way back: F12 away, let vim save the file, F12 back,
  * and stamping the new bytes as "applied" buries the external edit forever.
- * With one entry per recently-bound path, rebind can tell the two apart -
- * unchanged since we last applied it, or moved while we were elsewhere.
- *
- * Sized to the number of files that can be bound in one session rather than to
- * a guessed working set: eight user-scene slots, plus a catalog example's
- * write-back path, plus one for churn. Four entries was arbitrary and lossy -
- * with eight scenes, visiting a fifth evicted the first, and eviction reads as
- * "never seen", which stamps and does not reload. That is the right answer for
- * a file genuinely seen for the first time and the wrong one for a file whose
- * history was simply forgotten, so the table has to outlast the scene
- * catalog. */
-#define GLR_EXTEDIT_SEEN_MAX (MAX_USER_SCENES + 2)
+ * With one entry per bound path, rebind can tell the two apart - unchanged
+ * since we last applied it, or moved while we were elsewhere. The set is not
+ * bounded by the eight user-scene slots: a runtime `--examples-dir` catalog
+ * can expose dozens of file-backed examples, and an editor can visit any
+ * number of additional paths in one session. Evicting an entry reads as
+ * "never seen", which stamps and does not reload; that is the right answer
+ * for a genuinely new file and the wrong one for a history entry forgotten by
+ * an arbitrary cap. Keep the session's complete path history instead. */
 
 typedef struct {
     char               path[GLR_EXTEDIT_PATH_MAX];
@@ -99,25 +95,62 @@ typedef struct {
     int                valid;
 } GlrExtEditSeen;
 
-static GlrExtEditSeen g_seen[GLR_EXTEDIT_SEEN_MAX];
-static int            g_seen_next;
+static GlrExtEditSeen *g_seen;
+static size_t          g_seen_count;
+static size_t          g_seen_capacity;
 
-static void seen_remember(const char *path, unsigned long long content) {
-    for (int i = 0; i < GLR_EXTEDIT_SEEN_MAX; i++) {
+static void forget_binding_state(void);
+
+static void seen_clear(void) {
+    free(g_seen);
+    g_seen          = NULL;
+    g_seen_count    = 0;
+    g_seen_capacity = 0;
+}
+
+static int seen_reserve(size_t wanted) {
+    size_t capacity = g_seen_capacity ? g_seen_capacity : 8;
+
+    if (wanted <= g_seen_capacity)
+        return 1;
+    while (capacity < wanted) {
+        if (capacity > (size_t)-1 / 2) {
+            capacity = wanted;
+            break;
+        }
+        capacity *= 2;
+    }
+    if (capacity > (size_t)-1 / sizeof(*g_seen))
+        return 0;
+
+    GlrExtEditSeen *grown = (GlrExtEditSeen *)realloc(
+        g_seen, capacity * sizeof(*grown));
+    if (!grown)
+        return 0;
+    g_seen          = grown;
+    g_seen_capacity = capacity;
+    return 1;
+}
+
+static int seen_remember(const char *path, unsigned long long content) {
+    for (size_t i = 0; i < g_seen_count; i++) {
         if (g_seen[i].valid && strcmp(g_seen[i].path, path) == 0) {
             g_seen[i].content = content;
-            return;
+            return 1;
         }
     }
-    snprintf(g_seen[g_seen_next].path, sizeof(g_seen[g_seen_next].path),
+    if (g_seen_count == (size_t)-1 || !seen_reserve(g_seen_count + 1))
+        return 0;
+    snprintf(g_seen[g_seen_count].path, sizeof(g_seen[g_seen_count].path),
              "%s", path);
-    g_seen[g_seen_next].content = content;
-    g_seen[g_seen_next].valid   = 1;
-    g_seen_next = (g_seen_next + 1) % GLR_EXTEDIT_SEEN_MAX;
+    g_seen[g_seen_count].content = content;
+    g_seen[g_seen_count].valid   = 1;
+    g_seen_count++;
+    return 1;
 }
 
 static int seen_lookup(const char *path, unsigned long long *out) {
-    for (int i = 0; i < GLR_EXTEDIT_SEEN_MAX; i++) {
+    for (size_t i = 0; i < g_seen_count; i++) {
         if (g_seen[i].valid && strcmp(g_seen[i].path, path) == 0) {
             *out = g_seen[i].content;
             return 1;
@@ -220,12 +253,19 @@ static void forget_binding_state(void) {
     g_parked_valid       = 0;
 }
 
+static void stop_after_seen_history_oom(void) {
+    repl_set_status_error("Watch: out of memory remembering file history; "
+                          "watching stopped");
+    g_enabled = 0;
+    forget_binding_state();
+    seen_clear();
+}
+
 void glr_extedit_set_enabled(int enabled) {
     g_enabled = enabled ? 1 : 0;
     forget_binding_state();
     g_was_in_lesson = 0;
-    memset(&g_seen, 0, sizeof(g_seen));
-    g_seen_next = 0;
+    seen_clear();
     memset(&g_stats, 0, sizeof(g_stats));
 #if !defined(__EMSCRIPTEN__)
     /* Bind now rather than on the first poll. Arming is a deliberate act with
@@ -309,9 +349,12 @@ static void rebind(const char *path) {
             return;
         }
     }
+    if (!seen_remember(g_bound, content)) {
+        stop_after_seen_history_oom();
+        return;
+    }
     g_applied_content = content;
     g_applied_valid   = 1;
-    seen_remember(g_bound, content);
 }
 
 static void report_missing_once(const char *path) {
@@ -549,6 +592,7 @@ static void apply_reload(const char *path) {
     int have_loaded_content;
     int have_parked = 0;
     int is_user_scene = repl_active_user_scene() >= 0;
+    int history_ok = 1;
     int ok;
 
     /* Hash what is on disk NOW, because that is what the load below reads.
@@ -617,7 +661,7 @@ static void apply_reload(const char *path) {
                                                  : g_pending_content;
         g_applied_valid    = 1;
         g_suppressed_valid = 0;
-        seen_remember(path, g_applied_content);
+        history_ok = seen_remember(path, g_applied_content);
         g_stats.reloads++;
         /* The input row was clean - deferral guarantees it - but it still
          * holds the OLD document's row text. */
@@ -635,6 +679,8 @@ static void apply_reload(const char *path) {
 
     g_pending       = 0;
     g_have_defer_fp = 0;
+    if (!history_ok)
+        stop_after_seen_history_oom();
 }
 
 /* ----- poll --------------------------------------------------------------- */
@@ -823,7 +869,10 @@ void glr_extedit_note_wrote(const char *path) {
     g_observed        = change_token_from_stat(&st);
     g_applied_content = content;
     g_applied_valid   = 1;
-    seen_remember(g_bound, content);
+    if (!seen_remember(g_bound, content)) {
+        stop_after_seen_history_oom();
+        return;
+    }
     /* A save resolves any argument about who wins: the file and the document
      * now agree, so nothing is pending and nothing needs suppressing. */
     g_pending          = 0;

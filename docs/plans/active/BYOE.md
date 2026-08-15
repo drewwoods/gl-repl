@@ -75,11 +75,14 @@ first pass shipped and each now has a test that fails without the fix:
   seeded New Scene - which used to have no path, so `--watch` lost the file it
   was told to watch. The empty scene is now bound to it, which also makes
   Ctrl+S write there rather than to a name-derived `<slug>.c`.
-- **The per-path content memory is sized to the scene catalog**
-  (`MAX_USER_SCENES + 2`), not to a guessed working set. At four entries a
-  session that visited five watched files evicted the first, and eviction reads
-  as "never seen" - which stamps and does not reload, silently losing the next
-  external save to it.
+- **The per-path content memory must not evict.** A fixed ring sized to the
+  user-scene catalog still lost history when a runtime `--examples-dir`
+  catalog exposed more file-backed scenes than the ring could hold. Eviction
+  reads as "never seen" - which stamps and does not reload, silently losing the
+  next external save to that path. The watcher now keeps a growable,
+  session-scoped map of every path it has seen, and the regression cycles past
+  the old cap through a runtime catalog before saving the first file away from
+  it.
 - **A not-yet-created file is watchable.** `--watch new.glr` before the editor
   has written it: the bootstrap import fails, the seeded New Scene carries the
   path, and the first poll after the file appears picks it up.
@@ -898,7 +901,7 @@ Results for stages 1-2, in the numbering below:
 | # | Result |
 |---|---|
 | 1 | `make check-state-ownership` and `make check-trailing-whitespace` green. `--watch` needed rows in `scripts/completions/` too (`check-completions`). |
-| 2 | `make test` / `make test-stubs` green (28,550 assertions), and every `HEADLESS_DEMO_TARGETS` demo builds - `repl_demo` / `repl_live_demo` are the load-bearing no-controller proofs and a new `src/repl/*.c` needs a `REPL_DEMO_DEP_SRCS` row they alone catch. `make test-web` links the watcher TU and `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - it asserts the *inert* form rather than joining `WEB_TEST_EXCLUDE`. The lane's one remaining failure, `test_glr_init_trace`, fails identically at the pre-BYOE commit and is unrelated. |
+| 2 | `make test` / `make test-stubs` green (28,569 assertions), and every `HEADLESS_DEMO_TARGETS` demo builds - `repl_demo` / `repl_live_demo` are the load-bearing no-controller proofs and a new `src/repl/*.c` needs a `REPL_DEMO_DEP_SRCS` row they alone catch. `make test-web` links the watcher TU and `test_glr_extedit` passes there on its `__EMSCRIPTEN__` arm - it asserts the *inert* form rather than joining `WEB_TEST_EXCLUDE`. The lane's one remaining failure, `test_glr_init_trace`, fails identically at the pre-BYOE commit and is unrelated. |
 | 3 | gracemont (gcc 13.3, Ubuntu 24.04): `make check-c99` and `make test-stubs` green, including the `st_mtim` arm of the change token that macOS never compiles. |
 | 4 | End-to-end: `./gl-repl --watch scene.glr`, appended a `/* C-style note */`, four complete rows, a trailing `glVertex3f(3,` and a `// still typing` comment under it, all from outside; the session reloaded 7 -> 13 commands, kept both comments as document rows, and parked the incomplete row. Also `--watch new.glr` on a file holding nothing but `glVertex3f(1,`: the startup import fails (bootstrap has no parking), the binding survives, and the next save loads. `--watch` with no positional file exits 1 with a usage error. |
 | 5 | Resolved by reading rather than by hand - see the scope note above. |

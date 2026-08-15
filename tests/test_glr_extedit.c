@@ -1342,9 +1342,8 @@ static void test_watching_a_file_that_does_not_exist_yet(void) {
     (void)unlink(OTHER_PATH);
 }
 
-/* The seen table must outlast the scene catalog, or a switch tour through
- * every slot evicts the file you started on and the next external save to it
- * is stamped as already-applied and silently lost. */
+/* The per-path history must cover all user-scene slots, not just a guessed
+ * working set. */
 static void test_seen_history_outlasts_the_scene_catalog(void) {
     char paths[MAX_USER_SCENES][64];
     int slot_a;
@@ -1375,6 +1374,81 @@ static void test_seen_history_outlasts_the_scene_catalog(void) {
 
     for (int i = 0; i < MAX_USER_SCENES - 1; i++)
         (void)unlink(paths[i]);
+}
+
+/* Runtime examples are file-backed too, and a catalog may be larger than the
+ * user-scene capacity. The watcher must retain the first path while cycling
+ * through more than the old fixed history size, or returning to it stamps an
+ * external save as already applied and loses it. */
+static void test_seen_history_covers_runtime_catalog(void) {
+    enum { CATALOG_SCENES = 12 };
+    char root[] = "/tmp/gl_repl_extedit_seen_catalog.XXXXXX";
+    char scenes[512], catalog[512], paths[CATALOG_SCENES][512], err[512];
+    char *made_root;
+    FILE *f;
+
+    printf("--- path history covers a runtime catalog larger than the old cap ---\n");
+
+    glr_extedit_set_enabled(0);
+    made_root = mkdtemp(root);
+    ASSERT_TRUE("runtime catalog temp root", made_root != NULL);
+    if (!made_root)
+        return;
+    snprintf(scenes, sizeof(scenes), "%s/scenes", root);
+    snprintf(catalog, sizeof(catalog), "%s/catalog.ini", root);
+    ASSERT_INT("runtime catalog scenes directory", mkdir(scenes, 0700), 0);
+
+    f = fopen(catalog, "w");
+    ASSERT_TRUE("runtime catalog descriptor", f != NULL);
+    if (!f) {
+        (void)rmdir(scenes);
+        (void)rmdir(root);
+        return;
+    }
+    for (int i = 0; i < CATALOG_SCENES; i++) {
+        snprintf(paths[i], sizeof(paths[i]), "%s/seen_%d.glr", scenes, i);
+        write_lines(paths[i], k_scene_a);
+        fprintf(f, "[seen_%d]\n"
+                   "file = scenes/seen_%d.glr\n"
+                   "name = Seen %d\n"
+                   "tags = 3D\n"
+                   "group = Runtime\n\n",
+                i, i, i);
+    }
+    fclose(f);
+
+    glr_ctrl_reset_all();
+    err[0] = '\0';
+    ASSERT_TRUE("runtime catalog loads",
+                repl_examples_load_dir(root, err, sizeof(err)));
+    ASSERT_INT("catalog has more paths than the old history cap",
+               repl_example_count(), CATALOG_SCENES);
+    ASSERT_TRUE("first catalog scene loads", repl_load_example(0) > 0);
+
+    glr_extedit_set_enabled(1);
+    glr_extedit_poll();
+    for (int i = 1; i < CATALOG_SCENES; i++) {
+        ASSERT_TRUE("catalog scene loads while cycling",
+                    repl_load_example(i) > 0);
+        glr_extedit_poll();
+    }
+
+    /* Save the first file while it is not the active example. Returning to the
+     * scene rebinds the path; the following poll must apply the pending edit. */
+    write_lines(paths[0], k_scene_b);
+    ASSERT_TRUE("return to the first catalog scene", repl_load_example(0) > 0);
+    glr_extedit_poll();
+    glr_extedit_poll();
+    ASSERT_TRUE("the external edit survives the catalog tour",
+                document_mentions("9, 9, 9"));
+
+    glr_extedit_set_enabled(0);
+    repl_examples_clear_runtime_catalog();
+    for (int i = 0; i < CATALOG_SCENES; i++)
+        (void)unlink(paths[i]);
+    (void)unlink(catalog);
+    (void)rmdir(scenes);
+    (void)rmdir(root);
 }
 
 /* D7 asks for the observed token to be stamped at lesson end. This code does
@@ -1454,6 +1528,7 @@ int main(void) {
     test_watch_survives_a_failed_startup_import();
     test_watching_a_file_that_does_not_exist_yet();
     test_seen_history_outlasts_the_scene_catalog();
+    test_seen_history_covers_runtime_catalog();
     test_save_between_lesson_end_and_poll_is_not_swallowed();
     test_returning_to_a_scene_picks_up_what_changed();
     test_returning_to_an_untouched_scene_keeps_local_edits();
