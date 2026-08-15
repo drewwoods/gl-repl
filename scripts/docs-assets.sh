@@ -188,7 +188,8 @@ Options:
   --list             List selected asset names and exit (all by default).
   --to-apng          Write the selected clips as APNG instead of GIF: repoint
                      every Markdown reference at the .png and delete the
-                     superseded .gif. Needs apngasm + oxipng.
+                     superseded .gif. On its own it selects every clip, not
+                     every asset. Needs apngasm + oxipng.
   --to-gif           The reverse of --to-apng: back to GIF, delete the .png.
   -j, --jobs N       Regenerate up to N assets in parallel (default: 1).
   -h, --help         Show this help and exit.
@@ -295,7 +296,15 @@ if [[ ${#ARGS[@]} -gt 0 ]]; then
     WANTED+=("${ARGS[@]}")
 fi
 if [[ ${#WANTED[@]} -eq 0 ]]; then
-    WANTED=("${ALL_ASSETS[@]}")
+    # A bare --to-apng / --to-gif means "migrate the clips", not "regenerate
+    # every asset in the tree and migrate the clips among them". Only clips
+    # have a format to convert, so selecting the stills and demos too would
+    # re-render an hour of assets that the flag cannot affect.
+    if [[ -n "$CLIP_FORMAT" ]]; then
+        WANTED=("${GIF_ASSETS[@]}")
+    else
+        WANTED=("${ALL_ASSETS[@]}")
+    fi
 else
     # Avoid rendering an explicitly named asset twice when its category was
     # also selected (especially important for the xargs parallel path).
@@ -311,6 +320,18 @@ fi
 if [[ "$LIST" -eq 1 ]]; then
     printf '%s\n' "${WANTED[@]}" | sort
     exit 0
+fi
+
+# Naming a still alongside --to-apng/--to-gif is legal but does nothing to it:
+# it has no animation and so no format to migrate. Say so once rather than
+# leaving the user to wonder why the extension never changed.
+if [[ -n "$CLIP_FORMAT" ]]; then
+    n_still=0
+    for a in "${WANTED[@]}"; do
+        contains_asset "$a" "${GIF_ASSETS[@]}" || n_still=$((n_still + 1))
+    done
+    [[ "$n_still" -eq 0 ]] || echo "docs-assets: note --to-$CLIP_FORMAT converts clips only;" \
+        "$n_still selected asset(s) are stills and will just be re-rendered" >&2
 fi
 
 for tool in magick ffmpeg; do
@@ -1789,8 +1810,12 @@ fi
 #
 # use a long warm to wait for the camera crosshair to fade
 if want cursor-highlight; then
+    # Named once and reused by both the capture loop and the montage: these
+    # two numbers were renumbered in the loop alone once already, leaving the
+    # montage reaching for tiles nothing had written.
+    CH_LINE_A=54; CH_LINE_B=60
     ( export GLR_NO_SPLASH=1 GLR_TICK_PER_FRAME=1
-      for line in 54 60; do
+      for line in $CH_LINE_A $CH_LINE_B; do
           ( export GLR_EDIT_LINE=$line
             WARM=220 still "$WORK/ch-$line.png" 16 \
                 --example "$EX_XFORM" --time 1 )
@@ -1801,7 +1826,8 @@ if want cursor-highlight; then
           magick "$WORK/ch-code-$line.png" "$WORK/ch-scene-$line.png" \
               -append -background black "$WORK/ch-tile-$line.png"
       done )
-    montage1x2 "$WORK/ch-pair.png" "$WORK/ch-tile-53.png" "$WORK/ch-tile-59.png"
+    montage1x2 "$WORK/ch-pair.png" \
+        "$WORK/ch-tile-$CH_LINE_A.png" "$WORK/ch-tile-$CH_LINE_B.png"
     write_png "$WORK/ch-pair.png" "$OUT/cursor-highlight.png"
     echo "docs-assets: wrote $OUT/cursor-highlight.png"
 fi
