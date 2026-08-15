@@ -2537,6 +2537,19 @@ install-hooks: ## Point this clone's git hooks at the tracked .githooks/ directo
 	@git config core.hooksPath .githooks
 	@echo "git core.hooksPath -> .githooks (pre-push: check-trailing-whitespace + test-stubs + git lfs pre-push)"
 
+# Registers by putting the completions dir on $fpath, NOT by sourcing the
+# files. `source` runs compdef immediately, and compdef registrations live in
+# $_comps, which EVERY later compinit rebuilds from scratch — so a snippet
+# appended to .zshrc after ours (a tool installer ending in `compinit -C` is
+# the common one) silently wipes our bindings. An fpath entry survives any
+# number of later compinits. Measured both ways before changing it.
+#
+# The compinit here is deliberately UNCONDITIONAL. Guarding it on compdef
+# being undefined looks tidier but fails in the common case: an rc that ran
+# compinit earlier (oh-my-zsh does) has already built ~/.zcompdump without our
+# directory on $fpath, the guard then skips the rebuild, and a later
+# `compinit -C` reloads that stale dump. Extending $fpath only helps if some
+# compinit afterwards actually reads it, so we run one ourselves.
 install-completions: ## Add the bundled zsh completions to ~/.zshrc (idempotent; override ZSHRC to choose another file).
 	@touch "$(ZSHRC)"
 	@if grep -Fqx '# >>> gl-repl completions >>>' "$(ZSHRC)"; then \
@@ -2545,11 +2558,8 @@ install-completions: ## Add the bundled zsh completions to ~/.zshrc (idempotent;
 		printf '%s\n' \
 			'' \
 			'# >>> gl-repl completions >>>' \
-			'if (( ! $${+functions[compdef]} )); then' \
-			'  autoload -Uz compinit && compinit' \
-			'fi' \
-			'source "$(ZSH_COMPLETIONS_DIR)/_gl-repl"' \
-			'source "$(ZSH_COMPLETIONS_DIR)/_docs-assets.sh"' \
+			'fpath=("$(ZSH_COMPLETIONS_DIR)" $$fpath)' \
+			'autoload -Uz compinit && compinit' \
 			'# <<< gl-repl completions <<<' >> "$(ZSHRC)"; \
 		echo "installed gl-repl completions in $(ZSHRC)"; \
 	fi
