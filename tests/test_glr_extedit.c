@@ -584,6 +584,235 @@ static void test_reload_clears_the_input_row(void) {
                 editor_state_edit_line() <= repl_state_document_count());
 }
 
+/* --- stage 2: one incomplete final row ------------------------------------ */
+
+/* The shape stage 2 exists for: the user is mid-command in vim when they save.
+ * The row belongs in the live input buffer, where the edit-guide overlays and
+ * autocomplete can see it - not in the document, where it would not parse. */
+static void test_incomplete_final_row_is_parked(void) {
+    static const char *const half_typed[] = {
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(0, 0, 0);",
+        "glEnd();",
+        "glVertex3f(1,",
+        NULL
+    };
+
+    printf("--- a half-typed final row lands in the input buffer ---\n");
+
+    begin_watched_session(k_scene_a);
+    write_lines(WATCH_PATH, half_typed);
+    glr_extedit_poll();
+
+    ASSERT_INT("the reload succeeded", glr_extedit_stats().reloads, 1);
+    ASSERT_INT("a row was parked", glr_extedit_stats().parked_rows, 1);
+    ASSERT_INT("the document holds only the complete rows",
+               repl_state_document_count(), 5);
+    ASSERT_TRUE("and not the half-typed one", !document_mentions("glVertex3f(1,"));
+    ASSERT_TRUE("which is in the input row instead",
+                strcmp(editor_input_text(), "glVertex3f(1,") == 0);
+    ASSERT_INT("parked past the last row, so it appends",
+               editor_state_edit_line(), repl_state_document_count());
+    /* editor_input_set_text snaps the cursor to end-of-text, which is the
+     * right answer for a row the user is still typing. */
+    ASSERT_INT("with the cursor at the end", editor_cursor_pos(),
+               (int)strlen("glVertex3f(1,"));
+}
+
+/* The case a weaker "trailing comma or operator" rule misses, and the reason
+ * the test is the terminator: this row has depth 0 and ends in `)`, so it
+ * would not be stripped - and it does not fail either. import_finish_load
+ * flushes it at EOF and the parser adds the `;` back while rebuilding
+ * canonical text, so it would commit silently as a document row and stage 2's
+ * payoff would never fire for the most common half-typed line there is. */
+static void test_missing_semicolon_counts_as_incomplete(void) {
+    static const char *const no_semicolon[] = {
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(0, 0, 0);",
+        "glEnd();",
+        "glVertex3f(1, 2, 3)",
+        NULL
+    };
+
+    printf("--- a balanced row missing only its ';' is incomplete ---\n");
+
+    begin_watched_session(k_scene_a);
+    write_lines(WATCH_PATH, no_semicolon);
+    glr_extedit_poll();
+
+    ASSERT_INT("a row was parked", glr_extedit_stats().parked_rows, 1);
+    ASSERT_TRUE("and it is the one missing its semicolon",
+                strcmp(editor_input_text(), "glVertex3f(1, 2, 3)") == 0);
+    ASSERT_INT("the document has the rest",
+               repl_state_document_count(), 5);
+}
+
+static void test_trailing_comment_is_not_parked(void) {
+    static const char *const with_comment[] = {
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(0, 0, 0);",
+        "glEnd();",
+        "// a note about the scene",
+        NULL
+    };
+
+    printf("--- a trailing comment stays in the document ---\n");
+
+    begin_watched_session(k_scene_a);
+    write_lines(WATCH_PATH, with_comment);
+    glr_extedit_poll();
+
+    ASSERT_INT("the reload succeeded", glr_extedit_stats().reloads, 1);
+    ASSERT_INT("nothing was parked", glr_extedit_stats().parked_rows, 0);
+    ASSERT_INT("the comment is a document row",
+               repl_state_document_count(), 6);
+    ASSERT_TRUE("really the comment", document_mentions("a note about the scene"));
+    ASSERT_INT("and the input row is empty", editor_input_len(), 0);
+}
+
+/* A well-formed-but-wrong row has a terminator, so it is not stripped - and
+ * ATOMIC then refuses the whole file, which is correct: the user's mistake is
+ * reported instead of silently swallowed. */
+static void test_wrong_but_terminated_row_fails_the_file(void) {
+    static const char *const typo[] = {
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(0, 0, 0);",
+        "glEnd();",
+        "glVertx3f(1, 2, 3);",
+        NULL
+    };
+
+    printf("--- a well-formed-but-wrong final row fails the file ---\n");
+
+    begin_watched_session(k_scene_a);
+    write_lines(WATCH_PATH, typo);
+    glr_extedit_poll();
+
+    ASSERT_INT("the file was refused", glr_extedit_stats().failures, 1);
+    ASSERT_INT("nothing was parked", glr_extedit_stats().parked_rows, 0);
+    ASSERT_TRUE("and the previous scene is intact", document_mentions("0, 0, 0"));
+}
+
+/* The plan warns that stripping a *block delimiter* would unbalance what
+ * remains. With the terminator rule that cannot happen: `{` and `}` are
+ * statement terminators, so a row that opens or closes a block is complete by
+ * construction and is never the row selected. Asserted rather than assumed,
+ * because a future heuristic change could quietly reintroduce it. */
+static void test_block_rows_are_never_parked(void) {
+    static const char *const looped[] = {
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "for(i, 0, 3) {",
+        "glVertex3f(i, 0, 0);",
+        "}",
+        "glEnd();",
+        "glVertex3f(7,",
+        NULL
+    };
+
+    printf("--- a block delimiter is never the parked row ---\n");
+
+    begin_watched_session(k_scene_a);
+    write_lines(WATCH_PATH, looped);
+    glr_extedit_poll();
+
+    ASSERT_INT("the file loaded", glr_extedit_stats().failures, 0);
+    ASSERT_INT("one row was parked", glr_extedit_stats().parked_rows, 1);
+    ASSERT_TRUE("and it is the half-typed vertex, not the brace",
+                strcmp(editor_input_text(), "glVertex3f(7,") == 0);
+    ASSERT_TRUE("the loop survived whole", document_mentions("for"));
+}
+
+/* An unfinished statement absorbs every physical line after it, so an unclosed
+ * paren mid-file makes the entire tail one logical statement. Stripping that
+ * would delete rows the user never touched, so the multi-row case is refused -
+ * ATOMIC then rejects the file and names the line, which is the outcome that
+ * tells the user something is wrong. */
+static void test_multi_row_incomplete_statement_is_refused(void) {
+    static const char *const runaway[] = {
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(0,",              /* never closed */
+        "glVertex3f(1, 1, 1);",
+        "glEnd();",
+        NULL
+    };
+
+    printf("--- a runaway statement is refused, not stripped ---\n");
+
+    begin_watched_session(k_scene_a);
+    write_lines(WATCH_PATH, runaway);
+    glr_extedit_poll();
+
+    ASSERT_INT("nothing was parked", glr_extedit_stats().parked_rows, 0);
+    ASSERT_INT("the file was refused", glr_extedit_stats().failures, 1);
+    ASSERT_INT("no reload happened", glr_extedit_stats().reloads, 0);
+    ASSERT_TRUE("and the previous scene is intact", document_mentions("0, 0, 0"));
+}
+
+/* D5's parked-row exclusion is conditional, not blanket. The watcher's own
+ * text does not count as the user's typing - but the first local keystroke in
+ * that row transfers ownership back, or the next save overwrites work undo
+ * cannot restore. */
+static void test_parked_row_defers_only_once_the_user_touches_it(void) {
+    static const char *const half_typed[] = {
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(0, 0, 0);",
+        "glEnd();",
+        "glVertex3f(1,",
+        NULL
+    };
+    static const char *const half_typed_more[] = {
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(0, 0, 0);",
+        "glVertex3f(5, 5, 5);",
+        "glEnd();",
+        "glVertex3f(2,",
+        NULL
+    };
+
+    printf("--- an untouched parked row does not defer; a touched one does ---\n");
+
+    begin_watched_session(k_scene_a);
+    write_lines(WATCH_PATH, half_typed);
+    glr_extedit_poll();
+    ASSERT_INT("the row is parked", glr_extedit_stats().parked_rows, 1);
+    ASSERT_TRUE("the input row is non-empty",
+                editor_input_has_uncommitted_change());
+
+    /* Untouched: the next save goes straight through. */
+    write_lines(WATCH_PATH, half_typed_more);
+    glr_extedit_poll();
+    ASSERT_INT("a second save was not deferred",
+               glr_extedit_stats().deferrals, 0);
+    ASSERT_INT("it applied", glr_extedit_stats().reloads, 2);
+    ASSERT_TRUE("and re-parked the new tail",
+                strcmp(editor_input_text(), "glVertex3f(2,") == 0);
+
+    /* Touched: ownership transfers back to the user and deferral re-arms. */
+    editor_input_set_text("glVertex3f(2, 3,");
+    write_lines(WATCH_PATH, half_typed);
+    glr_extedit_poll();
+    ASSERT_INT("the third save is held", glr_extedit_stats().reloads, 2);
+    ASSERT_INT("as a deferral", glr_extedit_stats().deferrals, 1);
+    ASSERT_TRUE("with the user's typing intact",
+                strcmp(editor_input_text(), "glVertex3f(2, 3,") == 0);
+}
+
 /* --- disabled ------------------------------------------------------------- */
 
 static void test_disabled_watcher_does_nothing(void) {
@@ -620,6 +849,13 @@ int main(void) {
     test_tutorial_defers_then_dismisses();
     test_reload_stops_replay();
     test_reload_clears_the_input_row();
+    test_incomplete_final_row_is_parked();
+    test_missing_semicolon_counts_as_incomplete();
+    test_trailing_comment_is_not_parked();
+    test_wrong_but_terminated_row_fails_the_file();
+    test_block_rows_are_never_parked();
+    test_multi_row_incomplete_statement_is_refused();
+    test_parked_row_defers_only_once_the_user_touches_it();
     test_disabled_watcher_does_nothing();
     glr_extedit_set_enabled(0);
     (void)unlink(WATCH_PATH);

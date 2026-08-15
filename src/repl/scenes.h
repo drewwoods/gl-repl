@@ -210,6 +210,15 @@ struct ReplSceneLoadOpts;
 int  repl_reload_active_scene_from_path(const char *path,
                                         const struct ReplSceneLoadOpts *opts);
 
+/* The same reload over lines the caller already has in memory. The
+ * external-editor watcher reads the file itself so it can *remove* a trailing
+ * half-typed row before the loader ever sees it - the loader stays
+ * zero-tolerance, and the incomplete row is the controller's to park in the
+ * live input buffer. `label` names the source in diagnostics only. */
+int  repl_reload_active_scene_from_lines(const char *const *lines,
+                                         const char *label,
+                                         const struct ReplSceneLoadOpts *opts);
+
 const char *repl_user_scene_file_name(int slot);
 int  repl_user_scene_delete(int slot);
 int  repl_workspace_is_managed(void);

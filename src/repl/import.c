@@ -67,6 +67,7 @@
 #include "repl/parser.h"
 #include "repl/util.h"            /* repl_format_fits / _copy_string_fits / _append_clamped */
 #include "repl/pipeline.h"
+#include "repl/line_scan.h"       /* statement boundaries, shared with glr_extedit */
 #include "repl/scene_load.h"      /* ReplSceneLoadOpts - explicit load policy */
 #include "repl/scene_snapshot.h"  /* ATOMIC rollback */
 #include "repl/source_scope.h"
@@ -2700,51 +2701,6 @@ static int is_line_comment_or_directive(const char *line) {
     return 0;
 }
 
-/* Scan one physical line's *code* portion - everything up to an
- * unquoted "//" line-comment - advancing the running bracket-nesting
- * depth (counts () and [], not {} which delimit blocks) while skipping
- * string and char literals so brackets and slashes inside them can't
- * confuse the scan. *code_len gets the trimmed code length (trailing
- * whitespace removed); the return value is the last non-space code
- * char, or '\0' when the line has no code. Together the depth and last
- * char let the caller tell a continued statement (open bracket, or no
- * terminator yet) from a complete one - which is what makes multi-line
- * statements with interleaved comments / blank lines and split compound
- * literals reassemble correctly. */
-static char scan_code_line(const char *line, int *depth, int *code_len) {
-    int in_str = 0, in_chr = 0, last = -1, i = 0;
-    for (; line[i]; i++) {
-        char c = line[i];
-        if (in_str || in_chr) {
-            if (c == '\\' && line[i + 1]) { i++; continue; }
-            if (in_str && c == '"')  in_str = 0;
-            if (in_chr && c == '\'') in_chr = 0;
-            last = i;
-            continue;
-        }
-        if (c == '/' && line[i + 1] == '/') break; /* line comment */
-        if (c == '"')  { in_str = 1; last = i; continue; }
-        if (c == '\'') { in_chr = 1; last = i; continue; }
-        if (c == '(' || c == '[') (*depth)++;
-        else if ((c == ')' || c == ']') && *depth > 0) (*depth)--;
-        if (!isspace((unsigned char)c)) last = i;
-    }
-    *code_len = last + 1; /* 0 when the line has no code */
-    return last >= 0 ? line[last] : '\0';
-}
-
-/* Every REPL statement ends in one of these. `:` is the odd one out and
- * is kept for error containment, not for a live construct: no valid
- * statement ends in a colon now that labels are gone, so the case can
- * only ever fire on invalid input - a `loop:` in a legacy file. There its
- * effect is to keep that line self-contained. Drop it and the accumulator
- * reads `loop:` as an unfinished statement, glues the next physical line
- * onto it, and reports one joined parse error - losing the following row
- * from the document. */
-static int is_stmt_terminator(char c) {
-    return c == ';' || c == '{' || c == '}' || c == ':';
-}
-
 /* Emit the accumulated logical statement through import_process_line,
  * restoring the line number to where the statement began so a warning
  * points at its first physical line. accum is built from already
@@ -2997,13 +2953,13 @@ static void import_process_physical_line(ImportState *state,
     }
 
     int code_len = 0;
-    char last = scan_code_line(app, &acc->depth, &code_len);
+    char last = repl_scan_code_line(app, &acc->depth, &code_len);
     /* Complete when no bracket is open and the last code char closes
      * a statement (`;`), opens/closes a block (`{`/`}`), or is a stray
-     * `:` (see is_stmt_terminator). The depth gate is what stops a split
+     * `:` (see repl_is_stmt_terminator). The depth gate is what stops a split
      * compound literal - `(GLfloat[]){` - or a ternary `:` from flushing
      * mid-expression. */
-    int complete = acc->depth <= 0 && is_stmt_terminator(last);
+    int complete = acc->depth <= 0 && repl_is_stmt_terminator(last);
 
     /* On a continuation line, append only the code portion so a
      * trailing `// ...` can't bleed into the rest of the statement.

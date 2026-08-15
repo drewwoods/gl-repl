@@ -67,6 +67,35 @@
  *                    promote an unedited catalog scene into a user slot on
  *                    the first vim save. The file is the source of truth and
  *                    vim's own undo is the undo.
+ *
+ * ONE INCOMPLETE FINAL ROW (`.glr` only). A file may end with a half-typed
+ * command; it lands in the live input row, where the user keeps typing it and
+ * gets the edit-guide overlays and autocomplete for free.
+ *
+ * **This is not a loader concession.** The loader stays zero-tolerance; the
+ * *controller* removes the designated physical row before the import, and it
+ * has to be that way round: `import.c` accumulates physical lines into a
+ * logical statement while brackets are open, so an unfinished
+ * `glVertex3f(1,` absorbs the following lines and an atomic loader could only
+ * ever report a joined logical statement, never a physical row.
+ *
+ * The row is recognized by lexical evidence of incompleteness on the last row
+ * with *code* - bracket depth not back to zero, or a last code character that
+ * is not a statement terminator - using the importer's own scanner
+ * (repl/line_scan.h) rather than a lookalike. "Last row with code" is why an
+ * ordinary trailing `// note` stays in the document instead of being parked.
+ * Only a single trailing row qualifies; see find_incomplete_final_row for why
+ * the multi-row case is refused rather than stripped.
+ *
+ * `.glr` only, because the heuristic is meaningless on exported C: the
+ * incomplete authored command sits inside `display()` and is followed by
+ * generated wrapper rows, so it is never the final non-empty physical row.
+ *
+ * Two consequences worth stating. The parked row is deliberately *not* in the
+ * document, so an outbound write drops it. And if removing it unbalances what
+ * remains - a block delimiter, say - the ATOMIC import fails and the live
+ * document is left alone, which is the correct outcome and falls out of the
+ * design rather than being special-cased.
  */
 #ifndef GLR_EXTEDIT_H
 #define GLR_EXTEDIT_H
@@ -112,6 +141,7 @@ typedef struct {
     int failures;    /* reload attempts the loader rejected */
     int deferrals;   /* times a version was parked behind a shut gate */
     int dismissals;  /* parked versions the local document outvoted */
+    int parked_rows; /* reloads that put an incomplete final row in the input */
 } GlrExtEditStats;
 
 GlrExtEditStats glr_extedit_stats(void);

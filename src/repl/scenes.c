@@ -1177,30 +1177,32 @@ int repl_load_scene_as_new_slot(const char *path,
     }
 }
 
-int repl_reload_active_scene_from_path(const char *path,
-                                       const ReplSceneLoadOpts *opts) {
+/* Shared body of the two reload entry points. `load` runs the importer against
+ * whatever source the caller has; everything around it is the transaction and
+ * the no-rebind rule, which must be identical either way.
+ *
+ * Deliberately NOT repl_load_scene_via_loader: that allocates a *fresh* slot
+ * and fails REPL_SCENE_LOAD_ERR_NO_SLOT at capacity. An external editor saving
+ * the file the user is already editing must reuse the slot they are in - a
+ * save is not a new scene, and eight saves are not eight scenes. When there is
+ * no slot at all (a built-in example being viewed) the reload still runs; it
+ * just replaces the transient document, which is what an unpromoted example
+ * is. */
+typedef int (*SceneReloadFn)(void *ctx, ReplImportResult *result);
+
+static int reload_active_scene(SceneReloadFn load, void *ctx) {
     SceneSnapshot *stash;
     ReplImportResult import_result;
     int slot = g_active_user_scene;
     int ok;
 
-    if (!path || !path[0])
-        return 0;
-
-    /* Deliberately NOT repl_load_scene_via_loader: that allocates a *fresh*
-     * slot and fails REPL_SCENE_LOAD_ERR_NO_SLOT at capacity. An external
-     * editor saving the file the user is already editing must reuse the slot
-     * they are in - a save is not a new scene, and eight saves are not eight
-     * scenes. When there is no slot at all (a built-in example being viewed)
-     * the reload still runs; it just replaces the transient document, which
-     * is what an unpromoted example is. */
     stash = scene_snapshot_scratch_alloc();
     if (!stash)
         return 0;
     stash_live_state(stash);
 
     reset_live_for_scene_import();
-    ok = repl_scene_load_from_file(path, opts, &import_result);
+    ok = load(ctx, &import_result);
     if (!ok) {
         restore_live_from_stash(stash);
         scene_snapshot_scratch_free(stash);
@@ -1227,6 +1229,51 @@ int repl_reload_active_scene_from_path(const char *path,
     repl_state_flat_program_set_count(0);
     repl_mark_source_dirty();
     return 1;
+}
+
+typedef struct {
+    const char              *path;
+    const ReplSceneLoadOpts *opts;
+} SceneReloadPathCtx;
+
+static int reload_from_path(void *ctx, ReplImportResult *result) {
+    SceneReloadPathCtx *c = (SceneReloadPathCtx *)ctx;
+    return repl_scene_load_from_file(c->path, c->opts, result);
+}
+
+typedef struct {
+    const char *const       *lines;
+    const char              *label;
+    const ReplSceneLoadOpts *opts;
+} SceneReloadLinesCtx;
+
+static int reload_from_lines(void *ctx, ReplImportResult *result) {
+    SceneReloadLinesCtx *c = (SceneReloadLinesCtx *)ctx;
+    return repl_scene_load_from_lines(c->lines, c->label, c->opts, result);
+}
+
+int repl_reload_active_scene_from_path(const char *path,
+                                       const ReplSceneLoadOpts *opts) {
+    SceneReloadPathCtx ctx;
+
+    if (!path || !path[0])
+        return 0;
+    ctx.path = path;
+    ctx.opts = opts;
+    return reload_active_scene(reload_from_path, &ctx);
+}
+
+int repl_reload_active_scene_from_lines(const char *const *lines,
+                                        const char *label,
+                                        const ReplSceneLoadOpts *opts) {
+    SceneReloadLinesCtx ctx;
+
+    if (!lines)
+        return 0;
+    ctx.lines = lines;
+    ctx.label = label;
+    ctx.opts  = opts;
+    return reload_active_scene(reload_from_lines, &ctx);
 }
 
 static int split_scene_text_lines(const char *text,

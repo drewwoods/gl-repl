@@ -42,6 +42,30 @@ re-derive them:
   bridge call for `NONE` means no bridge implementation - present or future -
   can be handed the mode at all, while the header's own diagnostics
   (missing-role notes) still run.
+- **D5's commit-vs-cancel distinction is derived, not hooked.** The plan
+  assumed two router hooks (apply on cancel, dismiss on commit). The watcher
+  instead records a document fingerprint when the gate shuts and compares it
+  when the gate opens: unchanged means the row was abandoned, changed means the
+  user committed. Same semantics, no ordering to get wrong and no call site to
+  forget - and it handles "the user committed three lines while it waited",
+  which a keystroke hook would have to enumerate. The lesson-end edge is
+  detected the same way, from `tutorial_active()` going false during a poll.
+- **Stage 2 parks only a single trailing row.** An unfinished statement absorbs
+  every physical line after it, so one stray unclosed paren mid-file would make
+  the whole tail "the incomplete row". The multi-row case is refused rather
+  than stripped; ATOMIC then rejects the file and names the line, which is what
+  tells the user something is wrong. This matches the stage's own title.
+- **The cascade in stage 2's "Boundary" cannot occur** with the terminator
+  rule: `{` and `}` *are* statement terminators, so a block-delimiter row is
+  complete by construction and is never the selected row. Kept as an assertion
+  (`test_block_rows_are_never_parked`) rather than a documented limitation.
+- **Verification 5 was resolved by reading, not by hand.** The partial-vertex
+  guide draws: `draw_vertex_guides()` renders a plane at one filled slot and a
+  line at two (`src/render3d/guides/geometry_guides.c`), and
+  `tests/test_render3d_guides.c` already asserts both, labels included. The
+  concern was that the "renderer fills unset slots with the identity" contract
+  belonged to the *transform* guide - it does, and the vertex guide has its own
+  DOF-based rendering instead. Stage 2's payoff is real.
 
 ## Goal
 

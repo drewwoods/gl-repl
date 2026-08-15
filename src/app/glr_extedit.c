@@ -9,6 +9,7 @@
 #include "app/glr_extedit.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -17,9 +18,11 @@
 #include "app/glr_camera.h"
 #include "app/glr_ctrl.h"
 #include "app/glr_pointer_script.h"
+#include "config.h"          /* MAX_LINE_LEN / MAX_INPUT_LEN */
 #include "editor/input.h"
 #include "editor/state.h"
 #include "editor/undo.h"
+#include "repl/line_scan.h"   /* the importer's own statement-boundary scan */
 #include "repl/scene_load.h"
 #include "repl/scenes.h"
 #include "repl/host_effects.h"   /* repl_set_status / _error */
@@ -60,6 +63,13 @@ static unsigned long long    g_doc_fp_at_defer;
 static int                   g_have_defer_fp;
 static int                   g_reported_missing;
 static int                   g_was_in_lesson;
+/* Text of the row the watcher parked in the input buffer, and whether it is
+ * still exactly that. The parked row is excluded from "the input row is dirty"
+ * only while the user has not touched it (D5): the first local keystroke there
+ * transfers ownership back to them and re-arms normal deferral, or the next
+ * save would overwrite typing undo cannot restore. */
+static char                  g_parked_row[MAX_INPUT_LEN];
+static int                   g_parked_valid;
 static GlrExtEditStats       g_stats;
 
 /* ----- tokens ------------------------------------------------------------ */
@@ -151,6 +161,7 @@ static void forget_binding_state(void) {
     g_pending            = 0;
     g_have_defer_fp      = 0;
     g_reported_missing   = 0;
+    g_parked_valid       = 0;
 }
 
 void glr_extedit_set_enabled(int enabled) {
@@ -248,21 +259,182 @@ static void glr_extedit_notify_reloaded(void) {
     glr_assign_plot_invalidate_tag_sync();
 }
 
+/* ----- stage 2: one incomplete final row ---------------------------------- */
+
+/* A file the watcher read, as physical lines. Heap-backed rather than static
+ * BSS: `--watch` is off by default, and half a megabyte of always-resident
+ * line buffer for a feature nobody armed is not a trade worth making. */
+typedef struct {
+    char        *storage;   /* GLR_EXTEDIT_MAX_LINES * MAX_LINE_LEN */
+    const char **ptrs;      /* NULL-terminated, into storage */
+    int          count;
+} GlrExtEditFileLines;
+
+/* Beyond this the watcher falls back to letting the loader read the path
+ * itself: the incomplete-row heuristic is a convenience, and a scene file this
+ * long is a generated one nobody is hand-typing the tail of. */
+#define GLR_EXTEDIT_MAX_LINES 2048
+
+static void file_lines_free(GlrExtEditFileLines *fl) {
+    free(fl->storage);
+    free((void *)fl->ptrs);
+    fl->storage = NULL;
+    fl->ptrs    = NULL;
+    fl->count   = 0;
+}
+
+static int file_lines_read(const char *path, GlrExtEditFileLines *fl) {
+    FILE *f;
+    char buf[MAX_LINE_LEN];
+
+    fl->storage = (char *)malloc((size_t)GLR_EXTEDIT_MAX_LINES * MAX_LINE_LEN);
+    fl->ptrs    = (const char **)malloc((size_t)(GLR_EXTEDIT_MAX_LINES + 1) *
+                                        sizeof(*fl->ptrs));
+    fl->count   = 0;
+    if (!fl->storage || !fl->ptrs) {
+        file_lines_free(fl);
+        return 0;
+    }
+
+    f = fopen(path, "r");
+    if (!f) {
+        file_lines_free(fl);
+        return 0;
+    }
+    while (fgets(buf, (int)sizeof(buf), f)) {
+        char *dst;
+        size_t len = strlen(buf);
+        while (len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r'))
+            buf[--len] = '\0';
+        if (fl->count >= GLR_EXTEDIT_MAX_LINES) {
+            fclose(f);
+            file_lines_free(fl);
+            return 0;   /* too long: the caller falls back to the path loader */
+        }
+        dst = fl->storage + (size_t)fl->count * MAX_LINE_LEN;
+        memcpy(dst, buf, len + 1);
+        fl->ptrs[fl->count] = dst;
+        fl->count++;
+    }
+    if (ferror(f)) {
+        fclose(f);
+        file_lines_free(fl);
+        return 0;
+    }
+    fclose(f);
+    fl->ptrs[fl->count] = NULL;
+    return 1;
+}
+
+/* Which physical row, if any, is a half-typed command the user is still
+ * writing? Returns its index, or -1.
+ *
+ * Replays the importer's own accumulator over the file, using the *shared*
+ * scanner (repl/line_scan.h) rather than a lookalike - the two have to agree
+ * or this parks a row the importer would have accepted. A statement is open
+ * until the bracket depth is back to zero AND the last code character closes
+ * it; rows with no code (blank, comment, directive) are not statements and are
+ * skipped, which is what keeps an ordinary trailing `// note` in the document
+ * instead of parking it as a half-typed command.
+ *
+ * The terminator - not "ends in a comma or an operator" - is the test, and it
+ * is the whole point: `glVertex3f(1, 2, 3)` with the `;` not yet typed has
+ * depth 0 and ends in `)`. The weaker rule would leave it in the file, where
+ * `import_finish_load` flushes it at EOF and the parser adds the `;` back
+ * while rebuilding canonical text - so the almost-finished command commits
+ * silently as a document row and stage 2's payoff never fires for the most
+ * common half-typed line there is.
+ *
+ * Only a *single* trailing row qualifies. An unfinished statement absorbs
+ * every physical line after it, so one stray unclosed paren mid-file would
+ * otherwise make the whole tail "the incomplete row" and strip it. Refusing
+ * the multi-row case leaves ATOMIC to reject the file and say which line, and
+ * matches this stage's scope exactly. */
+static int find_incomplete_final_row(const char *const *lines, int count) {
+    int depth = 0, started = 0, stmt_start = -1, last_code = -1;
+
+    for (int i = 0; i < count; i++) {
+        int code_len = 0;
+        int d = started ? depth : 0;
+        char last = repl_scan_code_line(lines[i], &d, &code_len);
+
+        if (code_len == 0)
+            continue;                 /* blank / comment / directive */
+        if (!started) {
+            started    = 1;
+            stmt_start = i;
+        }
+        depth     = d;
+        last_code = i;
+        if (depth <= 0 && repl_is_stmt_terminator(last))
+            started = 0;
+    }
+
+    if (!started || stmt_start != last_code)
+        return -1;
+    return last_code;
+}
+
 /* ----- reload ------------------------------------------------------------- */
+
+static void park_incomplete_row(const char *text) {
+    /* Order matters: editor_input_set_text() ends by snapping the cursor to
+     * end-of-text, so text first. Stage 2 carries no column, and end-of-text
+     * is the right answer for a row the user is still typing.
+     *
+     * `edit_line = document_count` parks past the last row so the input row
+     * appends - which is already how the code panel renders the trailing live
+     * row. No placeholder document row is inserted; the row is deliberately
+     * NOT in the document, so an outbound write drops it. */
+    editor_insert_mode_set(0);
+    editor_state_edit_line_set(repl_state_document_count());
+    editor_input_set_text(text);
+    snprintf(g_parked_row, sizeof(g_parked_row), "%s", text);
+    g_parked_valid = 1;
+}
+
+/* Is the input row dirty in the sense that matters - typing that a reload
+ * would destroy and Ctrl+Z could not recover? A parked WIP row is the
+ * watcher's own text, so it does not count until the user changes it. */
+static int input_row_is_dirty(void) {
+    if (!editor_input_has_uncommitted_change())
+        return 0;
+    if (g_parked_valid && strcmp(editor_input_text(), g_parked_row) == 0)
+        return 0;
+    return 1;
+}
 
 static void apply_reload(const char *path) {
     ReplSceneLoadOpts opts;
     EditorUndoHistorySnapshot *history = NULL;
+    GlrExtEditFileLines fl = { NULL, NULL, 0 };
+    char parked[MAX_INPUT_LEN];
+    int have_parked = 0;
     int is_user_scene = repl_active_user_scene() >= 0;
     int ok;
 
     repl_scene_load_opts_init(&opts, repl_scene_format_from_path(path));
     /* The loader stays strictly atomic: any rejected line fails the whole
-     * import and the live document is untouched. */
+     * import and the live document is untouched. The incomplete-row allowance
+     * below is NOT a loader concession - the controller removes that row
+     * first, and the loader never sees it. */
     opts.policy = REPL_SCENE_LOAD_POLICY_ATOMIC;
     /* D3: an external text edit is geometry, not a presentation reset. */
     opts.apply_cfg    = 0;
     opts.camera_apply = REPL_CAMERA_APPLY_NONE;
+
+    /* Stage 2 is `.glr` only. The heuristic is meaningless on exported C: the
+     * incomplete authored command sits inside display() and is followed by
+     * generated wrapper rows, so it is never the final non-empty physical
+     * row. */
+    if (opts.format == REPL_EXAMPLE_SOURCE_GLR && file_lines_read(path, &fl)) {
+        int row = find_incomplete_final_row(fl.ptrs, fl.count);
+        if (row >= 0) {
+            snprintf(parked, sizeof(parked), "%s", fl.ptrs[row]);
+            have_parked = 1;
+            fl.ptrs[row] = NULL;   /* truncate: the loader sees lines minus it */
+        }
+    }
 
     /* D4. The history capture is heap-backed on purpose: with a full ring the
      * push below has already overwritten the oldest entry, and restoring
@@ -272,7 +444,11 @@ static void apply_reload(const char *path) {
         editor_undo_push_snapshot();
     }
 
-    ok = repl_reload_active_scene_from_path(path, &opts);
+    if (fl.ptrs)
+        ok = repl_reload_active_scene_from_lines(fl.ptrs, path, &opts);
+    else
+        ok = repl_reload_active_scene_from_path(path, &opts);
+    file_lines_free(&fl);
 
     if (!ok) {
         if (history)
@@ -288,6 +464,11 @@ static void apply_reload(const char *path) {
         editor_insert_mode_set(0);
         editor_input_clear();
         editor_state_edit_line_clamp();
+        g_parked_valid = 0;
+        if (have_parked) {
+            park_incomplete_row(parked);
+            g_stats.parked_rows++;
+        }
         glr_extedit_notify_reloaded();
     }
     editor_undo_history_destroy(history);
@@ -305,7 +486,7 @@ static int lesson_running(void) {
 }
 
 static int gate_is_shut(void) {
-    return lesson_running() || editor_input_has_uncommitted_change();
+    return lesson_running() || input_row_is_dirty();
 }
 
 /* Should the binding be left exactly as it is, whatever the active scene now
