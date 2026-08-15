@@ -40,15 +40,25 @@ done
 # dash ("  --window <WxH>  …"); continuation lines are indented far deeper, and
 # the Environment section that follows names GLR_* vars, never options. Take
 # every long option on such a line, which also picks up the "-h, --help" pair.
-help_opts=$(sed -n '/^static void print_usage/,/^}/p' "$CLI_SRC" \
+usage_text=$(sed -n '/^static void print_usage/,/^}/p' "$CLI_SRC")
+
+help_opts=$(printf '%s\n' "$usage_text" \
     | grep -E '^ *"  -' \
     | grep -oE -- '--[a-z][a-z0-9-]*' \
     | sort -u)
 
 # -h is the only short option; it is spelled inline with --help above.
-if sed -n '/^static void print_usage/,/^}/p' "$CLI_SRC" | grep -q -- '"  -h, --help'; then
-    help_opts=$(printf '%s\n-h\n' "$help_opts" | sort -u)
-fi
+#
+# Matched with a bash glob rather than `… | grep -q`: grep -q exits at the
+# first match, the writer upstream takes SIGPIPE, and `set -o pipefail` then
+# reports the whole pipeline as failed even though the pattern WAS found — so
+# the branch silently never ran and -h dropped out of help_opts. It survived
+# on macOS only because BSD sed's output fits the pipe buffer before grep
+# leaves; GNU sed on CI is slower to finish and fails loudly
+# ("sed: couldn't write N items to stdout: Broken pipe").
+case $usage_text in
+    *'"  -h, --help'*) help_opts=$(printf '%s\n-h\n' "$help_opts" | sort -u) ;;
+esac
 
 # --- parser ----------------------------------------------------------------
 parser_opts=$(grep -oE 'strcmp\(argv\[i\], "-[^"]*"\)' "$CLI_SRC" \
