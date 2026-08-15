@@ -757,11 +757,10 @@ int repl_save_active_scene(const ReplExportLayout *layout) {
      * write the self-write stamp suppresses, and the round trip is broken in
      * both directions at once.
      *
-     * A bound managed workspace wins, because it is the stronger and more
-     * recent statement of where this scene lives: `repl_save_workspace` owns
-     * the whole directory, prunes files by manifest, and would leave a scene
-     * saved elsewhere out of it. */
-    if (!workspace_dir && g_user_scenes[slot].source_path[0])
+     * File -> Open can occur while a managed workspace is active, and that
+     * later per-slot choice wins until an explicit workspace save adopts the
+     * slot (and clears source_path at the app-level commit point). */
+    if (g_user_scenes[slot].source_path[0])
         return save_active_scene_to_bound_path(g_user_scenes[slot].source_path,
                                                layout);
 
@@ -835,6 +834,11 @@ const char *repl_active_scene_bound_path(void) {
     if (slot >= 0 && slot < MAX_USER_SCENES && g_user_scenes[slot].used) {
         static char path[REPL_WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
 
+        /* A later File -> Open choice overrides a previously active workspace
+         * for this slot. An explicit workspace save clears source_path when it
+         * adopts the slot, restoring workspace resolution. */
+        if (g_user_scenes[slot].source_path[0])
+            return g_user_scenes[slot].source_path;
         /* A managed workspace slot: the leaf Save Scene writes. Formatted
          * rather than stored, so a rename moves the binding with the file the
          * next save will produce. */
@@ -842,8 +846,6 @@ const char *repl_active_scene_bound_path(void) {
             format_scene_path("c", g_workspace_dir, path, sizeof(path));
             return path;
         }
-        if (g_user_scenes[slot].source_path[0])
-            return g_user_scenes[slot].source_path;
     }
 
     /* A runtime-catalog `.glr`, either still being viewed or through the slot
@@ -1511,6 +1513,19 @@ void repl_set_workspace_dir(const char *dir) {
      * the buffer). */
     if (dir == g_workspace_dir_writable) return;
     snprintf(g_workspace_dir_writable, REPL_WORKSPACE_DIR_MAX, "%s", dir);
+}
+
+void repl_scenes_adopt_workspace_bindings(void) {
+    if (!g_workspace_dir[0])
+        return;
+    /* App-level successful workspace saves call this at their commit point.
+     * Keep it out of repl_save_workspace(): quit/open recovery writes use that
+     * low-level serializer too, but must not retarget a session's file-backed
+     * slots to the recovery copy. */
+    for (int s = 0; s < MAX_USER_SCENES; s++) {
+        if (g_user_scenes[s].used)
+            g_user_scenes[s].source_path[0] = '\0';
+    }
 }
 
 int repl_user_scene_rename(int slot, const char *new_name) {

@@ -172,9 +172,12 @@ const char *repl_active_scene_glr_write_back_path(void);
  * following a file gl-repl would not write - or a writer targeting a file
  * nothing watches - breaks the round trip and defeats the self-write stamp.
  *
- *   1. a bound managed workspace -> the leaf Save Scene writes there
- *   2. else the active slot's `source_path` - an arbitrary file the user
- *      named on the command line or through File -> Open
+ *   1. the active slot's `source_path` - an arbitrary file the user named on
+ *      the command line or through File -> Open; this later per-slot choice
+ *      overrides an older workspace binding
+ *   2. else a bound managed workspace -> the leaf Save Scene writes there;
+ *      an explicit successful workspace save adopts slots by clearing their
+ *      older `source_path` values
  *   3. else `repl_active_scene_glr_write_back_path()` - a runtime-catalog
  *      `.glr`, viewed or promoted
  *   4. else NULL: a built-in example or a transient has no file
@@ -273,5 +276,11 @@ typedef struct ReplScenesSnapshot ReplScenesSnapshot;
 ReplScenesSnapshot *repl_scenes_snapshot_capture(void);
 int  repl_scenes_snapshot_restore(const ReplScenesSnapshot *snapshot);
 void repl_scenes_snapshot_destroy(ReplScenesSnapshot *snapshot);
+
+/* Commit the app-level policy that a successful explicit workspace save
+ * adopts every occupied slot into the now-bound workspace. Clears older
+ * CLI/File-Open source_path values. Kept separate from repl_save_workspace()
+ * because recovery-workspace serialization must not retarget the live slots. */
+void repl_scenes_adopt_workspace_bindings(void);
 
 #endif /* REPL_SCENES_H */

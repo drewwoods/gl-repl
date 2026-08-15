@@ -15,6 +15,7 @@ list in "Steps"; the per-step state is tracked here.
 | 4 — `glr_extedit.c`, `--watch` | done |
 | 5 — `glr_extedit_notify_reloaded()` + D7 table | done |
 | 6 — stage 2, one incomplete final row | done |
+| 6.5 — stage 2.25, one recoverable failed row anywhere | **skipped — do not implement** |
 | 7 — stage 2.5, live WIP buffer | **not started — gated** (see below) |
 
 Step 7 is deliberately not implemented. Its gate is a measurement, and the
@@ -23,11 +24,16 @@ used and the total content-update latency is measured."* Neither half is
 satisfiable from the implementation seat - "has been used" is a human
 condition, and Verification 7 wants p95 across small / typical / large scenes
 under real editing. Everything 2.5 needs from stages 1-2 (the two-level gate,
-the three-state tracking, the deferral state machine, the notification hook) is
-in place; what is missing is the number.
+the three-state tracking, the deferral state machine, and the notification
+hook) is in place. Stage 2.25 is explicitly skipped: its automatic
+first-failure recovery is mostly throwaway work for 2.5, which receives an
+explicit cursor row and needs a complete physical-to-document map anyway.
+What remains is to collect the 2.5 latency number and, if the gate passes,
+build that complete mapping once.
 
 Corrections made after review, kept here because each was a real defect the
-first pass shipped and each now has a test that fails without the fix:
+first pass shipped. The behavioral cases have regression coverage; the
+allocation-failure guard is explicit at the mutation boundary:
 
 - **The applied stamp must come from the bytes the reload read**, not from the
   parked token. D8 says a deferred version is re-read when the gate opens, so
@@ -90,6 +96,19 @@ first pass shipped and each now has a test that fails without the fix:
   explicit list; the binary and the tests use `$(wildcard)`, so a missing row
   is invisible to `make test` and to `check-c99`. `repl_demo` and
   `repl_live_demo` are gated by `test-full`'s `HEADLESS_DEMO_TARGETS` - run it.
+- **An existing row edited down to empty is still dirty.** Empty input is clean
+  only at an insertion/trailing row; on a document row it differs from the
+  canonical text and must keep the reload gate shut.
+- **File Open is later than the workspace binding.** A slot's `source_path`
+  wins even when a managed workspace is already active. An explicit successful
+  workspace save adopts all serialized slots and clears those older per-file
+  homes at its commit point.
+- **A reload settles and cancels camera control state.** Settle the ease first,
+  then clear the held mouse button and momentum without changing the pose or
+  scene default.
+- **Undo-history capture failure refuses the reload.** Do not push when the
+  heap-backed history copy cannot be allocated; otherwise a failed import can
+  still clear redo or evict the oldest undo entry.
 
 Scope notes taken while implementing, so a later reader does not have to
 re-derive them:
@@ -172,8 +191,10 @@ Premises:
 ## Verdict
 
 Stage 1 is mostly assembly over two design problems — path binding and
-undo/divergence — both now decided below. Stage 2 is a small delta. Stage 2.5
-is the highest-value step and is gated on a measurement, not on new
+undo/divergence — both now decided below. Stage 2 is a small delta. Stage 2.25
+is skipped: only its hole-placement idea is reusable, while failure discovery
+and strict retry are not needed once the sidecar names the active row. Stage
+2.5 is the highest-value next step and is gated on a measurement, not on new
 architecture.
 
 The friction that bites at every stage and has no cheap fix: **gl-repl
@@ -198,6 +219,11 @@ binding's `format`. A slot with no path is not watched.
 | Built-in example (compiled in) | none | unbind; status bar says so |
 | F12 / scene tab | rebind to the new scene's path, else unbind | follows the bind |
 | File → Open / Save As | rebind to the path just used | same |
+
+`source_path` is a later per-slot choice than an already-active managed
+workspace. It wins for watch and Ctrl+S until an explicit successful workspace
+save adopts the slot; the workspace save clears `source_path` only after its
+files and manifest commit.
 
 Do **not** overload `glr_origin_path` for the CLI case: it is documented as
 catalog `.glr` write-back, bound once and never rewritten (`scenes.h:155-165`).
@@ -295,7 +321,8 @@ mark the inbound version *pending* and defer automatic application.** Status
 bar shows that a newer external version is waiting. This preserves the
 existing document-only undo contract without widening every snapshot.
 
-`editor_input_has_uncommitted_change()` does not exist today. Define it:
+`editor_input_has_uncommitted_change()` is now the single gate, with this
+contract:
 
 - `edit_line < count` → dirty iff the input differs from the canonical text of
   that document row, compared **through `repl_canonical_input_view()`**
@@ -547,8 +574,9 @@ the next physical line onto it, and reports one joined parse error — losing
 the following row from the document."
 
 So an ATOMIC loader reports a *joined logical statement*, never a physical
-row. "Allow one rejected line and require it to be the cursor row" was
-unimplementable.
+row. Stage 2 deliberately does not try to recover that case. Stage 2.5 avoids
+guessing which row failed: the sidecar supplies the physical cursor row, and
+the importer builds the complete mapping needed to place it.
 
 ### The framing that works
 
@@ -636,6 +664,25 @@ forbids pipeline TUs from touching the input row (`src/editor/input.h:160`).
   Verification 5.
 - Autocomplete follows for free (`ac_try_enum_slot_completion()`,
   `glr_completion.c:529`).
+
+## Stage 2.25 — skipped; do not implement
+
+The proposed intermediate stage would have guessed the first failed physical
+row, removed it, retried the complete import, and parked it at a nonce-bearing
+hole. It is not worth shipping as a separate recovery mode:
+
+- failure discovery and the two-pass strict retry are substantial importer
+  machinery that Stage 2.5 does not reuse—the sidecar names the row directly;
+- proving one hole does not remove Stage 2.5's need for a complete
+  physical-to-document map for later cursor-only moves; and
+- an explicit save while a row is parked would rewrite the file without that
+  row, adding another destructive edge to explain or block.
+
+Keep only the useful design constraint: Stage 2.5 owns one typed, nonce-scoped
+hole/mapping mechanism in the scene-import boundary, while `src/app/` owns the
+sidecar policy, parked text and cursor placement. Genuine user comments that
+look like transport markers remain ordinary text. Do not add automatic
+first-parse-failure recovery or a second mapping path.
 
 ## Stage 2.5 — live WIP buffer
 
@@ -820,6 +867,9 @@ not exist: sockets, kqueue, inotify, FSEvents, mkfifo, fork/exec.
 6. Stage 2: last-row strip, `.glr` only, append placement, terminator
    heuristic (`scan_code_line` + `is_stmt_terminator` promoted to a shared
    header; last **code** row, so trailing comments are skipped).
+6.5. **Skipped — do not implement Stage 2.25.** Its automatic failure
+   discovery and retry are not reused by 2.5. Carry only the typed hole and
+   mapping constraints into step 7.
 7. Stage 2.5 only after stage 1 has been used and the total content-update
    latency is measured: `@cursor-hole` staging + nonce, bind-time recovery vs
    live follow, WIP undo/exit policy, full `s:GlrWip()`.
@@ -828,14 +878,11 @@ not exist: sockets, kqueue, inotify, FSEvents, mkfifo, fork/exec.
 
 All in failure and edge behavior, where the suite is thinnest.
 
-**Where they landed.** `tests/test_scene_load.c` (new, 73 assertions) covers
+**Where they landed.** `tests/test_scene_load.c` (new, 79 assertions) covers
 the loader options and the source-file binding; `tests/test_glr_extedit.c`
-(new, 122 native / 5 wasm) covers the watcher; `test_export_glr_fixed_point`
-in `tests/test_repl_core_examples.c` covers the last bullet. Six rows below
-are stage-2.5 only and are **not** written: the `@cursor-hole` mapping, the
-cursor-only move to an unmapped row, the dismissed-content cursor-follow
-suppression, WIP entry/exit, sidecar atomicity, and `@cursor` never being
-exported. Everything else in the list is covered.
+(new, 209 native / 5 wasm) covers the watcher; `test_export_glr_fixed_point`
+in `tests/test_repl_core_examples.c` covers the last bullet. The Stage 2.5
+rows below are **not** written yet. Everything else in the list is covered.
 
 - **Undo per identity.** User scene: reload is undoable. Unedited example:
   reload pushes nothing and **does not promote** — assert the slot count.
@@ -874,8 +921,9 @@ exported. Everything else in the list is covered.
   is a block head, cascading (must fail).
 - **`@cursor-hole` mapping.** A file with headers, `@declare` rows and staged
   functions: the returned document row is right, not off-by-header-count.
-  Include a hole **inside a staged function body**, and a marker-collision
-  case where a genuine user comment spells `// @cursor-hole`.
+  Include a hole **inside a staged function body**. A genuine user comment
+  spelling `// @cursor-hole` remains an ordinary comment; only the active,
+  nonce-bearing transport marker is consumed. This belongs to Stage 2.5.
 - **WIP entry/exit.** Entry snapshot on a user scene but **not** on an
   unedited catalog scene (assert no promotion); Ctrl+Z out of WIP sticks and
   does not re-enter on the next poll; sidecar deletion clears WIP-active and
@@ -896,7 +944,8 @@ exported. Everything else in the list is covered.
 
 ## Verification
 
-Results for stages 1-2, in the numbering below:
+Results for stages 1-2, with Stage 2.25 skipped and Stage 2.5 still pending,
+in the numbering below:
 
 | # | Result |
 |---|---|

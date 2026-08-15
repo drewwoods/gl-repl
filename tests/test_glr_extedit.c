@@ -33,6 +33,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "gl_includes.h"
 #include "app/glr_camera.h"
 #include "app/glr_config.h"
 #include "app/glr_ctrl.h"
@@ -451,6 +452,31 @@ static void test_loaded_row_is_not_dirty(void) {
     ASSERT_INT("it just happens", glr_extedit_stats().reloads, 1);
 }
 
+static void test_empty_existing_row_is_dirty(void) {
+    printf("--- deleting an existing row to empty still defers ---\n");
+
+    begin_watched_session(k_scene_a);
+    editor_state_edit_line_set(3);
+    editor_load_line_to_input(3);
+    editor_input_clear();
+    ASSERT_TRUE("empty differs from the existing document row",
+                editor_input_has_uncommitted_change());
+
+    write_lines(WATCH_PATH, k_scene_b);
+    glr_extedit_poll();
+    ASSERT_INT("the reload is deferred", glr_extedit_stats().deferrals, 1);
+    ASSERT_INT("and has not erased the local edit",
+               glr_extedit_stats().reloads, 0);
+    ASSERT_TRUE("the old scene remains live", document_mentions("0, 0, 0"));
+
+    /* Restoring the canonical input is cancellation: the document did not
+     * move, so the pending external version may now land. */
+    editor_load_line_to_input(3);
+    glr_extedit_poll();
+    ASSERT_INT("the pending version lands after cancellation",
+               glr_extedit_stats().reloads, 1);
+}
+
 /* --- identity (D4) -------------------------------------------------------- */
 
 static void test_user_scene_reload_is_undoable(void) {
@@ -673,6 +699,35 @@ static void test_reload_stops_replay(void) {
     /* Flat identity and replay_exec_limit index a flat program that the
      * reflatten just replaced. */
     ASSERT_TRUE("replay stopped", !replay_state_view().active);
+}
+
+static void test_reload_cancels_camera_drag_and_momentum(void) {
+    GlrCameraRuntimeSnapshot runtime;
+    GlrCameraState before_motion;
+    GlrCameraState after_motion;
+
+    printf("--- a reload cancels camera drag and momentum ---\n");
+
+    begin_watched_session(k_scene_a);
+    glr_camera_mouse_event(GLUT_LEFT_BUTTON, GLUT_DOWN, 10, 10, 0);
+    glr_camera_drag_motion(20, 15);
+
+    write_lines(WATCH_PATH, k_scene_b);
+    glr_extedit_poll();
+    ASSERT_INT("the reload happened", glr_extedit_stats().reloads, 1);
+
+    glr_camera_runtime_capture(&runtime);
+    ASSERT_INT("the held camera button was released",
+               runtime.pointer_button, -1);
+    ASSERT_TRUE("orbit momentum was cleared",
+                runtime.vel_rx == 0.0f && runtime.vel_ry == 0.0f);
+
+    before_motion = glr_camera();
+    glr_camera_drag_motion(40, 25);
+    after_motion = glr_camera();
+    ASSERT_TRUE("later pointer motion no longer continues the old drag",
+                before_motion.rx == after_motion.rx &&
+                before_motion.ry == after_motion.ry);
 }
 
 static void test_reload_clears_the_input_row(void) {
@@ -1246,6 +1301,10 @@ static void test_catalog_scene_reload_does_not_promote(void) {
     ASSERT_TRUE("the runtime catalog loads",
                 repl_examples_load_dir(root, err, sizeof(err)));
     (void)repl_load_example(0);
+    /* The production scene action refreshes the input row after the pipeline
+     * load. This test calls the lower-level loader directly, so mirror that
+     * adapter step before asking the dirty-input gate for its answer. */
+    editor_load_line_to_input(editor_state_edit_line());
     slots_before = repl_user_scene_count();
     ASSERT_INT("a catalog scene is not a user scene",
                repl_active_user_scene(), -1);
@@ -1424,12 +1483,14 @@ static void test_seen_history_covers_runtime_catalog(void) {
     ASSERT_INT("catalog has more paths than the old history cap",
                repl_example_count(), CATALOG_SCENES);
     ASSERT_TRUE("first catalog scene loads", repl_load_example(0) > 0);
+    editor_load_line_to_input(editor_state_edit_line());
 
     glr_extedit_set_enabled(1);
     glr_extedit_poll();
     for (int i = 1; i < CATALOG_SCENES; i++) {
         ASSERT_TRUE("catalog scene loads while cycling",
                     repl_load_example(i) > 0);
+        editor_load_line_to_input(editor_state_edit_line());
         glr_extedit_poll();
     }
 
@@ -1437,6 +1498,7 @@ static void test_seen_history_covers_runtime_catalog(void) {
      * scene rebinds the path; the following poll must apply the pending edit. */
     write_lines(paths[0], k_scene_b);
     ASSERT_TRUE("return to the first catalog scene", repl_load_example(0) > 0);
+    editor_load_line_to_input(editor_state_edit_line());
     glr_extedit_poll();
     glr_extedit_poll();
     ASSERT_TRUE("the external edit survives the catalog tour",
@@ -1505,12 +1567,14 @@ int main(void) {
     test_commit_dismisses_and_the_bytes_do_not_return();
     test_save_supersedes_a_pending_version();
     test_loaded_row_is_not_dirty();
+    test_empty_existing_row_is_dirty();
     test_user_scene_reload_is_undoable();
     test_builtin_example_unbinds_the_watcher();
     test_failed_reload_restores_a_full_undo_ring();
     test_watched_reload_preserves_cfg_and_camera();
     test_tutorial_defers_then_dismisses();
     test_reload_stops_replay();
+    test_reload_cancels_camera_drag_and_momentum();
     test_reload_clears_the_input_row();
     test_incomplete_final_row_is_parked();
     test_missing_semicolon_counts_as_incomplete();

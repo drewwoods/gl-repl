@@ -1831,11 +1831,9 @@ int editor_input_has_uncommitted_change(void) {
     const char *canonical;
     int canonical_len;
 
-    if (in.input_len <= 0)
-        return 0;
     /* A new line: nothing on the document side to compare against. */
     if (in.insert_mode || line < 0 || line >= count)
-        return 1;
+        return in.input_len > 0;
 
     repl_canonical_input_view(editor_buffer_line(line),
                               &canonical, &canonical_len);

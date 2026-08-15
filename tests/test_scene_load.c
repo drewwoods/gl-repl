@@ -59,6 +59,15 @@ static const char *const k_good_scene[] = {
     NULL
 };
 
+static const char *const k_other_scene[] = {
+    "glClearColor(0.2, 0.2, 0.2, 1.0);",
+    "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+    "glBegin(GL_POINTS);",
+    "glVertex3f(9, 9, 9);",
+    "glEnd();",
+    NULL
+};
+
 /* The shape that motivated one-scene-loader.md: two statements on one row.
  * The REPL is one command per line, so the tail of the row is rejected -
  * while every other row in the file is perfectly good. */
@@ -626,6 +635,35 @@ static void test_open_binds_its_own_path(void) {
                slot != 0, 1);
 }
 
+static void test_open_path_wins_over_an_existing_workspace(void) {
+    ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+    const char *source;
+
+    printf("--- File -> Open overrides an older workspace binding ---\n");
+
+    write_file(WATCH_PATH, k_good_scene);
+    write_file(OTHER_PATH, k_other_scene);
+    glr_ctrl_reset_all();
+    (void)repl_load_initial_commands(WATCH_PATH);
+    repl_set_workspace_dir("/tmp/gl_repl_scene_load_older_workspace");
+
+    ASSERT_TRUE("the open succeeded",
+                repl_load_scene_as_new_slot(OTHER_PATH, &reason) >= 0);
+    source = repl_active_scene_source_path();
+    ASSERT_TRUE("the opened slot retained its own source path", source != NULL);
+    ASSERT_STR("watch follows the later per-slot choice",
+               repl_active_scene_bound_path(), source);
+
+    ASSERT_TRUE("Ctrl+S saves the opened file",
+                repl_save_active_scene(NULL) != 0);
+    ASSERT_TRUE("the opened .glr received its scene",
+                file_contains(OTHER_PATH, "glVertex3f(9, 9, 9);"));
+    ASSERT_STR("saving the file does not silently adopt it into the workspace",
+               repl_active_scene_bound_path(), source);
+
+    repl_set_workspace_dir(NULL);
+}
+
 int main(void) {
     printf("=== scene load options ===\n");
     test_format_drives_order_check();
@@ -646,6 +684,7 @@ int main(void) {
     test_failed_reload_leaves_no_trace();
     test_reload_cannot_rebind_the_slot();
     test_open_binds_its_own_path();
+    test_open_path_wins_over_an_existing_workspace();
     printf("\n=== Results: ");
     return test_harness_report(&g_harness, "scene_load");
 }

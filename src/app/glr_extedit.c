@@ -407,7 +407,11 @@ static void glr_extedit_notify_reloaded(void) {
      * are cached against a document that no longer exists. */
     if (editor_state_search()->active)
         editor_search_rescan();
+    /* Finish the intended ease destination before clearing the gesture state.
+     * controls_reset() then releases any mouse drag and momentum without
+     * changing the settled pose or the scene camera default. */
     glr_camera_settle_target();
+    glr_camera_controls_reset();
     /* Force the `// @plot` re-resolve. Keyed through this notification rather
      * than editor_undo_generation(), which a watched reload does not bump -
      * and the actual rescan runs on the frame path, after the flat refresh,
@@ -643,6 +647,14 @@ static void apply_reload(const char *path) {
      * head/count indices cannot bring it back. */
     if (is_user_scene) {
         history = editor_undo_history_capture();
+        if (!history) {
+            repl_set_status_error("Watch: out of memory preserving undo history");
+            file_lines_free(&fl);
+            g_stats.failures++;
+            g_pending       = 0;
+            g_have_defer_fp = 0;
+            return;
+        }
         editor_undo_push_snapshot();
     }
 

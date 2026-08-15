@@ -12,6 +12,7 @@
 #include "app/glr_config.h"
 #include "config.h"                  /* DEFAULT_SCENE_FILE */
 #include "app/glr_audio.h"
+#include "repl/bootstrap.h"
 #include "repl/example_loader.h"
 #include "repl/host_effects.h"
 #include "repl/scenes.h"
@@ -477,6 +478,61 @@ static void test_workspace_save_promotes_visible_example(void) {
     repl_set_workspace_dir(NULL);
     remove_test_workspace(menu_dir);
     glr_ctrl_reset_all();
+}
+
+static void test_workspace_save_adopts_open_file_binding(void) {
+    char workspace_dir[] = "/tmp/test_glr_adopt_workspace.XXXXXX";
+    char source_dir[] = "/tmp/test_glr_adopt_source.XXXXXX";
+    char source_path[REPL_WORKSPACE_DIR_MAX];
+    WorkspaceManifest manifest;
+    char err[REPL_STATUS_TEXT_MAX];
+    const char *bound;
+    const char *source_binding;
+    FILE *f;
+
+    printf("--- Save Workspace adopts a later File-Open binding ---\n");
+
+    ASSERT_TRUE("adoption workspace created", mkdtemp(workspace_dir) != NULL);
+    ASSERT_TRUE("adoption source directory created", mkdtemp(source_dir) != NULL);
+    snprintf(source_path, sizeof(source_path), "%s/opened.glr", source_dir);
+    f = fopen(source_path, "w");
+    ASSERT_TRUE("adoption source file opened", f != NULL);
+    if (!f)
+        return;
+    fputs("glBegin(GL_POINTS);\n"
+          "glVertex3f(4, 5, 6);\n"
+          "glEnd();\n", f);
+    fclose(f);
+
+    memset(&manifest, 0, sizeof(manifest));
+    manifest.version = 1;
+    snprintf(manifest.name, sizeof(manifest.name), "Adoption");
+    ASSERT_TRUE("adoption manifest created",
+                workspace_io_manifest_write(workspace_dir, &manifest,
+                                             err, sizeof(err)));
+
+    glr_ctrl_reset_all();
+    ASSERT_TRUE("the source file loads", repl_load_initial_commands(source_path));
+    source_binding = repl_active_scene_source_path();
+    ASSERT_TRUE("the loaded scene retained a source binding",
+                source_binding != NULL);
+    repl_set_workspace_dir(workspace_dir);
+    ASSERT_STR("File Open remains the active binding before workspace save",
+               repl_active_scene_bound_path(), source_binding);
+
+    ASSERT_INT("Save Workspace action consumed",
+               glr_action_menu_item_activate(GLR_MENU_FILE,
+                                             GLR_FILE_ITEM_SAVE_WORKSPACE), 1);
+    ASSERT_TRUE("the explicit workspace save cleared source_path",
+                repl_active_scene_source_path() == NULL);
+    bound = repl_active_scene_bound_path();
+    ASSERT_TRUE("the active binding now resolves inside the workspace",
+                bound && strstr(bound, workspace_dir) == bound);
+
+    glr_ctrl_reset_all();
+    remove_test_workspace(workspace_dir);
+    unlink(source_path);
+    rmdir(source_dir);
 }
 
 /* File > Split Declaration routes to the editor split entry: a multi-var
@@ -2738,6 +2794,7 @@ int main(void) {
     test_view_mode_swatch_state();
     test_menu_actions();
     test_workspace_save_promotes_visible_example();
+    test_workspace_save_adopts_open_file_binding();
     test_split_decl_menu_action();
     test_load_workspace_activates_scene();
     test_shortcuts();
