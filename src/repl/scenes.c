@@ -750,13 +750,23 @@ static void format_scene_path(const char *ext, const char *workspace_dir,
 
 /* Write the active scene to `path`, choosing the writer from the path's own
  * extension: the two formats are not interchangeable, and a `.glr` overwritten
- * with a standalone C program stops being loadable by the catalog. */
-static int save_active_scene_to_bound_path(const char *path,
-                                           const ReplExportLayout *layout) {
+ * with a standalone C program stops being loadable by the catalog.
+ *
+ * Unlike repl_save_active_scene() this takes the document as it stands, slot
+ * or no slot: the `--watch` sync reaches it with the same transient document
+ * the watcher has been reloading all along, which occupies no user-scene slot
+ * and therefore contributes no name hint. */
+int repl_save_active_scene_to_path(const char *path,
+                                   const ReplExportLayout *layout) {
     int slot = g_active_user_scene;
+    int have_slot = slot >= 0 && slot < MAX_USER_SCENES && g_user_scenes[slot].used;
     int ok;
 
-    IMPORT_EXPORT_WRITABLE->export_scene_name_hint = g_user_scenes[slot].name;
+    if (!path || !path[0])
+        return 0;
+
+    IMPORT_EXPORT_WRITABLE->export_scene_name_hint =
+        have_slot ? g_user_scenes[slot].name : NULL;
     if (repl_scene_format_from_path(path) == REPL_EXAMPLE_SOURCE_GLR)
         ok = repl_export_save_glr(path, source_document_view());
     else
@@ -796,7 +806,7 @@ int repl_save_active_scene(const ReplExportLayout *layout) {
      * later per-slot choice wins until an explicit workspace save adopts the
      * slot (and clears source_path at the app-level commit point). */
     if (g_user_scenes[slot].source_path[0])
-        return save_active_scene_to_bound_path(g_user_scenes[slot].source_path,
+        return repl_save_active_scene_to_path(g_user_scenes[slot].source_path,
                                                layout);
 
     /* Save aborts if a bound workspace dir can't be created. */

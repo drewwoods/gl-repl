@@ -302,7 +302,15 @@ See "Not this plan".
 
 Premises:
 
-- **Outbound is explicit-save only.** Ctrl+S stays the only writer.
+- ~~**Outbound is explicit-save only.** Ctrl+S stays the only writer.~~
+  **Superseded** (2026-08-16): gl-repl edits the document too, and not only
+  through the keyboard — a variable-panel drag rewrites a declaration row on
+  release. Leaving the file behind made every such edit silently perishable:
+  the editor's next save overwrote it and nothing said so. The watcher now
+  writes the bound file whenever the document moves off what the outside world
+  last gave it, held back only while a lesson owns the document, the gate is
+  shut, an inbound version is pending, or a WIP session is live. See
+  `glr_extedit.h` "OUTBOUND SYNC".
 - **The loader stays strictly atomic.** Any rejected line fails the whole
   import, live document untouched. The incomplete-row allowance is *not* a
   loader concession — the controller removes that row first.

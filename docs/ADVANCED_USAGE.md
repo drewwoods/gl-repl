@@ -650,9 +650,28 @@ caps further, re-check with
 
 `--watch` makes an external editor a peer author of the live scene. gl-repl
 re-reads the bound file whenever it is saved, so the scene updates without
-leaving the editor. Outbound stays explicit-save only: Ctrl+S is the only
-thing that writes the file, and it writes **that** file - the same path the
-watcher follows - rather than exporting a name-derived copy somewhere else.
+leaving the editor. Outbound is the same path in reverse: Ctrl+S writes **that**
+file - the one the watcher follows, not a name-derived copy somewhere else -
+and so does the automatic sync below.
+
+**Edits made in gl-repl are written back.** Not everything gl-repl changes was
+typed: dragging a value in the variable panel rewrites the declaration row, and
+the color picker rewrites a `glColor` row. Whenever the document moves away from
+what the file last gave it, the file is rewritten and re-stamped, so the two
+never drift apart silently - the failure that costs you work is the editor's
+next save landing on top of a change gl-repl never wrote down.
+
+The trigger is the document *text*, which is also why a drag costs one write
+rather than sixty: the value is applied live on every pointer event, but the
+source row is rewritten once, when you let go. Camera moves are deliberately not
+a reason to rewrite the file, and neither is an empty document.
+
+Four situations hold the write back until they resolve, all of them cases where
+the document is not what the file should hold: a tutorial or tour owns the
+document; a save is already waiting behind a half-typed line (inbound wins - a
+local write there would erase it); or a live WIP sidecar session is running, in
+which case the editor's unsaved buffer is the truth and the file is meant to be
+behind it. Editing locally ends that session anyway, and the sync follows.
 
 `--watch` is a boolean over the existing positional argument, and it is a
 session mode rather than scene configuration: there is no config toggle and no

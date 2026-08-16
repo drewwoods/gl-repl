@@ -41,10 +41,12 @@
 #include "app/glr_ctrl.h"
 #include "app/glr_extedit.h"
 #include "app/glr_modal.h"
+#include "editor/commit.h"
 #include "editor/input.h"
 #include "editor/state.h"
 #include "editor/undo.h"
 #include "repl/bootstrap.h"
+#include "repl/compile.h"
 #include "repl/eval.h"
 #include "repl/example_loader.h"
 #include "repl/examples.h"
@@ -3439,9 +3441,181 @@ static void test_an_unparseable_buffer_leaves_the_scene_alone(void) {
     (void)unlink(WIP_PATH);
 }
 
+/* ----- outbound sync ------------------------------------------------------ */
+
+/* The round trip is only closed if it runs both ways. A local edit that never
+ * reaches the file is not merely stale: the editor's next save overwrites it,
+ * and nothing ever said so. */
+static void test_a_local_edit_is_written_back(void) {
+    GlrExtEditStats stats;
+
+    printf("--- a local edit is synced back to the watched file ---\n");
+
+    begin_watched_session(k_scene_a);
+    ASSERT_INT("binding writes nothing", glr_extedit_stats().writes, 0);
+    for (int i = 0; i < 3; i++)
+        glr_extedit_poll();
+    ASSERT_INT("nor do idle frames", glr_extedit_stats().writes, 0);
+
+    ASSERT_TRUE("the line commits", editor_feed_line("glVertex3f(4, 4, 4);") != 0);
+    editor_input_clear();
+    ASSERT_TRUE("and the file does not have it yet",
+                !file_contains(WATCH_PATH, "4, 4, 4"));
+
+    glr_extedit_poll();
+    stats = glr_extedit_stats();
+    ASSERT_INT("the poll wrote the file once", stats.writes, 1);
+    ASSERT_INT("with no write failure", stats.write_failures, 0);
+    ASSERT_TRUE("the watched file carries the local edit",
+                file_contains(WATCH_PATH, "4, 4, 4"));
+
+    /* Our own write is stamped, so it must not read back as somebody else's
+     * save - and an unchanged document must not be rewritten every frame. */
+    for (int i = 0; i < 10; i++)
+        glr_extedit_poll();
+    stats = glr_extedit_stats();
+    ASSERT_INT("the write is not re-read as an external change",
+               stats.reloads, 0);
+    ASSERT_INT("and it happened exactly once", stats.writes, 1);
+    ASSERT_INT("no failures anywhere", stats.failures, 0);
+}
+
+/* The motivating case, and the reason the trigger is the document text: a
+ * variable-panel drag applies its value live on every pointer event but
+ * rewrites the declaration row exactly once, on release. This is that release
+ * (glr_ctrl_persist_variable_panel_drag_value's two calls), so one gesture is
+ * one write. */
+static void test_a_dragged_value_reaches_the_file(void) {
+    static const char *const scene[] = {
+        "float twist;",
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(twist, 0, 0);",
+        "glEnd();",
+        NULL
+    };
+    ReplCompiledChange compiled;
+    ReplCompileContext ctx;
+    char err[REPL_STATUS_TEXT_MAX] = "";
+
+    printf("--- a dragged variable value reaches the watched file ---\n");
+
+    begin_watched_session(scene);
+    ASSERT_TRUE("the variable is declared", document_mentions("float twist"));
+
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ASSERT_INT("the settled value compiles into the declaration row",
+               (int)repl_compile_persist_predef_value("twist", 0.375f, &ctx,
+                                                      &compiled, err,
+                                                      sizeof(err)),
+               (int)REPL_COMPILE_OK);
+    ASSERT_TRUE("the drag rewrote a row",
+                compiled.kind != REPL_COMPILED_NO_CHANGE);
+    ASSERT_TRUE("the rewrite applies",
+                editor_commit_apply_external_change(&compiled, 0, 0) != 0);
+
+    glr_extedit_poll();
+    ASSERT_INT("one gesture wrote the file once",
+               glr_extedit_stats().writes, 1);
+    ASSERT_TRUE("the watched file carries the dragged value",
+                file_contains(WATCH_PATH, "0.375"));
+}
+
+/* While a sidecar session is live the editor's unsaved buffer is the truth and
+ * the file is deliberately behind it - writing there would save someone's
+ * unsaved typing for them, and would drop the parked row, which is not in the
+ * document. The local edit still ends the session, and the sync follows it. */
+static void test_no_write_while_following_the_editor(void) {
+    printf("--- a live sidecar session holds the sync back ---\n");
+
+    begin_wip_session(k_scene_a);
+    publish_wip(k_scene_longer, 4, 1);
+    glr_extedit_poll();
+    ASSERT_INT("the session is live", glr_extedit_stats().wip_updates, 1);
+    ASSERT_INT("and following wrote nothing", glr_extedit_stats().writes, 0);
+
+    editor_state_edit_line_set(repl_state_document_count());
+    ASSERT_TRUE("a local line commits",
+                editor_feed_line("glVertex3f(4, 4, 4);") != 0);
+    editor_input_clear();
+    glr_extedit_poll();
+    ASSERT_INT("the file is left to the editor while it is following",
+               glr_extedit_stats().writes, 0);
+    ASSERT_TRUE("and still holds the saved scene",
+                !file_contains(WATCH_PATH, "4, 4, 4"));
+
+    /* Re-publishing the same buffer is what the editor does on any keystroke
+     * or cursor move. It ends the session (the document moved and this module
+     * did not move it), and the sync fires in the same poll. */
+    set_mtime(WIP_PATH, 18000, 0);
+    publish_wip(k_scene_longer, 5, 1);
+    set_mtime(WIP_PATH, 19000, 0);
+    glr_extedit_poll();
+    ASSERT_INT("the paused session releases the sync",
+               glr_extedit_stats().writes, 1);
+    ASSERT_TRUE("the local edit is in the file",
+                file_contains(WATCH_PATH, "4, 4, 4"));
+    (void)unlink(WIP_PATH);
+}
+
+/* Inbound wins a straight race: a version waiting behind the gate has not
+ * landed yet, and writing our own bytes over it would stamp the external save
+ * out of existence. The sync waits for the deferral to resolve either way. */
+static void test_a_pending_version_holds_the_sync_back(void) {
+    printf("--- a pending inbound version outranks the sync ---\n");
+
+    begin_watched_session(k_scene_a);
+    begin_typing("glVertex3f(4, 4, 4);");
+
+    write_lines(WATCH_PATH, k_scene_b);
+    glr_extedit_poll();
+    ASSERT_INT("the reload is held", glr_extedit_stats().reloads, 0);
+    ASSERT_INT("and nothing is written over it",
+               glr_extedit_stats().writes, 0);
+    ASSERT_TRUE("the pending version is still on disk",
+                file_contains(WATCH_PATH, "9, 9, 9"));
+
+    /* Committing is what resolves it: the pending version is dismissed in
+     * favour of the local document, and *that* is what the file should hold. */
+    ASSERT_TRUE("the line commits", editor_feed_line("glVertex3f(4, 4, 4);") != 0);
+    editor_input_clear();
+    glr_extedit_poll();
+    ASSERT_INT("the dismissal releases the sync",
+               glr_extedit_stats().writes, 1);
+    ASSERT_TRUE("the local document is now the file",
+                file_contains(WATCH_PATH, "4, 4, 4"));
+    ASSERT_TRUE("and the version it beat is gone",
+                !file_contains(WATCH_PATH, "9, 9, 9"));
+}
+
+/* Emptying the document while watching is a plausible accident, and an empty
+ * file is not a scene. The file keeps the last real version until something
+ * real replaces it. (Ctrl+N is not this case: clearing restores the default
+ * display baseline, which is a real scene and does sync.) */
+static void test_an_emptied_document_is_not_written(void) {
+    printf("--- an empty document never overwrites the file ---\n");
+
+    begin_watched_session(k_scene_a);
+    editor_state_edit_line_set(0);
+    editor_delete_cmd_range(0, repl_state_document_count(), "Deleted");
+    ASSERT_INT("the document is empty", repl_state_document_count(), 0);
+
+    for (int i = 0; i < 5; i++)
+        glr_extedit_poll();
+    ASSERT_INT("nothing was written", glr_extedit_stats().writes, 0);
+    ASSERT_TRUE("the file still holds the scene",
+                file_contains(WATCH_PATH, "0, 0, 0"));
+}
+
 int main(void) {
     printf("=== external-editor watch ===\n");
     test_bind_adopts_without_reloading();
+    test_a_local_edit_is_written_back();
+    test_a_dragged_value_reaches_the_file();
+    test_no_write_while_following_the_editor();
+    test_a_pending_version_holds_the_sync_back();
+    test_an_emptied_document_is_not_written();
     test_same_second_save_is_noticed();
     test_safe_write_rename_is_noticed();
     test_size_only_change_is_noticed();

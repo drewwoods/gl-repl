@@ -17,6 +17,7 @@
 #include "app/glr_assign_plot_bridge.h"
 #include "app/glr_camera.h"
 #include "app/glr_ctrl.h"
+#include "app/glr_ctrl_export.h"   /* ReplExportLayout for the outbound sync */
 #include "app/glr_modal.h"
 #include "app/glr_pointer_script.h"
 #include "config.h"          /* MAX_LINE_LEN / MAX_INPUT_LEN */
@@ -78,6 +79,12 @@ static int                   g_parked_valid;
  * re-park of the already-canonical g_parked_row so a cursor-only return to
  * the hole still maps the published column. */
 static int                   g_parked_lead;
+/* Outbound sync baseline: the document as it stood the last time gl-repl and
+ * the outside world agreed about it - a bind, an import, a sidecar update, or
+ * our own write. A document that has moved off it moved *locally*, and the
+ * watched file is stale until the sync writes it back out. */
+static unsigned long long    g_synced_doc_fp;
+static int                   g_have_synced_fp;
 static GlrExtEditStats       g_stats;
 
 /* What the live document last came from, remembered *per path* rather than
@@ -453,7 +460,17 @@ static void forget_binding_state(void) {
     g_reported_missing   = 0;
     g_parked_valid       = 0;
     g_parked_lead        = 0;
+    g_have_synced_fp     = 0;
     wip_forget();
+}
+
+/* Re-baseline the outbound sync: from here on, only a *local* change makes the
+ * document differ from what the file is expected to hold. Called at every
+ * point where the two are known to agree, and after every write that makes
+ * them agree again. */
+static void sync_stamp_document(void) {
+    g_synced_doc_fp  = document_fingerprint();
+    g_have_synced_fp = 1;
 }
 
 static void stop_after_seen_history_oom(void) {
@@ -532,6 +549,12 @@ static void rebind(const char *path) {
     forget_binding_state();
     snprintf(g_bound, sizeof(g_bound), "%s", path);
     wip_bind();
+    /* Before any of the token work below, and on every path out of it: binding
+     * asserts that the live document already is this scene, which is exactly
+     * the outbound sync's baseline. Skipping it on the early returns would
+     * leave the first local edit after a failed stat with nothing to compare
+     * against - and then write the file as if the whole document were new. */
+    sync_stamp_document();
     if (stat(g_bound, &st) != 0)
         return;
     g_observed = change_token_from_stat(&st);
@@ -988,6 +1011,8 @@ static void apply_reload(const char *path) {
             g_stats.parked_rows++;
         }
         glr_extedit_notify_reloaded();
+        /* The document is the file again. */
+        sync_stamp_document();
     }
     editor_undo_history_destroy(history);
 
@@ -1452,6 +1477,10 @@ static void wip_apply_content(GlrExtEditWip *w) {
     g_pending       = 0;
     g_have_defer_fp = 0;
     wip_stamp_document();
+    /* Not the file's bytes - the editor's unsaved buffer - but still not a
+     * local change, and the outbound sync must not treat it as one. Following
+     * somebody's typing is no reason to save it for them. */
+    sync_stamp_document();
 }
 
 /* The sidecar vanished - `:q`, `VimLeave`, or someone deleting it.
@@ -1506,6 +1535,10 @@ static void wip_handle_deleted(void) {
          * re-derive it. Cheapest correct answer: let the main-file poll
          * re-read it by dropping the stamp. */
         g_applied_valid = 0;
+        /* Same reasoning outbound: the document came from the file (or was
+         * left where the failed reload found it), so nothing here is a local
+         * change to write back. */
+        sync_stamp_document();
     }
     wip_map_release();
     g_wip_payload_valid = 0;
@@ -1868,6 +1901,82 @@ static void scene_file_poll(void) {
 }
 #endif
 
+#if !defined(__EMSCRIPTEN__)
+/* ----- outbound: local edits go back to the watched file ------------------ */
+
+/* gl-repl is a peer author too, and its edits are not all typed. Dragging a
+ * value in the variable panel rewrites the declaration row, the color picker
+ * rewrites a glColor row, and every one of those leaves the watched file
+ * describing a scene that is no longer on screen. The old contract - Ctrl+S is
+ * the only writer - made that the user's problem to remember, and the cost of
+ * forgetting is silent: the next save from the editor is a straight overwrite
+ * of work gl-repl never wrote down.
+ *
+ * The trigger is the document *text*, not the live variable table, and that is
+ * enough on purpose: a drag applies its value live but rewrites the source
+ * exactly once, on release (glr_ctrl_persist_variable_panel_drag_value), so
+ * one gesture is one write rather than sixty. Anything that only moves live
+ * state and never reaches a row - the camera, a scratch cell with no
+ * declaration - is deliberately not a reason to rewrite the user's file.
+ *
+ * Four states hold the write back, and each one is a case where the document
+ * is not the thing the file should be made to hold:
+ *
+ *   a pinned binding   a lesson or the transient it left behind owns the
+ *                      document; the bound path names the user's scene, not
+ *                      the tutorial's.
+ *   a shut gate        a lesson is running, or a half-typed local row is
+ *                      waiting - finish the thought before publishing it.
+ *   a pending import   the file already holds something newer that has not
+ *                      landed yet. Inbound wins; writing here would stamp our
+ *                      own bytes over it and the external save would vanish.
+ *                      Once the deferral resolves - applied, or dismissed in
+ *                      favour of the local edit - this fires on the next poll.
+ *   a live sidecar     while following an editor's unsaved buffer, that buffer
+ *                      is the truth and the file is deliberately behind it.
+ *                      Writing would also drop the parked row, which is not in
+ *                      the document (see the header). A local edit ends the
+ *                      session anyway, and the sync follows one poll later.
+ *
+ * An empty document is never written. "Clear all" while watching is a
+ * plausible accident and an empty file is not a scene; the file keeps the last
+ * real version until something real replaces it. */
+static void sync_out(void) {
+    ReplExportLayout layout;
+
+    if (!g_bound[0] || !g_have_synced_fp)
+        return;
+    if (binding_is_pinned() || gate_is_shut() || g_pending || g_wip_active)
+        return;
+    if (repl_state_document_count() <= 0)
+        return;
+    if (document_fingerprint() == g_synced_doc_fp)
+        return;
+
+    glr_ctrl_fill_export_layout(&layout);
+    if (!repl_save_active_scene_to_path(g_bound, &layout)) {
+        /* The writer set its own error status. Re-baseline anyway: a path that
+         * cannot be written will not become writable because we retried it
+         * sixty times a second, and the next local edit asks again. */
+        sync_stamp_document();
+        g_stats.write_failures++;
+        return;
+    }
+    g_stats.writes++;
+    /* Stamps the observed + applied tokens from the bytes now on disk, so the
+     * write we just did is not read back as an external change. */
+    glr_extedit_note_wrote(g_bound);
+    sync_stamp_document();
+    {
+        char msg[GLR_EXTEDIT_PATH_MAX + 32];
+        /* Restated over the writer's "Saved ..." so the status says which of
+         * the two writers wrote - this one was nobody's keystroke. */
+        snprintf(msg, sizeof(msg), "Watch: synced %s", g_bound);
+        repl_set_status(msg);
+    }
+}
+#endif
+
 void glr_extedit_poll(void) {
 #if defined(__EMSCRIPTEN__)
     /* No external editor in a browser tab, and no filesystem worth watching.
@@ -1878,6 +1987,7 @@ void glr_extedit_poll(void) {
         return;
     scene_file_poll();
     wip_poll();
+    sync_out();
 #endif
 }
 
@@ -1916,5 +2026,9 @@ void glr_extedit_note_wrote(const char *path) {
     g_pending          = 0;
     g_have_defer_fp    = 0;
     g_suppressed_valid = 0;
+    /* Including for the outbound sync: an explicit Ctrl+S is the same
+     * agreement the sync writes for, so it must not fire again on the way
+     * out. */
+    sync_stamp_document();
 #endif
 }

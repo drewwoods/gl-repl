@@ -7,8 +7,11 @@
  * docs/plans/active/BYOE.md; the decision letters below refer to its
  * "Decisions" section.
  *
- * Outbound is explicit-save only - Ctrl+S stays the only writer, and this
- * module never writes the file. Inbound is one `stat()` per frame.
+ * Inbound is one `stat()` per frame. Outbound is Ctrl+S *and* an automatic
+ * sync: a watched file that gl-repl silently stops matching is worse than no
+ * watch at all, because the editor's next save overwrites whatever gl-repl
+ * changed and nothing said so. See "OUTBOUND SYNC" below for what counts as a
+ * change and the four states that hold the write back.
  *
  * The decisions behind all of this are D1-D8 in the plan; what follows is the
  * short form of the ones a caller has to know, plus the traps that are not
@@ -53,6 +56,27 @@
  * transient: no push at all - `editor_undo_push_snapshot()` is the transient
  * auto-promotion hook, so pushing would promote an unedited catalog scene into
  * a user slot on the first vim save.
+ *
+ * OUTBOUND SYNC. gl-repl is a peer author too, and not everything it changes
+ * was typed: a variable-panel drag rewrites the declaration row, the color
+ * picker rewrites a `glColor` row. Whenever the live document moves away from
+ * what the outside world last handed it - a bind, an import, a sidecar update,
+ * a save - the watched file is written back out and re-stamped, so the round
+ * trip stays closed in both directions.
+ *
+ * The trigger is the document *text*. That is not a shortcut: a drag applies
+ * its value live on every pointer event but rewrites the source once, on
+ * release, so one gesture costs one write. Live state that never reaches a row
+ * - the camera above all - is deliberately not a reason to rewrite the user's
+ * file, and neither is an empty document.
+ *
+ * Four states hold the write back, all of them "the document is not what this
+ * file should hold": a pinned binding (a lesson owns the document), a shut
+ * gate (D5), a pending inbound version (inbound wins - writing would stamp
+ * over an external save that has not landed yet), and a live WIP session
+ * (the editor's unsaved buffer is the truth then, and a write would drop the
+ * parked row, which is not in the document). Each of those resolves, and the
+ * sync fires on the poll after it does.
  *
  * ONE INCOMPLETE FINAL ROW (`.glr` only). A file may end with a half-typed
  * command; it lands in the live input row, where the user keeps typing it and
@@ -188,6 +212,8 @@ typedef struct {
     int deferrals;    /* times a version was parked behind a shut gate */
     int dismissals;   /* parked versions the local document outvoted */
     int parked_rows;  /* reloads that put an incomplete row in the input */
+    int writes;       /* local edits synced back out to the watched file */
+    int write_failures; /* sync writes the exporter refused */
     int wip_updates;  /* sidecar content updates that replaced the document */
     int cursor_moves; /* sidecar updates that moved only the caret. The
                        * assertion the fast path needs: this rising while

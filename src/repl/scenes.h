@@ -143,6 +143,20 @@ int  repl_save_workspace(const char *dir, const ReplExportLayout *layout);
  * dir if needed and sets its own status naming the real file. */
 int  repl_save_active_scene(const ReplExportLayout *layout);
 
+/* Write the active scene to `path`, picking the writer from the path's own
+ * extension - `.glr` gets the authoring format, anything else the standalone
+ * C program. The two are not interchangeable, so the extension decides rather
+ * than the caller.
+ *
+ * This is what repl_save_active_scene() does once it has resolved a bound
+ * source path; it is public for the caller that already knows the path and
+ * must not have it re-derived - the `--watch` sync writes the file it is
+ * following, and falling back to `<slug>.c` / `output.c` there would write a
+ * file nobody is watching. Returns 1 on success, 0 on write failure (status
+ * set either way). */
+int  repl_save_active_scene_to_path(const char *path,
+                                    const ReplExportLayout *layout);
+
 /* Return the path to use when exporting the active scene to a file with
  * extension `ext` (no leading dot), mirroring repl_save_active_scene's
  * naming: `<workspace_dir>/<slug>.<ext>` (creating the dir) or
