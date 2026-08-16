@@ -372,15 +372,22 @@ static int seen_lookup(const char *path, unsigned long long *out) {
     return 1;
 }
 
-static void seen_remember_synced_doc(const char *path, unsigned long long fp) {
+/* NOT best-effort, unlike its `suppressed` / `wip_followed` neighbours: this
+ * is the outbound baseline, and a rebind that cannot find it falls back to
+ * stamping the live document - which is exactly the "unsaved slot edits are
+ * already on disk" drift the per-path record exists to prevent. Failing to
+ * record it is therefore the same class of loss as failing to record
+ * `content`, and gets the same answer. */
+static int seen_remember_synced_doc(const char *path, unsigned long long fp) {
     GlrExtEditSeen *e = seen_find(path);
 
     if (!e)
         e = seen_add(path);
     if (!e)
-        return;
+        return 0;
     e->synced_doc       = fp;
     e->synced_doc_valid = 1;
+    return 1;
 }
 
 static int seen_lookup_synced_doc(const char *path, unsigned long long *out) {
@@ -525,6 +532,7 @@ static unsigned long long synced_state_fingerprint(void) {
 
 static void rebind(const char *path);
 static void wip_forget(void);
+static void stop_after_seen_history_oom(void);
 
 static void forget_binding_state(void) {
     g_bound[0]           = '\0';
@@ -545,13 +553,19 @@ static void forget_binding_state(void) {
 /* Re-baseline the outbound sync: from here on, only a *local* change makes the
  * document differ from what the file is expected to hold. Called at every
  * point where the two are known to agree, and after every write that makes
- * them agree again. Persisted per path so a later rebind can restore it. */
+ * them agree again. Persisted per path so a later rebind can restore it - and
+ * a persist that cannot allocate stops the watcher rather than carrying on
+ * with a baseline the next rebind will silently invent.
+ *
+ * Only a first visit to a path can reach that: every other caller has already
+ * put an entry there (seen_remember from the bind/apply/write paths), so the
+ * lookup finds it and nothing is allocated. */
 static void sync_stamp_document(void) {
     g_synced_doc_fp     = synced_state_fingerprint();
     g_have_synced_fp    = 1;
     g_have_sync_fail_fp = 0;
-    if (g_bound[0])
-        seen_remember_synced_doc(g_bound, g_synced_doc_fp);
+    if (g_bound[0] && !seen_remember_synced_doc(g_bound, g_synced_doc_fp))
+        stop_after_seen_history_oom();
 }
 
 static void stop_after_seen_history_oom(void) {
@@ -637,10 +651,17 @@ static void rebind(const char *path) {
      * as already on disk. A first visit has nothing to restore, and then
      * the live document *is* the baseline - including after a failed stat,
      * so the first local edit has something to compare against. */
-    if (seen_lookup_synced_doc(g_bound, &g_synced_doc_fp))
+    if (seen_lookup_synced_doc(g_bound, &g_synced_doc_fp)) {
         g_have_synced_fp = 1;
-    else
+    } else {
         sync_stamp_document();
+        /* Stamping a first visit is the one call that can allocate, and its
+         * failure stops the watcher - which clears the binding underneath us.
+         * Falling through would stat("") and bury the OOM status under a
+         * "file missing" report for a path that was never named. */
+        if (!g_bound[0])
+            return;
+    }
     if (stat(g_bound, &st) != 0)
         return;
     g_observed = change_token_from_stat(&st);
