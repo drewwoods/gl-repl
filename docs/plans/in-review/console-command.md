@@ -10,11 +10,14 @@ It needs nothing from that plan and that plan needs nothing from this one, so
 the ordering is about review load, not dependency. The two compose later; see
 "Where the two plans meet".
 
-Revision note. A first draft proposed capturing console output through an
-executor sink on `ReplExecutionOptions` and exporting to a bare `printf`.
-A design read found both wrong - the first produces duplicate output under
-accumulation passes, the second silently changes rendered numbers and breaks
-import. Both are corrected below.
+Revision note, two review rounds. Round 1 rejected capturing console output
+through an executor sink on `ReplExecutionOptions` (duplicate output under
+accumulation passes) and exporting to a bare `printf` (silently changes
+rendered numbers, and does not round-trip through import). Round 2 added a
+second export divergence the plan had missed - indentation - and struck a
+composition claim that was simply false: clicking a console line cannot make
+the PATH row appear, because a `console()` step emits no draw. All corrected
+below.
 
 ### Why, given `label()` exists
 
@@ -163,10 +166,19 @@ same way it matches `label`. Factor the two helper emitters against each
 other if they turn out identical apart from the sink.
 
 Trace parity is unaffected: `test_export_trace_parity` compares GL calls
-captured through the stubs, and neither the helper nor its output is GL. The
-exported program prints to stdout where the REPL prints to a panel - a
-deliberate difference, and the one place `console()` is not
-behavior-identical to its export. Say so in `docs/USER_GUIDE.md`.
+captured through the stubs, and neither the helper nor its output is GL.
+
+**Two deliberate divergences from the export, not one** - both belong in
+`docs/USER_GUIDE.md`:
+
+1. **Sink.** The exported program prints to stdout; the REPL prints to a
+   panel.
+2. **Indentation.** The panel auto-indents by the flat command's baked
+   `call_depth` (see above). The exported helper has no such thing - by then
+   the calls are real C recursion and the depth exists only on the machine
+   stack - so stdout is unindented. Parity would mean instrumenting entry and
+   exit of every generated function to carry a depth counter, which is far
+   more than this feature is worth. Document the difference; do not chase it.
 
 ### Checklist
 
@@ -228,8 +240,21 @@ throughout, because it is the existing non-GL REPL primitive and it is
 
 Once frame provenance exists, a console line can record the flat index and
 frame it was emitted from - and the flat scan already has both in hand, since
-it is walking the flat program. That upgrades the panel from a text dump to a
-navigable execution trace: click a line, replay seeks to that flat command,
-and the PATH annotation explains how it got there. Neither plan needs the
-other to ship; this is the reason to keep the console line record one field
-wider than it strictly needs to be today.
+it is walking the flat program. That is the reason to keep the console line
+record one field wider than it strictly needs to be today.
+
+What that unlocks needs stating carefully, because the obvious version does
+not work. "Click a console line, replay seeks there, and the PATH row
+explains it" is **false as written**: `CMD_CONSOLE` emits no draw, so
+`replay_focus_anchor_flat_idx()` - which resolves the step's
+`repl_cmd_consumes_current_color()` command - returns -1 for that step and
+PATH is suppressed by design. Two honest options, both later work:
+
+- seek to an associated *draw* within the same frame (the console record's
+  frame gives `flat_begin`/`flat_end`, so "the first draw in this
+  invocation" is a range scan), which makes PATH fire naturally; or
+- render the breadcrumb directly from the console record's own frame index,
+  bypassing the anchor accessor entirely - the formatter takes a frame, not
+  a draw, so this is mostly plumbing.
+
+Either is a small extension. Neither should be promised by this plan.

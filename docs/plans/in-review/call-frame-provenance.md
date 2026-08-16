@@ -2,12 +2,16 @@
 
 ## Status - NOT STARTED (exploration, revised after design review)
 
-Revision note. A first draft of this plan proposed retiring the existing
+Revision note, two review rounds. Round 1 rejected retiring the existing
 provenance fields, storing the frame index on `GLCmd`, a fixed 16-argument
 frame record, and formatting the breadcrumb inside `replay_annotations.c`.
-A design read found all four unsafe; they are corrected below and the
-reasoning is kept inline rather than in a changelog, because in each case
-the *wrong* answer is the one a reader would otherwise reinvent.
+Round 2 rejected the *repairs*: frame-index equality is not safe at the
+overflow boundary, the code-panel row builder cannot resolve gutter labels
+while it is building rows, "structured payload" was not a transport, and the
+annotation cache key is missing a flat-program generation. All of it is
+corrected below, and the reasoning is kept inline rather than in a
+changelog, because in every one of these cases the *wrong* answer is the one
+a reader would otherwise reinvent.
 
 Motivated by two scenes that are currently hard to reason about:
 
@@ -301,6 +305,12 @@ arguments are literals from the source, but every inner frame's are computed
 - `A[0]` resolved to 3, `v0_x` to -0.5 then -0.25 - and none of them appear
 anywhere in the current annotation.
 
+**The `@nnn` line labels in these mockups are the eventual form, not v1.**
+They cannot be resolved from where the row is built; see "Transport" below.
+v1 drops them and keeps everything else - the identity of each rung is the
+function name and its arguments, which is the part that carries the
+information.
+
 The deep-chain scene is the other shape: five distinct lines, no repeats,
 and loop ancestry doing real work (first sphere, `u = v = -2`, values again
 verified against the dump):
@@ -328,14 +338,15 @@ and by the time the PC reaches the vertex the caller's locals are gone. The
 arguments have to be the values captured *at call entry, during flatten*, and
 that means storing them in the frame record. So:
 
-- `args[]` in `ReplCallFrame` is **required**, not an optimization. The
+- The **argument arena** is required, not an optimization. The
   `first_own_flat_idx` trick floated under option B is dead for this surface.
-- Parameter *names* stay derived - `func_slot` locates the `CMD_FUNC_DEF`,
-  `parse_repl_func_signature()` reads the signature. Rendering
-  `divide_triangle(depth=1, type=3)` instead of positionally costs no
-  storage.
+- Parameter *names* stay derived at capture time, not at render time -
+  `func_slot` locates the `CMD_FUNC_DEF` and `parse_repl_func_signature()`
+  reads the signature. Note *where* that resolution happens: it is REPL
+  parsing, so it belongs in the annotation builder, and the names travel to
+  the UI as data. See the transport section below.
 - The same rebake argument still holds: call-argument deps are already
-  classified structural, so a value-only rebake can never leave `args[]`
+  classified structural, so a value-only rebake can never leave the arena
   stale.
 
 Loop ancestry is the one part already solved: `FlatCmdActiveLoop
@@ -343,12 +354,10 @@ active_loops[]` is snapshotted per flat command *and* survives call
 boundaries by design, so `u=-2 > v=-2` needs no new storage at all - just
 prepending the existing innermost-last array to the frame chain.
 
-#### Who formats the row, and where the line labels come from
+#### Transport: how the chain reaches the UI
 
 The naive placement - format the whole breadcrumb string, `@line` labels and
-all, inside `replay_annotations.c` - does not typecheck against the layering,
-and the reason is worth stating before anyone writes it (design-review
-finding 2):
+all, inside `replay_annotations.c` - does not typecheck against the layering:
 
 - `replay_annotations_prepare()` runs during snapshot *construction*
   (`PROF_SNAPSHOT_VIRTUAL_LINES` in `glr_ctrl_display_frame`), before the
@@ -357,23 +366,57 @@ finding 2):
   `const UiRenderSnapshot *` and lives in `src/ui/app/`. A
   `src/subsystems/replay/` TU calling it is both a cycle in time and the
   wrong direction across the module boundary.
-- Resolving labels afterwards and patching the string does not save it: the
-  virtual row's text drives its own wrapped row count
-  (`repl_code_panel_virtual_row_count_for_line`), so a late edit to the text
-  invalidates the layout that was computed from it.
 
-**So the annotation carries structure, not prose.** `ReplReplayAnnotation`
-grows a PATH variant holding the resolved chain as data - per rung: source
-line index, func slot, and the frame's argument values - and the code-panel
-row builder formats it, resolving gutter labels through the resolver it
-already owns, at the point where wrapping is computed from the result. That
-also puts elision policy next to the panel width that determines it.
+So the annotation must carry **structure, not prose**. But the obvious
+correction - "let the code-panel row builder resolve the labels" - is also
+wrong, and for a subtler reason (finding 2): on a cache miss
+`ui_repl_code_panel_gutter_labels_for_lines()` calls
+`repl_code_panel_init_builder()` + `repl_code_panel_build_rows()`. Calling it
+*from inside* `build_rows` re-enters the builder. There is no legal place in
+the current design to ask for a gutter label while rows are being built.
 
-This is the one structural change the PATH row forces beyond the frame table
-itself, and it should be designed before implementation rather than
-discovered. **The cheaper v1 is to omit `@line` labels entirely** - the
-breadcrumb is still readable without them, and the structured payload can be
-added when the labels are.
+**Therefore v1 omits `@line` labels.** Not "alternatively" - definitively.
+The breadcrumb is fully readable without them (function name, arguments and
+order are the content; the line number is a convenience), and adding them
+later needs its own small design: either a two-pass gutter map published
+alongside the snapshot, or a non-recursive label-only walk that does not go
+through the row builder. Neither is hard; both are out of scope for the row
+that answers "how did we get here".
+
+One earlier claim withdrawn: a previous draft argued that late-patching the
+row text would invalidate layout because the text drives its own wrapped row
+count. **That is not true.**
+`repl_code_panel_virtual_row_count_for_line()` counts *logical* virtual
+entries matching `after_line_idx`; it does not measure wrapping. And virtual
+rows never increment `builder->file_line` - only STATIC / INPUT /
+PLACEHOLDER / TEXT rows do - so a PATH row cannot shift any other row's
+gutter label no matter how long it is. The re-entrancy above is the real
+constraint; wrapping is not.
+
+##### The payload
+
+Do **not** widen `UiVirtualLine` with a union big enough for a depth-64 chain
+and its arguments: that struct is instantiated `MAX_VIRTUAL_LINES` = 512
+times, so the union's size is paid 512 times to serve at most one row
+(finding 3).
+
+Instead, one **`UiReplayPathSnapshot` per frame**, published beside the
+virtual-line list, with the PATH virtual row carrying only a small index into
+it. The snapshot must be self-sufficient for a *pure* UI formatter - the UI
+layer must never call `parse_repl_func_signature()` or otherwise reconstruct
+REPL semantics - so it carries, per rung:
+
+- function display name (the funcN alias when set, `funcN` otherwise);
+- parameter names, if named arguments are to be rendered;
+- argument values;
+- the call-site source line index (kept even in v1, so the later `@line`
+  work needs no change to the transport);
+
+plus, ahead of the frames, the loop prefix as name/value pairs
+(`u = -2`, `v = -2`) read from the focused command's `active_loops[]`.
+
+That list is the actual interface contract between the two plans' halves, and
+it is worth writing into the header before any of it is built.
 
 #### Scope for the first cut
 
@@ -422,9 +465,25 @@ to identify an invocation and has to do it with a four-field conjunction -
 `func_scope_mask && call_depth && call_src_cmd_idx && root_call_src_cmd_idx`
 - with a comment conceding that repeated calls at one source site are
 disambiguated *temporally*, by `find_replay_assignment_flat_cmd`'s backward
-scan, because the provenance cannot do it. `call_frame_idx` replaces that
-conjunction plus its temporal fallback with one integer comparison. The
-codebase has already paid for this gap once.
+scan, because the provenance cannot do it. The frame index collapses that
+conjunction to an identity test - but **not unconditionally**, and the
+exception is exactly the overflow case (finding 1). `REPL_CALL_FRAME_NONE`
+is not an identity: comparing two unindexed commands for equality would make
+every unrelated invocation past the overflow point match. The contract is
+identity-when-indexed, legacy-otherwise:
+
+```c
+if (candidate_frame != REPL_CALL_FRAME_NONE &&
+    current_frame   != REPL_CALL_FRAME_NONE)
+    return candidate_frame == current_frame;
+return legacy_context_matches(candidate, current);   /* today's four fields */
+```
+
+which is the second reason the legacy fields are permanent, and the reason
+the drift test must compare derived-vs-stored **only for indexed commands**,
+with overflow behaviour asserted as its own case rather than folded in. The
+codebase has already paid for this gap once; the fix must not introduce a
+worse one at the boundary.
 
 ### Later surfaces (explicitly not in the first cut)
 
@@ -477,14 +536,15 @@ that each step is verifiable before the next depends on it:
   ones - the legacy fields are the oracle, and later the overflow fallback.
   Entirely offline, no UI.
 - **Stage 2 - the structured PATH virtual row.** New annotation kind carrying
-  the chain as data, anchored on `replay_focus_anchor_flat_idx()`; formatting,
-  gutter-label resolution and elision in the code-panel row builder; Verbose
-  gating.
+  the chain as data via a per-frame `UiReplayPathSnapshot`, anchored on
+  `replay_focus_anchor_flat_idx()`; formatting and elision in the code-panel
+  row builder; Verbose gating; **no `@line` labels**.
 - **Stage 3 - validation before anything else lands on top.** Same-site
   recursion (both `@96` rungs distinct), calls in loops (the four-invocation
-  repro), frame-table overflow degrading to the two-rung fallback, a function
-  with 17+ parameters round-tripping through the arena, chrome-adjusted
-  gutter labels, and middle-elision at depth > 8.
+  repro), frame-table overflow degrading to the two-rung fallback *and* the
+  identity test correctly declining to match unindexed commands, a function
+  with 17+ parameters round-tripping through the arena, a full flatten at an
+  unchanged replay PC, and middle-elision at depth > 8.
 - **Stage 4 - anything from "Later surfaces", by demand, one at a time.**
 
 Depth tinting (later surface 1) is independent of all of this and can be done
@@ -500,8 +560,17 @@ cheaper to make after living with the PATH row for a while.
   arena append; it must not add work to the non-call path.
 - `repl_flatten_rebake_program` must leave the frame index and the table
   untouched - it is topology, like every other provenance field.
-- `export_setup.c` synthesizes commands and sets `root_call_src_cmd_idx = -1`;
-  those need `REPL_CALL_FRAME_NONE` for the same reason.
+- Initialization of the frame index belongs to the **parallel provenance
+  buffer**, not to synthesized commands. `export_setup.c` sets
+  `root_call_src_cmd_idx = -1` on the `GLCmd`s it fabricates; with a flat-only
+  side array there is no field on those commands to set, and the buffer must
+  default to `REPL_CALL_FRAME_NONE` for any slot flatten did not write.
+- **Overflow admission is atomic.** A frame needs a topology slot *and*
+  `arg_count` floats of arena. If either is short, publish no partial frame:
+  latch the overflow and hand out `REPL_CALL_FRAME_NONE` from that invocation
+  onward, so a chain is never half-recorded and `parent` never points at a
+  frame whose arguments were truncated. Surface the latch (status line or
+  `--call-tree` note) - a scene that loses breadcrumb fidelity should say so.
 - `FlatProgramView` must carry the frame table and the arena so
   temporary-buffer callers (tests, `repl_demo`, the flatten differential) see
   the same thing the live path does.
@@ -510,9 +579,15 @@ cheaper to make after living with the PATH row for a while.
   is the depth-first walk order).
 - Export/import and trace parity are untouched: frames are provenance, never
   emitted GL.
-- Annotation building is per-frame during playback and already caches on
-  `s_replay_cache_pc`. Chain resolution must sit inside that cache; only
-  formatting belongs in the row builder, which runs per layout.
-- Overflow must be observable, not silent: surface a status message or a
-  `--call-tree` note when the frame table or arena fills, so a scene that
-  loses breadcrumb fidelity says so.
+- **The PATH cache cannot key on the replay PC alone.**
+  `replay_annotations_prepare()` rebuilds only when `s_replay_cache_pc !=
+  replay.pc`, but `repl_refresh_flat_program()` runs earlier in the same
+  frame and a full flatten can replace frame indices, topology and arena
+  contents *at an unchanged PC* - a paused replay under a structural `t`
+  dependency does exactly that. Stale indices would then point into a
+  rebuilt table. Either add a flat-program generation to the cache key, or
+  invalidate explicitly after a full flatten, or - simplest and
+  recommended - just re-resolve the chain on every `prepare()` call: it is
+  at most `MAX_FLATTEN_CALL_DEPTH` = 64 pointer hops, which is nothing
+  against the work `prepare()` already does. Only *formatting* belongs in
+  the row builder, which runs per layout.
