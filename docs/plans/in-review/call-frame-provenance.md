@@ -1,6 +1,13 @@
 ## Call-Frame Provenance - debugging deep call chains and recursion
 
-## Status - NOT STARTED (exploration)
+## Status - NOT STARTED (exploration, revised after design review)
+
+Revision note. A first draft of this plan proposed retiring the existing
+provenance fields, storing the frame index on `GLCmd`, a fixed 16-argument
+frame record, and formatting the breadcrumb inside `replay_annotations.c`.
+A design read found all four unsafe; they are corrected below and the
+reasoning is kept inline rather than in a changelog, because in each case
+the *wrong* answer is the one a reader would otherwise reinvent.
 
 Motivated by two scenes that are currently hard to reason about:
 
@@ -152,21 +159,42 @@ in `flatten_query.c`.
 Give each dynamic invocation an identity. `flatten_call` already holds
 everything needed at the moment it has it.
 
+The record is **split in two**, because the two halves have different
+loss tolerances (design-review findings 1 and 6):
+
 ```c
-/* One dynamic funcN invocation. Interned by flatten_call; a flat command
- * names its innermost frame and the parent chain reconstructs the stack. */
+/* Topology - the identity half. Must be lossless for every flat command
+ * that carries a frame index, because consumers navigate by it. */
 typedef struct {
-    int   parent;               /* enclosing frame, REPL_CALL_FRAME_NONE at top */
-    int   call_src_cmd_idx;     /* the funcN(...) row that opened this frame */
-    int   func_slot;            /* 0..REPL_FUNC_SLOT_COUNT-1 */
-    int   depth;                /* == parent->depth + 1 */
-    int   flat_begin, flat_end; /* the frame's contiguous subtree range */
-    int   arg_count;            /* params bound; > ARG_MAX means truncated */
-    float args[REPL_CALL_FRAME_ARG_MAX];
-} ReplCallFrame;
+    int parent;             /* enclosing frame, REPL_CALL_FRAME_NONE at top */
+    int call_src_cmd_idx;   /* the funcN(...) row that opened this frame */
+    int func_slot;          /* 0..REPL_FUNC_SLOT_COUNT-1 */
+    int depth;              /* == parent->depth + 1 */
+    int flat_begin, flat_end;   /* the frame's contiguous subtree range */
+    int arg_offset, arg_count;  /* window into the argument arena below */
+} ReplCallFrame;            /* 32 B */
 ```
 
-and one field on `GLCmd`: `int call_frame_idx`.
+Arguments live in a separate **variable-length arena** - one `float` run per
+frame, addressed by `arg_offset`/`arg_count` - rather than a fixed
+`args[N]` inline. Two reasons:
+
+- A fixed 16 would silently truncate: `MAX_EXPR_VARS` is 32, so a function
+  may legally bind more parameters than the record holds, and "historically
+  exact" is the whole premise of the PATH row. The arena is lossless to 32.
+- It is also *smaller* in practice. Real functions take 3-8 parameters
+  (`func4(x,y,z)`, `divide_triangle(...)` at 8), so a per-frame fixed 32
+  would waste ~100 B on every frame to serve a case that essentially never
+  occurs.
+
+Storage location: **a parallel flat-only array, not a `GLCmd` field**
+(finding 5). `GLCmd` is shared by the source document, both 32-slot
+undo/redo rings, the eight user-scene snapshots and the flat program, so an
+`int` there costs ~324 KB across copies that have no use for it, to buy
+32 KB of flat-program data. `FlatCmdLocalVars local_vars[MAX_FLAT_COMMANDS]`
+in `ReplFlatProgramState` is the existing precedent for exactly this - a
+flat-only parallel array - and the frame index belongs beside it, in the same
+struct or folded into a small `FlatCmdProvenance`.
 
 Sizing, against what the flat program already costs
 (`sizeof(GLCmd)` = 208 B, `sizeof(FlatCmdLocalVars)` = 1032 B, so
@@ -174,12 +202,33 @@ Sizing, against what the flat program already costs
 
 | | bytes |
 |---|---|
-| `call_frame_idx` x `MAX_FLAT_COMMANDS` | 32 KB |
-| frame table, 4096 frames x 92 B (`ARG_MAX` = 16) | 377 KB |
-| **total** | **~0.4 MB, ~4% of the flat program** |
+| frame index x `MAX_FLAT_COMMANDS` (parallel array) | 32 KB |
+| topology table, 16384 frames x 32 B | 512 KB |
+| argument arena, 65536 floats | 256 KB |
+| **total** | **~0.8 MB, ~8% of the flat program** |
 
 Design notes:
 
+- **The existing provenance fields stay.** An earlier draft proposed
+  retiring `call_src_cmd_idx` / `root_call_src_cmd_idx` / `call_depth` /
+  `func_scope_mask` as derivable from the chain (all four - the draft said
+  three and then listed four). That is arithmetically true and
+  operationally wrong: it collides head-on with the soft capacity limit
+  below. Retiring them means an overflow no longer degrades *the PATH row*,
+  it degrades call-site highlighting, `gl_state_inspector`, `edit_overlays`
+  and `flatten_query` too - silently. Keep all four. They are also the
+  migration oracle: a drift test asserting the chain-derived values equal
+  the stored ones is how you gain confidence in the table, and it needs both
+  sides to exist. The `-12 bytes` claim is withdrawn.
+- **Capacity is a soft limit, and now that is safe.** Past
+  `MAX_CALL_FRAMES`, interning stops and later commands carry
+  `REPL_CALL_FRAME_NONE`; the PATH row falls back to the two-rung
+  immediate/root display the legacy fields still provide. A scene must never
+  fail to flatten because a debug table filled. The 16384/65536 figures
+  above are chosen to make overflow practically unreachable rather than
+  merely survivable - a program can exceed any fixed bound while staying
+  inside the 200000-visit budget, so the bound must be generous *and* the
+  degradation must be harmless.
 - **Parameter *names* are not stored.** `func_slot` locates the
   `CMD_FUNC_DEF` row and `parse_repl_func_signature()` re-derives them, the
   same way `flatten_call` gets them. Values must be stored, though: locating
@@ -187,26 +236,11 @@ Design notes:
   because `flatten_for_loop` *prepends* its iterator, and a name lookup is
   not bulletproof either because an inner loop iterator may legally shadow a
   param.
-- **Capacity is a soft limit.** Past `MAX_CALL_FRAMES`, interning stops and
-  further commands carry `REPL_CALL_FRAME_NONE`; consumers fall back to
-  today's display. A scene must never fail to flatten because the debug
-  table filled.
 - **The in-place rebake is safe by an argument that already exists.**
   `flatten_call` classifies call-argument deps as *structural* ("call-argument
   values freeze into per-flat-command local snapshots"), so anything that
-  could change a frame's `args[]` already forces a full flatten. The frame
+  could change a frame's arguments already forces a full flatten. The frame
   table stays correct for exactly the reason `FlatCmdLocalVars` does.
-- **It is a net simplification, not just an addition.** `call_frame_idx`
-  *subsumes* three existing fields: `call_src_cmd_idx` is `frame.call_src_cmd_idx`,
-  `root_call_src_cmd_idx` is the chain's root frame's call site, `call_depth`
-  is `frame.depth`, and `func_scope_mask` is the OR of `1 << func_slot` up
-  the chain. Add the field first, migrate consumers
-  (`gl_state_inspector.c`, `edit_overlays.c`, `flatten_query.c`,
-  `replay_annotations.c`, `glr_ctrl.c`) behind inline accessors, then retire
-  the three - which nets **-12 bytes** on `GLCmd`, i.e. -98 KB, paying for
-  most of the frame table. A drift test asserting the derived values equal
-  the stored ones is the safe way to do the migration, and mirrors the
-  existing `test_replay_walk` predicate-agreement test.
 
 #### C - On-demand re-flatten probe
 
@@ -309,43 +343,77 @@ active_loops[]` is snapshotted per flat command *and* survives call
 boundaries by design, so `u=-2 > v=-2` needs no new storage at all - just
 prepending the existing innermost-last array to the frame chain.
 
+#### Who formats the row, and where the line labels come from
+
+The naive placement - format the whole breadcrumb string, `@line` labels and
+all, inside `replay_annotations.c` - does not typecheck against the layering,
+and the reason is worth stating before anyone writes it (design-review
+finding 2):
+
+- `replay_annotations_prepare()` runs during snapshot *construction*
+  (`PROF_SNAPSHOT_VIRTUAL_LINES` in `glr_ctrl_display_frame`), before the
+  `UiRenderSnapshot` exists.
+- `ui_repl_code_panel_gutter_labels_for_lines()` **takes** a
+  `const UiRenderSnapshot *` and lives in `src/ui/app/`. A
+  `src/subsystems/replay/` TU calling it is both a cycle in time and the
+  wrong direction across the module boundary.
+- Resolving labels afterwards and patching the string does not save it: the
+  virtual row's text drives its own wrapped row count
+  (`repl_code_panel_virtual_row_count_for_line`), so a late edit to the text
+  invalidates the layout that was computed from it.
+
+**So the annotation carries structure, not prose.** `ReplReplayAnnotation`
+grows a PATH variant holding the resolved chain as data - per rung: source
+line index, func slot, and the frame's argument values - and the code-panel
+row builder formats it, resolving gutter labels through the resolver it
+already owns, at the point where wrapping is computed from the result. That
+also puts elision policy next to the panel width that determines it.
+
+This is the one structural change the PATH row forces beyond the frame table
+itself, and it should be designed before implementation rather than
+discovered. **The cheaper v1 is to omit `@line` labels entirely** - the
+breadcrumb is still readable without them, and the structured payload can be
+added when the labels are.
+
 #### Scope for the first cut
 
-- **Vertex replay mode only.** In polygon mode one step can cover a whole
-  primitive, and a primitive's vertices can come from different frames -
-  `for(i,0,4){ func0(i); }` inside a `glBegin` block is exactly that, and is
-  the same minimal repro that breaks the zero-storage reconstruction. Showing
-  one path there would be a lie. **Suppress the row in polygon mode**; the
-  obvious later refinement is to show the longest common prefix of the step's
-  frames and mark where they diverge, but that is a separate decision.
+- **Vertex replay mode only, and the accessor enforces it.** Use
+  `replay_focus_anchor_flat_idx()`, not `replay_focus_flat_idx()`: it is
+  documented as the flat index of *the draw the current step emitted*, and it
+  already returns -1 when replay is inactive, when the mode is not vertex, or
+  when the step emitted no draw. That -1 **is** the polygon-mode suppression
+  - no separate gate is needed. The suppression is not squeamishness: in
+  polygon mode one step covers a whole primitive, and a primitive's vertices
+  can come from different frames (`for(i,0,4){ func0(i); }` inside a
+  `glBegin` block - the same minimal repro that breaks the zero-storage
+  reconstruction), so a single path would be a lie. The later refinement is
+  the longest common prefix of the step's frames with a divergence marker,
+  but that is a separate decision.
 - **Verbose expansion only.** `replay_annotations_refresh_output()` documents
   the invariant that virtual rows belong to Verbose alone and Expanded keeps
   every readout inline on the source row. PATH is a virtual row, so it is
   Verbose's. Do not add a fourth `e` mode for it.
 - `REPL_REPLAY_ANNOTATION_MAX` goes 2 -> 3.
 - The existing `HIGHLIGHT_REPLAY_CALL_SITE` / `_ROOT_CALL_SITE` gutter
-  markers **stay as they are**. They are cheap and they point at real lines;
-  the breadcrumb just becomes the authoritative account. Generalizing them to
+  markers **stay as they are**. They are cheap, they point at real lines, and
+  with the fields retained they are also the frame-table-overflow fallback.
+  The breadcrumb just becomes the authoritative account. Generalizing them to
   N rungs is a later, optional change and should not ride along.
 
-#### Two traps worth writing down now
+#### Long recursion needs middle-elision, not truncation
 
-1. **`@114` is not `src_cmd_idx + 1`.** The code panel's derived-C chrome
-   rows shift the visible gutter label, and
-   `ui_repl_code_panel_gutter_labels_for_lines()` exists precisely because of
-   it, with a comment saying any UI quoting a line number to the user must
-   resolve it there. A breadcrumb printing `source_line_idx + 1` will be
-   subtly wrong for every scene with chrome visible. The resolver is batched,
-   which suits a whole chain resolved at once.
-2. **Long recursion needs middle-elision, not truncation.** `MAX_VIRTUAL_LINE_TEXT`
-   is 256 and `MAX_FLATTEN_CALL_DEPTH` is 64, so a deep chain does not fit.
-   Keep the outermost rung and the innermost two or three, elide the middle
-   with a count - the ends carry the information, the middle is the part a
-   reader skims:
+`MAX_VIRTUAL_LINE_TEXT` is 256 and `MAX_FLATTEN_CALL_DEPTH` is 64, so a deep
+chain does not fit. Keep the outermost rung and the innermost two or three,
+elide the middle with a count - the ends carry the information, the middle is
+the part a reader skims:
 
-   ```
-   |-> divide_triangle(depth=12) @124 > ... 9 frames ... > depth=1 @104 > triangle @65
-   ```
+```
+|-> divide_triangle(depth=12) @124 > ... 9 frames ... > depth=1 @104 > triangle @65
+```
+
+Elision is a *display* concern and must not reach back into storage: the
+frame's arguments stay lossless (see the arena in option B) even when the row
+shows three of them.
 
 #### One more corroboration that the gap is real
 
@@ -381,12 +449,13 @@ Kept for sequencing only. None of these should ride along with the PATH row.
 ### Adjacent work
 
 - **`console(...)`** - a `label()`-shaped command that writes to a panel
-  instead of the framebuffer, auto-indented by `call_depth`. Independent of
-  everything here (it needs no new provenance) and useful on its own, so it
-  has its own plan: [`console-command.md`](console-command.md). The two meet
-  in one place worth knowing about: once frames exist, a console line can
-  carry its `call_frame_idx`, which makes the console a clickable execution
-  trace.
+  instead of the framebuffer, auto-indented by `call_depth`. **Follow-up
+  work, sequenced after this plan**: it needs no new provenance and does not
+  block anything here, and keeping it out avoids two features negotiating one
+  review. Its own plan: [`console-command.md`](console-command.md). The two
+  meet in one place worth knowing about - once frames exist, a console line
+  can record the frame it was emitted from, which makes the console a
+  clickable execution trace.
 - **Export to C and use a real debugger.** Export writes `funcN` as genuine C
   functions with genuine recursion, so `Save Scene as C` + `gcc -g` + `lldb`
   gives real stack frames, watchpoints and conditional breakpoints today.
@@ -396,44 +465,54 @@ Kept for sequencing only. None of these should ride along with the PATH row.
 ### Recommendation
 
 The PATH annotation is the goal, and it needs option B - there is no cheaper
-route to it, because ancestor arguments only exist at flatten time. So:
+route to it, because ancestor arguments only exist at flatten time. Staged so
+that each step is verifiable before the next depends on it:
 
-- **Stage 1** - option B. Intern the frames in `flatten_call`, add
-  `call_frame_idx` to `GLCmd`, thread the table through `FlatProgramView`,
-  print it in `--dump-flat` / a new `--call-tree`. Migrate the three subsumed
-  fields behind inline accessors under a drift test, then retire them.
-  Verifiable entirely offline, with no UI.
-- **Stage 2** - the PATH annotation: the new annotation kind, the chain
-  formatter (loop prefix, named args, middle-elision, gutter-label
-  resolution), vertex-mode and Verbose gating.
-- **Stage 3** - anything from "Later surfaces", by demand, one at a time.
+- **Stage 1 - lossless flat-only frame provenance.** Intern topology + the
+  argument arena in `flatten_call`; index it from a parallel flat array;
+  thread the table through `FlatProgramView`; print it in `--dump-flat` and a
+  new `--call-tree`. **Retain every existing provenance field** and add a
+  drift test asserting the chain-derived `call_src_cmd_idx` /
+  `root_call_src_cmd_idx` / `call_depth` / `func_scope_mask` equal the stored
+  ones - the legacy fields are the oracle, and later the overflow fallback.
+  Entirely offline, no UI.
+- **Stage 2 - the structured PATH virtual row.** New annotation kind carrying
+  the chain as data, anchored on `replay_focus_anchor_flat_idx()`; formatting,
+  gutter-label resolution and elision in the code-panel row builder; Verbose
+  gating.
+- **Stage 3 - validation before anything else lands on top.** Same-site
+  recursion (both `@96` rungs distinct), calls in loops (the four-invocation
+  repro), frame-table overflow degrading to the two-rung fallback, a function
+  with 17+ parameters round-tripping through the arena, chrome-adjusted
+  gutter labels, and middle-elision at depth > 8.
+- **Stage 4 - anything from "Later surfaces", by demand, one at a time.**
 
-Two things may be worth doing out of band because they are independent of
-all of the above and cheap: depth tinting (later surface 1) and the
-`console()` command.
+Depth tinting (later surface 1) is independent of all of this and can be done
+whenever. `console()` is follow-up work with its own plan; it needs nothing
+here.
 
-Do **not** start at Stage 3. Every one of those is a UI decision that is
+Do **not** start at Stage 4. Every one of those is a UI decision that is
 cheaper to make after living with the PATH row for a while.
 
 ### Risks and invariants to hold
 
-- Flatten is hot (rebuilt per frame). Interning is O(1) per call and adds one
-  store per emitted command; it must not add work to the non-call path.
-- `repl_flatten_rebake_program` must leave `call_frame_idx` and the table
+- Flatten is hot (rebuilt per frame). Interning is O(1) per call plus an
+  arena append; it must not add work to the non-call path.
+- `repl_flatten_rebake_program` must leave the frame index and the table
   untouched - it is topology, like every other provenance field.
 - `export_setup.c` synthesizes commands and sets `root_call_src_cmd_idx = -1`;
   those need `REPL_CALL_FRAME_NONE` for the same reason.
-- `FlatProgramView` must carry the frame table so temporary-buffer callers
-  (tests, `repl_demo`, the flatten differential) see the same thing the live
-  path does.
+- `FlatProgramView` must carry the frame table and the arena so
+  temporary-buffer callers (tests, `repl_demo`, the flatten differential) see
+  the same thing the live path does.
 - The flatten differential test compares two dumps byte for byte; frame
-  indices must be deterministic (they are - interning order is the
-  depth-first walk order).
+  indices and arena offsets must be deterministic (they are - interning order
+  is the depth-first walk order).
 - Export/import and trace parity are untouched: frames are provenance, never
   emitted GL.
-- The PATH row must read the focused command through `replay_focus_flat_idx()`,
-  not `replay_pc()` - the PC is the execution *limit* and points one past the
-  step's last command.
 - Annotation building is per-frame during playback and already caches on
-  `s_replay_cache_pc`. Chain formatting must sit inside that cache, not run
-  per render call.
+  `s_replay_cache_pc`. Chain resolution must sit inside that cache; only
+  formatting belongs in the row builder, which runs per layout.
+- Overflow must be observable, not silent: surface a status message or a
+  `--call-tree` note when the frame table or arena fills, so a scene that
+  loses breadcrumb fidelity says so.
