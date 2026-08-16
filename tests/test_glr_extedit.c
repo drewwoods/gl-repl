@@ -39,6 +39,7 @@
 #include "app/glr_camera.h"
 #include "app/glr_config.h"
 #include "app/glr_ctrl.h"
+#include "app/glr_defaults.h"   /* CFG_DEFAULT_* - never hardcode a default */
 #include "app/glr_extedit.h"
 #include "app/glr_modal.h"
 #include "editor/commit.h"
@@ -58,6 +59,7 @@
 #include "subsystems/replay/replay.h"
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
+#include "subsystems/variable_panel/variable_panel_state.h"
 #include "support/test_harness.h"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
@@ -3530,6 +3532,47 @@ static void test_a_dragged_value_reaches_the_file(void) {
                 file_contains(WATCH_PATH, "0.375"));
 }
 
+static void test_drag_when_cursor_on_declaration_row(void) {
+    static const char *const scene[] = {
+        "float twist;",
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(twist, 0, 0);",
+        "glEnd();",
+        NULL
+    };
+    int row = -1;
+    ReplPredefView predefs;
+
+    printf("--- a dragged variable when edit line is on the declaration ---\n");
+
+    begin_watched_session(scene);
+    editor_state_edit_line_set(0);
+    editor_load_line_to_input(0);
+
+    predefs = repl_eval_predef_view();
+    for (int i = 0; i < predefs.count; i++) {
+        if (strcmp(predefs.vars[i].name, "twist") == 0) {
+            row = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("twist variable exists in predef view", row >= 0);
+    variable_panel_handle_drag_begin(row, /*coarse=*/0, /*x=*/100);
+    ASSERT_TRUE("drag motion produces change",
+                glr_ctrl_router_handle_variable_panel_motion(150, 0));
+    ASSERT_TRUE("drag release persisted the change",
+                glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP));
+
+    glr_extedit_poll();
+    ASSERT_INT("one gesture wrote the file once",
+               glr_extedit_stats().writes, 1);
+    ASSERT_TRUE("the watched file carries the dragged value",
+                file_contains(WATCH_PATH, "twist ="));
+}
+
+
 /* While a sidecar session is live the editor's unsaved buffer is the truth and
  * the file is deliberately behind it - writing there would save someone's
  * unsaved typing for them, and would drop the parked row, which is not in the
@@ -3616,9 +3659,11 @@ static void test_an_emptied_document_is_not_written(void) {
                 file_contains(WATCH_PATH, "0, 0, 0"));
 }
 
-/* A hold-back that already suppressed the write, then F12 away and back:
- * the last-agreed fingerprint has to survive the rebind or the file stays
- * stale after the gate opens. */
+/* A hold-back that already suppressed the write, then F12 away and back: the
+ * last-agreed fingerprint has to survive the rebind or the file stays stale
+ * forever. A read-only file is the hold-back here because it is the one that
+ * outlives a scene switch without also holding the write on return - the point
+ * is the fingerprint, not the hold-back. */
 static void test_returning_after_a_held_write_still_syncs(void) {
     int slot_a;
 
@@ -3631,11 +3676,13 @@ static void test_returning_after_a_held_write_still_syncs(void) {
     ASSERT_TRUE("a local line commits",
                 editor_feed_line("glVertex3f(7, 7, 7);") != 0);
     editor_input_clear();
-    begin_typing("glVertex3f(8,");
+
+    ASSERT_INT("the file can be made unwritable", chmod(WATCH_PATH, 0444), 0);
     glr_extedit_poll();
-    ASSERT_INT("the shut gate held the write", glr_extedit_stats().writes, 0);
+    ASSERT_INT("the write was held", glr_extedit_stats().writes, 0);
     ASSERT_TRUE("the file is still the original",
                 !file_contains(WATCH_PATH, "7, 7, 7"));
+    ASSERT_INT("the file is writable again", chmod(WATCH_PATH, 0644), 0);
 
     write_lines(OTHER_PATH, k_scene_longer);
     {
@@ -3654,6 +3701,149 @@ static void test_returning_after_a_held_write_still_syncs(void) {
     ASSERT_TRUE("the file now has the local line",
                 file_contains(WATCH_PATH, "7, 7, 7"));
     (void)unlink(OTHER_PATH);
+}
+
+/* The writer derives the file's leading `@cfg` block from live config, so a
+ * scene setting changes the bytes on disk without moving a single document
+ * row. Hashing rows alone left the file stale until some unrelated edit
+ * happened to carry the setting out with it. */
+static void test_a_scene_config_change_syncs(void) {
+    int settled;
+    int before, after;
+
+    printf("--- a scene @cfg change reaches the file ---\n");
+
+    begin_watched_session(k_scene_a);
+    /* Start from the documented default rather than whatever the previous
+     * test left behind, so "cycling moves it off default" is a fact and not
+     * an assumption about the shipped value. */
+    glr_config_set(GLR_CONFIG_WIREFRAME, CFG_DEFAULT_WIREFRAME);
+    glr_extedit_poll();
+    settled = glr_extedit_stats().writes;
+    glr_extedit_poll();
+    ASSERT_INT("the session is settled", glr_extedit_stats().writes, settled);
+
+    before = glr_config_get(GLR_CONFIG_WIREFRAME);
+    (void)glr_config_cycle(GLR_CONFIG_WIREFRAME, 1);
+    after = glr_config_get(GLR_CONFIG_WIREFRAME);
+    ASSERT_TRUE("the scene setting moved", after != before);
+
+    glr_extedit_poll();
+    ASSERT_INT("and is published on its own", glr_extedit_stats().writes,
+               settled + 1);
+    ASSERT_TRUE("the file carries the @cfg row",
+                file_contains(WATCH_PATH, "@cfg wireframe"));
+    ASSERT_TRUE("and still the scene", file_contains(WATCH_PATH, "0, 0, 0"));
+
+    glr_extedit_poll();
+    ASSERT_INT("one change is one write", glr_extedit_stats().writes,
+               settled + 1);
+
+    /* Session-inspection settings are not the scene - same line the camera
+     * sits on. Opening a profiler must not rewrite the user's file. */
+    (void)glr_config_cycle(GLR_CONFIG_CPU_PROFILE, 1);
+    glr_extedit_poll();
+    ASSERT_INT("a session setting is not a reason to write",
+               glr_extedit_stats().writes, settled + 1);
+
+    glr_config_set(GLR_CONFIG_WIREFRAME, CFG_DEFAULT_WIREFRAME);
+}
+
+/* The outbound half of the gate split. A half-typed row is the *inbound*
+ * question - a reload would destroy typing undo cannot recover - and it used
+ * to hold the outbound write too, which parked every later local change behind
+ * a line the user may never finish. A row being typed is not in the document,
+ * so publishing the committed document without it takes nothing away from a
+ * file that never had it. */
+static void test_a_half_typed_row_does_not_hold_the_write(void) {
+    printf("--- a half-typed row elsewhere does not hold the write ---\n");
+
+    begin_watched_session(k_scene_a);
+    editor_state_edit_line_set(repl_state_document_count());
+    ASSERT_TRUE("a local line commits",
+                editor_feed_line("glVertex3f(7, 7, 7);") != 0);
+    editor_input_clear();
+    begin_typing("glVertex3f(8,");
+
+    glr_extedit_poll();
+    ASSERT_INT("the committed row is published anyway",
+               glr_extedit_stats().writes, 1);
+    ASSERT_TRUE("the file carries it", file_contains(WATCH_PATH, "7, 7, 7"));
+    ASSERT_TRUE("and not the row still being typed",
+                !file_contains(WATCH_PATH, "glVertex3f(8,"));
+    ASSERT_STR("which is still in the input, untouched",
+               editor_input_text(), "glVertex3f(8,");
+
+    /* Inbound is emphatically NOT relaxed: the same half-typed row still
+     * defers a reload, because that reload would overwrite it. */
+    write_lines(WATCH_PATH, k_scene_b);
+    set_mtime(WATCH_PATH, 1000000, 0);
+    glr_extedit_poll();
+    ASSERT_INT("an external save still defers",
+               glr_extedit_stats().deferrals, 1);
+    ASSERT_INT("and nothing reloaded", glr_extedit_stats().reloads, 0);
+    ASSERT_TRUE("the local document stands", document_mentions("7, 7, 7"));
+}
+
+/* The row the split keeps holding: a parked tail the user is still evolving.
+ * That row IS in the file, so a write dropping it loses their typing - and
+ * one more keystroke must not make it eligible. */
+static void test_editing_the_parked_row_still_holds_the_write(void) {
+    static const char *const twist_scene[] = {
+        "float twist;",
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(twist, 0, 0);",
+        "glEnd();",
+        NULL
+    };
+    static const char *const with_tail[] = {
+        "float twist;",
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(twist, 0, 0);",
+        "glEnd();",
+        "glVertex3f(1,",
+        NULL
+    };
+    ReplCompiledChange compiled;
+    ReplCompileContext ctx;
+    char err[REPL_STATUS_TEXT_MAX] = "";
+
+    printf("--- typing into the parked row keeps holding the write ---\n");
+
+    begin_watched_session(twist_scene);
+    write_lines(WATCH_PATH, with_tail);
+    glr_extedit_poll();
+    ASSERT_INT("the tail was parked", glr_extedit_stats().parked_rows, 1);
+
+    /* One more character: no longer byte-identical to the park, but the same
+     * row, still being typed, and still the row the file holds. */
+    editor_input_set_text("glVertex3f(1, 2");
+
+    ctx = repl_compile_context_from_live(0);
+    ASSERT_INT("a dragged value compiles into the declaration",
+               (int)repl_compile_persist_predef_value("twist", 0.625f, &ctx,
+                                                      &compiled, err,
+                                                      sizeof(err)),
+               (int)REPL_COMPILE_OK);
+    ASSERT_TRUE("the rewrite applies",
+                editor_commit_apply_external_change(&compiled, 0, 0) != 0);
+
+    glr_extedit_poll();
+    ASSERT_INT("the edited parked row still held the write",
+               glr_extedit_stats().writes, 0);
+    ASSERT_TRUE("the file still has the tail",
+                file_contains(WATCH_PATH, "glVertex3f(1,"));
+
+    editor_input_clear();
+    glr_extedit_poll();
+    ASSERT_INT("abandoning it releases the sync",
+               glr_extedit_stats().writes, 1);
+    ASSERT_TRUE("the dragged value reached the file",
+                file_contains(WATCH_PATH, "0.625"));
 }
 
 /* A failed write must not be treated as agreement. Retry when the document
@@ -3799,10 +3989,14 @@ int main(void) {
     test_bind_adopts_without_reloading();
     test_a_local_edit_is_written_back();
     test_a_dragged_value_reaches_the_file();
+    test_drag_when_cursor_on_declaration_row();
     test_no_write_while_following_the_editor();
     test_a_pending_version_holds_the_sync_back();
     test_an_emptied_document_is_not_written();
     test_returning_after_a_held_write_still_syncs();
+    test_a_scene_config_change_syncs();
+    test_a_half_typed_row_does_not_hold_the_write();
+    test_editing_the_parked_row_still_holds_the_write();
     test_a_failed_write_is_not_treated_as_synced();
     test_a_parked_row_holds_the_sync_back();
     test_post_tutorial_pin_holds_the_sync_back();

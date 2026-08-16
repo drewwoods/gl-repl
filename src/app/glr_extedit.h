@@ -64,22 +64,39 @@
  * a save - the watched file is written back out and re-stamped, so the round
  * trip stays closed in both directions.
  *
- * The trigger is the document *text*. That is not a shortcut: a drag applies
- * its value live on every pointer event but rewrites the source once, on
- * release, so one gesture costs one write. Live state that never reaches a row
- * - the camera above all - is deliberately not a reason to rewrite the user's
- * file, and neither is an empty document.
+ * The trigger is the document *text* plus the scene `@cfg` subset, which is
+ * exactly what the writer derives from live state. Neither half is a shortcut:
+ * a drag applies its value live on every pointer event but rewrites the source
+ * once, on release, so one gesture costs one write; and a scene setting is
+ * part of the file even though it moves no row, so a toggle that only ever
+ * rode out with the next unrelated edit now goes out on its own. Live state
+ * that is neither - the camera above all, `t`, a scratch cell with no
+ * declaration, and the session-inspection settings (profilers, viz, replay) -
+ * is deliberately not a reason to rewrite the user's file, and neither is an
+ * empty document.
  *
- * Five states hold the write back, all of them "the document is not what this
- * file should hold": a pinned binding (a lesson owns the document), a shut
- * gate (D5), a pending inbound version (inbound wins - writing would stamp
- * over an external save that has not landed yet), a live WIP session (the
- * editor's unsaved buffer is the truth then, and a write would drop the
- * parked row, which is not in the document), and a live parked row from a
- * stage-2 file reload (same drop, without a sidecar to hold it). Each of
- * those resolves, and the sync fires on the poll after it does. The last-
- * agreed document fingerprint is remembered per path, so a scene-switch
- * round trip cannot treat unsaved slot edits as already on disk.
+ * Four states hold the write back, all of them "the document is not what this
+ * file should hold": a pinned binding (a lesson owns the document - this also
+ * covers a lesson running, which is why the inbound gate is not consulted), a
+ * pending inbound version (inbound wins - writing would stamp over an external
+ * save that has not landed yet), a live WIP session (the editor's unsaved
+ * buffer is the truth then, and a write would drop the parked row, which is
+ * not in the document), and a parked row still in play from a stage-2 file
+ * reload (same drop, without a sidecar to hold it). Each of those resolves,
+ * and the sync fires on the poll after it does. The last-agreed fingerprint is
+ * remembered per path, so a scene-switch round trip cannot treat unsaved slot
+ * edits as already on disk.
+ *
+ * A half-typed row is NOT one of them, and used to be. D5's gate is the
+ * *inbound* question - a reload would destroy typing undo cannot recover - and
+ * outbound it is far too wide: a row being typed is not in the document, so
+ * writing the committed document without it takes nothing from a file that
+ * never had it, while holding on it parked every later local change behind a
+ * line the user may never finish. The one row whose absence the file would
+ * feel is the parked one, because that row came *from* the file - and "still
+ * in play" is its own predicate (the caret is still on it and the input is
+ * still uncommitted), so evolving it by one keystroke keeps holding rather
+ * than releasing.
  *
  * ONE INCOMPLETE FINAL ROW (`.glr` only). A file may end with a half-typed
  * command; it lands in the live input row, where the user keeps typing it and

@@ -952,8 +952,13 @@ static void glr_ctrl_persist_variable_panel_drag_value(
     /* On failure the already-applied live value stands; Undo still restores
      * the drag-start snapshot. */
     if (!editor_commit_apply_external_change(&compiled, /*capture_undo=*/0,
-                                             /*publish_status=*/0))
+                                             /*publish_status=*/0)) {
         repl_set_status_error("Command buffer full!");
+        return;
+    }
+
+    if (compiled.pos == editor_state_edit_line())
+        editor_load_line_to_input(compiled.pos);
 }
 
 int glr_ctrl_router_handle_variable_panel_drag_release(int state) {

@@ -25,6 +25,7 @@
 #include "editor/search.h"
 #include "editor/state.h"
 #include "editor/undo.h"
+#include "repl/cfg_baseline.h" /* scene-subset @cfg, part of the outbound fp */
 #include "repl/line_scan.h"   /* the importer's own statement-boundary scan */
 #include "repl/scene_load.h"
 #include "repl/scenes.h"
@@ -79,12 +80,17 @@ static int                   g_parked_valid;
  * re-park of the already-canonical g_parked_row so a cursor-only return to
  * the hole still maps the published column. */
 static int                   g_parked_lead;
-/* Outbound sync baseline: the document as it stood the last time gl-repl and
- * the outside world agreed about the current binding - a bind, an import, a
- * sidecar update, or our own write. The live copy is wiped on rebind, so the
- * last-agreed value also lives on GlrExtEditSeen.synced_doc. A document that
- * has moved off it moved *locally*, and the watched file is stale until the
- * sync writes it back out. */
+/* The document row the park addressed. The outbound sync needs it to tell the
+ * user still evolving the parked row (the file holds that tail; writing would
+ * drop it) from the user typing on some other row (typing that was never in
+ * the file, so publishing the committed document loses nothing). */
+static int                   g_parked_doc_row;
+/* Outbound sync baseline: synced_state_fingerprint() as it stood the last time
+ * gl-repl and the outside world agreed about the current binding - a bind, an
+ * import, a sidecar update, or our own write. The live copy is wiped on
+ * rebind, so the last-agreed value also lives on GlrExtEditSeen.synced_doc. A
+ * document (or scene `@cfg`) that has moved off it moved *locally*, and the
+ * watched file is stale until the sync writes it back out. */
 static unsigned long long    g_synced_doc_fp;
 static int                   g_have_synced_fp;
 /* A document we already failed to write. Cleared on a successful agreement
@@ -480,6 +486,41 @@ static unsigned long long document_fingerprint(void) {
     return h;
 }
 
+/* The outbound sync's fingerprint, which is NOT the document fingerprint: the
+ * writer derives the file's leading `@cfg` block from live config, so a scene
+ * setting can change the bytes on disk without moving a single row. Toggling
+ * one and watching the file stay stale until some unrelated edit happens to
+ * carry it out is the same silent drift the sync exists to remove.
+ *
+ * The scene subset only (`fill_scene_subset` - the k_cfg_scene_defaults[]
+ * roster). Session-inspection and interface settings - profilers, depth viz,
+ * code panel - appear in an exported `.c` header but are not part of the
+ * scene, and rewriting the user's file because they opened a profiler is
+ * churn, not sync. Same line the camera sits on, for the same reason.
+ *
+ * Deliberately separate from document_fingerprint(): that one answers "did the
+ * *document* move", which is what the deferral gate and the sidecar session
+ * compare against. Folding config into it would read a config toggle as the
+ * user having committed over a pending inbound version, or as somebody else
+ * taking the document away from a live sidecar. */
+static unsigned long long synced_state_fingerprint(void) {
+    const ReplConfigBridge *bridge = repl_config_bridge();
+    unsigned long long h = document_fingerprint();
+    ReplConfigBag cfg;
+
+    if (!bridge || !bridge->fill_scene_subset)
+        return h;
+    repl_config_bag_clear(&cfg);
+    bridge->fill_scene_subset(&cfg);
+    for (int i = 0; i < cfg.count; i++) {
+        h = hash_bytes(h, cfg.items[i].key, strlen(cfg.items[i].key));
+        h = hash_bytes(h, "=", 1);
+        h = hash_bytes(h, cfg.items[i].value, strlen(cfg.items[i].value));
+        h = hash_bytes(h, "\n", 1);
+    }
+    return h;
+}
+
 /* ----- state ------------------------------------------------------------- */
 
 static void rebind(const char *path);
@@ -495,6 +536,7 @@ static void forget_binding_state(void) {
     g_reported_missing   = 0;
     g_parked_valid       = 0;
     g_parked_lead        = 0;
+    g_parked_doc_row     = -1;
     g_have_synced_fp     = 0;
     g_have_sync_fail_fp  = 0;
     wip_forget();
@@ -505,7 +547,7 @@ static void forget_binding_state(void) {
  * point where the two are known to agree, and after every write that makes
  * them agree again. Persisted per path so a later rebind can restore it. */
 static void sync_stamp_document(void) {
-    g_synced_doc_fp     = document_fingerprint();
+    g_synced_doc_fp     = synced_state_fingerprint();
     g_have_synced_fp    = 1;
     g_have_sync_fail_fp = 0;
     if (g_bound[0])
@@ -930,8 +972,9 @@ static void park_incomplete_row(const char *text, int doc_row) {
     editor_state_edit_line_set(doc_row);
     editor_input_set_text(stripped);
     snprintf(g_parked_row, sizeof(g_parked_row), "%s", stripped);
-    g_parked_lead  = lead;
-    g_parked_valid = 1;
+    g_parked_lead    = lead;
+    g_parked_doc_row = doc_row;
+    g_parked_valid   = 1;
 }
 
 /* The watcher parked an incomplete row into the input and the user has not
@@ -939,6 +982,25 @@ static void park_incomplete_row(const char *text, int doc_row) {
  * the file (it is not in the document). */
 static int parked_row_is_live(void) {
     return g_parked_valid && strcmp(editor_input_text(), g_parked_row) == 0;
+}
+
+/* The same row, still being worked on - byte-identical to the park, or the
+ * user's own evolution of it. This is the outbound question, and it is
+ * deliberately wider than parked_row_is_live(): typing one more character
+ * into the tail the file already holds must not make the write eligible and
+ * drop that tail. It is also deliberately narrower than input_row_is_dirty():
+ * a half-typed row *anywhere else* was never in the file, so publishing the
+ * committed document without it loses nothing.
+ *
+ * The park resolves the moment the input goes clean - committed (the row is
+ * in the document now, so the write carries it) or cleared (abandoned, and
+ * the file is meant to lose it). g_parked_valid deliberately outlives that:
+ * it is also the memory the WIP re-park reads when the caret returns to the
+ * hole, and clearing it here would forget the row instead of publishing it. */
+static int parked_row_is_in_play(void) {
+    return g_parked_valid &&
+           editor_state_edit_line() == g_parked_doc_row &&
+           editor_input_has_uncommitted_change();
 }
 
 /* Is the input row dirty in the sense that matters - typing that a reload
@@ -1963,21 +2025,22 @@ static void scene_file_poll(void) {
  * forgetting is silent: the next save from the editor is a straight overwrite
  * of work gl-repl never wrote down.
  *
- * The trigger is the document *text*, not the live variable table, and that is
+ * The trigger is synced_state_fingerprint() - the document text plus the scene
+ * `@cfg` subset the writer emits - not the live variable table, and that is
  * enough on purpose: a drag applies its value live but rewrites the source
  * exactly once, on release (glr_ctrl_persist_variable_panel_drag_value), so
  * one gesture is one write rather than sixty. Anything that only moves live
- * state and never reaches a row - the camera, a scratch cell with no
- * declaration - is deliberately not a reason to rewrite the user's file.
+ * state and never reaches a row or a scene setting - the camera, a scratch
+ * cell with no declaration, `t` - is deliberately not a reason to rewrite the
+ * user's file.
  *
- * Five states hold the write back, and each one is a case where the document
+ * Four states hold the write back, and each one is a case where the document
  * is not the thing the file should be made to hold:
  *
  *   a pinned binding   a lesson or the transient it left behind owns the
  *                      document; the bound path names the user's scene, not
- *                      the tutorial's.
- *   a shut gate        a lesson is running, or a half-typed local row is
- *                      waiting - finish the thought before publishing it.
+ *                      the tutorial's. This also covers a running lesson,
+ *                      which is why the inbound gate is not consulted here.
  *   a pending import   the file already holds something newer that has not
  *                      landed yet. Inbound wins; writing here would stamp our
  *                      own bytes over it and the external save would vanish.
@@ -1988,9 +2051,20 @@ static void scene_file_poll(void) {
  *                      Writing would also drop the parked row, which is not in
  *                      the document (see the header). A local edit ends the
  *                      session anyway, and the sync follows one poll later.
- *   a live parked row  a stage-2 reload parked an incomplete final row in the
- *                      input. Implicit write would drop it from the file while
- *                      it is still the live input; Ctrl+S still may.
+ *   a parked row in    a reload parked an incomplete final row in the input and
+ *   play               the user is still on it. An implicit write would drop it
+ *                      from the file while they are still typing it; Ctrl+S
+ *                      still may.
+ *
+ * What is NOT a hold-back, and used to be: a half-typed row anywhere else.
+ * gate_is_shut() is the *inbound* question - a reload would destroy typing that
+ * undo cannot recover - and it is far too wide outbound. A row being typed is
+ * not in the document, so writing the committed document without it takes
+ * nothing away from the file, which never had it. Holding on it instead parked
+ * every later local change behind a line the user may never finish: drag a
+ * value, pick a color, edit anything, and none of it reached disk. The one row
+ * whose absence the file would actually feel is the parked one, because that
+ * row came *from* the file - and that case has its own predicate.
  *
  * An empty document is never written. "Clear all" while watching is a
  * plausible accident and an empty file is not a scene; the file keeps the last
@@ -2001,12 +2075,12 @@ static void sync_out(void) {
 
     if (!g_bound[0] || !g_have_synced_fp)
         return;
-    if (binding_is_pinned() || gate_is_shut() || g_pending || g_wip_active ||
-        parked_row_is_live())
+    if (binding_is_pinned() || g_pending || g_wip_active ||
+        parked_row_is_in_play())
         return;
     if (repl_state_document_count() <= 0)
         return;
-    now = document_fingerprint();
+    now = synced_state_fingerprint();
     if (now == g_synced_doc_fp)
         return;
     if (g_have_sync_fail_fp && now == g_sync_fail_fp)

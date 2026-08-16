@@ -661,19 +661,29 @@ what the file last gave it, the file is rewritten and re-stamped, so the two
 never drift apart silently - the failure that costs you work is the editor's
 next save landing on top of a change gl-repl never wrote down.
 
-The trigger is the document *text*, which is also why a drag costs one write
-rather than sixty: the value is applied live on every pointer event, but the
-source row is rewritten once, when you let go. Camera moves are deliberately not
-a reason to rewrite the file, and neither is an empty document.
+The trigger is the document *text* plus the scene settings the file's leading
+`@cfg` block carries - between them, everything the writer derives from live
+state. That is also why a drag costs one write rather than sixty: the value is
+applied live on every pointer event, but the source row is rewritten once, when
+you let go. Live state that is neither a row nor a scene setting is deliberately
+not a reason to rewrite the file: camera moves, `t`, and the
+session-inspection settings (profilers, depth/stencil viz, replay) - and neither
+is an empty document.
 
-Five situations hold the write back until they resolve, all of them cases where
+Four situations hold the write back until they resolve, all of them cases where
 the document is not what the file should hold: a tutorial or tour owns the
-document; a save is already waiting behind a half-typed line (inbound wins - a
-local write there would erase it); a live WIP sidecar session is running, in
-which case the editor's unsaved buffer is the truth and the file is meant to be
-behind it; or a stage-2 reload has parked an incomplete final row in the input
+document; a save is already waiting to be applied (inbound wins - a local write
+there would erase it); a live WIP sidecar session is running, in which case the
+editor's unsaved buffer is the truth and the file is meant to be behind it; or a
+reload has parked an incomplete final row in the input and you are still on it
 (an implicit write would drop that row from the file). Editing locally ends a
 WIP session anyway, and the sync follows.
+
+A half-typed line of your own is **not** one of them. It holds an inbound
+reload - which would overwrite it - but not the write: a line you are still
+typing is not in the document, so publishing the committed document without it
+takes nothing away from a file that never had it. Only the parked row is
+different, because that row came from the file in the first place.
 
 `--watch` is a boolean over the existing positional argument, and it is a
 session mode rather than scene configuration: there is no config toggle and no
