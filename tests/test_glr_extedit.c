@@ -1267,7 +1267,10 @@ static void test_returning_to_a_scene_picks_up_what_changed(void) {
 }
 
 /* And the other half: coming back to a file nobody touched must NOT reload,
- * or a scene switch would throw away edits made in gl-repl and never saved. */
+ * or a scene switch would throw away edits made in gl-repl and never saved.
+ * The outbound sync must still see those edits as local: restamping the live
+ * document on rebind would treat them as already on disk and leave the file
+ * stale. */
 static void test_returning_to_an_untouched_scene_keeps_local_edits(void) {
     int slot_a;
     int rows;
@@ -1297,6 +1300,11 @@ static void test_returning_to_an_untouched_scene_keeps_local_edits(void) {
     ASSERT_INT("the unsaved local line is still there",
                repl_state_document_count(), rows);
     ASSERT_TRUE("really still there", document_mentions("7, 7, 7"));
+    ASSERT_INT("and the file is brought up to date",
+               glr_extedit_stats().writes, 1);
+    ASSERT_TRUE("the watched file carries the local line",
+                file_contains(WATCH_PATH, "7, 7, 7"));
+    (void)unlink(OTHER_PATH);
 }
 
 /* D4's no-push arm, driven for real. The earlier example test only proves an
@@ -3608,6 +3616,184 @@ static void test_an_emptied_document_is_not_written(void) {
                 file_contains(WATCH_PATH, "0, 0, 0"));
 }
 
+/* A hold-back that already suppressed the write, then F12 away and back:
+ * the last-agreed fingerprint has to survive the rebind or the file stays
+ * stale after the gate opens. */
+static void test_returning_after_a_held_write_still_syncs(void) {
+    int slot_a;
+
+    printf("--- a write held across a scene switch still fires on return ---\n");
+
+    begin_watched_session(k_scene_a);
+    slot_a = repl_active_user_scene();
+
+    editor_state_edit_line_set(repl_state_document_count());
+    ASSERT_TRUE("a local line commits",
+                editor_feed_line("glVertex3f(7, 7, 7);") != 0);
+    editor_input_clear();
+    begin_typing("glVertex3f(8,");
+    glr_extedit_poll();
+    ASSERT_INT("the shut gate held the write", glr_extedit_stats().writes, 0);
+    ASSERT_TRUE("the file is still the original",
+                !file_contains(WATCH_PATH, "7, 7, 7"));
+
+    write_lines(OTHER_PATH, k_scene_longer);
+    {
+        ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+        (void)repl_load_scene_as_new_slot(OTHER_PATH, &reason);
+    }
+    /* Production F12 refreshes the input from the loaded row. The lower-level
+     * loaders do not, and a leftover half-typed row would keep the gate shut. */
+    editor_load_line_to_input(editor_state_edit_line());
+    glr_extedit_poll();
+    ASSERT_TRUE("back to the first scene", repl_load_user_scene_idx(slot_a));
+    editor_load_line_to_input(editor_state_edit_line());
+    glr_extedit_poll();
+    ASSERT_INT("the held edit is written on return",
+               glr_extedit_stats().writes, 1);
+    ASSERT_TRUE("the file now has the local line",
+                file_contains(WATCH_PATH, "7, 7, 7"));
+    (void)unlink(OTHER_PATH);
+}
+
+/* A failed write must not be treated as agreement. Retry when the document
+ * moves, not every frame, and not when the path merely becomes writable. */
+static void test_a_failed_write_is_not_treated_as_synced(void) {
+    printf("--- a failed write is not treated as synced ---\n");
+
+    begin_watched_session(k_scene_a);
+    editor_state_edit_line_set(repl_state_document_count());
+    ASSERT_TRUE("a local line commits",
+                editor_feed_line("glVertex3f(4, 4, 4);") != 0);
+    editor_input_clear();
+
+    ASSERT_INT("the file can be made unwritable", chmod(WATCH_PATH, 0444), 0);
+    glr_extedit_poll();
+    ASSERT_INT("the write failed once", glr_extedit_stats().write_failures, 1);
+    ASSERT_INT("and nothing was recorded as written",
+               glr_extedit_stats().writes, 0);
+    ASSERT_TRUE("the file still holds the original",
+                !file_contains(WATCH_PATH, "4, 4, 4"));
+
+    for (int i = 0; i < 5; i++)
+        glr_extedit_poll();
+    ASSERT_INT("the same document is not retried every frame",
+               glr_extedit_stats().write_failures, 1);
+
+    ASSERT_INT("the file is writable again", chmod(WATCH_PATH, 0644), 0);
+    glr_extedit_poll();
+    ASSERT_INT("becoming writable does not retry by itself",
+               glr_extedit_stats().writes, 0);
+
+    editor_state_edit_line_set(repl_state_document_count());
+    ASSERT_TRUE("a further line commits",
+                editor_feed_line("glVertex3f(5, 5, 5);") != 0);
+    editor_input_clear();
+    glr_extedit_poll();
+    ASSERT_INT("the next document change retries",
+               glr_extedit_stats().writes, 1);
+    ASSERT_TRUE("and both local lines reach the file",
+                file_contains(WATCH_PATH, "4, 4, 4") &&
+                file_contains(WATCH_PATH, "5, 5, 5"));
+}
+
+/* A stage-2 parked row is not in the document. An implicit write would drop
+ * it from the file while it is still the live input. Ctrl+S still may. */
+static void test_a_parked_row_holds_the_sync_back(void) {
+    static const char *const twist_scene[] = {
+        "float twist;",
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(twist, 0, 0);",
+        "glEnd();",
+        NULL
+    };
+    static const char *const with_tail[] = {
+        "float twist;",
+        "glClearColor(0.1, 0.1, 0.1, 1.0);",
+        "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(twist, 0, 0);",
+        "glEnd();",
+        "glVertex3f(1,",
+        NULL
+    };
+    ReplCompiledChange compiled;
+    ReplCompileContext ctx;
+    char err[REPL_STATUS_TEXT_MAX] = "";
+
+    printf("--- a live parked row holds the sync back ---\n");
+
+    begin_watched_session(twist_scene);
+    write_lines(WATCH_PATH, with_tail);
+    glr_extedit_poll();
+    ASSERT_INT("the tail was parked", glr_extedit_stats().parked_rows, 1);
+    ASSERT_STR("and is still the live input",
+               editor_input_text(), "glVertex3f(1,");
+
+    ctx = repl_compile_context_from_live(0);
+    ASSERT_INT("a dragged value compiles into the declaration",
+               (int)repl_compile_persist_predef_value("twist", 0.375f, &ctx,
+                                                      &compiled, err,
+                                                      sizeof(err)),
+               (int)REPL_COMPILE_OK);
+    ASSERT_TRUE("the rewrite applies",
+                editor_commit_apply_external_change(&compiled, 0, 0) != 0);
+    ASSERT_STR("without taking the parked row",
+               editor_input_text(), "glVertex3f(1,");
+
+    glr_extedit_poll();
+    ASSERT_INT("the parked row held the write", glr_extedit_stats().writes, 0);
+    ASSERT_TRUE("the file still has the incomplete tail",
+                file_contains(WATCH_PATH, "glVertex3f(1,"));
+
+    editor_input_clear();
+    glr_extedit_poll();
+    ASSERT_INT("clearing the input releases the sync",
+               glr_extedit_stats().writes, 1);
+    ASSERT_TRUE("the dragged value reached the file",
+                file_contains(WATCH_PATH, "0.375"));
+    ASSERT_TRUE("and the abandoned tail did not",
+                !file_contains(WATCH_PATH, "glVertex3f(1,"));
+}
+
+/* After a lesson ends the leftover document is still pinned to the user's
+ * watched file. Writing it would stamp the lesson over a scene the user
+ * never asked to replace. Promotion then unbinds rather than overwriting. */
+static void test_post_tutorial_pin_holds_the_sync_back(void) {
+    const char *bound;
+
+    printf("--- a leftover lesson is not written over the watched file ---\n");
+
+    begin_watched_session(k_scene_a);
+    tutorial_start(0);
+    glr_extedit_poll();
+    tutorial_stop();
+    ASSERT_TRUE("the leftover is still pinned to the user's file",
+                repl_state_tutorial_origin_idx() >= 0);
+
+    glr_extedit_poll();
+    ASSERT_INT("nothing was written over the pre-lesson scene",
+               glr_extedit_stats().writes, 0);
+    ASSERT_TRUE("the watched file still holds the user's scene",
+                file_contains(WATCH_PATH, "0, 0, 0"));
+
+    ASSERT_TRUE("the leftover promotes",
+                repl_promote_transient_if_needed() >= 0);
+    ASSERT_INT("and the pin lifts", repl_state_tutorial_origin_idx(), -1);
+
+    glr_extedit_poll();
+    ASSERT_INT("promotion does not write the leftover over the file",
+               glr_extedit_stats().writes, 0);
+    ASSERT_TRUE("the pre-lesson scene is still on disk",
+                file_contains(WATCH_PATH, "0, 0, 0"));
+    bound = glr_extedit_bound_path();
+    ASSERT_TRUE("the leftover is no longer bound to the user's file",
+                bound == NULL ||
+                strstr(bound, "gl_repl_extedit_scene.glr") == NULL);
+}
+
 int main(void) {
     printf("=== external-editor watch ===\n");
     test_bind_adopts_without_reloading();
@@ -3616,6 +3802,10 @@ int main(void) {
     test_no_write_while_following_the_editor();
     test_a_pending_version_holds_the_sync_back();
     test_an_emptied_document_is_not_written();
+    test_returning_after_a_held_write_still_syncs();
+    test_a_failed_write_is_not_treated_as_synced();
+    test_a_parked_row_holds_the_sync_back();
+    test_post_tutorial_pin_holds_the_sync_back();
     test_same_second_save_is_noticed();
     test_safe_write_rename_is_noticed();
     test_size_only_change_is_noticed();

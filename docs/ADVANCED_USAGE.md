@@ -666,12 +666,14 @@ rather than sixty: the value is applied live on every pointer event, but the
 source row is rewritten once, when you let go. Camera moves are deliberately not
 a reason to rewrite the file, and neither is an empty document.
 
-Four situations hold the write back until they resolve, all of them cases where
+Five situations hold the write back until they resolve, all of them cases where
 the document is not what the file should hold: a tutorial or tour owns the
 document; a save is already waiting behind a half-typed line (inbound wins - a
-local write there would erase it); or a live WIP sidecar session is running, in
+local write there would erase it); a live WIP sidecar session is running, in
 which case the editor's unsaved buffer is the truth and the file is meant to be
-behind it. Editing locally ends that session anyway, and the sync follows.
+behind it; or a stage-2 reload has parked an incomplete final row in the input
+(an implicit write would drop that row from the file). Editing locally ends a
+WIP session anyway, and the sync follows.
 
 `--watch` is a boolean over the existing positional argument, and it is a
 session mode rather than scene configuration: there is no config toggle and no

@@ -80,11 +80,18 @@ static int                   g_parked_valid;
  * the hole still maps the published column. */
 static int                   g_parked_lead;
 /* Outbound sync baseline: the document as it stood the last time gl-repl and
- * the outside world agreed about it - a bind, an import, a sidecar update, or
- * our own write. A document that has moved off it moved *locally*, and the
- * watched file is stale until the sync writes it back out. */
+ * the outside world agreed about the current binding - a bind, an import, a
+ * sidecar update, or our own write. The live copy is wiped on rebind, so the
+ * last-agreed value also lives on GlrExtEditSeen.synced_doc. A document that
+ * has moved off it moved *locally*, and the watched file is stale until the
+ * sync writes it back out. */
 static unsigned long long    g_synced_doc_fp;
 static int                   g_have_synced_fp;
+/* A document we already failed to write. Cleared on a successful agreement
+ * or a rebind. Stops a 60 Hz retry of a path that is not writable, without
+ * pretending the write happened. */
+static unsigned long long    g_sync_fail_fp;
+static int                   g_have_sync_fail_fp;
 static GlrExtEditStats       g_stats;
 
 /* What the live document last came from, remembered *per path* rather than
@@ -106,6 +113,7 @@ static GlrExtEditStats       g_stats;
 typedef struct {
     char               path[GLR_EXTEDIT_PATH_MAX];
     unsigned long long content;
+    int                content_valid;
     /* A payload the user's own commit beat, remembered per path for the same
      * reason `content` is: switching away and back must not resurrect a
      * version they already rejected. Kept out of the binding state, which
@@ -134,6 +142,12 @@ typedef struct {
      * exists for. */
     unsigned long long wip_declined;
     int                wip_declined_valid;
+    /* Last document fingerprint that agreed with this file. Restored on
+     * rebind so a scene-switch round trip cannot treat unsaved slot edits
+     * as already on disk. Binding state is wiped on rebind, so this lives
+     * per path like `content` does. */
+    unsigned long long synced_doc;
+    int                synced_doc_valid;
     int                valid;
 } GlrExtEditSeen;
 
@@ -261,7 +275,8 @@ static int seen_remember(const char *path, unsigned long long content) {
         e = seen_add(path);
     if (!e)
         return 0;
-    e->content = content;
+    e->content       = content;
+    e->content_valid = 1;
     /* Applying content settles any argument about this file: a version the
      * user dismissed earlier is no longer the thing being argued over. */
     e->suppressed_valid = 0;
@@ -345,9 +360,29 @@ static int seen_lookup_suppressed(const char *path, unsigned long long *out) {
 static int seen_lookup(const char *path, unsigned long long *out) {
     const GlrExtEditSeen *e = seen_find(path);
 
-    if (!e)
+    if (!e || !e->content_valid)
         return 0;
     *out = e->content;
+    return 1;
+}
+
+static void seen_remember_synced_doc(const char *path, unsigned long long fp) {
+    GlrExtEditSeen *e = seen_find(path);
+
+    if (!e)
+        e = seen_add(path);
+    if (!e)
+        return;
+    e->synced_doc       = fp;
+    e->synced_doc_valid = 1;
+}
+
+static int seen_lookup_synced_doc(const char *path, unsigned long long *out) {
+    const GlrExtEditSeen *e = seen_find(path);
+
+    if (!e || !e->synced_doc_valid)
+        return 0;
+    *out = e->synced_doc;
     return 1;
 }
 
@@ -461,16 +496,20 @@ static void forget_binding_state(void) {
     g_parked_valid       = 0;
     g_parked_lead        = 0;
     g_have_synced_fp     = 0;
+    g_have_sync_fail_fp  = 0;
     wip_forget();
 }
 
 /* Re-baseline the outbound sync: from here on, only a *local* change makes the
  * document differ from what the file is expected to hold. Called at every
  * point where the two are known to agree, and after every write that makes
- * them agree again. */
+ * them agree again. Persisted per path so a later rebind can restore it. */
 static void sync_stamp_document(void) {
-    g_synced_doc_fp  = document_fingerprint();
-    g_have_synced_fp = 1;
+    g_synced_doc_fp     = document_fingerprint();
+    g_have_synced_fp    = 1;
+    g_have_sync_fail_fp = 0;
+    if (g_bound[0])
+        seen_remember_synced_doc(g_bound, g_synced_doc_fp);
 }
 
 static void stop_after_seen_history_oom(void) {
@@ -535,11 +574,11 @@ GlrExtEditStats glr_extedit_stats(void) {
     return g_stats;
 }
 
-/* Adopt `path` as the binding and stamp what is on disk *now* as both observed
- * and applied - without reloading. The live document already is that scene
- * (this is reached at startup and on every scene switch), so a reload would be
- * a pointless wholesale replacement that clears the undo ring and the input
- * row for nothing. */
+/* Adopt `path` as the binding and stamp what is on disk *now* as observed
+ * and applied - without reloading. Reloading on every scene switch would
+ * clobber unsaved slot edits; inbound uses the per-path seen history to
+ * notice a file that moved while we were away. The outbound baseline is
+ * the last-agreed document fingerprint, restored from that same history. */
 static void wip_bind(void);
 
 static void rebind(const char *path) {
@@ -549,12 +588,17 @@ static void rebind(const char *path) {
     forget_binding_state();
     snprintf(g_bound, sizeof(g_bound), "%s", path);
     wip_bind();
-    /* Before any of the token work below, and on every path out of it: binding
-     * asserts that the live document already is this scene, which is exactly
-     * the outbound sync's baseline. Skipping it on the early returns would
-     * leave the first local edit after a failed stat with nothing to compare
-     * against - and then write the file as if the whole document were new. */
-    sync_stamp_document();
+    /* Restore the last-agreed document fingerprint for this path. Binding
+     * does not mean the live document already matches the file: a slot can
+     * hold unsaved local edits that a hold-back (or a missed poll) prevented
+     * writing, and stamping the live document here would treat those edits
+     * as already on disk. A first visit has nothing to restore, and then
+     * the live document *is* the baseline - including after a failed stat,
+     * so the first local edit has something to compare against. */
+    if (seen_lookup_synced_doc(g_bound, &g_synced_doc_fp))
+        g_have_synced_fp = 1;
+    else
+        sync_stamp_document();
     if (stat(g_bound, &st) != 0)
         return;
     g_observed = change_token_from_stat(&st);
@@ -890,6 +934,13 @@ static void park_incomplete_row(const char *text, int doc_row) {
     g_parked_valid = 1;
 }
 
+/* The watcher parked an incomplete row into the input and the user has not
+ * yet committed or cleared it. An outbound write would drop that row from
+ * the file (it is not in the document). */
+static int parked_row_is_live(void) {
+    return g_parked_valid && strcmp(editor_input_text(), g_parked_row) == 0;
+}
+
 /* Is the input row dirty in the sense that matters - typing that a reload
  * would destroy and Ctrl+Z could not recover? A parked WIP row is the
  * watcher's own text, so it does not count until the user changes it.
@@ -902,7 +953,7 @@ static void park_incomplete_row(const char *text, int doc_row) {
 static int input_row_is_dirty(void) {
     if (!editor_input_has_uncommitted_change())
         return 0;
-    if (g_parked_valid && strcmp(editor_input_text(), g_parked_row) == 0)
+    if (parked_row_is_live())
         return 0;
     return 1;
 }
@@ -1919,7 +1970,7 @@ static void scene_file_poll(void) {
  * state and never reaches a row - the camera, a scratch cell with no
  * declaration - is deliberately not a reason to rewrite the user's file.
  *
- * Four states hold the write back, and each one is a case where the document
+ * Five states hold the write back, and each one is a case where the document
  * is not the thing the file should be made to hold:
  *
  *   a pinned binding   a lesson or the transient it left behind owns the
@@ -1937,28 +1988,37 @@ static void scene_file_poll(void) {
  *                      Writing would also drop the parked row, which is not in
  *                      the document (see the header). A local edit ends the
  *                      session anyway, and the sync follows one poll later.
+ *   a live parked row  a stage-2 reload parked an incomplete final row in the
+ *                      input. Implicit write would drop it from the file while
+ *                      it is still the live input; Ctrl+S still may.
  *
  * An empty document is never written. "Clear all" while watching is a
  * plausible accident and an empty file is not a scene; the file keeps the last
  * real version until something real replaces it. */
 static void sync_out(void) {
     ReplExportLayout layout;
+    unsigned long long now;
 
     if (!g_bound[0] || !g_have_synced_fp)
         return;
-    if (binding_is_pinned() || gate_is_shut() || g_pending || g_wip_active)
+    if (binding_is_pinned() || gate_is_shut() || g_pending || g_wip_active ||
+        parked_row_is_live())
         return;
     if (repl_state_document_count() <= 0)
         return;
-    if (document_fingerprint() == g_synced_doc_fp)
+    now = document_fingerprint();
+    if (now == g_synced_doc_fp)
+        return;
+    if (g_have_sync_fail_fp && now == g_sync_fail_fp)
         return;
 
     glr_ctrl_fill_export_layout(&layout);
     if (!repl_save_active_scene_to_path(g_bound, &layout)) {
-        /* The writer set its own error status. Re-baseline anyway: a path that
-         * cannot be written will not become writable because we retried it
-         * sixty times a second, and the next local edit asks again. */
-        sync_stamp_document();
+        /* Leave the last successful agreement in place so a later inbound
+         * version is not applied over an edit we never wrote. Retry when the
+         * document moves, not every frame. */
+        g_sync_fail_fp      = now;
+        g_have_sync_fail_fp = 1;
         g_stats.write_failures++;
         return;
     }

@@ -11,7 +11,7 @@
  * sync: a watched file that gl-repl silently stops matching is worse than no
  * watch at all, because the editor's next save overwrites whatever gl-repl
  * changed and nothing said so. See "OUTBOUND SYNC" below for what counts as a
- * change and the four states that hold the write back.
+ * change and the states that hold the write back.
  *
  * The decisions behind all of this are D1-D8 in the plan; what follows is the
  * short form of the ones a caller has to know, plus the traps that are not
@@ -70,13 +70,16 @@
  * - the camera above all - is deliberately not a reason to rewrite the user's
  * file, and neither is an empty document.
  *
- * Four states hold the write back, all of them "the document is not what this
+ * Five states hold the write back, all of them "the document is not what this
  * file should hold": a pinned binding (a lesson owns the document), a shut
  * gate (D5), a pending inbound version (inbound wins - writing would stamp
- * over an external save that has not landed yet), and a live WIP session
- * (the editor's unsaved buffer is the truth then, and a write would drop the
- * parked row, which is not in the document). Each of those resolves, and the
- * sync fires on the poll after it does.
+ * over an external save that has not landed yet), a live WIP session (the
+ * editor's unsaved buffer is the truth then, and a write would drop the
+ * parked row, which is not in the document), and a live parked row from a
+ * stage-2 file reload (same drop, without a sidecar to hold it). Each of
+ * those resolves, and the sync fires on the poll after it does. The last-
+ * agreed document fingerprint is remembered per path, so a scene-switch
+ * round trip cannot treat unsaved slot edits as already on disk.
  *
  * ONE INCOMPLETE FINAL ROW (`.glr` only). A file may end with a half-typed
  * command; it lands in the live input row, where the user keeps typing it and
