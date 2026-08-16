@@ -1450,9 +1450,10 @@ gl-repl keeps up to 8 scenes in memory, shown as tabs below the menu bar.
 | Menu | Action |
 |---|---|
 | File → New Scene | Start a fresh scene |
-| File → Save Scene (Ctrl+S) | Save the active scene; a visible example is promoted into the bound workspace first |
+| File → Save Scene (Ctrl+S) | Save the active scene in the format it was loaded from; a visible example is promoted into the bound workspace first |
+| File → Save Scene as .c | Always export the active scene as a standalone C program |
 | File → Save Scene as .glr | Write the active scene in the built-in-example authoring format |
-| File → Load Scene | Load a `.c` file into a new scene slot |
+| File → Load Scene | Load a `.c` or `.glr` file into a new scene slot |
 | File → New Workspace… | Create and open a named managed workspace; scenes from a session with no workspace bound come along into it, while a workspace created from an already-bound one starts empty |
 | File → Save Workspace | Save every open tab at once, the visible example included |
 | File → Save Workspace As… | Save the whole set of tabs into a new named workspace |
@@ -1488,12 +1489,18 @@ scene the first time.
 
 ### Standalone C export
 
-**Ctrl+S** (File → Save Scene) writes the active scene as a complete,
-compilable GLUT/OpenGL C program. Where the file lands depends on whether you
-have a workspace open: with one bound it becomes a scene file inside that
-workspace, and without one it is the standalone `output.c` next to the binary.
-Either way, if what you are looking at is still a built-in example, saving
-forks it into a scene of your own first.
+**File → Save Scene as .c** writes the active scene as a complete, compilable
+GLUT/OpenGL C program. Where the file lands depends on whether you have a
+workspace open: with one bound it becomes a scene file inside that workspace,
+and without one it is the scene-named `.c` file next to the binary (or
+`output.c` for an unnamed scene). This explicit action is useful after loading
+a `.glr`: **Save Scene** preserves that file's authoring format, while **Save
+Scene as .c** produces the standalone program.
+
+**Ctrl+S** (File → Save Scene) saves the active scene in the format it was
+loaded from. For ordinary workspace scenes and built-in examples, that is the
+standalone C export described above. If what you are looking at is still a
+built-in example, saving forks it into a scene of your own first.
 
 Header comments carry the REPL state (variables, config, camera), your
 functions become C functions, and your commands become the `display()` body.

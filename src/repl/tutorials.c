@@ -1406,7 +1406,7 @@ static const TutorialStep g_tutorial_keeping_work_steps[] = {
         "glColor3f(0.2, 0.8, 1)"),
     STEP_CMD(NULL, "glutSolidCube(2)"),
     STEP_NOTE(
-        "// Ctrl+S (File -> Save Scene) saves this scene and writes the standalone C program you can compile outside the app."),
+        "// Use File -> Save Scene as .c to write the standalone C program you can compile outside the app."),
     STEP_SENTINEL,
 };
 

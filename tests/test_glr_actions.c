@@ -2655,7 +2655,7 @@ static void test_help_key_tabs_use_keymap_labels(void) {
     keymap_binding_to_string(shortcut, (int)sizeof(shortcut),
                              KM_KEY(GLR_SAVE), KM_MODS(GLR_SAVE), 0);
     ASSERT_TRUE("help Editor tab renders Save shortcut from keymap",
-                help_tab_contains_binding("Editor", shortcut, "Save to output.c"));
+                help_tab_contains_binding("Editor", shortcut, "Save Scene"));
 
     keymap_binding_to_string(shortcut, (int)sizeof(shortcut),
                              KM_KEY(GLR_NEXT_EXAMPLE), KM_MODS(GLR_NEXT_EXAMPLE), 1);

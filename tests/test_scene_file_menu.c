@@ -189,6 +189,54 @@ static void save_glr_fixture(const char *dir, char *out_path, size_t out_sz) {
     snprintf(out_path, out_sz, "%s/unit_save_glr.glr", dir);
 }
 
+/* A loaded .glr keeps Save Scene pointed at its authoring source. The
+ * explicit C row must still produce the standalone program beside the scene. */
+static void test_save_c_after_loading_glr(void) {
+    char tmpl[] = "/tmp/glr_scene_c_XXXXXX";
+    char *dir = mkdtemp(tmpl);
+    char glr_path[512];
+    char c_path[512];
+    char *text;
+    ReplSceneLoadStatus reason = REPL_SCENE_LOAD_OK;
+
+    ASSERT_TRUE("mkdtemp for .glr C export", dir != NULL);
+    if (!dir)
+        return;
+
+    save_glr_fixture(dir, glr_path, sizeof(glr_path));
+    reset_fixture();
+    repl_set_workspace_dir(NULL);
+    ASSERT_TRUE("loaded .glr scene", repl_load_scene_as_new_slot(glr_path,
+                                                                   &reason) >= 0);
+    ASSERT_TRUE("loaded .glr retains source binding",
+                repl_active_scene_source_path() != NULL &&
+                strstr(repl_active_scene_source_path(), ".glr") != NULL);
+
+    repl_set_workspace_dir(dir);
+    snprintf(c_path, sizeof(c_path), "%s", repl_active_scene_export_path("c"));
+
+    ASSERT_INT_EQ("Save Scene preserves loaded .glr format",
+                  glr_action_menu_item_activate(GLR_MENU_FILE,
+                                                GLR_FILE_ITEM_SAVE_SCENE), 1);
+    text = read_file_text(glr_path);
+    ASSERT_TRUE("Save Scene keeps the .glr authoring file", text != NULL &&
+                strstr(text, "#include") == NULL);
+    free(text);
+
+    ASSERT_INT_EQ("Save Scene as .c handled",
+                  glr_action_menu_item_activate(GLR_MENU_FILE,
+                                                GLR_FILE_ITEM_SAVE_C), 1);
+    text = read_file_text(c_path);
+    ASSERT_TRUE("Save Scene as .c writes standalone C", text != NULL &&
+                strstr(text, "#include") != NULL);
+    free(text);
+
+    unlink(c_path);
+    unlink(glr_path);
+    repl_set_workspace_dir(NULL);
+    rmdir(dir);
+}
+
 /* Save Scene as .glr writes the authoring format built-in examples ship in:
  * only the @cfg rows that differ from the presentation defaults, the
  * `// camera` block, and the document at column 0. None of the standalone-C
@@ -698,6 +746,7 @@ int main(void) {
     test_new_workspace_adopts_unbound_scenes();
     test_rename_scene_guard();
     test_scene_menu_is_selector();
+    test_save_c_after_loading_glr();
     test_save_glr_writes_scene_source();
     test_save_glr_splits_camera_boundary_spacing();
     /* Last two: they swap the process-wide example catalog for a runtime one. */

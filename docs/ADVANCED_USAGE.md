@@ -829,6 +829,10 @@ the canonical order (declarations, then function definitions, then camera and
 body), with no C scaffold (see [User Guide → Scene export](USER_GUIDE.md#scene-export-glr) for
 what the format drops). To turn one into an example:
 
+When a `.glr` scene is loaded as a file, **File → Save Scene** writes back to
+that authoring file. Use **File → Save Scene as .c** when you want the
+standalone C export instead.
+
 1. Drop the `.glr` file into `examples/scenes/`.
 2. Add a section for it to `examples/catalog.ini`.
 

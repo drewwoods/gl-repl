@@ -1434,6 +1434,27 @@ int glr_action_save_active_scene(void) {
     return 1;
 }
 
+/* Explicit standalone-C export. Save Scene follows a loaded source file's
+ * format, so a scene opened from `.glr` quite deliberately saves back to
+ * `.glr`. This action is the format escape hatch: resolve the normal scene
+ * name/directory with a C extension and let the path-selected writer emit
+ * the standalone program. */
+static int glr_action_save_scene_as_c(void) {
+    ReplExportLayout layout;
+    char path[REPL_WORKSPACE_DIR_MAX + USER_SCENE_NAME_MAX + 8];
+    const char *resolved;
+
+    if (!bind_app_workspace_for_scene_save_if_needed())
+        return 0;
+    glr_ctrl_fill_export_layout(&layout);
+    resolved = repl_active_scene_export_path("c");
+    snprintf(path, sizeof(path), "%s", resolved ? resolved : "");
+    if (!repl_save_active_scene_to_path(path, &layout))
+        return 0;
+    glr_extedit_note_wrote(path);
+    return 1;
+}
+
 static int glr_action_reveal_workspace(void) {
     const char *dir = repl_workspace_dir();
     if (!repl_workspace_is_managed() || !dir || !dir[0])
@@ -1610,6 +1631,9 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             glr_action_save_active_scene();
             return 1;
         }
+        case GLR_FILE_ITEM_SAVE_C:
+            glr_action_save_scene_as_c();
+            return 1;
         case GLR_FILE_ITEM_SAVE_GLR: {
             /* Editing a runtime `--examples-dir` catalog: write straight back
              * to the file the catalog names, so iterating on a scene updates

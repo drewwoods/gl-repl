@@ -170,7 +170,7 @@ static const char *const k_lang_sections_tail[] = {
     "  overlay them (extra rows past the plot's series limit are ignored)",
     "",
     "Save / Load:",
-    "  Click Save C or use the File > Save Scene shortcut to export output.c",
+    "  File > Save Scene as .c exports a standalone C program",
     "  Reload a saved file:  ./gl-repl output.c",
     "  Read a snippet from stdin:  printf 'glutSolidCube(1);\\n' | ./gl-repl -",
     "  (Commands between // Snippet start/end are imported)",
@@ -435,7 +435,7 @@ const ReplHelpContent *repl_help_text_build(void) {
     nk = key_emit(nk, "  Ctrl+/               \tToggle comment on line");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_DEBUG_DUMP), KM_MODS(GLR_DEBUG_DUMP), 0, "",
                           "Dump debug state to stdout");
-    nk = key_emit_binding(nk, "", KM_KEY(GLR_SAVE), KM_MODS(GLR_SAVE), 0, "", "Save to output.c");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_SAVE), KM_MODS(GLR_SAVE), 0, "", "Save Scene");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_QUIT), KM_MODS(GLR_QUIT), 0, "", "Exit and save to temp file");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_ESCAPE), KM_MODS(GLR_ESCAPE), 0, "",
                           "Clear input / close overlay");

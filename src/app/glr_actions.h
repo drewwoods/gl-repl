@@ -40,8 +40,9 @@ typedef enum {
 enum {
     GLR_FILE_ITEM_NEW_SCENE = 0,
     GLR_FILE_ITEM_SAVE_SCENE,        /* Ctrl+S */
+    GLR_FILE_ITEM_SAVE_C,             /* Standalone C export */
     GLR_FILE_ITEM_SAVE_GLR,          /* Scene as authoring-format .glr source */
-    GLR_FILE_ITEM_LOAD_SCENE,        /* Prompt for a .c scene path */
+    GLR_FILE_ITEM_LOAD_SCENE,        /* Prompt for a .c or .glr scene path */
     GLR_FILE_ITEM_RENAME_SCENE,
     GLR_FILE_ITEM_EXPORT_PLY,        /* Export geometry to active scene's .ply path */
     GLR_FILE_ITEM_SPLIT_DECL,        /* split multi-var decl at cursor */
