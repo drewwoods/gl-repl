@@ -396,6 +396,58 @@ int replay_test_flat_cmd_context_matches(int flat_a, int flat_b) {
     return replay_flat_cmd_context_matches(flat_a, flat_b);
 }
 
+/* True when `flat_idx` ran in the current invocation OR in one of its
+ * ancestor call frames - i.e. it is on the same chain the PATH breadcrumb
+ * walks. This is what lets a caller's body stay annotated while the program
+ * counter sits several frames deeper: standing on a vertex inside func4, the
+ * `a = x * 0.9;` row of the func3 invocation that called it is still part of
+ * the live execution and its frozen snapshot is the right one to read.
+ *
+ * Strictly wider than replay_flat_cmd_context_matches, and the extra width
+ * is exactly one relation - ancestry - which nothing before the interned
+ * call frames could express. A *completed sibling* call is still rejected:
+ * its frame is not on the chain, so its stale values never reach the panel.
+ * That rejection is the whole reason this is a chain test and not simply a
+ * relaxed gate.
+ *
+ * Both commands must be indexed. `repl_call_frame_identity` reports -1 when
+ * either is REPL_CALL_FRAME_NONE, and that value conflates two cases a
+ * frame index cannot separate - a genuinely top-level command, and one past
+ * the overflow latch - so neither is admitted as an ancestor. Overflowed
+ * programs therefore keep exactly the innermost-only behaviour they have
+ * today, which is the documented fallback. Top-level rows are excluded for
+ * the same reason rather than by intent; lifting that needs the
+ * `call_depth == 0` discriminator, and is deliberately not done here. */
+static int replay_flat_cmd_on_current_chain(int flat_idx,
+                                            int current_flat_idx) {
+    FlatProgramView view;
+    int chain[MAX_FLATTEN_CALL_DEPTH];
+    int cand_frame;
+    int cur_frame;
+    int n;
+
+    if (replay_flat_cmd_context_matches(flat_idx, current_flat_idx))
+        return 1;
+
+    view = repl_state_flat_program_view();
+    cand_frame = repl_flat_cmd_call_frame(&view, flat_idx);
+    cur_frame = repl_flat_cmd_call_frame(&view, current_flat_idx);
+    if (repl_call_frame_identity(cand_frame, cur_frame) < 0)
+        return 0;
+
+    n = repl_call_frame_walk_chain(view, cur_frame, chain,
+                                   MAX_FLATTEN_CALL_DEPTH);
+    for (int i = 0; i < n; i++) {
+        if (chain[i] == cand_frame)
+            return 1;
+    }
+    return 0;
+}
+
+int replay_test_flat_cmd_on_current_chain(int flat_a, int flat_b) {
+    return replay_flat_cmd_on_current_chain(flat_a, flat_b);
+}
+
 static int find_replay_assignment_flat_cmd(int src_line) {
     ReplayRuntimeState replay = replay_state_view();
     int current_flat_idx = replay_current_flat_cmd();
@@ -404,14 +456,18 @@ static int find_replay_assignment_flat_cmd(int src_line) {
     if (replay.pc <= 0)
         return -1;
 
-    /* Try cached map: O(1) lookup + context check */
+    /* Try cached map: O(1) lookup + chain check. The cache stores the most
+     * recent execution per source line with no context filter at all
+     * (replay_annotations_rebuild_cache's backward pass), so an ancestor
+     * frame's row is already what sits here - only the acceptance test had
+     * to widen. */
     if (s_replay_cache_pc == replay.pc &&
         src_line >= 0 && src_line < repl_state_document_count()) {
         int cached = s_replay_flat_map[src_line];
         if (cached >= 0 &&
             (current_flat_idx < 0 ||
              cached == current_flat_idx ||
-             replay_flat_cmd_context_matches(cached, current_flat_idx)))
+             replay_flat_cmd_on_current_chain(cached, current_flat_idx)))
             return cached;
     }
 
@@ -421,7 +477,7 @@ static int find_replay_assignment_flat_cmd(int src_line) {
             continue;
         if (current_flat_idx < 0 ||
             j == current_flat_idx ||
-            replay_flat_cmd_context_matches(j, current_flat_idx))
+            replay_flat_cmd_on_current_chain(j, current_flat_idx))
             return j;
     }
 

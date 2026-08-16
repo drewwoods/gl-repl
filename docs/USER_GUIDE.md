@@ -1417,7 +1417,12 @@ value at that point.
 
 Two related config items: **Replay mode** (Polygon steps a primitive at a
 time, Vertex steps a vertex at a time) and **Replay expand**. **Expanded**
-annotates every line in place as a `//` comment. **Verbose** is the only mode
+annotates lines in place as a `//` comment. Assignment readouts follow the
+whole live call chain, not just the innermost function: standing on a draw
+inside `func4`, the `a = x * 0.9;` row of the `func3` invocation that called
+it still shows that invocation's own values. A call that has already
+*returned* is not on the chain and stays unannotated, so a readout is never
+left over from finished work. **Verbose** is the only mode
 that splits a source row, adding a call-path breadcrumb (how the focused
 vertex was reached: loop iterators and each `funcN` invocation's arguments)
 then substituted and evaluated rows beneath it. The breadcrumb is vertex

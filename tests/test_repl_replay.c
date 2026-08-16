@@ -2274,8 +2274,101 @@ static void test_replay_identity_unindexed_different_sites(void) {
                     repl_flat_cmd_call_frame(&view, verts[2])) == -1);
 }
 
+/* Caller-frame expansion: while the PC sits inside a callee, the rows of
+ * the *ancestor* invocations that led there stay annotated, and the rows of
+ * a completed *sibling* call do not.
+ *
+ * outer(4) runs `a = x * 2` (a = 8), calls sib(9) which runs `m = s * 3`
+ * (m = 27) and returns, then calls inner(8) -> deep(8), which draws. With
+ * the PC on that draw, outer's frame is on the chain **two hops up** and
+ * sib's is not on it at all - so `a = 8` is live context and `m = 27` is
+ * stale. Before the interned call frames both were rejected alike, because
+ * "same frame as the PC" was the only relation the provenance could
+ * express; the multi-hop case is the shape the deep-call-chain scene hits,
+ * where four ancestors sit between the top-level call and the draw. */
+static void test_replay_caller_frame_expansion(void) {
+    SourceTextView text;
+    FlatProgramView view;
+    char display[256];
+    int outer_assign = -1;
+    int sib_assign = -1;
+    int draw = -1;
+    int safety = 1024;
+    int i;
+
+    printf("--- replay: caller-frame expansion ---\n");
+    glr_ctrl_reset_all();
+    editor_feed_line("sib(s) {");
+    editor_feed_line("float m;");
+    editor_feed_line("m = s * 3;");
+    editor_feed_line("}");
+    editor_feed_line("deep(d) {");
+    editor_feed_line("glutSolidSphere(d, 4, 4);");
+    editor_feed_line("}");
+    editor_feed_line("inner(y) {");
+    editor_feed_line("deep(y);");
+    editor_feed_line("}");
+    editor_feed_line("outer(x) {");
+    editor_feed_line("float a;");
+    editor_feed_line("a = x * 2;");
+    editor_feed_line("sib(9);");
+    editor_feed_line("inner(a);");
+    editor_feed_line("}");
+    editor_feed_line("outer(4);");
+
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands(editor_state_edit_line());
+    repl_state_flat_program_clear_dirty();
+
+    view = repl_state_flat_program_view();
+    for (i = 0; i < view.cmd_count; i++) {
+        if (view.cmds[i].type == CMD_VAR_ASSIGN && view.cmds[i].src_cmd_idx == 12)
+            outer_assign = i;
+        else if (view.cmds[i].type == CMD_VAR_ASSIGN && view.cmds[i].src_cmd_idx == 2)
+            sib_assign = i;
+        else if (view.cmds[i].type == CMD_GLUT_SPHERE)
+            draw = i;
+    }
+    ASSERT_TRUE("found outer/sib assignments and the draw",
+                outer_assign >= 0 && sib_assign >= 0 && draw >= 0);
+    ASSERT_TRUE("all three are indexed",
+                repl_flat_cmd_call_frame(&view, outer_assign) != REPL_CALL_FRAME_NONE &&
+                repl_flat_cmd_call_frame(&view, sib_assign) != REPL_CALL_FRAME_NONE &&
+                repl_flat_cmd_call_frame(&view, draw) != REPL_CALL_FRAME_NONE);
+
+    /* The widening is real and bounded: strict identity rejects the
+     * ancestor, the chain relation accepts it, and both reject the
+     * completed sibling. */
+    ASSERT_TRUE("identity rejects the ancestor frame",
+                replay_test_flat_cmd_context_matches(outer_assign, draw) == 0);
+    ASSERT_TRUE("chain accepts the ancestor frame",
+                replay_test_flat_cmd_on_current_chain(outer_assign, draw) == 1);
+    ASSERT_TRUE("chain rejects the completed sibling frame",
+                replay_test_flat_cmd_on_current_chain(sib_assign, draw) == 0);
+
+    replay_start();
+    while (g_replay_pc < g_replay_total_flat && safety-- > 0)
+        replay_advance(repl_state_flat_program_view());
+    ASSERT_TRUE("replay reached end without runaway", safety > 0);
+    ASSERT_TRUE("PC focuses inner's draw", replay_src_line() == 5);
+
+    g_replay_expand_args = REPLAY_EXPAND_EXPANDED;
+    text = source_document_view();
+
+    replay_code_panel_get_command_display_text(text, 12, display, sizeof(display));
+    ASSERT_TRUE("caller row is annotated with its own frame's value",
+                strstr(display, "//") != NULL && strstr(display, "8") != NULL);
+
+    replay_code_panel_get_command_display_text(text, 2, display, sizeof(display));
+    ASSERT_TRUE("completed sibling row stays unannotated",
+                strstr(display, "//") == NULL);
+
+    replay_stop();
+}
+
 int main(void) {
     test_replay_basic_controls();
+    test_replay_caller_frame_expansion();
     test_replay_stepping();
     test_replay_focus_call_site_provenance();
     test_replay_seek_function_aware_jump();

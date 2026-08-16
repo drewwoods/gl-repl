@@ -111,6 +111,11 @@ void replay_annotations_prepare(SourceTextView text,
  * commands do not match just because both frames are NONE. */
 int replay_test_flat_cmd_context_matches(int flat_a, int flat_b);
 
+/* Test-only: the wider relation the inline assignment readout accepts -
+ * same invocation, or an ancestor call frame of it. A completed sibling
+ * call is not on the chain and stays rejected. */
+int replay_test_flat_cmd_on_current_chain(int flat_a, int flat_b);
+
 /* Get the inline annotated display text for a source line during replay
  * (the source body, without the extra annotation rows). Writes up to
  * out_size bytes into out. `text` is the source-text view the caller

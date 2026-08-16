@@ -524,6 +524,62 @@ with overflow behaviour asserted as its own case rather than folded in. The
 codebase has already paid for this gap once; the fix must not introduce a
 worse one at the boundary.
 
+### Caller-frame expansion (Part A - LANDED)
+
+Found by looking at a running replay: with the PC inside `func4`, `func4`'s
+body carried inline value readouts but `func3`'s - the invocation that called
+it - carried none, though its values are just as live.
+
+Not a design decision, an expressiveness limit.
+`find_replay_assignment_flat_cmd()` accepted a candidate row only if
+`replay_flat_cmd_context_matches()` said it came from the *same frame* as the
+PC, and "same frame" was the only relation the old four-field provenance
+could express. Every ancestor differs in all four fields
+(`func3` at `depth=4 mask=0x0f` vs `func4` at `depth=5 mask=0x1f`), so the
+whole caller chain was rejected wholesale.
+
+The value machinery was already frame-agnostic and needed no change:
+`build_visible_vars_from_predef_snapshot(flat_idx, ...)` reads
+`local_vars[flat_idx]` - that row's own frozen bindings - and the readout
+takes `args[0]` / `payload.assign.prev_local_value` from the row itself. The
+cache needed no change either: `replay_annotations_rebuild_cache()`'s
+backward pass stores the most recent execution per source line with **no**
+context filter, so an ancestor's row was already sitting in
+`s_replay_flat_map[]`. Only the acceptance test was frame-restrictive.
+
+So Part A is one new predicate, `replay_flat_cmd_on_current_chain()`:
+identity first, else test whether the candidate's frame appears in
+`repl_call_frame_walk_chain()` of the PC's frame. Both call sites in
+`find_replay_assignment_flat_cmd` use it; `replay_flat_cmd_context_matches`
+is left alone so "same invocation" stays available as its own concept.
+
+Two properties worth keeping:
+
+- **A completed sibling call is still rejected.** Its frame is not on the
+  chain, so its stale values never reach the panel. That rejection is why
+  this is a chain test rather than a relaxed gate, and it is asserted
+  directly.
+- **Overflow degrades to today's behaviour.** `repl_call_frame_identity()`
+  returns -1 when either frame is `REPL_CALL_FRAME_NONE`, and that value
+  cannot separate "genuinely top-level" from "past the latch", so neither is
+  admitted as an ancestor. Top-level rows are therefore excluded as a
+  consequence, not by intent; lifting that needs the `call_depth == 0`
+  discriminator and was deliberately not done here.
+
+Measured: `replay_examples` 118.7-120.0 ms before, 118.7-119.6 ms after
+(`min_iter_ms`, `--iters 15`, three runs each) - the chain walk on the
+reject path is not visible.
+
+**Part B - function-def headers - is NOT done and must not be done by
+deleting the gate.** `build_replay_funcdef_inline_comment()` reads
+`local_vars[cur_flat]`, the *PC's* snapshot, and looks parameters up by
+name. Every function in the deep-call scene takes `(x, y, z)`, so a relaxed
+gate would find `func4`'s `x` and print it on `func3`'s header - wrong
+values that look right. It has to read the frame's argument arena instead
+(`f->arg_offset`), the way `replay_path_add_rung_from_frame()` already does.
+Recursion also needs a policy there: one source row, several chain frames -
+innermost wins.
+
 ### Later surfaces (explicitly not in the first cut)
 
 Kept for sequencing only. None of these should ride along with the PATH row.
