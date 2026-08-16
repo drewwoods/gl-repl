@@ -3576,9 +3576,48 @@ static void test_drag_when_cursor_on_declaration_row(void) {
 /* While a sidecar session is live the editor's unsaved buffer is the truth and
  * the file is deliberately behind it - writing there would save someone's
  * unsaved typing for them, and would drop the parked row, which is not in the
- * document. The local edit still ends the session, and the sync follows it. */
+ * document. Following moves the document on every publication, and none of
+ * that movement is gl-repl's to write down. */
 static void test_no_write_while_following_the_editor(void) {
     printf("--- a live sidecar session holds the sync back ---\n");
+
+    begin_wip_session(k_scene_a);
+    publish_wip(k_scene_longer, 4, 1);
+    glr_extedit_poll();
+    ASSERT_INT("the session is live", glr_extedit_stats().wip_updates, 1);
+    ASSERT_INT("and following wrote nothing", glr_extedit_stats().writes, 0);
+
+    set_mtime(WIP_PATH, 18000, 0);
+    publish_wip(k_scene_b, 4, 1);
+    set_mtime(WIP_PATH, 19000, 0);
+    glr_extedit_poll();
+    ASSERT_INT("a second publication is followed",
+               glr_extedit_stats().wip_updates, 2);
+    ASSERT_TRUE("the document is the editor's buffer",
+                document_mentions("9, 9, 9"));
+    ASSERT_INT("and still nothing is written",
+               glr_extedit_stats().writes, 0);
+    ASSERT_TRUE("the file is the saved scene, deliberately behind",
+                file_contains(WATCH_PATH, "0, 0, 0"));
+
+    for (int i = 0; i < 5; i++)
+        glr_extedit_poll();
+    ASSERT_INT("idle frames under a live session write nothing",
+               glr_extedit_stats().writes, 0);
+    (void)unlink(WIP_PATH);
+}
+
+/* The repro that showed the hold-back was waiting on the wrong thing. Leave
+ * the editor open and idle, change a value in gl-repl, and nothing reached the
+ * file - because the session only noticed the local move when the sidecar's
+ * own change token moved, which an idle editor never does. The write then went
+ * out minutes later, the first time the user touched vim, by which point the
+ * two had been out of step the whole time.
+ *
+ * A local edit ends the session on the frame it happens, whatever the editor
+ * is doing. */
+static void test_a_local_edit_ends_the_session_without_the_editor(void) {
+    printf("--- an idle editor does not hold the sync hostage ---\n");
 
     begin_wip_session(k_scene_a);
     publish_wip(k_scene_longer, 4, 1);
@@ -3590,25 +3629,29 @@ static void test_no_write_while_following_the_editor(void) {
     ASSERT_TRUE("a local line commits",
                 editor_feed_line("glVertex3f(4, 4, 4);") != 0);
     editor_input_clear();
-    glr_extedit_poll();
-    ASSERT_INT("the file is left to the editor while it is following",
-               glr_extedit_stats().writes, 0);
-    ASSERT_TRUE("and still holds the saved scene",
-                !file_contains(WATCH_PATH, "4, 4, 4"));
 
-    /* Re-publishing the same buffer is what the editor does on any keystroke
-     * or cursor move. It ends the session (the document moved and this module
-     * did not move it), and the sync fires in the same poll. */
+    /* The sidecar does not move: the editor is open, and idle. */
+    glr_extedit_poll();
+    ASSERT_INT("the local edit ends the session on the next poll",
+               glr_extedit_stats().writes, 1);
+    ASSERT_TRUE("and reaches the file", file_contains(WATCH_PATH, "4, 4, 4"));
+
+    /* The editor's next breath must not take it back: the buffer it is still
+     * holding is the payload the local edit beat. */
     set_mtime(WIP_PATH, 18000, 0);
     publish_wip(k_scene_longer, 5, 1);
     set_mtime(WIP_PATH, 19000, 0);
     glr_extedit_poll();
-    ASSERT_INT("the paused session releases the sync",
-               glr_extedit_stats().writes, 1);
-    ASSERT_TRUE("the local edit is in the file",
-                file_contains(WATCH_PATH, "4, 4, 4"));
+    ASSERT_TRUE("the local edit survives the editor's cursor move",
+                document_mentions("4, 4, 4"));
+    ASSERT_INT("which costs no second write", glr_extedit_stats().writes, 1);
     (void)unlink(WIP_PATH);
 }
+
+/* The other exit stays covered by test_undo_exits_the_session_and_sticks
+ * above: with the session now ending on the frame the undo happens, that
+ * test's five idle polls run the detection, and the publication after them
+ * must still be dropped regardless of payload. */
 
 /* Inbound wins a straight race: a version waiting behind the gate has not
  * landed yet, and writing our own bytes over it would stamp the external save
@@ -3991,6 +4034,7 @@ int main(void) {
     test_a_dragged_value_reaches_the_file();
     test_drag_when_cursor_on_declaration_row();
     test_no_write_while_following_the_editor();
+    test_a_local_edit_ends_the_session_without_the_editor();
     test_a_pending_version_holds_the_sync_back();
     test_an_emptied_document_is_not_written();
     test_returning_after_a_held_write_still_syncs();

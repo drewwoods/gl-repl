@@ -87,6 +87,13 @@
  * remembered per path, so a scene-switch round trip cannot treat unsaved slot
  * edits as already on disk.
  *
+ * Resolving is this module's job, never the editor's. A WIP session ends on
+ * the frame the user changes the document from this side, whatever the editor
+ * is doing - the local-edit check runs every frame a session is live, not only
+ * when the sidecar publishes. An editor sitting open and idle does not move
+ * its sidecar for minutes, and while that was the only trigger a value dragged
+ * in gl-repl stayed unwritten until somebody touched vim.
+ *
  * A half-typed row is NOT one of them, and used to be. D5's gate is the
  * *inbound* question - a reload would destroy typing undo cannot recover - and
  * outbound it is far too wide: a row being typed is not in the document, so

@@ -676,8 +676,12 @@ document; a save is already waiting to be applied (inbound wins - a local write
 there would erase it); a live WIP sidecar session is running, in which case the
 editor's unsaved buffer is the truth and the file is meant to be behind it; or a
 reload has parked an incomplete final row in the input and you are still on it
-(an implicit write would drop that row from the file). Editing locally ends a
-WIP session anyway, and the sync follows.
+(an implicit write would drop that row from the file).
+
+Editing locally ends a WIP session anyway, and the sync follows on the next
+frame - it does **not** wait for the editor to do anything. An editor sitting
+open and idle publishes nothing for as long as you leave it alone, and a change
+made in gl-repl must not sit unwritten until you happen to touch vim again.
 
 A half-typed line of your own is **not** one of them. It holds an inbound
 reload - which would overwrite it - but not the write: a line you are still

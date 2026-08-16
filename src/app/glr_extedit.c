@@ -204,6 +204,10 @@ static int                   g_wip_offering;      /* the recovery modal is up */
  * currently writing the file. */
 static int                   g_wip_saw_cursor;
 static int                   g_wip_entry_pushed;  /* the one per-session snapshot */
+/* An undo ended the session, so the publication racing it is dropped whatever
+ * it holds - the sidecar may have been written either side of the key. One
+ * publication only; the ones after it are judged on their payload. */
+static int                   g_wip_drop_next_publication;
 /* The live document as this module last left it. A mismatch means somebody
  * else moved it - Ctrl+Z, or a commit - and the session is over. Same
  * mechanism as the deferral gate, for the same reason: reading the document
@@ -1222,6 +1226,7 @@ static void wip_forget(void) {
     g_wip_saw_cursor     = 0;
     g_wip_entry_pushed   = 0;
     g_wip_have_doc_fp    = 0;
+    g_wip_drop_next_publication = 0;
     wip_map_release();
 }
 
@@ -1265,6 +1270,45 @@ static void wip_end_session(const char *why) {
     g_wip_have_entry_fp = 0;
     if (why)
         repl_set_status(why);
+}
+
+/* Somebody else moved the document since the last update - Ctrl+Z, or a
+ * commit, or a drag, or the color picker. The session is over: the editor's
+ * buffer stopped being the truth the moment the user changed the document
+ * from this side.
+ *
+ * Checked every frame a session is live, NOT only when the sidecar publishes,
+ * and that is the whole point. An editor sitting idle does not move its
+ * sidecar's change token for minutes at a time, and while g_wip_active stood
+ * the outbound sync was held - so a value dragged in gl-repl sat unwritten
+ * until the user next touched the editor, which is exactly the drift the sync
+ * exists to close. It went out eventually, at the worst possible moment: the
+ * editor had just been reminded of a buffer that no longer matched.
+ *
+ * The two exits share a suppressed-payload hash (D5) so a later CursorMoved of
+ * the dismissed bytes cannot look like new content, but they are not the same
+ * pause:
+ *
+ *   Ctrl+Z   the sidecar may have been written before or after the key, so the
+ *            next publication is dropped regardless of its payload. Following
+ *            resumes on the one after, if its hash is not the dismissed one.
+ *   anything the next publication is judged on its payload alone: the same
+ *   else     bytes are ignored below, a genuinely new buffer is followed. */
+static void wip_note_local_document_move(void) {
+    if (!g_wip_active || !g_wip_have_doc_fp)
+        return;
+    if (document_fingerprint() == g_wip_doc_fp)
+        return;
+
+    if (g_wip_have_entry_fp && document_fingerprint() == g_wip_entry_fp)
+        g_wip_drop_next_publication = 1;
+    if (g_wip_payload_valid) {
+        g_wip_suppressed       = g_wip_payload;
+        g_wip_suppressed_valid = 1;
+        g_stats.dismissals++;
+    }
+    wip_end_session("Watch: kept your edit; live follow paused");
+    g_wip_payload_valid = 0;
 }
 
 /* The sidecar, read and split the same way the scene file is, plus the two
@@ -1765,6 +1809,11 @@ static void wip_poll(void) {
         return;
     }
 
+    /* Before the change token, deliberately: an idle editor's sidecar does not
+     * move, and a local edit ends the session on the frame it happens rather
+     * than whenever the editor is next touched. */
+    wip_note_local_document_move();
+
     token = change_token_from_stat(&st);
     if (change_token_equal(&token, &g_wip_observed))
         return;
@@ -1773,9 +1822,9 @@ static void wip_poll(void) {
     /* The editor is publishing again, which is exactly the condition a hold
      * waits for: it was set by declining the recovery offer, and declining
      * means "not this file as it stands", not "never". Following resumes with
-     * this update rather than the one after - the local-edit case below is
-     * where a publication is deliberately dropped, and doing it in both places
-     * would cost two. */
+     * this update rather than the one after - the drop-next-publication flag
+     * is where a publication is deliberately dropped, and doing it in both
+     * places would cost two. */
     g_wip_hold = 0;
 
     /* The same gate the scene file waits on: a lesson owns the document, and
@@ -1787,33 +1836,13 @@ static void wip_poll(void) {
     if (!wip_read(g_wip_path, &w))
         return;
 
-    /* Somebody else moved the document since the last update - Ctrl+Z, or a
-     * commit. The two exits share a suppressed-payload hash (D5) so a later
-     * CursorMoved of the dismissed bytes cannot look like new content, but
-     * they are not the same pause:
-     *
-     *   Ctrl+Z   the sidecar may have been written before or after the key,
-     *            so this publication is dropped regardless of its payload.
-     *            Following resumes on the next publication whose hash is
-     *            not the dismissed one.
-     *   commit   fall through. Same payload is ignored below; a genuinely
-     *            new payload is followed immediately. */
-    if (g_wip_active && g_wip_have_doc_fp &&
-        document_fingerprint() != g_wip_doc_fp) {
-        int is_undo = g_wip_have_entry_fp &&
-                      document_fingerprint() == g_wip_entry_fp;
-
-        if (g_wip_payload_valid) {
-            g_wip_suppressed       = g_wip_payload;
-            g_wip_suppressed_valid = 1;
-            g_stats.dismissals++;
-        }
-        wip_end_session("Watch: kept your edit; live follow paused");
-        g_wip_payload_valid = 0;
-        if (is_undo) {
-            wip_free(&w);
-            return;
-        }
+    /* The publication racing an undo (see wip_note_local_document_move),
+     * dropped whatever it holds. Ahead of the truncation backstop below, which
+     * is where the old in-band version of this check also sat. */
+    if (g_wip_drop_next_publication) {
+        g_wip_drop_next_publication = 0;
+        wip_free(&w);
+        return;
     }
 
     /* A publisher that has been appending `// @cursor` and suddenly is not is
@@ -2071,7 +2100,11 @@ static void scene_file_poll(void) {
  *                      is the truth and the file is deliberately behind it.
  *                      Writing would also drop the parked row, which is not in
  *                      the document (see the header). A local edit ends the
- *                      session anyway, and the sync follows one poll later.
+ *                      session on the frame it happens
+ *                      (wip_note_local_document_move), so the sync follows one
+ *                      poll later and does NOT wait for the editor to publish
+ *                      again - an idle editor would hold it for as long as
+ *                      nobody touched it.
  *   a parked row in    a reload parked an incomplete final row in the input and
  *   play               the user is still on it. An implicit write would drop it
  *                      from the file while they are still typing it; Ctrl+S
