@@ -1856,14 +1856,18 @@ void test_debug_dump_flat_commands() {
                     strstr(basic, "root_call_src_idx=") != NULL);
         ASSERT_TRUE("basic dump row has func_scope mask",
                     strstr(basic, "func_scope=0x00000000") != NULL);
+        ASSERT_TRUE("basic dump header has call_frames",
+                    strstr(basic, "call_frames=") != NULL);
+        ASSERT_TRUE("basic dump row has frame field",
+                    strstr(basic, "frame=") != NULL);
 
-        /* Row count should match num_flat_cmds + 3 fixed lines
-         * (header, count, footer). */
+        /* Row count should match num_flat_cmds + 4 fixed lines
+         * (header, count, call_frames, footer). */
         int newlines = 0;
         for (const char *p = basic; *p; p++)
             if (*p == '\n') newlines++;
         ASSERT_INT("basic dump line count",
-                   newlines, repl_state_flat_program_count() + 3);
+                   newlines, repl_state_flat_program_count() + 4);
 
         free(basic);
     }

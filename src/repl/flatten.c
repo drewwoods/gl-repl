@@ -25,7 +25,6 @@
 #include "support/cpuprof.h"   /* PROF_FLATTEN_* sub-phase timing */
 #include "config.h"        /* REPL_STATUS_TEXT_MAX */
 
-#define MAX_FLATTEN_CALL_DEPTH 64
 /* Overridable so a capacity-raised build (`make gl-repl-unchained`) does not
  * simply trade the MAX_EDITOR_COMMANDS ceiling for this one: a document large
  * enough to need that target can exhaust the default budget on straight-line
@@ -34,6 +33,9 @@
 #ifndef MAX_FLATTEN_VISIT_BUDGET
 #define MAX_FLATTEN_VISIT_BUDGET 200000
 #endif
+
+STATIC_ASSERT(sizeof(ReplCallFrame) == 32,
+              "ReplCallFrame is eight ints; keep the intern table dense");
 #define MAX_FLATTEN_ACTIVE_LOOPS (MAX_FLATTEN_CALL_DEPTH * MAX_EXPR_VARS)
 /* Per-for-loop hard stop on unrolled iterations, separate from the
  * whole-program MAX_FLATTEN_VISIT_BUDGET above: a single runaway loop
@@ -157,6 +159,18 @@ typedef struct {
      * Built once in repl_flatten_program; CMD_CALL handlers index directly
      * instead of walking the source for each call. */
     int func_def_idx[REPL_FUNC_SLOT_COUNT];
+    /* Call-frame intern. NULL table means "do not intern" - every written
+     * idx slot stays REPL_CALL_FRAME_NONE. overflow latches for the rest
+     * of this flatten so a chain is never half-recorded. */
+    int            *flat_call_frame_idx;
+    ReplCallFrame  *call_frames;
+    int             call_frame_capacity;
+    int             call_frame_count;
+    float          *call_frame_args;
+    int             call_frame_arg_capacity;
+    int             call_frame_arg_count;
+    int             call_frame_overflow;
+    int             current_frame;
 } FlattenContext;
 
 static void flatten_note_status(FlattenContext *ctx, const char *msg) {
@@ -268,6 +282,9 @@ static int flatten_append_cmd(FlattenContext *ctx, const GLCmd *cmd,
                             src_cmd_idx, call_src_cmd_idx,
                             root_call_src_cmd_idx, func_scope_mask,
                             ctx->call_depth);
+    /* One int on the non-call path: the current frame, or NONE. */
+    if (ctx->flat_call_frame_idx)
+        ctx->flat_call_frame_idx[flat_cmd_idx] = ctx->current_frame;
 
     if (ctx->flat_local_vars) {
         int loop_count = ctx->active_loop_count;
@@ -510,6 +527,59 @@ static void flatten_bind_func_locals(FlattenContext *ctx,
     }
 }
 
+/* Atomic: a topology slot AND arg_count floats, or latch and hand out
+ * NONE from this invocation onward. Never publish a frame whose parent
+ * is missing or whose arguments were truncated. */
+static int flatten_intern_call_frame(FlattenContext *ctx,
+                                     int parent,
+                                     int call_src_cmd_idx,
+                                     int func_slot,
+                                     const float *arg_vals,
+                                     int arg_count) {
+    ReplCallFrame *frame;
+    int idx;
+    int depth;
+
+    if (!ctx->call_frames || ctx->call_frame_capacity <= 0)
+        return REPL_CALL_FRAME_NONE;
+    if (ctx->call_frame_overflow)
+        return REPL_CALL_FRAME_NONE;
+    if (arg_count < 0)
+        arg_count = 0;
+    if (arg_count > 0 && !ctx->call_frame_args) {
+        ctx->call_frame_overflow = 1;
+        return REPL_CALL_FRAME_NONE;
+    }
+    if (ctx->call_frame_count >= ctx->call_frame_capacity ||
+        ctx->call_frame_arg_count + arg_count > ctx->call_frame_arg_capacity) {
+        ctx->call_frame_overflow = 1;
+        return REPL_CALL_FRAME_NONE;
+    }
+
+    if (parent != REPL_CALL_FRAME_NONE &&
+        parent >= 0 && parent < ctx->call_frame_count)
+        depth = ctx->call_frames[parent].depth + 1;
+    else
+        depth = 1;
+
+    idx = ctx->call_frame_count;
+    frame = &ctx->call_frames[idx];
+    frame->parent = parent;
+    frame->call_src_cmd_idx = call_src_cmd_idx;
+    frame->func_slot = func_slot;
+    frame->depth = depth;
+    frame->flat_begin = ctx->flat_count;
+    frame->flat_end = ctx->flat_count;
+    frame->arg_offset = ctx->call_frame_arg_count;
+    frame->arg_count = arg_count;
+    if (arg_count > 0)
+        memcpy(ctx->call_frame_args + ctx->call_frame_arg_count,
+               arg_vals, (size_t)arg_count * sizeof(float));
+    ctx->call_frame_arg_count += arg_count;
+    ctx->call_frame_count++;
+    return idx;
+}
+
 static void flatten_call(FlattenContext *ctx,
                          const GLCmd *src_cmd, int i,
                          ExprVar *vars, const ReplExprDepMask *var_deps,
@@ -659,10 +729,18 @@ static void flatten_call(FlattenContext *ctx,
         int nested_root_call = (root_call_src_cmd_idx >= 0)
                              ? root_call_src_cmd_idx : i;
 
+        int saved_frame = ctx->current_frame;
+        int frame = flatten_intern_call_frame(ctx, saved_frame, i,
+                                              func_num, arg_vals, arg_count);
+        ctx->current_frame = frame;
+
         ctx->call_depth++;
         flatten_range(ctx, k + 1, body_end, lvars, ldeps, lkinds, lnv,
                       i, nested_root_call, nested_func_mask);
+        if (frame != REPL_CALL_FRAME_NONE)
+            ctx->call_frames[frame].flat_end = ctx->flat_count;
         if (ctx->call_depth > 0) ctx->call_depth--;
+        ctx->current_frame = saved_frame;
         ctx->frame_has_locals = caller_has_locals;
         /* Call-frame boundary for loop jumps. The parser rejects a break
          * whose loop is not in the same function body, so reaching here
@@ -1710,7 +1788,16 @@ int repl_flatten_program(const ReplFlattenOptions *options,
         .call_depth = 0,
         .abort = 0,
         .visit_budget = options && options->visit_budget > 0
-                      ? options->visit_budget : MAX_FLATTEN_VISIT_BUDGET
+                      ? options->visit_budget : MAX_FLATTEN_VISIT_BUDGET,
+        .flat_call_frame_idx = options ? options->flat_call_frame_idx : NULL,
+        .call_frames = options ? options->call_frames : NULL,
+        .call_frame_capacity = options ? options->call_frame_capacity : 0,
+        .call_frame_count = 0,
+        .call_frame_args = options ? options->call_frame_args : NULL,
+        .call_frame_arg_capacity = options ? options->call_frame_arg_capacity : 0,
+        .call_frame_arg_count = 0,
+        .call_frame_overflow = 0,
+        .current_frame = REPL_CALL_FRAME_NONE
     };
 
     repl_flatten_expr_init(&ctx.expr,
@@ -1728,6 +1815,15 @@ int repl_flatten_program(const ReplFlattenOptions *options,
                               "Invalid flatten program options");
         return 0;
     }
+
+    /* Treat a missing pointer as "no table" even if a capacity leaked in. */
+    if (!ctx.call_frames)
+        ctx.call_frame_capacity = 0;
+    if (!ctx.call_frame_args)
+        ctx.call_frame_arg_capacity = 0;
+    if (ctx.flat_call_frame_idx && ctx.flat_capacity > 0)
+        memset(ctx.flat_call_frame_idx, 0xFF,
+               (size_t)ctx.flat_capacity * sizeof(int));
 
     repl_source_scope_view_bind(&ctx.source_scope,
                                 ctx.source_cmds,
@@ -1803,6 +1899,9 @@ int repl_flatten_program(const ReplFlattenOptions *options,
         result->rebake_ok = repl_flatten_expr_rebake_ok(&ctx.expr);
     }
     repl_copy_string_fits(result->status, sizeof(result->status), ctx.status);
+    result->call_frame_count = ctx.call_frame_count;
+    result->call_frame_arg_count = ctx.call_frame_arg_count;
+    result->call_frame_overflow = ctx.call_frame_overflow;
     return result->ok;
 }
 
@@ -2054,7 +2153,12 @@ void repl_flatten_commands(int edit_line_idx) {
         .func_aliases = repl_func_alias_view(),
         .max_call_depth = MAX_FLATTEN_CALL_DEPTH,
         .visit_budget = MAX_FLATTEN_VISIT_BUDGET,
-        .expr_cache = flatten_live_expr_cache()
+        .expr_cache = flatten_live_expr_cache(),
+        .flat_call_frame_idx = flat_program->call_frame_idx,
+        .call_frames = flat_program->call_frames,
+        .call_frame_capacity = MAX_CALL_FRAMES,
+        .call_frame_args = flat_program->call_frame_args,
+        .call_frame_arg_capacity = MAX_CALL_FRAME_ARGS
     };
     ReplFlattenResult result;
 
@@ -2064,6 +2168,9 @@ void repl_flatten_commands(int edit_line_idx) {
         result.required_flat_capacity > flat_program->capacity
             ? result.required_flat_capacity
             : 0;
+    flat_program->call_frame_count = result.call_frame_count;
+    flat_program->call_frame_arg_count = result.call_frame_arg_count;
+    flat_program->call_frame_overflow = result.call_frame_overflow;
     repl_state_flat_program_set_user_lighting_enabled(
         result.user_lighting_enabled);
     /* Refresh the dependency-routing state: a full flatten re-derives both
@@ -2073,8 +2180,58 @@ void repl_flatten_commands(int edit_line_idx) {
                                           result.rebake_ok);
     if (result.status[0])
         repl_set_status_error(result.status);
+    else if (result.ok && result.call_frame_overflow)
+        repl_set_status("Call-frame table overflow; PATH uses two-rung fallback");
 
     repl_flatten_refresh_current_block_highlight(edit_line_idx);
+}
+
+int repl_call_frame_walk_chain(FlatProgramView view, int frame,
+                               int *out_frames, int max_out) {
+    int chain[MAX_FLATTEN_CALL_DEPTH];
+    int n = 0;
+    int total;
+    int i;
+
+    if (!out_frames || max_out <= 0)
+        return 0;
+    while (repl_call_frame_ok(&view, frame) && n < MAX_FLATTEN_CALL_DEPTH) {
+        chain[n++] = frame;
+        frame = view.call_frames[frame].parent;
+    }
+    total = n;
+    if (n > max_out)
+        n = max_out;
+    /* chain is innermost-first; write outermost-first (drop the leaf if
+     * the caller passed a short buffer). */
+    for (i = 0; i < n; i++)
+        out_frames[i] = chain[total - 1 - i];
+    return n;
+}
+
+int repl_call_frame_derive_prov(FlatProgramView view, int frame,
+                                ReplCallFrameDerivedProv *out) {
+    int chain[MAX_FLATTEN_CALL_DEPTH];
+    unsigned int mask = 0;
+    int n;
+    int i;
+
+    if (!out || !repl_call_frame_ok(&view, frame))
+        return 0;
+    n = repl_call_frame_walk_chain(view, frame, chain, MAX_FLATTEN_CALL_DEPTH);
+    if (n <= 0)
+        return 0;
+
+    for (i = 0; i < n; i++) {
+        int slot = view.call_frames[chain[i]].func_slot;
+        if (slot >= 0 && slot < FUNC_SCOPE_MASK_BITS)
+            mask |= (1u << slot);
+    }
+    out->call_src_cmd_idx = view.call_frames[frame].call_src_cmd_idx;
+    out->root_call_src_cmd_idx = view.call_frames[chain[0]].call_src_cmd_idx;
+    out->call_depth = view.call_frames[frame].depth;
+    out->func_scope_mask = mask;
+    return 1;
 }
 
 static ReplFlatRefreshKind flatten_refresh_live(int edit_line_idx,

@@ -44,6 +44,7 @@ _gl_repl() {
         '--dump-code[print the loaded program and exit]' \
         '--dump-flat[print the flattened program and exit]' \
         '--flat-histogram[print flat-command statistics and exit]' \
+        '--call-tree[print the interned call-frame tree and exit]' \
         '--dump-state-layout[print the state layout and exit]' \
         '--detailed-prof[enable detailed profiling sections]' \
         '*:scene file or workspace dir:_files -g "*.(c|glr)"'

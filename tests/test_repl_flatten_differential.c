@@ -48,6 +48,9 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 typedef struct {
     GLCmd             cmds[MAX_FLAT_COMMANDS];
     FlatCmdLocalVars  locals[MAX_FLAT_COMMANDS];
+    int               call_frame_idx[MAX_FLAT_COMMANDS];
+    ReplCallFrame     call_frames[MAX_CALL_FRAMES];
+    float             call_frame_args[MAX_CALL_FRAME_ARGS];
     ReplFlattenResult result;
     float             predef[MAX_PREDEF_VARS];
     float             scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
@@ -82,6 +85,9 @@ static void flatten_into(FlattenRun *run, int force_reparse, int use_cache) {
 
     memset(run->cmds, 0, sizeof(run->cmds));
     memset(run->locals, 0, sizeof(run->locals));
+    memset(run->call_frame_idx, 0xFF, sizeof(run->call_frame_idx));
+    memset(run->call_frames, 0, sizeof(run->call_frames));
+    memset(run->call_frame_args, 0, sizeof(run->call_frame_args));
     memset(&run->result, 0, sizeof(run->result));
 
     opts = (ReplFlattenOptions){
@@ -96,6 +102,11 @@ static void flatten_into(FlattenRun *run, int force_reparse, int use_cache) {
         .visit_budget     = 0,
         .force_reparse    = force_reparse,
         .expr_cache       = use_cache ? repl_expr_cache_live() : NULL,
+        .flat_call_frame_idx = run->call_frame_idx,
+        .call_frames = run->call_frames,
+        .call_frame_capacity = MAX_CALL_FRAMES,
+        .call_frame_args = run->call_frame_args,
+        .call_frame_arg_capacity = MAX_CALL_FRAME_ARGS,
     };
     repl_flatten_program(&opts, &run->result);
 
@@ -207,6 +218,49 @@ static void compare_runs(const char *name, float t, const char *tag,
              "%s @ t=%g [%s]: local snapshots identical (first diff)",
              name, (double)t, tag);
     TEST_ASSERT_INT(&g_harness, label, mismatch_locals, -1);
+
+    snprintf(label, sizeof(label), "%s @ t=%g [%s]: call-frame count",
+             name, (double)t, tag);
+    TEST_ASSERT_INT(&g_harness, label, a->result.call_frame_count,
+                    b->result.call_frame_count);
+    snprintf(label, sizeof(label), "%s @ t=%g [%s]: call-frame arg count",
+             name, (double)t, tag);
+    TEST_ASSERT_INT(&g_harness, label, a->result.call_frame_arg_count,
+                    b->result.call_frame_arg_count);
+    snprintf(label, sizeof(label), "%s @ t=%g [%s]: call-frame overflow",
+             name, (double)t, tag);
+    TEST_ASSERT_INT(&g_harness, label, a->result.call_frame_overflow,
+                    b->result.call_frame_overflow);
+    if (a->result.call_frame_count == b->result.call_frame_count &&
+        a->result.call_frame_count > 0) {
+        snprintf(label, sizeof(label),
+                 "%s @ t=%g [%s]: call-frame table identical",
+                 name, (double)t, tag);
+        TEST_ASSERT_INT(&g_harness, label,
+                        memcmp(a->call_frames, b->call_frames,
+                               (size_t)a->result.call_frame_count *
+                               sizeof(ReplCallFrame)) == 0, 1);
+    }
+    if (a->result.call_frame_arg_count == b->result.call_frame_arg_count &&
+        a->result.call_frame_arg_count > 0) {
+        snprintf(label, sizeof(label),
+                 "%s @ t=%g [%s]: call-frame args identical",
+                 name, (double)t, tag);
+        TEST_ASSERT_INT(&g_harness, label,
+                        memcmp(a->call_frame_args, b->call_frame_args,
+                               (size_t)a->result.call_frame_arg_count *
+                               sizeof(float)) == 0, 1);
+    }
+    if (a->result.flat_cmd_count == b->result.flat_cmd_count &&
+        a->result.flat_cmd_count > 0) {
+        snprintf(label, sizeof(label),
+                 "%s @ t=%g [%s]: call-frame idx identical",
+                 name, (double)t, tag);
+        TEST_ASSERT_INT(&g_harness, label,
+                        memcmp(a->call_frame_idx, b->call_frame_idx,
+                               (size_t)a->result.flat_cmd_count *
+                               sizeof(int)) == 0, 1);
+    }
 
     snprintf(label, sizeof(label), "%s @ t=%g [%s]: post-flatten predef state",
              name, (double)t, tag);

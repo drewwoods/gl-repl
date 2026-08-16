@@ -29,6 +29,34 @@
 #include "source_document.h"  /* SourceTextView */
 #include "config.h"           /* REPL_DIAG_TEXT_MAX */
 
+#ifndef MAX_FLATTEN_CALL_DEPTH
+#define MAX_FLATTEN_CALL_DEPTH 64
+#endif
+
+/* Soft intern caps. A program that stays inside the visit budget can still
+ * exceed any fixed frame bound, so overflow latches and later commands
+ * carry REPL_CALL_FRAME_NONE rather than failing the flatten. */
+#ifndef MAX_CALL_FRAMES
+#define MAX_CALL_FRAMES 16384
+#endif
+#ifndef MAX_CALL_FRAME_ARGS
+#define MAX_CALL_FRAME_ARGS 65536
+#endif
+
+/* No interned frame: top-level command, or a call after the table latched. */
+#define REPL_CALL_FRAME_NONE (-1)
+
+/* Topology half of one dynamic invocation. Arguments live in the parallel
+ * arena (arg_offset / arg_count). 8 ints, 32 B. */
+typedef struct {
+    int parent;             /* enclosing frame, REPL_CALL_FRAME_NONE at top */
+    int call_src_cmd_idx;   /* the funcN(...) row that opened this frame */
+    int func_slot;          /* 0..REPL_FUNC_SLOT_COUNT-1 */
+    int depth;              /* == parent->depth + 1 */
+    int flat_begin, flat_end;   /* the frame's contiguous subtree range */
+    int arg_offset, arg_count;  /* window into FlatProgramView.call_frame_args */
+} ReplCallFrame;
+
 /* Local variable snapshot for a single flat command. Captured when the
  * command is emitted (e.g., loop counter value, function parameter binding).
  * Not read by the executor (which consumes baked args); consumers that need
@@ -52,15 +80,53 @@ typedef struct {
 } FlatCmdLocalVars;
 
 /* Read-only view over an expanded command stream. The live view points at
- * g_flat_cmds[] and g_flat_local_vars[]; tests and replay tools can flatten
+ * the arrays in ReplFlatProgramState; tests and replay tools can flatten
  * into temporary buffers and pass a view over them without changing the
- * executor's behavior. */
+ * executor's behavior. Frame-table pointers may be NULL when the caller
+ * flattened without an intern buffer; then every command is unindexed. */
 typedef struct {
     const GLCmd      *cmds;
     const FlatCmdLocalVars *local_vars;
     int               cmd_count;
     int               overflow_cmd_count; /* exact required count after overflow */
+    const int            *call_frame_idx;     /* parallel to cmds, or NULL */
+    const ReplCallFrame  *call_frames;
+    int                   call_frame_count;
+    const float          *call_frame_args;
+    int                   call_frame_arg_count;
+    int                   call_frame_overflow; /* latch: later calls unindexed */
 } FlatProgramView;
+
+static inline int repl_call_frame_ok(const FlatProgramView *view, int frame) {
+    return view && view->call_frames &&
+           frame >= 0 && frame < view->call_frame_count;
+}
+
+static inline int repl_flat_cmd_call_frame(const FlatProgramView *view,
+                                           int flat_idx) {
+    if (!view || !view->call_frame_idx ||
+        flat_idx < 0 || flat_idx >= view->cmd_count)
+        return REPL_CALL_FRAME_NONE;
+    return view->call_frame_idx[flat_idx];
+}
+
+/* Walk parent links outermost-first. Returns the number of frames written
+ * (capped at max_out). 0 if `frame` is unindexed. */
+int repl_call_frame_walk_chain(FlatProgramView view, int frame,
+                               int *out_frames, int max_out);
+
+/* Re-derive the four legacy provenance fields from an interned chain.
+ * Returns 1 on success. Indexed frames only - do not call on
+ * REPL_CALL_FRAME_NONE (the overflow fallback is the stored fields). */
+typedef struct {
+    int          call_src_cmd_idx;
+    int          root_call_src_cmd_idx;
+    int          call_depth;
+    unsigned int func_scope_mask;
+} ReplCallFrameDerivedProv;
+
+int repl_call_frame_derive_prov(FlatProgramView view, int frame,
+                                ReplCallFrameDerivedProv *out);
 
 typedef struct {
     int          edit_line_idx;
@@ -102,6 +168,16 @@ typedef struct {
      * sink) as they are first visited; FAILED lines stay on the text path
      * until the next source-dirty invalidation. */
     ReplExprCache    *expr_cache;
+    /* Optional call-frame intern. NULL / zero capacity skips interning
+     * (every written call_frame_idx slot is REPL_CALL_FRAME_NONE). The
+     * live wrapper always supplies the ReplFlatProgramState arrays. A
+     * short table or arena latches overflow; flatten itself still
+     * succeeds. */
+    int              *flat_call_frame_idx;   /* parallel to flat_cmds */
+    ReplCallFrame    *call_frames;
+    int               call_frame_capacity;
+    float            *call_frame_args;
+    int               call_frame_arg_capacity;
 } ReplFlattenOptions;
 
 /* Result: whether flattening succeeded, how many commands were generated,
@@ -131,6 +207,9 @@ typedef struct {
     ReplExprDepMask value_dep_mask;
     int  rebake_ok;
     char status[REPL_DIAG_TEXT_MAX];     /* error or informational message */
+    int  call_frame_count;
+    int  call_frame_arg_count;
+    int  call_frame_overflow;
 } ReplFlattenResult;
 
 
@@ -153,8 +232,9 @@ int repl_flat_clears_stencil(const GLCmd *flat_cmds, int flat_count);
  * recomputed from each command's compiled programs under its frozen local
  * snapshot, and assignments (scalar + scratch) are re-applied in stream
  * order so later reads see them - the same threading a full flatten
- * performs. Topology, provenance, flags, local snapshots, and lighting
- * classification are never touched; that is what makes it valid only for
+ * performs. Topology, provenance, flags, local snapshots, call-frame
+ * intern, and lighting classification are never touched; that is what
+ * makes it valid only for
  * value-routed changes (args_dirty_mask): any structural root change must
  * take repl_flatten_program instead. Compiled-only by design - a needed
  * program that is missing (line not READY) fails the walk, it never falls

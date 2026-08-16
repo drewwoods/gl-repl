@@ -1,6 +1,12 @@
 ## Call-Frame Provenance - debugging deep call chains and recursion
 
-## Status - NOT STARTED (exploration, revised after design review)
+## Status - IN PROGRESS (Stage 1)
+
+Revision note, performance. After two design-review rounds the core
+contract is settled; this pass adds an explicit `make bench` gate so the
+flatten-hot intern does not ship on a hunch. Interning is O(1) per call
+plus an arena append and must not add work to the non-call path - the
+benchmark is how that claim is checked, not a comment.
 
 Revision note, two review rounds. Round 1 rejected retiring the existing
 provenance fields, storing the frame index on `GLCmd`, a fixed 16-argument
@@ -545,6 +551,10 @@ that each step is verifiable before the next depends on it:
   identity test correctly declining to match unindexed commands, a function
   with 17+ parameters round-tripping through the arena, a full flatten at an
   unchanged replay PC, and middle-elision at depth > 8.
+- **Stage 3b - `make bench`.** After Stage 1 (and again after Stage 2 if it
+  touches the flatten or annotation-prepare path), run `make bench` and
+  compare the flatten / rebake / replay rows against the pre-change
+  baseline. See "Performance verification" below. A silent skip is a miss.
 - **Stage 4 - anything from "Later surfaces", by demand, one at a time.**
 
 Depth tinting (later surface 1) is independent of all of this and can be done
@@ -553,6 +563,40 @@ here.
 
 Do **not** start at Stage 4. Every one of those is a UI decision that is
 cheaper to make after living with the PATH row for a while.
+
+### Performance verification
+
+Flatten is hot: the live path rebuilds the flat program every frame when
+`t` or a structural root moves, and accumulation time-blur multiplies that
+by the sample count. The intern is specified as O(1) per `flatten_call`
+plus an arena `memcpy` of the argument run, and as **zero extra work on
+the non-call path** beyond one `int` write next to the existing local-var
+snapshot.
+
+That is a measurable claim. After the frame table lands, and again after
+the PATH row if `replay_annotations_prepare()` grows:
+
+```
+make bench
+```
+
+Compare, at minimum:
+
+| Bench row | What it answers |
+|---|---|
+| flatten / full-flatten of a no-`funcN` example | Non-call path must stay noise-level identical. A few percent here is a bug, not a cost of the table. |
+| flatten of a call-heavy example (or the deep-chain / Sierpinski scenes under `--examples-dir`) | Call-path overhead. A small constant per invocation is expected; a super-linear jump is not. |
+| rebake | Must be unchanged: rebake does not walk or rewrite the frame table. |
+| replay / replay-annotation rows | Stage 2 only. Re-resolving a ≤64-rung chain per `prepare()` should be invisible next to the existing snapshot walk. |
+
+Record the before/after numbers in the Stage 1 (and Stage 3) commit
+message, or as a short note under this heading once the numbers exist.
+Do not treat "it should be cheap" as the verification.
+
+A scene with no `funcN` calls is the load-bearing control: if that row
+moves, the `int` write in `flatten_append_cmd` is not the cause - look
+for an accidental memset of the 16k-frame table, a per-command walk, or
+a `FlatProgramView` copy that started dragging the arena.
 
 ### Risks and invariants to hold
 

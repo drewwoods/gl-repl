@@ -16,7 +16,7 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--tutorial name|n]
         [--export-ply out.ply [--export-ply-srgb]]
         [--accum | --no-accum]
         [--assets dir] [--examples-dir dir] [--no-audio] [--watch]
-        [--dump-code] [--dump-flat] [--flat-histogram]
+        [--dump-code] [--dump-flat] [--flat-histogram] [--call-tree]
         [--dump-state-layout] [--detailed-prof]
         [--list-examples] [--list-tutorials] [--list-tours] [--list-config]
         [--lint-scenes dir]
@@ -51,8 +51,9 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--tutorial name|n]
 | `--no-audio` | Skip audio initialization entirely (also isolates startup stalls). |
 | `--watch` | Follow the positional file: whenever an external editor saves it, gl-repl re-reads it and the scene updates. See [Bring your own editor](#bring-your-own-editor). Requires a positional file - `--watch` on its own is an error. |
 | `--dump-code` | Load the session and print the editor buffer to stdout, then exit. |
-| `--dump-flat` | Load the session and print the flattened command list, then exit. |
+| `--dump-flat` | Load the session and print the flattened command list, then exit. Each row now includes `frame=N` (or `frame=-1` at top level / after table overflow). |
 | `--flat-histogram` | Print per-function / per-line flat-command budget costs. Honors `--example`. |
+| `--call-tree` | Print the interned per-invocation call tree (function name, captured arguments, source site, flat range). Honors `--example`. A `NOTE` line appears if the table overflowed. |
 | `--dump-state-layout` | Print the `ReplRuntimeState` field layout and exit. |
 | `--detailed-prof` | Add fine-grained init-trace phases (see [Diagnostics](#diagnostics)). Also via `GLR_DETAILED_PROF`. |
 

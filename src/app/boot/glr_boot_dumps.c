@@ -45,10 +45,11 @@ int glr_boot_run_dumps(const GlrCliOptions *opts, FILE *out) {
     FILE *dst = out ? out : stdout;
 
     if (!(opts->dump_code || opts->dump_flat || opts->dump_flat_histogram ||
-          opts->dump_state_layout))
+          opts->dump_call_tree || opts->dump_state_layout))
         return 0;
 
-    if (opts->dump_code || opts->dump_flat || opts->dump_flat_histogram)
+    if (opts->dump_code || opts->dump_flat || opts->dump_flat_histogram ||
+        opts->dump_call_tree)
         glr_boot_load_session(opts);
     if (opts->dump_code)
         glr_debug_dump_current_editor(dst);
@@ -56,6 +57,8 @@ int glr_boot_run_dumps(const GlrCliOptions *opts, FILE *out) {
         glr_debug_dump_current_flat_commands_sync(dst);
     if (opts->dump_flat_histogram)
         glr_debug_dump_current_flat_histogram(dst);
+    if (opts->dump_call_tree)
+        glr_debug_dump_current_call_tree(dst);
     if (opts->dump_state_layout)
         glr_debug_dump_runtime_state_layout(dst);
     return 1;

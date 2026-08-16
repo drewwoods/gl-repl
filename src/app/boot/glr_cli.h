@@ -44,6 +44,7 @@ typedef struct GlrCliOptions {
     int dump_code;                 /* --dump-code                               */
     int dump_flat;                 /* --dump-flat                               */
     int dump_flat_histogram;       /* --flat-histogram                          */
+    int dump_call_tree;            /* --call-tree                               */
     int dump_state_layout;         /* --dump-state-layout                       */
 
     int no_audio;                  /* --no-audio                                */

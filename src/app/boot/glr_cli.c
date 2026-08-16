@@ -36,6 +36,8 @@ static void print_usage(const char *prog) {
             "  --dump-flat  Load the session and print flattened commands\n"
             "  --flat-histogram  Load the session and print per-function /\n"
             "               per-line flat-command costs (budget breakdown)\n"
+            "  --call-tree  Load the session and print the interned call-frame\n"
+            "               tree (per-invocation ranges and arguments)\n"
             "  --dump-state-layout  Print ReplRuntimeState field layout\n"
             "  --detailed-prof  Emit finer-grained startup init traces\n"
             "               (also via GLR_DETAILED_PROF env var)\n"
@@ -332,6 +334,8 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
             out->dump_flat = 1;
         else if (strcmp(argv[i], "--flat-histogram") == 0)
             out->dump_flat_histogram = 1;
+        else if (strcmp(argv[i], "--call-tree") == 0)
+            out->dump_call_tree = 1;
         else if (strcmp(argv[i], "--dump-state-layout") == 0)
             out->dump_state_layout = 1;
         else if (strcmp(argv[i], "--detailed-prof") == 0)

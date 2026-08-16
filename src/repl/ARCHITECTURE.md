@@ -279,6 +279,16 @@ line that produced it:
 - `call_depth` - every call frame counted (so recursion depth *is*
   visible, unlike the mask).
 
+Those four fields name the first rung, the last rung, and the number of
+rungs. They cannot identify a sibling invocation from the same site, and
+they do not store ancestor argument values. That identity lives in a
+flat-only interned table ([`ReplCallFrame`](flatten.h), argument arena,
+parallel `call_frame_idx[]`) rebuilt by `flatten_call` and left untouched
+by in-place rebake. Capacity is a soft limit: past `MAX_CALL_FRAMES` /
+`MAX_CALL_FRAME_ARGS` later commands carry `REPL_CALL_FRAME_NONE` and
+the four fields above remain the overflow fallback. `--dump-flat` prints
+`frame=N`; `--call-tree` prints the interned tree.
+
 [`flatten_query.c`](flatten_query.c) reads these to answer "how much of the flat budget is
 spent on the line under the cursor?" (a loop body counts once per
 iteration; a function counts across all call sites). `--flat-histogram`
@@ -725,6 +735,10 @@ Expansion is recursive and **bounded**:
 On overflow it returns `ok = 0` with a status message and leaves the
 prior flat program in place. Every emitted flat command gets its
 provenance (§3.3) and a [`FlatCmdLocalVars`](flatten.h#L43) snapshot (§3.4).
+Each `flatten_call` also interns a [`ReplCallFrame`](flatten.h) (topology
+plus a variable-length argument run) when the caller supplied the table;
+that intern is O(1) plus an arena append and is skipped entirely when no
+table is provided.
 
 #### Expression paths and cache lifecycle
 

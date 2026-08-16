@@ -86,6 +86,7 @@ static void test_defaults(void) {
     ASSERT_INT("dump-code off", o.dump_code, 0);
     ASSERT_INT("dump-flat off", o.dump_flat, 0);
     ASSERT_INT("flat-histogram off", o.dump_flat_histogram, 0);
+    ASSERT_INT("call-tree off", o.dump_call_tree, 0);
     ASSERT_INT("dump-state-layout off", o.dump_state_layout, 0);
     ASSERT_INT("audio on by default", o.no_audio, 0);
     /* Neither --accum nor --no-accum: the renderer probe in glr_ctrl decides. */
@@ -166,6 +167,10 @@ static void test_dump_flags(void) {
     char *av4[] = { "gl-repl", "--dump-state-layout", NULL };
     ASSERT_INT("--dump-state-layout proceeds", parse_v(&o, &code, av4), 1);
     ASSERT_INT("--dump-state-layout sets flag", o.dump_state_layout, 1);
+
+    char *av5[] = { "gl-repl", "--call-tree", NULL };
+    ASSERT_INT("--call-tree proceeds", parse_v(&o, &code, av5), 1);
+    ASSERT_INT("--call-tree sets flag", o.dump_call_tree, 1);
 }
 
 static void test_value_flags(void) {
@@ -515,6 +520,14 @@ static void test_dump_dispatch(void) {
     ASSERT_INT("--flat-histogram dispatches",
                run_dumps_capture(&o, buf, sizeof(buf)), 1);
     o.dump_flat_histogram = 0;
+
+    /* --call-tree */
+    o.dump_call_tree = 1;
+    ASSERT_INT("--call-tree dispatches",
+               run_dumps_capture(&o, buf, sizeof(buf)), 1);
+    ASSERT_TRUE("call-tree dump written",
+                strstr(buf, "REPL Call Tree") != NULL);
+    o.dump_call_tree = 0;
 
     /* --example with dump flag */
     o.dump_code = 1;

@@ -77,6 +77,16 @@ typedef struct {
     ReplExprDepMask  value_dep_mask;
     ReplExprDepMask  args_dirty_mask;
     int              rebake_ok;
+    /* Flat-only call-frame intern. Parallel to cmds[]: call_frame_idx[i]
+     * is REPL_CALL_FRAME_NONE for top-level commands and for every
+     * command after the overflow latch. Topology + argument arena are
+     * rebuilt by a full flatten and left untouched by in-place rebake. */
+    int              call_frame_idx[MAX_FLAT_COMMANDS];
+    ReplCallFrame    call_frames[MAX_CALL_FRAMES];
+    int              call_frame_count;
+    float            call_frame_args[MAX_CALL_FRAME_ARGS];
+    int              call_frame_arg_count;
+    int              call_frame_overflow;
 } ReplFlatProgramState;
 
 /* Predefined-variable runtime: named float table, scratch arrays, optional

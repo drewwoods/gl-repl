@@ -59,10 +59,18 @@ static const CapRow rows[] = {
     /* Flat-program capacity (split from the source cap 2026-07-10).
      * One live array pair - no undo/scene fan-out. */
     { "MAX_FLAT_COMMANDS", MAX_FLAT_COMMANDS,
-      sizeof(GLCmd) + sizeof(FlatCmdLocalVars)
+      sizeof(GLCmd) + sizeof(FlatCmdLocalVars) + sizeof(int)
         + sizeof(unsigned) + sizeof(int) + sizeof(float)
           /* VertexLabelSticky (file-private to edit_overlays.c) */,
-      "ReplFlatProgramState.cmds + .local_vars + vertex-label sticky table" },
+      "ReplFlatProgramState.cmds + .local_vars + .call_frame_idx + vertex-label sticky table" },
+
+    { "MAX_CALL_FRAMES", MAX_CALL_FRAMES,
+      sizeof(ReplCallFrame),
+      "ReplFlatProgramState.call_frames[] - interned invocation topology" },
+
+    { "MAX_CALL_FRAME_ARGS", MAX_CALL_FRAME_ARGS,
+      sizeof(float),
+      "ReplFlatProgramState.call_frame_args[] - per-frame argument arena" },
 
     /* Per-line text width. Multiplies into every full-document buffer. */
     { "MAX_LINE_LEN", MAX_LINE_LEN,

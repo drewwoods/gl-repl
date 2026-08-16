@@ -1,7 +1,8 @@
 /*
  * glr_boot_dumps.h - CLI dump/export-and-exit boot paths.
  *
- * The `--dump-*` / `--flat-histogram` / `--export-c` / `--export-glr` flags
+ * The `--dump-*` / `--flat-histogram` / `--call-tree` / `--export-c` /
+ * `--export-glr` flags
  * select a GL-free bootstrap that runs a diagnostic dump to stdout (or writes
  * the exported scene file) and exits instead of opening a window. This is a
  * boot-band concern:

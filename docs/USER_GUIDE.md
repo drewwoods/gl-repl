@@ -1801,7 +1801,7 @@ and the optional music pack are in
 ## Command-Line Options
 
 This is the common, day-to-day set. The complete flag reference, including
-`--examples-dir`, `--lint-scenes`, `--dump-flat`, and every `GLR_*`
+`--examples-dir`, `--lint-scenes`, `--dump-flat`, `--call-tree`, and every `GLR_*`
 environment variable, is in
 [`ADVANCED_USAGE.md`](ADVANCED_USAGE.md#options).
 
@@ -1826,8 +1826,10 @@ environment variable, is in
 --no-accum             disable the accumulation buffer (AA + motion blur)
 --accum                force it on (default: off on software-accum renderers)
 --dump-code            print the loaded buffer to stdout
+--dump-flat            print the flattened command list (includes frame=N)
 --flat-histogram       print per-function / per-line flat-command costs
                        (where the 8192 budget goes; works with --example)
+--call-tree            print the interned per-invocation call tree
 --detailed-prof        verbose startup timing trace (also GLR_DETAILED_PROF=1)
 -h, --help             usage
 ```

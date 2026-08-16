@@ -30,7 +30,8 @@ void repl_state_capture(ReplRuntimeState *snapshot);
 void repl_state_restore(const ReplRuntimeState *snapshot);
 
 /* Lean checkpoint of the REPL-owned slices EXCLUDING the derived flat
- * program. The flat program (ReplFlatProgramState, ~6.8 MB) is rebuilt from
+ * program. The flat program (ReplFlatProgramState, ~10.5 MB including the
+ * call-frame table) is rebuilt from
  * the document on the next frame, so it is deliberately not stored. Used by
  * the tour-baseline snapshot (src/app/glr_tour_snapshot.c), which pairs this
  * with the editor, the scene-slot capture (repl_scenes_snapshot_capture()),

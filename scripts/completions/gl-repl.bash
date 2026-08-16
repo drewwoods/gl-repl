@@ -10,7 +10,7 @@
 # Kept to bash 3.2 syntax (the /bin/bash macOS ships).
 
 _gl_repl_opts='-h --help --accum --no-accum --no-audio --dump-code --dump-flat
---flat-histogram --dump-state-layout --detailed-prof --export-c --export-glr
+--flat-histogram --call-tree --dump-state-layout --detailed-prof --export-c --export-glr
 --export-ply --export-ply-srgb --assets --example --examples-dir --time
 --window --watch --tutorial --tour --list-examples --list-tutorials --list-tours --list-config --lint-scenes'
 

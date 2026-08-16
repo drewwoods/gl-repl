@@ -10,6 +10,7 @@
 #include "repl/export.h"
 #include "repl/command_spec.h"
 #include "repl/eval.h"       /* repl_func_alias_get, REPL_FUNC_SLOT_COUNT */
+#include "repl/text_helpers.h" /* parse_repl_func_signature */
 #include "repl/pipeline.h"
 #include "repl/state.h"
 
@@ -113,16 +114,21 @@ void glr_debug_dump_flat_commands_sync(FILE *out, SourceTextView text) {
 
     fprintf(dst, "=== REPL Flattened Commands Dump ===\n");
     fprintf(dst, "num_flat_cmds=%d\n", num_flat_cmds);
+    fprintf(dst, "call_frames=%d/%d args=%d/%d overflow=%d\n",
+            flat_program.call_frame_count, MAX_CALL_FRAMES,
+            flat_program.call_frame_arg_count, MAX_CALL_FRAME_ARGS,
+            flat_program.call_frame_overflow);
 
     for (int flat_idx = 0; flat_idx < num_flat_cmds; flat_idx++) {
         const GLCmd *cmd = &flat_cmds[flat_idx];
         const char *line_text = source_text_line(text, cmd->src_cmd_idx);
         fprintf(dst,
-                "%4d | %-22s | valid=%d has_vars=%d src_idx=%d call_src_idx=%d root_call_src_idx=%d depth=%d var_idx=%d func_scope=0x%08x | ",
+                "%4d | %-22s | valid=%d has_vars=%d src_idx=%d call_src_idx=%d root_call_src_idx=%d depth=%d frame=%d var_idx=%d func_scope=0x%08x | ",
                 flat_idx, repl_cmd_type_name(cmd->type), cmd->valid,
                 cmd->has_vars, cmd->src_cmd_idx, cmd->call_src_cmd_idx,
-                cmd->root_call_src_cmd_idx, cmd->call_depth, cmd->var_idx,
-                cmd->func_scope_mask);
+                cmd->root_call_src_cmd_idx, cmd->call_depth,
+                repl_flat_cmd_call_frame(&flat_program, flat_idx),
+                cmd->var_idx, cmd->func_scope_mask);
         debug_dump_flat_args(dst, cmd);
         fprintf(dst, " | %s\n", line_text ? line_text : "");
     }
@@ -215,6 +221,100 @@ void glr_debug_dump_flat_histogram(FILE *out, SourceTextView text) {
     fflush(dst);
 }
 
+static const char *debug_call_frame_func_name(int func_slot, char *buf, int buf_sz) {
+    const char *alias = repl_func_alias_get(func_slot);
+
+    if (alias && alias[0])
+        return alias;
+    snprintf(buf, (size_t)buf_sz, "func%d", func_slot);
+    return buf;
+}
+
+static void debug_dump_call_frame_line(FILE *dst, FlatProgramView view,
+                                       SourceTextView text, int frame,
+                                       int indent) {
+    const ReplCallFrame *f;
+    char name_buf[REPL_FUNC_NAME_MAX];
+    const char *name;
+    char param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
+    int param_count = 0;
+    int def_fn = -1;
+    int a;
+
+    if (!repl_call_frame_ok(&view, frame))
+        return;
+    f = &view.call_frames[frame];
+    name = debug_call_frame_func_name(f->func_slot, name_buf, (int)sizeof(name_buf));
+
+    for (int i = 0; i < indent; i++)
+        fputc(' ', dst);
+    fprintf(dst, "[%d] %s(", frame, name);
+
+    /* Names are derived from the current CMD_FUNC_DEF, not stored. */
+    {
+        const GLCmd *doc = repl_state_document_cmds();
+        int doc_count = repl_state_document_count();
+        for (int i = 0; i < doc_count; i++) {
+            if (doc[i].type == CMD_FUNC_DEF &&
+                (int)doc[i].args[0] == f->func_slot) {
+                const char *line = source_text_line(text, i);
+                parse_repl_func_signature(line ? line : "",
+                                          &def_fn, param_names,
+                                          MAX_EXPR_VARS, &param_count);
+                break;
+            }
+        }
+    }
+    for (a = 0; a < f->arg_count; a++) {
+        float val = 0.0f;
+        if (view.call_frame_args &&
+            f->arg_offset + a >= 0 &&
+            f->arg_offset + a < view.call_frame_arg_count)
+            val = view.call_frame_args[f->arg_offset + a];
+        if (a < param_count && param_names[a][0])
+            fprintf(dst, "%s%s=%g", a ? ", " : "", param_names[a], (double)val);
+        else
+            fprintf(dst, "%s%g", a ? ", " : "", (double)val);
+    }
+    fprintf(dst, ")  site=%d  flat=[%d, %d)  depth=%d\n",
+            f->call_src_cmd_idx, f->flat_begin, f->flat_end, f->depth);
+}
+
+static void debug_dump_call_frame_tree(FILE *dst, FlatProgramView view,
+                                       SourceTextView text, int parent,
+                                       int indent) {
+    int frame;
+
+    for (frame = 0; frame < view.call_frame_count; frame++) {
+        if (!repl_call_frame_ok(&view, frame))
+            continue;
+        if (view.call_frames[frame].parent != parent)
+            continue;
+        debug_dump_call_frame_line(dst, view, text, frame, indent);
+        debug_dump_call_frame_tree(dst, view, text, frame, indent + 2);
+    }
+}
+
+void glr_debug_dump_call_tree(FILE *out, SourceTextView text) {
+    FILE *dst = out ? out : stdout;
+    FlatProgramView view;
+
+    repl_refresh_flat_program(editor_state_edit_line());
+    view = repl_state_flat_program_view();
+
+    fprintf(dst, "=== REPL Call Tree ===\n");
+    fprintf(dst, "frames: %d/%d  args: %d/%d\n",
+            view.call_frame_count, MAX_CALL_FRAMES,
+            view.call_frame_arg_count, MAX_CALL_FRAME_ARGS);
+    if (view.call_frame_overflow)
+        fprintf(dst,
+                "NOTE: call-frame table overflow; later invocations are unindexed\n");
+    debug_dump_call_frame_tree(dst, view, text, REPL_CALL_FRAME_NONE, 0);
+    fprintf(dst, "reconstructed frames: %d\n", view.call_frame_count);
+    fprintf(dst, "=== End REPL Call Tree ===\n");
+    fflush(dst);
+}
+
 void glr_debug_dump_current_editor(FILE *out) {
     glr_debug_dump_editor(out, source_document_view());
 }
@@ -225,6 +325,10 @@ void glr_debug_dump_current_flat_commands_sync(FILE *out) {
 
 void glr_debug_dump_current_flat_histogram(FILE *out) {
     glr_debug_dump_flat_histogram(out, source_document_view());
+}
+
+void glr_debug_dump_current_call_tree(FILE *out) {
+    glr_debug_dump_call_tree(out, source_document_view());
 }
 
 void glr_debug_dump_runtime_state_layout(FILE *out) {

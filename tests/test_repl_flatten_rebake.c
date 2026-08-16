@@ -46,10 +46,20 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 typedef struct {
     GLCmd             cmds[MAX_FLAT_COMMANDS];
     FlatCmdLocalVars  locals[MAX_FLAT_COMMANDS];
+    int               call_frame_idx[MAX_FLAT_COMMANDS];
+    ReplCallFrame     call_frames[MAX_CALL_FRAMES];
+    float             call_frame_args[MAX_CALL_FRAME_ARGS];
     ReplFlattenResult result;
 } RefRun;
 
 static RefRun g_ref;
+
+static ReplCallFrame g_frames_before[MAX_CALL_FRAMES];
+static float         g_args_before[MAX_CALL_FRAME_ARGS];
+static int           g_idx_before[MAX_FLAT_COMMANDS];
+static int           g_frames_before_count;
+static int           g_frames_before_arg_count;
+static int           g_frames_before_cmd_count;
 
 typedef struct {
     float predef[MAX_PREDEF_VARS];
@@ -77,9 +87,17 @@ static void full_flatten_into(RefRun *run) {
         .text             = source_document_view(),
         .func_aliases     = repl_func_alias_view(),
         .expr_cache       = repl_expr_cache_live(),
+        .flat_call_frame_idx = run->call_frame_idx,
+        .call_frames = run->call_frames,
+        .call_frame_capacity = MAX_CALL_FRAMES,
+        .call_frame_args = run->call_frame_args,
+        .call_frame_arg_capacity = MAX_CALL_FRAME_ARGS,
     };
     memset(run->cmds, 0, sizeof(run->cmds));
     memset(run->locals, 0, sizeof(run->locals));
+    memset(run->call_frame_idx, 0xFF, sizeof(run->call_frame_idx));
+    memset(run->call_frames, 0, sizeof(run->call_frames));
+    memset(run->call_frame_args, 0, sizeof(run->call_frame_args));
     repl_flatten_program(&opts, &run->result);
 }
 
@@ -209,6 +227,23 @@ static void check_rebake_matches_full(const char *name,
     repl_state_time_set(t0);
     repl_ensure_flat_program_with_live_vars(0);
 
+    /* Snapshot the interned frames. Rebake must leave them byte-identical. */
+    {
+        FlatProgramView pre = repl_state_flat_program_view();
+        g_frames_before_count = pre.call_frame_count;
+        g_frames_before_arg_count = pre.call_frame_arg_count;
+        g_frames_before_cmd_count = repl_state_flat_program_count();
+        if (g_frames_before_count > 0)
+            memcpy(g_frames_before, pre.call_frames,
+                   (size_t)g_frames_before_count * sizeof(ReplCallFrame));
+        if (g_frames_before_arg_count > 0)
+            memcpy(g_args_before, pre.call_frame_args,
+                   (size_t)g_frames_before_arg_count * sizeof(float));
+        if (g_frames_before_cmd_count > 0 && pre.call_frame_idx)
+            memcpy(g_idx_before, pre.call_frame_idx,
+                   (size_t)g_frames_before_cmd_count * sizeof(int));
+    }
+
     /* Change t. For a value-only scene this routes to args_dirty_mask; a
      * full re-flatten is NOT expected here. */
     repl_state_flat_program_clear_dirty();
@@ -226,6 +261,39 @@ static void check_rebake_matches_full(const char *name,
     snprintf(label, sizeof(label), "%s: rebake succeeds", name);
     TEST_ASSERT_INT(&g_harness, label, repl_refresh_flat_program(0),
                     REPL_FLAT_REFRESH_REBAKE);
+    {
+        FlatProgramView post = repl_state_flat_program_view();
+        snprintf(label, sizeof(label), "%s: rebake left frame count", name);
+        TEST_ASSERT_INT(&g_harness, label, post.call_frame_count,
+                        g_frames_before_count);
+        snprintf(label, sizeof(label), "%s: rebake left frame arg count", name);
+        TEST_ASSERT_INT(&g_harness, label, post.call_frame_arg_count,
+                        g_frames_before_arg_count);
+        if (g_frames_before_count > 0) {
+            snprintf(label, sizeof(label),
+                     "%s: rebake left frame table untouched", name);
+            TEST_ASSERT_INT(&g_harness, label,
+                            memcmp(post.call_frames, g_frames_before,
+                                   (size_t)g_frames_before_count *
+                                   sizeof(ReplCallFrame)) == 0, 1);
+        }
+        if (g_frames_before_arg_count > 0) {
+            snprintf(label, sizeof(label),
+                     "%s: rebake left frame args untouched", name);
+            TEST_ASSERT_INT(&g_harness, label,
+                            memcmp(post.call_frame_args, g_args_before,
+                                   (size_t)g_frames_before_arg_count *
+                                   sizeof(float)) == 0, 1);
+        }
+        if (g_frames_before_cmd_count > 0 && post.call_frame_idx) {
+            snprintf(label, sizeof(label),
+                     "%s: rebake left frame idx untouched", name);
+            TEST_ASSERT_INT(&g_harness, label,
+                            memcmp(post.call_frame_idx, g_idx_before,
+                                   (size_t)g_frames_before_cmd_count *
+                                   sizeof(int)) == 0, 1);
+        }
+    }
     snprintf(label, sizeof(label), "%s: rebake cleared args-dirty", name);
     TEST_ASSERT_INT(&g_harness, label,
                     (int)repl_state_flat_program_args_dirty_mask(), 0);
