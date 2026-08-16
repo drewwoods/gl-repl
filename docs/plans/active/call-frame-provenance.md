@@ -1,6 +1,6 @@
 ## Call-Frame Provenance - debugging deep call chains and recursion
 
-## Status - IN PROGRESS (Stage 1)
+## Status - IN PROGRESS (Stage 2)
 
 Revision note, performance. After two design-review rounds the core
 contract is settled; this pass adds an explicit `make bench` gate so the

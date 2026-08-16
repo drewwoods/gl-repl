@@ -326,8 +326,10 @@ recursion activates the same source loop more than once, the innermost entry
 wins.
 
 Replay associates an earlier assignment with the active invocation using
-stable flat-command provenance (`func_scope_mask`, `call_depth`, immediate and
-root call sites) plus nearest-earlier execution order. It must never compare
+the interned call-frame index when both commands are indexed, and the
+four legacy provenance fields (`func_scope_mask`, `call_depth`, immediate and
+root call sites) when either is `REPL_CALL_FRAME_NONE`. Temporal order
+still breaks remaining ties. It must never compare
 [`FlatCmdLocalVars`](flatten.h#L43) values for that match: those values are effective command
 state and therefore change after every local assignment within one invocation.
 

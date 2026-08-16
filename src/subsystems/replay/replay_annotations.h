@@ -26,6 +26,8 @@
 #define REPL_REPLAY_ANNOTATIONS_H
 
 #include "source_document.h"  /* caller-supplied SourceTextView */
+#include "repl/eval.h"        /* REPL_FUNC_NAME_MAX, REPL_PREDEF_NAME_MAX, MAX_EXPR_VARS */
+#include "repl/flatten.h"     /* MAX_FLATTEN_CALL_DEPTH */
 
 /* Per-row capacity. Callers reading the output struct should treat the
  * arrays as NUL-terminated within these bounds. Sized to match the
@@ -39,9 +41,40 @@
 #endif
 
 typedef enum {
+    REPL_REPLAY_ANNOTATION_KIND_PATH,   /* call-frame breadcrumb (Verbose) */
     REPL_REPLAY_ANNOTATION_KIND_SUBST,  /* variable-substituted source line */
     REPL_REPLAY_ANNOTATION_KIND_EVAL,   /* `glVertex3f(value, ...);` evaluated form */
 } ReplReplayAnnotationKind;
+
+/* Structured PATH payload. One per prepare(), published beside the
+ * virtual-line list. The UI formatter must not call back into REPL
+ * parsing: every name and value the row needs is here. v1 omits @line
+ * labels; call_src_cmd_idx is kept so that work needs no transport change. */
+#ifndef REPL_REPLAY_PATH_RUNG_MAX
+#define REPL_REPLAY_PATH_RUNG_MAX MAX_FLATTEN_CALL_DEPTH
+#endif
+
+typedef struct {
+    char  name[REPL_PREDEF_NAME_MAX];
+    float value;
+} ReplReplayPathLoop;
+
+typedef struct {
+    char  func_name[REPL_FUNC_NAME_MAX];
+    int   arg_count;
+    char  param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
+    float args[MAX_EXPR_VARS];
+    int   call_src_cmd_idx;
+} ReplReplayPathRung;
+
+typedef struct {
+    ReplReplayPathLoop loops[MAX_EXPR_VARS];
+    int                loop_count;
+    ReplReplayPathRung rungs[REPL_REPLAY_PATH_RUNG_MAX];
+    int                rung_count;
+    int                overflow; /* frame table latched; chain may be incomplete */
+    int                valid;    /* 1 when loops or rungs are present */
+} ReplReplayPathSnapshot;
 
 typedef struct {
     int                      after_line_idx;
@@ -50,15 +83,16 @@ typedef struct {
     char                     aux[REPL_REPLAY_ANNOTATION_AUX_MAX];  /* "" when unused */
 } ReplReplayAnnotation;
 
-/* At most SUBST + EVAL = 2 annotations per replay frame, anchored to
- * the source line currently under the program counter. */
+/* At most PATH + SUBST + EVAL = 3 annotations per replay frame, anchored
+ * to the source line currently under the program counter. */
 #ifndef REPL_REPLAY_ANNOTATION_MAX
-#define REPL_REPLAY_ANNOTATION_MAX 2
+#define REPL_REPLAY_ANNOTATION_MAX 3
 #endif
 
 typedef struct {
-    ReplReplayAnnotation items[REPL_REPLAY_ANNOTATION_MAX];
-    int                  count;
+    ReplReplayAnnotation     items[REPL_REPLAY_ANNOTATION_MAX];
+    int                      count;
+    ReplReplayPathSnapshot   path;  /* filled when a PATH row is present */
 } ReplReplayAnnotationOutput;
 
 /* Build the annotation list for the current replay frame.

@@ -1418,7 +1418,10 @@ value at that point.
 Two related config items: **Replay mode** (Polygon steps a primitive at a
 time, Vertex steps a vertex at a time) and **Replay expand**. **Expanded**
 annotates every line in place as a `//` comment. **Verbose** is the only mode
-that splits a source row, adding substituted and evaluated rows beneath it.
+that splits a source row, adding a call-path breadcrumb (how the focused
+vertex was reached: loop iterators and each `funcN` invocation's arguments)
+then substituted and evaluated rows beneath it. The breadcrumb is vertex
+replay only.
 
 ---
 

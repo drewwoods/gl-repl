@@ -714,6 +714,7 @@ int editor_state_virtual_lines_append(int after_line_idx,
     } else {
         vl->aux[0] = '\0';
     }
+    vl->path_idx = (style == VIRTUAL_STYLE_REPLAY_PATH) ? 0 : -1;
     return 1;
 }
 

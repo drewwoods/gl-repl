@@ -25,6 +25,7 @@
 #include "subsystems/color_picker/color_picker_state.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 #include "subsystems/replay/replay_state.h"
+#include "subsystems/replay/replay_annotations.h"
 #include "app/glr_pointer_script.h"          /* GlrTourPlaybackView */
 #include "ui/subsystems/variable_panel.h"   /* UiVariable / UiVariableList */
 #include "ui/support/assign_plot.h"        /* AssignPlotView / title cap */
@@ -213,6 +214,9 @@ typedef struct UiRenderSnapshot {
     const UiTransformerList *editor_transformers;
     const UiHighlightList   *editor_highlights;
     const UiVirtualLineList *editor_virtual_lines;
+    /* One PATH breadcrumb per frame. PATH virtual rows carry path_idx
+     * into this snapshot; the UI formatter reads only this. */
+    ReplReplayPathSnapshot   replay_path;
 
     /* Selection range materialized once so the per-row branch in the
      * code panel does not call back into clipboard helpers. */

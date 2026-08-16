@@ -106,6 +106,7 @@ typedef struct {
  * consume this list so a row that affects layout has exactly one source
  * of truth. */
 typedef enum {
+    VIRTUAL_STYLE_REPLAY_PATH,
     VIRTUAL_STYLE_REPLAY_SUBST,
     VIRTUAL_STYLE_REPLAY_EVAL
 } UiVirtualLineStyle;
@@ -118,6 +119,9 @@ typedef struct {
     UiVirtualLineStyle style;
     char             text[MAX_VIRTUAL_LINE_TEXT];
     char             aux[MAX_VIRTUAL_LINE_AUX];  /* trailing comment text */
+    /* Index into UiRenderSnapshot.replay_path. -1 when this is not a
+     * PATH row. v1 has one snapshot, so PATH rows carry 0. */
+    int              path_idx;
 } UiVirtualLine;
 
 #define MAX_VIRTUAL_LINES 512

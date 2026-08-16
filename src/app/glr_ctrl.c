@@ -148,6 +148,7 @@ static char g_buffer_viz_legend_title[48];
 
 static UiRenderSnapshot g_last_ui_snapshot;
 static int g_last_ui_snapshot_valid = 0;
+static ReplReplayPathSnapshot g_published_replay_path;
 static int g_last_replay_follow_src_line = -1;
 /* Offline/capture mode: advance the complete fixed-dt simulation once per
  * rendered frame instead of once per wall-clock-paced GLUT timer callback. */
@@ -2412,6 +2413,7 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->editor_transformers = editor_state_transformers();
     snap->editor_highlights = editor_state_highlights();
     snap->editor_virtual_lines = editor_state_virtual_lines();
+    snap->replay_path = g_published_replay_path;
 
     /* Selection range materialized once for the per-row code-panel branch. */
     snap->selection_active = editor_clipboard_sel_active();
@@ -3603,12 +3605,18 @@ const UiOverlayContent *glr_ctrl_help_overlay_content(void) {
 }
 
 void glr_publish_replay_annotations(const ReplReplayAnnotationOutput *out) {
+    memset(&g_published_replay_path, 0, sizeof(g_published_replay_path));
     editor_state_virtual_lines_clear();
     if (!out) return;
+    if (out->path.valid)
+        g_published_replay_path = out->path;
     for (int i = 0; i < out->count; i++) {
         const ReplReplayAnnotation *row = &out->items[i];
         UiVirtualLineStyle style;
         switch (row->kind) {
+        case REPL_REPLAY_ANNOTATION_KIND_PATH:
+            style = VIRTUAL_STYLE_REPLAY_PATH;
+            break;
         case REPL_REPLAY_ANNOTATION_KIND_SUBST:
             style = VIRTUAL_STYLE_REPLAY_SUBST;
             break;

@@ -366,6 +366,19 @@ static int replay_flat_cmd_context_matches(int flat_idx, int current_flat_idx) {
     candidate = &flat_cmds[flat_idx];
     current = &flat_cmds[current_flat_idx];
 
+    /* Identity-when-indexed, legacy-otherwise. REPL_CALL_FRAME_NONE is
+     * not an identity: comparing two unindexed commands as equal would
+     * make every overflowed invocation match. */
+    {
+        FlatProgramView view = repl_state_flat_program_view();
+        int cand_frame = repl_flat_cmd_call_frame(&view, flat_idx);
+        int cur_frame = repl_flat_cmd_call_frame(&view, current_flat_idx);
+
+        if (cand_frame != REPL_CALL_FRAME_NONE &&
+            cur_frame != REPL_CALL_FRAME_NONE)
+            return cand_frame == cur_frame;
+    }
+
     /* Match the invocation's stable provenance, never its mutable local
      * values. Local snapshots are effective state at each command, so two
      * rows in the same call are expected to differ after an assignment.
@@ -1294,6 +1307,150 @@ static void replay_output_append(ReplReplayAnnotationOutput *out,
     out->count++;
 }
 
+static void replay_func_display_name(int func_slot, char *out, int out_sz) {
+    const char *alias;
+
+    if (!out || out_sz <= 0)
+        return;
+    out[0] = '\0';
+    alias = repl_func_alias_get(func_slot);
+    if (alias && alias[0])
+        snprintf(out, (size_t)out_sz, "%s", alias);
+    else
+        snprintf(out, (size_t)out_sz, "func%d", func_slot);
+}
+
+static int replay_func_def_src(int func_slot) {
+    const GLCmd *doc = repl_state_document_cmds();
+    int n = repl_state_document_count();
+    int i;
+
+    for (i = 0; i < n; i++) {
+        if (doc[i].type == CMD_FUNC_DEF && (int)doc[i].args[0] == func_slot)
+            return i;
+    }
+    return -1;
+}
+
+static void replay_path_fill_rung_names(ReplReplayPathRung *rung, int func_slot) {
+    int def = replay_func_def_src(func_slot);
+    int parsed_fn = func_slot;
+    int param_count = 0;
+
+    replay_func_display_name(func_slot, rung->func_name, (int)sizeof(rung->func_name));
+    if (def < 0)
+        return;
+    if (!parse_repl_func_signature(replay_document_text(def), &parsed_fn,
+                                   rung->param_names, MAX_EXPR_VARS,
+                                   &param_count))
+        return;
+    (void)param_count;
+}
+
+static int replay_path_add_rung_from_frame(ReplReplayPathSnapshot *path,
+                                           FlatProgramView view, int frame) {
+    const ReplCallFrame *f;
+    ReplReplayPathRung *rung;
+    int ncopy;
+    int a;
+
+    if (!repl_call_frame_ok(&view, frame) ||
+        path->rung_count >= REPL_REPLAY_PATH_RUNG_MAX)
+        return 0;
+    f = &view.call_frames[frame];
+    rung = &path->rungs[path->rung_count];
+    memset(rung, 0, sizeof(*rung));
+    replay_path_fill_rung_names(rung, f->func_slot);
+    rung->call_src_cmd_idx = f->call_src_cmd_idx;
+    ncopy = f->arg_count;
+    if (ncopy < 0)
+        ncopy = 0;
+    if (ncopy > MAX_EXPR_VARS)
+        ncopy = MAX_EXPR_VARS;
+    rung->arg_count = ncopy;
+    for (a = 0; a < ncopy; a++) {
+        int off = f->arg_offset + a;
+        if (view.call_frame_args &&
+            off >= 0 && off < view.call_frame_arg_count)
+            rung->args[a] = view.call_frame_args[off];
+    }
+    path->rung_count++;
+    return 1;
+}
+
+static int replay_path_add_rung_from_call_site(ReplReplayPathSnapshot *path,
+                                               int call_src) {
+    const GLCmd *call;
+    ReplReplayPathRung *rung;
+    int slot;
+
+    if (call_src < 0 || call_src >= repl_state_document_count() ||
+        path->rung_count >= REPL_REPLAY_PATH_RUNG_MAX)
+        return 0;
+    call = repl_state_document_cmd_at(call_src);
+    if (!call || call->type != CMD_CALL)
+        return 0;
+    slot = (int)call->args[0];
+    rung = &path->rungs[path->rung_count];
+    memset(rung, 0, sizeof(*rung));
+    replay_path_fill_rung_names(rung, slot);
+    rung->call_src_cmd_idx = call_src;
+    rung->arg_count = 0;
+    path->rung_count++;
+    return 1;
+}
+
+/* Re-resolved on every prepare(): a full flatten can replace frame
+ * indices at an unchanged replay PC. */
+static void replay_path_fill(ReplReplayPathSnapshot *path, int flat_idx) {
+    FlatProgramView view;
+    int frame;
+    int chain[MAX_FLATTEN_CALL_DEPTH];
+    int n;
+    int i;
+
+    memset(path, 0, sizeof(*path));
+    if (flat_idx < 0)
+        return;
+    view = repl_state_flat_program_view();
+    if (!view.cmds || flat_idx >= view.cmd_count)
+        return;
+
+    path->overflow = view.call_frame_overflow;
+
+    if (view.local_vars) {
+        const FlatCmdLocalVars *lv = &view.local_vars[flat_idx];
+        for (i = 0; i < lv->num_active_loops &&
+                    path->loop_count < MAX_EXPR_VARS; i++) {
+            ReplReplayPathLoop *loop = &path->loops[path->loop_count];
+            repl_extract_for_var_name(
+                replay_document_text(lv->active_loops[i].source_cmd_idx),
+                loop->name, (int)sizeof(loop->name));
+            loop->value = lv->active_loops[i].iter_value;
+            path->loop_count++;
+        }
+    }
+
+    frame = repl_flat_cmd_call_frame(&view, flat_idx);
+    if (frame != REPL_CALL_FRAME_NONE) {
+        n = repl_call_frame_walk_chain(view, frame, chain,
+                                       MAX_FLATTEN_CALL_DEPTH);
+        for (i = 0; i < n; i++)
+            replay_path_add_rung_from_frame(path, view, chain[i]);
+    } else {
+        const GLCmd *cmd = &view.cmds[flat_idx];
+        int root = cmd->root_call_src_cmd_idx;
+        int call = cmd->call_src_cmd_idx;
+
+        if (root >= 0)
+            replay_path_add_rung_from_call_site(path, root);
+        if (call >= 0 && call != root)
+            replay_path_add_rung_from_call_site(path, call);
+    }
+
+    path->valid = (path->loop_count > 0 || path->rung_count > 0) ? 1 : 0;
+}
+
 static void replay_annotations_refresh_output(ReplReplayAnnotationOutput *out) {
     if (!out) return;
     memset(out, 0, sizeof(*out));
@@ -1304,6 +1461,27 @@ static void replay_annotations_refresh_output(ReplReplayAnnotationOutput *out) {
      * Verbose is the only mode in which one source line becomes several. */
     if (!replay.active || replay.expand_args != REPLAY_EXPAND_VERBOSE)
         return;
+
+    /* PATH is independent of has_vars: a literal glutSolidSphere still
+     * has a call stack. The accessor is the polygon-mode gate: it
+     * returns -1 unless vertex replay just emitted a draw. */
+    {
+        int anchor = replay_focus_anchor_flat_idx();
+        if (anchor >= 0) {
+            FlatProgramView view = repl_state_flat_program_view();
+            int after = replay.src_line_idx;
+
+            replay_path_fill(&out->path, anchor);
+            if (after < 0 && view.cmds &&
+                anchor < view.cmd_count)
+                after = view.cmds[anchor].src_cmd_idx;
+            if (out->path.valid && after >= 0)
+                replay_output_append(out, after,
+                                     REPL_REPLAY_ANNOTATION_KIND_PATH,
+                                     "", NULL);
+        }
+    }
+
     int cmd_idx = replay.src_line_idx;
     if (cmd_idx < 0 || cmd_idx >= repl_state_document_count())
         return;

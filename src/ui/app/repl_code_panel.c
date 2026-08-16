@@ -1878,6 +1878,144 @@ static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,
     repl_code_panel_apply_auto_dim(row, builder->snap, line_idx);
 }
 
+static void replay_path_format_loop(const ReplReplayPathLoop *loop,
+                                    char *buf, int buf_sz) {
+    snprintf(buf, (size_t)buf_sz, "%s=%g",
+             loop->name[0] ? loop->name : "?", (double)loop->value);
+}
+
+static void replay_path_format_rung(const ReplReplayPathRung *rung,
+                                    char *buf, int buf_sz) {
+    int n;
+
+    if (!buf || buf_sz <= 0)
+        return;
+    n = snprintf(buf, (size_t)buf_sz, "%s(",
+                 rung->func_name[0] ? rung->func_name : "?");
+    if (n < 0)
+        n = 0;
+    if (n >= buf_sz) {
+        buf[buf_sz - 1] = '\0';
+        return;
+    }
+    for (int a = 0; a < rung->arg_count; a++) {
+        n += snprintf(buf + n, (size_t)(buf_sz - n), "%s%g",
+                      a ? ", " : "", (double)rung->args[a]);
+        if (n >= buf_sz) {
+            buf[buf_sz - 1] = '\0';
+            return;
+        }
+    }
+    snprintf(buf + n, (size_t)(buf_sz - n), ")");
+}
+
+static const char k_replay_path_prefix[] = "|-> ";
+static const char k_replay_path_sep[] = " > ";
+
+static int replay_path_joined_len(const char *const *parts, int nparts) {
+    int used = (int)(sizeof(k_replay_path_prefix) - 1);
+    int i;
+
+    for (i = 0; i < nparts; i++) {
+        if (i)
+            used += (int)(sizeof(k_replay_path_sep) - 1);
+        used += (int)strlen(parts[i] ? parts[i] : "");
+    }
+    return used;
+}
+
+static int replay_path_join(char *out, int out_sz,
+                            const char *const *parts, int nparts) {
+    int used = 0;
+    int i;
+
+    if (!out || out_sz <= 0)
+        return 0;
+    out[0] = '\0';
+    used = snprintf(out, (size_t)out_sz, "%s", k_replay_path_prefix);
+    if (used < 0)
+        used = 0;
+    if (used >= out_sz) {
+        out[out_sz - 1] = '\0';
+        return out_sz - 1;
+    }
+    for (i = 0; i < nparts; i++) {
+        int n = snprintf(out + used, (size_t)(out_sz - used), "%s%s",
+                         i ? k_replay_path_sep : "",
+                         parts[i] ? parts[i] : "");
+        if (n < 0)
+            break;
+        if (n >= out_sz - used) {
+            out[out_sz - 1] = '\0';
+            return out_sz - 1;
+        }
+        used += n;
+    }
+    return used;
+}
+
+/* name + '=' + a printed float, comfortably. */
+#define REPLAY_PATH_LOOP_FRAG_LEN  (REPL_PREDEF_NAME_MAX + 16)
+/* func( + up to MAX_EXPR_VARS compact %g args + ). */
+#define REPLAY_PATH_RUNG_FRAG_LEN  (REPL_FUNC_NAME_MAX + MAX_EXPR_VARS * 8)
+/* Displayable chars in UiVirtualLine.text (the array includes the NUL). */
+#define REPLAY_PATH_TEXT_MAX       (MAX_VIRTUAL_LINE_TEXT - 1)
+/* Outermost rung plus the innermost two — the ends carry the information. */
+#define REPLAY_PATH_KEEP_OUTER     1
+#define REPLAY_PATH_KEEP_INNER     2
+#define REPLAY_PATH_KEEP_ENDS      (REPLAY_PATH_KEEP_OUTER + REPLAY_PATH_KEEP_INNER)
+
+int ui_repl_code_panel_format_replay_path(const ReplReplayPathSnapshot *path,
+                                          char *out, int out_sz) {
+    char loop_frags[MAX_EXPR_VARS][REPLAY_PATH_LOOP_FRAG_LEN];
+    char rung_frags[REPL_REPLAY_PATH_RUNG_MAX][REPLAY_PATH_RUNG_FRAG_LEN];
+    char ellipsis[sizeof("... ") + 10 + sizeof(" frames ...")];
+    const char *parts[MAX_EXPR_VARS + REPL_REPLAY_PATH_RUNG_MAX + 1];
+    int nparts = 0;
+    int i;
+    int used;
+
+    if (!out || out_sz <= 0)
+        return 0;
+    out[0] = '\0';
+    if (!path || !path->valid)
+        return 0;
+
+    for (i = 0; i < path->loop_count && i < MAX_EXPR_VARS; i++) {
+        replay_path_format_loop(&path->loops[i], loop_frags[i],
+                                (int)sizeof(loop_frags[i]));
+        parts[nparts++] = loop_frags[i];
+    }
+    for (i = 0; i < path->rung_count && i < REPL_REPLAY_PATH_RUNG_MAX; i++) {
+        replay_path_format_rung(&path->rungs[i], rung_frags[i],
+                                (int)sizeof(rung_frags[i]));
+        parts[nparts++] = rung_frags[i];
+    }
+    if (nparts == 0)
+        return 0;
+
+    /* Elide against the virtual-line display budget, even when the
+     * caller passed a larger buffer (the row builder uses MAX_LINE_LEN * 2). */
+    if (replay_path_joined_len(parts, nparts) <= REPLAY_PATH_TEXT_MAX)
+        return replay_path_join(out, out_sz, parts, nparts);
+
+    /* Middle-elision: keep loops, the outermost rung, and the innermost
+     * two rungs. The ends carry the information; the middle is skimmed. */
+    if (path->rung_count > REPLAY_PATH_KEEP_ENDS) {
+        int omitted = path->rung_count - REPLAY_PATH_KEEP_ENDS;
+        nparts = 0;
+        for (i = 0; i < path->loop_count && i < MAX_EXPR_VARS; i++)
+            parts[nparts++] = loop_frags[i];
+        parts[nparts++] = rung_frags[0];
+        snprintf(ellipsis, sizeof(ellipsis), "... %d frames ...", omitted);
+        parts[nparts++] = ellipsis;
+        parts[nparts++] = rung_frags[path->rung_count - REPLAY_PATH_KEEP_INNER];
+        parts[nparts++] = rung_frags[path->rung_count - 1];
+        used = replay_path_join(out, out_sz, parts, nparts);
+    }
+    return used;
+}
+
 static void repl_code_panel_add_virtual_rows(ReplCodePanelBuilder *builder,
                                              int after_line_idx) {
     const UiVirtualLineList *virtual_lines;
@@ -1904,13 +2042,23 @@ static void repl_code_panel_add_virtual_rows(ReplCodePanelBuilder *builder,
         if (!row || !text)
             return;
 
-        snprintf(text, MAX_LINE_LEN * 2, "%s%s", virtual_line->text, virtual_line->aux);
+        if (virtual_line->style == VIRTUAL_STYLE_REPLAY_PATH) {
+            ui_repl_code_panel_format_replay_path(&builder->snap->replay_path,
+                                                  text, MAX_LINE_LEN * 2);
+        } else {
+            snprintf(text, MAX_LINE_LEN * 2, "%s%s", virtual_line->text,
+                     virtual_line->aux);
+        }
         row->text = text;
         row->kind = UI_TEXT_PANEL_ROW_VIRTUAL;
         row->hit_target_line_idx = after_line_idx;
         row->hit_eligible = after_line_idx >= 0;
 
-        if (virtual_line->style == VIRTUAL_STYLE_REPLAY_SUBST) {
+        if (virtual_line->style == VIRTUAL_STYLE_REPLAY_PATH) {
+            row->background_active = 1;
+            row->background_color = repl_code_panel_rgba(0.28f, 0.20f, 0.08f, 0.35f);
+            row->color = repl_code_panel_rgb(0.85f, 0.74f, 0.42f);
+        } else if (virtual_line->style == VIRTUAL_STYLE_REPLAY_SUBST) {
             row->background_active = 1;
             row->background_color = repl_code_panel_rgba(0.10f, 0.25f, 0.15f, 0.35f);
             row->color = repl_code_panel_rgb(0.50f, 0.75f, 0.50f);

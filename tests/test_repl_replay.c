@@ -18,6 +18,7 @@
 #include "subsystems/replay/replay_render.h"
 #include "ui/subsystems/replay_hud.h"
 #include "ui/app/snapshot.h"
+#include "ui/app/repl_code_panel.h"
 #ifdef GL_STUBS
 #include <GL/gl_stub_counts.h>
 #endif
@@ -1588,6 +1589,172 @@ static void test_replay_for_header_crosses_recursive_call(void) {
     replay_stop();
 }
 
+static void replay_verbose_vertex_to_first_draw(void) {
+    int safety = 4096;
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+    g_replay_expand_args = REPLAY_EXPAND_VERBOSE;
+    while (g_replay_pc < g_replay_total_flat && safety-- > 0) {
+        replay_advance(repl_state_flat_program_view());
+        if (replay_focus_anchor_flat_idx() >= 0)
+            return;
+    }
+}
+
+static void test_replay_path_verbose_chain(void) {
+    ReplReplayAnnotationOutput out;
+    int i;
+    int path_at = -1;
+
+    printf("--- replay PATH: verbose chain ---\n");
+    glr_ctrl_reset_all();
+    editor_feed_line("inner(x) {");
+    editor_feed_line("glVertex3f(x, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("outer(n) {");
+    editor_feed_line("inner(n + 0.5);");
+    editor_feed_line("}");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("for(i, 0, 2) {");
+    editor_feed_line("outer(i);");
+    editor_feed_line("}");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_verbose_vertex_to_first_draw();
+    ASSERT_TRUE("PATH scene reached a vertex",
+                replay_focus_anchor_flat_idx() >= 0);
+
+    replay_annotations_prepare(source_document_view(), &out);
+    ASSERT_TRUE("PATH is first annotation",
+                out.count >= 1 &&
+                out.items[0].kind == REPL_REPLAY_ANNOTATION_KIND_PATH);
+    ASSERT_TRUE("PATH snapshot valid", out.path.valid);
+    ASSERT_TRUE("PATH has the loop prefix",
+                out.path.loop_count >= 1 &&
+                strcmp(out.path.loops[0].name, "i") == 0);
+    ASSERT_TRUE("PATH first loop value is 0",
+                out.path.loops[0].value == 0.0f);
+    ASSERT_TRUE("PATH has two call rungs", out.path.rung_count == 2);
+    ASSERT_TRUE("outermost rung is outer",
+                strcmp(out.path.rungs[0].func_name, "outer") == 0);
+    ASSERT_TRUE("innermost rung is inner",
+                strcmp(out.path.rungs[1].func_name, "inner") == 0);
+    ASSERT_TRUE("outer arg is 0",
+                out.path.rungs[0].arg_count == 1 &&
+                out.path.rungs[0].args[0] == 0.0f);
+    ASSERT_TRUE("inner arg is 0.5",
+                out.path.rungs[1].arg_count == 1 &&
+                out.path.rungs[1].args[0] == 0.5f);
+
+    for (i = 0; i < out.count; i++)
+        if (out.items[i].kind == REPL_REPLAY_ANNOTATION_KIND_PATH)
+            path_at = i;
+    ASSERT_TRUE("PATH precedes SUBST/EVAL", path_at == 0);
+
+    g_replay_expand_args = REPLAY_EXPAND_EXPANDED;
+    replay_annotations_prepare(source_document_view(), &out);
+    ASSERT_TRUE("Expanded emits no PATH row", out.count == 0);
+
+    g_replay_expand_args = REPLAY_EXPAND_VERBOSE;
+    g_replay_mode = REPLAY_MODE_POLYGON;
+    replay_annotations_prepare(source_document_view(), &out);
+    {
+        int has_path = 0;
+        for (i = 0; i < out.count; i++)
+            if (out.items[i].kind == REPL_REPLAY_ANNOTATION_KIND_PATH)
+                has_path = 1;
+        ASSERT_TRUE("polygon mode suppresses PATH", !has_path);
+    }
+
+    replay_stop();
+}
+
+static void test_replay_path_same_site_siblings(void) {
+    ReplReplayAnnotationOutput first;
+    ReplReplayAnnotationOutput second;
+    int safety = 4096;
+    int seen = 0;
+
+    printf("--- replay PATH: same-site siblings ---\n");
+    glr_ctrl_reset_all();
+    editor_feed_line("mark(x) {");
+    editor_feed_line("glVertex3f(x, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("for(i, 0, 2) {");
+    editor_feed_line("mark(i);");
+    editor_feed_line("}");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+    g_replay_expand_args = REPLAY_EXPAND_VERBOSE;
+    memset(&first, 0, sizeof(first));
+    memset(&second, 0, sizeof(second));
+    while (g_replay_pc < g_replay_total_flat && safety-- > 0 && seen < 2) {
+        replay_advance(repl_state_flat_program_view());
+        if (replay_focus_anchor_flat_idx() < 0)
+            continue;
+        if (seen == 0)
+            replay_annotations_prepare(source_document_view(), &first);
+        else
+            replay_annotations_prepare(source_document_view(), &second);
+        seen++;
+    }
+    ASSERT_TRUE("saw two sibling vertices", seen == 2);
+    ASSERT_TRUE("both PATH snapshots valid",
+                first.path.valid && second.path.valid);
+    ASSERT_TRUE("sibling rungs are both mark",
+                first.path.rung_count == 1 && second.path.rung_count == 1 &&
+                strcmp(first.path.rungs[0].func_name, "mark") == 0 &&
+                strcmp(second.path.rungs[0].func_name, "mark") == 0);
+    ASSERT_TRUE("siblings captured distinct arguments",
+                first.path.rungs[0].args[0] == 0.0f &&
+                second.path.rungs[0].args[0] == 1.0f);
+    replay_stop();
+}
+
+static void test_replay_path_elision_format(void) {
+    ReplReplayPathSnapshot path;
+    char buf[MAX_VIRTUAL_LINE_TEXT];
+    char last_a[32];
+    char last_b[32];
+    int n = REPL_REPLAY_PATH_RUNG_MAX;
+    int i;
+
+    printf("--- replay PATH: middle elision ---\n");
+    memset(&path, 0, sizeof(path));
+    path.valid = 1;
+    path.rung_count = n;
+    for (i = 0; i < n; i++) {
+        snprintf(path.rungs[i].func_name, sizeof(path.rungs[i].func_name),
+                 "depth%d", i);
+        path.rungs[i].arg_count = 1;
+        path.rungs[i].args[0] = (float)i;
+        path.rungs[i].call_src_cmd_idx = 100 + i;
+    }
+    ASSERT_TRUE("format wrote a breadcrumb",
+                ui_repl_code_panel_format_replay_path(&path, buf,
+                                                      (int)sizeof(buf)) > 0);
+    snprintf(last_a, sizeof(last_a), "depth%d(%d)", n - 2, n - 2);
+    snprintf(last_b, sizeof(last_b), "depth%d(%d)", n - 1, n - 1);
+    ASSERT_TRUE("elision keeps the outermost rung",
+                strstr(buf, "depth0(0)") != NULL);
+    ASSERT_TRUE("elision keeps the innermost rungs",
+                strstr(buf, last_a) != NULL && strstr(buf, last_b) != NULL);
+    ASSERT_TRUE("elision marks the omitted middle",
+                strstr(buf, "frames") != NULL && strstr(buf, "...") != NULL);
+    ASSERT_TRUE("elided middle rungs are gone",
+                strstr(buf, "depth3(") == NULL);
+    ASSERT_TRUE("no @line labels in v1",
+                strchr(buf, '@') == NULL);
+}
+
 int main(void) {
     test_replay_basic_controls();
     test_replay_stepping();
@@ -1610,6 +1777,9 @@ int main(void) {
     test_replay_atoll_sea_def_params();
     test_replay_for_header_expands_iter_and_limit();
     test_replay_for_header_crosses_recursive_call();
+    test_replay_path_verbose_chain();
+    test_replay_path_same_site_siblings();
+    test_replay_path_elision_format();
     test_replay_single_arg_shape_gets_eval_annotation();
     test_replay_expanded_color_and_normal_values_inline();
     test_replay_expanded_never_splits_a_source_row();
