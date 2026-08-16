@@ -118,10 +118,10 @@ void glr_debug_dump_flat_commands_sync(FILE *out, SourceTextView text) {
         const GLCmd *cmd = &flat_cmds[flat_idx];
         const char *line_text = source_text_line(text, cmd->src_cmd_idx);
         fprintf(dst,
-                "%4d | %-22s | valid=%d has_vars=%d src_idx=%d call_src_idx=%d root_call_src_idx=%d var_idx=%d func_scope=0x%08x | ",
+                "%4d | %-22s | valid=%d has_vars=%d src_idx=%d call_src_idx=%d root_call_src_idx=%d depth=%d var_idx=%d func_scope=0x%08x | ",
                 flat_idx, repl_cmd_type_name(cmd->type), cmd->valid,
                 cmd->has_vars, cmd->src_cmd_idx, cmd->call_src_cmd_idx,
-                cmd->root_call_src_cmd_idx, cmd->var_idx,
+                cmd->root_call_src_cmd_idx, cmd->call_depth, cmd->var_idx,
                 cmd->func_scope_mask);
         debug_dump_flat_args(dst, cmd);
         fprintf(dst, " | %s\n", line_text ? line_text : "");
