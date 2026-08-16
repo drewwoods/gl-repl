@@ -148,9 +148,12 @@ void ui_repl_code_panel_gutter_labels_for_lines(const UiRenderSnapshot *snap,
                                                 int count);
 
 /* Format a PATH breadcrumb from the structured snapshot. Writes a
- * NUL-terminated string of at most out_sz-1 chars, eliding the middle of
- * a deep chain so the row stays inside MAX_VIRTUAL_LINE_TEXT. Pure: no
- * REPL parsing. Returns characters written, excluding NUL. */
+ * NUL-terminated string of at most min(out_sz-1, MAX_VIRTUAL_LINE_TEXT-1)
+ * chars. Every over-budget shape gets a deterministic fallback: middle
+ * frame elision, loop elision, in-rung argument elision, then whole-part
+ * truncation ending in "...". Never cuts mid-number. Unindexed overflow
+ * rungs render as func(...) with an [incomplete] marker. Pure: no REPL
+ * parsing. Returns characters written, excluding NUL. */
 int ui_repl_code_panel_format_replay_path(const ReplReplayPathSnapshot *path,
                                           char *out, int out_sz);
 

@@ -1471,8 +1471,10 @@ gl-repl: $(COMPILE_REPORT_SAMPLE_SUMMARY)
 # is cut to 8 to pay for it. Shorter undo history is the trade that keeps a
 # 32x document cap from costing over a gigabyte.
 #
-# The flatten visit budget is raised alongside, or the target would just swap
-# one ceiling for another on the first large document.
+# The flatten visit budget and the call-frame intern table are raised
+# alongside, or the target would just swap one ceiling for another on the
+# first large document. Frame count tracks the 8x flat-command raise; the
+# argument arena is MAX_CALL_FRAMES * 8 and follows automatically.
 #
 # And the main thread needs a bigger stack. Document-sized snapshots are taken
 # as ordinary locals all over the controller and editor -- 267 KB each at the
@@ -1502,6 +1504,7 @@ gl-repl-unchained: ## Build an experimental gl-repl with 32x source-command and 
 		CFLAGS="$(CFLAGS) -DMAX_EDITOR_COMMANDS=65536 \
 			-DMAX_FLAT_COMMANDS=65536 \
 			-DMAX_FLATTEN_VISIT_BUDGET=2000000 \
+			-DMAX_CALL_FRAMES=131072 \
 			-DREPL_UNDO_DEPTH=8" \
 		EXTRA_LDFLAGS="$(GLR_UNCHAINED_LDFLAGS)" \
 		$(GLR_UNCHAINED_BIN)
@@ -2454,8 +2457,9 @@ internal-test-case: $$(BINDIR)/$$(TEST_CASE)
 # export plus a cc invocation, and unlike examples/scenes (which ships to
 # users and always runs) they exist to collect corner cases and are meant to
 # grow freely. REPL_SCENE_CORPUS is read by tests/support/scene_corpus.h;
-# only these two binaries consult it, so only they need rebuilding+running.
-SCENE_CORPUS_TESTS = test_repl_core_examples test_camera_header_parity
+# these binaries consult it, so they need rebuilding+running.
+SCENE_CORPUS_TESTS = test_repl_core_examples test_camera_header_parity \
+	test_repl_call_frames
 
 COMPILE_REPORT_SCENES_SUMMARY := $(COMPILE_REPORT_DIR)/scenes-summary
 $(COMPILE_REPORT_SCENES_SUMMARY): $(addprefix $(BINDIR)/,$(SCENE_CORPUS_TESTS))

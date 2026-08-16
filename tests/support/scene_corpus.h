@@ -19,8 +19,10 @@ static inline int repl_test_scene_corpus_enabled(void) {
     return env && env[0] && strcmp(env, "0") != 0;
 }
 
-/* The corpora themselves, NULL-terminated. Three tests walk these now, so
- * the paths live here rather than in each of them. */
+/* The corpora themselves, NULL-terminated. Four tests walk these now
+ * (test_repl_core_examples, test_camera_header_parity,
+ * test_export_trace_parity, test_repl_call_frames), so the paths live
+ * here rather than in each of them. */
 static inline const char *const *repl_test_scene_corpus_dirs(void) {
     static const char *const dirs[] = {
         "tests/scenes/stress",

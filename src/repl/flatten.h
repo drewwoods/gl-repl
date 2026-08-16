@@ -35,12 +35,20 @@
 
 /* Soft intern caps. A program that stays inside the visit budget can still
  * exceed any fixed frame bound, so overflow latches and later commands
- * carry REPL_CALL_FRAME_NONE rather than failing the flatten. */
+ * carry REPL_CALL_FRAME_NONE rather than failing the flatten.
+ *
+ * The arena is sized for 8-arg frames (divide_triangle) so the topology
+ * table is fully reachable at the 8-arg shape this was built for. Empty
+ * frames are LIFO-reclaimed at the end of flatten_call, which keeps the
+ * bound out of reach for wrapper/predicate calls that emit nothing.
+ * `make gl-repl-unchained` overrides this (8x, matching the flat-command
+ * raise) so a capacity-raised build does not just trade one ceiling for
+ * another; the arena is MAX_CALL_FRAMES * 8 and follows. */
 #ifndef MAX_CALL_FRAMES
 #define MAX_CALL_FRAMES 16384
 #endif
 #ifndef MAX_CALL_FRAME_ARGS
-#define MAX_CALL_FRAME_ARGS 65536
+#define MAX_CALL_FRAME_ARGS (MAX_CALL_FRAMES * 8)
 #endif
 
 /* No interned frame: top-level command, or a call after the table latched. */
@@ -110,6 +118,17 @@ static inline int repl_flat_cmd_call_frame(const FlatProgramView *view,
     return view->call_frame_idx[flat_idx];
 }
 
+/* Identity-when-indexed. Returns 1 if both frames are indexed and equal,
+ * 0 if both are indexed and disagree. Returns -1 if either is
+ * REPL_CALL_FRAME_NONE: NONE is not an identity (every overflowed
+ * invocation would otherwise match). Callers must fall through to the
+ * stored provenance fields in that case. */
+static inline int repl_call_frame_identity(int frame_a, int frame_b) {
+    if (frame_a == REPL_CALL_FRAME_NONE || frame_b == REPL_CALL_FRAME_NONE)
+        return -1;
+    return frame_a == frame_b;
+}
+
 /* Walk parent links outermost-first. Returns the number of frames written
  * (capped at max_out). 0 if `frame` is unindexed. */
 int repl_call_frame_walk_chain(FlatProgramView view, int frame,
@@ -172,7 +191,8 @@ typedef struct {
      * (every written call_frame_idx slot is REPL_CALL_FRAME_NONE). The
      * live wrapper always supplies the ReplFlatProgramState arrays. A
      * short table or arena latches overflow; flatten itself still
-     * succeeds. */
+     * succeeds. flatten_append_cmd stamps [0, flat_count); hard failure
+     * publishes count 0 rather than a partial table. */
     int              *flat_call_frame_idx;   /* parallel to flat_cmds */
     ReplCallFrame    *call_frames;
     int               call_frame_capacity;

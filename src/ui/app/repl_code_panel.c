@@ -1878,39 +1878,122 @@ static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,
     repl_code_panel_apply_auto_dim(row, builder->snap, line_idx);
 }
 
+static const char k_replay_path_prefix[] = "|-> ";
+static const char k_replay_path_sep[] = " > ";
+static const char k_replay_path_incomplete[] = "[incomplete]";
+
+/* Displayable chars in UiVirtualLine.text (the array includes the NUL). */
+#define REPLAY_PATH_TEXT_MAX       (MAX_VIRTUAL_LINE_TEXT - 1)
+/* Room for the prefix so one fragment always fits with "|-> ". */
+#define REPLAY_PATH_FRAG_MAX       (REPLAY_PATH_TEXT_MAX - \
+                                    (int)(sizeof(k_replay_path_prefix) - 1))
+#define REPLAY_PATH_LOOP_FRAG_LEN  (REPL_PREDEF_NAME_MAX + 24)
+#define REPLAY_PATH_RUNG_FRAG_LEN  (REPLAY_PATH_FRAG_MAX + 1)
+#define REPLAY_PATH_KEEP_OUTER     1
+#define REPLAY_PATH_KEEP_INNER     2
+
+/* Append src if the whole token fits. Returns 1 on success. */
+static int replay_path_append(char *buf, int buf_sz, int *pos, const char *src) {
+    int n;
+
+    if (!buf || buf_sz <= 0 || !pos || *pos < 0)
+        return 0;
+    if (!src)
+        src = "";
+    n = (int)strlen(src);
+    if (*pos + n >= buf_sz)
+        return 0;
+    memcpy(buf + *pos, src, (size_t)n);
+    *pos += n;
+    buf[*pos] = '\0';
+    return 1;
+}
+
 static void replay_path_format_loop(const ReplReplayPathLoop *loop,
                                     char *buf, int buf_sz) {
     snprintf(buf, (size_t)buf_sz, "%s=%g",
              loop->name[0] ? loop->name : "?", (double)loop->value);
 }
 
+/* Format one number-plus-optional-comma into num. Always a complete token. */
+static void replay_path_format_arg(char *num, int num_sz, int with_comma,
+                                   float value) {
+    snprintf(num, (size_t)num_sz, "%s%g", with_comma ? ", " : "",
+             (double)value);
+}
+
+/* arg_head < 0: all args that fit. arg_head == 0 && arg_tail == 0: (...).
+ * Otherwise keep the first arg_head and last arg_tail, with "..." between.
+ * Unindexed rungs (args_available == 0) always render as name(...).
+ * Never writes a partial number. */
 static void replay_path_format_rung(const ReplReplayPathRung *rung,
-                                    char *buf, int buf_sz) {
+                                    char *buf, int buf_sz,
+                                    int arg_head, int arg_tail) {
+    char num[32];
+    int pos = 0;
     int n;
+    int a;
+    int hide_args;
 
     if (!buf || buf_sz <= 0)
         return;
-    n = snprintf(buf, (size_t)buf_sz, "%s(",
-                 rung->func_name[0] ? rung->func_name : "?");
+    buf[0] = '\0';
+    if (buf_sz > REPLAY_PATH_RUNG_FRAG_LEN)
+        buf_sz = REPLAY_PATH_RUNG_FRAG_LEN;
+
+    replay_path_append(buf, buf_sz, &pos,
+                       rung->func_name[0] ? rung->func_name : "?");
+    replay_path_append(buf, buf_sz, &pos, "(");
+
+    n = rung->arg_count;
     if (n < 0)
         n = 0;
-    if (n >= buf_sz) {
-        buf[buf_sz - 1] = '\0';
+    hide_args = !rung->args_available || (arg_head == 0 && arg_tail == 0);
+    if (hide_args) {
+        replay_path_append(buf, buf_sz, &pos, "...");
+        replay_path_append(buf, buf_sz, &pos, ")");
         return;
     }
-    for (int a = 0; a < rung->arg_count; a++) {
-        n += snprintf(buf + n, (size_t)(buf_sz - n), "%s%g",
-                      a ? ", " : "", (double)rung->args[a]);
-        if (n >= buf_sz) {
-            buf[buf_sz - 1] = '\0';
-            return;
+    if (arg_head < 0 || arg_head + arg_tail >= n) {
+        for (a = 0; a < n; a++) {
+            int last = (a + 1 == n);
+            int reserve;
+
+            replay_path_format_arg(num, (int)sizeof(num), a > 0,
+                                   rung->args[a]);
+            /* Keep room for ')' if this is the last arg, or ', ...)' if
+             * more remain, so a truncated list never ends mid-number. */
+            reserve = last ? 1 : (int)sizeof(", ...)") - 1;
+            if (pos + (int)strlen(num) + reserve >= buf_sz) {
+                if (a > 0)
+                    replay_path_append(buf, buf_sz, &pos, ", ");
+                replay_path_append(buf, buf_sz, &pos, "...");
+                break;
+            }
+            replay_path_append(buf, buf_sz, &pos, num);
+        }
+    } else {
+        for (a = 0; a < arg_head && a < n; a++) {
+            replay_path_format_arg(num, (int)sizeof(num), a > 0,
+                                   rung->args[a]);
+            if (pos + (int)strlen(num) + 1 >= buf_sz)
+                break;
+            replay_path_append(buf, buf_sz, &pos, num);
+        }
+        if (arg_head > 0)
+            replay_path_append(buf, buf_sz - 1, &pos, ", ");
+        replay_path_append(buf, buf_sz - 1, &pos, "...");
+        for (a = n - arg_tail; a < n; a++) {
+            if (a < arg_head)
+                continue;
+            replay_path_format_arg(num, (int)sizeof(num), 1, rung->args[a]);
+            if (pos + (int)strlen(num) + 1 >= buf_sz)
+                break;
+            replay_path_append(buf, buf_sz, &pos, num);
         }
     }
-    snprintf(buf + n, (size_t)(buf_sz - n), ")");
+    replay_path_append(buf, buf_sz, &pos, ")");
 }
-
-static const char k_replay_path_prefix[] = "|-> ";
-static const char k_replay_path_sep[] = " > ";
 
 static int replay_path_joined_len(const char *const *parts, int nparts) {
     int used = (int)(sizeof(k_replay_path_prefix) - 1);
@@ -1924,6 +2007,8 @@ static int replay_path_joined_len(const char *const *parts, int nparts) {
     return used;
 }
 
+/* Join whole parts only. A part that does not fit is replaced by "..."
+ * so the result never ends mid-token. */
 static int replay_path_join(char *out, int out_sz,
                             const char *const *parts, int nparts) {
     int used = 0;
@@ -1932,48 +2017,70 @@ static int replay_path_join(char *out, int out_sz,
     if (!out || out_sz <= 0)
         return 0;
     out[0] = '\0';
-    used = snprintf(out, (size_t)out_sz, "%s", k_replay_path_prefix);
-    if (used < 0)
-        used = 0;
-    if (used >= out_sz) {
-        out[out_sz - 1] = '\0';
-        return out_sz - 1;
-    }
+    if (!replay_path_append(out, out_sz, &used, k_replay_path_prefix))
+        return 0;
     for (i = 0; i < nparts; i++) {
-        int n = snprintf(out + used, (size_t)(out_sz - used), "%s%s",
-                         i ? k_replay_path_sep : "",
-                         parts[i] ? parts[i] : "");
-        if (n < 0)
+        const char *sep = i ? k_replay_path_sep : "";
+        const char *p = parts[i] ? parts[i] : "";
+        int need = (int)strlen(sep) + (int)strlen(p);
+
+        if (used + need >= out_sz) {
+            replay_path_append(out, out_sz, &used, "...");
             break;
-        if (n >= out_sz - used) {
-            out[out_sz - 1] = '\0';
-            return out_sz - 1;
         }
-        used += n;
+        replay_path_append(out, out_sz, &used, sep);
+        replay_path_append(out, out_sz, &used, p);
     }
     return used;
 }
 
-/* name + '=' + a printed float, comfortably. */
-#define REPLAY_PATH_LOOP_FRAG_LEN  (REPL_PREDEF_NAME_MAX + 16)
-/* func( + up to MAX_EXPR_VARS compact %g args + ). */
-#define REPLAY_PATH_RUNG_FRAG_LEN  (REPL_FUNC_NAME_MAX + MAX_EXPR_VARS * 8)
-/* Displayable chars in UiVirtualLine.text (the array includes the NUL). */
-#define REPLAY_PATH_TEXT_MAX       (MAX_VIRTUAL_LINE_TEXT - 1)
-/* Outermost rung plus the innermost two — the ends carry the information. */
-#define REPLAY_PATH_KEEP_OUTER     1
-#define REPLAY_PATH_KEEP_INNER     2
-#define REPLAY_PATH_KEEP_ENDS      (REPLAY_PATH_KEEP_OUTER + REPLAY_PATH_KEEP_INNER)
+static int replay_path_emit_loop_span(const char **loop_frags, int nloops,
+                                      int head, int tail,
+                                      const char **parts, int nparts,
+                                      char *ellipsis, int ellipsis_sz) {
+    int i;
+    int omitted;
+
+    if (head < 0 || head + tail >= nloops) {
+        for (i = 0; i < nloops; i++)
+            parts[nparts++] = loop_frags[i];
+        return nparts;
+    }
+    for (i = 0; i < head; i++)
+        parts[nparts++] = loop_frags[i];
+    omitted = nloops - head - tail;
+    if (omitted > 0 && ellipsis && ellipsis_sz > 0) {
+        snprintf(ellipsis, (size_t)ellipsis_sz, "... %d loops ...", omitted);
+        parts[nparts++] = ellipsis;
+    }
+    for (i = nloops - tail; i < nloops; i++) {
+        if (i < head)
+            continue;
+        parts[nparts++] = loop_frags[i];
+    }
+    return nparts;
+}
 
 int ui_repl_code_panel_format_replay_path(const ReplReplayPathSnapshot *path,
                                           char *out, int out_sz) {
     char loop_frags[MAX_EXPR_VARS][REPLAY_PATH_LOOP_FRAG_LEN];
     char rung_frags[REPL_REPLAY_PATH_RUNG_MAX][REPLAY_PATH_RUNG_FRAG_LEN];
-    char ellipsis[sizeof("... ") + 10 + sizeof(" frames ...")];
-    const char *parts[MAX_EXPR_VARS + REPL_REPLAY_PATH_RUNG_MAX + 1];
-    int nparts = 0;
+    const char *loop_ptrs[MAX_EXPR_VARS];
+    char frame_ellipsis[sizeof("... ") + 10 + sizeof(" frames ...")];
+    char loop_ellipsis[sizeof("... ") + 10 + sizeof(" loops ...")];
+    const char *parts[MAX_EXPR_VARS + REPL_REPLAY_PATH_RUNG_MAX + 3];
+    int nloops = 0;
+    int nrungs = 0;
+    int nparts;
     int i;
-    int used;
+    int budget;
+    int arg_head;
+    int arg_tail;
+    int loop_head;
+    int loop_tail;
+    int rung_outer;
+    int rung_inner;
+    int pass;
 
     if (!out || out_sz <= 0)
         return 0;
@@ -1984,36 +2091,112 @@ int ui_repl_code_panel_format_replay_path(const ReplReplayPathSnapshot *path,
     for (i = 0; i < path->loop_count && i < MAX_EXPR_VARS; i++) {
         replay_path_format_loop(&path->loops[i], loop_frags[i],
                                 (int)sizeof(loop_frags[i]));
-        parts[nparts++] = loop_frags[i];
+        loop_ptrs[i] = loop_frags[i];
+        nloops++;
     }
-    for (i = 0; i < path->rung_count && i < REPL_REPLAY_PATH_RUNG_MAX; i++) {
-        replay_path_format_rung(&path->rungs[i], rung_frags[i],
-                                (int)sizeof(rung_frags[i]));
-        parts[nparts++] = rung_frags[i];
-    }
-    if (nparts == 0)
+    nrungs = path->rung_count;
+    if (nrungs > REPL_REPLAY_PATH_RUNG_MAX)
+        nrungs = REPL_REPLAY_PATH_RUNG_MAX;
+    if (nloops == 0 && nrungs == 0 && !path->overflow)
         return 0;
 
-    /* Elide against the virtual-line display budget, even when the
-     * caller passed a larger buffer (the row builder uses MAX_LINE_LEN * 2). */
-    if (replay_path_joined_len(parts, nparts) <= REPLAY_PATH_TEXT_MAX)
-        return replay_path_join(out, out_sz, parts, nparts);
+    budget = out_sz - 1;
+    if (budget > REPLAY_PATH_TEXT_MAX)
+        budget = REPLAY_PATH_TEXT_MAX;
+    if (budget < 0)
+        budget = 0;
 
-    /* Middle-elision: keep loops, the outermost rung, and the innermost
-     * two rungs. The ends carry the information; the middle is skimmed. */
-    if (path->rung_count > REPLAY_PATH_KEEP_ENDS) {
-        int omitted = path->rung_count - REPLAY_PATH_KEEP_ENDS;
+    /* Tightening passes: full path, then frame-middle, loop-middle,
+     * drop loops, shrink args, func(...), outer+inner, innermost. */
+    for (pass = 0; pass < 8; pass++) {
+        switch (pass) {
+        case 0:
+            loop_head = -1; loop_tail = 0;
+            rung_outer = nrungs; rung_inner = 0;
+            arg_head = -1; arg_tail = 0;
+            break;
+        case 1:
+            loop_head = -1; loop_tail = 0;
+            rung_outer = REPLAY_PATH_KEEP_OUTER;
+            rung_inner = REPLAY_PATH_KEEP_INNER;
+            arg_head = -1; arg_tail = 0;
+            break;
+        case 2:
+            loop_head = 1; loop_tail = 1;
+            rung_outer = REPLAY_PATH_KEEP_OUTER;
+            rung_inner = REPLAY_PATH_KEEP_INNER;
+            arg_head = -1; arg_tail = 0;
+            break;
+        case 3:
+            loop_head = 0; loop_tail = 0;
+            rung_outer = REPLAY_PATH_KEEP_OUTER;
+            rung_inner = REPLAY_PATH_KEEP_INNER;
+            arg_head = -1; arg_tail = 0;
+            break;
+        case 4:
+            loop_head = 0; loop_tail = 0;
+            rung_outer = REPLAY_PATH_KEEP_OUTER;
+            rung_inner = REPLAY_PATH_KEEP_INNER;
+            arg_head = 1; arg_tail = 1;
+            break;
+        case 5:
+            loop_head = 0; loop_tail = 0;
+            rung_outer = REPLAY_PATH_KEEP_OUTER;
+            rung_inner = REPLAY_PATH_KEEP_INNER;
+            arg_head = 0; arg_tail = 0;
+            break;
+        case 6:
+            loop_head = 0; loop_tail = 0;
+            rung_outer = REPLAY_PATH_KEEP_OUTER;
+            rung_inner = 1;
+            arg_head = 0; arg_tail = 0;
+            break;
+        default:
+            loop_head = 0; loop_tail = 0;
+            rung_outer = 0; rung_inner = 1;
+            arg_head = 0; arg_tail = 0;
+            break;
+        }
+
+        for (i = 0; i < nrungs; i++)
+            replay_path_format_rung(&path->rungs[i], rung_frags[i],
+                                    (int)sizeof(rung_frags[i]),
+                                    arg_head, arg_tail);
+
         nparts = 0;
-        for (i = 0; i < path->loop_count && i < MAX_EXPR_VARS; i++)
-            parts[nparts++] = loop_frags[i];
-        parts[nparts++] = rung_frags[0];
-        snprintf(ellipsis, sizeof(ellipsis), "... %d frames ...", omitted);
-        parts[nparts++] = ellipsis;
-        parts[nparts++] = rung_frags[path->rung_count - REPLAY_PATH_KEEP_INNER];
-        parts[nparts++] = rung_frags[path->rung_count - 1];
-        used = replay_path_join(out, out_sz, parts, nparts);
+        if (path->overflow)
+            parts[nparts++] = k_replay_path_incomplete;
+        nparts = replay_path_emit_loop_span(loop_ptrs, nloops,
+                                            loop_head, loop_tail,
+                                            parts, nparts,
+                                            loop_ellipsis,
+                                            (int)sizeof(loop_ellipsis));
+        if (rung_outer < 0 || rung_outer + rung_inner >= nrungs) {
+            for (i = 0; i < nrungs; i++)
+                parts[nparts++] = rung_frags[i];
+        } else {
+            int omitted = nrungs - rung_outer - rung_inner;
+
+            for (i = 0; i < rung_outer; i++)
+                parts[nparts++] = rung_frags[i];
+            if (omitted > 0) {
+                snprintf(frame_ellipsis, sizeof(frame_ellipsis),
+                         "... %d frames ...", omitted);
+                parts[nparts++] = frame_ellipsis;
+            }
+            for (i = nrungs - rung_inner; i < nrungs; i++) {
+                if (i < rung_outer)
+                    continue;
+                parts[nparts++] = rung_frags[i];
+            }
+        }
+
+        if (nparts == 0)
+            continue;
+        if (replay_path_joined_len(parts, nparts) <= budget || pass == 7)
+            return replay_path_join(out, budget + 1, parts, nparts);
     }
-    return used;
+    return 0;
 }
 
 static void repl_code_panel_add_virtual_rows(ReplCodePanelBuilder *builder,

@@ -374,9 +374,9 @@ static int replay_flat_cmd_context_matches(int flat_idx, int current_flat_idx) {
         int cand_frame = repl_flat_cmd_call_frame(&view, flat_idx);
         int cur_frame = repl_flat_cmd_call_frame(&view, current_flat_idx);
 
-        if (cand_frame != REPL_CALL_FRAME_NONE &&
-            cur_frame != REPL_CALL_FRAME_NONE)
-            return cand_frame == cur_frame;
+        int same = repl_call_frame_identity(cand_frame, cur_frame);
+        if (same >= 0)
+            return same;
     }
 
     /* Match the invocation's stable provenance, never its mutable local
@@ -390,6 +390,10 @@ static int replay_flat_cmd_context_matches(int flat_idx, int current_flat_idx) {
            candidate->call_depth == current->call_depth &&
            candidate->call_src_cmd_idx == current->call_src_cmd_idx &&
            candidate->root_call_src_cmd_idx == current->root_call_src_cmd_idx;
+}
+
+int replay_test_flat_cmd_context_matches(int flat_a, int flat_b) {
+    return replay_flat_cmd_context_matches(flat_a, flat_b);
 }
 
 static int find_replay_assignment_flat_cmd(int src_line) {
@@ -1362,6 +1366,7 @@ static int replay_path_add_rung_from_frame(ReplReplayPathSnapshot *path,
     memset(rung, 0, sizeof(*rung));
     replay_path_fill_rung_names(rung, f->func_slot);
     rung->call_src_cmd_idx = f->call_src_cmd_idx;
+    rung->args_available = 1;
     ncopy = f->arg_count;
     if (ncopy < 0)
         ncopy = 0;
@@ -1396,6 +1401,7 @@ static int replay_path_add_rung_from_call_site(ReplReplayPathSnapshot *path,
     replay_path_fill_rung_names(rung, slot);
     rung->call_src_cmd_idx = call_src;
     rung->arg_count = 0;
+    rung->args_available = 0;
     path->rung_count++;
     return 1;
 }
@@ -1416,7 +1422,9 @@ static void replay_path_fill(ReplReplayPathSnapshot *path, int flat_idx) {
     if (!view.cmds || flat_idx >= view.cmd_count)
         return;
 
-    path->overflow = view.call_frame_overflow;
+    /* overflow is per selected command, not the program latch: an
+     * earlier indexed vertex keeps a complete chain after a later
+     * invocation trips the table. */
 
     if (view.local_vars) {
         const FlatCmdLocalVars *lv = &view.local_vars[flat_idx];
@@ -1446,6 +1454,11 @@ static void replay_path_fill(ReplReplayPathSnapshot *path, int flat_idx) {
             replay_path_add_rung_from_call_site(path, root);
         if (call >= 0 && call != root)
             replay_path_add_rung_from_call_site(path, call);
+        /* Legacy two-rung fallback: only an unindexed command that
+         * actually had a call site is missing arguments. Top-level
+         * loop breadcrumbs stay complete even if the table latched. */
+        if (view.call_frame_overflow && (root >= 0 || call >= 0))
+            path->overflow = 1;
     }
 
     path->valid = (path->loop_count > 0 || path->rung_count > 0) ? 1 : 0;

@@ -14,10 +14,13 @@
 #include "editor/input.h"
 #include "repl/command.h"
 #include "repl/eval.h"
+#include "repl/example_loader.h"
+#include "repl/examples.h"
 #include "repl/flatten.h"
 #include "repl/pipeline.h"
 #include "repl/state.h"
 #include "source_document.h"
+#include "support/scene_corpus.h"
 #include "support/test_harness.h"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
@@ -34,7 +37,8 @@ static void load_scene(const char *const *lines) {
     repl_flatten_commands(0);
 }
 
-static void assert_indexed_drift(const char *tag, FlatProgramView view) {
+static void assert_indexed_drift_ex(const char *tag, FlatProgramView view,
+                                    int require_indexed) {
     int mismatches = 0;
     int indexed = 0;
 
@@ -68,9 +72,29 @@ static void assert_indexed_drift(const char *tag, FlatProgramView view) {
         char label[128];
         snprintf(label, sizeof(label), "%s: indexed commands drifted", tag);
         ASSERT_INT(label, mismatches, 0);
-        snprintf(label, sizeof(label), "%s: saw indexed commands", tag);
-        ASSERT_TRUE(label, indexed > 0);
+        if (require_indexed) {
+            snprintf(label, sizeof(label), "%s: saw indexed commands", tag);
+            ASSERT_TRUE(label, indexed > 0);
+        }
     }
+}
+
+static void assert_indexed_drift(const char *tag, FlatProgramView view) {
+    assert_indexed_drift_ex(tag, view, 1);
+}
+
+static void assert_scene_drift(const char *tag, FlatProgramView view) {
+    if (view.cmd_count == 0) {
+        char label[192];
+        snprintf(label, sizeof(label),
+                 "%s: failed flatten published no frames", tag);
+        ASSERT_INT(label, view.call_frame_count, 0);
+        snprintf(label, sizeof(label),
+                 "%s: failed flatten published no args", tag);
+        ASSERT_INT(label, view.call_frame_arg_count, 0);
+        return;
+    }
+    assert_indexed_drift_ex(tag, view, 0);
 }
 
 static void test_record_size(void) {
@@ -261,6 +285,21 @@ static void test_wide_arena(void) {
     }
 }
 
+static void test_identity_declines_unindexed(void) {
+    printf("--- call-frames: identity declines unindexed ---\n");
+    ASSERT_INT("NONE vs NONE is not an identity",
+               repl_call_frame_identity(REPL_CALL_FRAME_NONE,
+                                        REPL_CALL_FRAME_NONE), -1);
+    ASSERT_INT("NONE vs indexed is not an identity",
+               repl_call_frame_identity(REPL_CALL_FRAME_NONE, 0), -1);
+    ASSERT_INT("indexed vs NONE is not an identity",
+               repl_call_frame_identity(2, REPL_CALL_FRAME_NONE), -1);
+    ASSERT_INT("same indexed frames match",
+               repl_call_frame_identity(3, 3), 1);
+    ASSERT_INT("different indexed frames disagree",
+               repl_call_frame_identity(3, 4), 0);
+}
+
 static void test_overflow_is_soft(void) {
     static const char *const lines[] = {
         "leaf(x) {",
@@ -380,6 +419,132 @@ static void test_dump_mentions_frames(void) {
                 strstr(buf, "reconstructed frames: 1") != NULL);
 }
 
+static void test_empty_frames_reclaimed(void) {
+    static const char *const lines[] = {
+        "skip(x) {",
+        "if(0) {",
+        "glVertex3f(x, 0, 0);",
+        "}",
+        "}",
+        "inner(x) {",
+        "if(0) {",
+        "glVertex3f(x, 0, 0);",
+        "}",
+        "}",
+        "outer(x) {",
+        "inner(x);",
+        "}",
+        "mark(y) {",
+        "glVertex3f(y, 0, 0);",
+        "}",
+        "glBegin(GL_POINTS);",
+        "skip(1);",
+        "outer(1);",
+        "mark(2);",
+        "glEnd();",
+        NULL,
+    };
+    FlatProgramView view;
+    int frame = REPL_CALL_FRAME_NONE;
+    int i;
+
+    printf("--- call-frames: empty frames reclaimed ---\n");
+    load_scene(lines);
+    view = repl_state_flat_program_view();
+    ASSERT_INT("only the emitting call remains", view.call_frame_count, 1);
+    ASSERT_INT("only the emitting arg remains", view.call_frame_arg_count, 1);
+    ASSERT_INT("no overflow", view.call_frame_overflow, 0);
+    for (i = 0; i < view.cmd_count; i++) {
+        if (view.cmds[i].type == CMD_VERTEX3F) {
+            frame = repl_flat_cmd_call_frame(&view, i);
+            break;
+        }
+    }
+    ASSERT_TRUE("vertex is indexed", frame != REPL_CALL_FRAME_NONE);
+    ASSERT_FLOAT("kept frame is mark(2)",
+                 view.call_frame_args[view.call_frames[frame].arg_offset],
+                 2.0f);
+}
+
+static void test_flatten_failure_zeros_frames(void) {
+    static const char *const lines[] = {
+        "walk(x) {",
+        "walk(x);",
+        "}",
+        "walk(1);",
+        NULL,
+    };
+    FlatProgramView view;
+
+    printf("--- call-frames: hard flatten failure zeros the table ---\n");
+    load_scene(lines);
+    view = repl_state_flat_program_view();
+    ASSERT_INT("failed flatten has no executable cmds", view.cmd_count, 0);
+    ASSERT_INT("failed flatten published no frames", view.call_frame_count, 0);
+    ASSERT_INT("failed flatten published no args", view.call_frame_arg_count, 0);
+    ASSERT_INT("failed flatten does not report overflow",
+               view.call_frame_overflow, 0);
+}
+
+static void drift_one_example(int idx, const char *corpus) {
+    char tag[192];
+    FlatProgramView view;
+
+    snprintf(tag, sizeof(tag), "%s:%s", corpus, repl_example_name(idx));
+    glr_ctrl_reset_all();
+    if (repl_load_example(idx) <= 0)
+        return;
+    repl_flatten_commands(0);
+    view = repl_state_flat_program_view();
+    assert_scene_drift(tag, view);
+}
+
+static void test_example_corpus_drift(void) {
+    int n = repl_example_count();
+    int i;
+
+    printf("--- call-frames: built-in example drift ---\n");
+    ASSERT_TRUE("built-in catalog is non-empty", n > 0);
+    for (i = 0; i < n; i++)
+        drift_one_example(i, "example");
+}
+
+static void test_scene_corpus_drift(void) {
+    const char *const *dirs;
+    int d;
+
+    if (!repl_test_scene_corpus_enabled()) {
+        printf("--- call-frames: scene corpora not walked "
+               "(REPL_SCENE_CORPUS unset) ---\n");
+        return;
+    }
+
+    printf("--- call-frames: scene corpus drift ---\n");
+    dirs = repl_test_scene_corpus_dirs();
+    for (d = 0; dirs[d]; d++) {
+        char err[512];
+        const char *tag = repl_test_scene_corpus_tag(dirs[d]);
+        int n;
+        int i;
+
+        err[0] = '\0';
+        if (!repl_examples_load_dir(dirs[d], err, sizeof(err))) {
+            char label[256];
+            snprintf(label, sizeof(label), "%s catalog loads", dirs[d]);
+            ASSERT_TRUE(label, 0);
+            continue;
+        }
+        n = repl_example_count();
+        printf("  %s: %d scenes\n", dirs[d], n);
+        for (i = 0; i < n; i++) {
+            if (repl_example_source_format(i) != REPL_EXAMPLE_SOURCE_GLR)
+                continue;
+            drift_one_example(i, tag);
+        }
+        repl_examples_clear_runtime_catalog();
+    }
+}
+
 int main(void) {
     test_record_size();
     test_top_level_unindexed();
@@ -387,7 +552,12 @@ int main(void) {
     test_nested_and_loop_siblings();
     test_same_site_recursion();
     test_wide_arena();
+    test_identity_declines_unindexed();
     test_overflow_is_soft();
     test_dump_mentions_frames();
+    test_empty_frames_reclaimed();
+    test_flatten_failure_zeros_frames();
+    test_example_corpus_drift();
+    test_scene_corpus_drift();
     return test_harness_report(&g_harness, "test_repl_call_frames");
 }

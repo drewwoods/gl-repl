@@ -580,6 +580,30 @@ static int flatten_intern_call_frame(FlattenContext *ctx,
     return idx;
 }
 
+/* Close the interned frame's range. An empty subtree (nothing appended
+ * here or in any descendant) cannot be named by a call_frame_idx slot -
+ * children reclaim first, so this frame is still last-interned and
+ * nothing references it. Roll it back so wrapper/predicate calls do not
+ * starve the table. */
+static void flatten_finish_call_frame(FlattenContext *ctx, int frame) {
+    ReplCallFrame *f;
+
+    if (!ctx->call_frames || frame == REPL_CALL_FRAME_NONE)
+        return;
+    if (frame < 0 || frame >= ctx->call_frame_count)
+        return;
+    f = &ctx->call_frames[frame];
+    f->flat_end = ctx->flat_count;
+    if (frame != ctx->call_frame_count - 1)
+        return;
+    if (f->flat_end != f->flat_begin)
+        return;
+    ctx->call_frame_arg_count -= f->arg_count;
+    if (ctx->call_frame_arg_count < 0)
+        ctx->call_frame_arg_count = 0;
+    ctx->call_frame_count--;
+}
+
 static void flatten_call(FlattenContext *ctx,
                          const GLCmd *src_cmd, int i,
                          ExprVar *vars, const ReplExprDepMask *var_deps,
@@ -738,7 +762,7 @@ static void flatten_call(FlattenContext *ctx,
         flatten_range(ctx, k + 1, body_end, lvars, ldeps, lkinds, lnv,
                       i, nested_root_call, nested_func_mask);
         if (frame != REPL_CALL_FRAME_NONE)
-            ctx->call_frames[frame].flat_end = ctx->flat_count;
+            flatten_finish_call_frame(ctx, frame);
         if (ctx->call_depth > 0) ctx->call_depth--;
         ctx->current_frame = saved_frame;
         ctx->frame_has_locals = caller_has_locals;
@@ -1821,9 +1845,8 @@ int repl_flatten_program(const ReplFlattenOptions *options,
         ctx.call_frame_capacity = 0;
     if (!ctx.call_frame_args)
         ctx.call_frame_arg_capacity = 0;
-    if (ctx.flat_call_frame_idx && ctx.flat_capacity > 0)
-        memset(ctx.flat_call_frame_idx, 0xFF,
-               (size_t)ctx.flat_capacity * sizeof(int));
+    /* flatten_append_cmd stamps every slot in [0, flat_count). Consumers
+     * reject flat_idx >= cmd_count, so the unused tail is never read. */
 
     repl_source_scope_view_bind(&ctx.source_scope,
                                 ctx.source_cmds,
@@ -1888,20 +1911,25 @@ int repl_flatten_program(const ReplFlattenOptions *options,
     if (!result->ok) {
         /* A failed expansion (depth/budget/capacity overflow) leaves an empty
          * flat program; report all-bits so any predef change retries a full
-         * flatten rather than being routed away from the failure. */
+         * flatten rather than being routed away from the failure. Do not
+         * publish a partial intern: --call-tree would print ranges into
+         * nothing. */
         result->structural_dep_mask = REPL_EXPR_DEP_ALL;
         result->value_dep_mask = REPL_EXPR_DEP_ALL;
         result->rebake_ok = 0;
+        result->call_frame_count = 0;
+        result->call_frame_arg_count = 0;
+        result->call_frame_overflow = 0;
     } else {
         result->structural_dep_mask =
             repl_flatten_expr_structural_deps(&ctx.expr);
         result->value_dep_mask = repl_flatten_expr_value_deps(&ctx.expr);
         result->rebake_ok = repl_flatten_expr_rebake_ok(&ctx.expr);
+        result->call_frame_count = ctx.call_frame_count;
+        result->call_frame_arg_count = ctx.call_frame_arg_count;
+        result->call_frame_overflow = ctx.call_frame_overflow;
     }
     repl_copy_string_fits(result->status, sizeof(result->status), ctx.status);
-    result->call_frame_count = ctx.call_frame_count;
-    result->call_frame_arg_count = ctx.call_frame_arg_count;
-    result->call_frame_overflow = ctx.call_frame_overflow;
     return result->ok;
 }
 
@@ -2161,6 +2189,7 @@ void repl_flatten_commands(int edit_line_idx) {
         .call_frame_arg_capacity = MAX_CALL_FRAME_ARGS
     };
     ReplFlattenResult result;
+    int was_frame_overflow = flat_program->call_frame_overflow;
 
     repl_flatten_program(&options, &result);
     repl_state_flat_program_set_count(result.flat_cmd_count);
@@ -2180,7 +2209,10 @@ void repl_flatten_commands(int edit_line_idx) {
                                           result.rebake_ok);
     if (result.status[0])
         repl_set_status_error(result.status);
-    else if (result.ok && result.call_frame_overflow)
+    else if (result.ok && result.call_frame_overflow && !was_frame_overflow)
+        /* One-shot on the 0->1 edge so an animated overflowing scene
+         * announces the fallback once instead of pinning the status bar
+         * on every flatten. */
         repl_set_status("Call-frame table overflow; PATH uses two-rung fallback");
 
     repl_flatten_refresh_current_block_highlight(edit_line_idx);

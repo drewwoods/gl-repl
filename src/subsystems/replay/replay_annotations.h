@@ -62,6 +62,7 @@ typedef struct {
 typedef struct {
     char  func_name[REPL_FUNC_NAME_MAX];
     int   arg_count;
+    int   args_available; /* 0: unindexed fallback; render func(...) */
     char  param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
     float args[MAX_EXPR_VARS];
     int   call_src_cmd_idx;
@@ -72,7 +73,7 @@ typedef struct {
     int                loop_count;
     ReplReplayPathRung rungs[REPL_REPLAY_PATH_RUNG_MAX];
     int                rung_count;
-    int                overflow; /* frame table latched; chain may be incomplete */
+    int                overflow; /* this command used the unindexed fallback */
     int                valid;    /* 1 when loops or rungs are present */
 } ReplReplayPathSnapshot;
 
@@ -105,6 +106,10 @@ typedef struct {
  * etc.). */
 void replay_annotations_prepare(SourceTextView text,
                                      ReplReplayAnnotationOutput *out);
+
+/* Test-only: identity-when-indexed, legacy-otherwise. Two unindexed
+ * commands do not match just because both frames are NONE. */
+int replay_test_flat_cmd_context_matches(int flat_a, int flat_b);
 
 /* Get the inline annotated display text for a source line during replay
  * (the source body, without the extra annotation rows). Writes up to

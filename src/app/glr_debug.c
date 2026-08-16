@@ -221,58 +221,83 @@ void glr_debug_dump_flat_histogram(FILE *out, SourceTextView text) {
     fflush(dst);
 }
 
-static const char *debug_call_frame_func_name(int func_slot, char *buf, int buf_sz) {
-    const char *alias = repl_func_alias_get(func_slot);
+typedef struct {
+    char name[REPL_FUNC_NAME_MAX];
+    char param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
+    int  param_count;
+    int  ready;
+} DebugCallFuncMeta;
 
-    if (alias && alias[0])
-        return alias;
-    snprintf(buf, (size_t)buf_sz, "func%d", func_slot);
-    return buf;
+static void debug_call_func_meta_cache(DebugCallFuncMeta *meta,
+                                       SourceTextView text) {
+    const GLCmd *doc = repl_state_document_cmds();
+    int doc_count = repl_state_document_count();
+    int i;
+
+    memset(meta, 0, sizeof(*meta) * (size_t)REPL_FUNC_SLOT_COUNT);
+    for (i = 0; i < doc_count; i++) {
+        int slot;
+        int def_fn = -1;
+
+        if (doc[i].type != CMD_FUNC_DEF)
+            continue;
+        slot = (int)doc[i].args[0];
+        if (slot < 0 || slot >= REPL_FUNC_SLOT_COUNT || meta[slot].ready)
+            continue;
+        {
+            const char *alias = repl_func_alias_get(slot);
+            if (alias && alias[0])
+                snprintf(meta[slot].name, sizeof(meta[slot].name), "%s", alias);
+            else
+                snprintf(meta[slot].name, sizeof(meta[slot].name),
+                         "func%d", slot);
+        }
+        {
+            const char *line = source_text_line(text, i);
+            parse_repl_func_signature(line ? line : "",
+                                      &def_fn, meta[slot].param_names,
+                                      MAX_EXPR_VARS, &meta[slot].param_count);
+        }
+        meta[slot].ready = 1;
+    }
 }
 
 static void debug_dump_call_frame_line(FILE *dst, FlatProgramView view,
-                                       SourceTextView text, int frame,
-                                       int indent) {
+                                       const DebugCallFuncMeta *meta,
+                                       int frame) {
     const ReplCallFrame *f;
-    char name_buf[REPL_FUNC_NAME_MAX];
+    const DebugCallFuncMeta *m;
+    char fallback[REPL_FUNC_NAME_MAX];
     const char *name;
-    char param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
-    int param_count = 0;
-    int def_fn = -1;
+    int indent;
     int a;
 
     if (!repl_call_frame_ok(&view, frame))
         return;
     f = &view.call_frames[frame];
-    name = debug_call_frame_func_name(f->func_slot, name_buf, (int)sizeof(name_buf));
+    indent = f->depth > 1 ? (f->depth - 1) * 2 : 0;
+    if (f->func_slot >= 0 && f->func_slot < REPL_FUNC_SLOT_COUNT &&
+        meta[f->func_slot].ready) {
+        m = &meta[f->func_slot];
+        name = m->name;
+    } else {
+        m = NULL;
+        snprintf(fallback, sizeof(fallback), "func%d", f->func_slot);
+        name = fallback;
+    }
 
-    for (int i = 0; i < indent; i++)
+    for (a = 0; a < indent; a++)
         fputc(' ', dst);
     fprintf(dst, "[%d] %s(", frame, name);
-
-    /* Names are derived from the current CMD_FUNC_DEF, not stored. */
-    {
-        const GLCmd *doc = repl_state_document_cmds();
-        int doc_count = repl_state_document_count();
-        for (int i = 0; i < doc_count; i++) {
-            if (doc[i].type == CMD_FUNC_DEF &&
-                (int)doc[i].args[0] == f->func_slot) {
-                const char *line = source_text_line(text, i);
-                parse_repl_func_signature(line ? line : "",
-                                          &def_fn, param_names,
-                                          MAX_EXPR_VARS, &param_count);
-                break;
-            }
-        }
-    }
     for (a = 0; a < f->arg_count; a++) {
         float val = 0.0f;
         if (view.call_frame_args &&
             f->arg_offset + a >= 0 &&
             f->arg_offset + a < view.call_frame_arg_count)
             val = view.call_frame_args[f->arg_offset + a];
-        if (a < param_count && param_names[a][0])
-            fprintf(dst, "%s%s=%g", a ? ", " : "", param_names[a], (double)val);
+        if (m && a < m->param_count && m->param_names[a][0])
+            fprintf(dst, "%s%s=%g", a ? ", " : "", m->param_names[a],
+                    (double)val);
         else
             fprintf(dst, "%s%g", a ? ", " : "", (double)val);
     }
@@ -280,24 +305,11 @@ static void debug_dump_call_frame_line(FILE *dst, FlatProgramView view,
             f->call_src_cmd_idx, f->flat_begin, f->flat_end, f->depth);
 }
 
-static void debug_dump_call_frame_tree(FILE *dst, FlatProgramView view,
-                                       SourceTextView text, int parent,
-                                       int indent) {
-    int frame;
-
-    for (frame = 0; frame < view.call_frame_count; frame++) {
-        if (!repl_call_frame_ok(&view, frame))
-            continue;
-        if (view.call_frames[frame].parent != parent)
-            continue;
-        debug_dump_call_frame_line(dst, view, text, frame, indent);
-        debug_dump_call_frame_tree(dst, view, text, frame, indent + 2);
-    }
-}
-
 void glr_debug_dump_call_tree(FILE *out, SourceTextView text) {
     FILE *dst = out ? out : stdout;
     FlatProgramView view;
+    DebugCallFuncMeta meta[REPL_FUNC_SLOT_COUNT];
+    int frame;
 
     repl_refresh_flat_program(editor_state_edit_line());
     view = repl_state_flat_program_view();
@@ -306,10 +318,16 @@ void glr_debug_dump_call_tree(FILE *out, SourceTextView text) {
     fprintf(dst, "frames: %d/%d  args: %d/%d\n",
             view.call_frame_count, MAX_CALL_FRAMES,
             view.call_frame_arg_count, MAX_CALL_FRAME_ARGS);
+    if (view.cmd_count == 0)
+        fprintf(dst,
+                "NOTE: no executable flat program; frame table is empty\n");
     if (view.call_frame_overflow)
         fprintf(dst,
                 "NOTE: call-frame table overflow; later invocations are unindexed\n");
-    debug_dump_call_frame_tree(dst, view, text, REPL_CALL_FRAME_NONE, 0);
+    /* Intern order is depth-first, so one pass in table order is the tree. */
+    debug_call_func_meta_cache(meta, text);
+    for (frame = 0; frame < view.call_frame_count; frame++)
+        debug_dump_call_frame_line(dst, view, meta, frame);
     fprintf(dst, "reconstructed frames: %d\n", view.call_frame_count);
     fprintf(dst, "=== End REPL Call Tree ===\n");
     fflush(dst);

@@ -597,6 +597,7 @@ and it is not a supported configuration.**
 | `MAX_EDITOR_COMMANDS` | 1024 | 32768 |
 | `MAX_FLAT_COMMANDS` | 8192 | 65536 |
 | `MAX_FLATTEN_VISIT_BUDGET` | 200000 | 2000000 |
+| `MAX_CALL_FRAMES` | 16384 | 131072 |
 | `REPL_UNDO_DEPTH` | 32 | 8 |
 
 Two of those are not capacity increases, and both are load-bearing:
@@ -608,6 +609,10 @@ Two of those are not capacity increases, and both are load-bearing:
   document cap from costing over a gigabyte; measured resident set is ~630 MB.
 - **`MAX_FLATTEN_VISIT_BUDGET` goes up**, or the target would just trade the
   editor ceiling for the flatten one on the first large document.
+- **`MAX_CALL_FRAMES` tracks the 8× flat-command raise** (the argument
+  arena is `MAX_CALL_FRAMES * 8` and follows). Leaving it at 16384 would
+  make PATH 8× more likely to latch and fall back on the one build that
+  exists for oversized scenes.
 
 ### The stack
 

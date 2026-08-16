@@ -1,6 +1,24 @@
 ## Call-Frame Provenance - debugging deep call chains and recursion
 
-## Status - IN PROGRESS (Stage 2)
+## Status - Stage 3 complete (PATH validated; Stage 4 is demand-driven)
+
+Revision note, implementation reviews. Two post-Stage-2 reviews of the
+landed intern + PATH row. The P1s were a mismatched 16384/65536 cap
+(8-arg scenes bound the arena at 8192 frames), empty frames exhausting
+the table, an uninitialized PATH length on long shallow paths, and a
+Unicode em dash that blocked `make test-stubs`. The P2s were a join
+budget that still used the caller's `MAX_LINE_LEN * 2` buffer, mid-number
+`%g` truncation, overflow fallback rendering `func()` for missing
+arguments, quadratic `--call-tree`, a dead 32 KB memset whose bench
+attribution was wrong, and drift coverage that never left the hand-built
+fixtures. Addressed below: arena is `MAX_CALL_FRAMES * 8`, empty frames
+are LIFO-reclaimed, the formatter has a fallback for every over-budget
+shape, overflow rungs render `func(...)` plus `[incomplete]`
+only on the unindexed selected command,
+`--call-tree` is one preorder pass, hard flatten failure zeros the
+table, overflow status is one-shot on the 0->1 edge, and
+`assert_indexed_drift` walks the built-in catalog (and
+`tests/scenes` under `REPL_SCENE_CORPUS`).
 
 Revision note, performance. After two design-review rounds the core
 contract is settled; this pass adds an explicit `make bench` gate so the
@@ -214,8 +232,16 @@ Sizing, against what the flat program already costs
 |---|---|
 | frame index x `MAX_FLAT_COMMANDS` (parallel array) | 32 KB |
 | topology table, 16384 frames x 32 B | 512 KB |
-| argument arena, 65536 floats | 256 KB |
-| **total** | **~0.8 MB, ~8% of the flat program** |
+| argument arena, `MAX_CALL_FRAMES * 8` floats | 512 KB |
+| **total** | **~1.05 MB, ~11% of the flat program** |
+
+The arena used to be 65536 floats. That bound the 8-arg motivating scene
+(`divide_triangle`) at 8192 frames and left half the topology table
+unreachable. Sizing the arena for 8 args makes the two caps meet at the
+same invocation count. Empty-frame LIFO reclaim at the end of
+`flatten_call` then keeps wrapper/predicate calls from occupying a slot
+nothing can name (`flat_end == flat_begin`; children reclaim first, so
+the parent is last-interned in turn).
 
 Design notes:
 
@@ -234,11 +260,13 @@ Design notes:
   `MAX_CALL_FRAMES`, interning stops and later commands carry
   `REPL_CALL_FRAME_NONE`; the PATH row falls back to the two-rung
   immediate/root display the legacy fields still provide. A scene must never
-  fail to flatten because a debug table filled. The 16384/65536 figures
+  fail to flatten because a debug table filled. The 16384 / (`16384 * 8`) figures
   above are chosen to make overflow practically unreachable rather than
   merely survivable - a program can exceed any fixed bound while staying
   inside the 200000-visit budget, so the bound must be generous *and* the
-  degradation must be harmless.
+  degradation must be harmless. Empty frames are reclaimed, so a scene
+  of wrapper calls does not spend the table on ranges no consumer can
+  reach.
 - **Parameter *names* are not stored.** `func_slot` locates the
   `CMD_FUNC_DEF` row and `parse_repl_func_signature()` re-derives them, the
   same way `flatten_call` gets them. Values must be stored, though: locating
@@ -462,7 +490,12 @@ the part a reader skims:
 
 Elision is a *display* concern and must not reach back into storage: the
 frame's arguments stay lossless (see the arena in option B) even when the row
-shows three of them.
+shows three of them. The formatter's join budget is
+`min(out_sz - 1, MAX_VIRTUAL_LINE_TEXT - 1)`, and every over-budget shape
+has a fallback: middle frame elision, loop elision, in-rung argument
+elision (never a mid-number cut), then whole-part truncation ending in
+`...`. A long shallow path (one 32-arg rung, three long rungs, many
+loops) must not return an empty row.
 
 #### One more corroboration that the gap is real
 
@@ -551,10 +584,17 @@ that each step is verifiable before the next depends on it:
   identity test correctly declining to match unindexed commands, a function
   with 17+ parameters round-tripping through the arena, a full flatten at an
   unchanged replay PC, and middle-elision at depth > 8.
+  Done: `repl_call_frame_identity` + `replay_test_flat_cmd_context_matches`
+  (`NONE` vs `NONE` is not an identity; unindexed different sites do not
+  match), PATH coverage for same-site recursion, four loop siblings, the
+  17-arg arena, a full flatten at an unchanged replay PC, and depth-9
+  elision. Overflow fallback and pre-overflow indexed commands were
+  already covered.
 - **Stage 3b - `make bench`.** After Stage 1 (and again after Stage 2 if it
   touches the flatten or annotation-prepare path), run `make bench` and
   compare the flatten / rebake / replay rows against the pre-change
   baseline. See "Performance verification" below. A silent skip is a miss.
+  Done: Stage 2/3 table under that heading.
 - **Stage 4 - anything from "Later surfaces", by demand, one at a time.**
 
 Depth tinting (later surface 1) is independent of all of this and can be done
@@ -584,7 +624,7 @@ Compare, at minimum:
 
 | Bench row | What it answers |
 |---|---|
-| flatten / full-flatten of a no-`funcN` example | Non-call path must stay noise-level identical. A few percent here is a bug, not a cost of the table. |
+| flatten / full-flatten of a no-`funcN` example | Non-call path must stay inside between-build noise (sub-2% on this rig). A super-linear jump or a several-percent move that survives rebuild medians is a bug. |
 | flatten of a call-heavy example (or the deep-chain / Sierpinski scenes under `--examples-dir`) | Call-path overhead. A small constant per invocation is expected; a super-linear jump is not. |
 | rebake | Must be unchanged: rebake does not walk or rewrite the frame table. |
 | replay / replay-annotation rows | Stage 2 only. Re-resolving a ≤64-rung chain per `prepare()` should be invisible next to the existing snapshot walk. |
@@ -593,10 +633,13 @@ Record the before/after numbers in the Stage 1 (and Stage 3) commit
 message, or as a short note under this heading once the numbers exist.
 Do not treat "it should be cheap" as the verification.
 
-A scene with no `funcN` calls is the load-bearing control: if that row
-moves, the `int` write in `flatten_append_cmd` is not the cause - look
-for an accidental memset of the 16k-frame table, a per-command walk, or
-a `FlatProgramView` copy that started dragging the arena.
+A scene with no `funcN` calls is the load-bearing control. Sub-2%
+moves on this rig are not measurable: identical HEAD source, rebuilt
+in separate sessions, produced non-overlapping `flatten_grass` ranges
+~2% apart (code-layout / alignment). Do not attribute a cause to a
+delta that sits inside that between-build noise. A real regression is
+a super-linear jump or a several-percent move that survives medians
+across repeated rebuilds, not repeated runs of one binary.
 
 #### Stage 1 numbers (2026-08-16, drew-macbook-air Darwin 25.6.0 arm64)
 
@@ -629,18 +672,47 @@ Tiny corpus rows (`logo`, `cube`, `function demo`) sit at 1–3 µs and
 jumped by tenths of a microsecond; that is timer noise, not a flatten
 cost. Grass/wave/tree are the ones that can lie.
 
-**Reading.** The no-call control did not jump by "a few percent that
-means a bug." Large no-`funcN` flattens moved +0.7–1.7%; call-heavy
-orrery is flat; recursive tree/Sierpinski sit in the same +1–2% band
-as grass. Rebake-refresh and replay are unchanged, which is the
-predicted rebake invariant (the walk does not touch the table). The
-per-flatten `memset` of `call_frame_idx` (32 KB, `0xFF` → `NONE`) is
-the only new non-call work besides one `int` store in
-`flatten_append_cmd`; at this noise floor it is not separable from
-run-to-run scatter.
+**Reading.** These deltas are below the noise floor. The same
+unchanged `flatten_grass` binary shape, rebuilt on different days,
+moved by ~2% with non-overlapping ranges; the recorded +0.7–1.7%
+no-call shift and the memset A/B (fully overlapping, later removed as
+dead) are not separable from that between-build variance. Rebake and
+replay not jumping is the only claim this table can support: a walk
+that rewrote the frame table would have shown up as more than layout
+noise. Do not treat the leftover +1% as evidence for the per-command
+`int` store or the extra cache footprint - those are guesses this
+harness cannot confirm. Future notes under this heading should either
+publish medians across repeated rebuilds or decline to name a cause
+for a sub-2% move.
 
-Stage 2 PATH numbers go in a second table under this heading, same
-machine and flags, once `replay_annotations_prepare()` grows.
+#### Stage 2/3 numbers (2026-08-17, drew-macbook-air Darwin 25.6.0 arm64)
+
+Taken after Stage 2 PATH + the Stage 3 validation tests, same flags as
+the Stage 1 table (`BUILD=release USE_GL_STUBS=1`, `bench_repl --csv`,
+default `--iters 5`). Unit is `per_op_us`.
+
+| Row | Stage 1 after | Stage 2/3 | Δ vs Stage 1 |
+|---|---|---|---|
+| `flatten_examples` | 756.27 | 773.91 | +2.3% |
+| `flatten_grass` | 1772.38 | 1815.75 | +2.4% |
+| `flatten_grass_cold` | 1796.33 | 1858.03 | +3.4% |
+| `flatten_orrery` | 961.21 | 1014.28 | +5.5% |
+| `flatten_orrery_cold` | 1079.24 | 1142.43 | +5.9% |
+| `flatten_corpus_14` | 87.58 | 89.90 | +2.6% |
+| `flatten_corpus_15` | 287.98 | 288.75 | +0.3% |
+| `flatten_corpus_16` | 769.45 | 771.80 | +0.3% |
+| `refresh_grass` | 1763.27 | 1811.51 | +2.7% |
+| `refresh_orrery` | 975.78 | 991.57 | +1.6% |
+| `refresh_wave` | 289.72 | 305.98 | +5.6% |
+| `replay_examples` | 1.791 | 1.911 | +6.7% |
+
+**Reading.** These are a different day's rebuild, not a paired A/B, and
+they sit in the same band as the ~2% between-build scatter already
+measured for unchanged `flatten_grass`. They do not support a claim
+that PATH re-resolve made replay more expensive, or that empty-frame
+reclaim made flatten more expensive. No super-linear jump. The
+rebake-refresh rows still move with flatten, which is the "rebake does
+not walk the table" check this harness can actually make.
 
 ### Risks and invariants to hold
 
@@ -651,14 +723,22 @@ machine and flags, once `replay_annotations_prepare()` grows.
 - Initialization of the frame index belongs to the **parallel provenance
   buffer**, not to synthesized commands. `export_setup.c` sets
   `root_call_src_cmd_idx = -1` on the `GLCmd`s it fabricates; with a flat-only
-  side array there is no field on those commands to set, and the buffer must
-  default to `REPL_CALL_FRAME_NONE` for any slot flatten did not write.
+  side array there is no field on those commands to set.
+  `flatten_append_cmd` stamps every slot in `[0, flat_count)`. Consumers
+  must not read past `cmd_count`; there is no memset of the unused tail.
+  A hard flatten failure (depth / visit budget / flat capacity) zeros
+  the published frame counts so `--call-tree` cannot print ranges into
+  an empty stream.
 - **Overflow admission is atomic.** A frame needs a topology slot *and*
   `arg_count` floats of arena. If either is short, publish no partial frame:
   latch the overflow and hand out `REPL_CALL_FRAME_NONE` from that invocation
   onward, so a chain is never half-recorded and `parent` never points at a
-  frame whose arguments were truncated. Surface the latch (status line or
-  `--call-tree` note) - a scene that loses breadcrumb fidelity should say so.
+  frame whose arguments were truncated. Surface the latch (`--call-tree`
+  note, and a one-shot status on the 0->1 edge so an animated overflowing
+  scene does not pin the status bar). Unindexed fallback rungs render as
+  `func(...)` plus `[incomplete]`, not `func()`. The `[incomplete]`
+  marker is per selected command: an indexed vertex before the overflow
+  point keeps a complete chain even after the program latch is set.
 - `FlatProgramView` must carry the frame table and the arena so
   temporary-buffer callers (tests, `repl_demo`, the flatten differential) see
   the same thing the live path does.

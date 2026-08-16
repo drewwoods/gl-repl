@@ -1644,9 +1644,11 @@ static void test_replay_path_verbose_chain(void) {
                 strcmp(out.path.rungs[1].func_name, "inner") == 0);
     ASSERT_TRUE("outer arg is 0",
                 out.path.rungs[0].arg_count == 1 &&
+                out.path.rungs[0].args_available &&
                 out.path.rungs[0].args[0] == 0.0f);
     ASSERT_TRUE("inner arg is 0.5",
                 out.path.rungs[1].arg_count == 1 &&
+                out.path.rungs[1].args_available &&
                 out.path.rungs[1].args[0] == 0.5f);
 
     for (i = 0; i < out.count; i++)
@@ -1726,6 +1728,7 @@ static void test_replay_path_elision_format(void) {
     char last_b[32];
     int n = REPL_REPLAY_PATH_RUNG_MAX;
     int i;
+    int n_written;
 
     printf("--- replay PATH: middle elision ---\n");
     memset(&path, 0, sizeof(path));
@@ -1735,12 +1738,13 @@ static void test_replay_path_elision_format(void) {
         snprintf(path.rungs[i].func_name, sizeof(path.rungs[i].func_name),
                  "depth%d", i);
         path.rungs[i].arg_count = 1;
+        path.rungs[i].args_available = 1;
         path.rungs[i].args[0] = (float)i;
         path.rungs[i].call_src_cmd_idx = 100 + i;
     }
-    ASSERT_TRUE("format wrote a breadcrumb",
-                ui_repl_code_panel_format_replay_path(&path, buf,
-                                                      (int)sizeof(buf)) > 0);
+    n_written = ui_repl_code_panel_format_replay_path(&path, buf,
+                                                     (int)sizeof(buf));
+    ASSERT_TRUE("format wrote a breadcrumb", n_written > 0);
     snprintf(last_a, sizeof(last_a), "depth%d(%d)", n - 2, n - 2);
     snprintf(last_b, sizeof(last_b), "depth%d(%d)", n - 1, n - 1);
     ASSERT_TRUE("elision keeps the outermost rung",
@@ -1753,6 +1757,521 @@ static void test_replay_path_elision_format(void) {
                 strstr(buf, "depth3(") == NULL);
     ASSERT_TRUE("no @line labels in v1",
                 strchr(buf, '@') == NULL);
+    ASSERT_TRUE("elided path stays inside the virtual-line budget",
+                n_written <= MAX_VIRTUAL_LINE_TEXT - 1);
+}
+
+static void test_replay_path_shallow_long_format(void) {
+    ReplReplayPathSnapshot path;
+    char buf[MAX_LINE_LEN * 2];
+    int n;
+    int i;
+
+    printf("--- replay PATH: long shallow path ---\n");
+    memset(&path, 0, sizeof(path));
+    path.valid = 1;
+    path.rung_count = 1;
+    snprintf(path.rungs[0].func_name, sizeof(path.rungs[0].func_name),
+             "wide");
+    path.rungs[0].arg_count = MAX_EXPR_VARS;
+    path.rungs[0].args_available = 1;
+    for (i = 0; i < MAX_EXPR_VARS; i++)
+        path.rungs[0].args[i] = 1.234567e-10f;
+
+    n = ui_repl_code_panel_format_replay_path(&path, buf, (int)sizeof(buf));
+    ASSERT_TRUE("shallow long path wrote a breadcrumb", n > 0);
+    ASSERT_TRUE("shallow long path stays inside the display budget",
+                n <= MAX_VIRTUAL_LINE_TEXT - 1);
+    ASSERT_TRUE("shallow long path names the function",
+                strstr(buf, "wide(") != NULL);
+    ASSERT_TRUE("shallow long path elides arguments",
+                strstr(buf, "...") != NULL);
+    ASSERT_TRUE("shallow long path is not an empty row", buf[0] != '\0');
+}
+
+static void test_replay_path_three_long_rungs(void) {
+    ReplReplayPathSnapshot path;
+    char buf[MAX_LINE_LEN * 2];
+    int n;
+    int r;
+    int a;
+
+    printf("--- replay PATH: three long rungs ---\n");
+    memset(&path, 0, sizeof(path));
+    path.valid = 1;
+    path.rung_count = 3;
+    for (r = 0; r < 3; r++) {
+        snprintf(path.rungs[r].func_name, sizeof(path.rungs[r].func_name),
+                 "rung%d", r);
+        path.rungs[r].arg_count = 16;
+        path.rungs[r].args_available = 1;
+        for (a = 0; a < 16; a++)
+            path.rungs[r].args[a] = 1.234567e-10f;
+    }
+
+    n = ui_repl_code_panel_format_replay_path(&path, buf, (int)sizeof(buf));
+    ASSERT_TRUE("three long rungs wrote a breadcrumb", n > 0);
+    ASSERT_TRUE("three long rungs stay inside the display budget",
+                n <= MAX_VIRTUAL_LINE_TEXT - 1);
+    ASSERT_TRUE("three long rungs keep an end",
+                strstr(buf, "rung0(") != NULL ||
+                strstr(buf, "rung2(") != NULL);
+}
+
+static void test_replay_path_many_loops(void) {
+    ReplReplayPathSnapshot path;
+    char buf[MAX_LINE_LEN * 2];
+    int n;
+    int i;
+
+    printf("--- replay PATH: many long loops ---\n");
+    memset(&path, 0, sizeof(path));
+    path.valid = 1;
+    path.loop_count = 20;
+    for (i = 0; i < 20; i++) {
+        snprintf(path.loops[i].name, sizeof(path.loops[i].name), "i%d", i);
+        path.loops[i].value = 1.234567e-10f;
+    }
+    path.rung_count = 1;
+    snprintf(path.rungs[0].func_name, sizeof(path.rungs[0].func_name),
+             "leaf");
+    path.rungs[0].arg_count = 1;
+    path.rungs[0].args_available = 1;
+    path.rungs[0].args[0] = 1.0f;
+
+    n = ui_repl_code_panel_format_replay_path(&path, buf, (int)sizeof(buf));
+    ASSERT_TRUE("many-loop path wrote a breadcrumb", n > 0);
+    ASSERT_TRUE("many-loop path stays inside the display budget",
+                n <= MAX_VIRTUAL_LINE_TEXT - 1);
+    ASSERT_TRUE("many-loop path keeps the leaf",
+                strstr(buf, "leaf(") != NULL);
+}
+
+static void test_replay_path_overflow_unavailable_args(void) {
+    ReplReplayPathSnapshot path;
+    char buf[MAX_VIRTUAL_LINE_TEXT];
+    int n;
+
+    printf("--- replay PATH: overflow fallback args ---\n");
+    memset(&path, 0, sizeof(path));
+    path.valid = 1;
+    path.overflow = 1;
+    path.rung_count = 2;
+    snprintf(path.rungs[0].func_name, sizeof(path.rungs[0].func_name),
+             "outer");
+    path.rungs[0].arg_count = 0;
+    path.rungs[0].args_available = 0;
+    snprintf(path.rungs[1].func_name, sizeof(path.rungs[1].func_name),
+             "inner");
+    path.rungs[1].arg_count = 0;
+    path.rungs[1].args_available = 0;
+
+    n = ui_repl_code_panel_format_replay_path(&path, buf, (int)sizeof(buf));
+    ASSERT_TRUE("overflow fallback wrote a breadcrumb", n > 0);
+    ASSERT_TRUE("overflow fallback marks unavailable args",
+                strstr(buf, "outer(...)") != NULL &&
+                strstr(buf, "inner(...)") != NULL);
+    ASSERT_TRUE("overflow fallback does not look like a zero-arg call",
+                strstr(buf, "outer()") == NULL &&
+                strstr(buf, "inner()") == NULL);
+    ASSERT_TRUE("overflow fallback marks the incomplete chain",
+                strstr(buf, "[incomplete]") != NULL);
+}
+
+static void test_replay_path_zero_arg_available(void) {
+    ReplReplayPathSnapshot path;
+    char buf[MAX_VIRTUAL_LINE_TEXT];
+    int n;
+
+    printf("--- replay PATH: zero-arg available ---\n");
+    memset(&path, 0, sizeof(path));
+    path.valid = 1;
+    path.rung_count = 1;
+    snprintf(path.rungs[0].func_name, sizeof(path.rungs[0].func_name),
+             "thunk");
+    path.rungs[0].arg_count = 0;
+    path.rungs[0].args_available = 1;
+
+    n = ui_repl_code_panel_format_replay_path(&path, buf, (int)sizeof(buf));
+    ASSERT_TRUE("zero-arg available wrote a breadcrumb", n > 0);
+    ASSERT_TRUE("zero-arg available renders empty parens",
+                strstr(buf, "thunk()") != NULL);
+    ASSERT_TRUE("zero-arg available is not an unknown-args marker",
+                strstr(buf, "thunk(...)") == NULL);
+}
+
+static void flatten_live_with_frame_capacity(int frame_cap) {
+    ReplFlatProgramState *fp = repl_state_flat_program_writable();
+    ReplFlattenResult result;
+    ReplFlattenOptions opts = {
+        .source_cmds = repl_state_document_cmds(),
+        .source_cmd_count = repl_state_document_count(),
+        .flat_cmds = fp->cmds,
+        .flat_local_vars = fp->local_vars,
+        .flat_capacity = fp->capacity,
+        .text = source_document_view(),
+        .func_aliases = repl_func_alias_view(),
+        .flat_call_frame_idx = fp->call_frame_idx,
+        .call_frames = fp->call_frames,
+        .call_frame_capacity = frame_cap,
+        .call_frame_args = fp->call_frame_args,
+        .call_frame_arg_capacity = MAX_CALL_FRAME_ARGS,
+    };
+
+    ASSERT_TRUE("tiny-table flatten succeeds",
+                repl_flatten_program(&opts, &result) == 1);
+    repl_state_flat_program_set_count(result.flat_cmd_count);
+    fp->call_frame_count = result.call_frame_count;
+    fp->call_frame_arg_count = result.call_frame_arg_count;
+    fp->call_frame_overflow = result.call_frame_overflow;
+    repl_state_flat_program_set_dep_state(result.structural_dep_mask,
+                                          result.value_dep_mask,
+                                          result.rebake_ok);
+    repl_state_flat_program_clear_dirty();
+}
+
+static void test_replay_path_overflow_does_not_mark_indexed(void) {
+    ReplReplayAnnotationOutput first;
+    ReplReplayAnnotationOutput later;
+    char buf[MAX_VIRTUAL_LINE_TEXT];
+    FlatProgramView view;
+    int safety = 4096;
+    int seen = 0;
+
+    printf("--- replay PATH: indexed command before overflow ---\n");
+    glr_ctrl_reset_all();
+    editor_feed_line("leaf(x) {");
+    editor_feed_line("glVertex3f(x, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("leaf(1);");
+    editor_feed_line("leaf(2);");
+    editor_feed_line("leaf(3);");
+    editor_feed_line("glEnd();");
+    flatten_live_with_frame_capacity(1);
+
+    view = repl_state_flat_program_view();
+    ASSERT_TRUE("program latch is set", view.call_frame_overflow == 1);
+    ASSERT_TRUE("one indexed frame remains", view.call_frame_count == 1);
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+    g_replay_expand_args = REPLAY_EXPAND_VERBOSE;
+    memset(&first, 0, sizeof(first));
+    memset(&later, 0, sizeof(later));
+    while (g_replay_pc < g_replay_total_flat && safety-- > 0 && seen < 2) {
+        replay_advance(repl_state_flat_program_view());
+        if (replay_focus_anchor_flat_idx() < 0)
+            continue;
+        if (seen == 0)
+            replay_annotations_prepare(source_document_view(), &first);
+        else
+            replay_annotations_prepare(source_document_view(), &later);
+        seen++;
+    }
+    ASSERT_TRUE("saw an indexed vertex and an overflowed one", seen == 2);
+    ASSERT_TRUE("both PATH snapshots valid",
+                first.path.valid && later.path.valid);
+    ASSERT_TRUE("pre-overflow vertex kept its args",
+                first.path.rungs[0].args_available &&
+                first.path.rungs[0].arg_count == 1 &&
+                first.path.rungs[0].args[0] == 1.0f);
+    ASSERT_TRUE("pre-overflow vertex is not marked incomplete",
+                first.path.overflow == 0);
+    ASSERT_TRUE("overflowed vertex uses the fallback",
+                later.path.overflow == 1);
+    ASSERT_TRUE("overflowed vertex has no captured args",
+                !later.path.rungs[0].args_available);
+
+    ASSERT_TRUE("pre-overflow format has no incomplete marker",
+                ui_repl_code_panel_format_replay_path(&first.path, buf,
+                                                      (int)sizeof(buf)) > 0 &&
+                strstr(buf, "[incomplete]") == NULL);
+    ASSERT_TRUE("overflowed format marks the incomplete chain",
+                ui_repl_code_panel_format_replay_path(&later.path, buf,
+                                                      (int)sizeof(buf)) > 0 &&
+                strstr(buf, "[incomplete]") != NULL &&
+                strstr(buf, "leaf(...)") != NULL);
+    replay_stop();
+}
+
+static int replay_collect_path_vertices(ReplReplayAnnotationOutput *out,
+                                        int max_out) {
+    int safety = 4096;
+    int seen = 0;
+
+    replay_start();
+    g_replay_mode = REPLAY_MODE_VERTEX;
+    g_replay_state = REPLAY_PAUSED;
+    g_replay_expand_args = REPLAY_EXPAND_VERBOSE;
+    while (g_replay_pc < g_replay_total_flat && safety-- > 0 && seen < max_out) {
+        replay_advance(repl_state_flat_program_view());
+        if (replay_focus_anchor_flat_idx() < 0)
+            continue;
+        replay_annotations_prepare(source_document_view(), &out[seen]);
+        seen++;
+    }
+    return seen;
+}
+
+static void test_replay_path_same_site_recursion(void) {
+    ReplReplayAnnotationOutput paths[4];
+    int n;
+    int recurse_site;
+
+    printf("--- replay PATH: same-site recursion ---\n");
+    glr_ctrl_reset_all();
+    editor_feed_line("walk(d) {");
+    editor_feed_line("if(d > 0.5) {");
+    editor_feed_line("walk(d - 1);");
+    editor_feed_line("}");
+    editor_feed_line("glVertex3f(d, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("walk(2);");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(editor_state_edit_line());
+
+    memset(paths, 0, sizeof(paths));
+    n = replay_collect_path_vertices(paths, 3);
+    ASSERT_TRUE("same-site recursion emitted three vertices", n == 3);
+    ASSERT_TRUE("deepest vertex has a 3-rung chain",
+                paths[0].path.valid && paths[0].path.rung_count == 3);
+    ASSERT_TRUE("outermost arg is 2",
+                paths[0].path.rungs[0].args_available &&
+                paths[0].path.rungs[0].args[0] == 2.0f);
+    recurse_site = paths[0].path.rungs[1].call_src_cmd_idx;
+    ASSERT_TRUE("inner rungs share the recursive call site",
+                recurse_site >= 0 &&
+                paths[0].path.rungs[2].call_src_cmd_idx == recurse_site);
+    ASSERT_TRUE("inner rungs captured distinct arguments",
+                paths[0].path.rungs[1].args[0] == 1.0f &&
+                paths[0].path.rungs[2].args[0] == 0.0f);
+    ASSERT_TRUE("outermost site is not the recursive site",
+                paths[0].path.rungs[0].call_src_cmd_idx != recurse_site);
+    replay_stop();
+}
+
+static void test_replay_path_four_loop_invocations(void) {
+    ReplReplayAnnotationOutput paths[4];
+    int n;
+    int i;
+
+    printf("--- replay PATH: four loop invocations ---\n");
+    glr_ctrl_reset_all();
+    editor_feed_line("mark(x) {");
+    editor_feed_line("glVertex3f(x, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("for(i, 0, 4) {");
+    editor_feed_line("mark(i);");
+    editor_feed_line("}");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(editor_state_edit_line());
+
+    memset(paths, 0, sizeof(paths));
+    n = replay_collect_path_vertices(paths, 4);
+    ASSERT_TRUE("loop emitted four vertices", n == 4);
+    for (i = 0; i < 4; i++) {
+        ASSERT_TRUE("loop PATH is mark",
+                    paths[i].path.valid &&
+                    paths[i].path.rung_count == 1 &&
+                    strcmp(paths[i].path.rungs[0].func_name, "mark") == 0);
+        ASSERT_TRUE("loop PATH arg is i",
+                    paths[i].path.rungs[0].args_available &&
+                    paths[i].path.rungs[0].args[0] == (float)i);
+    }
+    replay_stop();
+}
+
+static void test_replay_path_wide_arena(void) {
+    ReplReplayAnnotationOutput out;
+    int a;
+
+    printf("--- replay PATH: 17-arg arena ---\n");
+    glr_ctrl_reset_all();
+    editor_feed_line(
+        "wide(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16) {");
+    editor_feed_line("glVertex3f(a0, a8, a16);");
+    editor_feed_line("}");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("wide(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16);");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(editor_state_edit_line());
+
+    memset(&out, 0, sizeof(out));
+    ASSERT_TRUE("wide arena reached a vertex",
+                replay_collect_path_vertices(&out, 1) == 1);
+    ASSERT_TRUE("wide PATH captured 17 args",
+                out.path.valid &&
+                out.path.rung_count == 1 &&
+                out.path.rungs[0].args_available &&
+                out.path.rungs[0].arg_count == 17);
+    for (a = 0; a < 17; a++)
+        ASSERT_TRUE("wide PATH arena cell",
+                    out.path.rungs[0].args[a] == (float)a);
+    replay_stop();
+}
+
+static void test_replay_path_flatten_at_unchanged_pc(void) {
+    ReplReplayAnnotationOutput before;
+    ReplReplayAnnotationOutput after;
+    int k_idx;
+    int pc;
+
+    printf("--- replay PATH: full flatten at unchanged PC ---\n");
+    glr_ctrl_reset_all();
+    editor_feed_line("float k;");
+    editor_feed_line("leaf(x) {");
+    editor_feed_line("glVertex3f(x, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("leaf(k);");
+    editor_feed_line("glEnd();");
+    k_idx = repl_eval_find_predef_var_idx("k");
+    ASSERT_TRUE("k predef exists", k_idx >= 0);
+    g_predef_vars_mut[k_idx].value = 1.0f;
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands(editor_state_edit_line());
+    repl_state_flat_program_clear_dirty();
+
+    memset(&before, 0, sizeof(before));
+    ASSERT_TRUE("pre-change PATH reached a vertex",
+                replay_collect_path_vertices(&before, 1) == 1);
+    ASSERT_TRUE("pre-change PATH is leaf(1)",
+                before.path.valid &&
+                before.path.rung_count == 1 &&
+                before.path.rungs[0].args[0] == 1.0f);
+    pc = g_replay_pc;
+    ASSERT_TRUE("replay PC is parked", pc > 0);
+
+    g_predef_vars_mut[k_idx].value = 7.0f;
+    repl_state_mark_flat_dirty();
+    repl_flatten_commands(editor_state_edit_line());
+    repl_state_flat_program_clear_dirty();
+    ASSERT_TRUE("PC survived the full flatten", g_replay_pc == pc);
+
+    memset(&after, 0, sizeof(after));
+    replay_annotations_prepare(source_document_view(), &after);
+    ASSERT_TRUE("post-flatten PATH re-resolved at the same PC",
+                after.path.valid &&
+                after.path.rung_count == 1 &&
+                after.path.rungs[0].args_available &&
+                after.path.rungs[0].args[0] == 7.0f);
+    replay_stop();
+}
+
+static void test_replay_path_depth_nine_elision(void) {
+    ReplReplayAnnotationOutput out;
+    char buf[MAX_VIRTUAL_LINE_TEXT];
+    int i;
+    int n;
+
+    printf("--- replay PATH: depth-9 middle elision ---\n");
+    glr_ctrl_reset_all();
+    editor_feed_line("d8(x) {");
+    editor_feed_line("glVertex3f(x, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("d7(x) {");
+    editor_feed_line("d8(x);");
+    editor_feed_line("}");
+    editor_feed_line("d6(x) {");
+    editor_feed_line("d7(x);");
+    editor_feed_line("}");
+    editor_feed_line("d5(x) {");
+    editor_feed_line("d6(x);");
+    editor_feed_line("}");
+    editor_feed_line("d4(x) {");
+    editor_feed_line("d5(x);");
+    editor_feed_line("}");
+    editor_feed_line("d3(x) {");
+    editor_feed_line("d4(x);");
+    editor_feed_line("}");
+    editor_feed_line("d2(x) {");
+    editor_feed_line("d3(x);");
+    editor_feed_line("}");
+    editor_feed_line("d1(x) {");
+    editor_feed_line("d2(x);");
+    editor_feed_line("}");
+    editor_feed_line("d0(x) {");
+    editor_feed_line("d1(x);");
+    editor_feed_line("}");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("d0(1);");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(editor_state_edit_line());
+
+    memset(&out, 0, sizeof(out));
+    ASSERT_TRUE("depth-9 reached a vertex",
+                replay_collect_path_vertices(&out, 1) == 1);
+    ASSERT_TRUE("storage kept all nine rungs",
+                out.path.valid && out.path.rung_count == 9);
+    n = ui_repl_code_panel_format_replay_path(&out.path, buf, (int)sizeof(buf));
+    ASSERT_TRUE("depth-9 format wrote a breadcrumb", n > 0);
+    ASSERT_TRUE("depth-9 format keeps the outermost rung",
+                strstr(buf, "d0(") != NULL);
+    ASSERT_TRUE("depth-9 format keeps an innermost rung",
+                strstr(buf, "d8(") != NULL);
+    /* Nine short rungs fit; force a long-arg copy so elision is required. */
+    for (i = 0; i < 9; i++) {
+        int a;
+        out.path.rungs[i].arg_count = 8;
+        for (a = 0; a < 8; a++)
+            out.path.rungs[i].args[a] = 1.234567e-10f;
+    }
+    n = ui_repl_code_panel_format_replay_path(&out.path, buf, (int)sizeof(buf));
+    ASSERT_TRUE("fat depth-9 path elides the middle",
+                n > 0 && n <= MAX_VIRTUAL_LINE_TEXT - 1 &&
+                strstr(buf, "frames") != NULL &&
+                strstr(buf, "d0(") != NULL &&
+                strstr(buf, "d8(") != NULL);
+    replay_stop();
+}
+
+static void test_replay_identity_unindexed_different_sites(void) {
+    FlatProgramView view;
+    int verts[4];
+    int nvert = 0;
+    int i;
+
+    printf("--- replay PATH: unindexed identity is not NONE==NONE ---\n");
+    glr_ctrl_reset_all();
+    editor_feed_line("red(x) {");
+    editor_feed_line("glVertex3f(x, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("blu(x) {");
+    editor_feed_line("glVertex3f(x, 1, 0);");
+    editor_feed_line("}");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("red(1);");
+    editor_feed_line("blu(2);");
+    editor_feed_line("red(3);");
+    editor_feed_line("glEnd();");
+    flatten_live_with_frame_capacity(1);
+
+    view = repl_state_flat_program_view();
+    ASSERT_TRUE("overflow latched for identity test",
+                view.call_frame_overflow == 1);
+    for (i = 0; i < view.cmd_count && nvert < 3; i++) {
+        if (view.cmds[i].type == CMD_VERTEX3F)
+            verts[nvert++] = i;
+    }
+    ASSERT_TRUE("found three vertices", nvert == 3);
+    ASSERT_TRUE("first vertex is indexed",
+                repl_flat_cmd_call_frame(&view, verts[0]) !=
+                REPL_CALL_FRAME_NONE);
+    ASSERT_TRUE("later vertices are unindexed",
+                repl_flat_cmd_call_frame(&view, verts[1]) ==
+                REPL_CALL_FRAME_NONE &&
+                repl_flat_cmd_call_frame(&view, verts[2]) ==
+                REPL_CALL_FRAME_NONE);
+    ASSERT_TRUE("unindexed different sites do not match",
+                replay_test_flat_cmd_context_matches(verts[1], verts[2]) == 0);
+    ASSERT_TRUE("NONE vs NONE is not an identity",
+                repl_call_frame_identity(
+                    repl_flat_cmd_call_frame(&view, verts[1]),
+                    repl_flat_cmd_call_frame(&view, verts[2])) == -1);
 }
 
 int main(void) {
@@ -1780,6 +2299,18 @@ int main(void) {
     test_replay_path_verbose_chain();
     test_replay_path_same_site_siblings();
     test_replay_path_elision_format();
+    test_replay_path_shallow_long_format();
+    test_replay_path_three_long_rungs();
+    test_replay_path_many_loops();
+    test_replay_path_overflow_unavailable_args();
+    test_replay_path_zero_arg_available();
+    test_replay_path_overflow_does_not_mark_indexed();
+    test_replay_path_same_site_recursion();
+    test_replay_path_four_loop_invocations();
+    test_replay_path_wide_arena();
+    test_replay_path_flatten_at_unchanged_pc();
+    test_replay_path_depth_nine_elision();
+    test_replay_identity_unindexed_different_sites();
     test_replay_single_arg_shape_gets_eval_annotation();
     test_replay_expanded_color_and_normal_values_inline();
     test_replay_expanded_never_splits_a_source_row();
