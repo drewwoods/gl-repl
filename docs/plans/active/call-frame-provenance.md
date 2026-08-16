@@ -598,6 +598,50 @@ moves, the `int` write in `flatten_append_cmd` is not the cause - look
 for an accidental memset of the 16k-frame table, a per-command walk, or
 a `FlatProgramView` copy that started dragging the arena.
 
+#### Stage 1 numbers (2026-08-16, drew-macbook-air Darwin 25.6.0 arm64)
+
+Taken after `bd34e303` (`repl: intern call-frame provenance during flatten`)
+against its parent `4d2d2769`. Same binary shape as `make bench`
+(`BUILD=release USE_GL_STUBS=1`, default `--iters 5`), run sequentially
+on one machine so the two processes do not steal cycles from each other.
+Subset is the flatten / rebake-refresh / replay rows the table above
+names; parse/feed/slider rows cannot see the intern and were skipped.
+
+Unit is `per_op_us` from `bench_repl --csv` (microseconds per flatten,
+refresh, or replay step). Delta is `(after - before) / before`.
+
+| Row | What it is | before | after | Δ |
+|---|---|---|---|---|
+| `flatten_examples` | no-`funcN` wave-surface control | 750.68 | 756.27 | +0.7% |
+| `flatten_grass` | no-`funcN`, 8113 flats (near cap) | 1743.99 | 1772.38 | +1.6% |
+| `flatten_grass_cold` | same, cache rebuilt inside the timer | 1766.29 | 1796.33 | +1.7% |
+| `flatten_orrery` | call-heavy named funcs, 5651 flats | 961.59 | 961.21 | −0.0% |
+| `flatten_orrery_cold` | same, cold cache | 1074.38 | 1079.24 | +0.5% |
+| `flatten_corpus_14` | Sierpinski carpet (recursion) | 85.93 | 87.58 | +1.9% |
+| `flatten_corpus_15` | Sierpinski sponge (recursion) | 284.28 | 287.98 | +1.3% |
+| `flatten_corpus_16` | 3D tree (func + recursion) | 752.58 | 769.45 | +2.2% |
+| `refresh_grass` | production `t` refresh (rebake path) | 1755.63 | 1763.27 | +0.4% |
+| `refresh_orrery` | production `t` refresh | 974.13 | 975.78 | +0.2% |
+| `refresh_wave` | production `t` refresh | 283.76 | 289.72 | +2.1% |
+| `replay_examples` | step replay through every example | 1.792 | 1.791 | −0.0% |
+
+Tiny corpus rows (`logo`, `cube`, `function demo`) sit at 1–3 µs and
+jumped by tenths of a microsecond; that is timer noise, not a flatten
+cost. Grass/wave/tree are the ones that can lie.
+
+**Reading.** The no-call control did not jump by "a few percent that
+means a bug." Large no-`funcN` flattens moved +0.7–1.7%; call-heavy
+orrery is flat; recursive tree/Sierpinski sit in the same +1–2% band
+as grass. Rebake-refresh and replay are unchanged, which is the
+predicted rebake invariant (the walk does not touch the table). The
+per-flatten `memset` of `call_frame_idx` (32 KB, `0xFF` → `NONE`) is
+the only new non-call work besides one `int` store in
+`flatten_append_cmd`; at this noise floor it is not separable from
+run-to-run scatter.
+
+Stage 2 PATH numbers go in a second table under this heading, same
+machine and flags, once `replay_annotations_prepare()` grows.
+
 ### Risks and invariants to hold
 
 - Flatten is hot (rebuilt per frame). Interning is O(1) per call plus an
