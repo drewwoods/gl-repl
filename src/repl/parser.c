@@ -698,41 +698,45 @@ static int parse_glu_color(const char *args, GLCmd *cmd,
     return 0;
 }
 
-static int parse_label(const char *args, GLCmd *cmd,
-                       char *text_out, int text_sz,
-                       const char *indent,
-                       const ReplParseContext *ctx) {
+static int parse_label_like(const char *args, GLCmd *cmd,
+                             char *text_out, int text_sz,
+                             const char *indent,
+                             const ReplParseContext *ctx,
+                             CmdType type, const char *func_name,
+                             int max_sub_args) {
     ExprVar *vars = ctx->vars;
     int num_vars = ctx->num_vars;
     char fmt_str[GLUT_BITMAP_FMT_MAX] = "";
     char post_args[MAX_LINE_LEN] = "";
     char split_err[REPL_DIAG_TEXT_MAX] = "";
 
-    if (!repl_label_split_args(args,
-                               fmt_str, (int)sizeof(fmt_str),
-                               post_args, (int)sizeof(post_args),
-                               split_err, (int)sizeof(split_err))) {
+    if (!repl_label_split_args_named(args,
+                                     fmt_str, (int)sizeof(fmt_str),
+                                     post_args, (int)sizeof(post_args),
+                                     split_err, (int)sizeof(split_err),
+                                     func_name)) {
         parser_emit_error_static(ctx, split_err);
         return 0;
     }
 
-    float subs[GLUT_BITMAP_MAX_SUB_ARGS] = {0};
+    float subs[REPL_CONSOLE_MAX_SUB_ARGS] = {0};
     int sub_count = 0;
     if (post_args[0]) {
         if (!parser_validate_expression_idents(post_args, vars, num_vars, ctx))
             return 0;
         parser_capture_expr_span(ctx, REPL_EXPR_ROLE_CMD_ARG_LIST_LENIENT,
                                  0, post_args);
-        float subs_full[GLUT_BITMAP_MAX_SUB_ARGS + 4];
+        float subs_full[REPL_CONSOLE_MAX_SUB_ARGS + 4];
         int parsed = repl_eval_parse_exprs(
             post_args, subs_full,
             (int)(sizeof(subs_full) / sizeof(subs_full[0])),
             vars, num_vars);
-        if (parsed > GLUT_BITMAP_MAX_SUB_ARGS) {
+        if (parsed > max_sub_args) {
             char buf[128];
             snprintf(buf, sizeof(buf),
-                     "label: too many args (max %d)",
-                     GLUT_BITMAP_MAX_SUB_ARGS);
+                     "%s: too many args (max %d)",
+                     func_name,
+                     max_sub_args);
             parser_emit_error_static(ctx, buf);
             return 0;
         }
@@ -748,21 +752,25 @@ static int parse_label(const char *args, GLCmd *cmd,
         if (nx == 'f') { pct_count++; i++; }
         else if (nx == '%') { i++; }
         else {
-            parser_emit_error_static(ctx,
-                "label: only %f and %% allowed in format");
+            char buf[128];
+            snprintf(buf, sizeof(buf),
+                     "%s: only %%f and %%%% allowed in format",
+                     func_name);
+            parser_emit_error_static(ctx, buf);
             return 0;
         }
     }
     if (pct_count != sub_count) {
         char buf[128];
         snprintf(buf, sizeof(buf),
-                 "label: format expects %d arg%s, got %d",
+                 "%s: format expects %d arg%s, got %d",
+                 func_name,
                  pct_count, pct_count == 1 ? "" : "s", sub_count);
         parser_emit_error_static(ctx, buf);
         return 0;
     }
 
-    cmd->type = CMD_LABEL;
+    cmd->type = type;
     cmd->valid = 1;
     for (int i = 0; i < sub_count; i++) cmd->args[i] = subs[i];
     cmd->num_args = sub_count;
@@ -771,7 +779,7 @@ static int parse_label(const char *args, GLCmd *cmd,
 
     if (text_out && text_sz > 0) {
         int off = snprintf(text_out, (size_t)text_sz,
-                           "%slabel(\"%s\"", indent, fmt_str);
+                           "%s%s(\"%s\"", indent, func_name, fmt_str);
         for (int i = 0; i < sub_count && off < (int)text_sz - 6; i++) {
             char fbuf[REPL_SOURCE_FLOAT_TEXT_MAX];
             off += snprintf(text_out + off, (size_t)(text_sz - off),
@@ -780,6 +788,22 @@ static int parse_label(const char *args, GLCmd *cmd,
         snprintf(text_out + off, (size_t)(text_sz - off), ");");
     }
     return 1;
+}
+
+static int parse_label(const char *args, GLCmd *cmd,
+                       char *text_out, int text_sz,
+                       const char *indent,
+                       const ReplParseContext *ctx) {
+    return parse_label_like(args, cmd, text_out, text_sz, indent, ctx,
+                            CMD_LABEL, "label", GLUT_BITMAP_MAX_SUB_ARGS);
+}
+
+static int parse_console(const char *args, GLCmd *cmd,
+                         char *text_out, int text_sz,
+                         const char *indent,
+                         const ReplParseContext *ctx) {
+    return parse_label_like(args, cmd, text_out, text_sz, indent, ctx,
+                            CMD_CONSOLE, "console", REPL_CONSOLE_MAX_SUB_ARGS);
 }
 
 static void trim_and_copy(char *dst, int dst_sz, const char *src, int src_len) {
@@ -1836,6 +1860,8 @@ static int try_parse_custom_arg_command(const char *func, const char *args,
                                         const ReplParseContext *ctx) {
     if (strcmp(func, "label") == 0)
         return parse_label(args, cmd, text_out, text_sz, indent, ctx);
+    if (strcmp(func, "console") == 0)
+        return parse_console(args, cmd, text_out, text_sz, indent, ctx);
     if (strcmp(func, "glMaterialfv") == 0)
         return parse_materialfv(args, cmd, text_out, text_sz, indent, ctx);
     if (strcmp(func, "glMaterialf") == 0)
@@ -2442,10 +2468,12 @@ int repl_parser_parse_command_ctx(const char *line, ReplParsedLine *out,
     return 1;
 }
 
-int repl_label_split_args(const char *args,
-                          char *fmt, int fmt_sz,
-                          char *post, int post_sz,
-                          char *err, int err_sz) {
+int repl_label_split_args_named(const char *args,
+                                char *fmt, int fmt_sz,
+                                char *post, int post_sz,
+                                char *err, int err_sz,
+                                const char *func_name) {
+    const char *name = func_name ? func_name : "label";
     if (!args || !fmt || !post || fmt_sz <= 0 || post_sz <= 0) {
         if (err && err_sz > 0)
             snprintf(err, (size_t)err_sz, "internal: bad split-args buffers");
@@ -2459,7 +2487,7 @@ int repl_label_split_args(const char *args,
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '"') {
         snprintf(err, (size_t)err_sz,
-                 "Usage: label(\"fmt\", arg, ...)");
+                 "Usage: %s(\"fmt\", arg, ...)", name);
         return 0;
     }
     const char *quote_open = p;
@@ -2472,7 +2500,7 @@ int repl_label_split_args(const char *args,
     }
     if (!quote_close) {
         snprintf(err, (size_t)err_sz,
-                 "label: missing closing '\"'");
+                 "%s: missing closing '\"'", name);
         return 0;
     }
 
@@ -2481,18 +2509,18 @@ int repl_label_split_args(const char *args,
     for (const char *q = quote_open + 1; q < quote_close; q++) {
         if (*q == '\\') {
             snprintf(err, (size_t)err_sz,
-                     "label: backslash escapes not allowed");
+                     "%s: backslash escapes not allowed", name);
             return 0;
         }
         if (q[0] == '/' && q + 1 < quote_close && q[1] == '/') {
             snprintf(err, (size_t)err_sz,
-                     "label: '//' not allowed in format string");
+                     "%s: '//' not allowed in format string", name);
             return 0;
         }
         if (*q == '(' || *q == ')' || *q == ',') {
             snprintf(err, (size_t)err_sz,
-                     "label: '%c' not allowed in format string",
-                     *q);
+                     "%s: '%c' not allowed in format string",
+                     name, *q);
             return 0;
         }
     }
@@ -2500,7 +2528,7 @@ int repl_label_split_args(const char *args,
     int fmt_len = (int)(quote_close - (quote_open + 1));
     if (fmt_len >= fmt_sz) {
         snprintf(err, (size_t)err_sz,
-                 "label: format too long (max %d)", fmt_sz - 1);
+                 "%s: format too long (max %d)", name, fmt_sz - 1);
         return 0;
     }
     memcpy(fmt, quote_open + 1, (size_t)fmt_len);
@@ -2513,7 +2541,7 @@ int repl_label_split_args(const char *args,
     if (*after) {
         if (*after != ',') {
             snprintf(err, (size_t)err_sz,
-                     "Usage: label(\"fmt\", arg, ...)");
+                     "Usage: %s(\"fmt\", arg, ...)", name);
             return 0;
         }
         after++;
@@ -2521,11 +2549,18 @@ int repl_label_split_args(const char *args,
         int post_len = (int)strlen(after);
         if (post_len >= post_sz) {
             snprintf(err, (size_t)err_sz,
-                     "label: args too long");
+                     "%s: args too long", name);
             return 0;
         }
         memcpy(post, after, (size_t)post_len);
         post[post_len] = '\0';
     }
     return 1;
+}
+
+int repl_label_split_args(const char *args,
+                          char *fmt, int fmt_sz,
+                          char *post, int post_sz,
+                          char *err, int err_sz) {
+    return repl_label_split_args_named(args, fmt, fmt_sz, post, post_sz, err, err_sz, "label");
 }

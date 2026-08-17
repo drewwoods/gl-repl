@@ -43,6 +43,7 @@ typedef enum {
     UI_HIT_ASSIGN_PLOT_RESET,  /* assignment plot "[reset]" */
     UI_HIT_ASSIGN_PLOT_YSCALE, /* assignment plot "lin"/"log" state chip */
     UI_HIT_ASSIGN_PLOT_EXPAND, /* assignment plot "1x"/"2x" zoom state chip */
+    UI_HIT_CONSOLE_CLOSE,      /* console panel header "[x]" */
     UI_HIT_OVERLAY_CHROME,   /* visible floating/status panel surface; inert */
     UI_HIT_SCENE
 } UiAppHitKind;

@@ -72,6 +72,7 @@
 #include "repl/state_views.h"
 #include "repl/tutorials.h"
 #include "subsystems/assign_plot/assign_plot.h"
+#include "subsystems/console/console.h"
 #include "subsystems/replay/replay.h"
 #include "subsystems/replay/replay_state.h"
 #include "subsystems/tutorial/tutorial.h"
@@ -84,6 +85,7 @@
 #include "ui/app/menu_bar.h"
 #include "ui/core/metrics.h"
 #include "ui/support/assign_plot.h"
+#include "ui/support/console.h"
 #include "ui/support/memprof.h"
 #include "ui/app/numeric_swatch.h"
 #include "ui/app/panels.h"
@@ -1891,11 +1893,16 @@ static void route_right_press(int x, int y) {
                 return;
             }
         } else {
-            /* The assignment-value plot paints under the inspector, so it
-             * classifies only where the popup did not. */
+            /* The assignment-value plot and console panel paint under the
+             * inspector, so they classify only where the popup did not. */
             plot_hit = ui_panels_hit_test_assign_plot(&ui_snap, x, y);
-            if (plot_hit.kind != UI_HIT_NONE)
+            if (plot_hit.kind != UI_HIT_NONE) {
                 hit = plot_hit;
+            } else {
+                UiHit console_hit = ui_panels_hit_test_console(&ui_snap, x, y);
+                if (console_hit.kind != UI_HIT_NONE)
+                    hit = console_hit;
+            }
         }
     }
 
@@ -2379,6 +2386,10 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_assign_plot_yscale_hit(); break;
     case UI_HIT_ASSIGN_PLOT_EXPAND:
         consumed = route_assign_plot_expand_hit(); break;
+    case UI_HIT_CONSOLE_CLOSE:
+        console_close();
+        editor_request_redraw();
+        consumed = 1; break;
     case UI_HIT_OVERLAY_CHROME:
         consumed = 1; break;
     case UI_HIT_PANEL_DIVIDER:
@@ -2453,6 +2464,8 @@ static int router_press_routes_to(int x, int y, int kind) {
     if (glr_ctrl_router_point_in_gl_state_popup(x, y))
         return 0;
     if (ui_panels_hit_test_assign_plot(&snap, x, y).kind != UI_HIT_NONE)
+        return 0;
+    if (ui_panels_hit_test_console(&snap, x, y).kind != UI_HIT_NONE)
         return 0;
     return ui_panels_hit_test(&snap, x, y, variable_count).kind == kind;
 }
@@ -2564,10 +2577,12 @@ static void route_wheel(int x, int y, int delta) {
         } else if (glr_ctrl_router_handle_gl_state_popup_wheel(x, y, delta)) {
             /* Consumed by the OpenGL-state popup under the pointer. */
         } else if (ui_panels_hit_test_assign_plot(&ui_snap, x, y).kind
+                       != UI_HIT_NONE ||
+                   ui_panels_hit_test_console(&ui_snap, x, y).kind
                        != UI_HIT_NONE) {
-            /* The plot paints below the popup but is still a floating panel:
-             * it consumes the wheel inert rather than letting it reach the
-             * code panel or the camera behind it. */
+            /* The plot and console paint below the popup but are still floating
+             * panels: they consume the wheel inert rather than letting it reach the
+             * code panel or the camera behind them. */
         } else if (editor_input_point_in_code_panel(x, y)) {
             glr_ctrl_router_dismiss_gl_state_for_editor_input();
             editor_input_code_panel_scroll(delta);
@@ -2901,6 +2916,11 @@ static void mouse_dispatch(int button, int state, int x, int y) {
         UiHit plot_hit = ui_panels_hit_test_assign_plot(&ui_snap, x, y);
         if (plot_hit.kind != UI_HIT_NONE) {
             (void)glr_ctrl_router_handle_code_panel_hit(plot_hit, x, y);
+            return;
+        }
+        UiHit console_hit = ui_panels_hit_test_console(&ui_snap, x, y);
+        if (console_hit.kind != UI_HIT_NONE) {
+            (void)glr_ctrl_router_handle_code_panel_hit(console_hit, x, y);
             return;
         }
         /* Classify the click via the canonical hit-test, then route by

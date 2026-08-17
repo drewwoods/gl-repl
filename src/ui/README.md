@@ -18,7 +18,7 @@ retained as a persistent object tree.
 The architecturally important part is the **strict view/controller split**:
 
 - **A UI renderer may draw.** It takes a read-only snapshot
-  ([`UiRenderSnapshot`](app/snapshot.h#L90)) and produces pixels. It does not read live program or
+  ([`UiRenderSnapshot`](app/snapshot.h#L91)) and produces pixels. It does not read live program or
   editor state, and it does not mutate anything.
 - **A UI input handler may hit-test and return.** It computes a *neutral*
   [`UiHit`](core/hit.h#L60) (e.g. "the pointer is over code row 12, char 4" or "over the
@@ -70,7 +70,7 @@ and without `src/ui/app`. The `render3d_demo` HUD shows the same fixed-function
 ## In the REPL app
 
 Inside the full app this is **layer 5** of the ownership map. Each frame the
-controller ([`src/app/glr_ctrl.c`](../app/glr_ctrl.c)) builds a [`UiRenderSnapshot`](app/snapshot.h#L90) from
+controller ([`src/app/glr_ctrl.c`](../app/glr_ctrl.c)) builds a [`UiRenderSnapshot`](app/snapshot.h#L91) from
 REPL runtime state + [`EditorState`](../editor/state.h#L199) + [`UiState`](app/state.h#L20) + peer state and fans it out to the
 `ui_*_render` functions. On input, the controller asks UI to hit-test, gets
 a [`UiHit`](core/hit.h#L60) back, and dispatches it to the owning subsystem.
@@ -98,7 +98,7 @@ source-line targets.
 | [`app/layout.c`](app/layout.c) / `.h` | App 3D viewport / code-panel rectangle geometry |
 | [`app/overlay_layout.c`](app/overlay_layout.c) / `.h` | Floating overlay panel placement |
 | [`app/state.c`](app/state.c) / `.h`, [`app/state_types.h`](app/state_types.h) | Owns [`UiState`](app/state.h#L20) (chrome/viewport/pointer/status TTL only) |
-| [`app/snapshot.h`](app/snapshot.h) | [`UiRenderSnapshot`](app/snapshot.h#L90) - the read-only per-frame bundle every renderer takes |
+| [`app/snapshot.h`](app/snapshot.h) | [`UiRenderSnapshot`](app/snapshot.h#L91) - the read-only per-frame bundle every renderer takes |
 | [`app/panels.c`](app/panels.c) / `.h` | Top-level panel bridge: code panel + status banner, prioritizes overlay/menu hits |
 | [`app/repl_code_panel.c`](app/repl_code_panel.c) / `.h` | REPL-aware adapter: builds rows from snapshots, maps hits to source lines |
 | [`app/menu_bar.c`](app/menu_bar.c) / `.h` | Menu bar, dropdowns, flyout submenus, search slot |

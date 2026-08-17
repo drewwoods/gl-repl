@@ -212,6 +212,10 @@ Transforms and validates the current raster position used by bitmap text. If the
 title = label
 Draws formatted bitmap text at the current raster position. Set that position with glRasterPos3f; numeric arguments replace the format string's supported floating-point placeholders.
 
+[command CMD_CONSOLE]
+title = console
+Prints a formatted trace line to the Console panel. Numeric arguments replace the format string's supported floating-point placeholders, and output is auto-indented by call depth. Unlike label, console emits no GL and is legal inside glBegin/glEnd.
+
 [command CMD_CLIP_PLANE]
 title = glClipPlane
 Defines one user clip plane from equation coefficients (a, b, c, d). Enable the matching GL_CLIP_PLANE slot to discard geometry on the plane's negative side.

@@ -84,4 +84,9 @@ UiHit ui_panels_hit_test_above_gl_state(const UiRenderSnapshot *snap,
 UiHit ui_panels_hit_test_assign_plot(const UiRenderSnapshot *snap,
                                      int mx, int my);
 
+/* The console panel's hit pass: like assign plot, it is consulted after the
+ * OpenGL-state inspector. */
+UiHit ui_panels_hit_test_console(const UiRenderSnapshot *snap,
+                                 int mx, int my);
+
 #endif /* UI_PANELS_H */

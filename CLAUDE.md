@@ -315,7 +315,7 @@ Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/gl
   and `glr_state_presentation_reset_example_defaults()`.
 - **New GL commands** → the canonical checklist is `docs/ARCHITECTURE.md`
   *Adding A New Command*; skill `gl-repl-new-command` carries the extra detail.
-  A bound table-driven command means [`CmdType`](src/repl/command.h#L44), the
+  A bound table-driven command means [`CmdType`](src/repl/command.h#L48), the
   three `command_spec.c` tables, executor, replay annotation,
   `command_descriptions.txt` (build-enforced), export round-trip, and an
   explicit classification in the default-less `attrib_bits.c` and
@@ -329,7 +329,7 @@ Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/gl
   (default), `ENUM_OR_CONST_VALUE` (bool masks, 0/1 reverse-mapped),
   `ENUM_OR_EXPR` (only `glLightModeli` slot 1). Spec tables stay **alphabetical
   by GL name**.
-- [`CmdType`](src/repl/command.h#L44) set tests use the inline predicates in [`command.h`](src/repl/command.h)
+- [`CmdType`](src/repl/command.h#L48) set tests use the inline predicates in [`command.h`](src/repl/command.h)
   (`repl_cmd_is_transform`, `repl_cmd_emits_vertex` /
   `repl_cmd_emits_immediate_vertex` for the glVertex-only subset,
   `repl_cmd_is_block_head` / `_end`), never ad-hoc `||` chains
@@ -400,7 +400,7 @@ frame baseline so accumulating programs don't compound.
 ### Two-level command model
 
 Source `GLCmd[]` (per-line canonical **text lives in [`EditorState`](src/editor/state.h#L199)'s editor
-buffer, not on [`GLCmd`](src/repl/command.h#L122)**) → flat array (loops unrolled, funcs inlined, ifs
+buffer, not on [`GLCmd`](src/repl/command.h#L127)**) → flat array (loops unrolled, funcs inlined, ifs
 resolved; each flat cmd records `src_cmd_idx` / `call_src_cmd_idx` /
 `func_scope_mask`) → executor emits GL. Any edit marks the flat array dirty;
 rebuilt next frame. Budgets: `MAX_FLATTEN_VISIT_BUDGET` = 200000,
@@ -457,7 +457,7 @@ is [`repl_parse_and_normalize()`](src/repl/normalize.h#L20) → `parse_command()
   [`repl_eval_declare_predef_var()`](src/repl/eval.h#L319). Locals register
   nowhere: `flatten_bind_func_locals` re-derives them from
   `payload.decl.names[]` per call.
-- [`GLCmd`](src/repl/command.h#L122) payload is a tagged union keyed on `type`
+- [`GLCmd`](src/repl/command.h#L127) payload is a tagged union keyed on `type`
   (`payload.decl.*`, `payload.assign.prev_local_value`, `payload.label.fmt`,
   `payload.matrix.m[]`); other types must not read it. A flat local assignment
   captures its pre-write target value in the assignment arm because the

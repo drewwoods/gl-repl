@@ -109,6 +109,9 @@ typedef enum {
     PROF_ASSIGN_PLOT,           /* capture + panel, accumulated */
     PROF_ASSIGN_PLOT_CAPTURE,   /* assign_plot_capture() flat-program scan */
     PROF_ASSIGN_PLOT_PANEL,     /* ui_assign_plot_panel_render() */
+    PROF_CONSOLE,               /* Console trace line capture + panel, accumulated */
+    PROF_CONSOLE_CAPTURE,       /* console_capture() flat-program scan */
+    PROF_CONSOLE_PANEL,         /* ui_console_panel_render() */
     PROF_COMPOSITOR,    /* glr_compositor_postprocess_frame() - whole-frame
                          * (full-screen) post-process; distinct from the
                          * scene-viewport pass PROF_RENDER3D_POST_PROCESS */

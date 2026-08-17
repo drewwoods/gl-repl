@@ -101,6 +101,9 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_ASSIGN_PLOT]                       = { "Assign Plot",     0, 0 },
     [PROF_ASSIGN_PLOT_CAPTURE]               = { "capture",         1, 0 },
     [PROF_ASSIGN_PLOT_PANEL]                 = { "panel",           1, 0 },
+    [PROF_CONSOLE]                           = { "Console",         0, 0 },
+    [PROF_CONSOLE_CAPTURE]                   = { "capture",         1, 0 },
+    [PROF_CONSOLE_PANEL]                     = { "panel",           1, 0 },
     [PROF_COMPOSITOR]                        = { "Compositor FX",   0, 0 },
     [PROF_FRAME_RESTORE]                     = { "Frame Restore",   0, 0 },
     [PROF_SCRIPTED_INPUT]                    = { "Scripted Input",  0, 0 },
@@ -179,6 +182,7 @@ static const unsigned char k_gpu_sections[PROF_SECTION_COUNT] = {
      * separate points in the frame - so a query there would bracket work
      * that issues no GL at all. */
     [PROF_ASSIGN_PLOT_PANEL]                 = 1,
+    [PROF_CONSOLE_PANEL]                     = 1,
     [PROF_COMPOSITOR]                        = 1,
     /* Host-band stages: the overlay aggregate draws (splash banner, tour
      * cursor/caption), so it owns a query; its two children stay CPU-only

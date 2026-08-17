@@ -1395,6 +1395,7 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
     case CMD_GLUT_TEAPOT:
     case CMD_GLUT_CONE:
     case CMD_LABEL:
+    case CMD_CONSOLE:
     /* Tessellation: the vertex data rides the tessellator's own cursor and
      * reaches GL through its callbacks, not as a state write at this row. */
     case CMD_TESS_BEGIN_POLYGON:

@@ -29,6 +29,7 @@
 #include "app/glr_pointer_script.h"          /* GlrTourPlaybackView */
 #include "ui/subsystems/variable_panel.h"   /* UiVariable / UiVariableList */
 #include "ui/support/assign_plot.h"        /* AssignPlotView / title cap */
+#include "ui/support/console.h"            /* ConsoleView */
 
 #include "ui/app/state_types.h"
 
@@ -105,6 +106,7 @@ typedef struct UiRenderSnapshot {
     AssignPlotView            assign_plot;
     char                      assign_plot_titles[MAX_ASSIGN_PLOT_SERIES]
                                                 [UI_ASSIGN_PLOT_TITLE_MAX];
+    ConsoleView               console;
     UiStatusState             status;
     UiStatusHistory           status_history;
     EditorSearchState             search;

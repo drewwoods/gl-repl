@@ -49,6 +49,7 @@ typedef struct ExportNeeds {
     int needs_smoothstep;
     int needs_sign;
     int needs_label;
+    int needs_console;
     int needs_scratch_a;
     int needs_scratch_b;
     int needs_scratch_c;
@@ -130,6 +131,7 @@ void write_rand_helper(FILE *f);
 void write_shape_helpers(FILE *f, const ExportNeeds *needs);
 void write_glfloat_vector_helpers(FILE *f, const ExportNeeds *needs);
 void write_label_helper(FILE *f);
+void write_console_helper(FILE *f);
 void write_render_helper_as_c(FILE *f, const char *name);
 void write_func_defs_as_c(FILE *f);
 void write_tess_preamble(FILE *f);

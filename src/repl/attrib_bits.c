@@ -182,6 +182,7 @@ unsigned repl_attrib_bits_for_cmd(const GLCmd *cmd) {
     case CMD_GLUT_TORUS: case CMD_GLUT_CUBE: case CMD_GLUT_SPHERE:
     case CMD_GLUT_TEAPOT: case CMD_GLUT_CONE:
     case CMD_LABEL:
+    case CMD_CONSOLE:
     /* Tessellator state lives on the REPL's own tess cursor
      * (ExecCursor.tess_current_normal/_color), not on GL's current-state
      * cells, so glPushAttrib does not scope it. */

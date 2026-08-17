@@ -15,6 +15,7 @@
 #include "ui/core/layout_utils.h"          /* ui_clamp_panel_y */
 #include "ui/subsystems/variable_panel.h"  /* ui_variable_panel_size */
 #include "ui/support/assign_plot.h"        /* ui_assign_plot_panel_size */
+#include "ui/support/console.h"            /* ui_console_panel_size */
 #include "ui/support/cpuprof.h"            /* ui_profile_panel_width/height */
 #include "ui/support/memprof.h"            /* ui_memory_panel_width/height */
 
@@ -89,6 +90,12 @@ UiOverlayLayoutIn ui_overlay_layout_inputs(UiOverlayLayoutInputs args) {
                               args.assign_plot_series_count,
                               &in.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT].w,
                               &in.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT].h);
+
+    in.panels[UI_OVERLAY_PANEL_CONSOLE].visible =
+        (args.console_visible != 0);
+    ui_console_panel_size(args.console_line_count,
+                          &in.panels[UI_OVERLAY_PANEL_CONSOLE].w,
+                          &in.panels[UI_OVERLAY_PANEL_CONSOLE].h);
     return in;
 }
 
@@ -109,10 +116,12 @@ void ui_overlay_layout_solve(const UiOverlayLayoutIn *in,
     int y = y0;
 
     order[order_count++] = UI_OVERLAY_PANEL_VARIABLE;
-    /* Directly above the variable panel: the assignment plot is read against
-     * the code, so it stays in the low, always-visible part of the stack
-     * rather than being pushed into a spill column by the profile surfaces. */
+    /* Directly above the variable panel: the assignment plot and console
+     * are read against the code, so they stay in the low, always-visible
+     * part of the stack rather than being pushed into a spill column by the
+     * profile surfaces. */
     order[order_count++] = UI_OVERLAY_PANEL_ASSIGN_PLOT;
+    order[order_count++] = UI_OVERLAY_PANEL_CONSOLE;
     order[order_count++] = UI_OVERLAY_PANEL_FPS;
     /* Memory and FPS are one right-edge telemetry stack. Keep them together
      * before the larger compute panels spill into columns to the left. */

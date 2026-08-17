@@ -125,4 +125,10 @@ int repl_label_split_args(const char *args,
                           char *post, int post_sz,
                           char *err, int err_sz);
 
+int repl_label_split_args_named(const char *args,
+                                char *fmt, int fmt_sz,
+                                char *post, int post_sz,
+                                char *err, int err_sz,
+                                const char *func_name);
+
 #endif

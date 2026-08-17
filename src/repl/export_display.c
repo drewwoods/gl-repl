@@ -165,6 +165,7 @@ ExportNeeds export_collect_needs(void) {
         .needs_smoothstep = 0,
         .needs_sign = 0,
         .needs_label = 0,
+        .needs_console = 0,
         .needs_scratch_a = 0,
         .needs_scratch_b = 0,
         .needs_scratch_c = 0,
@@ -195,6 +196,7 @@ ExportNeeds export_collect_needs(void) {
         const GLCmd *cmd = &repl_state_document_cmds()[cmd_idx];
         if (!cmd->valid) continue;
         if (cmd->type == CMD_LABEL) needs.needs_label = 1;
+        if (cmd->type == CMD_CONSOLE) needs.needs_console = 1;
         switch (cmd->type) {
         case CMD_MATERIALFV:
             if (cmd->num_args == 3)

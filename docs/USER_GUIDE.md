@@ -621,6 +621,24 @@ With lighting on, the text colour is the *lit* result latched at the
 > either way. `glDisable(GL_COLOR_MATERIAL);` immediately before the
 > `glRasterPos3f` works around it.
 
+### Console output - `console()`
+
+```c
+console("phase=%f steps=%f", phase, steps);
+```
+
+- `console("fmt", a, b, c, ...)` outputs formatted debug strings to a floating
+  **Console panel** in the scene overlay. Up to 8 substitution arguments;
+  `%f` substitutes a value formatted via `%g`, and `%%` produces a literal
+  percent sign. The format string is limited to 64 characters and may not
+  contain `//`, `(`, `)`, `,`, or backslashes.
+- Legal anywhere in a scene, including inside `glBegin` / `glEnd` blocks.
+- In the REPL: Lines automatically indent according to their nesting / call
+  depth ($2 \times \text{call\_depth}$ spaces). When frame replay is active,
+  console output scrubs with the replay position.
+- In standalone C export: Emits a `console()` helper that prints unindented
+  lines directly to `stdout`.
+
 ### Math expressions
 
 Every numeric argument is a full expression, evaluated when the line runs:

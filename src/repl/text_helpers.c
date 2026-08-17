@@ -90,6 +90,38 @@ void repl_format_source_float(char *out, int out_sz, float v) {
     snprintf(out, (size_t)out_sz, "%.9g", (double)v);
 }
 
+int repl_format_label_string(char *out, int out_sz,
+                             const char *fmt,
+                             const float *args, int num_args) {
+    if (!out || out_sz <= 0) return 0;
+    out[0] = '\0';
+    if (!fmt) return 0;
+
+    int sub_count = num_args > 0 ? num_args : 0;
+    int sub_idx = 0;
+    int off = 0;
+
+    while (*fmt && off < out_sz - 1) {
+        if (fmt[0] == '%' && fmt[1] == 'f' && sub_idx < sub_count && args) {
+            int written = snprintf(out + off, (size_t)(out_sz - off),
+                                   "%g", (double)args[sub_idx]);
+            if (written > 0) {
+                off += written;
+                if (off >= out_sz) off = out_sz - 1;
+            }
+            sub_idx++;
+            fmt += 2;
+        } else if (fmt[0] == '%' && fmt[1] == '%') {
+            out[off++] = '%';
+            fmt += 2;
+        } else {
+            out[off++] = *fmt++;
+        }
+    }
+    out[off] = '\0';
+    return off;
+}
+
 int repl_extract_paren_payload(const char *src, char *out, int out_sz) {
     const char *p = strchr(src, '(');
     if (!p) return 0;

@@ -365,6 +365,14 @@ static void emit_export_label_helper_section(FILE *f,
     write_label_helper(f);
 }
 
+static void emit_export_console_helper_section(FILE *f,
+                                               const ExportScaffoldContext *ctx) {
+    if (!ctx || !ctx->needs.needs_console)
+        return;
+    (void)ctx;
+    write_console_helper(f);
+}
+
 static void emit_export_tess_preamble_section(FILE *f,
                                               const ExportScaffoldContext *ctx) {
     if (!ctx || !ctx->needs.needs_tess)
@@ -435,6 +443,7 @@ static const ExportScaffoldSectionSpec EXPORT_SCAFFOLD_SECTIONS[] = {
     { emit_export_rand_helper_section        },
     { emit_export_shape_helper_section       },
     { emit_export_label_helper_section       },
+    { emit_export_console_helper_section     },
     { emit_export_tess_preamble_section      },
     { emit_export_save_restore_section       },
     { emit_export_fp_contract_section        },

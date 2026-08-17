@@ -139,7 +139,7 @@ module boundaries only through the typed facades ([`src/repl/state.h`](../src/re
 The most common contributions, recipe-style:
 
 **A new GL command**
-1. Add a [`CmdType`](../src/repl/command.h#L44) to [`src/repl/command.h`](../src/repl/command.h).
+1. Add a [`CmdType`](../src/repl/command.h#L48) to [`src/repl/command.h`](../src/repl/command.h).
 2. Parse it in [`repl_parser_parse_command_ctx()`](../src/repl/parser.h#L105) ([`src/repl/parser.c`](../src/repl/parser.c)) -
    for a `glEnable`-shaped enum-arg command or a standard float-arg
    command, you only need a new row in `k_enum_command_specs[]` /

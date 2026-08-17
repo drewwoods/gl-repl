@@ -127,7 +127,7 @@ Consequences:
   editor text and REPL command state. A failed validation updates
   neither. Undo restores both sides together.
 - **UI is view + hit-test, not a controller.** Renderers consume
-  [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L90). Input handlers compute a [`UiHit`](../src/ui/core/hit.h#L60) and return.
+  [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L91). Input handlers compute a [`UiHit`](../src/ui/core/hit.h#L60) and return.
   `glr_ctrl` dispatches based on `UiHit.kind`. There is no central
   dispatch enum; the editor and the peer subsystems are each their
   own controller.
@@ -283,7 +283,7 @@ lists to make the layer boundaries observable.
   / search/theme helpers, [`src/support/cpuprof.c`](../src/support/cpuprof.c). It deliberately does
   **not** link `src/ui/app`: the demo proves the editor model can render
   through generic UI primitives without the REPL code-panel adapter,
-  [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L90), menu bar, app chrome, or [`UiState`](../src/ui/app/state.h#L20). The demo is
+  [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L91), menu bar, app chrome, or [`UiState`](../src/ui/app/state.h#L20). The demo is
   shim-free: edit-line ownership lives in
   `EditorState.document.edit_line_idx`, and the demo's input dispatcher
   reaches edit-line through `editor_state_edit_line` / `_set` like the
@@ -352,7 +352,7 @@ editor-overlay snapshot types in [`src/ui/app/editor.h`](../src/ui/app/editor.h)
 > ownership model they encode.
 
 - **Legacy GL/eval domain types** in `src/repl/` (cross-domain,
-  deliberately un-prefixed): [`GLCmd`](../src/repl/command.h#L122), [`CmdType`](../src/repl/command.h#L44), [`ExprVar`](../src/repl/eval.h#L136), [`ExprCtx`](../src/repl/eval.h#L143),
+  deliberately un-prefixed): [`GLCmd`](../src/repl/command.h#L127), [`CmdType`](../src/repl/command.h#L48), [`ExprVar`](../src/repl/eval.h#L136), [`ExprCtx`](../src/repl/eval.h#L143),
   [`TessVertex`](../src/repl/executor.h#L106), [`FlatCmdLocalVars`](../src/repl/flatten.h#L79), [`FlatProgramView`](../src/repl/flatten.h#L59),
   [`CmdSyntaxCategory`](../src/repl/command_spec.h#L152), and the `cmd_type_name` thin alias.
 - **REPL formatting**: [`src/repl/format.h`](../src/repl/format.h) `ReplFmt*`/`repl_format_*`
@@ -516,7 +516,7 @@ commands.
 | `repl_comment_toggle` | The whole Ctrl+/ operation: which rows move (selection, enclosing block, or the cursor line) and which way. Commenting is one pure `repl_compile_comment_range` change; uncommenting is a range transaction in the same family as `repl_replace` - each row is re-parsed in place against a document where the rows above it are already restored, under a [`SceneSnapshot`](../src/repl/scene_snapshot.h#L17) restored wholesale if any row is rejected. The editor keeps only the undo snapshot, the status line, and the input row - and because its undo push is also the one-way transient-scene promotion hook, the toggle is rehearsed (`REPL_COMMENT_TOGGLE_REHEARSE`) before it is committed |
 | `repl_bootstrap` | Startup loading helpers (`repl_load_initial_commands`): the file/workspace/stdin/example load a session begins with, returning the post-load cursor target for the caller to apply. Positional `-` spools stdin to an anonymous seekable file before entering the shared multi-pass importer |
 | `repl_host_effects` | Host-installed side-effect bridge: status, cursor, input, completion, and tutorial effects owned *above* `src/repl` are reached through it, so uninstalled callbacks make pure tests and `repl_demo` no-op cleanly |
-| `repl_command_store` | Low-level [`GLCmd`](../src/repl/command.h#L122) array mechanics only: insert, replace, delete, load. No text-buffer writes |
+| `repl_command_store` | Low-level [`GLCmd`](../src/repl/command.h#L127) array mechanics only: insert, replace, delete, load. No text-buffer writes |
 | `repl_flatten` | Builds the flat executable command stream from source commands, loops, functions, and `if` blocks |
 | `repl_flatten_expr` + `repl_expr_program` | Expression side of flattening: dep masks + value-only rebake, and the compiled-expression cache the per-frame re-evaluation runs on |
 | `repl_flatten_query` | Reads the live flat command stream for cursor matching, current-block highlights, and per-line flat-cost attribution |
@@ -529,7 +529,7 @@ commands.
 | `src/repl/time` | `repl_set_time` and the transient-`t` handling the animation-blur sub-step path relies on |
 | `src/repl/keymap_format` | Renders [`keymap.h`](../keymap.h) bindings as text for the help overlay and `make keymap-list`, so the binding table is never transcribed by hand |
 
-[`GLCmd`](../src/repl/command.h#L122) is a parse-result record: type, args, flags, provenance. It does
+[`GLCmd`](../src/repl/command.h#L127) is a parse-result record: type, args, flags, provenance. It does
 not carry source text. Per-line text belongs to [`EditorState`](../src/editor/state.h#L199).
 
 ### 2. Editor - text, cursor, navigation, commit, undo
@@ -665,7 +665,7 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | Module | Role |
 |--------|------|
 | `ui_state` | Owns [`UiState`](../src/ui/app/state.h#L20): viewport, pointer, status text TTL, panel visibility, panel-divider geometry. *Not* cursor blink (that's editor) and *not* camera pose (that's `glr_camera`). Small chrome value types live in `ui_state_types` and are re-exported by `repl_state_views` where a view facade needs them |
-| `ui_snapshot` | Defines [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L90), the read-only bundle passed to every UI renderer |
+| `ui_snapshot` | Defines [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L91), the read-only bundle passed to every UI renderer |
 | `ui_editor` | Editor-overlay snapshot types: transformers, highlights, virtual lines |
 | `ui_hit` | Defines [`UiHitKind`](../src/ui/core/hit.h#L17) + [`UiHit`](../src/ui/core/hit.h#L60), the passive UI → controller contract. UI hit-test functions return [`UiHit`](../src/ui/core/hit.h#L60); `glr_ctrl` dispatches on it |
 | `ui_panels` | Top-level panel bridge: delegates code-panel rendering/hit-test to `ui_repl_code_panel`, renders the scene status banner, and prioritizes overlay/menu hit-tests before returning [`UiHit`](../src/ui/core/hit.h#L60) |
@@ -673,8 +673,8 @@ allowlists. The contract is enforced by a per-feature lighter guard:
 | `ui_text_search` | Pure case-insensitive substring search helpers (`ui_text_matches_at`, `ui_text_find_next_in_text`), plus `_opts` twins that take the whole-word flag - the short names keep plain-substring behavior for the editor-demo twin. REPL/editor-free; used by `editor_search` |
 | `ui_theme` ([`src/ui/core/theme.c`](../src/ui/core/theme.c)) | Single source of truth for 2D chrome color: semantic `ui_clr(UI_TOK_*)` tokens resolved against one active theme row, so a runtime theme switch updates one storage site instead of one copy per TU. Computed/data palettes (HSV math, syntax categories, the FPS gauge) deliberately stay outside it |
 | `ui_color_swatch` / `ui_numeric_swatch` / `ui_view_mode_swatch` | Inline code-panel affordances: the color square on an editable color line (reads the app-owned [`UiTransformer`](../src/ui/app/editor.h), which is why it sits in `ui/app` and not the picker peer), the stateless numeric stepper the controller re-derives each frame, and the animated 2D/3D toggle cell driven by the controller's projection blend. Render + hit-test only |
-| `ui_variable_panel_view` ([`src/ui/app/variable_panel_view.c`](../src/ui/app/variable_panel_view.c)) | Bakes scene rect / statusbar inset / panel-at-top into the dependency-light [`UiVariablePanelView`](../src/ui/subsystems/variable_panel.h#L56), so the variable-panel renderer never touches [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L90), `ui/app/layout`, or `ui/app/state` and stays linkable from `{ui/core, config}` alone - the 2D analogue of `glr_ctrl` building [`Render3dRenderConfig`](../src/render3d/render_types.h#L139) |
-| `ui_repl_code_panel` | REPL-aware adapter over `ui_text_panel`: builds rows from [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L90), editor buffer/virtual-line views, command metadata, tutorial fade, replay annotations, and color-transformer state; rewrites generic hits back to source-line targets. Owns the left aux column (vertex indices, auto-normal `auto` tag), whose width `ui_repl_code_panel_compute_text_x` reserves unconditionally - the column is painted at `text_x - 6 * FONT_W`, so reserving and painting it must never disagree |
+| `ui_variable_panel_view` ([`src/ui/app/variable_panel_view.c`](../src/ui/app/variable_panel_view.c)) | Bakes scene rect / statusbar inset / panel-at-top into the dependency-light [`UiVariablePanelView`](../src/ui/subsystems/variable_panel.h#L56), so the variable-panel renderer never touches [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L91), `ui/app/layout`, or `ui/app/state` and stays linkable from `{ui/core, config}` alone - the 2D analogue of `glr_ctrl` building [`Render3dRenderConfig`](../src/render3d/render_types.h#L139) |
+| `ui_repl_code_panel` | REPL-aware adapter over `ui_text_panel`: builds rows from [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L91), editor buffer/virtual-line views, command metadata, tutorial fade, replay annotations, and color-transformer state; rewrites generic hits back to source-line targets. Owns the left aux column (vertex indices, auto-normal `auto` tag), whose width `ui_repl_code_panel_compute_text_x` reserves unconditionally - the column is painted at `text_x - 6 * FONT_W`, so reserving and painting it must never disagree |
 | `ui_layout` | Pure 3D viewport / code-panel rectangle geometry |
 | `ui_overlay_layout` ([`src/ui/app/overlay_layout.c`](../src/ui/app/overlay_layout.c)) | Layout engine for the floating scene-overlay panels (variable / FPS plot / profile / memory): pure bottom-up right-column stacking solve above the statusbar + replay-HUD band, column spill on overflow (panels can't overlap), plus the controller-ticked eased positions every panel glides on. View builders read resolved positions; unticked queries fall back to pure solve targets |
 | `ui_text_layout` ([`src/ui/core/text_layout.c`](../src/ui/core/text_layout.c)) | Pure text wrapping and visual-line iteration. Public types and functions use the `code_layout_*` / [`CodeLayout`](../src/ui/core/text_layout.h#L57) / [`CodeWrapIter`](../src/ui/core/text_layout.h#L70) convention |
@@ -711,7 +711,7 @@ Files that do not belong in this layer:
 
 | Module | Role |
 |--------|------|
-| `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps. Reads source via the `source_document` view; camera/cfg formatting delegated to app-side bridges and neutral cfg-baseline helpers. Split by output section - `export_prologue` (headers/`@cfg`/globals), `export_setup` (the generated `init()`), `export_display` (the `display()` body), `export_cmd_writer` (per-[`GLCmd`](../src/repl/command.h#L122) C text) - over the shared [`export_format_shared.h`](../src/repl/export_format_shared.h) helpers |
+| `repl_export` | Save/load, typed export scaffold, workspace headers, code-panel dumps. Reads source via the `source_document` view; camera/cfg formatting delegated to app-side bridges and neutral cfg-baseline helpers. Split by output section - `export_prologue` (headers/`@cfg`/globals), `export_setup` (the generated `init()`), `export_display` (the `display()` body), `export_cmd_writer` (per-[`GLCmd`](../src/repl/command.h#L127) C text) - over the shared [`export_format_shared.h`](../src/repl/export_format_shared.h) helpers |
 | `src/repl/export_glr` | The other writer: `.glr` scene source (File → Save Scene as .glr), the authoring format built-in examples ship in - non-default scene-subset `@cfg`, the tagged `@camera` rows, and the document text at column 0 in canonical phase order (declarations, function definitions, camera, body - the exported C's own order), with none of the standalone-C scaffold. Symmetric with `src/repl/example_loader`, which reads exactly that; the reader/writer pair moves together. Off-default detection uses the cfg bridge's `fill_scene_defaults` (app-side table over `CFG_DEFAULT_*`) |
 | `src/repl/import` | Reverses the exporter line-by-line, feeding geometry through [`repl_load_apply_line()`](../src/repl/load.h#L78) - the compile + apply path [`load.h`](../src/repl/load.h) provides for non-editor callers, deliberately not `editor_feed_line()`. Reader and writer share the [`export_format_shared.h`](../src/repl/export_format_shared.h) accessors rather than duplicating state |
 | `src/repl/line_scan` | Statement-boundary lexing: running bracket depth (literals skipped, `//` ends the code, `()`/`[]` count and `{}` do not) and the terminator set `; { } :`. Two consumers that must agree - `src/repl/import`'s physical-line accumulator, and `src/app/glr_extedit`'s incomplete-final-row heuristic - so it is one implementation rather than two |

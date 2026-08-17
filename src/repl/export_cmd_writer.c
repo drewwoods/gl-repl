@@ -523,7 +523,8 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
                     x, y, z);
         }
         break;
-    case CMD_LABEL: {
+    case CMD_LABEL:
+    case CMD_CONSOLE: {
         /* Split format / post-args, translate the post-args
          * through repl_eval_expr_to_c, and re-emit with the
          * format string preserved byte-exact. The default branch
@@ -531,10 +532,10 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
          * (including string contents) and would rewrite substrings
          * like "sin" or "PI" appearing inside the format string.
          *
-         * Emits `label(...)`, a REPL-specific primitive whose
-         * standalone-C definition is provided by a static wrapper
-         * emitted in the file's prologue when needs_label is set.
-         * See write_label_helper. */
+         * Emits `label(...)` or `console(...)`, REPL-specific primitives
+         * whose standalone-C definitions are provided by static wrappers
+         * emitted in the file's prologue when needs_label / needs_console is set.
+         * See write_label_helper and write_console_helper. */
         const char *open_p = strchr(source_text, '(');
         const char *close_p = open_p ? strrchr(source_text, ')') : NULL;
         if (open_p && close_p && close_p > open_p) {

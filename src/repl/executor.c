@@ -9,6 +9,7 @@
 #include "repl/attrib_bits.h"   /* repl_attrib_bits_for_type (restore gating) */
 #include "repl/executor.h"
 #include "repl/state_owners.h"
+#include "repl/text_helpers.h"  /* repl_format_label_string */
 #include "support/mesh_ply.h"   /* MESH_PLY_PASS_* feedback normal-encoding markers */
 
 /* Camera-distance source for the point-size fallback used when the
@@ -891,32 +892,17 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
          * in sync with current variable values for has_vars commands, so we
          * use them directly. */
         char buf[128];
-        int sub_count = cmd->num_args;
-        int sub_idx = 0;
-        int off = 0;
-        const char *fmt = cmd->payload.label.fmt;
-        if (sub_count < 0)
-            sub_count = 0;
-        while (*fmt && off < (int)sizeof(buf) - 1) {
-            if (fmt[0] == '%' && fmt[1] == 'f' && sub_idx < sub_count) {
-                off += snprintf(buf + off, sizeof(buf) - (size_t)off,
-                                "%g", (double)cmd->args[sub_idx]);
-                if (off >= (int)sizeof(buf))
-                    off = (int)sizeof(buf) - 1;
-                sub_idx++;
-                fmt += 2;
-            } else if (fmt[0] == '%' && fmt[1] == '%') {
-                buf[off++] = '%';
-                fmt += 2;
-            } else {
-                buf[off++] = *fmt++;
-            }
-        }
-        buf[off] = '\0';
+        repl_format_label_string(buf, sizeof(buf), cmd->payload.label.fmt,
+                                 cmd->args, cmd->num_args);
         for (const char *c = buf; *c; c++)
             glutBitmapCharacter(GLUT_BITMAP_9_BY_15, (unsigned char)*c);
         break;
     }
+    case CMD_CONSOLE:
+        /* `console("fmt", ...)` - printf-style trace line. Emits no GL and
+         * does not draw into the scene. Output is captured once per frame via
+         * the flat-program scan (console_capture) rather than an executor hook. */
+        break;
     case CMD_TESS_BEGIN_POLYGON:
         if (g_tess) {
             g_tess_vert_count = 0;

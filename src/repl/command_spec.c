@@ -395,6 +395,13 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Up to 4 substitution args; format string limited to 64 chars.\n"
         "Forbidden in fmt: '//', '(', ')', ',', and any backslash.",
         REPL_HELP_GROUP_RASTER },
+    { "console(",            "console(\"fmt\", a, b, c, ...)",                           9, { "fmt", "a", "b", "c", "d", "e", "f", "g", "h" },
+        "Print a formatted trace line to the Console panel (auto-indented by call depth).\n"
+        "Format supports %f (substituted from arguments as %g) and %% (literal '%').\n"
+        "Up to 8 substitution args; format string limited to 64 chars.\n"
+        "Legal anywhere (including inside glBegin/glEnd).\n"
+        "Forbidden in fmt: '//', '(', ')', ',', and any backslash.",
+        REPL_HELP_GROUP_RASTER },
     /* --- Point parameters & blending --- */
     { "glPointParameterfv(", "glPointParameterfv(pname, a, b, c)",                       4, { "pname", "a", "b", "c" },
         "Distance attenuation: size *= 1/sqrt(const + linear*d + quadratic*d*d)",
@@ -862,6 +869,7 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC_NAMED(CMD_EDGE_FLAG,              "glEdgeFlag",           1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_RASTER_POS3F,       "glRasterPos3f",       1, CMD_CAT_STATE),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_LABEL,              "label",               1, CMD_CAT_GLUT_SHAPE),
+    CMD_TYPE_SPEC_NAMED(CMD_CONSOLE,            "console",             1, CMD_CAT_GLUT_SHAPE),
     CMD_TYPE_SPEC(CMD_ELSE_IF,                    1, CMD_CAT_CONDITIONAL),
     CMD_TYPE_SPEC(CMD_ELSE,                       1, CMD_CAT_CONDITIONAL),
     CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_CLIP_PLANE,         "glClipPlane",         1, CMD_CAT_STATE),

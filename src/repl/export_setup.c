@@ -721,7 +721,8 @@ void emit_export_header_pre(FILE *f, const ExportNeeds *needs) {
      * here, grouped with the other system includes, rather than mid-file
      * at each helper's definition - a stray `#include` below file-scope
      * code reads as a sanitization bug even though it compiles. */
-    int needs_stdio = needs && (needs->needs_label || needs->tune_count > 0);
+    int needs_stdio = needs && (needs->needs_label || needs->needs_console ||
+                                needs->tune_count > 0);
 
     /* NOTE: resolving a dynamic boilerplate line at the consumer site
      * (as here) is safe ONLY because this one consumer is the file

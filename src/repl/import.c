@@ -1617,18 +1617,18 @@ static int import_make_repl_mult_matrixf_line(const char *line, char *out, int o
                             repl_args[12], repl_args[13], repl_args[14], repl_args[15]);
 }
 
-static int import_make_repl_glut_bitmap_string(const char *line,
-                                                char *out, int out_sz) {
-    /* Match the label prefix (allow leading whitespace).
+static int import_make_repl_label_like_string(const char *line,
+                                              char *out, int out_sz,
+                                              const char *prefix) {
+    /* Match the label/console prefix (allow leading whitespace).
      * Run the args halves through the C-to-REPL converter while
      * preserving the format string verbatim. */
     const char *p = line ? line : "";
     while (*p && isspace((unsigned char)*p)) p++;
-    static const char kPrefix[] = "label";
-    int kPrefixLen = (int)(sizeof(kPrefix) - 1);
-    if (strncmp(p, kPrefix, (size_t)kPrefixLen) != 0)
+    int prefix_len = (int)strlen(prefix);
+    if (strncmp(p, prefix, (size_t)prefix_len) != 0)
         return 0;
-    p += kPrefixLen;
+    p += prefix_len;
     while (*p && isspace((unsigned char)*p)) p++;
     if (*p != '(') return 0;
     const char *open_p = p;
@@ -1646,10 +1646,11 @@ static int import_make_repl_glut_bitmap_string(const char *line,
     char fmt[GLUT_BITMAP_FMT_MAX] = "";
     char post[MAX_LINE_LEN] = "";
     char split_err[REPL_DIAG_TEXT_MAX] = "";
-    if (!repl_label_split_args(args_str,
-                               fmt, (int)sizeof(fmt),
-                               post, (int)sizeof(post),
-                               split_err, (int)sizeof(split_err)))
+    if (!repl_label_split_args_named(args_str,
+                                     fmt, (int)sizeof(fmt),
+                                     post, (int)sizeof(post),
+                                     split_err, (int)sizeof(split_err),
+                                     prefix))
         return 0;
 
     char post_repl[MAX_LINE_LEN] = "";
@@ -1657,8 +1658,18 @@ static int import_make_repl_glut_bitmap_string(const char *line,
         repl_eval_c_expr_to_repl(post, post_repl, sizeof(post_repl));
 
     return repl_format_fits(out, (size_t)out_sz,
-                            "label(\"%s\"%s%s);",
-                            fmt, post_repl[0] ? ", " : "", post_repl);
+                            "%s(\"%s\"%s%s);",
+                            prefix, fmt, post_repl[0] ? ", " : "", post_repl);
+}
+
+static int import_make_repl_glut_bitmap_string(const char *line,
+                                                char *out, int out_sz) {
+    return import_make_repl_label_like_string(line, out, out_sz, "label");
+}
+
+static int import_make_repl_console_string(const char *line,
+                                           char *out, int out_sz) {
+    return import_make_repl_label_like_string(line, out, out_sz, "console");
 }
 
 static void import_state_init(ImportState *s) {
@@ -1961,7 +1972,8 @@ static void import_translate_repl_line(const char *line,
         import_make_repl_fog_fv_line(line, repl_line, repl_line_sz) ||
         import_make_repl_mult_matrixf_line(line, repl_line, repl_line_sz) ||
         import_make_repl_scratch_block_line(line, repl_line, repl_line_sz) ||
-        import_make_repl_glut_bitmap_string(line, repl_line, repl_line_sz))
+        import_make_repl_glut_bitmap_string(line, repl_line, repl_line_sz) ||
+        import_make_repl_console_string(line, repl_line, repl_line_sz))
         return;
 
     repl_eval_c_expr_to_repl(line, repl_line, repl_line_sz);

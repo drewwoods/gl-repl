@@ -290,6 +290,9 @@ static int make_c89_probe(CmdType type, GLCmd *cmd,
     case CMD_LABEL:
         snprintf(line, line_sz, "label(\"probe\", 1); // c89 probe");
         break;
+    case CMD_CONSOLE:
+        snprintf(line, line_sz, "console(\"probe\", 1); // c89 probe");
+        break;
     case CMD_ELSE_IF:
         snprintf(line, line_sz, "} else if (1) { // c89 probe");
         break;
@@ -467,6 +470,7 @@ static const CmdType expected_commands[] = {
     CMD_TESS_END,
     CMD_RASTER_POS3F,
     CMD_LABEL,
+    CMD_CONSOLE,
     CMD_CLIP_PLANE,
     CMD_CLEAR,
     CMD_FOG_I,
@@ -1225,6 +1229,7 @@ int main(void) {
      * arg list. */
     editor_feed_line("glRasterPos3f(0, 1.5, 0);");
     editor_feed_line("label(\"x = %f\", x);");
+    editor_feed_line("console(\"x = %f\", x);");
 
     /* GLU tessellation commands - polygon */
     editor_feed_line("gluBegin(GLU_POLYGON);");

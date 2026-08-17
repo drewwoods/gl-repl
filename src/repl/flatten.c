@@ -1107,7 +1107,7 @@ static int flatten_reparse_line(FlattenContext *ctx,
          * to flatten_var_assign before it can reach here, as is
          * CMD_VAR_DECLARE with payload.decl. The parser's memset already
          * zeroes the payload union (GLCmd's "unused payload is zeroed"
-         * contract) and refills payload.label for CMD_LABEL. */
+         * contract) and refills payload.label for CMD_LABEL and CMD_CONSOLE. */
         tmp.is_auto = src_cmd->is_auto;
         if (has_local_vars)
             tmp.has_vars = src_cmd->has_vars;

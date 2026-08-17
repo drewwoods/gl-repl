@@ -79,6 +79,7 @@ static void debug_dump_flat_args(FILE *dst, const GLCmd *cmd) {
         fprintf(dst, "]");
         break;
     case CMD_LABEL:
+    case CMD_CONSOLE:
         fprintf(dst, " fmt=\"%s\"", cmd->payload.label.fmt);
         break;
     case CMD_VAR_DECLARE:

@@ -97,6 +97,7 @@
 #include "ui/app/menu_bar.h"
 #include "ui/app/overlay_layout.h"
 #include "ui/support/assign_plot.h"
+#include "ui/support/console.h"
 #include "ui/support/memprof.h"
 #include "ui/app/numeric_swatch.h"
 #include "ui/app/panels.h"
@@ -114,6 +115,7 @@
 #include "app/glr_ctrl_internal.h"
 #include "app/glr_modal.h"
 #include "subsystems/assign_plot/assign_plot.h"
+#include "subsystems/console/console.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 
@@ -2427,6 +2429,7 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
         glr_ctrl_assign_plot_title(snap->assign_plot.series[i].source_line_idx,
                                    snap->assign_plot_titles[i],
                                    sizeof(snap->assign_plot_titles[i]));
+    snap->console        = console_view();
     snap->status         = ui_state_status();
     snap->status_history = ui_state_status_history();
     /* Count of structurally unbalanced bracket commands, surfaced as a
@@ -2713,6 +2716,8 @@ static UiOverlayLayoutIn glr_ctrl_overlay_layout_inputs(
         .assign_plot_visible        = snap->assign_plot.open,
         .assign_plot_expanded       = snap->assign_plot.expanded,
         .assign_plot_series_count   = snap->assign_plot.series_count,
+        .console_visible            = snap->console.open,
+        .console_line_count         = snap->console.count,
         .band_h                     = ui_overlay_layout_last_band_h(),
     });
 }
@@ -2743,6 +2748,20 @@ static UiAssignPlotPanelView glr_ctrl_build_assign_plot_view(
     }
     UiOverlayLayoutIn in = glr_ctrl_overlay_layout_inputs(snap);
     ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_ASSIGN_PLOT,
+                                &v.panel_x, &v.panel_y);
+    return v;
+}
+
+static UiConsolePanelView glr_ctrl_build_console_view(
+        const UiRenderSnapshot *snap) {
+    UiConsolePanelView v;
+    memset(&v, 0, sizeof(v));
+    v.window_w = snap->viewport.window_w;
+    v.window_h = snap->viewport.window_h;
+    v.visible  = snap->console.open;
+    v.console  = snap->console;
+    UiOverlayLayoutIn in = glr_ctrl_overlay_layout_inputs(snap);
+    ui_overlay_layout_panel_pos(&in, UI_OVERLAY_PANEL_CONSOLE,
                                 &v.panel_x, &v.panel_y);
     return v;
 }
@@ -3272,6 +3291,39 @@ void glr_ctrl_display_frame(void) {
         prof_accum_end(PROF_ASSIGN_PLOT);
     }
 
+    /* Auto-open console panel if the document uses console(...) and scene changed
+     * or newly added to the document. */
+    {
+        static int s_last_console_scene_slot = -2;
+        static int s_last_had_console = 0;
+        int active_slot = repl_active_user_scene();
+        int has_console = 0;
+        for (int i = 0; i < flat_program.cmd_count; i++) {
+            if (flat_program.cmds[i].valid && flat_program.cmds[i].type == CMD_CONSOLE) {
+                has_console = 1;
+                break;
+            }
+        }
+        if (active_slot != s_last_console_scene_slot) {
+            s_last_console_scene_slot = active_slot;
+            if (has_console) {
+                console_open();
+            }
+        } else if (has_console && !s_last_had_console) {
+            console_open();
+        }
+        s_last_had_console = has_console;
+    }
+
+    if (console_is_open()) {
+        prof_accum_reset(PROF_CONSOLE);
+        prof_begin(PROF_CONSOLE);
+        prof_begin(PROF_CONSOLE_CAPTURE);
+        console_capture(flat_program.cmds, flat_program.cmd_count, g_frame_replay_exec_limit);
+        prof_end(PROF_CONSOLE_CAPTURE);
+        prof_accum_end(PROF_CONSOLE);
+    }
+
     repl_refresh_render_state_strings();
     repl_refresh_camera_lines();
     prof_end(PROF_SNAPSHOT_PREP);
@@ -3423,6 +3475,17 @@ void glr_ctrl_display_frame(void) {
         prof_end(PROF_ASSIGN_PLOT_PANEL);
         prof_accum_end(PROF_ASSIGN_PLOT);
         prof_accum_commit(PROF_ASSIGN_PLOT);
+    }
+
+    /* Console panel. Drawn adjacent to assignment plot panel. */
+    if (ui_snap.console.open) {
+        UiConsolePanelView console_view = glr_ctrl_build_console_view(&ui_snap);
+        prof_begin(PROF_CONSOLE);
+        prof_begin(PROF_CONSOLE_PANEL);
+        ui_console_panel_render(&console_view);
+        prof_end(PROF_CONSOLE_PANEL);
+        prof_accum_end(PROF_CONSOLE);
+        prof_accum_commit(PROF_CONSOLE);
     }
 
     prof_begin(PROF_UI_PANELS);
@@ -5037,6 +5100,8 @@ void glr_ctrl_tick(void) {
             .assign_plot_visible        = assign_plot_is_open(),
             .assign_plot_expanded       = assign_plot_is_expanded(),
             .assign_plot_series_count   = assign_plot_series_count(),
+            .console_visible            = console_is_open(),
+            .console_line_count         = console_view().count,
             .band_h                     = band_h,
         });
         ui_overlay_layout_tick(&in);

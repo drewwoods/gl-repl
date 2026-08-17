@@ -332,6 +332,37 @@ void write_label_helper(FILE *f) {
         "}\n");
 }
 
+void write_console_helper(FILE *f) {
+    fprintf(f,
+        "\n/* Print formatted trace line to stdout. */\n"
+        "\nstatic void console(const char *fmt, ...) {\n"
+        "  char text[128];\n"
+        "  int offset = 0;\n"
+        "  va_list args;\n"
+        "\n"
+        "  va_start(args, fmt);\n"
+        "  while (*fmt && offset < (int)sizeof(text) - 1) {\n"
+        "    if (fmt[0] == '%%' && fmt[1] == 'f') {\n"
+        "      double value = va_arg(args, double);\n"
+        "      offset += snprintf(text + offset, sizeof(text) - (size_t)offset,\n"
+        "                         \"%%g\", value);\n"
+        "      if (offset >= (int)sizeof(text))\n"
+        "        offset = (int)sizeof(text) - 1;\n"
+        "      fmt += 2;\n"
+        "    } else if (fmt[0] == '%%' && fmt[1] == '%%') {\n"
+        "      text[offset++] = '%%';\n"
+        "      fmt += 2;\n"
+        "    } else {\n"
+        "      text[offset++] = *fmt++;\n"
+        "    }\n"
+        "  }\n"
+        "  text[offset] = '\\0';\n"
+        "  va_end(args);\n"
+        "\n"
+        "  printf(\"%%s\\n\", text);\n"
+        "}\n");
+}
+
 void write_render_helper_as_c(FILE *f, const char *name) {
     fprintf(f, "\n/* User scene commands captured from gl-repl. */\n");
     fprintf(f, "static void %s(void) {\n", name);

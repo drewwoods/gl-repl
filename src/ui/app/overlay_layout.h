@@ -34,6 +34,7 @@ typedef enum {
     UI_OVERLAY_PANEL_HISTOGRAM,     /* compute-profile section histograms */
     UI_OVERLAY_PANEL_MEMORY,        /* memory (RSS) panel */
     UI_OVERLAY_PANEL_ASSIGN_PLOT,   /* right-clicked assignment's value plot */
+    UI_OVERLAY_PANEL_CONSOLE,       /* console trace line panel */
     UI_OVERLAY_PANEL_COUNT
 } UiOverlayPanelId;
 
@@ -68,6 +69,8 @@ typedef struct {
     int assign_plot_expanded;    /* the plot's own zoom chip: doubles its
                                   * footprint, so the solver has to know */
     int assign_plot_series_count; /* >1 adds the plot's legend row */
+    int console_visible;
+    int console_line_count;
     int band_h;
 } UiOverlayLayoutInputs;
 

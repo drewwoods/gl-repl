@@ -27,6 +27,14 @@ void repl_canonical_input_view(const char *src,
 
 void repl_format_source_float(char *out, int out_sz, float v);
 
+/* Format a format-string payload (used by CMD_LABEL and CMD_CONSOLE).
+ * Walks `fmt`, expanding `%f` from `args[0..num_args-1]` formatted with `%g`,
+ * and `%%` to literal '%'. Returns the number of characters written
+ * (excluding trailing NUL). */
+int  repl_format_label_string(char *out, int out_sz,
+                             const char *fmt,
+                             const float *args, int num_args);
+
 /* Split a comma-separated identifier list (e.g. a func parameter list
  * `float a, float b` with leading_keyword "float", or a bare `a, b`
  * with leading_keyword NULL/"") into names[]. Returns the count, or -1

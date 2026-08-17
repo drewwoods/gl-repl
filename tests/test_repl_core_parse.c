@@ -674,6 +674,135 @@ int main(void) {
         ASSERT_TRUE("label 64-char format status",
                     strstr(g_status, "format too long") != NULL);
     }
+
+    /* console: success cases */
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        char text[MAX_LINE_LEN] = "";
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_cmd_with_text(
+            "console(\"hello\")", &cmd, text, sizeof(text));
+        ASSERT_TRUE("console no-args parse ok", ok == 1);
+        ASSERT_TRUE("console type",
+                    cmd.type == CMD_CONSOLE);
+        ASSERT_TRUE("console num_args", cmd.num_args == 0);
+        ASSERT_TRUE("console fmt stored",
+                    strcmp(cmd.payload.label.fmt, "hello") == 0);
+        ASSERT_TRUE("console canonical text",
+                    strstr(text, "\"hello\"") != NULL);
+    }
+
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("console(\"v=%f\", 3.5)", &cmd);
+        ASSERT_TRUE("console one %f parse ok", ok == 1);
+        ASSERT_TRUE("console one %f num_args", cmd.num_args == 1);
+        ASSERT_TRUE("console one %f sub arg", cmd.args[0] == 3.5f);
+        ASSERT_TRUE("console one %f fmt stored",
+                    strcmp(cmd.payload.label.fmt, "v=%f") == 0);
+    }
+
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test(
+            "console(\"%f %f %f %f %f %f %f %f\", 1, 2, 3, 4, 5, 6, 7, 8)", &cmd);
+        ASSERT_TRUE("console eight %f parse ok", ok == 1);
+        ASSERT_TRUE("console eight %f num_args", cmd.num_args == 8);
+        ASSERT_TRUE("console eight %f arg[7]", cmd.args[7] == 8.0f);
+    }
+
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("console(\"100%% done\")", &cmd);
+        ASSERT_TRUE("console %% literal parse ok", ok == 1);
+        ASSERT_TRUE("console %% literal num_args", cmd.num_args == 0);
+        ASSERT_TRUE("console %% literal fmt stored",
+                    strcmp(cmd.payload.label.fmt, "100%% done") == 0);
+    }
+
+    /* console inside glBegin is legal */
+    {
+        glr_ctrl_reset_all();
+        editor_feed_line("glBegin(GL_TRIANGLES);");
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("console(\"inside begin: %f\", 1)", &cmd);
+        ASSERT_TRUE("console inside glBegin is legal", ok == 1);
+        ASSERT_TRUE("console inside glBegin type", cmd.type == CMD_CONSOLE);
+    }
+
+    /* console: error cases */
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("console(\"a // b\")", &cmd);
+        ASSERT_TRUE("console // forbidden", ok == 0);
+        ASSERT_TRUE("console // forbidden status",
+                    strstr(g_status, "'//'") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("console(\"a , b\")", &cmd);
+        ASSERT_TRUE("console , forbidden", ok == 0);
+        ASSERT_TRUE("console , forbidden status",
+                    strstr(g_status, "','") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("console(\"hi\\nworld\")", &cmd);
+        ASSERT_TRUE("console backslash forbidden", ok == 0);
+        ASSERT_TRUE("console backslash forbidden status",
+                    strstr(g_status, "backslash") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("console(\"unterminated)", &cmd);
+        ASSERT_TRUE("console missing close quote", ok == 0);
+        ASSERT_TRUE("console missing close quote status",
+                    strstr(g_status, "closing") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("console(\"%f\", 1, 2)", &cmd);
+        ASSERT_TRUE("console arg-count mismatch", ok == 0);
+        ASSERT_TRUE("console arg-count status",
+                    strstr(g_status, "format expects") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("console(\"%d\", 1)", &cmd);
+        ASSERT_TRUE("console %d rejected", ok == 0);
+        ASSERT_TRUE("console %d status",
+                    strstr(g_status, "only %f") != NULL);
+    }
+    {
+        glr_ctrl_reset_all();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test(
+            "console(\"%f %f %f %f %f %f %f %f %f\", 1, 2, 3, 4, 5, 6, 7, 8, 9)", &cmd);
+        ASSERT_TRUE("console >8 sub args rejected", ok == 0);
+        ASSERT_TRUE("console >8 sub args status",
+                    strstr(g_status, "max 8") != NULL);
+    }
     {
         glr_ctrl_reset_all();
         GLCmd cmd;

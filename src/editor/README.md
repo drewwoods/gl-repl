@@ -39,7 +39,7 @@ editor** built from the reusable half of this module only. It links
 generic text panel from `src/ui/core` - and drives them with its *own* input
 dispatcher ([`tools/editor_demo/input.c`](../../tools/editor_demo/input.c)) and its *own* File menu
 ([`tools/editor_demo/menu.c`](../../tools/editor_demo/menu.c)). It must not link `src/ui/app`: the REPL
-code-panel adapter, menu bar, [`UiRenderSnapshot`](../ui/app/snapshot.h#L90), [`UiState`](../ui/app/state.h#L20), and app chrome are
+code-panel adapter, menu bar, [`UiRenderSnapshot`](../ui/app/snapshot.h#L91), [`UiState`](../ui/app/state.h#L20), and app chrome are
 part of the full app composition, not the generic editor proof.
 
 ```bash
@@ -80,7 +80,7 @@ Inside the full app this is **layer 2** of the ownership map. The contract:
 - Read-only documents are also editor sessions: [`help_session.c`](help_session.c) backs the
   F1 overlay with the same scroll/search/cursor model and no commit path.
 
-The editor owns the **canonical per-line text**; [`GLCmd`](../repl/command.h#L122) in `src/repl`
+The editor owns the **canonical per-line text**; [`GLCmd`](../repl/command.h#L127) in `src/repl`
 carries none. That single-writer rule is why the REPL pipeline can be driven
 without the editor at all (see `repl_demo`).
 

@@ -48,6 +48,8 @@ static UiOverlayLayoutIn base_inputs(void) {
         (UiOverlayPanelReq){ 1, 220, 150 };
     in.panels[UI_OVERLAY_PANEL_ASSIGN_PLOT] =
         (UiOverlayPanelReq){ 0, 250, 160 };  /* hidden in the base shape */
+    in.panels[UI_OVERLAY_PANEL_CONSOLE] =
+        (UiOverlayPanelReq){ 0, 320, 100 };  /* hidden in the base shape */
     return in;
 }
 

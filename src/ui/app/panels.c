@@ -19,6 +19,7 @@
 #include "ui/subsystems/variable_panel.h"
 #include "ui/app/variable_panel_view.h"
 #include "ui/support/assign_plot.h"
+#include "ui/support/console.h"
 #include "ui/support/cpuprof.h"
 
 #include <math.h>
@@ -782,6 +783,63 @@ UiHit ui_panels_hit_test_assign_plot(const UiRenderSnapshot *snap,
     }
     if (point_in_gl_rect(mx, my, win_h, px, py, panel->w, panel->h))
         return overlay_chrome_hit(mx, my, win_h, px, py);
+    return hit;
+}
+
+UiHit ui_panels_hit_test_console(const UiRenderSnapshot *snap,
+                                 int mx, int my) {
+    UiHit hit = ui_hit_none();
+    UiOverlayLayoutIn layout_in;
+    const UiOverlayPanelReq *panel;
+    UiConsolePanelView console_view;
+    int win_w, win_h, px, py, console_hit;
+
+    if (!snap)
+        return hit;
+    win_w = snap->viewport.window_w;
+    win_h = snap->viewport.window_h;
+    if (win_w <= 0 || win_h <= 0)
+        return hit;
+
+    layout_in = ui_overlay_layout_inputs((UiOverlayLayoutInputs){
+        .var_visible                = snap->variable_panel.visible,
+        .var_count                  = snap->variable_panel_vars.count,
+        .var_collapsed              = snap->variable_panel.collapsed,
+        .profile_mode               = snap->profile_panel.mode,
+        .profile_collapsed_sections = snap->profile_panel.collapsed_sections,
+        .memory_mode                = snap->memory_panel.mode,
+        .assign_plot_visible        = snap->assign_plot.open,
+        .assign_plot_expanded       = snap->assign_plot.expanded,
+        .assign_plot_series_count   = snap->assign_plot.series_count,
+        .console_visible            = snap->console.open,
+        .console_line_count         = snap->console.count,
+        .band_h                     = ui_overlay_layout_last_band_h(),
+    });
+    panel = &layout_in.panels[UI_OVERLAY_PANEL_CONSOLE];
+    if (!panel->visible)
+        return hit;
+    ui_overlay_layout_panel_pos(&layout_in, UI_OVERLAY_PANEL_CONSOLE,
+                                &px, &py);
+
+    memset(&console_view, 0, sizeof(console_view));
+    console_view.window_w = win_w;
+    console_view.window_h = win_h;
+    console_view.visible  = panel->visible;
+    console_view.panel_x  = px;
+    console_view.panel_y  = py;
+    console_view.console  = snap->console;
+    console_hit = ui_console_panel_hit_test(&console_view, mx, my);
+
+    if (console_hit == UI_CONSOLE_HIT_CLOSE) {
+        hit.kind = UI_HIT_CONSOLE_CLOSE;
+        hit.local_x = (float)(mx - px);
+        hit.local_y = (float)(win_h - my - py);
+        return hit;
+    }
+    if (console_hit == UI_CONSOLE_HIT_PANEL ||
+        point_in_gl_rect(mx, my, win_h, px, py, panel->w, panel->h)) {
+        return overlay_chrome_hit(mx, my, win_h, px, py);
+    }
     return hit;
 }
 

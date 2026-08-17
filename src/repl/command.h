@@ -12,8 +12,8 @@
 
 #include "config.h"  /* MAX_EDITOR_COMMANDS, MAX_LINE_LEN */
 
-/* Maximum format-string length for CMD_LABEL (excluding
- * the surrounding quotes and trailing NUL). 64 fits ~5 short %f
+/* Maximum format-string length for CMD_LABEL and CMD_CONSOLE
+ * (excluding the surrounding quotes and trailing NUL). 64 fits ~5 short %f
  * substitutions plus surrounding text and stays well within the
  * MAX_LINE_LEN budget when the canonical line is rebuilt. */
 #ifndef GLUT_BITMAP_FMT_MAX
@@ -21,10 +21,14 @@
 #endif
 
 /* Maximum number of %f substitution args for CMD_LABEL.
- * Position takes args[0..2], substitutions live in args[3..6]; the
- * 8-slot args[] cap is enforced both here and in the parser. */
+ * The 8-slot args[] cap is enforced both here and in the parser. */
 #ifndef GLUT_BITMAP_MAX_SUB_ARGS
 #define GLUT_BITMAP_MAX_SUB_ARGS 4
+#endif
+
+/* Maximum number of %f substitution args for CMD_CONSOLE. */
+#ifndef REPL_CONSOLE_MAX_SUB_ARGS
+#define REPL_CONSOLE_MAX_SUB_ARGS 8
 #endif
 
 /* Cells in a CMD_MULT_MATRIXF payload - a 4x4, column-major. Twice the
@@ -97,6 +101,7 @@ typedef enum {
     CMD_EDGE_FLAG,
     CMD_RASTER_POS3F,
     CMD_LABEL,
+    CMD_CONSOLE,
     CMD_ELSE_IF,
     CMD_ELSE,
     CMD_CLIP_PLANE,
@@ -147,6 +152,7 @@ typedef struct {
      *   CMD_VAR_DECLARE  -> payload.decl
      *   CMD_VAR_ASSIGN   -> payload.assign
      *   CMD_LABEL        -> payload.label
+     *   CMD_CONSOLE      -> payload.label
      *   CMD_MULT_MATRIXF -> payload.matrix
      *   CMD_SCRATCH_BLOCK_ASSIGN -> payload.scratch_block
      *   CMD_SCRATCH_ASSIGN -> payload.scratch (flat rows only)
@@ -167,7 +173,7 @@ typedef struct {
             float prev_local_value;
         } assign;
         struct {
-            char fmt[GLUT_BITMAP_FMT_MAX]; /* Format string for CMD_LABEL (no quotes) */
+            char fmt[GLUT_BITMAP_FMT_MAX]; /* Format string for CMD_LABEL and CMD_CONSOLE (no quotes) */
         } label;
         /* CMD_MULT_MATRIXF carries its 4x4 by value rather than by
          * scratch-array reference. Both argument forms end up here, and

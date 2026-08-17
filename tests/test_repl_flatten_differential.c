@@ -134,7 +134,7 @@ static int flat_cmd_equal(const GLCmd *a, const GLCmd *b) {
         a->func_scope_mask != b->func_scope_mask ||
         a->call_depth != b->call_depth)
         return 0;
-    if (a->type == CMD_LABEL &&
+    if ((a->type == CMD_LABEL || a->type == CMD_CONSOLE) &&
         strcmp(a->payload.label.fmt, b->payload.label.fmt) != 0)
         return 0;
     if (a->type == CMD_VAR_DECLARE &&

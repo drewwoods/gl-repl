@@ -995,6 +995,9 @@ TEST_BINS += test_call_depth_viz
 # pipeline) and the panel renderer (GL stubs, explicit object list below).
 TEST_BINS += test_assign_plot
 TEST_BINS += test_ui_assign_plot
+# Console trace lines: capture engine (core test) and panel renderer (GL stubs).
+TEST_BINS += test_console
+TEST_BINS += test_ui_console
 
 # `make test-web` runs TEST_BINS as wasm under node. These two do not survive
 # that move; the other 75 do. Every exclusion here is a test asserting behavior
@@ -1022,7 +1025,7 @@ WEB_TEST_EXCLUDE = \
 	test_ui_menu_bar
 WEB_TEST_BINS = $(filter-out $(WEB_TEST_EXCLUDE),$(TEST_BINS))
 
-CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_render3d_palette test_audio test_render3d_guides test_render3d_transition test_render3d_render test_depth_viz test_stencil_viz test_call_depth_viz test_scene_file_menu test_editor_completion test_glr_camera test_glr_init_trace test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match test_ui_assign_plot,$(TEST_BINS))
+CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_render3d_palette test_audio test_render3d_guides test_render3d_transition test_render3d_render test_depth_viz test_stencil_viz test_call_depth_viz test_scene_file_menu test_editor_completion test_glr_camera test_glr_init_trace test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match test_ui_assign_plot test_ui_console,$(TEST_BINS))
 
 # Benchmark binaries follow the same linking pattern as core test binaries
 # (they reuse CORE_TEST_OBJS so they work in both real-GL and stubs builds),
@@ -1249,6 +1252,13 @@ test_ui_assign_plot_OBJS = $(OBJDIR)/$(TEST_DIR)/test_ui_assign_plot.o \
 	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
 test_ui_assign_plot_LDLIBS = $(GL_LDFLAGS)
 test_ui_assign_plot_RUN ?= $(BINDIR)/test_ui_assign_plot
+
+test_ui_console_OBJS = $(OBJDIR)/$(TEST_DIR)/test_ui_console.o \
+	$(OBJDIR)/src/ui/support/console.o \
+	$(OBJDIR)/src/ui/core/theme.o \
+	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
+test_ui_console_LDLIBS = $(GL_LDFLAGS)
+test_ui_console_RUN ?= $(BINDIR)/test_ui_console
 
 test_ui_memprof_OBJS = $(OBJDIR)/$(TEST_DIR)/test_ui_memprof.o \
 	$(OBJDIR)/src/support/memprof.o \
