@@ -1220,6 +1220,8 @@ draw_branch(step, rad) {
   glVertex3f(rad * cos(step * 0.8), rad * sin(step * 0.8), 0);
   glEnd();
 }
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glColor3f(0.3, 0.7, 1);
 for(i, 0, 4) {
   console("step %f", i);
   draw_branch(i, r);
