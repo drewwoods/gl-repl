@@ -723,6 +723,7 @@ Files that do not belong in this layer:
 | `src/support/runstats` | The numbers half of a distribution on its own: count / min / max / sum / Welford mean+variance over *unconstrained* doubles. Split out of `histogram` because the assignment-value plot needs the same statistics over signed, unitless values that no positive log-spaced bin range could hold |
 | `src/support/gpuprof` | Neutral GPU timer-query helper; app injects live GL timer-query function pointers after capability detection |
 | `src/support/memprof` | Neutral memory RSS sampling helper used by the memory HUD |
+| `src/support/gl_state_dump` | Live GL 1.1 state dump: queries the current context and emits one `NAME=value` row per state variable in a fixed order, so two probe points (this app vs its exported C twin, two frames, two machines) diff cleanly. The *queried* counterpart to `repl_gl_state_inspector`, which predicts the same state without touching GL. Diagnostic only - one call is ~250 glGet* round trips. Controller hook: `GL_STATE_DUMP=<prefix>` |
 | `gl_stub_counts` | `USE_GL_STUBS` symbol tracking for `tests/gl-stubs` headers |
 
 ## Ownership / Coordination Diagram

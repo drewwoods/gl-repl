@@ -49,6 +49,7 @@
 #include "keys.h"
 #include "support/memprof.h"
 #include "support/cpuprof.h"
+#include "support/gl_state_dump.h"
 #include "support/gpuprof.h"
 #include "app/glr_prof.h"
 #include "repl/bootstrap.h"
@@ -1270,6 +1271,33 @@ static int call_depth_tint_state_filter(CmdType type, const GLCmd *cmd,
  * Render3dExecutePurpose is a forward-compatible enum; additional
  * probe-like purposes (fade-overlay, picking pass, etc.) take the same
  * snapshot/restore path automatically. */
+/* GL_STATE_DUMP=<path-prefix> writes the live GL state on both sides of the
+ * first main fill: <prefix>.before (what the frame hands the program) and
+ * <prefix>.after (what the program left). One shot per process - the dump is
+ * ~250 driver round trips, and the point is a file to diff, not a stream.
+ *
+ * The probe point is deliberately this one: it is the same boundary
+ * src/repl/gl_state_inspector.c predicts state for, and the same boundary the
+ * exported C program's display() reaches, so all three are comparable. */
+static void glr_ctrl_dump_gl_state(const char *phase) {
+    static int g_dumped = 0;
+    const char *prefix = getenv("GL_STATE_DUMP");
+    char path[512];
+    char label[64];
+
+    if (!prefix || !*prefix) return;
+    if (g_dumped >= 2) return;
+    g_dumped++;
+
+    snprintf(path, sizeof path, "%s.%s", prefix, phase);
+    snprintf(label, sizeof label, "gl-repl/user-pass-%s", phase);
+    if (!gl_state_dump_write_path(path, label)) {
+        char prefix[GLR_LOG_PREFIX_MAX];
+        fprintf(stderr, "%sGL state dump: cannot write %s\n",
+                glr_log_prefix(prefix, sizeof prefix, NULL), path);
+    }
+}
+
 static void scene_execute_adapter(const Render3dExecuteContext *ctx,
                                   void *user_data) {
     (void)user_data;
@@ -1318,6 +1346,8 @@ static void scene_execute_adapter(const Render3dExecuteContext *ctx,
     }
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
+    if (purpose == RENDER3D_EXEC_MAIN_FILL)
+        glr_ctrl_dump_gl_state("before");
     if (wireframe_effect_pass) {
         HiddenLinesRenderContext hl = {
             .flat_cmd_count = count,
@@ -1356,6 +1386,8 @@ static void scene_execute_adapter(const Render3dExecuteContext *ctx,
         }
         repl_execute_program(&opts);
     }
+    if (purpose == RENDER3D_EXEC_MAIN_FILL)
+        glr_ctrl_dump_gl_state("after");
     glPopAttrib();
 
     if (suppress_side_effects) {

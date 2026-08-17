@@ -20,6 +20,18 @@ their respective layers.
 - `src/support/memprof.{c,h}` - process memory sampling (current signal,
   ring of historical samples, pure byte formatter). Mirrors cpuprof's
   conventions; panel at [`src/ui/support/memprof.c`](../ui/support/memprof.c).
+- `src/support/gl_state_dump.{c,h}` - live OpenGL 1.1 state dump: queries the
+  current context and writes one `NAME=value` row per state variable in a
+  fixed order, so two probe points diff cleanly (`gl_state_dump_write`,
+  `_write_path`, or `_walk` for a callback sink). The *queried* twin of
+  [`src/repl/gl_state_inspector.c`](../repl/gl_state_inspector.c), which
+  predicts the same state by folding the program without touching GL - when
+  the two disagree, one of them is wrong. Enum values resolve within their own
+  domain (GL enum numbers collide across domains), floats print fixed-width so
+  repeat runs are byte-identical. It is a debugging instrument - ~250 glGet*
+  round trips - not something to call per frame. `GL_STATE_DUMP=<prefix>`
+  makes the controller write `<prefix>.before` / `<prefix>.after` around the
+  first main fill; see `docs/ADVANCED_USAGE.md`.
 - `src/support/mesh_ply.{c,h}` - pure PLY writer over a GL feedback
   (`GL_3D_COLOR`) float stream: inverts the ortho/viewport transform back
   to world space, fan-triangulates, optionally welds.

@@ -1213,6 +1213,27 @@ backend audio-device issues:
   (or `__GL_MaxFramesAllowed=1`) before believing it; `make bench-vertex-labels`
   reproduces both sides of that comparison in isolation.
 
+- **GL state dump** - `GL_STATE_DUMP=<prefix>` writes the live OpenGL 1.1
+  state around the first main fill: `<prefix>.before` is what the frame hands
+  the user program, `<prefix>.after` is what the program left. One
+  `NAME=value` row per state variable in a fixed order, so `diff` is the
+  reading tool:
+
+  ```bash
+  GL_STATE_DUMP=/tmp/app ./gl-repl scene.glr    # /tmp/app.before, /tmp/app.after
+  diff /tmp/app.after /tmp/export.after
+  ```
+
+  The probe point is deliberately the boundary
+  [`gl_state_inspector`](../src/repl/gl_state_inspector.c) predicts state for
+  and the exported C program's `display()` reaches, so a scene that renders
+  differently in the app than as exported C - or differently than the GL-state
+  popup claims - can be settled by diffing two dumps instead of by guesswork.
+  Any GLUT program can produce a comparable file by linking
+  [`src/support/gl_state_dump.c`](../src/support/gl_state_dump.c) and calling
+  `gl_state_dump_write_path()` at the matching point. Diagnostic only: a dump
+  is ~250 glGet* round trips, each a pipeline sync.
+
 In-app, the CPU profiler overlay shows per-frame section timings and the
 memory panel shows RSS history - see
 [User Guide → Profiling](USER_GUIDE.md#profiling).
