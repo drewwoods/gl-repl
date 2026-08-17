@@ -1232,7 +1232,10 @@ backend audio-device issues:
   Any GLUT program can produce a comparable file by linking
   [`src/support/gl_state_dump.c`](../src/support/gl_state_dump.c) and calling
   `gl_state_dump_write_path()` at the matching point. Diagnostic only: a dump
-  is ~250 glGet* round trips, each a pipeline sync.
+  is ~250 glGet* round trips, each a pipeline sync. The controller hook still
+  calls `getenv("GL_STATE_DUMP")` on every main fill when the variable is
+  unset; `bench_repl --only getenv` prices that leftover scan against the
+  one-time cached alternative the other frame-path env hooks use.
 
 In-app, the CPU profiler overlay shows per-frame section timings and the
 memory panel shows RSS history - see

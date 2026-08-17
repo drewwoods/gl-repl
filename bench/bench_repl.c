@@ -73,6 +73,9 @@
  *                       frame tick, and the legend-hover stats readback. The
  *                       only row here that measures instrumentation rather
  *                       than product work.
+ *   getenv            - libc getenv on the frame path: a miss (the common
+ *                       GL_STATE_DUMP-unset tax), a hit, and the one-time
+ *                       cached load the rest of the frame-path env hooks use.
  *   fade_batches      - drive repl_execute_program() per fade batch with a packed
  *                       batch buffer whose old_pcs sit deep in a long flat
  *                       command stream (exercises the per-batch prefix
@@ -2299,6 +2302,182 @@ static void bench_cpuprof_sample(int iters) {
     }
 }
 
+/* ---- bench: getenv on the frame path ---------------------------------- */
+
+/* glr_ctrl_dump_gl_state() (5b801c95) calls getenv("GL_STATE_DUMP") twice
+ * per MAIN_FILL, every frame, even when the variable is unset and after the
+ * one-shot dump has already fired. The dump itself is ~250 glGet* round
+ * trips and is not a frame path; the leftover getenv is.
+ *
+ * libc getenv is a lock plus a linear scan of environ, so a miss walks the
+ * whole table and a late hit nearly does. That is why flatten_live_expr_cache
+ * and glr_ctrl_prof_dump_tick read their env vars once: changing the
+ * environment of a running process is not a supported cache transition.
+ *
+ * Rows:
+ *   getenv_miss    getenv of a name that is not in environ (production default)
+ *   getenv_cached  the house alternative: one lookup, then a static pointer
+ *   getenv_hit     getenv of GL_STATE_DUMP after this process set it (armed)
+ *
+ * Human summary converts the miss into us/frame at 2 calls per MAIN_FILL
+ * (before + after) for 1 fill and for MAX_ACCUM_SAMPLES fills. */
+
+enum { GETENV_BENCH_INNER = 20000 };
+enum { GETENV_BENCH_ACCUM_MAX = 16 }; /* MAX_ACCUM_SAMPLES in render.h */
+
+#define GETENV_MISS_NAME "GLR_BENCH_GETENV_UNSET"
+#define GETENV_HIT_NAME  "GL_STATE_DUMP"
+#define GETENV_HIT_VALUE "/tmp/gl-state-dump-bench"
+
+extern char **environ;
+
+/* libc often marks getenv __attribute__((pure)). Combined with a literal
+ * name and an inlined helper, a release build hoists one call out of the
+ * inner loop and the row reports 0 ns. Calling through a volatile pointer
+ * is the per-frame shape (a real call the compiler cannot CSE) and keeps
+ * the scan inside the timer. */
+static char *(*volatile g_getenv)(const char *) = getenv;
+
+static int bench_environ_count(void) {
+    int n = 0;
+    if (!environ) return 0;
+    while (environ[n]) n++;
+    return n;
+}
+
+static double getenv_bench_min_ns(BenchResult r) {
+    return (r.iters > 0) ? r.min_sec * 1e9 / (double)GETENV_BENCH_INNER : 0.0;
+}
+
+static BenchResult bench_getenv_scan(const char *row_name, const char *var,
+                                     int iters) {
+    BenchResult r = { .name = row_name, .unit = "calls", .min_sec = 1e18 };
+    long long sink = 0;
+
+    for (int it = 0; it < iters; it++) {
+        double t0 = now_seconds();
+        for (int k = 0; k < GETENV_BENCH_INNER; k++) {
+            const char *v = g_getenv(var);
+            /* Same predicate the controller hook uses to early-out. */
+            sink += (v && v[0]) ? (long long)(unsigned char)v[0] : 1;
+        }
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops += GETENV_BENCH_INNER;
+        r.iters++;
+    }
+    /* A collapsed loop produces sink==0; a real scan produces >= 1 per call. */
+    if (sink < (long long)iters * GETENV_BENCH_INNER) {
+        fprintf(stderr, "ERROR: %s loop collapsed (sink=%lld)\n",
+                row_name, sink);
+        g_case_missing = 1;
+    }
+    return r;
+}
+
+/* One-time getenv, then the per-call cost of the cached pointer. The
+ * initialized flag lives across iterations so every timed sample is the
+ * steady-state branch, not the first-lookup one. */
+static const char *getenv_cached_prefix(void) {
+    static int initialized = 0;
+    static const char *prefix = NULL;
+
+    if (!initialized) {
+        prefix = getenv(GETENV_HIT_NAME);
+        initialized = 1;
+    }
+    return prefix;
+}
+
+static BenchResult bench_getenv_cached(int iters) {
+    BenchResult r = { .name = "getenv_cached", .unit = "calls", .min_sec = 1e18 };
+    long long sink = 0;
+    static const char *(*volatile cached)(void) = getenv_cached_prefix;
+
+    (void)cached();
+    for (int it = 0; it < iters; it++) {
+        double t0 = now_seconds();
+        for (int k = 0; k < GETENV_BENCH_INNER; k++) {
+            const char *v = cached();
+            sink += (v && v[0]) ? (long long)(unsigned char)v[0] : 1;
+        }
+        double dt = now_seconds() - t0;
+        if (dt < r.min_sec) r.min_sec = dt;
+        r.total_sec += dt;
+        r.ops += GETENV_BENCH_INNER;
+        r.iters++;
+    }
+    if (sink < (long long)iters * GETENV_BENCH_INNER) {
+        fprintf(stderr, "ERROR: getenv_cached loop collapsed (sink=%lld)\n",
+                sink);
+        g_case_missing = 1;
+    }
+    return r;
+}
+
+static int getenv_copy(const char *name, char *buf, size_t buf_sz) {
+    const char *v = getenv(name);
+
+    if (!v) return 0;
+    snprintf(buf, buf_sz, "%s", v);
+    return 1;
+}
+
+static void bench_getenv(int iters) {
+    BenchResult miss, cached, hit;
+    char saved[512];
+    int had_hit;
+    int env_n = bench_environ_count();
+
+    unsetenv(GETENV_MISS_NAME);
+    miss = bench_getenv_scan("getenv_miss", GETENV_MISS_NAME, iters);
+    report(miss);
+
+    cached = bench_getenv_cached(iters);
+    report(cached);
+
+    had_hit = getenv_copy(GETENV_HIT_NAME, saved, sizeof saved);
+    if (setenv(GETENV_HIT_NAME, GETENV_HIT_VALUE, 1) != 0) {
+        fprintf(stderr, "ERROR: setenv %s failed\n", GETENV_HIT_NAME);
+        g_case_missing = 1;
+        hit = (BenchResult){ .name = "getenv_hit", .unit = "calls",
+                             .min_sec = 0.0 };
+    } else {
+        const char *probe = getenv(GETENV_HIT_NAME);
+        if (!probe || !*probe) {
+            fprintf(stderr, "ERROR: getenv bench hit var %s is unset\n",
+                    GETENV_HIT_NAME);
+            g_case_missing = 1;
+        }
+        hit = bench_getenv_scan("getenv_hit", GETENV_HIT_NAME, iters);
+        report(hit);
+    }
+    if (had_hit)
+        setenv(GETENV_HIT_NAME, saved, 1);
+    else
+        unsetenv(GETENV_HIT_NAME);
+
+    if (!g_csv) {
+        double miss_ns = getenv_bench_min_ns(miss);
+        double hit_ns = getenv_bench_min_ns(hit);
+        double cached_ns = getenv_bench_min_ns(cached);
+        double frame_us = miss_ns * 2.0 / 1000.0;
+        double accum_us = miss_ns * 2.0 * (double)GETENV_BENCH_ACCUM_MAX / 1000.0;
+
+        fprintf(stderr, "  (getenv: environ_entries=%d)\n", env_n);
+        printf("  # getenv: miss %.1f ns, hit %.1f ns, cached %.1f ns "
+               "(%d environ entries)\n",
+               miss_ns, hit_ns, cached_ns, env_n);
+        printf("  # getenv: 2 calls/MAIN_FILL * 1 fill = %.3f us/frame "
+               "(%.4f%% of 16.67 ms)\n",
+               frame_us, frame_us / 16666.0 * 100.0);
+        printf("  # getenv: 2 calls/MAIN_FILL * %d fills = %.3f us/frame "
+               "(%.4f%% of 16.67 ms)\n",
+               GETENV_BENCH_ACCUM_MAX, accum_us, accum_us / 16666.0 * 100.0);
+    }
+}
+
 /* ---- main -------------------------------------------------------------- */
 
 static void print_csv_header(void) {
@@ -2370,6 +2549,7 @@ static void usage(const char *prog) {
         "                      histogram record (rotating across sections, and\n"
         "                      dependency-chained on one), live begin/end pair,\n"
         "                      nesting-guard A/B, frame tick, stats readback\n"
+        "    getenv            libc getenv miss / cached / hit (GL_STATE_DUMP tax)\n"
         "    fade_batches      replay fade-batch rendering with late old_pcs\n",
         prog);
 }
@@ -2526,6 +2706,8 @@ int main(int argc, char **argv) {
      * cases drive the timer directly and call prof_test_reset() when done. */
     if (wants(only, "cpuprof_sample"))
         bench_cpuprof_sample(iters);
+    if (wants(only, "getenv"))
+        bench_getenv(iters);
 
     // GL benchmarks
     if (wants(only, "fade_batches")) {
