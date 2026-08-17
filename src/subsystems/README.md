@@ -64,6 +64,9 @@ subsystems here:
   shape (pure core, false-colour view) but not by input - this reads the
   *program*, not the pixels it wrote, so there is no readback, no capture
   and no capability probe.
+- **`console/`** - debug trace capture buffer for `console(...)` commands:
+  scans the flat program once per frame, auto-indents lines by `2 * call_depth` spaces,
+  tracks line capacity and overflow, and provides view snapshots for UI rendering.
 
 Subsystem file shapes vary: a single co-located file (like
 [`color_picker_state.c`](color_picker/color_picker_state.c)), a `*_state.c` storage file plus a `*.c`

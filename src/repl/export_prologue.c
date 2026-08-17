@@ -336,7 +336,7 @@ void write_console_helper(FILE *f) {
     fprintf(f,
         "\n/* Print formatted trace line to stdout. */\n"
         "\nstatic void console(const char *fmt, ...) {\n"
-        "  char text[128];\n"
+        "  char text[256];\n"
         "  int offset = 0;\n"
         "  va_list args;\n"
         "\n"

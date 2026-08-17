@@ -167,7 +167,7 @@ The most common contributions, recipe-style:
    *attributed to* at a source position, not which color a clear wrote into
    framebuffer channels, so a clear-affecting command touches it too.
 
-**A new config toggle** - append a [`GlrConfigItem`](../src/app/glr_config.h#L106)
+**A new config toggle** - append a [`GlrConfigItem`](../src/app/glr_config.h#L107)
 descriptor to `g_cfg_items[]` in [`src/app/glr_actions.c`](../src/app/glr_actions.c)
 under the right `### ` section, including an explicit stable lowercase `.slug`.
 The count auto-computes and the item joins its section's flyout menu. Use

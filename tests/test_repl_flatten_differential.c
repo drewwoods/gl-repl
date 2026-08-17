@@ -647,6 +647,7 @@ static void test_capture_construct_coverage(void) {
     editor_feed_line("}");
     editor_feed_line("glRasterPos3f(n, 0, A[1]);");
     editor_feed_line("label(\"v=%f\", n + 1);");
+    editor_feed_line("console(\"debug: n=%f, t=%f\", n, t);");
     editor_feed_line("gluBegin(GLU_POLYGON);");
     editor_feed_line("gluColor(n / 4, 0.5, 0.25);");
     editor_feed_line("gluVertex(0, 0, n);");

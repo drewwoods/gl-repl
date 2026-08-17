@@ -307,7 +307,7 @@ Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/gl
   (3D), `ui_*` (2D view), neutral (`prof`) for generic utilities. Don't
   introduce new top-level prefixes without documenting the boundary.
 - **Config toggles** → skill `gl-repl-config-toggle`. One-line version: append a
-  [`GlrConfigItem`](src/app/glr_config.h#L106) to `g_cfg_items[]` in [`src/app/glr_actions.c`](src/app/glr_actions.c)
+  [`GlrConfigItem`](src/app/glr_config.h#L107) to `g_cfg_items[]` in [`src/app/glr_actions.c`](src/app/glr_actions.c)
   under the right `### ` section (count + flyout membership auto-compute), then
   claim storage in the two default-less switches in
   [`src/app/glr_config.c`](src/app/glr_config.c) - `-Werror=switch` fails the
@@ -770,6 +770,7 @@ glStencilFunc, glStencilOp, glStencilMask
 glPolygonMode(face, mode), glPolygonOffset(factor, units)
 glutSolidTorus/Cube/Sphere/Teapot/Cone, glRasterPos3f
 label("fmt", ...)              (bitmap text; REPL primitive)
+console("fmt", ...)            (debug trace to console panel; REPL primitive)
 for(var, start, end[, step]) { }   func0..func9(params) { }   if(expr) { }
 break;   continue;                (innermost enclosing loop, same func body)
 float name[, ...];    var = expr;    A[i] = expr;    // comment

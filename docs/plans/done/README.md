@@ -13,6 +13,7 @@ historical context and are not in the table below.
 
 | Plan | Landed | What it shipped |
 |---|---|---|
+| `console-command.md` | 2026-08-17 | `console(...)` command and floating overlay Console panel: formatted trace output with call-depth auto-indentation, line overflow tracking, C export/import support, and interface menu integration. |
 | `user-guide-consistency-review.md` | 2026-08-14 | USER_GUIDE editorial pass: display-baseline/`glClear`, Ctrl+Shift+H, tour transport, common CLI, accum ladder, replay keys, PLY scope; language/overlay sections halved; math/shadows/stateless to TUTORIAL, driver oracles to CONTRIBUTING. |
 | `render3d-clarity-review.md` | 2026-08-14 | Clarity and consistency review of `src/render3d`: header contracts, quality helpers, post-FX decoupling, derived camera pose on `Render3dFrameRenderContext`, palette/winding tokens, `g_grid_theme_traits` table, bounds validation, text helper routing, and pipeline doc updates. |
 | `tutorial-catalog-review.md` | 2026-08-14 | Catalog consistency pass: lighting run reordered, Feature Tour retargeted, Depth Test Triangle retired, tags/voice/takeaways cleaned up, four Tier 1 lessons plus Loops Beyond the Ring. 29 tutorials. Function Scope blocked on the float-decl COMMAND ban. |

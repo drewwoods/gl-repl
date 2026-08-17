@@ -56,6 +56,7 @@ typedef enum GlrConfigKey {
     GLR_CONFIG_CALL_DEPTH_TINT,
     GLR_CONFIG_CAMERA_ROTATE,
     GLR_CONFIG_CODE_PANEL_LAYOUT,
+    GLR_CONFIG_CONSOLE_PANEL,
     GLR_CONFIG_CPU_PROFILE,
     GLR_CONFIG_DEPTH_VIZ,
     GLR_CONFIG_FOCUS_ORIGIN,   /* action row: no state; eases target to origin */

@@ -634,7 +634,7 @@ console("phase=%f steps=%f", phase, steps);
   contain `//`, `(`, `)`, `,`, or backslashes.
 - Legal anywhere in a scene, including inside `glBegin` / `glEnd` blocks.
 - In the REPL: Lines automatically indent according to their nesting / call
-  depth ($2 \times \text{call\_depth}$ spaces). When frame replay is active,
+  depth (2 * call_depth spaces). When frame replay is active,
   console output scrubs with the replay position.
 - In standalone C export: Emits a `console()` helper that prints unindented
   lines directly to `stdout`.

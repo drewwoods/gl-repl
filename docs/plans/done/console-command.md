@@ -1,6 +1,6 @@
 ## `console(...)` - printf debugging for the REPL
 
-## Status - NOT STARTED (follow-up work, revised after design review)
+## Status - COMPLETE
 
 A REPL primitive with `label()`'s exact argument shape that writes a text
 line to a panel instead of drawing bitmap text into the scene.

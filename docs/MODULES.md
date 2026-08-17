@@ -570,6 +570,7 @@ controllers; UI may render them; their input routes to them through
 | Module | Role |
 |--------|------|
 | `assign_plot` | Peer subsystem: assignment-value capture. Scans the host's execution trace (read through the installed [`AssignPlotHostBridge`](../src/subsystems/assign_plot/assign_plot.h), backed in the app by the live flat program - see `src/app/glr_assign_plot_bridge`) for each targeted source row and folds every execution's baked value into that series' min/max column buffer plus its `RunStats`. Needs no executor hook - flatten already materializes one flat command per execution with the value in `args[0]` (`args[2]` for a scratch assign), knowledge that lives in the bridge and not here. Returns on its first line when nothing is targeted, so a closed panel costs nothing |
+| `console` | Peer subsystem: debug trace capture buffer for `console(...)` commands. Storage lives in [`src/subsystems/console/console.c`](../src/subsystems/console/console.c); captures formatted text lines from the flat program with call-depth indentation and line capacity tracking. |
 | `variable_panel` | Peer subsystem: owns visibility flag + slider drag transaction in a single [`VariablePanelState`](../src/subsystems/variable_panel/variable_panel_state.h#L64). Storage lives in [`src/subsystems/variable_panel/variable_panel_state.c`](../src/subsystems/variable_panel/variable_panel_state.c). |
 | `variable_panel_drag` | Implementation behind `variable_panel`'s drag transaction (begin/motion/reset, value writeback; the source-line rewrite happens once on mouse-up, not per motion). Reads/writes through [`variable_panel_drag_mut()`](../src/subsystems/variable_panel/variable_panel_state.h#L81) |
 | `replay_state` | Peer subsystem: owns [`ReplayRuntimeState`](../src/subsystems/replay/replay_state.h#L97) storage in [`src/subsystems/replay/replay_state.c`](../src/subsystems/replay/replay_state.c). Narrow accessors (`replay_active`, `replay_pc`, `replay_mode`, …) plus [`replay_state_view()`](../src/subsystems/replay/replay_state.h#L140) for the per-frame snapshot fill |
@@ -764,7 +765,7 @@ flowchart TB
 
     editor["<b>2. Editor</b><br/>input · edit_ops · commit · state · undo · clipboard ·<br/>search · replace · completion · reformat ·<br/>inline_rename · inline_file_prompt · help_session<br/>(owns EditorState)"]
 
-    peers["<b>2b. Peer subsystems</b><br/>replay · variable_panel · color_picker · tutorial ·<br/>edit_overlays · hidden_lines · buffer_viz · call_depth_viz ·<br/>assign_plot · camera<br/>(each owns its own state)"]
+    peers["<b>2b. Peer subsystems</b><br/>replay · variable_panel · color_picker · tutorial ·<br/>edit_overlays · hidden_lines · buffer_viz · call_depth_viz ·<br/>assign_plot · console · camera<br/>(each owns its own state)"]
 
     repl["<b>1. REPL pipeline</b> (pure compiler/program)<br/>parser · normalize · compile · apply · load · replace ·<br/>source_scope · command_spec · attrib_bits · command_store ·<br/>flatten · flatten_expr · flatten_query · expr_program ·<br/>executor · eval · gl_state_inspector · bootstrap · host_effects"]
 
@@ -772,7 +773,7 @@ flowchart TB
 
     srcdoc["<b>source_document port</b><br/>(neutral REPL ↔ host text seam;<br/>full-app impl = glr_source_document)"]
 
-    ui["<b>5. 2D UI</b> (render + hit-test)<br/><b>ui/core:</b> text_panel · text_layout · text_search ·<br/>tabbed_overlay · gl_2d · hit · theme · metrics<br/><b>ui/app:</b> panels · menu_bar · scene_tabs · repl_code_panel ·<br/>layout · overlay_layout · autocomplete_panel · gl_state_panel ·<br/>command_description_panel · color/numeric/view_mode swatches ·<br/>variable_panel_view<br/><b>ui/subsystems:</b> color_picker · variable_panel ·<br/>replay_hud · tour_hud · buffer_viz_legend<br/><b>ui/support:</b> cpuprof · memprof · assign_plot panels<br/>(snapshots in, UiHit out - never mutates)"]
+    ui["<b>5. 2D UI</b> (render + hit-test)<br/><b>ui/core:</b> text_panel · text_layout · text_search ·<br/>tabbed_overlay · gl_2d · hit · theme · metrics<br/><b>ui/app:</b> panels · menu_bar · scene_tabs · repl_code_panel ·<br/>layout · overlay_layout · autocomplete_panel · gl_state_panel ·<br/>command_description_panel · color/numeric/view_mode swatches ·<br/>variable_panel_view<br/><b>ui/subsystems:</b> color_picker · variable_panel ·<br/>replay_hud · tour_hud · buffer_viz_legend<br/><b>ui/support:</b> cpuprof · memprof · assign_plot · console panels<br/>(snapshots in, UiHit out - never mutates)"]
 
     render3d["<b>4. 3D rendering (render3d)</b><br/>render · grid · axes · backdrop · lights ·<br/>overlays · postprocess_filter ·<br/>postprocess_surface · guides · render3d_transition"]
 

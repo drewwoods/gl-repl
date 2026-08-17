@@ -899,9 +899,8 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
         break;
     }
     case CMD_CONSOLE:
-        /* `console("fmt", ...)` - printf-style trace line. Emits no GL and
-         * does not draw into the scene. Output is captured once per frame via
-         * the flat-program scan (console_capture) rather than an executor hook. */
+        /* Trace command emits no GL calls; output is captured from the flat
+         * program by the console subsystem. */
         break;
     case CMD_TESS_BEGIN_POLYGON:
         if (g_tess) {

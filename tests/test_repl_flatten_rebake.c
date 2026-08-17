@@ -312,11 +312,14 @@ static void check_rebake_matches_full(const char *name,
 /* value-only: amp scales already-emitted vertices, t drives a vertex arg. */
 static const char *const k_scene_value[] = {
     "float amp = 1;",
+    "console(\"start amp=%f, t=%f\", amp, t);",
     "for(i, 0, 20) {",
     "glBegin(GL_TRIANGLES);",
     "glVertex3f(amp*i, sin(t + i), 0);",
     "glVertex3f(amp*i, amp, cos(t));",
     "glEnd();",
+    "label(\"i=%f, t=%f\", i, t);",
+    "console(\"iter i=%f, t=%f\", i, t);",
     "}",
     NULL,
 };

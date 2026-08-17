@@ -448,6 +448,7 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "Code panel", .slug = "code_panel", .key = GLR_CONFIG_CODE_PANEL_LAYOUT,
       .state_count = CODE_PANEL_LAYOUT_COUNT, .state_names = code_panel_layout_names,
       .key_code = KM_KEY(GLR_CODE_PANEL), .modifiers = KM_MODS(GLR_CODE_PANEL) },
+    { .label = "Console panel", .slug = "console_panel", .key = GLR_CONFIG_CONSOLE_PANEL, .state_count = 2 },
     { .label = "Wrap at commas", .slug = "wrap_at_commas", .key = GLR_CONFIG_WRAP_AT_COMMA, .state_count = 2 },
     { .label = "Syntax highlight", .slug = "syntax_highlight", .key = GLR_CONFIG_SYNTAX_HIGHLIGHT,
       .state_count = SYNTAX_HIGHLIGHT_COUNT, .state_names = syntax_hl_names,

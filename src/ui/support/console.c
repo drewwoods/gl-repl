@@ -85,11 +85,14 @@ void ui_console_panel_render(const UiConsolePanelView *view) {
     ui_clr(UI_TOK_TEXT_PRIMARY);
     {
         char header[64];
-        if (view->console.overflow_count > 0) {
-            snprintf(header, sizeof(header), "Console (%d, +%d ovf)",
-                     view->console.count, view->console.overflow_count);
-        } else if (view->console.count > 0) {
-            snprintf(header, sizeof(header), "Console (%d)", view->console.count);
+        int vis_lines = view->console.count > CONSOLE_MAX_DISPLAY_LINES
+                      ? CONSOLE_MAX_DISPLAY_LINES : view->console.count;
+        int unshown = view->console.total_count - vis_lines;
+        if (unshown > 0) {
+            snprintf(header, sizeof(header), "Console (%d, +%d)",
+                     view->console.total_count, unshown);
+        } else if (view->console.total_count > 0) {
+            snprintf(header, sizeof(header), "Console (%d)", view->console.total_count);
         } else {
             snprintf(header, sizeof(header), "Console");
         }
@@ -104,16 +107,21 @@ void ui_console_panel_render(const UiConsolePanelView *view) {
         ui_clr(UI_TOK_TEXT_PLACEHOLDER);
         gl2d_draw_string((float)tx, (float)line_y, "(no output)", FONT_SMALL);
     } else {
-        /* If more than CONSOLE_MAX_DISPLAY_LINES, display the latest lines */
-        int start = 0;
-        int count = view->console.count;
-        if (count > CONSOLE_MAX_DISPLAY_LINES) {
-            start = count - CONSOLE_MAX_DISPLAY_LINES;
-        }
-        for (int i = start; i < count; i++) {
+        int max_chars = (panel_w - 2 * UI_CONSOLE_PAD) / FONT_SMALL_W;
+        if (max_chars < 1) max_chars = 1;
+        int display_count = view->console.count > CONSOLE_MAX_DISPLAY_LINES
+                          ? CONSOLE_MAX_DISPLAY_LINES : view->console.count;
+        for (int i = 0; i < display_count; i++) {
+            char line_buf[64];
+            const char *src = view->console.lines[i].text;
+            int src_len = (int)strlen(src);
+            if (src_len > max_chars && max_chars > 3) {
+                snprintf(line_buf, sizeof(line_buf), "%.*s...", max_chars - 3, src);
+            } else {
+                snprintf(line_buf, sizeof(line_buf), "%.*s", max_chars, src);
+            }
             ui_clr(UI_TOK_TEXT_PRIMARY);
-            gl2d_draw_string((float)tx, (float)line_y,
-                             view->console.lines[i].text, FONT_SMALL);
+            gl2d_draw_string((float)tx, (float)line_y, line_buf, FONT_SMALL);
             line_y -= UI_CONSOLE_LINE_H;
         }
     }

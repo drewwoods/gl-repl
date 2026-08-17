@@ -39,6 +39,7 @@
 /* @cfg compute_profile = 0 */
 /* @cfg memory_profile = 0 */
 /* @cfg code_panel = 1 */
+/* @cfg console_panel = 0 */
 /* @cfg wrap_at_commas = 1 */
 /* @cfg syntax_highlight = SYNTAX_HIGHLIGHT_ON_SHADOW */
 /* @cfg paren_match = 1 */

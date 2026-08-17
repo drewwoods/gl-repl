@@ -6,4 +6,4 @@ or to `../active/` if implementation begins immediately.
 
 | Plan | Topic |
 |---|---|
-| [console-command.md](console-command.md) | `console(...)`, a `label()`-shaped primitive that writes to a panel instead of the framebuffer, auto-indented by call depth |
+| *(none)* | |

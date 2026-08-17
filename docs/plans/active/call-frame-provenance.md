@@ -666,7 +666,7 @@ Kept for sequencing only. None of these should ride along with the PATH row.
   instead of the framebuffer, auto-indented by `call_depth`. **Follow-up
   work, sequenced after this plan**: it needs no new provenance and does not
   block anything here, and keeping it out avoids two features negotiating one
-  review. Its own plan: [`console-command.md`](console-command.md). The two
+  review. Its own plan: [`../done/console-command.md`](../done/console-command.md). The two
   meet in one place worth knowing about - once frames exist, a console line
   can record the frame it was emitted from, which makes the console a
   clickable execution trace.

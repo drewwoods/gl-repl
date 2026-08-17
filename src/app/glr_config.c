@@ -12,6 +12,7 @@
 #include "repl/host_effects.h"
 #include "repl/state_views.h"
 #include "ui/app/state_types.h"
+#include "subsystems/console/console.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 #include "subsystems/tutorial/tutorial.h"        /* tutorial_notify_state_changed */
 #include "ui/app/state.h"
@@ -283,6 +284,7 @@ static int *config_value_ptr(GlrConfigKey key) {
     case GLR_CONFIG_DEPTH_VIZ:           return &glr_state_presentation_mut()->depth_viz;
     case GLR_CONFIG_STENCIL_VIZ:         return &glr_state_presentation_mut()->stencil_viz;
     case GLR_CONFIG_CALL_DEPTH_TINT:     return &glr_state_presentation_mut()->call_depth_tint;
+    case GLR_CONFIG_CONSOLE_PANEL:       return NULL; /* subsystem owns this: see glr_config_set */
     case GLR_CONFIG_VARIABLE_PANEL:      return &variable_panel_state_mut()->visible;
     case GLR_CONFIG_CPU_PROFILE:         return &ui_state_profile_panel_mut()->mode;
     case GLR_CONFIG_MEMORY_PROFILE:      return &ui_state_memory_panel_mut()->mode;
@@ -346,6 +348,7 @@ int glr_config_get(GlrConfigKey key) {
     case GLR_CONFIG_DEPTH_VIZ:           return glr_state_presentation().depth_viz;
     case GLR_CONFIG_STENCIL_VIZ:         return glr_state_presentation().stencil_viz;
     case GLR_CONFIG_CALL_DEPTH_TINT:     return glr_state_presentation().call_depth_tint;
+    case GLR_CONFIG_CONSOLE_PANEL:       return console_is_open();
     case GLR_CONFIG_VARIABLE_PANEL:      return variable_panel_view().visible;
     case GLR_CONFIG_CPU_PROFILE:         return ui_state_profile_panel().mode;
     case GLR_CONFIG_MEMORY_PROFILE:      return ui_state_memory_panel().mode;
@@ -467,6 +470,8 @@ void glr_config_set(GlrConfigKey key, int value) {
         glr_config_apply_post_fx_modes();
     } else if (key == GLR_CONFIG_PROJECTION) {
         glr_state_presentation_mut()->projection_mode = (Render3dProjectionMode)value;
+    } else if (key == GLR_CONFIG_CONSOLE_PANEL) {
+        console_set_open(value ? 1 : 0);
     } else {
         int *target = config_value_ptr(key);
         if (!target)

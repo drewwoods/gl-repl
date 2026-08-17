@@ -19,6 +19,7 @@
 #include "repl/scenes.h"
 #include "repl/state.h"
 #include "subsystems/color_picker/color_picker_state.h"
+#include "subsystems/console/console.h"
 #include "subsystems/replay/replay_state.h"
 #include "subsystems/tutorial/tutorial_state.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
@@ -37,6 +38,7 @@ struct GlrTourSnapshot {
     ReplayRuntimeState        replay;
     TutorialRuntimeState      tutorial;
     VariablePanelState        variable_panel;
+    int                       console_open;
     EditorHelpSession         help_session;
     GlrCameraRuntimeSnapshot  camera;
     GlrViewTransitionSnapshot view_transition;
@@ -72,6 +74,7 @@ GlrTourSnapshot *glr_tour_snapshot_capture(void) {
     replay_state_capture(&s->replay);
     s->tutorial = tutorial_state_view();
     variable_panel_state_capture(&s->variable_panel);
+    s->console_open = console_is_open();
     editor_help_session_capture(&s->help_session);
     glr_camera_runtime_capture(&s->camera);
     glr_ctrl_view_transition_capture(&s->view_transition);
@@ -108,6 +111,7 @@ int glr_tour_snapshot_restore(const GlrTourSnapshot *s) {
     replay_state_restore(&s->replay);
     *tutorial_state_mut() = s->tutorial;
     variable_panel_state_restore(&s->variable_panel);
+    console_set_open(s->console_open);
     color_picker_runtime_restore(&s->color_picker);
     editor_help_session_restore(&s->help_session);
     /* UI chrome, menu state, and overlay layout. */

@@ -3292,27 +3292,29 @@ void glr_ctrl_display_frame(void) {
     }
 
     /* Auto-open console panel if the document uses console(...) and scene changed
-     * or newly added to the document. */
+     * or newly added to the document. Only scanned on scene load / program refresh. */
     {
         static int s_last_console_scene_slot = -2;
         static int s_last_had_console = 0;
         int active_slot = repl_active_user_scene();
-        int has_console = 0;
-        for (int i = 0; i < flat_program.cmd_count; i++) {
-            if (flat_program.cmds[i].valid && flat_program.cmds[i].type == CMD_CONSOLE) {
-                has_console = 1;
-                break;
+        if (flat_refresh != REPL_FLAT_REFRESH_NONE || active_slot != s_last_console_scene_slot) {
+            int has_console = 0;
+            for (int i = 0; i < flat_program.cmd_count; i++) {
+                if (flat_program.cmds[i].valid && flat_program.cmds[i].type == CMD_CONSOLE) {
+                    has_console = 1;
+                    break;
+                }
             }
-        }
-        if (active_slot != s_last_console_scene_slot) {
-            s_last_console_scene_slot = active_slot;
-            if (has_console) {
+            if (active_slot != s_last_console_scene_slot) {
+                s_last_console_scene_slot = active_slot;
+                if (has_console) {
+                    console_open();
+                }
+            } else if (has_console && !s_last_had_console) {
                 console_open();
             }
-        } else if (has_console && !s_last_had_console) {
-            console_open();
+            s_last_had_console = has_console;
         }
-        s_last_had_console = has_console;
     }
 
     if (console_is_open()) {
@@ -4368,6 +4370,7 @@ void glr_ctrl_reset_all(void) {
     ui_state_reset();
     ui_overlay_layout_reset();
     variable_panel_state_reset();
+    console_reset();
     replay_state_reset();
     color_picker_state_reset();
     /* Hard reset rather than an outro: a wholesale world reset is not a tour

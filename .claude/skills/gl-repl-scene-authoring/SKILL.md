@@ -38,6 +38,7 @@ glPolygonOffset(factor, units)  (needs glEnable(GL_POLYGON_OFFSET_FILL/LINE/POIN
 glutSolidTorus/Cube/Sphere/Teapot/Cone(...)
 glRasterPos3f(x,y,z)
 label("fmt", a, b, c, d)       (bitmap text at raster pos; REPL primitive)
+console("fmt", a, b, ...)      (debug trace to console panel; REPL primitive, ≤ 8 args)
 for(var, start, end[, step]) { body }
 func0..func9(params) { body }  (parens required; NAME(params) aliases a slot)
 if(expr) { body }              (if(0) { } disables a block - emits nothing)
@@ -134,6 +135,9 @@ a `float ...;` declaration. Use `X`/`Y`/`Z` in tests and scratch scenes.
 - **`label()`** format string: `%f` and `%%` only, ≤ 4 args, ≤ 64 chars; no
   `//`, parens, commas, or backslashes inside the string. The exporter emits a
   self-contained `label()` helper.
+- **`console()`** format string: `%f` and `%%` only, ≤ 8 args, ≤ 64 chars.
+  Emits formatted debug trace into the floating Console panel, auto-indented by
+  call depth. The exporter emits a self-contained `console()` helper printing to `stdout`.
 
 ## Example headers: `@cfg` and camera
 
