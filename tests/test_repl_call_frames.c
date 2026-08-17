@@ -7,6 +7,7 @@
  * oracle for every indexed command. Overflow is a soft latch.
  */
 #include <stdio.h>
+#include <stdarg.h>
 #include <string.h>
 
 #include "app/glr_ctrl.h"
@@ -30,6 +31,64 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_FLOAT(label, got, exp) \
     TEST_ASSERT_FLOAT(&g_harness, label, got, exp, 1e-5f)
 
+#define DRIFT_MAX_REPORTED 8
+
+typedef struct {
+    int scenes;
+    int indexed;
+    int derive_failures;
+    int provenance_mismatches;
+    int missing_indexed;
+    int empty_frame_failures;
+    int empty_arg_failures;
+    int load_failures;
+    int detail_count;
+    int omitted_details;
+    char details[DRIFT_MAX_REPORTED][256];
+} DriftSummary;
+
+static void drift_note(DriftSummary *summary, const char *format, ...) {
+    va_list args;
+
+    if (summary->detail_count >= DRIFT_MAX_REPORTED) {
+        summary->omitted_details++;
+        return;
+    }
+    va_start(args, format);
+    vsnprintf(summary->details[summary->detail_count],
+              sizeof(summary->details[summary->detail_count]), format, args);
+    va_end(args);
+    summary->detail_count++;
+}
+
+static int drift_summary_failed(const DriftSummary *summary) {
+    return summary->derive_failures > 0 ||
+           summary->provenance_mismatches > 0 ||
+           summary->missing_indexed > 0 ||
+           summary->empty_frame_failures > 0 ||
+           summary->empty_arg_failures > 0 ||
+           summary->load_failures > 0;
+}
+
+static void assert_drift_summary(const char *label,
+                                 const DriftSummary *summary) {
+    if (drift_summary_failed(summary)) {
+        printf("  %s: scenes=%d indexed=%d derive_failures=%d "
+               "provenance_mismatches=%d missing_indexed=%d "
+               "empty_frames=%d empty_args=%d load_failures=%d\n",
+               label, summary->scenes, summary->indexed,
+               summary->derive_failures, summary->provenance_mismatches,
+               summary->missing_indexed, summary->empty_frame_failures,
+               summary->empty_arg_failures, summary->load_failures);
+        for (int i = 0; i < summary->detail_count; i++)
+            printf("    %s\n", summary->details[i]);
+        if (summary->omitted_details > 0)
+            printf("    ... %d more drift details omitted\n",
+                   summary->omitted_details);
+    }
+    ASSERT_INT(label, drift_summary_failed(summary), 0);
+}
+
 static void load_scene(const char *const *lines) {
     glr_ctrl_reset_all();
     for (int i = 0; lines[i]; i++)
@@ -37,64 +96,70 @@ static void load_scene(const char *const *lines) {
     repl_flatten_commands(0);
 }
 
-static void assert_indexed_drift_ex(const char *tag, FlatProgramView view,
-                                    int require_indexed) {
-    int mismatches = 0;
+static void check_indexed_drift_ex(const char *tag, FlatProgramView view,
+                                   int require_indexed,
+                                   DriftSummary *summary) {
     int indexed = 0;
 
     for (int i = 0; i < view.cmd_count; i++) {
-        ReplCallFrameDerivedProv derived;
+        ReplCallFrameDerivedProv derived = { 0 };
         int frame = repl_flat_cmd_call_frame(&view, i);
-        char label[192];
 
         if (frame == REPL_CALL_FRAME_NONE)
             continue;
         indexed++;
-        snprintf(label, sizeof(label), "%s flat %d derive", tag, i);
-        ASSERT_INT(label, repl_call_frame_derive_prov(view, frame, &derived), 1);
+        summary->indexed++;
+        if (!repl_call_frame_derive_prov(view, frame, &derived)) {
+            summary->derive_failures++;
+            drift_note(summary, "%s flat=%d frame=%d: derive failed",
+                       tag, i, frame);
+            continue;
+        }
         if (derived.call_src_cmd_idx != view.cmds[i].call_src_cmd_idx ||
             derived.root_call_src_cmd_idx != view.cmds[i].root_call_src_cmd_idx ||
             derived.call_depth != view.cmds[i].call_depth ||
             derived.func_scope_mask != view.cmds[i].func_scope_mask) {
-            mismatches++;
-            printf("  drift[%s] flat=%d frame=%d "
-                   "derived(src=%d root=%d depth=%d mask=0x%x) "
-                   "stored(src=%d root=%d depth=%d mask=0x%x)\n",
-                   tag, i, frame,
-                   derived.call_src_cmd_idx, derived.root_call_src_cmd_idx,
-                   derived.call_depth, derived.func_scope_mask,
-                   view.cmds[i].call_src_cmd_idx,
-                   view.cmds[i].root_call_src_cmd_idx,
-                   view.cmds[i].call_depth, view.cmds[i].func_scope_mask);
+            summary->provenance_mismatches++;
+            drift_note(summary,
+                       "%s flat=%d frame=%d: derived(src=%d root=%d "
+                       "depth=%d mask=0x%x), stored(src=%d root=%d "
+                       "depth=%d mask=0x%x)",
+                       tag, i, frame,
+                       derived.call_src_cmd_idx, derived.root_call_src_cmd_idx,
+                       derived.call_depth, derived.func_scope_mask,
+                       view.cmds[i].call_src_cmd_idx,
+                       view.cmds[i].root_call_src_cmd_idx,
+                       view.cmds[i].call_depth, view.cmds[i].func_scope_mask);
         }
     }
-    {
-        char label[128];
-        snprintf(label, sizeof(label), "%s: indexed commands drifted", tag);
-        ASSERT_INT(label, mismatches, 0);
-        if (require_indexed) {
-            snprintf(label, sizeof(label), "%s: saw indexed commands", tag);
-            ASSERT_TRUE(label, indexed > 0);
-        }
-    }
+    if (require_indexed && indexed == 0)
+        summary->missing_indexed++;
 }
 
 static void assert_indexed_drift(const char *tag, FlatProgramView view) {
-    assert_indexed_drift_ex(tag, view, 1);
+    DriftSummary summary = { 0 };
+
+    summary.scenes = 1;
+    check_indexed_drift_ex(tag, view, 1, &summary);
+    assert_drift_summary(tag, &summary);
 }
 
-static void assert_scene_drift(const char *tag, FlatProgramView view) {
+static void check_scene_drift(const char *tag, FlatProgramView view,
+                              DriftSummary *summary) {
     if (view.cmd_count == 0) {
-        char label[192];
-        snprintf(label, sizeof(label),
-                 "%s: failed flatten published no frames", tag);
-        ASSERT_INT(label, view.call_frame_count, 0);
-        snprintf(label, sizeof(label),
-                 "%s: failed flatten published no args", tag);
-        ASSERT_INT(label, view.call_frame_arg_count, 0);
+        if (view.call_frame_count != 0) {
+            summary->empty_frame_failures++;
+            drift_note(summary, "%s: failed flatten published %d frames",
+                       tag, view.call_frame_count);
+        }
+        if (view.call_frame_arg_count != 0) {
+            summary->empty_arg_failures++;
+            drift_note(summary, "%s: failed flatten published %d args",
+                       tag, view.call_frame_arg_count);
+        }
         return;
     }
-    assert_indexed_drift_ex(tag, view, 0);
+    check_indexed_drift_ex(tag, view, 0, summary);
 }
 
 static void test_record_size(void) {
@@ -486,32 +551,40 @@ static void test_flatten_failure_zeros_frames(void) {
                view.call_frame_overflow, 0);
 }
 
-static void drift_one_example(int idx, const char *corpus) {
+static void drift_one_example(int idx, const char *corpus,
+                              DriftSummary *summary) {
     char tag[192];
     FlatProgramView view;
 
     snprintf(tag, sizeof(tag), "%s:%s", corpus, repl_example_name(idx));
+    summary->scenes++;
     glr_ctrl_reset_all();
-    if (repl_load_example(idx) <= 0)
+    if (repl_load_example(idx) <= 0) {
+        summary->load_failures++;
+        drift_note(summary, "%s: example failed to load", tag);
         return;
+    }
     repl_flatten_commands(0);
     view = repl_state_flat_program_view();
-    assert_scene_drift(tag, view);
+    check_scene_drift(tag, view, summary);
 }
 
 static void test_example_corpus_drift(void) {
     int n = repl_example_count();
     int i;
+    DriftSummary summary = { 0 };
 
     printf("--- call-frames: built-in example drift ---\n");
     ASSERT_TRUE("built-in catalog is non-empty", n > 0);
     for (i = 0; i < n; i++)
-        drift_one_example(i, "example");
+        drift_one_example(i, "example", &summary);
+    assert_drift_summary("built-in example drift summary", &summary);
 }
 
 static void test_scene_corpus_drift(void) {
     const char *const *dirs;
     int d;
+    DriftSummary summary = { 0 };
 
     if (!repl_test_scene_corpus_enabled()) {
         printf("--- call-frames: scene corpora not walked "
@@ -529,9 +602,9 @@ static void test_scene_corpus_drift(void) {
 
         err[0] = '\0';
         if (!repl_examples_load_dir(dirs[d], err, sizeof(err))) {
-            char label[256];
-            snprintf(label, sizeof(label), "%s catalog loads", dirs[d]);
-            ASSERT_TRUE(label, 0);
+            summary.load_failures++;
+            drift_note(&summary, "%s catalog failed to load: %s",
+                       dirs[d], err[0] ? err : "unknown error");
             continue;
         }
         n = repl_example_count();
@@ -539,10 +612,11 @@ static void test_scene_corpus_drift(void) {
         for (i = 0; i < n; i++) {
             if (repl_example_source_format(i) != REPL_EXAMPLE_SOURCE_GLR)
                 continue;
-            drift_one_example(i, tag);
+            drift_one_example(i, tag, &summary);
         }
         repl_examples_clear_runtime_catalog();
     }
+    assert_drift_summary("scene corpus drift summary", &summary);
 }
 
 int main(void) {
