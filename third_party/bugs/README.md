@@ -19,9 +19,10 @@ comment carries its own build line.
 | [`apple-colormaterial-rasterpos`](apple-colormaterial-rasterpos.md) | Apple OpenGL (`2.1 Metal`) | Components tracked by `GL_COLOR_MATERIAL` are lit as zero at `glRasterPos`; renders lit `label()` text black |
 | [`mesa-rasterpos-lighting-untransformed`](mesa-rasterpos-lighting-untransformed.md) | Mesa core (`iris`) | `glRasterPos` lit from the object-space position, and `GL_NORMALIZE` ignored; wrong shade on lit bitmap text under a transformed modelview |
 | [`mesa-rasterpos-color-unclamped`](mesa-rasterpos-color-unclamped.md) | Mesa core (`iris`) | `GL_CURRENT_RASTER_COLOR` latched unclamped with lighting off; visible only to code that reads the cell back |
+| [`apple-line-smooth-polygon-viewport`](apple-line-smooth-polygon-viewport.md) | Apple OpenGL (`2.1 Metal`) | Antialiased `GL_LINE` polygon-mode edges are discarded when the viewport is smaller than the drawable; renders wireframe scenes empty with Line smooth on |
 
-The last three all land on `GL_CURRENT_RASTER_COLOR` and were found by the
-differential oracles in `make gl-tests`, which diff the pure
+The three `rasterpos` reports all land on `GL_CURRENT_RASTER_COLOR` and were
+found by the differential oracles in `make gl-tests`, which diff the pure
 `gl_state_inspector` model against a live driver. Each reproducer is standalone
 (GLUT, no project headers). The two lighting reproducers compare the raster
 colour with the colour the same driver gives a vertex under identical state,
@@ -29,3 +30,11 @@ which the specification defines as the same computation. The unclamped-colour
 probe instead checks the specified [0, 1] range and uses the lit path as a
 control. Each exits 0 when all of its checks pass, so the programs can also be
 used as cross-driver probes.
+
+`apple-line-smooth-polygon-viewport` came from the other differential tool:
+[`src/support/gl_state_dump.c`](../../src/support/gl_state_dump.c) dumps the
+live GL state at the user-geometry boundary, and diffing the app's dump against
+its exported C twin's showed the two rendering the same geometry under the same
+state - which is what turned a scene bug into a driver bug. Its oracles are the
+same draw under state that cannot decide visibility, so it follows the same
+"the driver disagrees with itself" pattern as the others.
