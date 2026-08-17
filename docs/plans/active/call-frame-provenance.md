@@ -435,7 +435,11 @@ visible gutter number. The controller already uses this path for the immediate
 and root caller markers. A later full-chain tint can therefore walk the frame
 chain, publish one highlight per frame's `call_src_cmd_idx`, and let the UI
 render those markers without a `UiRenderSnapshot`-to-gutter-label lookup or a
-row-builder re-entry.
+row-builder re-entry. It must start from `replay_focus_flat_idx()`, the same
+focus used by the existing markers, rather than
+`replay_focus_anchor_flat_idx()`: caller tint generalizes the all-mode replay
+marker and must remain present for polygon and non-draw steps. The PATH row's
+vertex-only anchor is deliberately a different gate.
 
 The two surfaces should stay separate: `@line` is optional text inside the
 breadcrumb, while caller tint is an editor overlay keyed by source index. The
@@ -607,34 +611,49 @@ Kept for sequencing only. None of these should ride along with the PATH row.
    on the list, and independent enough to ship first or never; it shipped
    first. See "Call-depth tint, as built" below.
 2. **Replay caller-chain gutter tint.** Generalize the existing immediate/root
-   caller-site markers to the complete frame chain for the selected replay
-   draw. The controller walks `repl_call_frame_walk_chain()` and publishes one
-   source-line highlight per frame, using the frame's `call_src_cmd_idx` and
-   depth; no displayed gutter-number lookup is involved. This is deliberately
-   a gutter overlay, not another PATH row and not a replacement for the
+   caller-site markers to the complete frame chain for the current replay
+   focus. Start with `replay_focus_flat_idx()`, resolve the focused command's
+   frame with `repl_flat_cmd_call_frame()`, and walk an indexed frame with
+   `repl_call_frame_walk_chain(..., MAX_FLATTEN_CALL_DEPTH)`. Do not use
+   `replay_focus_anchor_flat_idx()` or `UiReplayPathSnapshot`: caller tint is
+   not Verbose-gated and must preserve the existing polygon/non-draw behavior.
+   No displayed gutter-number lookup is involved. This is deliberately a
+   gutter overlay, not another PATH row and not a replacement for the
    breadcrumb.
+
+   Publication is mutually exclusive at the focus boundary. When the focused
+   command has an indexed frame, publish only the new multi-entry replay-chain
+   highlight kind, one entry per walked frame, using its `call_src_cmd_idx` and
+   depth. When `repl_flat_cmd_call_frame()` returns
+   `REPL_CALL_FRAME_NONE`, publish only today's scalar
+   `HIGHLIGHT_REPLAY_CALL_SITE` / `_ROOT_CALL_SITE` entries from the retained
+   legacy fields. This preserves the overflow fallback without allowing the
+   old scalar marker priority to mask the new segmented marker.
 
    The visual language should borrow `call_depth_viz`: depth is ordered, so
    use its cool-to-warm ramp (`call_depth_viz_ramp_rgb()`), normalized to the
-   observed depth range for the active chain/frame. The recommended first
-   rendering contract is two-role: the innermost, last rung gets the warmest
-   ramp colour, while ancestor rungs use neutral off-palette white/grey bands.
-   That makes the active caller pop without competing with the PATH row; a
-   later pass can put every band on the full ramp if that proves more useful.
-   The palette choice is presentation, not provenance. If several frames land
-   on one recursive source line, keep one band per distinct frame/depth, using
-   the existing segmented gutter mechanism already used for `glPushAttrib`
-   bits. The existing marker-band cap is a display cap only; it must not
-   truncate the frame chain data.
+   observed depth range for the active chain/frame. The first-cut contract is:
+   a source line carrying only one ancestor rung may use neutral off-palette
+   white/grey, while the innermost/last rung gets the warmest ramp colour; any
+   source line carrying two or more chain frames must use distinguishable ramp
+   stops for those bands, never identical neutral grey. Thus the two recursive
+   `@96` frames remain visibly two frames. If several frames land on one source
+   line, keep one band per retained frame/depth, using the existing segmented
+   gutter mechanism already used for `glPushAttrib` bits.
 
-   This needs a multi-entry replay highlight kind (or equivalent depth payload)
-   and a code-panel aggregation path analogous to
+   Walk the complete chain before applying the UI cap. The cap is
+   `UI_TEXT_PANEL_MAX_MARKER_BANDS` (currently 4), and applies only while
+   filling `left_marker_band_colors`; it must not shorten the frame walk or
+   mutate the provenance payload. If one source line has more than four chain
+   frames, retain its outermost band plus its three innermost bands and drop
+   only the middle bands from the gutter. The PATH data remains lossless.
+
+   This needs a multi-entry replay highlight kind (or equivalent depth/color
+   payload) and a code-panel aggregation path analogous to
    `repl_code_panel_line_attrib_bits()`. The controller must resolve the ramp
-   colours (or publish the chain depth range and a neutral colour payload) so
-   the UI continues to consume a frozen snapshot rather than reaching into
-   live REPL/call-depth state. Existing immediate/root markers remain the
-   overflow fallback and can remain the scalar high-priority markers until the
-   chain form is validated.
+   colours, or publish the chain depth range and a color payload, so the UI
+   continues to consume a frozen snapshot rather than reaching into live
+   REPL/call-depth state.
 3. **Offline `--call-tree` dump.** Also turns `--flat-histogram` from
    per-*function* into per-*invocation* accounting, which is what you want
    when a scene approaches the 8192 flat budget.
