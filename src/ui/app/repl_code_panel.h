@@ -167,6 +167,16 @@ int ui_repl_code_panel_row_marker_for_test(int source_line_idx,
                                            int *out_active,
                                            float out_rgba[4]);
 
+/* Test-only: after a render or layout populates the row buffer, return the
+ * segmented marker bands for `source_line_idx`. Returns 1 on hit (writing
+ * `out_active`, `out_band_count`, and up to `max_bands` rgba values in
+ * `out_band_rgba`), 0 if no matching row. */
+int ui_repl_code_panel_row_marker_bands_for_test(int source_line_idx,
+                                                 int *out_active,
+                                                 int *out_band_count,
+                                                 float out_band_rgba[][4],
+                                                 int max_bands);
+
 /* Test-only: after a render or hit-test populates the row builder, return the
  * left auxiliary label for the row representing `source_line_idx`. Returns 1
  * when a row was found, including rows whose aux label is empty. */

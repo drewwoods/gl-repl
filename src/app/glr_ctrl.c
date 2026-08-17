@@ -855,20 +855,59 @@ static void glr_ctrl_push_highlights(void) {
     /* When the focused replay command was expanded from a funcN(...) call,
      * also light up the call site(s) so a reused or recursive function shows
      * which invocation is live (the PC line above is the body line inside the
-     * function). call_src_cmd_idx is the immediate caller; root_call_src_cmd_idx
-     * the outermost caller of a nested chain - push it only when distinct. */
+     * function). When the focused command has an indexed call frame, walk the
+     * entire ancestor chain (outermost-first) and publish multi-entry
+     * HIGHLIGHT_REPLAY_CALL_CHAIN highlights with depth-mapped ramp colours.
+     * When unindexed (REPL_CALL_FRAME_NONE), fall back to scalar
+     * HIGHLIGHT_REPLAY_CALL_SITE and HIGHLIGHT_REPLAY_ROOT_CALL_SITE from the
+     * retained legacy provenance fields. */
     if (replay_active()) {
         int focus = replay_focus_flat_idx();
         FlatProgramView flat = repl_state_flat_program_view();
         if (focus >= 0 && focus < flat.cmd_count) {
-            int call_site = flat.cmds[focus].call_src_cmd_idx;
-            int root_site = flat.cmds[focus].root_call_src_cmd_idx;
-            if (call_site >= 0)
-                editor_state_highlights_append(call_site, -1, -1,
-                                                    HIGHLIGHT_REPLAY_CALL_SITE);
-            if (root_site >= 0 && root_site != call_site)
-                editor_state_highlights_append(root_site, -1, -1,
-                                                    HIGHLIGHT_REPLAY_ROOT_CALL_SITE);
+            int frame = repl_flat_cmd_call_frame(&flat, focus);
+            if (frame != REPL_CALL_FRAME_NONE) {
+                int chain[MAX_FLATTEN_CALL_DEPTH];
+                int chain_count = repl_call_frame_walk_chain(
+                    flat, frame, chain, MAX_FLATTEN_CALL_DEPTH);
+                if (chain_count > 0) {
+                    int min_depth = flat.call_frames[chain[0]].depth;
+                    int max_depth = flat.call_frames[chain[chain_count - 1]].depth;
+                    for (int i = 0; i < chain_count; i++) {
+                        int d = flat.call_frames[chain[i]].depth;
+                        if (d < min_depth) min_depth = d;
+                        if (d > max_depth) max_depth = d;
+                    }
+                    int depth_span = max_depth - min_depth;
+                    for (int i = 0; i < chain_count; i++) {
+                        const ReplCallFrame *f = &flat.call_frames[chain[i]];
+                        int call_site = f->call_src_cmd_idx;
+                        if (call_site >= 0) {
+                            float rgb[3];
+                            call_depth_viz_ramp_rgb(f->depth - min_depth, depth_span, rgb);
+                            int r_byte = (int)(rgb[0] * 255.0f + 0.5f);
+                            int g_byte = (int)(rgb[1] * 255.0f + 0.5f);
+                            int b_byte = (int)(rgb[2] * 255.0f + 0.5f);
+                            if (r_byte < 0) r_byte = 0; else if (r_byte > 255) r_byte = 255;
+                            if (g_byte < 0) g_byte = 0; else if (g_byte > 255) g_byte = 255;
+                            if (b_byte < 0) b_byte = 0; else if (b_byte > 255) b_byte = 255;
+                            int aux = (r_byte << 16) | (g_byte << 8) | b_byte;
+                            editor_state_highlights_append_aux(call_site, -1, -1,
+                                                               HIGHLIGHT_REPLAY_CALL_CHAIN,
+                                                               aux);
+                        }
+                    }
+                }
+            } else {
+                int call_site = flat.cmds[focus].call_src_cmd_idx;
+                int root_site = flat.cmds[focus].root_call_src_cmd_idx;
+                if (call_site >= 0)
+                    editor_state_highlights_append(call_site, -1, -1,
+                                                        HIGHLIGHT_REPLAY_CALL_SITE);
+                if (root_site >= 0 && root_site != call_site)
+                    editor_state_highlights_append(root_site, -1, -1,
+                                                        HIGHLIGHT_REPLAY_ROOT_CALL_SITE);
+            }
         }
     }
 

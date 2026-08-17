@@ -49,9 +49,15 @@ typedef enum {
      * executing. CALL_SITE is the immediate caller; ROOT_CALL_SITE is the
      * outermost caller of a nested chain, pushed only when it differs from
      * the immediate one. Both come from the focused flat command's
-     * call_src_cmd_idx / root_call_src_cmd_idx provenance. */
+     * call_src_cmd_idx / root_call_src_cmd_idx provenance. Kept as the overflow
+     * fallback when the frame table is unindexed. */
     HIGHLIGHT_REPLAY_CALL_SITE,
     HIGHLIGHT_REPLAY_ROOT_CALL_SITE,
+    /* Multi-entry replay call-chain gutter highlight. When the focused replay
+     * command has an interned call frame, one entry is pushed per active ancestor
+     * frame on the chain (outermost-first). `aux` carries the 24-bit packed RGB
+     * ramp colour for that frame's depth. */
+    HIGHLIGHT_REPLAY_CALL_CHAIN,
     HIGHLIGHT_SEARCH_MATCH,
     HIGHLIGHT_SELECTION,
     HIGHLIGHT_TUTORIAL_INSERTION,

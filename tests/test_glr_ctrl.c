@@ -10,8 +10,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "ui/app/repl_code_panel.h"
 #include "subsystems/assign_plot/assign_plot.h"
 #include "editor/undo.h"
 #include "repl/example_loader.h"
@@ -192,6 +194,23 @@ static int count_highlight_kind_on_line(UiHighlightKind kind, int line_idx) {
             count++;
     }
     return count;
+}
+
+static int get_highlight_aux_on_line(UiHighlightKind kind, int line_idx, int match_index) {
+    const UiHighlightList *list = editor_state_highlights();
+    int match = 0;
+
+    if (!list)
+        return -1;
+    for (int i = 0; i < list->count; i++) {
+        if (list->items[i].kind == kind &&
+            list->items[i].line_idx == line_idx) {
+            if (match == match_index)
+                return list->items[i].aux;
+            match++;
+        }
+    }
+    return -1;
 }
 
 /* Off (-1) by default: most display-frame tests want the config, not a
@@ -4989,27 +5008,229 @@ static void test_replay_call_site_highlights_are_pushed(void) {
 
     ASSERT_INT("first nested replay PC highlights body line",
                count_highlight_kind_on_line(HIGHLIGHT_REPLAY_PC, 2), 1);
-    ASSERT_INT("first nested replay highlights immediate call site",
-               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_SITE, 6), 1);
-    ASSERT_INT("first nested replay highlights root call site",
-               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_ROOT_CALL_SITE, 8), 1);
+    ASSERT_INT("first nested replay highlights immediate call site on chain",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 6), 1);
+    ASSERT_INT("first nested replay highlights root call site on chain",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 8), 1);
     ASSERT_INT("first nested replay has no root marker on second outer call",
-               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_ROOT_CALL_SITE, 9), 0);
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 9), 0);
+    ASSERT_INT("indexed frame suppresses legacy call site marker",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_SITE, 6), 0);
+    ASSERT_INT("indexed frame suppresses legacy root call site marker",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_ROOT_CALL_SITE, 8), 0);
 
     replay_advance(repl_state_flat_program_view());
     glr_ctrl_push_highlights();
 
     ASSERT_INT("second nested replay still highlights immediate call site",
-               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_SITE, 6), 1);
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 6), 1);
     ASSERT_INT("second nested replay moves root marker to second outer call",
-               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_ROOT_CALL_SITE, 9), 1);
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 9), 1);
     ASSERT_INT("second nested replay clears prior root marker",
-               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_ROOT_CALL_SITE, 8), 0);
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 8), 0);
 
     replay_stop();
     glr_ctrl_push_highlights();
-    ASSERT_INT("inactive replay clears immediate call-site highlight",
-               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_SITE, 6), 0);
+    ASSERT_INT("inactive replay clears call-chain highlights",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 6), 0);
+}
+
+static void test_replay_call_chain_ramp_colors(void) {
+    printf("--- imrepl_ctrl replay call-chain ramp colors ---\n");
+
+    glr_ctrl_reset_all();
+    editor_feed_line("func2() {");               /* 0 */
+    editor_feed_line("glBegin(GL_POINTS);");      /* 1 */
+    editor_feed_line("glVertex3f(0, 0, 0);");     /* 2 */
+    editor_feed_line("glEnd();");                 /* 3 */
+    editor_feed_line("}");                        /* 4 */
+    editor_feed_line("func1() {");               /* 5 */
+    editor_feed_line("func2();");                 /* 6 */
+    editor_feed_line("}");                        /* 7 */
+    editor_feed_line("func0() {");               /* 8 */
+    editor_feed_line("func1();");                 /* 9 */
+    editor_feed_line("}");                        /* 10 */
+    editor_feed_line("func0();");                 /* 11 */
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    replay_state_mut()->state = REPLAY_PAUSED;
+    replay_state_mut()->mode = REPLAY_MODE_VERTEX;
+
+    replay_advance(repl_state_flat_program_view());
+    glr_ctrl_push_highlights();
+
+    ASSERT_INT("chain highlights root call site",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 11), 1);
+    ASSERT_INT("chain highlights middle call site",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 9), 1);
+    ASSERT_INT("chain highlights immediate call site",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 6), 1);
+
+    int aux_root = get_highlight_aux_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 11, 0);
+    int aux_mid  = get_highlight_aux_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 9, 0);
+    int aux_leaf = get_highlight_aux_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 6, 0);
+
+    ASSERT_TRUE("root and mid colors are distinct", aux_root != aux_mid);
+    ASSERT_TRUE("mid and leaf colors are distinct", aux_mid != aux_leaf);
+    ASSERT_TRUE("root and leaf colors are distinct", aux_root != aux_leaf);
+
+    /* Unpack RGB to assert monotonic warmth (red rises, blue falls) */
+    int r_root = (aux_root >> 16) & 0xFF, b_root = aux_root & 0xFF;
+    int r_mid  = (aux_mid >> 16) & 0xFF,  b_mid  = aux_mid & 0xFF;
+    int r_leaf = (aux_leaf >> 16) & 0xFF, b_leaf = aux_leaf & 0xFF;
+
+    ASSERT_TRUE("red channel rises monotonically along chain",
+                r_root <= r_mid && r_mid <= r_leaf && r_root < r_leaf);
+    ASSERT_TRUE("blue channel falls monotonically along chain",
+                b_root >= b_mid && b_mid >= b_leaf && b_root > b_leaf);
+
+    replay_stop();
+}
+
+static void test_replay_call_chain_recursive_same_line(void) {
+    printf("--- imrepl_ctrl replay recursive same-line call chain ---\n");
+
+    glr_ctrl_reset_all();
+    editor_feed_line("rec(d) {");                 /* 0 */
+    editor_feed_line("if (d > 0) {");             /* 1 */
+    editor_feed_line("rec(d - 1);");              /* 2 */
+    editor_feed_line("}");                        /* 3 */
+    editor_feed_line("glBegin(GL_POINTS);");      /* 4 */
+    editor_feed_line("glVertex3f(d, 0, 0);");     /* 5 */
+    editor_feed_line("glEnd();");                 /* 6 */
+    editor_feed_line("}");                        /* 7 */
+    editor_feed_line("rec(2);");                  /* 8 */
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    replay_state_mut()->state = REPLAY_PAUSED;
+    replay_state_mut()->mode = REPLAY_MODE_VERTEX;
+
+    /* First vertex is from deepest recursion: d = 0, chain depth 3 (root @8, rec(1) @2, rec(0) @2) */
+    replay_advance(repl_state_flat_program_view());
+    glr_ctrl_push_highlights();
+
+    ASSERT_INT("root call site has 1 chain highlight",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 8), 1);
+    ASSERT_INT("recursive call line 2 has 2 chain highlights",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 2), 2);
+
+    int aux_rec0 = get_highlight_aux_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 2, 0);
+    int aux_rec1 = get_highlight_aux_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 2, 1);
+    ASSERT_TRUE("recursive same-line rungs have distinct ramp colours",
+                aux_rec0 != aux_rec1);
+
+    /* Verify code panel produces 2 distinct left marker bands on line 2 */
+    ui_state_viewport_set_size(800, 600);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+    ui_state_code_panel_mut()->panel_frac = 0.45f;
+
+    UiRenderSnapshot snap;
+    glr_ctrl_build_ui_snapshot(&snap);
+    ui_repl_code_panel_render_with_chrome(&snap, NULL);
+
+    int active = 0, band_count = 0;
+    float band_rgba[4][4];
+    ASSERT_TRUE("code panel row marker bands available for line 2",
+                ui_repl_code_panel_row_marker_bands_for_test(2, &active, &band_count, band_rgba, 4));
+    ASSERT_INT("line 2 marker active", active, 1);
+    ASSERT_INT("line 2 has 2 marker bands", band_count, 2);
+    ASSERT_TRUE("band 0 and band 1 have distinct colors",
+                band_rgba[0][0] != band_rgba[1][0] ||
+                band_rgba[0][1] != band_rgba[1][1] ||
+                band_rgba[0][2] != band_rgba[1][2]);
+
+    replay_stop();
+}
+
+static void test_replay_call_chain_unindexed_fallback(void) {
+    printf("--- imrepl_ctrl replay unindexed call chain fallback ---\n");
+
+    glr_ctrl_reset_all();
+    editor_feed_line("func1() {");                /* 0 */
+    editor_feed_line("glBegin(GL_POINTS);");      /* 1 */
+    editor_feed_line("glVertex3f(0, 0, 0);");     /* 2 */
+    editor_feed_line("glEnd();");                 /* 3 */
+    editor_feed_line("}");                        /* 4 */
+    editor_feed_line("func0() {");                /* 5 */
+    editor_feed_line("func1();");                 /* 6 */
+    editor_feed_line("}");                        /* 7 */
+    editor_feed_line("func0();");                 /* 8 */
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    replay_state_mut()->state = REPLAY_PAUSED;
+    replay_state_mut()->mode = REPLAY_MODE_VERTEX;
+
+    replay_advance(repl_state_flat_program_view());
+
+    /* Temporarily simulate unindexed frame table */
+    ReplFlatProgramState *flat_state = repl_state_flat_program_writable();
+    int focus = replay_focus_flat_idx();
+    int saved_frame = flat_state->call_frame_idx[focus];
+    flat_state->call_frame_idx[focus] = REPL_CALL_FRAME_NONE;
+
+    glr_ctrl_push_highlights();
+
+    ASSERT_INT("unindexed frame falls back to legacy immediate call site",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_SITE, 6), 1);
+    ASSERT_INT("unindexed frame falls back to legacy root call site",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_ROOT_CALL_SITE, 8), 1);
+    ASSERT_INT("unindexed frame suppresses multi-entry chain highlight",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 6), 0);
+
+    /* Restore */
+    flat_state->call_frame_idx[focus] = saved_frame;
+
+    replay_stop();
+}
+
+static void test_replay_call_chain_gutter_bands_capping(void) {
+    printf("--- imrepl_ctrl replay 4-band capping policy ---\n");
+
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(800, 600);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+    ui_state_code_panel_mut()->panel_frac = 0.45f;
+
+    for (int i = 0; i < 5; i++) {
+        editor_feed_line("glVertex3f(0, 0, 0);");
+    }
+
+    /* Test that if 6 chain highlights land on one line, the UI retains
+     * outermost (idx 0) + 3 innermost (idx 3, 4, 5). */
+    editor_state_highlights_clear();
+    for (int i = 0; i < 6; i++) {
+        int r = (i + 1) * 30;
+        int aux = (r << 16) | (r << 8) | r;
+        editor_state_highlights_append_aux(2, -1, -1, HIGHLIGHT_REPLAY_CALL_CHAIN, aux);
+    }
+
+    UiRenderSnapshot snap;
+    glr_ctrl_build_ui_snapshot(&snap);
+    ui_repl_code_panel_render_with_chrome(&snap, NULL);
+
+    int active = 0, band_count = 0;
+    float band_rgba[4][4];
+    ASSERT_TRUE("code panel row marker bands available for line 2",
+                ui_repl_code_panel_row_marker_bands_for_test(2, &active, &band_count, band_rgba, 4));
+    ASSERT_INT("capped band count is 4", band_count, 4);
+
+    /* Check that band 0 is from i=0 (r = 30 / 255) */
+    float r0 = 30.0f / 255.0f;
+    float r3 = 120.0f / 255.0f;
+    float r4 = 150.0f / 255.0f;
+    float r5 = 180.0f / 255.0f;
+
+    ASSERT_TRUE("band 0 is outermost", (float)fabs(band_rgba[0][0] - r0) < 0.02f);
+    ASSERT_TRUE("band 1 is innermost-2 (i=3)", (float)fabs(band_rgba[1][0] - r3) < 0.02f);
+    ASSERT_TRUE("band 2 is innermost-1 (i=4)", (float)fabs(band_rgba[2][0] - r4) < 0.02f);
+    ASSERT_TRUE("band 3 is innermost-0 (i=5)", (float)fabs(band_rgba[3][0] - r5) < 0.02f);
+
+    editor_state_highlights_clear();
 }
 
 /* Req 5: during replay the affecting-transform highlight tracks the
@@ -7341,6 +7562,10 @@ int main(void) {
     test_push_attrib_bit_token_highlights();
     test_begin_end_bracket_highlights();
     test_replay_call_site_highlights_are_pushed();
+    test_replay_call_chain_ramp_colors();
+    test_replay_call_chain_recursive_same_line();
+    test_replay_call_chain_unindexed_fallback();
+    test_replay_call_chain_gutter_bands_capping();
     test_replay_focus_vertex_affecting_transforms();
     test_replay_focus_glut_solid_affecting_transforms();
     test_overlay_scope_last_instance_affecting_transforms();

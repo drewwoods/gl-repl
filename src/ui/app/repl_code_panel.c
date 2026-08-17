@@ -631,6 +631,50 @@ static unsigned repl_code_panel_line_attrib_bits(const UiRenderSnapshot *snap,
     return mask;
 }
 
+/* Collect up to UI_TEXT_PANEL_MAX_MARKER_BANDS caller-chain ramp colours for
+ * `line_idx`. When a source line carries more than UI_TEXT_PANEL_MAX_MARKER_BANDS
+ * (4) chain frames, retain its outermost band plus its three innermost bands
+ * and drop only the middle bands from the gutter. Returns the number of bands
+ * written to out_colors. */
+static int repl_code_panel_line_replay_call_chain_colors(
+    const UiRenderSnapshot *snap, int line_idx,
+    UiTextPanelColor *out_colors, int max_out) {
+    if (!snap || !snap->editor_highlights || line_idx < 0 || !out_colors || max_out <= 0)
+        return 0;
+
+    UiTextPanelColor temp_colors[MAX_HIGHLIGHTS];
+    int match_count = 0;
+    for (int i = 0; i < snap->editor_highlights->count; i++) {
+        const UiHighlight *h = &snap->editor_highlights->items[i];
+        if (h->kind == HIGHLIGHT_REPLAY_CALL_CHAIN && h->line_idx == line_idx) {
+            if (match_count < MAX_HIGHLIGHTS) {
+                float r = (float)((h->aux >> 16) & 0xFF) / 255.0f;
+                float g = (float)((h->aux >> 8) & 0xFF) / 255.0f;
+                float b = (float)(h->aux & 0xFF) / 255.0f;
+                temp_colors[match_count++] = repl_code_panel_rgba(r, g, b, 0.90f);
+            }
+        }
+    }
+    if (match_count == 0)
+        return 0;
+
+    int cap = (max_out < UI_TEXT_PANEL_MAX_MARKER_BANDS) ? max_out : UI_TEXT_PANEL_MAX_MARKER_BANDS;
+    if (match_count <= cap) {
+        for (int i = 0; i < match_count; i++) {
+            out_colors[i] = temp_colors[i];
+        }
+        return match_count;
+    }
+
+    /* Retain outermost (index 0) + (cap - 1) innermost (tail of temp_colors) */
+    out_colors[0] = temp_colors[0];
+    int inner_count = cap - 1;
+    for (int i = 0; i < inner_count; i++) {
+        out_colors[1 + i] = temp_colors[match_count - inner_count + i];
+    }
+    return cap;
+}
+
 /* The 6-char aux column (vertex indices, the auto-normal tag) is always
  * reserved, and UI_TEXT_PANEL_CHROME_AUX_COL is always set to match - the
  * renderer draws the column at text_x - 6 * FONT_W, so reserving and
@@ -875,6 +919,7 @@ typedef enum {
     MARKER_PRIORITY_REPLAY,
     MARKER_PRIORITY_REPLAY_ROOT_CALL_SITE,
     MARKER_PRIORITY_REPLAY_CALL_SITE,
+    MARKER_PRIORITY_REPLAY_CALL_CHAIN,
     MARKER_PRIORITY_MATCHING_PUSH,
     MARKER_PRIORITY_FEEDING_NORMAL,
     MARKER_PRIORITY_FEEDING_COLOR,
@@ -984,6 +1029,15 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
         }
     }
 
+    UiTextPanelColor chain_colors[UI_TEXT_PANEL_MAX_MARKER_BANDS];
+    int chain_band_count = repl_code_panel_line_replay_call_chain_colors(
+        builder->snap, line_idx, chain_colors, UI_TEXT_PANEL_MAX_MARKER_BANDS);
+    if (chain_band_count > 0) {
+        if (MARKER_PRIORITY_REPLAY_CALL_CHAIN > priority) {
+            priority = MARKER_PRIORITY_REPLAY_CALL_CHAIN;
+        }
+    }
+
     if (repl_code_panel_line_is_unbalanced(builder->snap, line_idx)) {
         if (MARKER_PRIORITY_UNBALANCED > priority) {
             priority = MARKER_PRIORITY_UNBALANCED;
@@ -1014,6 +1068,12 @@ static void repl_code_panel_apply_command_overlays(ReplCodePanelBuilder *builder
             }
         }
         row->left_marker_band_count = nb;
+        row->left_marker_active = 1;
+    } else if (priority == MARKER_PRIORITY_REPLAY_CALL_CHAIN) {
+        for (int i = 0; i < chain_band_count; i++) {
+            row->left_marker_band_colors[i] = chain_colors[i];
+        }
+        row->left_marker_band_count = chain_band_count;
         row->left_marker_active = 1;
     } else if (priority > MARKER_PRIORITY_NONE) {
         row->left_marker_active = 1;
@@ -3853,6 +3913,41 @@ int ui_repl_code_panel_row_marker_for_test(int source_line_idx,
             out_rgba[1] = row->left_marker_color.g;
             out_rgba[2] = row->left_marker_color.b;
             out_rgba[3] = row->left_marker_color.a;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+int ui_repl_code_panel_row_marker_bands_for_test(int source_line_idx,
+                                                 int *out_active,
+                                                 int *out_band_count,
+                                                 float out_band_rgba[][4],
+                                                 int max_bands) {
+    if (!g_builder_cache.valid)
+        return 0;
+    for (int i = 0; i < g_builder_cache.builder.text_snap.row_count; i++) {
+        const UiTextPanelRow *row = &g_repl_code_panel_rows[i];
+        if (row->source_line_idx != source_line_idx)
+            continue;
+        if (row->kind != UI_TEXT_PANEL_ROW_TEXT &&
+            row->kind != UI_TEXT_PANEL_ROW_INPUT)
+            continue;
+        if (out_active)
+            *out_active = row->left_marker_active;
+        if (out_band_count)
+            *out_band_count = row->left_marker_band_count;
+        if (out_band_rgba && max_bands > 0) {
+            int n = row->left_marker_band_count;
+            if (n > max_bands)
+                n = max_bands;
+            for (int b = 0; b < n; b++) {
+                out_band_rgba[b][0] = row->left_marker_band_colors[b].r;
+                out_band_rgba[b][1] = row->left_marker_band_colors[b].g;
+                out_band_rgba[b][2] = row->left_marker_band_colors[b].b;
+                out_band_rgba[b][3] = row->left_marker_band_colors[b].has_alpha
+                    ? row->left_marker_band_colors[b].a : 1.0f;
+            }
         }
         return 1;
     }
