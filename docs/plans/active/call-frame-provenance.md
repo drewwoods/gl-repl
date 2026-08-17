@@ -427,6 +427,21 @@ PLACEHOLDER / TEXT rows do - so a PATH row cannot shift any other row's
 gutter label no matter how long it is. The re-entrancy above is the real
 constraint; wrapping is not.
 
+This limitation is specific to **printing** a gutter number in the PATH
+prose. It does not block a caller-site gutter tint. A normal editor highlight
+already targets a document source-line index and the code panel resolves that
+index while it builds the real source row; it does not need to know the row's
+visible gutter number. The controller already uses this path for the immediate
+and root caller markers. A later full-chain tint can therefore walk the frame
+chain, publish one highlight per frame's `call_src_cmd_idx`, and let the UI
+render those markers without a `UiRenderSnapshot`-to-gutter-label lookup or a
+row-builder re-entry.
+
+The two surfaces should stay separate: `@line` is optional text inside the
+breadcrumb, while caller tint is an editor overlay keyed by source index. The
+former remains out of v1; the latter is a reasonable Stage 4 surface once the
+PATH row has established the chain semantics.
+
 ##### The payload
 
 Do **not** widen `UiVirtualLine` with a union big enough for a depth-64 chain
@@ -472,10 +487,11 @@ it is worth writing into the header before any of it is built.
   Verbose's. Do not add a fourth `e` mode for it.
 - `REPL_REPLAY_ANNOTATION_MAX` goes 2 -> 3.
 - The existing `HIGHLIGHT_REPLAY_CALL_SITE` / `_ROOT_CALL_SITE` gutter
-  markers **stay as they are**. They are cheap, they point at real lines, and
-  with the fields retained they are also the frame-table-overflow fallback.
-  The breadcrumb just becomes the authoritative account. Generalizing them to
-  N rungs is a later, optional change and should not ride along.
+  markers **stay as they are** in the first cut. They are cheap, they point at
+  real lines, and with the fields retained they are also the frame-table-
+  overflow fallback. The breadcrumb just becomes the authoritative account.
+  Generalizing those markers to N rungs is a later, optional change and should
+  not ride along with the PATH row.
 
 #### Long recursion needs middle-elision, not truncation
 
@@ -590,14 +606,43 @@ Kept for sequencing only. None of these should ride along with the PATH row.
    recursion structure visible spatially. The cheapest genuinely useful thing
    on the list, and independent enough to ship first or never; it shipped
    first. See "Call-depth tint, as built" below.
-2. **Offline `--call-tree` dump.** Also turns `--flat-histogram` from
+2. **Replay caller-chain gutter tint.** Generalize the existing immediate/root
+   caller-site markers to the complete frame chain for the selected replay
+   draw. The controller walks `repl_call_frame_walk_chain()` and publishes one
+   source-line highlight per frame, using the frame's `call_src_cmd_idx` and
+   depth; no displayed gutter-number lookup is involved. This is deliberately
+   a gutter overlay, not another PATH row and not a replacement for the
+   breadcrumb.
+
+   The visual language should borrow `call_depth_viz`: depth is ordered, so
+   use its cool-to-warm ramp (`call_depth_viz_ramp_rgb()`), normalized to the
+   observed depth range for the active chain/frame. The recommended first
+   rendering contract is two-role: the innermost, last rung gets the warmest
+   ramp colour, while ancestor rungs use neutral off-palette white/grey bands.
+   That makes the active caller pop without competing with the PATH row; a
+   later pass can put every band on the full ramp if that proves more useful.
+   The palette choice is presentation, not provenance. If several frames land
+   on one recursive source line, keep one band per distinct frame/depth, using
+   the existing segmented gutter mechanism already used for `glPushAttrib`
+   bits. The existing marker-band cap is a display cap only; it must not
+   truncate the frame chain data.
+
+   This needs a multi-entry replay highlight kind (or equivalent depth payload)
+   and a code-panel aggregation path analogous to
+   `repl_code_panel_line_attrib_bits()`. The controller must resolve the ramp
+   colours (or publish the chain depth range and a neutral colour payload) so
+   the UI continues to consume a frozen snapshot rather than reaching into
+   live REPL/call-depth state. Existing immediate/root markers remain the
+   overflow fallback and can remain the scalar high-priority markers until the
+   chain form is validated.
+3. **Offline `--call-tree` dump.** Also turns `--flat-histogram` from
    per-*function* into per-*invocation* accounting, which is what you want
    when a scene approaches the 8192 flat budget.
-3. **Debugger verbs on replay.** Frames-as-ranges makes *step out* (seek to
+4. **Debugger verbs on replay.** Frames-as-ranges makes *step out* (seek to
    `frame.flat_end`), *step over* and *run to frame* one-liners over replay's
    existing clamped execution.
-4. **Frame isolate.** Render one invocation's subtree - a range clamp.
-5. **Click geometry, get the stack.** The inverse-pick direction, using
+5. **Frame isolate.** Render one invocation's subtree - a range clamp.
+6. **Click geometry, get the stack.** The inverse-pick direction, using
    `repl_find_affecting_transforms_for_flat_vertex()`'s plumbing and the
    assign-plot right-click hit model.
 
