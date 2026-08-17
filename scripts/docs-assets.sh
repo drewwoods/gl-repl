@@ -95,6 +95,7 @@ LI_COL_SCROLL=172             # light-theme-inspect: init()'s per-light color bl
 LI_POS_CROP=870x94+8+46       # light-theme-inspect: the comment + four GL_POSITION rows
 LI_COL_CROP=870x184+8+46      # light-theme-inspect: the comment + GL_LIGHT0/1 color rows
 VP_CROP=265x122+935+653       # variable-panel: the panel, header row to last slider
+CP_CROP=320x152+872+616       # console-panel: the floating console panel
 AP_CROP=270x175+933+602       # assign-plot: the bottom-right value panel, one series
 APS_CROP=270x189+933+588      # assign-plot-series: same panel, three series + legend
 
@@ -149,6 +150,7 @@ PNG_ASSETS=(
     winding-view depth-view light-theme-studio light-theme-inspect
     grid-themes grid-brightness backdrops axes-compass
     labels-orrery glu-tess glow-sprites transform-stress variable-panel
+    console-panel
     export-c-grass export-c-knobs
     motion-blur xform-guide-montage xform-guide-mode
     single-polygon-scope label-placement
@@ -1206,6 +1208,26 @@ glEnd();
 EOF
 }
 
+stage_console() { stage console <<'EOF'
+/* @cfg grid = GRID_THEME_DARK */
+/* @cfg variable_panel = 0 */
+// Snippet start
+float r = 1.2;
+draw_branch(step, rad) {
+  console("branch %f rad=%f", step, rad);
+  glBegin(GL_LINES);
+  glVertex3f(0, 0, 0);
+  glVertex3f(rad * cos(step * 0.8), rad * sin(step * 0.8), 0);
+  glEnd();
+}
+for(i, 0, 4) {
+  console("step %f", i);
+  draw_branch(i, r);
+}
+// Snippet end
+EOF
+}
+
 # Motion blur: a lit torus centered on the origin, spun about +Y. The torus
 # lies in the XY plane, so its ±X rim sweeps a 1.2-radius circle while the
 # ±Y points sit on the rotation axis and barely move — one shot showing the
@@ -2163,6 +2185,15 @@ if want variable-panel; then
     write_png "$WORK/variable-panel-full.png" "$OUT/variable-panel.png" \
         -crop "$VP_CROP" +repage
     echo "docs-assets: wrote $OUT/variable-panel.png"
+fi
+
+# The console panel: captures trace lines and formats them with call-depth auto-indentation.
+if want console-panel; then
+    ( WARM=$WARM_SPLASH
+      still "$WORK/console-panel-full.png" 16 "$(stage_console)" )
+    write_png "$WORK/console-panel-full.png" "$OUT/console-panel.png" \
+        -crop "$CP_CROP" +repage
+    echo "docs-assets: wrote $OUT/console-panel.png"
 fi
 
 # --- Exported-C stills -----------------------------------------------------

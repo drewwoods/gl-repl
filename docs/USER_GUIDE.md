@@ -627,15 +627,18 @@ With lighting on, the text colour is the *lit* result latched at the
 console("phase=%f steps=%f", phase, steps);
 ```
 
+![The console panel: formatted debug output auto-indented by call depth](images/console-panel.png)
+
 - `console("fmt", a, b, c, ...)` outputs formatted debug strings to a floating
   **Console panel** in the scene overlay. Up to 8 substitution arguments;
   `%f` substitutes a value formatted via `%g`, and `%%` produces a literal
   percent sign. The format string is limited to 64 characters and may not
   contain `//`, `(`, `)`, `,`, or backslashes.
+- Lines emitted from functions are auto-indented by `2 * call_depth` spaces to
+  visually mirror the execution tree.
 - Legal anywhere in a scene, including inside `glBegin` / `glEnd` blocks.
-- In the REPL: Lines automatically indent according to their nesting / call
-  depth (2 * call_depth spaces). When frame replay is active,
-  console output scrubs with the replay position.
+- In the REPL: When frame replay is active, console output scrubs with the
+  replay position.
 - In standalone C export: Emits a `console()` helper that prints unindented
   lines directly to `stdout`.
 
