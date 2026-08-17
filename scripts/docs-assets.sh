@@ -140,6 +140,7 @@ GIF_ASSETS=(
     sc-torus-knot sc-snowfall sc-recursive-tree sc-spirograph sc-ripple-ring
     sc-bubble-sort sc-wave-surface sc-ringed-planet sc-grass sc-jellyfish
     sc-conditional-colors sc-sierpinski-carpet sc-sierpinski-sponge
+    sc-call-tree
     sc-whale sc-stress-test sc-lantern-festival sc-aurora-observatory
     sc-planar-shadows sc-fog-ring-tunnel sc-pulse-bars sc-stencil-mask
     sc-feature-time
@@ -2653,6 +2654,10 @@ fi
 if want sc-sierpinski-sponge; then
     clip "$SHOW/sierpinski-sponge" 200 2 20 560 \
         --example "Sierpinski sponge (3D recursion)"
+fi
+if want sc-call-tree; then
+    clip "$SHOW/call-tree" 200 2 20 560 \
+        --example "Call tree (console debug)"
 fi
 
 # Big scenes.

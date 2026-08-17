@@ -368,7 +368,16 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 <br><sub>the carpet's rule in 3D - 400 cubes</sub>
 
 </td>
-<td></td>
+<td align="center">
+
+<!-- images/showcase/call-tree.gif
+     scripts/docs-assets.sh sc-call-tree -->
+<img src="images/showcase/call-tree.gif" alt="Call tree console debug trace" width="100%">
+
+**[Call tree](../examples/scenes/call-tree-console-trace.glr)**
+<br><sub>recursive branch trace + console debug</sub>
+
+</td>
 </tr>
 </table>
 

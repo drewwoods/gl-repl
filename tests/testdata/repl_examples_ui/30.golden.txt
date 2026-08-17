@@ -87,22 +87,6 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
-
-static GLfloat *repl_glfloat16(GLfloat m0, GLfloat m1, GLfloat m2, GLfloat m3,
-                   GLfloat m4, GLfloat m5, GLfloat m6, GLfloat m7,
-                   GLfloat m8, GLfloat m9, GLfloat m10, GLfloat m11,
-                   GLfloat m12, GLfloat m13, GLfloat m14, GLfloat m15) {
-  static GLfloat repl_glfloat16_buf[16];
-  repl_glfloat16_buf[0] = m0;   repl_glfloat16_buf[1] = m1;
-  repl_glfloat16_buf[2] = m2;   repl_glfloat16_buf[3] = m3;
-  repl_glfloat16_buf[4] = m4;   repl_glfloat16_buf[5] = m5;
-  repl_glfloat16_buf[6] = m6;   repl_glfloat16_buf[7] = m7;
-  repl_glfloat16_buf[8] = m8;   repl_glfloat16_buf[9] = m9;
-  repl_glfloat16_buf[10] = m10; repl_glfloat16_buf[11] = m11;
-  repl_glfloat16_buf[12] = m12; repl_glfloat16_buf[13] = m13;
-  repl_glfloat16_buf[14] = m14; repl_glfloat16_buf[15] = m15;
-  return repl_glfloat16_buf;
-}
 --- display_header ---
 void display(void) {
   glLoadIdentity();
@@ -111,90 +95,96 @@ void display(void) {
   // Eye-space light positions, set before the camera transform.
   glLightfv(GL_LIGHT0, GL_POSITION, repl_glfloat4(0, 0, -1, 1));
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -7.9000f);   // @camera dist
-  glRotatef(24.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(-28.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -1.1500f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
+  glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float lx, ly, lz; // orbiting lamp position, read by the matrix and the marker
+  // Stencil masking, minimum viable. Three passes over one shape:
+  //   1. stamp it into the stencil buffer only - no color, no depth
+  //   2. draw the payload where the stamp landed (GL_EQUAL, 1)
+  //   3. trace the window edge with the test off, so the mask is visible
+  // The stencil buffer itself does not render. Pass 3 is the only reason
+  // you can tell where the window is - there is no stencil viewer yet, so
+  // comment it out and the mask becomes guesswork. That is the point.
+  static float spin; // @tune  mask rotation, degrees
 
-  // The caster, drawn twice: once squashed by the shadow matrix, once for
-  // real. One definition means the two can never drift apart.
-  caster() {
+  // The window. Drawn twice - once as a stamp, once as an outline - so it
+  // lives in a func and both passes are guaranteed to agree.
+  maskWindow() {
     glPushMatrix();
-      glTranslatef(0, 1.05, 0);
-      glRotatef(26*t, 0, 1, 0);
-      glutSolidTeapot(0.62);
+      glRotatef(spin, 0, 0, 1);
+      glBegin(GL_QUADS);
+        glVertex3f(-0.75, -0.75, 0);
+        glVertex3f(0.75, -0.75, 0);
+        glVertex3f(0.75, 0.75, 0);
+        glVertex3f(-0.75, 0.75, 0);
+      glEnd();
     glPopMatrix();
   }
 
-  // Translate, rotate and scale cannot flatten a solid onto a plane -- that
-  // takes a matrix of their own. glMultMatrixf posts one onto the modelview
-  // stack: 16 column-major cells, either inline as below or read from a
-  // scratch array with glMultMatrixf(A).
-  //
-  // These cells are the classic planar shadow projection for the ground
-  // plane y = 0 and a point light at (lx, ly, lz). It maps every point to
-  // where the ray from the lamp through it crosses the floor, so drawing
-  // the SAME geometry under it draws the object's shadow. Cells are
-  // ordinary expressions, re-evaluated every frame, so moving the lamp
-  // moves the shadow -- no rebuild of the caster.
-
   glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_LIGHTING);
   glEnable(GL_LIGHT0);
   glEnable(GL_NORMALIZE);
-  glShadeModel(GL_SMOOTH);
   glEnable(GL_COLOR_MATERIAL);
   glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_STENCIL_TEST);
 
-  lx = 2.4*cos(0.5*t);
-  ly = 3.4;
-  lz = 2.4*sin(0.5*t);
+  spin = t * 20;
 
-  // Floor first, so the shadow has something to land on.
-  glColor3f(0.92, 0.95, 0.98);
-  glBegin(GL_QUADS);
-    glNormal3f(0, 1, 0);
-    glVertex3f(-3.5, 0, -3.5);
-    glVertex3f(-3.5, 0, 3.5);
-    glVertex3f(3.5, 0, 3.5);
-    glVertex3f(3.5, 0, -3.5);
-  glEnd();
-
-  // Shadow pass. The projection is singular -- it collapses y to 0 -- so
-  // the result lands exactly on the floor and would z-fight it. Painting
-  // with the depth test off and depth writes masked settles that: the
-  // shadow covers the floor it follows, and the lit pass below still
-  // draws over the shadow.
-  glDisable(GL_DEPTH_TEST);
+  // --- Pass 1: stamp -------------------------------------------------
+  // Writes are off for color and depth, so the quad leaves no trace in
+  // the frame. All it does is set stencil = 1 under its own footprint.
+  // GL_ALWAYS means "never fail the comparison"; GL_REPLACE on the pass
+  // branch is what actually writes ref (1) into the buffer.
+  glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
   glDepthMask(GL_FALSE);
-  glDisable(GL_LIGHTING);
-  glColor3f(0.05, 0.06, 0.08);
-  glPushMatrix();
-    glMultMatrixf((GLfloat[]){ly, 0, 0, 0, -lx, 0, -lz, -1, 0, 0, ly, 0, 0, 0, 0, ly});
-    caster();
-  glPopMatrix();
-  glEnable(GL_LIGHTING);
+  glStencilMask(0xFF); // decimal in; canonicalizes to 0xFF
+  glStencilFunc(GL_ALWAYS, 1, 0xFF);
+  glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+  maskWindow();
+
+  // --- Pass 2: payload, clipped to the stamp -------------------------
+  // GL_EQUAL, 1 admits only the stamped pixels. glStencilMask(0) makes
+  // this pass read-only against the stencil buffer, so the teapot cannot
+  // smear the mask it is being cut by.
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
   glDepthMask(GL_TRUE);
-  glEnable(GL_DEPTH_TEST);
+  glStencilMask(0x00);
+  glStencilFunc(GL_EQUAL, 1, 0xFF);
+  glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+  glColor3f(0.1, 0.95, 0.85);
+  glPushMatrix();
+    glRotatef(t * 35, 0, 1, 0);
+    glutSolidTeapot(0.85);
+  glPopMatrix();
 
-  // The caster itself, in the frame the shadow was cast from.
-  glColor3f(1, 0.35, 0.2);
-  caster();
-
-  // The lamp, so the sweep of the shadow reads as a light moving.
+  // --- Pass 3: show the window ---------------------------------------
+  // Test off and depth off, so the outline always draws over everything -
+  // including the part of the teapot the mask just removed.
+  glDisable(GL_STENCIL_TEST);
+  glDisable(GL_DEPTH_TEST);
   glDisable(GL_LIGHTING);
   glColor3f(1, 0.85, 0.15);
-  glPushMatrix();
-    glTranslatef(lx, ly, lz);
-    glutSolidSphere(0.13, 12, 10);
-  glPopMatrix();
+  glLineWidth(2);
+  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  maskWindow();
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  glLineWidth(1);
   glEnable(GL_LIGHTING);
+  glEnable(GL_DEPTH_TEST);
+
+  // Things to try:
+  //   - GL_EQUAL -> GL_NOTEQUAL in pass 2: the window becomes a hole.
+  //   - GL_REPLACE -> GL_INCR in pass 1 and stamp twice from different
+  //     angles; then GL_EQUAL, 2 in pass 2 keeps only the overlap.
+  //   - drop glStencilMask(0) from pass 2 and watch the teapot chew
+  //     through its own mask on the next frame.
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);

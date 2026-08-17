@@ -9,9 +9,9 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_OCEAN */
+/* @cfg grid = GRID_THEME_OFF */
 /* @cfg grid_major = GRID_MAJOR_1 */
-/* @cfg grid_extent = GRID_EXTENT_MID */
+/* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
@@ -26,9 +26,9 @@
 /* @cfg stencil_view = 0 */
 /* @cfg call_depth_tint = 0 */
 /* @cfg auto_normals = REPL_AUTONORMAL_OFF */
-/* @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES */
-/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
-/* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX */
+/* @cfg overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF */
+/* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED */
 /* @cfg vertex_points = 0 */
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */
@@ -93,216 +93,199 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -6.5500f);   // @camera dist
-  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(-115.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -24.0000f);   // @camera dist
+  glRotatef(6.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -5.0000f, -0.0000f);   // @camera pan
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float launchVelX, launchVelY, launchVelZ;
-  static float currentVelY;
-  static float particleLife, particleAge;
-  static float dragDecay = 0.9;
-  static float gravityY = -3.5;
-  static float dragRate = 10;
-  static float particleX, particleY, particleZ;
-  static float floorY = 0;
-  static float spawnDelay;
-  static float emitDuration = 6; // spout emission window (s); the clock loops at 2x this @tune
-  static float speed = 0.5;
-  static float detail = 30;
-  static float blowHoleX = 0.95, blowHoleY = 0.71, blowHoleZ;
-  static float waterDroplets = 250; // @tune
+  static float bright = 1; // @tune @config overall lantern intensity
+  static float spread = 12; // @tune horizontal scatter of the flock and its glints
+  static float rise = 0.55; // @tune @config ascent speed
+  static float lanterns = 20; // @tune @config number of lanterns in the flock
 
-  computeVerticalMotion(ageSeconds, launchY) {
-    // Velocity is linear in age: currentVelY = gravityY*ageSeconds + launchVelY.
-    // Position is its integral:
-    //   (gravityY/2)*ageSeconds^2 + launchVelY*ageSeconds + launchY
-    // currentVelY is computed for illustration (the velocity term above);
-    // only particleY is read by the caller.
-    currentVelY = launchVelY + gravityY*ageSeconds;
-    particleY = launchY + gravityY/2 * ageSeconds * ageSeconds + launchVelY * ageSeconds;
+  // Dusk gradient backdrop: warm afterglow at the horizon, ink at zenith.
+  // Three stops down the palette: CORAL at a third strength, VIOLET at a
+  // quarter, then the canvas ink itself.
+  sky() {
+    float low, mid;
+    low = 0.36;
+    mid = 0.24;
+    glBegin(GL_QUADS);
+      glColor4f(1.0 * low, 0.35 * low, 0.2 * low, 1);
+      glVertex3f(-160, 0, -55);
+      glVertex3f(160, 0, -55);
+      glColor4f(0.55 * mid, 0.3 * mid, 1.0 * mid, 1);
+      glVertex3f(160, 9, -55);
+      glVertex3f(-160, 9, -55);
+      glColor4f(0.55 * mid, 0.3 * mid, 1.0 * mid, 1);
+      glVertex3f(-160, 9, -55);
+      glVertex3f(160, 9, -55);
+      glColor4f(0.05, 0.06, 0.08, 1);
+      glVertex3f(160, 60, -55);
+      glVertex3f(-160, 60, -55);
+    glEnd();
   }
 
-  computeLifespan(launchY) {
-    // Solve particleY(age) = floorY for age: how long the particle takes to fall
-    // from launchY to the floor. particleY is the projectile
-    //   (gravityY/2)*age^2 + launchVelY*age + (launchY - floorY) = 0
-    // a quadratic with a = gravityY/2, b = launchVelY, c = launchY - floorY, so
-    //   age = (-b - sqrt(b^2 - 4ac)) / 2a
-    // Substituting a = gravityY/2: 4ac = 2*gravityY*c and 2a = gravityY.
-    particleLife = (-launchVelY - sqrt(launchVelY*launchVelY - 2 * gravityY*(launchY - floorY))) / gravityY;
-  }
-
-  computeDriftX(ageSeconds, launchX) {
-    // Integral over [0, age] of the decaying horizontal velocity
-    //   velX(s) = launchVelX * dragDecay^(dragRate*s)
-    particleX = launchX + (launchVelX * pow(dragDecay, ageSeconds*dragRate) - launchVelX) / (dragRate*ln(dragDecay));
-  }
-
-  computeDriftZ(ageSeconds, launchZ) {
-    // Integral over [0, age] of the decaying horizontal velocity
-    //   velZ(s) = launchVelZ * dragDecay^(dragRate*s)
-    particleZ = launchZ + (launchVelZ * pow(dragDecay, ageSeconds*dragRate) - launchVelZ) / (dragRate*ln(dragDecay));
-  }
-
-  // bhX/bhY/bhZ: blowhole position in the whale's local frame (the globals
-  // blowHoleX/Y/Z, passed in -- named apart so they don't shadow).
-  // flukeAng/finAng are function-scoped locals: plain `float` inside the
-  // body, rebuilt every call, invisible to the rest of the scene. `detail`
-  // stays a global on purpose -- it is a scrubbable knob whose value has to
-  // survive between frames for the clamp below to hold it, not a temporary.
-  drawWhale(bhX, bhY, bhZ) {
-    float flukeAng, finAng;
-    flukeAng = sin(speed*t*TAU)* 30;
-    finAng = cos(speed*t*TAU)* 5;
-    detail = max(12, floor(detail));
-
-    // Shiny wet whale
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.2, 0.2, 0.2, 1});
-    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 100);
-
-    // Main body: elongated ellipsoid, dark blue-grey on top
-    glColor3f(0.24, 0.3, 0.4);
-
-    glPushMatrix();
-      glScalef(2, 0.85, 1.05);
-      glutSolidSphere(1, detail, detail);
-    glPopMatrix();
-
-    // Belly: lighter, sits just under the body so it shows the underside
-    glColor3f(0.72, 0.76, 0.78);
-    glPushMatrix();
-      glTranslatef(0.05, -0.42, 0);
-      glScalef(1.65, 0.45, 0.75);
-      glutSolidSphere(1, detail, detail);
-    glPopMatrix();
-
-    glColor3f(0.24, 0.3, 0.4);
-    glPushMatrix(); // begin tail
-      glTranslatef(-1.85, -0.2, 0);
-      glRotatef(flukeAng/2, 0, 0, 1);
-
-      // Tail peduncle (narrow part before the flukes)
-      glPushMatrix();
-        glScalef(0.75, 0.3, 0.4);
-        glutSolidSphere(1, detail, detail);
-      glPopMatrix();
-
-      // Tail flukes -- two flat lobes, animated with flukeAng
-      glPushMatrix();
-        glTranslatef(-0.65, 0, 0);
-        glRotatef(flukeAng, 0, 0, 1);
-        glPushMatrix();
-          glTranslatef(-0.1, 0, 0.55);
-          glRotatef(15, 0, 1, 0);
-          glScalef(0.35, 0.06, 0.65);
-          glutSolidSphere(1, detail, detail); // right fluke
-        glPopMatrix();
-        glPushMatrix();
-          glTranslatef(-0.1, 0, -0.55);
-          glRotatef(-15, 0, 1, 0);
-          glScalef(0.35, 0.06, 0.65);
-          glutSolidSphere(1, detail, detail); // left fluke
-        glPopMatrix();
-      glPopMatrix(); // end flukes
-    glPopMatrix(); // end tail
-
-    // Pectoral fins
-    glPushMatrix();
-      glRotatef(finAng, 0, 0, 1);
-      glRotatef(finAng/4, 0, 1, 0);
-
-      glPushMatrix();
-        glTranslatef(0.45, -0.25, 1);
-        glRotatef(25, 0, 1, 0);
-        glScalef(0.4, 0.08, 0.45);
-        glutSolidSphere(1, 14, 10); // right pectoral fin
-      glPopMatrix();
-
-      glPushMatrix();
-        glTranslatef(0.45, -0.25, -1);
-        glScalef(0.4, 0.08, 0.45);
-        glutSolidSphere(1, 14, 10); // left pectoral fin
-      glPopMatrix();
-    glPopMatrix(); // end fins
-
-    // Eyes
-    glDisable(GL_LIGHTING);
-    glColor3f(0.04, 0.04, 0.04);
-    glPushMatrix();
-      glTranslatef(1.45, 0.18, 0.63);
-      glutSolidSphere(0.07, 10, 8);
-      glTranslatef(0, 0, -1.26);
-      glutSolidSphere(0.07, 10, 8);
-    glPopMatrix();
-
-    // Blowhole
-    glColor3f(0.08, 0.08, 0.12);
-    glPushMatrix();
-      glTranslatef(bhX, bhY, bhZ);
-      glScalef(0.15, 0.04, 0.1);
-      glutSolidSphere(1, 10, 8);
-    glPopMatrix();
-  }
-
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glEnable(GL_COLOR_MATERIAL);
-  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
-  glEnable(GL_POINT_SMOOTH);
-
-  glColor4f(0.25, 0.45, 0.85, 0.46);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-  glEnable(GL_DEPTH_TEST);
-  glDepthFunc(GL_ALWAYS);
-  glPointSize(10);
-
-  // Scene-looping trick: deliberately rewind the GLOBAL animation clock
-  // every 2*emitDuration (~12s) so the spout replays on a loop. Heads-up
-  // side effect -- this also resets t for replay and the Ctrl+T toggle,
-  // since t is app-wide, not scene-local.
-  if(t > 2*emitDuration) {
-    t = 0;
-  }
-
-  glBegin(GL_POINTS);
-    for(i, 0, waterDroplets) {
-      launchVelX = 3 * rand2(i,1);
-      launchVelY = 2 + 2 * rand(i, 2);
-      launchVelZ = 3 * rand2(i, 3);
-
-      computeLifespan(blowHoleY);
-      spawnDelay = 3 * rand(i,4);
-
-      if((t - spawnDelay) > 0 && ( t <= ceil(emitDuration/particleLife)*particleLife + spawnDelay)) {
-        particleAge = fmod(t - spawnDelay, particleLife);
-
-        computeDriftX(particleAge, blowHoleX);
-        computeVerticalMotion(particleAge, blowHoleY);
-        computeDriftZ(particleAge, blowHoleZ);
-
-        glVertex3f(particleX + 0.05, particleY, particleZ);
+  // Stars twinkle out of phase; they dissolve into the bright horizon.
+  stars() {
+    float sy, tw;
+    glPointSize(5);
+    glBegin(GL_POINTS);
+      for(k, 0, 90) {
+        sy = 3 + 40 * rand(42, k);
+        tw = 0.55 + 0.45 * sin(2.3 * t + 6.28 * rand(43, k));
+        glColor4f(0.92, 0.95, 0.98, 0.75 * tw * smoothstep(3, 10, sy));
+        glVertex3f(150 * rand2(41, k), sy, -54);
       }
+    glEnd();
+  }
+
+  // Translucent water: near edge stays clear so reflections read through,
+  // the far edge goes opaque and mirrors the sunset to hide the seam.
+  water() {
+    float far;
+    far = 0.3;
+    glBegin(GL_QUADS);
+      glColor4f(1.0 * far, 0.35 * far, 0.2 * far, 0.95);
+      glVertex3f(-160, 0, -55);
+      glVertex3f(160, 0, -55);
+      glColor4f(0.05, 0.06, 0.08, 0.55);
+      glVertex3f(160, 0, 14);
+      glVertex3f(-160, 0, 14);
+    glEnd();
+  }
+
+  // Sparse firelight glints: pow() gates the sine so each spark spends
+  // most of its cycle dark, then flashes. The glint field tracks `spread`
+  // a third wider than the flock, so the sparks always fringe the water
+  // under the lanterns instead of clumping when the flock scatters.
+  glints() {
+    float gx, gz, gp, ga;
+    glPointSize(6);
+    glBegin(GL_POINTS);
+      for(k, 0, lanterns*2) {
+        gx = 1.33 * spread * rand2(51, k);
+        gz = 0 - 3 - 26 * rand(52, k);
+        gp = TAU * rand(53, k);
+        ga = pow(0.5 + 0.5 * sin(1.8 * t + gp), 6);
+        glColor4f(1.0, 0.85, 0.15, 0.85 * ga);
+        glVertex3f(gx + 0.3 * sin(0.9 * t + gp), 0.04, gz);
+      }
+    glEnd();
+  }
+
+  // One lantern: two triangle fans make the paper bipyramid - dim CORAL
+  // crown, AMBER flame-lit base - plus a flame point and a soft halo. All
+  // five tints are one anchor scaled by `glow`, so a lantern fades as a
+  // unit instead of drifting off-hue.
+  lantern(px, py, pz, s, glow) {
+    float ax;
+    glPushMatrix();
+      glTranslatef(px, py, pz);
+      glScalef(s, s, s);
+      glRotatef(14 * sin(0.8 * t + px + pz), 1, 0, 0.3);
+      glBegin(GL_TRIANGLE_FAN);
+        glColor4f(0.5 * glow, 0.175 * glow, 0.1 * glow, 0.9);
+        glVertex3f(0, 1.35, 0);
+        glColor4f(glow, 0.35 * glow, 0.2 * glow, 0.9);
+        for(k, 0, 7) {
+          ax = TAU * k / 6;
+          glVertex3f(0.6 * cos(ax), 0.42, 0.6 * sin(ax));
+        }
+      glEnd();
+      glBegin(GL_TRIANGLE_FAN);
+        glColor4f(glow, 0.85 * glow, 0.15 * glow, 0.95);
+        glVertex3f(0, 0, 0);
+        glColor4f(glow, 0.35 * glow, 0.2 * glow, 0.9);
+        for(k, 0, 7) {
+          ax = TAU * k / 6;
+          glVertex3f(0.6 * cos(ax), 0.42, 0.6 * sin(ax));
+        }
+      glEnd();
+      glPointSize(7);
+      glBegin(GL_POINTS);
+        glColor4f(glow, 0.85 * glow, 0.15 * glow, 0.9);
+        glVertex3f(0, 0.12, 0);
+      glEnd();
+      glPointSize(26);
+      glBegin(GL_POINTS);
+        glColor4f(0.9 * glow, 0.315 * glow, 0.18 * glow, 0.22);
+        glVertex3f(0, 0.5, 0);
+      glEnd();
+    glPopMatrix();
+  }
+
+  // Per-lantern flight: seeded phase/speed/size, a 15-unit rise that
+  // wraps, and a cycle counter that reshuffles x/z each lap (the wrap
+  // lands while fade = 0, so respawns are invisible). mirror > 0.5 draws
+  // the reflection copy instead, dimmed and wobbled by the water.
+  launch(i, mirror) {
+    float ph, spd, riseT, ypos, cyc, xpos, zpos;
+    float fade, flick, dim, sz, g;
+    ph = TAU * rand(11, i);
+    spd = rise * (0.7 + 0.6 * rand(12, i));
+    riseT = spd * t + 15 * rand(13, i);
+    ypos = fmod(riseT, 15);
+    cyc = floor(riseT / 15);
+    xpos = spread * rand2(21, i + 9 * cyc) + 0.9 * sin(0.31 * t + ph);
+    zpos = 0 - 5 - 20 * rand(22, i + 9 * cyc) + 0.7 * cos(0.23 * t + ph);
+    fade = smoothstep(0, 2.5, ypos) * (1 - smoothstep(11, 15, ypos));
+    flick = 0.82 + 0.18 * sin(5 * t + 6 * ph);
+    dim = 1 - 0.6 * smoothstep(6, 26, 0 - zpos);
+    sz = 0.5 + 0.35 * rand(23, i);
+    g = bright * fade * flick * dim;
+    if(mirror > 0.5) {
+      glPushMatrix();
+        glScalef(1, -1, 1);
+        lantern(xpos + 0.18 * sin(1.6 * t + 0.7 * zpos), ypos + 0.35, zpos, sz, 0.5 * g);
+      glPopMatrix();
+    } else {
+      lantern(xpos, ypos + 0.35, zpos, sz, g);
     }
-  glEnd();
+  }
 
-  glDepthFunc(GL_LESS);
+  // Keep config sensible
+  rise = clamp(rise, 0.1, 2.0);
+  bright = clamp(bright, 0.1, 10.0);
+  lanterns = max(0, round(lanterns));
 
+  // Lantern Festival - first night.
+  // Paper lanterns rise off dark water into a dusk sky: additive glow,
+  // wobbling reflections under a translucent water plane, twinkling
+  // stars, and firelight glints riding the ripples. Every lantern is
+  // deterministic - rand(seed, i) - so the flock repeats exactly, and a
+  // wrapped lantern respawns at a reshuffled spot while faded to zero.
+
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glEnable(GL_DEPTH_TEST);
-  glEnable(GL_NORMALIZE);
-  glDisable(GL_BLEND);
+  glDisable(GL_LIGHTING);
+  glEnable(GL_BLEND);
+  glEnable(GL_POINT_SMOOTH);
+  glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){0.3, 0, 0.004});
 
-  glEnable(GL_LIGHT0);
-  glEnable(GL_LIGHT1);
-
-  glEnable(GL_LIGHTING);
-
-  drawWhale(blowHoleX, blowHoleY, blowHoleZ);
+  sky();
+  stars();
+  // Reflections go down first, under the water plane...
+  glDepthMask(GL_FALSE);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  for(i, 0, lanterns) {
+    launch(i, 1);
+  }
+  // ...then the translucent surface seals them in...
+  glDepthMask(GL_TRUE);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  water();
+  // ...and the real flock burns additively above it.
+  glDepthMask(GL_FALSE);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glints();
+  for(i, 0, lanterns) {
+    launch(i, 0);
+  }
+  glDepthMask(GL_TRUE);
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);

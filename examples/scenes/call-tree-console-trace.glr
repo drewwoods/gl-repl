@@ -1,0 +1,48 @@
+// @cfg grid = GRID_THEME_CLASSIC
+// @cfg console_panel = 1
+// camera
+// eye: 0.000 1.600 3.800
+// target: 0.000 1.100 0.000
+// up: 0.000 1.000 0.000
+// fov: 45.000
+//
+// Recursive call-tree debug trace. Each nested branch() call emits a
+// console() message showing depth, segment length, and bend angle. The
+// Console panel auto-indents each line by call depth, providing a live
+// hierarchical trace of the recursion alongside the 3D geometry.
+static float levels = 3; // @tune
+static float len = 1.1; // @tune
+static float spread = 28; // @tune
+static float decay = 0.72; // @tune
+
+branch(depth, length, angle) {
+  float sway, r, g, b;
+  console("branch depth=%f len=%f angle=%f", depth, length, angle);
+  glPushMatrix();
+    glRotatef(angle, 0, 0, 1);
+    glRotatef(angle * 0.4 + sin(t + depth) * 10, 0, 1, 0);
+    r = 0.25 + (3 - depth) * 0.22;
+    g = 0.85 - (3 - depth) * 0.15;
+    b = 0.95 - (3 - depth) * 0.20;
+    glColor3f(r, g, b);
+    glBegin(GL_LINES);
+      glVertex3f(0, 0, 0);
+      glVertex3f(0, length, 0);
+    glEnd();
+    glTranslatef(0, length, 0);
+    if(depth > 0) {
+      sway = sin(t * 1.5 + depth) * 6;
+      branch(depth - 1, length * decay, spread + sway);
+      branch(depth - 1, length * decay, -spread - sway);
+    }
+    if(depth <= 0) {
+      glColor3f(1.0, 0.85, 0.15);
+      glutSolidSphere(0.06, 6, 4);
+    }
+  glPopMatrix();
+}
+
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glLineWidth(2.2);
+console("=== root t=%f levels=%f len=%f ===", t, levels, len);
+branch(levels, len, 0);
