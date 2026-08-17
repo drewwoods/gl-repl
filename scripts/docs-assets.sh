@@ -1211,20 +1211,21 @@ EOF
 stage_console() { stage console <<'EOF'
 /* @cfg grid = GRID_THEME_DARK */
 /* @cfg variable_panel = 0 */
+/* @cfg code_panel = 0 */
+/* @cfg wrap_at_commas = 0 */
 // Snippet start
-float r = 1.2;
-draw_branch(step, rad) {
-  console("branch %f rad=%f", step, rad);
+spoke(n, rad) {
+  console("spoke %f rad=%f", n, rad);
   glBegin(GL_LINES);
   glVertex3f(0, 0, 0);
-  glVertex3f(rad * cos(step * 0.8), rad * sin(step * 0.8), 0);
+  glVertex3f(rad * cos(n * 0.8), rad * sin(n * 0.8), 0);
   glEnd();
 }
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glColor3f(0.3, 0.7, 1);
 for(i, 0, 4) {
   console("step %f", i);
-  draw_branch(i, r);
+  spoke(i, 1.2);
 }
 // Snippet end
 EOF
@@ -2191,11 +2192,9 @@ fi
 
 # The console panel: captures trace lines and formats them with call-depth auto-indentation.
 if want console-panel; then
-    ( WARM=$WARM_SPLASH
-      still "$WORK/console-panel-full.png" 16 "$(stage_console)" )
-    write_png "$WORK/console-panel-full.png" "$OUT/console-panel.png" \
-        -crop "$CP_CROP" +repage
-    echo "docs-assets: wrote $OUT/console-panel.png"
+    ( WARM=$WARM_SPLASH W=980 H=400
+      export GLR_EDIT_LINE=1 GLR_PANEL_FRAC=0.60
+      still "$OUT/console-panel.png" 16 "$(stage_console)" )
 fi
 
 # --- Exported-C stills -----------------------------------------------------

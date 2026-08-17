@@ -40,6 +40,9 @@ void glr_ctrl_set_accum_passes(int count);
  * lines - with code focus off the generated C fills rows no cursor can reach. */
 void glr_ctrl_set_code_panel_scroll(int top_row);
 
+/* Capture affordance (GLR_PANEL_FRAC): set the code panel width fraction (0.15 .. 0.85). */
+void glr_ctrl_set_code_panel_frac(float frac);
+
 /* Open the floating color picker on source line `line` (clamped to the
  * document; no-op unless the line is a picker-editable color command).
  * Startup hook for GLR_OPEN_COLOR_PICKER: the picker only opens via a

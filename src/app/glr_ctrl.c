@@ -4894,6 +4894,12 @@ void glr_ctrl_set_code_panel_scroll(int top_row) {
     editor_scroll_set(top_row);
 }
 
+void glr_ctrl_set_code_panel_frac(float frac) {
+    if (frac < 0.15f) frac = 0.15f;
+    if (frac > 0.85f) frac = 0.85f;
+    ui_state_code_panel_mut()->panel_frac = frac;
+}
+
 void glr_ctrl_open_color_picker(int line) {
     int count = repl_state_document_count();
     int sy = 0, sh = 0;

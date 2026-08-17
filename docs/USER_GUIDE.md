@@ -623,10 +623,6 @@ With lighting on, the text colour is the *lit* result latched at the
 
 ### Console output - `console()`
 
-```c
-console("phase=%f steps=%f", phase, steps);
-```
-
 ![The console panel: formatted debug output auto-indented by call depth](images/console-panel.png)
 
 - `console("fmt", a, b, c, ...)` outputs formatted debug strings to a floating

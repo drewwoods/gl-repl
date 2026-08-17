@@ -295,7 +295,21 @@ static void maybe_capture_open_help(void) {
         glr_action_help_tab_next();
 }
 
+static void maybe_capture_panel_frac(void) {
+    static int done = 0;
+    const char *frac_src;
+    if (done) return;
+    done = 1;
+    frac_src = getenv("GLR_PANEL_FRAC");
+    if (frac_src && *frac_src) {
+        float frac = (float)atof(frac_src);
+        if (frac > 0.0f)
+            glr_ctrl_set_code_panel_frac(frac);
+    }
+}
+
 void glr_capture_env_frame_hook(void) {
+    maybe_capture_panel_frac();
     maybe_capture_view_toggle();
     maybe_capture_open_gl_state();
     maybe_capture_open_assign_plot();
