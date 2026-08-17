@@ -375,13 +375,19 @@ static void emit_export_geometry_pass(FILE *f,
     fprintf(f, "  glPopAttrib();\n");
 }
 
-static void emit_export_display_begin(FILE *f) {
+static void emit_export_display_begin(FILE *f, const ExportNeeds *needs) {
     /* display() opening lines come from g_display_header so the panel
      * (which renders the same array) and the exported file stay
      * byte-identical here. */
     fprintf(f, "\n/* Draw one frame. */\n");
-    for (int line_idx = 0; g_display_header[line_idx]; line_idx++)
+    for (int line_idx = 0; g_display_header[line_idx]; line_idx++) {
         fprintf(f, "%s\n", g_display_header[line_idx]);
+        if (line_idx == 0 && needs && needs->needs_console) {
+            fprintf(f,
+                "  static int s_frame = 0;\n"
+                "  printf(\"\\033[2J\\033[H--- frame %%d ---\\n\", ++s_frame);\n");
+        }
+    }
     /* Eye-space positions are submitted with the identity modelview, once per
      * frame, before the camera transform is applied. */
     {
@@ -728,7 +734,7 @@ static void emit_export_display_tail(FILE *f, const ExportNeeds *needs,
 void emit_export_display(FILE *f, const ExportNeeds *needs,
                          const ReplExportLayout *layout,
                          const ExportGeneratedNames *names) {
-    emit_export_display_begin(f);
+    emit_export_display_begin(f, needs);
     emit_export_display_geometry(f, names);
     emit_export_display_tail(f, needs, layout, names);
 }
