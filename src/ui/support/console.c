@@ -103,7 +103,7 @@ void ui_console_panel_render(const UiConsolePanelView *view) {
 
     /* Body text lines */
     int line_y = panel_y + panel_h - UI_CONSOLE_HEADER_H - UI_CONSOLE_LINE_H + 2;
-    if (view->console.count == 0) {
+    if (view->console.count == 0 || !view->console.lines) {
         ui_clr(UI_TOK_TEXT_PLACEHOLDER);
         gl2d_draw_string((float)tx, (float)line_y, "(no output)", FONT_SMALL);
     } else {

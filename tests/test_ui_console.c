@@ -112,12 +112,22 @@ static void test_panel_render(void) {
     ui_console_panel_render(&view);
     ASSERT_TRUE("render empty state succeeded", 1);
 
-    /* Overflow state */
-    cview.count = 16;
-    cview.overflow_count = 25;
-    view.console = cview;
-    ui_console_panel_render(&view);
-    ASSERT_TRUE("render overflow state succeeded", 1);
+    /* Overflow state: the panel walks min(count, 16) entries of lines[]. */
+    {
+        ConsoleLine overflow_lines[16];
+        memset(overflow_lines, 0, sizeof(overflow_lines));
+        for (int i = 0; i < 16; i++) {
+            snprintf(overflow_lines[i].text, sizeof(overflow_lines[i].text),
+                     "overflow line %d", i);
+        }
+        cview.count = 16;
+        cview.total_count = 41;
+        cview.overflow_count = 25;
+        cview.lines = overflow_lines;
+        view.console = cview;
+        ui_console_panel_render(&view);
+        ASSERT_TRUE("render overflow state succeeded", 1);
+    }
 }
 
 int main(void) {
