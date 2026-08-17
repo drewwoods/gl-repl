@@ -1,14 +1,18 @@
 /*
- * test_buffer_viz_legend.c - the stencil legend's row-selection policy and
- * the panel's solved geometry.
+ * test_buffer_viz_legend.c - the legend panel's row-selection policies and
+ * its solved geometry.
  *
- * Two halves, matching the two places the legend can go wrong:
+ * Two halves, matching the two places the legend can go wrong, and two
+ * producers sharing the second:
  *
  *   - glr_ctrl_buffer_viz_legend_select_rows() - the controller decides
- *     which of up to 255 non-zero values earn a row. A capture can hold
- *     them all and the panel has no scrolling, so the top-N cap, the
+ *     which of up to 255 non-zero stencil values earn a row. A capture can
+ *     hold them all and the panel has no scrolling, so the top-N cap, the
  *     "+N more" remainder, and the always-retained zero/total rows are
  *     load-bearing, not cosmetic.
+ *   - glr_ctrl_call_depth_legend_select_rows() - the same panel, keyed by
+ *     funcN call depth. Its rule is ASCENDING depth rather than top-N by
+ *     count, because the colours it keys are an ordered ramp.
  *   - ui_buffer_viz_legend_size() - the renderer's pure solve. Drives it
  *     with no GL context; the panel must stay inside the scene rect and
  *     refuse to draw when it cannot.
@@ -313,6 +317,122 @@ static void test_view_absent_while_viz_is_off(void) {
     glr_state_presentation_mut()->stencil_viz = BUFFER_VIZ_STENCIL_OFF;
 }
 
+/* --- call-depth rows -------------------------------------------------
+ *
+ * The panel's second producer. Its selection rule is deliberately NOT the
+ * stencil one: depths come out in ascending order, because the colours
+ * they key are a ramp and a legend that reordered an ordered scale by
+ * population would be unreadable.
+ */
+
+static CallDepthVizStats make_depth_stats(const unsigned int *counts,
+                                          int count_len) {
+    CallDepthVizStats s;
+    int d;
+
+    memset(&s, 0, sizeof s);
+    for (d = 0; d < count_len && d < CALL_DEPTH_VIZ_SLOTS; d++) {
+        if (!counts[d])
+            continue;
+        s.counts[d] = counts[d];
+        s.distinct++;
+        s.total += counts[d];
+        s.max_depth = d;
+    }
+    s.valid = (s.total > 0);
+    return s;
+}
+
+static void test_depth_rows_are_ascending_and_counted(void) {
+    /* Deliberately not monotonic in count: depth 1 is the most populous,
+     * and a top-N-by-count rule would list it first. */
+    const unsigned int counts[] = { 40, 900, 0, 120 };
+    CallDepthVizStats stats = make_depth_stats(counts, 4);
+    UiBufferVizLegendView view;
+
+    memset(&view, 0, sizeof view);
+    glr_ctrl_call_depth_legend_select_rows(&stats, &view);
+
+    AI("depth rows: one row per occupied depth", view.row_count, 3);
+    AI("depth rows: first row is the shallowest depth", view.rows[0].value, 0);
+    AI("depth rows: rows ascend by depth, not by count",
+       view.rows[1].value, 1);
+    AI("depth rows: an empty depth is skipped, not blank-rowed",
+       view.rows[2].value, 3);
+    AI("depth rows: counts come straight from the scan",
+       (int)view.rows[1].count, 900);
+    AI("depth rows: total is every command scanned",
+       (int)view.total_px, 1060);
+    AI("depth rows: nothing hidden when every depth fits",
+       view.hidden_rows, 0);
+}
+
+static void test_depth_rows_swatch_matches_the_ramp(void) {
+    const unsigned int counts[] = { 1, 1, 1, 1, 1 };
+    CallDepthVizStats stats = make_depth_stats(counts, 5);
+    UiBufferVizLegendView view;
+    float want[3];
+    int c, ok = 1;
+
+    memset(&view, 0, sizeof view);
+    glr_ctrl_call_depth_legend_select_rows(&stats, &view);
+    AI("depth swatch: every depth listed", view.row_count, 5);
+
+    /* The swatch must be the colour the executor tinted with - same ramp,
+     * same max depth - or the panel describes a frame that never drew. */
+    call_depth_viz_ramp_rgb(3, stats.max_depth, want);
+    for (c = 0; c < 3; c++) {
+        int expected = (int)(want[c] * 255.0f + 0.5f);
+        if ((int)view.rows[3].rgb[c] != expected)
+            ok = 0;
+    }
+    AT("depth swatch: row colour is the ramp colour for its depth", ok);
+    AT("depth swatch: the shallow row is cooler than the deep one",
+       view.rows[0].rgb[2] > view.rows[4].rgb[2]);
+}
+
+static void test_depth_rows_cap_and_summarize_the_tail(void) {
+    unsigned int counts[UI_BUFFER_VIZ_LEGEND_MAX_ROWS + 3];
+    CallDepthVizStats stats;
+    UiBufferVizLegendView view;
+    int overflow = 3;
+    int d;
+
+    for (d = 0; d < UI_BUFFER_VIZ_LEGEND_MAX_ROWS + overflow; d++)
+        counts[d] = 10;
+    stats = make_depth_stats(counts, UI_BUFFER_VIZ_LEGEND_MAX_ROWS + overflow);
+
+    memset(&view, 0, sizeof view);
+    glr_ctrl_call_depth_legend_select_rows(&stats, &view);
+
+    AI("depth cap: rows stop at the panel's budget",
+       view.row_count, UI_BUFFER_VIZ_LEGEND_MAX_ROWS);
+    /* Truncation drops the DEEP tail, keeping the shallow levels a frame
+     * is mostly made of - which is also what keeps the listing ascending. */
+    AI("depth cap: the shallowest depth survives", view.rows[0].value, 0);
+    AI("depth cap: the deep tail is the part elided", view.hidden_rows,
+       overflow);
+    AI("depth cap: the elided commands are still accounted for",
+       (int)view.hidden_px, overflow * 10);
+}
+
+static void test_depth_rows_reject_unscanned_stats(void) {
+    CallDepthVizStats stats;
+    UiBufferVizLegendView view;
+
+    memset(&stats, 0, sizeof stats);
+    memset(&view, 0, sizeof view);
+    view.row_count = 5;   /* stale rows must be cleared, not kept */
+    glr_ctrl_call_depth_legend_select_rows(&stats, &view);
+    AI("depth rows: an invalid scan lists nothing", view.row_count, 0);
+    AI("depth rows: an invalid scan reports no total", (int)view.total_px, 0);
+
+    glr_ctrl_call_depth_legend_select_rows(NULL, &view);
+    AI("depth rows: a NULL scan lists nothing", view.row_count, 0);
+    glr_ctrl_call_depth_legend_select_rows(&stats, NULL);  /* must not crash */
+    AT("depth rows: a NULL view is survivable", 1);
+}
+
 int main(void) {
     test_select_rows_reports_counts();
     test_select_rows_orders_by_count_then_value();
@@ -326,5 +446,9 @@ int main(void) {
     test_size_tracks_a_large_truncation_count();
     test_size_refuses_a_scene_too_small();
     test_view_absent_while_viz_is_off();
+    test_depth_rows_are_ascending_and_counted();
+    test_depth_rows_swatch_matches_the_ramp();
+    test_depth_rows_cap_and_summarize_the_tail();
+    test_depth_rows_reject_unscanned_stats();
     return test_harness_report(&g_h, "buffer_viz_legend");
 }

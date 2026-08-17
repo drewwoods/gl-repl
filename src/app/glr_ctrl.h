@@ -4,6 +4,7 @@
 #include "app/glr_defaults.h"  /* GlrExampleTagDefault */
 #include "subsystems/edit_overlays/edit_overlays.h"  /* OverlayDepthSnapshot */
 #include "subsystems/buffer_viz/stencil_viz.h"  /* BufferVizStencilHistogram */
+#include "subsystems/call_depth_viz/call_depth_viz.h"  /* CallDepthVizStats */
 #include "ui/app/gl_state_panel.h"
 #include "ui/app/repl_code_panel.h"
 #include "ui/subsystems/buffer_viz_legend.h"
@@ -147,11 +148,19 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap);
  * the controller's cached snapshot. view.visible is 0 when closed. */
 UiGlStatePanelView glr_ctrl_build_gl_state_panel_view(const UiRenderSnapshot *snap);
 
-/* Per-frame view for the stencil-buffer legend panel. Reads the histogram
- * the buffer_viz subsystem published from the frame's final capture and
- * decides which values earn a row. view.visible is 0 when Stencil view is
- * Off, masked Off by the readback probe, or nothing has been scanned. */
+/* Per-frame view for the colour-key legend panel, shared by the stencil viz
+ * and the call-depth tint (stencil wins the corner when both are on). Reads
+ * whichever subsystem published counts this frame and decides which values
+ * earn a row. view.visible is 0 when both views are Off - stencil including
+ * masked Off by the readback probe - or the active one has scanned nothing. */
 UiBufferVizLegendView glr_ctrl_build_buffer_viz_legend_view(void);
+
+/* The call-depth legend's row-selection policy, split out so it is testable
+ * without a frame: fills `view`'s rows / hidden counts / total from `stats`,
+ * keeping the shallowest UI_BUFFER_VIZ_LEGEND_MAX_ROWS occupied depths in
+ * ascending order (the ramp is ordered, so the key must be too). */
+void glr_ctrl_call_depth_legend_select_rows(const CallDepthVizStats *stats,
+                                            UiBufferVizLegendView *view);
 
 /* The legend's row-selection policy, split out so it is testable without a
  * GL capture: fills `view`'s rows / hidden counts / zero + total pixels

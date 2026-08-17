@@ -65,6 +65,7 @@ static const float g_grid_extents[GRID_EXTENT_COUNT] = {
         .highlight_current_poly = CFG_DEFAULT_HIGHLIGHT_POLY, \
         .depth_viz              = CFG_DEFAULT_DEPTH_VIZ, \
         .stencil_viz            = CFG_DEFAULT_STENCIL_VIZ, \
+        .call_depth_tint        = CFG_DEFAULT_CALL_DEPTH_TINT, \
         .ortho_mode             = CFG_DEFAULT_ORTHO_MODE, \
         .projection_mode        = CFG_DEFAULT_PROJECTION, \
         .wrap_at_comma          = CFG_DEFAULT_WRAP_AT_COMMA, \
@@ -159,7 +160,8 @@ void glr_state_presentation_reset_example_defaults(void) {
      *
      * Everything else is deliberately NOT scene-local and survives an
      * example switch: session-inspection settings (the profilers, depth /
-     * stencil viz, post FX, replay options), interface settings
+     * stencil viz, the call-depth tint, post FX, replay options),
+     * interface settings
      * (code_panel_layout, wrap_at_comma, syntax_highlight, paren match /
      * scope), render features (MSAA, line smooth, accum), and autonormal.
      * test_glr_ctrl.c pins this reset against the roster. */

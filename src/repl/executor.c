@@ -629,6 +629,7 @@ ReplExecCursor repl_exec_cursor_begin(const ReplExecutionOptions *options) {
     cursor.tess_current_color[1] = 1.0;
     cursor.tess_current_color[2] = 1.0;
     cursor.alpha_scale = 1.0f;
+    cursor.depth_tint_emitted = -1;
     /* Clear-affecting GL state starts where the caller says the context does:
      * baseline_clear_rgba is what a glClear with no preceding glClearColor
      * would use, and all four channels are writable until a glColorMask says
@@ -742,6 +743,41 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
             return 1;
         default:
             break;
+        }
+    }
+    /* Call-depth tint. Placed after the prefix-walk early-outs above, so a
+     * skipped vertex does not leave a colour behind for the geometry that
+     * actually draws, and keyed on repl_cmd_consumes_current_color() - the
+     * existing "this draw reads the current colour" set - so the tint leads
+     * exactly the commands it has to and nothing else. Emitting on change
+     * rather than per command keeps a 3000-vertex run at one glColor4f.
+     *
+     * alpha_scale carries the replay fade, the same way the program's own
+     * glColor3f does; the tint replaces the hue, not the pass's blending. */
+    if (cursor->options.depth_tint_count > 0 &&
+        cursor->options.depth_tint_colors &&
+        repl_cmd_consumes_current_color(cmd->type)) {
+        const float *rgb;
+        int d = cmd->call_depth;
+        if (d < 0)
+            d = 0;
+        if (d >= cursor->options.depth_tint_count)
+            d = cursor->options.depth_tint_count - 1;
+        rgb = cursor->options.depth_tint_colors[d];
+        if (cmd->type == CMD_TESS_VERTEX) {
+            /* A tess vertex does not read GL's current colour: the value
+             * travels in the vertex payload and the combine/vertex callbacks
+             * emit it. So the tint lands on the cursor's tess colour instead,
+             * and unconditionally rather than on change - a CMD_TESS_COLOR
+             * between two same-depth vertices would otherwise reclaim the
+             * slot behind the cache's back. No GL call either way. */
+            cursor->tess_current_color[0] = rgb[0];
+            cursor->tess_current_color[1] = rgb[1];
+            cursor->tess_current_color[2] = rgb[2];
+            cursor->tess_current_color[3] = cursor->alpha_scale;
+        } else if (d != cursor->depth_tint_emitted) {
+            glColor4f(rgb[0], rgb[1], rgb[2], cursor->alpha_scale);
+            cursor->depth_tint_emitted = d;
         }
     }
     switch (cmd->type) {

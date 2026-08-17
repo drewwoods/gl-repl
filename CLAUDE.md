@@ -307,7 +307,7 @@ Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/gl
   (3D), `ui_*` (2D view), neutral (`prof`) for generic utilities. Don't
   introduce new top-level prefixes without documenting the boundary.
 - **Config toggles** → skill `gl-repl-config-toggle`. One-line version: append a
-  [`GlrConfigItem`](src/app/glr_config.h#L105) to `g_cfg_items[]` in [`src/app/glr_actions.c`](src/app/glr_actions.c)
+  [`GlrConfigItem`](src/app/glr_config.h#L106) to `g_cfg_items[]` in [`src/app/glr_actions.c`](src/app/glr_actions.c)
   under the right `### ` section (count + flyout membership auto-compute), then
   claim storage in the two default-less switches in
   [`src/app/glr_config.c`](src/app/glr_config.c) - `-Werror=switch` fails the
@@ -360,7 +360,7 @@ follows is the trip-wire list.
 
 ### Frame & rendering
 
-[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L284) drives each frame: rebuild autonormals + flat
+[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L293) drives each frame: rebuild autonormals + flat
 program if dirty → build [`Render3dRenderConfig`](src/render3d/render_types.h#L139) → clear chrome + load camera
 + scissor (all **controller** policy - render3d owns no camera type, sets no
 scissor, clears no color/depth) → [`render3d_draw_scene()`](src/render3d/render.h#L139) (projection → user
@@ -522,10 +522,10 @@ applying the example's `@cfg`.** The roster is `k_cfg_scene_defaults[]`
 direct-write twin is `glr_state_presentation_reset_example_defaults()` plus
 the two peer writes (camera auto-rotate, variable panel) in
 `glr_ctrl_reset_example_chrome()`. Session-inspection settings (profilers,
-depth/stencil viz, post FX, replay) and interface settings (code panel, wrap,
-syntax highlight, paren match/scope) are **not** scene-local and survive the
-switch. Camera is deliberately excluded (inherited unless the scene carries
-`@camera`-tagged rows); `restore_user_scene()` restores commands + predef vars
+depth/stencil viz, call-depth tint, post FX, replay) and interface settings
+(code panel, wrap, syntax highlight, paren match/scope) are **not**
+scene-local and survive the switch. Camera is deliberately excluded
+(inherited unless the scene carries `@camera`-tagged rows); `restore_user_scene()` restores commands + predef vars
 only.
 
 Full authoring detail - `@cfg` slugs, the five files that move together, size

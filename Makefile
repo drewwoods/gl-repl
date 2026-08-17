@@ -989,6 +989,8 @@ TEST_BINS += test_hidden_lines
 # Stencil legend: the controller's row-selection policy plus the panel's
 # pure geometry solve. Links CORE_TEST_OBJS for glr_ctrl's view builder.
 TEST_BINS += test_buffer_viz_legend
+# Call-depth tint: the pure scan + ramp core (no GL, no frame).
+TEST_BINS += test_call_depth_viz
 # Assignment-value plot: the capture engine (core test - it drives the REPL
 # pipeline) and the panel renderer (GL stubs, explicit object list below).
 TEST_BINS += test_assign_plot
@@ -1020,7 +1022,7 @@ WEB_TEST_EXCLUDE = \
 	test_ui_menu_bar
 WEB_TEST_BINS = $(filter-out $(WEB_TEST_EXCLUDE),$(TEST_BINS))
 
-CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_render3d_palette test_audio test_render3d_guides test_render3d_transition test_render3d_render test_depth_viz test_stencil_viz test_scene_file_menu test_editor_completion test_glr_camera test_glr_init_trace test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match test_ui_assign_plot,$(TEST_BINS))
+CORE_TEST_BINS = $(filter-out test_eval test_format test_mesh_ply test_memprof test_gpuprof test_repl_code_panel_layout test_ui_theme test_render3d_palette test_audio test_render3d_guides test_render3d_transition test_render3d_render test_depth_viz test_stencil_viz test_call_depth_viz test_scene_file_menu test_editor_completion test_glr_camera test_glr_init_trace test_ui_cpuprof test_ui_memprof test_ui_text_panel test_tutorial_match test_ui_assign_plot,$(TEST_BINS))
 
 # Benchmark binaries follow the same linking pattern as core test binaries
 # (they reuse CORE_TEST_OBJS so they work in both real-GL and stubs builds),
@@ -1197,6 +1199,16 @@ test_stencil_viz_OBJS = $(OBJDIR)/$(TEST_DIR)/test_stencil_viz.o \
 	$(BUFFER_VIZ_TEST_OBJS)
 test_stencil_viz_LDLIBS = $(GL_LDFLAGS)
 test_stencil_viz_RUN ?= $(BINDIR)/test_stencil_viz
+
+# Colour-by-call-depth: a pure scan + ramp over hand-built GLCmd arrays,
+# so it needs the one viz object and nothing else - no GL, no REPL
+# pipeline. gl_stub_counts.o only because the project headers it pulls in
+# reference the counters.
+test_call_depth_viz_OBJS = $(OBJDIR)/$(TEST_DIR)/test_call_depth_viz.o \
+	$(OBJDIR)/src/subsystems/call_depth_viz/call_depth_viz.o \
+	$(OBJDIR)/tests/gl-stubs/gl_stub_counts.o
+test_call_depth_viz_LDLIBS = $(GL_LDFLAGS)
+test_call_depth_viz_RUN ?= $(BINDIR)/test_call_depth_viz
 
 test_scene_file_menu_OBJS = $(OBJDIR)/$(TEST_DIR)/test_scene_file_menu.o $(CORE_TEST_OBJS)
 test_scene_file_menu_LDLIBS = $(GL_LDFLAGS)

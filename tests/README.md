@@ -297,7 +297,8 @@ explicit flag replaces the `REPL_SCENE_CORPUS` set rather than adding to it.
 | `test_ui_status_history` | 16-entry message ring + messages-button hit-test |
 | `test_ui_theme` | theme palette integrity (header-only target) |
 | `test_overlay_layout` | the floating-panel layout solver and its eased positions |
-| `test_buffer_viz_legend` | stencil legend row selection + the panel's pure solve |
+| `test_buffer_viz_legend` | legend row selection (stencil top-N by count, call depth ascending) + the panel's pure solve |
+| `test_call_depth_viz` | call-depth scan + ramp: binning, observed-range normalization, monotonic warmth |
 | `test_ui_gl_state` | **real GL**: `gl2d_begin()`/`gl2d_end()` fully restores what it touches |
 | `test_ui_cpuprof`, `test_ui_memprof` | profiler panels |
 

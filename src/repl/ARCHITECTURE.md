@@ -298,8 +298,8 @@ surfaces it on the CLI.
 
 Loop counters, function parameters and function-scoped locals don't exist in
 the source command's own scope. When [`flatten.c`](flatten.c) emits a flat command, it snapshots
-the live lexical bindings into a parallel [`FlatCmdLocalVars`](flatten.h#L43) array
-([`repl_state_flat_program_local_vars()`](state_views.h#L192)):
+the live lexical bindings into a parallel [`FlatCmdLocalVars`](flatten.h#L79) array
+([`repl_state_flat_program_local_vars()`](state_views.h#L202)):
 
 ```c
 typedef struct {
@@ -330,7 +330,7 @@ the interned call-frame index when both commands are indexed, and the
 four legacy provenance fields (`func_scope_mask`, `call_depth`, immediate and
 root call sites) when either is `REPL_CALL_FRAME_NONE`. Temporal order
 still breaks remaining ties. It must never compare
-[`FlatCmdLocalVars`](flatten.h#L43) values for that match: those values are effective command
+[`FlatCmdLocalVars`](flatten.h#L79) values for that match: those values are effective command
 state and therefore change after every local assignment within one invocation.
 
 The snapshot is *frozen* at emit time, and that is what makes function-local
@@ -709,7 +709,7 @@ rather than inserting a second set.
 
 ### 5.2 Flatten - lowering source to flat
 
-[`repl_flatten_program()`](flatten.h#L141) ([`flatten.c`](flatten.c)) expands the source array into the
+[`repl_flatten_program()`](flatten.h#L240) ([`flatten.c`](flatten.c)) expands the source array into the
 flat array:
 
 - **for-loops** iterate `[start, end)` by `step`, half-open, re-parsing
@@ -736,7 +736,7 @@ Expansion is recursive and **bounded**:
 
 On overflow it returns `ok = 0` with a status message and leaves the
 prior flat program in place. Every emitted flat command gets its
-provenance (§3.3) and a [`FlatCmdLocalVars`](flatten.h#L43) snapshot (§3.4).
+provenance (§3.3) and a [`FlatCmdLocalVars`](flatten.h#L79) snapshot (§3.4).
 Each `flatten_call` also interns a [`ReplCallFrame`](flatten.h) (topology
 plus a variable-length argument run) when the caller supplied the table;
 that intern is O(1) plus an arena append and is skipped entirely when no
@@ -750,7 +750,7 @@ paths. They all produce the same baked [`GLCmd`](command.h#L122) stream:
 1. A command whose `has_vars` is 0 is appended verbatim from the committed
    source array. `has_vars` is decided at commit time against predefs and the
    enclosing loop/function bindings, so its baked args cannot change between
-   frames. The enclosing [`FlatCmdLocalVars`](flatten.h#L43) snapshot is still
+   frames. The enclosing [`FlatCmdLocalVars`](flatten.h#L79) snapshot is still
    recorded for replay annotations.
 2. On an uncached variable-bearing numeric command, the direct evaluator uses
    the committed command type/arity to extract and evaluate only the known
@@ -847,7 +847,7 @@ There are three intentional disable/reference modes:
 | Scope | Mechanism | What remains enabled |
 |---|---|---|
 | Live application/benchmark process | Start with `GLR_NO_FLATTEN_CACHE=1` | Literal and direct-evaluation fast paths remain; every relevant value change full-flattens and no rebake is attempted. |
-| One [`repl_flatten_program()`](flatten.h#L141) call | Set `ReplFlattenOptions.expr_cache = NULL` | Same cache-free direct/text behavior, without changing the live cache or other callers. |
+| One [`repl_flatten_program()`](flatten.h#L240) call | Set `ReplFlattenOptions.expr_cache = NULL` | Same cache-free direct/text behavior, without changing the live cache or other callers. |
 | Strong differential reference | Set `force_reparse = 1` (normally with `expr_cache = NULL`) | Disables the literal/direct paths as well as compiled evaluation and forces the legacy general-parser path. |
 
 `GLR_NO_FLATTEN_CACHE` is a diagnostic/startup switch, not a live toggle: it
@@ -859,12 +859,12 @@ paths by
 
 The live frame path goes through `repl_flatten_commands(edit_line_idx)`, but
 the engine is reusable: tests and replay tools flatten into a *temporary*
-buffer and pass a [`FlatProgramView`](flatten.h#L58) over it, never touching
+buffer and pass a [`FlatProgramView`](flatten.h#L59) over it, never touching
 the live arrays.
 
 ### 5.3 Execute - flat program to GL
 
-[`repl_execute_program()`](executor.h#L258) ([`executor.c`](executor.c)) walks `flat_cmds[0..count)`
+[`repl_execute_program()`](executor.h#L286) ([`executor.c`](executor.c)) walks `flat_cmds[0..count)`
 emitting GL. Key behaviors:
 
 - **Baked args only.** Every command renders from its flatten-baked
@@ -985,10 +985,10 @@ typed slices ([`state_views.h`](state_views.h)):
 |---|---|
 | [`ReplDocumentState`](state_views.h#L42) | source `GLCmd[]`, count, capacity, `normals_dirty`, cached source-uses-`t` metadata |
 | [`ReplFlatProgramState`](state_views.h#L52) | flat `GLCmd[]`, `FlatCmdLocalVars[]`, dirty flag, cursor-block range, user-lighting flag |
-| [`ReplVariableState`](state_views.h#L84) | predef var table, scratch arrays `A/B/C`, `funcN` aliases, the `t` clock (`anim_time`, `time_playing`) |
-| [`ReplRenderState`](state_views.h#L123) | the runtime-mutated render *tail*: `light_enabled_mask` alone. The frame background is not state here - the cursor observes it while emitting the program's clears and publishes a [`ReplBackgroundObservation`](executor.h#L64) |
-| [`ReplSceneRuntimeState`](state_views.h#L154) | active example index, bound workspace dir |
-| [`ReplImportExportState`](state_views.h#L164) | cached header/render/camera text + pending import metadata |
+| [`ReplVariableState`](state_views.h#L94) | predef var table, scratch arrays `A/B/C`, `funcN` aliases, the `t` clock (`anim_time`, `time_playing`) |
+| [`ReplRenderState`](state_views.h#L133) | the runtime-mutated render *tail*: `light_enabled_mask` alone. The frame background is not state here - the cursor observes it while emitting the program's clears and publishes a [`ReplBackgroundObservation`](executor.h#L64) |
+| [`ReplSceneRuntimeState`](state_views.h#L164) | active example index, bound workspace dir |
+| [`ReplImportExportState`](state_views.h#L174) | cached header/render/camera text + pending import metadata |
 
 [`repl_state_capture()`](state.h#L29) / [`repl_state_restore()`](state.h#L30) snapshot exactly these
 slices - and nothing else (no editor, UI, replay, or app presentation
@@ -1360,7 +1360,7 @@ each re-flatten knows to re-evaluate it from text (§5.2).
 
 ### Stage 3 - flatten  (`repl_flatten_commands`)
 
-[`repl_flatten_program()`](flatten.h#L141) (§5.2) lowers the nine source commands to eleven
+[`repl_flatten_program()`](flatten.h#L240) (§5.2) lowers the nine source commands to eleven
 flat ones - the loop body unrolled into six vertices, the `CMD_FOR_BEGIN`
 / `CMD_FOR_END` / `CMD_VAR_DECLARE` markers consumed:
 

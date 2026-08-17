@@ -71,6 +71,150 @@ static void test_fade_context(void) {
     ASSERT_TRUE("fade context option fields set", opts.fade_alpha_scale == 0.5f && opts.skip_geom_before_pc == 5);
 }
 
+/* --- Call-depth tint --------------------------------------------------
+ *
+ * The executor's half of the colour-by-call-depth view: given a table of
+ * per-depth colours, emit one glColor4f ahead of every command that
+ * consumes the current colour, and only when the depth changes. The GL
+ * trace is the oracle - counts alone could not tell "tinted correctly"
+ * from "tinted with the wrong row", which is the failure that would look
+ * plausible on screen.
+ */
+
+/* Deliberately not the real ramp: exact, well-separated values so a
+ * misindexed row is a mismatch rather than a near miss. */
+static const float k_tint_table[3][3] = {
+    { 0.25f, 0.00f, 0.00f },   /* depth 0 */
+    { 0.00f, 0.50f, 0.00f },   /* depth 1 */
+    { 0.00f, 0.00f, 0.75f },   /* depth 2 */
+};
+
+static GLCmd tint_cmd(CmdType type, int depth) {
+    GLCmd c;
+    memset(&c, 0, sizeof c);
+    c.type = type;
+    c.valid = 1;
+    c.call_depth = depth;
+    c.num_args = 3;
+    return c;
+}
+
+/* Run `cmds` under the tint and return the trace text in `buf`. */
+static void tint_run_trace(const GLCmd *cmds, int count, int tint_rows,
+                           char *buf, size_t buf_size) {
+    char path[] = "/tmp/test_repl_executor_depth_tint.txt";
+    FlatProgramView prog;
+    ReplExecutionOptions opts;
+    FILE *f;
+    size_t n = 0;
+
+    memset(&prog, 0, sizeof prog);
+    prog.cmds = cmds;
+    prog.cmd_count = count;
+
+    memset(&opts, 0, sizeof opts);
+    opts.flat_cmd_count = count;
+    opts.program = prog;
+    opts.depth_tint_colors = k_tint_table;
+    opts.depth_tint_count = tint_rows;
+
+    gl_stub_trace_open(path);
+    repl_execute_program(&opts);
+    gl_stub_trace_close();
+
+    buf[0] = '\0';
+    f = fopen(path, "r");
+    if (f) {
+        n = fread(buf, 1, buf_size - 1, f);
+        fclose(f);
+        remove(path);
+    }
+    buf[n] = '\0';
+}
+
+static int tint_count_substr(const char *hay, const char *needle) {
+    int n = 0;
+    const char *p = hay;
+    while ((p = strstr(p, needle)) != NULL) {
+        n++;
+        p += strlen(needle);
+    }
+    return n;
+}
+
+static void test_depth_tint_colors_by_depth(void) {
+    GLCmd cmds[7];
+    char buf[16384];
+
+    /* Two vertices at depth 0, then two at depth 2, inside a begin/end. */
+    cmds[0] = tint_cmd(CMD_BEGIN, 0);
+    cmds[0].args[0] = GL_TRIANGLES;
+    cmds[0].num_args = 1;
+    cmds[1] = tint_cmd(CMD_VERTEX3F, 0);
+    cmds[2] = tint_cmd(CMD_VERTEX3F, 0);
+    cmds[3] = tint_cmd(CMD_VERTEX3F, 2);
+    cmds[4] = tint_cmd(CMD_VERTEX3F, 2);
+    cmds[5] = tint_cmd(CMD_VERTEX3F, 0);
+    cmds[6] = tint_cmd(CMD_END, 0);
+    cmds[6].num_args = 0;
+
+    tint_run_trace(cmds, 7, 3, buf, sizeof buf);
+
+    ASSERT_TRUE("tint: depth 0 emits its table row",
+                strstr(buf, "glColor4f 0.25 0 0 1\n") != NULL);
+    ASSERT_TRUE("tint: depth 2 emits its table row",
+                strstr(buf, "glColor4f 0 0 0.75 1\n") != NULL);
+    ASSERT_TRUE("tint: an unused depth's row is never emitted",
+                strstr(buf, "glColor4f 0 0.5 0 1\n") == NULL);
+    /* Three changes across the run (0 -> 2 -> 0, plus the leading one),
+     * not one per vertex: a run at one depth must cost a single colour
+     * change or a 3000-vertex mesh pays 3000 redundant glColor4f calls. */
+    ASSERT_TRUE("tint: one glColor4f per depth CHANGE, not per vertex",
+                tint_count_substr(buf, "glColor4f") == 3);
+}
+
+static void test_depth_tint_clamps_and_leads_solids(void) {
+    GLCmd cmds[2];
+    char buf[16384];
+
+    /* A glutSolid* consumes the current colour without emitting a vertex,
+     * so the tint has to lead it too. Its depth is past the table, which a
+     * short table (overflowed frames, a truncated build) can produce - it
+     * must clamp to the deepest row rather than read off the end. */
+    cmds[0] = tint_cmd(CMD_GLUT_CUBE, 9);
+    cmds[0].args[0] = 1.0f;
+    cmds[0].num_args = 1;
+    cmds[1] = tint_cmd(CMD_GLUT_SPHERE, 9);
+    cmds[1].args[0] = 1.0f;
+    cmds[1].args[1] = 8;
+    cmds[1].args[2] = 8;
+
+    tint_run_trace(cmds, 2, 3, buf, sizeof buf);
+
+    ASSERT_TRUE("tint: a glut solid is led by the tint",
+                strstr(buf, "glColor4f 0 0 0.75 1\n") != NULL);
+    ASSERT_TRUE("tint: depth past the table clamps to the last row",
+                tint_count_substr(buf, "glColor4f") == 1);
+}
+
+static void test_depth_tint_off_by_default(void) {
+    GLCmd cmds[3];
+    char buf[16384];
+
+    cmds[0] = tint_cmd(CMD_BEGIN, 0);
+    cmds[0].args[0] = GL_TRIANGLES;
+    cmds[0].num_args = 1;
+    cmds[1] = tint_cmd(CMD_VERTEX3F, 1);
+    cmds[2] = tint_cmd(CMD_END, 0);
+    cmds[2].num_args = 0;
+
+    /* Zero rows is the off state, and it is the state every existing
+     * caller gets from a zeroed options struct. */
+    tint_run_trace(cmds, 3, 0, buf, sizeof buf);
+    ASSERT_TRUE("tint: zero table rows emits no colour at all",
+                tint_count_substr(buf, "glColor4f") == 0);
+}
+
 static void test_predef_edge_cases(void) {
     // These should return early safely without crashing
     repl_copy_predef_values(NULL, 10);
@@ -1791,6 +1935,9 @@ int main(void) {
     test_light_indicator_tracks_program();
     test_apply_state_bookkeeping();
     test_fade_context();
+    test_depth_tint_colors_by_depth();
+    test_depth_tint_clamps_and_leads_solids();
+    test_depth_tint_off_by_default();
     test_predef_edge_cases();
     test_transform_stack_edge_cases();
     test_apply_state_cmd_edge_cases();

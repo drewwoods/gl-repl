@@ -57,21 +57,21 @@ would replace.
 That independence is intentional documentation, not just a build
 optimization. A demo should stay `src/app`-free unless a new exception is
 explicitly justified in its object-list comment and local docs. Pulling in
-`glr_ctrl`, `glr_actions`, `glr_config`, or [`UiRenderSnapshot`](../ui/app/snapshot.h#L89) to make a demo
+`glr_ctrl`, `glr_actions`, `glr_config`, or [`UiRenderSnapshot`](../ui/app/snapshot.h#L90) to make a demo
 easier usually means the owner module is missing a smaller contract or view
 type.
 
 ## In the REPL app
 
 Inside the full app this is **layer 0** of the ownership map. Per frame,
-[`glr_ctrl_display_frame()`](glr_ctrl.h#L284):
+[`glr_ctrl_display_frame()`](glr_ctrl.h#L293):
 
 1. rebuilds autonormals / the flat program if dirty, and prepares replay /
    export / camera strings;
 2. builds a [`Render3dRenderConfig`](../render3d/render_types.h#L139) from REPL runtime state + view state and calls
    [`glr_camera_load_modelview()`](glr_camera.h#L165) then [`render3d_draw_scene()`](../render3d/render.h#L139) (with the
    owned [`Render3dState`](../render3d/render.h#L101), once per frame; the renderer owns its accumulation-jitter loop);
-3. builds a [`UiRenderSnapshot`](../ui/app/snapshot.h#L89) and fans it out to the `ui_*_render`
+3. builds a [`UiRenderSnapshot`](../ui/app/snapshot.h#L90) and fans it out to the `ui_*_render`
    functions.
 
 On input, the physical `glr_ctrl_keyboard` / `_mouse` family first arbitrates
@@ -136,7 +136,7 @@ formatters free of any boot dependency.
 | [`glr_camera_export.c`](glr_camera_export.c) | Camera state ↔ exported `glTranslatef`/`glRotatef` text |
 | [`glr_audio.c`](glr_audio.c) / `.h` | App-level playlist engine and persisted audio config (`glr_audio_*`) |
 | [`glr_actions.c`](glr_actions.c) / `.h` | Config descriptor table (`g_cfg_items[]`), config shortcuts, menu actions |
-| [`glr_config.c`](glr_config.c) / `.h` | [`GlrConfigKey`](glr_config.h#L47) / [`GlrConfigItem`](glr_config.h#L105) descriptor API for keyed config access; the key → storage map (`config_value_ptr`) and its read twin (`glr_config_get`) are default-less switches, so `-Werror=switch` catches a key that claims no storage |
+| [`glr_config.c`](glr_config.c) / `.h` | [`GlrConfigKey`](glr_config.h#L47) / [`GlrConfigItem`](glr_config.h#L106) descriptor API for keyed config access; the key → storage map (`config_value_ptr`) and its read twin (`glr_config_get`) are default-less switches, so `-Werror=switch` catches a key that claims no storage |
 | [`glr_completion.c`](glr_completion.c) / `.h` | REPL-side completion provider; registers with `editor_completion` |
 | [`glr_state.c`](glr_state.c) / `.h` | App-level presentation/runtime toggles not owned by repl/editor/ui |
 | [`glr_source_document.c`](glr_source_document.c) | Binds the `source_document_*` contract to the live [`EditorState`](../editor/state.h#L199) buffer |

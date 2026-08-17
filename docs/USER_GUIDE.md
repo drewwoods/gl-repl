@@ -1225,6 +1225,32 @@ not write history; the palette repeats every 16 values; a program that omits
 (the status line points that out). If Depth view is on at the same time,
 depth wins wherever it paints.
 
+### Call depth
+
+**Call depth** colours your geometry by how deep in `funcN` calls it was
+drawn. Depth 0 is the top level of `display()`; each nested call is one
+deeper. A recursive scene renders as one pile of triangles and nothing on
+screen says which came from the outer call and which from four frames down -
+this says it.
+
+The colour is a ramp: **azure at the top level, warming through teal and
+gold to coral at the deepest call**, and it is stretched over the depth
+range *your program actually reaches*. A tree that recurses three deep gets
+four well-separated colours; one that recurses twenty deep gets a smooth
+gradient. That is deliberate - depth is an ordering, so the key to it has to
+be an ordering too, which a fixed per-depth palette would not be. It also
+means the colours re-scale if your recursion gets deeper, because it did.
+
+The legend in the scene's top-left lists each occupied depth with the number
+of flat commands at it - so it answers "which nesting level is eating my
+8192-command budget" as well as "which colour is which depth".
+
+While the view is on, the tint replaces your `glColor*` and material
+commands. Lighting is left alone: the geometry stays lit and shaded, so
+shape still reads - only the hue changes. Wireframe modes draw through a
+different path and are not tinted, and if Stencil view is also on it takes
+the legend corner.
+
 ---
 
 ## The Config Menu
@@ -1246,7 +1272,8 @@ flyouts taller than the window):
   (returns to the scene's authored `// camera` pose - from a built-in example
   or a loaded file - and to the built-in defaults only when the scene has no
   camera header)
-- **GEOMETRY** - Wireframe, Winding, Depth view, Stencil view, Auto-normals
+- **GEOMETRY** - Wireframe, Winding, Depth view, Stencil view, Call depth,
+  Auto-normals
 - **OVERLAYS** - Overlay scope, Vertex labels, Vertex label placement, Vertex
   points, Vertex outlines, Vertex outline style, Normal vectors, Polygon
   highlight, Transform guides

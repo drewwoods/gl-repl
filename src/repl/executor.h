@@ -185,6 +185,28 @@ typedef struct {
      * preceding glClearColor would use. A caller that publishes must set it;
      * a caller passing observation_out = NULL need not. */
     float           baseline_clear_rgba[4];
+    /* Call-depth tint (the "Call depth" view). When `depth_tint_count` is
+     * positive, the executor emits glColor4f(depth_tint_colors[d]) ahead of
+     * every command that consumes the current colour, where d is that
+     * command's `call_depth` clamped to the table - so the geometry from one
+     * funcN nesting level draws in one colour and the recursion becomes
+     * visible in the frame.
+     *
+     * A **table, not a callback or a mapping function**: the colours depend
+     * only on the program's observed depth range, which the caller already
+     * resolved this frame, so handing over the solved array keeps
+     * src/repl/ free of any dependency on the viz module that computed it
+     * (subsystems/call_depth_viz/) and costs one index per drawing command.
+     * The pointer is borrowed for the walk; the caller owns the storage.
+     *
+     * The executor only *adds* the tint. Suppressing the program's own
+     * colour and material commands - so they cannot overwrite it - is the
+     * caller's job through `state_filter`, exactly as the winding view
+     * defends its two-sided lighting setup. That split is deliberate: which
+     * commands a pass wants silenced is pass policy, and there is already
+     * one hook for it. */
+    const float   (*depth_tint_colors)[3];
+    int             depth_tint_count;
 } ReplExecutionOptions;
 
 /* Stack-owned execution cursor over a flat REPL program. This is the same
@@ -222,6 +244,12 @@ typedef struct ReplExecCursor {
     GLdouble             tess_current_color[4];
     float                alpha_scale;
     int                  skip_geom_before_pc;
+    /* Which call depth the tint has already emitted a glColor4f for, so a
+     * run of geometry at one depth costs one colour change rather than one
+     * per vertex. -1 = nothing emitted yet (set at cursor begin; a plain
+     * zeroed cursor would claim depth 0 was already live and skip the
+     * program's first colour). Meaningless when the tint is off. */
+    int                  depth_tint_emitted;
 } ReplExecCursor;
 
 /* Get a view over the live flat program (g_flat_cmds, g_flat_local_vars).

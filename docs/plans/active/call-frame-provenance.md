@@ -584,11 +584,12 @@ innermost wins.
 
 Kept for sequencing only. None of these should ride along with the PATH row.
 
-1. **Colour geometry by call depth.** An overlay mode that tints each draw by
-   `call_depth`. Needs **no new provenance at all** - the field is already on
-   `GLCmd` - and it makes recursion structure visible spatially. The cheapest
-   genuinely useful thing on the list, and independent enough to ship first
-   or never.
+1. **Colour geometry by call depth.** **DONE** - Config -> GEOMETRY -> "Call
+   depth". An overlay mode that tints each draw by `call_depth`. Needed **no
+   new provenance at all** - the field was already on `GLCmd` - and it makes
+   recursion structure visible spatially. The cheapest genuinely useful thing
+   on the list, and independent enough to ship first or never; it shipped
+   first. See "Call-depth tint, as built" below.
 2. **Offline `--call-tree` dump.** Also turns `--flat-histogram` from
    per-*function* into per-*invocation* accounting, which is what you want
    when a scene approaches the 8192 flat budget.
@@ -653,12 +654,50 @@ that each step is verifiable before the next depends on it:
   Done: Stage 2/3 table under that heading.
 - **Stage 4 - anything from "Later surfaces", by demand, one at a time.**
 
-Depth tinting (later surface 1) is independent of all of this and can be done
-whenever. `console()` is follow-up work with its own plan; it needs nothing
-here.
+Depth tinting (later surface 1) was independent of all of this and shipped on
+its own; see below. `console()` is follow-up work with its own plan; it needs
+nothing here.
 
 Do **not** start at Stage 4. Every one of those is a UI decision that is
 cheaper to make after living with the PATH row for a while.
+
+### Call-depth tint, as built
+
+Shipped as a session-inspection config toggle beside Depth view / Stencil
+view, not as a replay or overlay mode. Four decisions worth keeping, because
+each had a plausible alternative that is worse:
+
+- **A ramp, never a categorical palette.** The obvious move was to copy
+  `buffer_viz_stencil`'s fixed 16-entry palette for shallow depths and fall
+  back to a ramp past 8. But a stencil value is a *tag* - value 7 has no
+  "more than" relationship to value 3, which is exactly why a lookup table
+  buys view-independence there. Call depth is an *ordering*, and the only
+  question the view answers is which geometry is deeper; a palette answers it
+  with magenta-versus-yellow, which is no answer. The palette/ramp split had a
+  second failure mode too: a scene whose recursion deepens with `t` would
+  change colour *scheme* mid-animation at the crossover.
+- **Normalized over the observed max depth, recomputed per frame.** A ramp
+  over a fixed 0..`MAX_FLATTEN_CALL_DEPTH` would give a three-deep scene four
+  adjacent blues. Normalizing adapts the contrast, and re-deriving it each
+  frame (rather than EMA-smoothing it, as stencil RAMP does) is right because
+  depth is an integer and a change in it is information - the stencil EMA
+  exists to damp per-pixel jitter that has no analogue here.
+- **The colours reach the executor as a table, not a hook.** They depend only
+  on the frame's depth range, which the controller resolved before the pass,
+  so `ReplExecutionOptions` carries a borrowed `const float (*)[3]` and
+  `src/repl/` gains no knowledge of the viz module. The emit point is keyed on
+  the existing `repl_cmd_consumes_current_color()` predicate and fires on
+  depth *change*, so a 3000-vertex run costs one `glColor4f`.
+- **Suppression is `state_filter`, not new executor policy.** The pass owns
+  the colour, so the program's own colour/material commands must not paint
+  over it - the same defence the winding view already runs for its two-sided
+  lighting, through the same hook. Lighting itself is deliberately left alone:
+  the tint replaces hue, and lit geometry stays lit so shape still reads.
+
+Known scope boundaries, all deliberate: the wireframe views run through
+`hidden_lines_execute` and are not tinted; replay fade batches already force
+their own single colour; and the legend corner is single-tenant, so Stencil
+view wins it when both are on.
 
 ### Performance verification
 

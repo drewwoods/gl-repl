@@ -1,5 +1,5 @@
 /*
- * src/ui/subsystems/buffer_viz_legend.c -- Stencil-buffer legend panel.
+ * src/ui/subsystems/buffer_viz_legend.c -- Colour-key legend panel.
  *
  * Pure renderer over UiBufferVizLegendView (see the header for the
  * subsystem -> controller -> UI pull). Solves one small table - swatch,
@@ -78,6 +78,7 @@ static void bvl_push_line(BvlLayout *out, BvlLineKind kind,
  * small to hold the solved panel). Pure - no GL, no state reads. */
 static int bvl_solve(const UiBufferVizLegendView *view, BvlLayout *out) {
     char label[BVL_LEFT_MAX];
+    const char *prefix;
     int left_chars = 0, right_chars = 0, title_chars;
     int content_w, i;
 
@@ -89,8 +90,9 @@ static int bvl_solve(const UiBufferVizLegendView *view, BvlLayout *out) {
     if (view->scene_w <= 0 || view->scene_h <= 0)
         return 0;
 
+    prefix = view->row_prefix ? view->row_prefix : "";
     for (i = 0; i < view->row_count && i < UI_BUFFER_VIZ_LEGEND_MAX_ROWS; i++) {
-        snprintf(label, sizeof label, "%d", view->rows[i].value);
+        snprintf(label, sizeof label, "%s%d", prefix, view->rows[i].value);
         bvl_push_line(out, BVL_LINE_VALUE, view->rows[i].rgb, label,
                       view->rows[i].count);
     }
@@ -98,10 +100,14 @@ static int bvl_solve(const UiBufferVizLegendView *view, BvlLayout *out) {
         snprintf(label, sizeof label, "+%d more", view->hidden_rows);
         bvl_push_line(out, BVL_LINE_MORE, NULL, label, view->hidden_px);
     }
-    /* The zero row is never dropped: "how much of the frame is still
-     * background" is the question this panel most often answers, and an
-     * empty mask shows up as nothing but zeros. */
-    bvl_push_line(out, BVL_LINE_ZERO, NULL, "0", view->zero_px);
+    /* For a producer that has a zero row it is never dropped: "how much of
+     * the frame is still background" is the question this panel most often
+     * answers, and an empty mask shows up as nothing but zeros. A producer
+     * whose zero is an ordinary value (call depth) omits it - see the view. */
+    if (!view->omit_zero_row) {
+        snprintf(label, sizeof label, "%s0", prefix);
+        bvl_push_line(out, BVL_LINE_ZERO, NULL, label, view->zero_px);
+    }
     bvl_push_line(out, BVL_LINE_TOTAL, NULL, "total", view->total_px);
 
     for (i = 0; i < out->line_count; i++) {

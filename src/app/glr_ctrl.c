@@ -39,6 +39,7 @@
 #include "subsystems/buffer_viz/buffer_viz.h"      /* buffer-hook subscriber + frame modes */
 #include "subsystems/buffer_viz/depth_viz.h"        /* BufferVizDepthMode */
 #include "subsystems/buffer_viz/stencil_viz.h"      /* BufferVizStencilMode */
+#include "subsystems/call_depth_viz/call_depth_viz.h" /* colour-by-call-depth core */
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
@@ -1179,6 +1180,73 @@ static int winding_state_filter(CmdType type, const GLCmd *cmd, void *ud) {
     }
 }
 
+/* ---------------------------------------------------------------------------
+ * Call-depth tint (Config -> GEOMETRY -> "Call depth").
+ *
+ * Resolved ONCE per frame, in glr_ctrl_display_frame, and reused by every
+ * accumulation pass: the ramp is normalized over the program's observed depth
+ * range, so re-scanning per pass would let time-blur's sub-step reflattens
+ * shift the colours between samples of one frame. The subsystem owns the
+ * scan and the ramp; what lives here is the frame policy and the two
+ * consumers (the executor's tint table, the legend panel).
+ *
+ * Scanned over the WHOLE flat program, not the replay-clamped prefix. Both
+ * products want it: a depth's colour must not change as you scrub - the
+ * deepest command may sit past the PC - and the legend describes the program
+ * rather than the frame's clamp.
+ */
+static CallDepthVizStats g_call_depth_stats;
+static float g_call_depth_tint_table[CALL_DEPTH_VIZ_SLOTS][3];
+static int   g_call_depth_tint_rows;   /* 0 = tint off / nothing to tint */
+
+static void glr_ctrl_refresh_call_depth_tint(const FlatProgramView *program) {
+    memset(&g_call_depth_stats, 0, sizeof g_call_depth_stats);
+    g_call_depth_tint_rows = 0;
+    if (!glr_state_presentation().call_depth_tint || !program)
+        return;
+    call_depth_viz_scan(program->cmds, program->cmd_count,
+                        &g_call_depth_stats);
+    if (!g_call_depth_stats.valid)
+        return;
+    g_call_depth_tint_rows =
+        call_depth_viz_build_table(g_call_depth_stats.max_depth,
+                                   g_call_depth_tint_table,
+                                   CALL_DEPTH_VIZ_SLOTS);
+}
+
+/* State filter for the call-depth tint, the same defence the winding view
+ * runs for its two-sided lighting: the pass owns the colour, so the
+ * program's own colour and material commands must not paint over it.
+ *
+ * glEnable/glDisable(GL_COLOR_MATERIAL) is suppressed because the pass
+ * enables it to make the tint survive lighting - a program that turns it off
+ * mid-scene would flip its own geometry back to the pass's material. Lighting
+ * itself and the individual lights are deliberately NOT suppressed: replacing
+ * the hue is the whole change, and a scene that lit its geometry should stay
+ * lit so shape still reads. */
+static int call_depth_tint_state_filter(CmdType type, const GLCmd *cmd,
+                                        void *ud) {
+    (void)ud;
+    /* The whole current-colour family, via the predicate rather than a
+     * hand-rolled type list. CMD_TESS_COLOR is in it and never reaches a
+     * filter (the executor writes the cursor's tess colour directly, and the
+     * tint overrides that at the vertex instead) - naming the set correctly
+     * costs nothing and keeps this from drifting if that ever changes. */
+    if (repl_cmd_sets_current_color(type))
+        return 0;
+    switch (type) {
+    case CMD_MATERIALFV:
+    case CMD_MATERIALF:
+    case CMD_COLOR_MATERIAL:
+        return 0;
+    case CMD_ENABLE:
+    case CMD_DISABLE:
+        return (GLenum)cmd->args[0] != GL_COLOR_MATERIAL;
+    default:
+        return 1;
+    }
+}
+
 /* Scene's geometry callback for the main-fill and depth-probe passes.
  * The signature is intentionally opaque to scene - the controller
  * pulls live program / count / text from REPL state here, and clamps
@@ -1269,6 +1337,23 @@ static void scene_execute_adapter(const Render3dExecuteContext *ctx,
                sizeof(opts.baseline_clear_rgba));
         if (purpose == RENDER3D_EXEC_WINDING)
             opts.state_filter = winding_state_filter;
+        /* Call-depth tint, main fill only. The winding view owns the colour
+         * of its own pass (front/back, not depth) and the depth probe emits
+         * no colour worth tinting; the wireframe purposes never reach here at
+         * all - they run through hidden_lines_execute above, so the tint and
+         * a hidden-line view do not compose. */
+        if (purpose == RENDER3D_EXEC_MAIN_FILL && g_call_depth_tint_rows > 0) {
+            opts.depth_tint_colors = (const float (*)[3])g_call_depth_tint_table;
+            opts.depth_tint_count = g_call_depth_tint_rows;
+            opts.state_filter = call_depth_tint_state_filter;
+            /* The tint is a glColor, so it only reaches lit geometry through
+             * colour-material. Set here, inside the pass's glPushAttrib
+             * bracket, rather than in the executor: which GL state a render
+             * pass owns is pass policy, and the executor stays a walk that
+             * emits the program. */
+            glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+            glEnable(GL_COLOR_MATERIAL);
+        }
         repl_execute_program(&opts);
     }
     glPopAttrib();
@@ -3046,6 +3131,12 @@ void glr_ctrl_display_frame(void) {
         g_stencil_clear_warning_active = missing_clear;
     }
 
+    /* Depth range + colour table for the call-depth tint, resolved off the
+     * now-current flat program and before any pass reads it. Free when the
+     * view is off - the refresh returns on the config check without
+     * touching the program. */
+    glr_ctrl_refresh_call_depth_tint(&flat_program);
+
     /* Snapshot production: every per-frame list/snapshot the UI consumes
      * is built here so timing of the producer side is visible in profile.
      * The aggregate PROF_SNAPSHOT section sums the four sub-phases plus
@@ -3800,11 +3891,66 @@ void glr_ctrl_buffer_viz_legend_select_rows(
         view->hidden_px = (unsigned int)hist->nonzero_px - listed_px;
 }
 
-/* Build the stencil legend's per-frame view. The subsystem publishes raw
- * per-value counts from the final accumulation pass; which of them are
- * worth a row is a presentation decision, so it is made here rather than
- * in the renderer. Invisible whenever the viz is Off (including masked
- * Off by the capability probe) or no capture has been scanned yet. */
+/* Call-depth legend rows: the occupied depths in ASCENDING order, not the
+ * top-N by count the stencil selection uses. The colours are a ramp over
+ * depth, so a legend that reordered them by population would put the key to
+ * an ordered scale out of order - the one thing it exists to show. Depths
+ * past the panel's row budget collapse into the "+N more" line, which is
+ * why ascending is also the right truncation: it keeps the shallow levels
+ * that dominate a frame and elides the deep tail. */
+void glr_ctrl_call_depth_legend_select_rows(const CallDepthVizStats *stats,
+                                            UiBufferVizLegendView *view) {
+    int d;
+
+    if (!view)
+        return;
+    view->row_count = 0;
+    view->hidden_rows = 0;
+    view->hidden_px = 0;
+    view->zero_px = 0;
+    view->total_px = 0;
+    if (!stats || !stats->valid)
+        return;
+
+    view->total_px = stats->total;
+    for (d = 0; d <= stats->max_depth && d < CALL_DEPTH_VIZ_SLOTS; d++) {
+        UiBufferVizLegendRow *row;
+        float rgb[3];
+        int c;
+
+        if (stats->counts[d] == 0)
+            continue;
+        if (view->row_count >= UI_BUFFER_VIZ_LEGEND_MAX_ROWS) {
+            view->hidden_rows++;
+            view->hidden_px += stats->counts[d];
+            continue;
+        }
+        row = &view->rows[view->row_count++];
+        row->value = d;
+        row->count = stats->counts[d];
+        /* Straight from the ramp the executor tinted with, same max_depth -
+         * the swatch is the colour on screen, not a second opinion. */
+        call_depth_viz_ramp_rgb(d, stats->max_depth, rgb);
+        for (c = 0; c < 3; c++) {
+            float v = rgb[c] <= 0.0f ? 0.0f : (rgb[c] >= 1.0f ? 1.0f : rgb[c]);
+            row->rgb[c] = (unsigned char)(v * 255.0f + 0.5f);
+        }
+    }
+}
+
+/* Build the legend panel's per-frame view. Two producers share it (see
+ * ui/subsystems/buffer_viz_legend.h): a subsystem publishes raw counts,
+ * and which of them are worth a row is a presentation decision made here
+ * rather than in the renderer.
+ *
+ * The scene rect's top-left corner is single-tenant and the panel has no
+ * stacking, so when both views are somehow on at once **stencil wins**: it
+ * reports pixels that were actually read back, and a stencil swatch is
+ * genuinely ambiguous (the palette repeats every 16 values) where a depth
+ * ramp still reads cool-to-deep without its key.
+ *
+ * Invisible whenever both are Off (including stencil masked Off by the
+ * capability probe) or the active one has nothing scanned yet. */
 UiBufferVizLegendView glr_ctrl_build_buffer_viz_legend_view(void) {
     UiBufferVizLegendView view;
     UiViewportState vp = ui_state_viewport();
@@ -3818,8 +3964,20 @@ UiBufferVizLegendView glr_ctrl_build_buffer_viz_legend_view(void) {
     view.window_h = vp.window_h;
     ui_layout_scene_rect(&view.scene_x, &view.scene_y,
                          &view.scene_w, &view.scene_h);
-    if (mode <= BUFFER_VIZ_STENCIL_OFF || mode >= BUFFER_VIZ_STENCIL_COUNT)
+    if (mode <= BUFFER_VIZ_STENCIL_OFF || mode >= BUFFER_VIZ_STENCIL_COUNT) {
+        if (!g_call_depth_stats.valid)
+            return view;
+        snprintf(g_buffer_viz_legend_title, sizeof g_buffer_viz_legend_title,
+                 "Call depth");
+        view.title = g_buffer_viz_legend_title;
+        /* "d0"/"d1", and no zero row - depth 0 is the top level, an
+         * ordinary value with an ordinary swatch. */
+        view.row_prefix = "d";
+        view.omit_zero_row = 1;
+        glr_ctrl_call_depth_legend_select_rows(&g_call_depth_stats, &view);
+        view.visible = 1;
         return view;
+    }
 
     hist = buffer_viz_stencil_histogram();
     if (!hist->valid || hist->total_px <= 0)

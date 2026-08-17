@@ -55,6 +55,15 @@ subsystems here:
   into a **GL-free conversion core** (unit-tested against synthetic
   buffers - that is where the interesting math lives) and a thin GL
   shell around `glReadPixels` + a textured quad.
+- **`call_depth_viz/`** - colour the scene by `funcN` call depth: bin the
+  flat program by `GLCmd.call_depth` and map depth to a ramp normalized
+  over the *observed* depth range. All core, no shell - the module never
+  touches GL. Its two products are handed to consumers that do: the
+  executor takes the colour table through `ReplExecutionOptions`, and the
+  legend panel takes the per-depth counts. Related to `buffer_viz/` by
+  shape (pure core, false-colour view) but not by input - this reads the
+  *program*, not the pixels it wrote, so there is no readback, no capture
+  and no capability probe.
 
 Subsystem file shapes vary: a single co-located file (like
 [`color_picker_state.c`](color_picker/color_picker_state.c)), a `*_state.c` storage file plus a `*.c`
@@ -81,7 +90,7 @@ seam is a **narrow installable interface** rather than the snapshot:
 - **`make variable-panel-demo`** ([`tools/variable_panel_demo/`](../../tools/variable_panel_demo/)) -
   drives the peer over an in-memory `VariablePanelValueSource` and a
   hand-built `UiVariablePanelView`, so neither the REPL eval table nor
-  [`UiRenderSnapshot`](../ui/app/snapshot.h#L89) is in the link set.
+  [`UiRenderSnapshot`](../ui/app/snapshot.h#L90) is in the link set.
 - **`make color-picker-demo`** ([`tools/color_picker_demo/`](../../tools/color_picker_demo/)) -
   drives the peer over a [`ColorPickerHostBridge`](color_picker/color_picker_state.h#L116)
   backed by a plain color array, standing in for the REPL document + commit

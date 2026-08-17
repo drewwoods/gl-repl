@@ -74,6 +74,13 @@ typedef struct {
      * persisted in full workspace @cfg headers but intentionally left out of
      * per-example defaults and scene-local config. */
     int stencil_viz;
+    /* Colour-by-call-depth view (0/1). Replaces the program's own colours
+     * with a ramp over each command's funcN nesting depth, so recursion is
+     * visible in the frame. A session inspection setting like the two viz
+     * modes above - it describes how you are looking at the scene, not
+     * anything about the scene - so it stays out of per-example defaults
+     * and scene-local config. */
+    int call_depth_tint;
     Render3dViewMode ortho_mode;
     /* Projection mode, INDEPENDENT of ortho_mode's 2D-flatten view:
      * PROJ_PERSPECTIVE = perspective, PROJ_ORTHO = orthographic.

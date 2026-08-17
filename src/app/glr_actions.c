@@ -397,6 +397,8 @@ const GlrConfigItem g_cfg_items[] = {
     { .label = "Stencil view", .slug = "stencil_view", .key = GLR_CONFIG_STENCIL_VIZ,
       .state_count = ARRAY_LEN(stencil_viz_names), .state_names = stencil_viz_names,
       .key_code = KM_KEY(GLR_STENCIL_VIZ), .modifiers = KM_MODS(GLR_STENCIL_VIZ) },
+    { .label = "Call depth", .slug = "call_depth_tint", .key = GLR_CONFIG_CALL_DEPTH_TINT,
+      .state_count = 2 },
     { .label = "Auto-normals", .slug = "auto_normals", .key = GLR_CONFIG_AUTO_NORMALS,
       .state_count = ARRAY_LEN(auto_normal_names), .state_names = auto_normal_names },
     { .label = "---", .section_header = 1 },

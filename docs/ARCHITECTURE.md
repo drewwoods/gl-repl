@@ -90,7 +90,7 @@ The editor owns text-document behavior; UI renders its 2D view.
 The controller translates REPL state into per-frame view inputs.
 ```
 
-Render3d modules may consume [`FlatProgramView`](../src/repl/flatten.h#L58), [`CmdType`](../src/repl/command.h#L44), and other
+Render3d modules may consume [`FlatProgramView`](../src/repl/flatten.h#L59), [`CmdType`](../src/repl/command.h#L44), and other
 command-domain data when that data is already present in the
 [`Render3dRenderConfig`](../src/render3d/render_types.h#L139) or a derived frame snapshot. They should not fetch REPL
 globals or call `repl_state_*` APIs directly during rendering.
@@ -162,9 +162,9 @@ transformers, highlights, virtual lines, scene config, and ui snapshot
 (see [`src/support/cpuprof.h`](../src/support/cpuprof.h)).
 
 **The frame is the display callback, and the application owns it.** The three
-[`glr_frame_begin()`](../src/app/glr_ctrl.h#L264) /
-[`glr_frame_work_end()`](../src/app/glr_ctrl.h#L265) /
-[`glr_frame_ended()`](../src/app/glr_ctrl.h#L266) calls bracket `gl_repl.c`'s
+[`glr_frame_begin()`](../src/app/glr_ctrl.h#L273) /
+[`glr_frame_work_end()`](../src/app/glr_ctrl.h#L274) /
+[`glr_frame_ended()`](../src/app/glr_ctrl.h#L275) calls bracket `gl_repl.c`'s
 callback and also own the staleness/FPS tick, the GPU query-slot rotation and
 the capture-mode simulation tick. They carry the plain `glr_` prefix rather
 than `glr_ctrl_` because the controller is one stage inside a frame, not the
@@ -331,7 +331,7 @@ Source commands are the editing model.
 
 Flattened commands are the execution, replay, export, and 3D annotation model.
 
-Code outside the command pipeline should use [`FlatProgramView`](../src/repl/flatten.h#L58) or a snapshot
+Code outside the command pipeline should use [`FlatProgramView`](../src/repl/flatten.h#L59) or a snapshot
 derived from it instead of poking raw global arrays.
 
 ### Flatten cache and render-pass reuse
@@ -362,7 +362,7 @@ before returning. While animation is playing, advancing `t` is routed by its
 dependency bit: stable value-only scenes rebake, while `t`-dependent loops or
 conditions full-flatten. Ordinary jitter AA, replay overlay passes, and vertex
 outlines reuse the same frame-level
-[`FlatProgramView`](../src/repl/flatten.h#L58)/snapshot instead of reparsing, reflattening, or re-evaluating
+[`FlatProgramView`](../src/repl/flatten.h#L59)/snapshot instead of reparsing, reflattening, or re-evaluating
 expressions per sample. Those passes may reapply precomputed assignment
 commands from `args[]` while walking the flat stream, but the frame/probe
 side-effect brackets restore predefined variables and scratch arrays so
@@ -556,7 +556,7 @@ snapshot family lives in [`src/ui/app/editor.h`](../src/ui/app/editor.h):
 |---|---|---|
 | `UiTransformerList editor_transformers` | `glr_ctrl_push_color_transformers()` | One entry per editable color command (line index + RGBA + alpha/clear flags). Drives inline swatches and color-picker hit-testing. |
 | `UiHighlightList editor_highlights` | `glr_ctrl_push_highlights()` | Feeding-normal and feeding-color commands, replay PC, search match, and selection. Drives gutter accents and row backgrounds. |
-| `UiVirtualLineList editor_virtual_lines` | [`replay_annotations_prepare()`](../src/subsystems/replay/replay_annotations.h#L72), via `_refresh_virtual_lines()` | Replay-time substitution and evaluation rows attached to the current source line. Layout, scrolling, hit-testing, and rendering share this list, so virtual-row counts have one source of truth. |
+| `UiVirtualLineList editor_virtual_lines` | [`replay_annotations_prepare()`](../src/subsystems/replay/replay_annotations.h#L107), via `_refresh_virtual_lines()` | Replay-time substitution and evaluation rows attached to the current source line. Layout, scrolling, hit-testing, and rendering share this list, so virtual-row counts have one source of truth. |
 
 All three lists are named slices on [`ReplRuntimeState`](../src/repl/state.h#L18). Read-only
 accessors live in [`src/repl/state_views.h`](../src/repl/state_views.h); clear and append operations
@@ -802,7 +802,7 @@ vertices** - the geometry is generated inside GLU/freeglut, so the first
 two passes have nothing to trace. Instead, each shape is *re-drawn* under
 the already-active `glPolygonMode(GL_LINE)` + polygon offset, letting the
 GL pipeline rasterize the wireframe itself. The actual `glutSolid*` call
-goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L312) (shared with the live
+goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L340) (shared with the live
 render loop in [`src/repl/executor.c`](../src/repl/executor.c), so the dispatch stays in one place
 and the GLUT-symbol call site stays inside the executor TU). The
 membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L346) in [`src/repl/command.h`](../src/repl/command.h)
@@ -834,7 +834,7 @@ funcN-local parameters or loop-assigned values, so the controller must override
 cursor arguments from the **flat** command stream before rendering guides inside
 functions or loops.
 
-[`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L224) walks the current [`FlatProgramView`](../src/repl/flatten.h#L58) via
+[`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L224) walks the current [`FlatProgramView`](../src/repl/flatten.h#L59) via
 the replay/user-vertex walkers while tracking the modelview with
 `apply_tracked_transform` / `unwind_transform_stack`. At the cursor's chosen
 flat command - its first expansion, or its last when the snapshot's
@@ -910,24 +910,24 @@ Responsibilities:
 * profile HUD
 * status banners and other screen-space overlays
 
-UI renderers draw from a single per-frame [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L89) (defined in
+UI renderers draw from a single per-frame [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L90) (defined in
 [`src/ui/app/snapshot.h`](../src/ui/app/snapshot.h)) that the controller builds once via
-[`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L138) and passes to every `ui_*_render*()`
+[`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L139) and passes to every `ui_*_render*()`
 entry point. Render code does not call `repl_state_*()` directly. The
 `check-ui-no-repl-state-read` Makefile guard enforces the snapshot-shaped
 signature for audited renderers.
 
-[`UiRenderSnapshot`](../src/ui/app/snapshot.h#L89) carries:
+[`UiRenderSnapshot`](../src/ui/app/snapshot.h#L90) carries:
 
 * by-value value-type slices (code_panel, replay, search, autocomplete,
   status, …) - small structs cheap to copy. Scene-presentation policy
   and most render config live **app-side**
   on `glr_state` ([`src/app/glr_state.c`](../src/app/glr_state.c)), not on [`ReplRuntimeState`](../src/repl/state.h#L18); the
   controller reads them from there when filling the snapshot. Only the
-  REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L123): the light-enable
+  REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L133): the light-enable
   bitmask) remains a REPL slice.
-* pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L100), [`EditorInputView`](../src/editor/state.h#L68),
-  [`ReplImportExportView`](../src/repl/state_views.h#L176), [`FlatProgramView`](../src/repl/flatten.h#L58), [`ReplPredefView`](../src/repl/eval.h#L179))
+* pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L110), [`EditorInputView`](../src/editor/state.h#L68),
+  [`ReplImportExportView`](../src/repl/state_views.h#L186), [`FlatProgramView`](../src/repl/flatten.h#L59), [`ReplPredefView`](../src/repl/eval.h#L179))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
   - sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L390),
   `flat_program_count`, …)
@@ -1357,7 +1357,7 @@ Runtime shape:
   whole-app baseline (`GlrTourSnapshot`, [`src/app/glr_tour_snapshot.c`](../src/app/glr_tour_snapshot.c))
   is captured on the first frame after `start_tour` (deferred so the Tours-menu
   close path is part of the baseline). Left-Arrow restores that baseline, calls
-  [`glr_ctrl_after_tour_restore()`](../src/app/glr_ctrl.h#L102) to re-sync derived chrome + export strings,
+  [`glr_ctrl_after_tour_restore()`](../src/app/glr_ctrl.h#L103) to re-sync derived chrome + export strings,
   then fast-executes the prefix `[0, target)` via `ps_finish_event_immediate`
   (≤ 32 events per rendered frame; a `shell:` DOM click yields one browser
   turn). The baseline is derived-state-free: the flat program, renderer
@@ -1679,7 +1679,7 @@ events through [`glr_web_io.c`](../src/app/glr_web_io.c) and no bridge is instal
   [`repl_load_apply_line()`](../src/repl/load.h#L78) transaction handles example, import, and
   tutorial loads.
 - **Reset:** [`repl_state_reset_program()`](../src/repl/state_owners.h#L130) resets core REPL
-  state. [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L89) resets the editor, UI, and peer
+  state. [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L90) resets the editor, UI, and peer
   subsystems when a program is replaced wholesale.
 - **App-service bootstrap:** Dump-only CLI paths bypass normal GL
   initialization but run the idempotent `glr_ctrl_install_app_services()`
@@ -1691,7 +1691,7 @@ Scene-presentation policy and most render config live in the app-side owner
 [`src/app/glr_state.c`](../src/app/glr_state.c). REPL-pipeline translation units do not include
 [`glr_state.h`](../src/app/glr_state.h); `check-repl-state-no-glr-state` enforces that boundary.
 App, editor, UI, and render3d code may consume it. Only the REPL-owned render
-tail-[`ReplRenderState`](../src/repl/state_views.h#L123), containing the light-enable
+tail-[`ReplRenderState`](../src/repl/state_views.h#L133), containing the light-enable
 bitmask-remains a REPL slice.
 
 ### Capture/restore boundaries
@@ -1734,7 +1734,7 @@ state-ownership plan (rebuild undo on `repl_state_capture()`) was abandoned
 rather than deferred; see
 [`done/state-ownership-finalize.md`](plans/done/state-ownership-finalize.md).
 
-The lean REPL variant, [`repl_state_checkpoint_capture`](../src/repl/state.h#L61),
+The lean REPL variant, [`repl_state_checkpoint_capture`](../src/repl/state.h#L62),
 is everything above *except* the derived flat program, which restore leaves
 dirty to rebuild next frame. The tour baseline pairs it with
 [`editor_state_session_capture`](../src/editor/state.h#L248) - the persistent
@@ -1765,7 +1765,7 @@ executor, or GL-free export code.
 #### Runtime GL Capability Detection
 
 GL feature availability that varies by *runtime context* (not by build) is
-detected once in [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L16) - the first point at which the GL
+detected once in [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L17) - the first point at which the GL
 context is current - and pushed into the GL-free REPL/render3d layers through
 setters and [`Render3dRenderConfig`](../src/render3d/render_types.h#L139), never re-queried per frame.
 
@@ -1780,7 +1780,7 @@ supported = GL_VERSION >= 1.4
 
 The version check comes first on purpose: an ARB/EXT-only test
 false-negatives on a 1.4+ core context that doesn't advertise the extension
-string. The result is stored via [`repl_executor_set_point_parameter_supported()`](../src/repl/executor.h#L371)
+string. The result is stored via [`repl_executor_set_point_parameter_supported()`](../src/repl/executor.h#L399)
 (the executor no-ops `CMD_POINT_PARAMETER_FV` and falls back to a
 camera-distance `glPointSize` approximation when unsupported) and mirrored
 into `Render3dRenderConfig.point_parameter_supported` so the star backdrop's
@@ -1789,7 +1789,7 @@ own direct call is gated identically.
 **`GLR_NO_POINT_PARAMETER`** (environment variable, any non-empty value)
 forces the unsupported path on capable hardware - the only override; there
 is no build flag (it replaced the old compile-time `NO_POINT_PARAMETER`
-macro). When point attenuation ends up off, [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L16) logs one
+macro). When point attenuation ends up off, [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L17) logs one
 line to stderr that distinguishes the two causes:
 
 * env override - `"glPointParameterfv disabled via GLR_NO_POINT_PARAMETER=..."`
@@ -1813,7 +1813,7 @@ advertised    = has_timestamp
               || glutExtensionSupported("GL_EXT_timer_query")
 ```
 
-The entry points are runtime-loaded in [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L16) (same
+The entry points are runtime-loaded in [`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L17) (same
 core-then-ARB/EXT-suffix loader pattern as `glPointParameterfv`) and
 injected into gpuprof as a function-pointer table, so the support module
 stays GL-header-free. Two measurement modes, picked at init by what
@@ -1843,7 +1843,7 @@ policy table in [`src/app/glr_prof.c`](../src/app/glr_prof.c)).
 **`GLR_NO_GPU_PROF`** (environment variable, any non-empty value)
 disables GPU timing entirely - the panel's GPU column reads `--`, and
 the Max column falls back to plain CPU. When GPU timing ends up off,
-[`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L16) logs one stderr line distinguishing the env
+[`glr_ctrl_init_gl()`](../src/app/glr_ctrl.h#L17) logs one stderr line distinguishing the env
 override, a context that advertises timer queries but yields no loadable
 entry points, and a context with no timer-query support at all.
 
@@ -1917,14 +1917,14 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L139) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L284) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L293) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame - here a 2D/3D switch would let row-count see one
 `gluPerspective(...)` line while render emits two `glOrtho(...)` lines,
 skewing scroll-follow and row hit mapping. "Deterministic within a
 frame" is *not* sufficient - the inputs themselves change mid-frame at
-the render3d-render boundary. This is just [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L89)'s existing
+the render3d-render boundary. This is just [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L90)'s existing
 contract ("UI render code reads only from the snapshot") restated for
 the case where the value is computed rather than copied.
 
@@ -1944,7 +1944,7 @@ stored as a unique sentinel constant
 Per the rule above:
 
 * **Code panel (per frame):** the controller resolves the block once in
-  [`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L138) into
+  [`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L139) into
   `UiRenderSnapshot.reshape_proj_lines/_count`; both panel passes read
   that frozen copy and never touch the resolver. This is the canonical
   shape - UI reads the snapshot only (the symmetric counterpart of
@@ -2084,6 +2084,22 @@ hands the executor for the `RENDER3D_EXEC_WINDING` purpose - it suppresses
 Everything else (geometry, transforms, `glNormal3f`) passes through; `glColor`
 is left alone because GL ignores it with lighting on and color-material off.
 
+The **call-depth tint** (Config -> GEOMETRY -> "Call depth") is the second
+user. `call_depth_tint_state_filter` in
+[`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c) suppresses the current-colour
+family, `glMaterialfv`/`glMaterialf`/`glColorMaterial` and the
+`glEnable`/`glDisable` of `GL_COLOR_MATERIAL`, so the program cannot paint
+over the colour the pass owns. Lighting is deliberately *not* suppressed -
+the tint replaces the hue and nothing else, so lit geometry stays shaded and
+shape still reads. The positive half lives in the executor: with
+`ReplExecutionOptions.depth_tint_colors` set, it emits one `glColor4f` from
+that table ahead of every command matching
+[`repl_cmd_consumes_current_color()`](../src/repl/command.h), on depth change
+rather than per command. The colours arrive as a **solved table** rather than
+a callback, because they depend only on the frame's observed depth range,
+which the controller resolved before the pass - that keeps `src/repl/` free
+of any dependency on `subsystems/call_depth_viz/`, which computed them.
+
 The `.ply` exporter's `encode_feedback_normals` flag (see *Mesh Export*
 below) is the older, special-cased ancestor of this hook: it hard-codes the
 suppression of the program's `glEnable(GL_LIGHTING)` / `glEnable(GL_CULL_FACE)`
@@ -2117,7 +2133,7 @@ passes + stripped tess are the load-bearing reason here); reach for
 **Side effects across auxiliary passes.** Both mechanisms can run the program
 more than once per frame (the wireframe's three passes; a depth probe).
 `scene_execute_adapter` in [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c)
-snapshots and restores predef vars / scratch arrays / [`ReplRenderState`](../src/repl/state_views.h#L123)
+snapshots and restores predef vars / scratch arrays / [`ReplRenderState`](../src/repl/state_views.h#L133)
 around any pass whose [`Render3dExecutePurpose`](../src/render3d/render_types.h#L75) is *not* the one
 side-effecting fill - so `t = t + 1` style assignment animation advances
 exactly once per frame. `RENDER3D_EXEC_MAIN_FILL`, the wireframe's visible-
@@ -2448,7 +2464,7 @@ When a module starts owning mutable REPL state, follow this template:
    actualizes back into state.
 4. Extend the ownership tests in the same change: keep
    [`repl_state_capture()`](../src/repl/state.h#L29), [`repl_state_restore()`](../src/repl/state.h#L30), and
-   [`repl_state_reset_program()`](../src/repl/state_owners.h#L130) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L89)
+   [`repl_state_reset_program()`](../src/repl/state_owners.h#L130) (REPL-only) / [`glr_ctrl_reset_all()`](../src/app/glr_ctrl.h#L90)
    (full-world) current for runtime slices, and add focused behavior
    coverage in the module's own tests.
 
