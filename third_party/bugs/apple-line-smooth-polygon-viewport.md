@@ -39,7 +39,8 @@ oracles and controls. GLUT, no project dependencies:
 cc -std=c99 -O0 -Wno-deprecated-declarations \
    -o apple-line-smooth-polygon-viewport apple-line-smooth-polygon-viewport.c \
    -framework OpenGL -framework GLUT
-./apple-line-smooth-polygon-viewport   # 0 = conformant, 1 = bug, 77 = no GL
+./apple-line-smooth-polygon-viewport          # 0 = conformant, 1 = bug, 77 = no GL
+./apple-line-smooth-polygon-viewport --live   # Interactive live window mode
 ```
 
 **No expected pixel value is hardcoded.** Each case is compared against ink the
