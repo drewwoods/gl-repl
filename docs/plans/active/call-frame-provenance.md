@@ -489,7 +489,10 @@ it is worth writing into the header before any of it is built.
   the invariant that virtual rows belong to Verbose alone and Expanded keeps
   every readout inline on the source row. PATH is a virtual row, so it is
   Verbose's. Do not add a fourth `e` mode for it.
-- `REPL_REPLAY_ANNOTATION_MAX` goes 2 -> 3.
+- `REPL_REPLAY_ANNOTATION_MAX` stays 3: PATH remains one semantic annotation
+  alongside SUBST and EVAL. The app/UI publication step may expand that one
+  PATH anchor into one or two `UiVirtualLine` rows, so the replay subsystem does
+  not need a UI-specific annotation for each display segment.
 - The existing `HIGHLIGHT_REPLAY_CALL_SITE` / `_ROOT_CALL_SITE` gutter
   markers **stay as they are** in the first cut. They are cheap, they point at
   real lines, and with the fields retained they are also the frame-table-
@@ -497,21 +500,42 @@ it is worth writing into the header before any of it is built.
   Generalizing those markers to N rungs is a later, optional change and should
   not ride along with the PATH row.
 
-#### Long recursion needs middle-elision, not truncation
+#### Two-line PATH expansion and progressive middle-elision
 
-`MAX_VIRTUAL_LINE_TEXT` is 256 and `MAX_FLATTEN_CALL_DEPTH` is 64, so a deep
-chain does not fit. Keep the outermost rung and the innermost two or three,
-elide the middle with a count - the ends carry the information, the middle is
-the part a reader skims:
+`MAX_VIRTUAL_LINE_TEXT` is 256 and `MAX_FLATTEN_CALL_DEPTH` is 64. First build the
+complete, unelided path candidate. If it fits within 255 displayable characters,
+emit one virtual line regardless of rung count. Only a candidate that does not fit
+and has multiple rungs or active loop variables expands to **up to 2 virtual lines**
+stacked below the source row, providing an aggregate budget of $2 \times 255 = 510$ characters.
+The replay subsystem publishes only the structured snapshot and PATH anchors; the
+line-count/partition decision belongs at the UI boundary (or a neutral display-plan
+helper), so `src/subsystems/replay/` never includes or calls the code-panel UI.
+The publisher passes the resulting `path_part` (0 or 1) to each PATH virtual row;
+the formatter consumes that part together with the shared snapshot.
 
 ```
-|-> divide_triangle(depth=12) @124 > ... 9 frames ... > depth=1 @104 > triangle @65
+|-> u = -2, v = -2 > divide_triangle(depth=12) @124
+\-> ... 9 frames ... > depth=1 @104 > triangle(0, 0, 1) @65
 ```
+
+- **Line 1 (`|-> `)**: Context line carrying active loop variable assignments and
+  outermost ancestor call frames.
+- **Line 2 (`\-> `)**: Continuation line carrying intermediate elision (`... N frames ...`),
+  innermost recursion rungs, and the leaf draw call.
+- **Short paths**: If the entire path fits comfortably on a single line (<= 255 chars
+  with no wrap needed), only 1 virtual line is emitted.
+- **Single-rung long arguments**: A path with one rung and no loop context stays on
+  one row and uses the existing argument-tightening ladder (`arg0, ..., argN`, then
+  `func(...)`, then whole-token `...`). It never creates a second row containing a
+  duplicate copy of the same rung. A one-rung path with active loop context may use
+  the two-part layout: Part 0 carries the loop context and Part 1 carries the rung.
+- **Deep recursion elision**: Keep the outermost rung and innermost two or three rungs,
+  eliding the middle with `... N frames ...`.
 
 Elision is a *display* concern and must not reach back into storage: the
 frame's arguments stay lossless (see the arena in option B) even when the row
-shows three of them. The formatter's join budget is
-`min(out_sz - 1, MAX_VIRTUAL_LINE_TEXT - 1)`, and every over-budget shape
+shows three of them. The formatter's join budget across the two lines is
+$2 \times \min(\text{out\_sz} - 1, \text{MAX\_VIRTUAL\_LINE\_TEXT} - 1)$, and every over-budget shape
 has a fallback: middle frame elision, loop elision, in-rung argument
 elision (never a mid-number cut), then whole-part truncation ending in
 `...`. A long shallow path (one 32-arg rung, three long rungs, many
@@ -610,50 +634,21 @@ Kept for sequencing only. None of these should ride along with the PATH row.
    recursion structure visible spatially. The cheapest genuinely useful thing
    on the list, and independent enough to ship first or never; it shipped
    first. See "Call-depth tint, as built" below.
-2. **Replay caller-chain gutter tint.** Generalize the existing immediate/root
-   caller-site markers to the complete frame chain for the current replay
-   focus. Start with `replay_focus_flat_idx()`, resolve the focused command's
-   frame with `repl_flat_cmd_call_frame()`, and walk an indexed frame with
-   `repl_call_frame_walk_chain(..., MAX_FLATTEN_CALL_DEPTH)`. Do not use
-   `replay_focus_anchor_flat_idx()` or `UiReplayPathSnapshot`: caller tint is
-   not Verbose-gated and must preserve the existing polygon/non-draw behavior.
-   No displayed gutter-number lookup is involved. This is deliberately a
-   gutter overlay, not another PATH row and not a replacement for the
-   breadcrumb.
+2. **Replay caller-chain gutter tint.** **DONE** - Shipped.
+   Generalizes the immediate/root caller-site markers to the complete frame chain
+   for the current replay focus. Resolves the focused command's frame with
+   `repl_flat_cmd_call_frame()` and walks the chain with `repl_call_frame_walk_chain()`.
 
-   Publication is mutually exclusive at the focus boundary. When the focused
-   command has an indexed frame, publish only the new multi-entry replay-chain
-   highlight kind, one entry per walked frame, using its `call_src_cmd_idx` and
-   depth. When `repl_flat_cmd_call_frame()` returns
-   `REPL_CALL_FRAME_NONE`, publish only today's scalar
-   `HIGHLIGHT_REPLAY_CALL_SITE` / `_ROOT_CALL_SITE` entries from the retained
-   legacy fields. This preserves the overflow fallback without allowing the
-   old scalar marker priority to mask the new segmented marker.
-
-   The visual language should borrow `call_depth_viz`: depth is ordered, so
-   use its cool-to-warm ramp (`call_depth_viz_ramp_rgb()`), normalized to the
-   observed depth range for the active chain/frame. The first-cut contract is:
-   a source line carrying only one ancestor rung may use neutral off-palette
-   white/grey, while the innermost/last rung gets the warmest ramp colour; any
-   source line carrying two or more chain frames must use distinguishable ramp
-   stops for those bands, never identical neutral grey. Thus the two recursive
-   `@96` frames remain visibly two frames. If several frames land on one source
-   line, keep one band per retained frame/depth, using the existing segmented
-   gutter mechanism already used for `glPushAttrib` bits.
-
-   Walk the complete chain before applying the UI cap. The cap is
-   `UI_TEXT_PANEL_MAX_MARKER_BANDS` (currently 4), and applies only while
-   filling `left_marker_band_colors`; it must not shorten the frame walk or
-   mutate the provenance payload. If one source line has more than four chain
-   frames, retain its outermost band plus its three innermost bands and drop
-   only the middle bands from the gutter. The PATH data remains lossless.
-
-   This needs a multi-entry replay highlight kind (or equivalent depth/color
-   payload) and a code-panel aggregation path analogous to
-   `repl_code_panel_line_attrib_bits()`. The controller must resolve the ramp
-   colours, or publish the chain depth range and a color payload, so the UI
-   continues to consume a frozen snapshot rather than reaching into live
-   REPL/call-depth state.
+   **Shipped choices:**
+   - **Ramp mapping**: Uses `call_depth_viz_ramp_rgb()`, mapping normalized depth across
+     `[min_depth, max_depth]` into a 24-bit RGB packed payload in `UiHighlight.aux`.
+   - **Multi-entry highlight**: Publishes `HIGHLIGHT_REPLAY_CALL_CHAIN` for each ancestor
+     frame on indexed commands.
+   - **4-band gutter capping**: Stacked vertical gutter bands in `repl_code_panel.c` apply
+     a 4-band retention policy when $> 4$ frames land on one line: retains outermost (index 0)
+     plus 3 innermost (tail), dropping middle rungs.
+   - **Fallback contract**: Commands with `REPL_CALL_FRAME_NONE` fall back to scalar
+     `HIGHLIGHT_REPLAY_CALL_SITE` / `_ROOT_CALL_SITE`.
 3. **Offline `--call-tree` dump.** Also turns `--flat-histogram` from
    per-*function* into per-*invocation* accounting, which is what you want
    when a scene approaches the 8192 flat budget.
