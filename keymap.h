@@ -122,6 +122,8 @@
 #define GLR_REPLAY           KEY_CTRL_R, 0     /* pairs w/ Camera rotate */
 #define GLR_CAMERA_ROTATE    KEY_CTRL_R, GLUT_ACTIVE_SHIFT  /* plain Ctrl+R = Replay */
 #define GLR_STENCIL_VIZ      KEY_CTRL_S, GLUT_ACTIVE_SHIFT  /* plain Ctrl+S = Save */
+#define GLR_LOOK_DOWN_Z      KEY_CTRL_I, GLUT_ACTIVE_SHIFT  /* plain Ctrl+I = Tab */
+#define GLR_CALL_DEPTH_TINT  KEY_CTRL_J, GLUT_ACTIVE_SHIFT  /* plain Ctrl+J = LF / Enter variant */
 #define GLR_AUTO_TIME        KEY_CTRL_T, 0
 #define GLR_WINDING_VIEW     KEY_CTRL_W, GLUT_ACTIVE_SHIFT
 #define GLR_MSAA             KEY_CTRL_U, 0

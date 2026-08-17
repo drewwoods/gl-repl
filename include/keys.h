@@ -28,6 +28,8 @@
 #define KEY_CTRL_E    5    /* jump to line end */
 #define KEY_CTRL_H    8    /* Ctrl+H aliases Backspace; the Shift chord may be
                               claimed by a pre-editor shortcut route */
+#define KEY_CTRL_I    9    /* Ctrl+I aliases Tab; Ctrl+Shift+I: Look down Z */
+#define KEY_CTRL_J    10   /* Ctrl+J aliases LF / Enter; Ctrl+Shift+J: Call depth */
 #define KEY_BACKSPACE 8    /* backspace (some platforms deliver here) */
 #define KEY_DELETE    127  /* delete key (macOS terminal) */
 

@@ -996,6 +996,7 @@ its `glVertex3f` line (or the variable feeding it); see
 | Ctrl+Shift+R | Toggle camera auto-rotate |
 | Ctrl+Shift+V | Toggle View mode: 3D perspective / 2D ortho |
 | Ctrl+Shift+E | Toggle Projection: Perspective / Ortho (free camera) |
+| Ctrl+Shift+I | Look down Z |
 
 **2D mode.** *View mode* (Ctrl+Shift+V, or the CAMERA section of the Config
 menu) switches between the 3D perspective camera and a flat 2D orthographic
@@ -1932,6 +1933,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+W | Wireframe |
 | Ctrl+Shift+D | Depth view (Off / Linear / Scene / Split) |
 | Ctrl+Shift+S | Stencil view (Off / Palette / Ramp / Split) |
+| Ctrl+Shift+J | Call depth tint |
 | Ctrl+L | Light indicators |
 | Ctrl+Shift+L | Line smooth |
 | Ctrl+U | MSAA |
@@ -1963,6 +1965,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+Shift+R | Auto-rotate |
 | Ctrl+Shift+V | 2D / 3D view mode |
 | Ctrl+Shift+E | Projection (Perspective / Ortho) |
+| Ctrl+Shift+I | Look down Z |
 
 ### Tours (while a Tours-menu tour runs)
 

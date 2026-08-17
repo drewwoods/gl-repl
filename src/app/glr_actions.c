@@ -379,8 +379,9 @@ const GlrConfigItem g_cfg_items[] = {
      * the camera move. */
     { .label = "Focus origin", .slug = "focus_origin", .key = GLR_CONFIG_FOCUS_ORIGIN,
       .key_code = KM_KEY(GLR_FOCUS_ORIGIN), .modifiers = KM_MODS(GLR_FOCUS_ORIGIN) },
-    /* Menu-only (no keymap slot): head-on view down Z, zoom preserved. */
-    { .label = "Look down Z", .slug = "look_down_z", .key = GLR_CONFIG_LOOK_DOWN_Z },
+    /* Head-on view down Z, zoom preserved. */
+    { .label = "Look down Z", .slug = "look_down_z", .key = GLR_CONFIG_LOOK_DOWN_Z,
+      .key_code = KM_KEY(GLR_LOOK_DOWN_Z), .modifiers = KM_MODS(GLR_LOOK_DOWN_Z) },
     { .label = "Reset camera", .slug = "reset_camera", .key = GLR_CONFIG_RESET_CAMERA,
       .key_code = KM_KEY(GLR_RESET_CAMERA), .modifiers = KM_MODS(GLR_RESET_CAMERA) },
     { .label = "---", .section_header = 1 },
@@ -398,7 +399,8 @@ const GlrConfigItem g_cfg_items[] = {
       .state_count = ARRAY_LEN(stencil_viz_names), .state_names = stencil_viz_names,
       .key_code = KM_KEY(GLR_STENCIL_VIZ), .modifiers = KM_MODS(GLR_STENCIL_VIZ) },
     { .label = "Call depth", .slug = "call_depth_tint", .key = GLR_CONFIG_CALL_DEPTH_TINT,
-      .state_count = 2 },
+      .state_count = 2,
+      .key_code = KM_KEY(GLR_CALL_DEPTH_TINT), .modifiers = KM_MODS(GLR_CALL_DEPTH_TINT) },
     { .label = "Auto-normals", .slug = "auto_normals", .key = GLR_CONFIG_AUTO_NORMALS,
       .state_count = ARRAY_LEN(auto_normal_names), .state_names = auto_normal_names },
     { .label = "---", .section_header = 1 },
