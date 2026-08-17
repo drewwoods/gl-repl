@@ -406,14 +406,17 @@ IF(UNIX AND NOT(ANDROID OR BLACKBERRY OR FREEGLUT_WAYLAND OR OGC OR FREEGLUT_COC
     INCLUDE_DIRECTORIES(${X11_X11_INCLUDE_PATH})
     LIST(APPEND LIBS ${X11_X11_LIB})
     IF(X11_Xrandr_FOUND)
+        INCLUDE_DIRECTORIES(${X11_Xrandr_INCLUDE_PATH})
         SET(HAVE_X11_EXTENSIONS_XRANDR_H TRUE)
         LIST(APPEND LIBS ${X11_Xrandr_LIB})
     ENDIF()
     IF(X11_xf86vmode_FOUND)
+        INCLUDE_DIRECTORIES(${X11_Xxf86vm_INCLUDE_PATH})
         SET(HAVE_X11_EXTENSIONS_XF86VMODE_H TRUE)
         LIST(APPEND LIBS ${X11_Xxf86vm_LIB})
     ENDIF()
     IF(X11_Xinput_FOUND)
+        INCLUDE_DIRECTORIES(${X11_Xinput_INCLUDE_PATH})
         # Needed for multi-touch:
         CHECK_INCLUDE_FILES("${X11_Xinput_INCLUDE_PATH}/X11/extensions/XInput2.h" HAVE_X11_EXTENSIONS_XINPUT2_H)
         LIST(APPEND LIBS ${X11_Xinput_LIB})
@@ -932,6 +935,7 @@ ADD_DEMO(accum           progs/demos/accum/accum.c)
 ADD_DEMO(windows         progs/demos/windows/windows.c)
 ADD_DEMO(vsync           progs/demos/vsync/vsync.c)
 ADD_DEMO(fonts           progs/demos/fonts/fonts.c)
+ADD_DEMO(cursors         progs/demos/cursors/cursors.c)
 
 #######################
 # INSTALLATION
