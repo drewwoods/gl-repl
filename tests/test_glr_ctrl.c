@@ -213,6 +213,15 @@ static int get_highlight_aux_on_line(UiHighlightKind kind, int line_idx, int mat
     return -1;
 }
 
+static int band_matches_aux(const float rgba[4], int aux) {
+    float r = (float)((aux >> 16) & 0xFF) / 255.0f;
+    float g = (float)((aux >> 8) & 0xFF) / 255.0f;
+    float b = (float)(aux & 0xFF) / 255.0f;
+    return (float)fabs(rgba[0] - r) < 0.02f &&
+           (float)fabs(rgba[1] - g) < 0.02f &&
+           (float)fabs(rgba[2] - b) < 0.02f;
+}
+
 /* Off (-1) by default: most display-frame tests want the config, not a
  * geometry walk. Set to a Render3dExecutePurpose to make the stub drive the
  * controller's real execute_fn the way render.c does, which is the only way
@@ -5233,6 +5242,130 @@ static void test_replay_call_chain_gutter_bands_capping(void) {
     editor_state_highlights_clear();
 }
 
+/* Publication must start from replay_focus_flat_idx(), not the vertex-only
+ * replay_focus_anchor_flat_idx(). Polygon mode and a draw-free step both
+ * leave the anchor at -1; the chain must still publish. */
+static void test_replay_call_chain_focus_not_anchor(void) {
+    printf("--- imrepl_ctrl replay call-chain focus vs vertex-only anchor ---\n");
+
+    glr_ctrl_reset_all();
+    editor_feed_line("func1() {");                /* 0 */
+    editor_feed_line("glBegin(GL_POINTS);");      /* 1 */
+    editor_feed_line("glVertex3f(0, 0, 0);");     /* 2 */
+    editor_feed_line("glEnd();");                 /* 3 */
+    editor_feed_line("}");                        /* 4 */
+    editor_feed_line("func0() {");                /* 5 */
+    editor_feed_line("func1();");                 /* 6 */
+    editor_feed_line("}");                        /* 7 */
+    editor_feed_line("func0();");                 /* 8 */
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    replay_state_mut()->state = REPLAY_PAUSED;
+    replay_state_mut()->mode = REPLAY_MODE_POLYGON;
+    replay_advance(repl_state_flat_program_view());
+    glr_ctrl_push_highlights();
+
+    ASSERT_TRUE("polygon step has a focused command",
+                replay_focus_flat_idx() >= 0);
+    ASSERT_INT("polygon step has no vertex-mode draw anchor",
+               replay_focus_anchor_flat_idx(), -1);
+    ASSERT_INT("polygon step still publishes immediate call-chain rung",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 6), 1);
+    ASSERT_INT("polygon step still publishes root call-chain rung",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 8), 1);
+    replay_stop();
+
+    glr_ctrl_reset_all();
+    editor_feed_line("func1() {");                /* 0 */
+    editor_feed_line("glTranslatef(1, 0, 0);");   /* 1 */
+    editor_feed_line("}");                        /* 2 */
+    editor_feed_line("func0() {");                /* 3 */
+    editor_feed_line("func1();");                 /* 4 */
+    editor_feed_line("}");                        /* 5 */
+    editor_feed_line("func0();");                 /* 6 */
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    replay_state_mut()->state = REPLAY_PAUSED;
+    replay_state_mut()->mode = REPLAY_MODE_VERTEX;
+    replay_advance(repl_state_flat_program_view());
+    glr_ctrl_push_highlights();
+
+    ASSERT_TRUE("draw-free vertex step has a focused command",
+                replay_focus_flat_idx() >= 0);
+    ASSERT_INT("draw-free vertex step has no draw anchor",
+               replay_focus_anchor_flat_idx(), -1);
+    ASSERT_INT("draw-free step still publishes immediate call-chain rung",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 4), 1);
+    ASSERT_INT("draw-free step still publishes root call-chain rung",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 6), 1);
+    replay_stop();
+}
+
+/* Live rec(5) publishes every same-line ancestor (five rungs) and the
+ * gutter keeps outermost + 3 innermost. walk_chain(..., 4) would drop
+ * the leaf and never reach five published entries on that line. */
+static void test_replay_call_chain_recursive_deep_cap(void) {
+    printf("--- imrepl_ctrl replay recursive call-chain live 4-band cap ---\n");
+
+    glr_ctrl_reset_all();
+    editor_feed_line("rec(d) {");                 /* 0 */
+    editor_feed_line("if (d > 0) {");             /* 1 */
+    editor_feed_line("rec(d - 1);");              /* 2 */
+    editor_feed_line("}");                        /* 3 */
+    editor_feed_line("glBegin(GL_POINTS);");      /* 4 */
+    editor_feed_line("glVertex3f(d, 0, 0);");     /* 5 */
+    editor_feed_line("glEnd();");                 /* 6 */
+    editor_feed_line("}");                        /* 7 */
+    editor_feed_line("rec(5);");                  /* 8 */
+    repl_flatten_commands(editor_state_edit_line());
+
+    replay_start();
+    replay_state_mut()->state = REPLAY_PAUSED;
+    replay_state_mut()->mode = REPLAY_MODE_VERTEX;
+    replay_advance(repl_state_flat_program_view());
+    glr_ctrl_push_highlights();
+
+    ASSERT_INT("root call site has 1 chain highlight",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 8), 1);
+    ASSERT_INT("recursive call line publishes all 5 ancestor rungs",
+               count_highlight_kind_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 2), 5);
+
+    int aux0 = get_highlight_aux_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 2, 0);
+    int aux2 = get_highlight_aux_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 2, 2);
+    int aux3 = get_highlight_aux_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 2, 3);
+    int aux4 = get_highlight_aux_on_line(HIGHLIGHT_REPLAY_CALL_CHAIN, 2, 4);
+    ASSERT_TRUE("outermost same-line rung has a colour", aux0 >= 0);
+    ASSERT_TRUE("innermost same-line rung has a colour", aux4 >= 0);
+
+    ui_state_viewport_set_size(800, 600);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+    ui_state_code_panel_mut()->panel_frac = 0.45f;
+
+    UiRenderSnapshot snap;
+    glr_ctrl_build_ui_snapshot(&snap);
+    ui_repl_code_panel_render_with_chrome(&snap, NULL);
+
+    int active = 0, band_count = 0;
+    float band_rgba[4][4];
+    ASSERT_TRUE("code panel row marker bands available for line 2",
+                ui_repl_code_panel_row_marker_bands_for_test(2, &active, &band_count, band_rgba, 4));
+    ASSERT_INT("line 2 marker active", active, 1);
+    ASSERT_INT("line 2 gutter keeps outermost + 3 innermost", band_count, 4);
+    ASSERT_TRUE("band 0 is the outermost same-line rung",
+                band_matches_aux(band_rgba[0], aux0));
+    ASSERT_TRUE("band 1 is the third-innermost same-line rung",
+                band_matches_aux(band_rgba[1], aux2));
+    ASSERT_TRUE("band 2 is the second-innermost same-line rung",
+                band_matches_aux(band_rgba[2], aux3));
+    ASSERT_TRUE("band 3 is the innermost same-line rung",
+                band_matches_aux(band_rgba[3], aux4));
+
+    replay_stop();
+}
+
 /* Req 5: during replay the affecting-transform highlight tracks the
  * replay-focused vertex (via the req-4 exact-flat resolver), not the edit
  * cursor - and each expansion shows only its own in-scope transforms. */
@@ -7566,6 +7699,8 @@ int main(void) {
     test_replay_call_chain_recursive_same_line();
     test_replay_call_chain_unindexed_fallback();
     test_replay_call_chain_gutter_bands_capping();
+    test_replay_call_chain_focus_not_anchor();
+    test_replay_call_chain_recursive_deep_cap();
     test_replay_focus_vertex_affecting_transforms();
     test_replay_focus_glut_solid_affecting_transforms();
     test_overlay_scope_last_instance_affecting_transforms();

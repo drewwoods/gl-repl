@@ -447,7 +447,8 @@ void                         editor_state_highlights_clear(void);
 int                          editor_state_highlights_append(int line_idx, int char_start,
                                                             int char_end, UiHighlightKind kind);
 /* Same, but carries the kind-specific `aux` payload (bit-index mask for
- * HIGHLIGHT_ATTRIB_STATE, single bit index for HIGHLIGHT_ATTRIB_BIT_TOKEN).
+ * HIGHLIGHT_ATTRIB_STATE, single bit index for HIGHLIGHT_ATTRIB_BIT_TOKEN,
+ * 24-bit packed RGB for HIGHLIGHT_REPLAY_CALL_CHAIN).
  * The plain _append above forwards here with aux=0. */
 int                          editor_state_highlights_append_aux(int line_idx, int char_start,
                                                                 int char_end, UiHighlightKind kind,

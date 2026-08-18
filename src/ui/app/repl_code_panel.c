@@ -666,7 +666,6 @@ static int repl_code_panel_line_replay_call_chain_colors(
         return match_count;
     }
 
-    /* Retain outermost (index 0) + (cap - 1) innermost (tail of temp_colors) */
     out_colors[0] = temp_colors[0];
     int inner_count = cap - 1;
     for (int i = 0; i < inner_count; i++) {

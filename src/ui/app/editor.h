@@ -96,7 +96,8 @@ typedef struct {
     UiHighlightKind kind;
     /* Kind-specific payload (0 for every kind that predates it): a bit-index
      * mask for HIGHLIGHT_ATTRIB_STATE, a single bit index for
-     * HIGHLIGHT_ATTRIB_BIT_TOKEN. */
+     * HIGHLIGHT_ATTRIB_BIT_TOKEN, 24-bit packed RGB (0xRRGGBB) for
+     * HIGHLIGHT_REPLAY_CALL_CHAIN. */
     int           aux;
 } UiHighlight;
 

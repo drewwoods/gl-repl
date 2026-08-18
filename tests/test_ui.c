@@ -2161,6 +2161,32 @@ static void test_marker_priority_cascade(void) {
     marker_for_line(1, &active, rgba);
     ASSERT_TRUE("no signals: marker inactive", !active);
 
+    /* CALL_CHAIN + leftover CALL_SITE: the chain bands must win. A
+     * priority inversion back to the cyan scalar paints a solid marker
+     * and drops the bands even if publication stays exclusive. */
+    editor_state_highlights_clear();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->src_line_idx = -1;
+    editor_state_highlights_append_aux(1, -1, -1, HIGHLIGHT_REPLAY_CALL_CHAIN,
+                                       (40 << 16) | (80 << 8) | 200);
+    editor_state_highlights_append(1, -1, -1, HIGHLIGHT_REPLAY_CALL_SITE);
+    {
+        int band_count = 0;
+        float bands[4][4];
+        UiRenderSnapshot snap;
+        ui_repl_code_panel_invalidate_row_cache_for_test();
+        make_test_ui_snapshot(&snap);
+        ui_repl_code_panel_render_with_chrome(&snap, NULL);
+        ASSERT_TRUE("CALL_CHAIN+CALL_SITE: bands available",
+                    ui_repl_code_panel_row_marker_bands_for_test(
+                        1, &active, &band_count, bands, 4));
+        ASSERT_TRUE("CALL_CHAIN+CALL_SITE: marker active", active);
+        ASSERT_INT("CALL_CHAIN+CALL_SITE: chain bands win", band_count, 1);
+        ASSERT_TRUE("CALL_CHAIN+CALL_SITE: band is packed RGB, not CALL_SITE cyan",
+                    rgba_eq(bands[0], 40.0f / 255.0f, 80.0f / 255.0f,
+                            200.0f / 255.0f, 0.90f));
+    }
+
     /* Reset for follow-on tests. */
     editor_state_highlights_clear();
     replay_state_mut()->active = 0;

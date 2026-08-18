@@ -854,15 +854,9 @@ static void glr_ctrl_push_highlights(void) {
         editor_state_highlights_append(src_line, -1, -1,
                                             HIGHLIGHT_REPLAY_PC);
 
-    /* When the focused replay command was expanded from a funcN(...) call,
-     * also light up the call site(s) so a reused or recursive function shows
-     * which invocation is live (the PC line above is the body line inside the
-     * function). When the focused command has an indexed call frame, walk the
-     * entire ancestor chain (outermost-first) and publish multi-entry
-     * HIGHLIGHT_REPLAY_CALL_CHAIN highlights with depth-mapped ramp colours.
-     * When unindexed (REPL_CALL_FRAME_NONE), fall back to scalar
-     * HIGHLIGHT_REPLAY_CALL_SITE and HIGHLIGHT_REPLAY_ROOT_CALL_SITE from the
-     * retained legacy provenance fields. */
+    /* Light the live funcN invocation: the PC marker sits on the body line,
+     * so the gutter has to name the caller. Overflow (unindexed frames)
+     * keeps the older scalar markers. */
     if (replay_active()) {
         int focus = replay_focus_flat_idx();
         FlatProgramView flat = repl_state_flat_program_view();
