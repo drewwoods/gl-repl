@@ -66,6 +66,7 @@
  *                             # Shift+right-drag pans camera vertically
  *   3.8  wheel -1             # mouse wheel, +1/-1
  *   3.9  view 3d              # ensure 3D; transition only when currently 2D
+ *   4.0  cfg vertex_labels 0  # set config slug value symbolically or as int
  *   4.0  ring sub:3d:torus_knot 1.5   # pulsing highlight ring for 1.5s
  *   5.0  key glColor3f(       # feed text through the keyboard dispatch
  *                             # (escapes: \n = Enter, \e = Esc, \t = Tab,

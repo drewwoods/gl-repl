@@ -1234,6 +1234,38 @@ static void test_tour_sequential_steps_and_pause(void) {
                glr_pointer_script_start_tour("T", "t.pointer", shell_target, 1),
                1);
     glr_pointer_script_stop();
+
+    /* cfg <slug> <value> verb */
+    static const char *const cfg_valid[] = {
+        "cfg vertex_labels OVERLAY_VERTEX_LABEL_INDEX",
+        "cfg overlay_scope OVERLAY_SCOPE_ALL_INSTANCES",
+    };
+    static const char *const cfg_bad_slug[] = { "cfg unknown_slug 1" };
+    static const char *const cfg_bad_val[] = { "cfg vertex_labels UNKNOWN_ENUM" };
+    static const char *const cfg_incomplete[] = { "cfg vertex_labels" };
+
+    glr_state_presentation_mut()->show_vertex_labels = OVERLAY_VERTEX_LABEL_OFF;
+    glr_state_presentation_mut()->overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE;
+
+    ASSERT_INT("valid cfg tour loads",
+               glr_pointer_script_start_tour("Cfg", "cfg.pointer", cfg_valid, 2), 1);
+    glr_pointer_script_frame(); /* baseline capture */
+    glr_pointer_script_frame(); /* first cfg fires */
+    ASSERT_INT("cfg sets vertex_labels",
+               glr_state_presentation().show_vertex_labels,
+               OVERLAY_VERTEX_LABEL_INDEX);
+    glr_pointer_script_frame(); /* second cfg fires */
+    ASSERT_INT("cfg sets overlay_scope",
+               glr_state_presentation().overlay_scope,
+               OVERLAY_SCOPE_ALL_INSTANCES);
+    glr_pointer_script_stop();
+
+    ASSERT_INT("unknown slug rejected",
+               glr_pointer_script_start_tour("Cfg", "cfg.pointer", cfg_bad_slug, 1), 0);
+    ASSERT_INT("unknown value rejected",
+               glr_pointer_script_start_tour("Cfg", "cfg.pointer", cfg_bad_val, 1), 0);
+    ASSERT_INT("incomplete cfg rejected",
+               glr_pointer_script_start_tour("Cfg", "cfg.pointer", cfg_incomplete, 1), 0);
 }
 
 /* Audit #20: glr_config_set(GLR_CONFIG_AUDIO_MODE, ...) routes through

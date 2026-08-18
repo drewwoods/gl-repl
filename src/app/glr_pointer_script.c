@@ -13,6 +13,7 @@
 #include "app/glr_config.h"       /* GLR_CONFIG_ORTHO_MODE */
 #include "app/glr_ctrl.h"
 #include "app/glr_tour_snapshot.h" /* whole-app baseline for backstep/restart */
+#include "repl/cfg_baseline.h"   /* repl_cfg_set_text / repl_cfg_known */
 #include "repl/host_effects.h"   /* repl_set_status_error (tour target loss) */
 #include "support/cpuprof.h"     /* PROF_TOUR_OVERLAY bracket in the overlay pass */
 #include "ui/app/layout.h"       /* ui_layout_scene_rect (scene: targets) */
@@ -90,6 +91,7 @@ typedef enum {
     PS_UP,
     PS_WHEEL,
     PS_VIEW,
+    PS_CFG,
     PS_KEY,
     PS_SKEY,
     PS_CHORD,
@@ -110,6 +112,8 @@ typedef struct {
     int    button;                 /* down/up: GLUT_LEFT/RIGHT_BUTTON    */
     int    wheel_dir;              /* wheel: +1 / -1                     */
     int    view_mode;              /* view: RENDER3D_VIEW_2D / _3D       */
+    char   slug[32];               /* cfg: stable configuration slug     */
+    char   value_str[64];          /* cfg: symbolic or integer value     */
     int    special;                /* skey/chord: GLUT_KEY_* code, or    */
                                    /* -1 for a chord's printable path    */
     int    mods;                   /* chord: GLUT_ACTIVE_* override mask  */
@@ -493,6 +497,31 @@ static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
             ev->view_mode = RENDER3D_VIEW_2D;
         else
             return -1;
+        return 1;
+    }
+    if (strcmp(verb, "cfg") == 0) {
+        char slug[32], val[64];
+        int nread = 0;
+        ev->verb = PS_CFG;
+        if (sscanf(args, "%31s %63s%n", slug, val, &nread) != 2)
+            return -1;
+        const char *rest = args + nread;
+        while (*rest == ' ' || *rest == '\t' || *rest == '\n' || *rest == '\r')
+            rest++;
+        if (*rest != '\0' && *rest != '#')
+            return -1;
+        if (!repl_cfg_known(slug))
+            return -1;
+        int out_val = 0;
+        if (!repl_cfg_resolve_text(slug, val, &out_val)) {
+            char *end = NULL;
+            long v = strtol(val, &end, 10);
+            if (!end || end == val || (*end != '\0' && *end != ' ' && *end != '\t'))
+                return -1;
+            (void)v;
+        }
+        snprintf(ev->slug, sizeof(ev->slug), "%s", slug);
+        snprintf(ev->value_str, sizeof(ev->value_str), "%s", val);
         return 1;
     }
     if (strncmp(verb, "key", 3) == 0 &&
@@ -1005,6 +1034,9 @@ static void ps_fire(const PsEvent *ev) {
     case PS_VIEW:
         ps_ensure_view_mode(ev->view_mode);
         break;
+    case PS_CFG:
+        repl_cfg_set_text(ev->slug, ev->value_str);
+        break;
     case PS_KEY:
         ps_type_flush();
         if (ev->cps > 0.0f) {
@@ -1255,6 +1287,9 @@ static void ps_finish_event_immediate(const PsEvent *ev, int allow_overlays) {
         ps_ensure_view_mode(ev->view_mode);
         if (g_tour_state == GLR_TOUR_SEEKING)
             glr_ctrl_view_transition_finish_reconstruction();
+        break;
+    case PS_CFG:
+        repl_cfg_set_text(ev->slug, ev->value_str);
         break;
     case PS_KEY:
         ps_type_flush();

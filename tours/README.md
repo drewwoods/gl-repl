@@ -201,6 +201,7 @@ an unintended interaction.
 | Right-drag release | `rightup [point]` | Optionally moves, then releases the right button. |
 | Wheel | `wheel <nonzero-integer>` | Sends a wheel event at the current pointer. `1` and `-1` are the usual directions. |
 | View mode | `view 3d` or `view 2d` | Idempotently selects a view mode. If a change is needed, autoplay waits for the normal animated transition to settle. |
+| Config | `cfg <slug> <value>` | Sets a configuration setting by stable slug and symbolic (or integer) value. |
 | Text | `key <text>` | Sends every character through the normal keyboard handler immediately. |
 | Paced text | `key@<chars-per-second> <text>` | Types the payload on the frame clock, one character at a time. The next untimed step waits for it. |
 | Special key | `skey <name>` | Sends a special GLUT key. See the names below. |
@@ -251,6 +252,26 @@ A line is rejected at load (failing a recording, stopping a tour) when: the
 has no shortcut meaning - type it with `key`); a modifier name is unknown,
 empty, or repeated (`ctrl++shift`, `ctrl+ctrl`); or extra tokens follow the key
 (only a trailing `#` comment is allowed).
+
+### Configuration settings (`cfg`)
+
+`cfg <slug> <value>` overrides or establishes a baseline configuration setting by its stable slug name, accepting either symbolic enum constants or integer state indices:
+
+```text
+cfg vertex_labels OVERLAY_VERTEX_LABEL_OFF   # symbolic enum constant
+cfg overlay_scope OVERLAY_SCOPE_LAST_INSTANCE
+cfg polygon_highlight 1                      # integer state index
+```
+
+To list all authoritative configuration slugs, labels, and state counts:
+
+```bash
+make config-list
+# or:
+./gl-repl --list-config
+```
+
+The script `scripts/check/check-config-slugs.py` validates `@cfg` slugs against `./gl-repl --list-config`.
 
 ### Keyboard text and escapes
 
