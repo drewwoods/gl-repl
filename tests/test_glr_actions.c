@@ -2920,6 +2920,61 @@ static void test_auto_normals_off_strips_generated_rows(void) {
                repl_state_document_count(), doc_with_normals);
 }
 
+static void test_accum_passes_status_strings(void) {
+    ASSERT_STR("accum passes 1 status",
+               glr_actions_accum_passes_status_string(1),
+               "Accum passes: 1");
+    ASSERT_STR("accum passes 2 status (3dfx nod)",
+               glr_actions_accum_passes_status_string(2),
+               "Accum passes: 2 - Voodoo 4 4500 engaged");
+    ASSERT_STR("accum passes 4 status (3dfx nod)",
+               glr_actions_accum_passes_status_string(4),
+               "Accum passes: 4 - Voodoo 5 5500 engaged");
+    ASSERT_STR("accum passes 6 status",
+               glr_actions_accum_passes_status_string(6),
+               "Accum passes: 6");
+    ASSERT_STR("accum passes 8 status (3dfx nod)",
+               glr_actions_accum_passes_status_string(8),
+               "Accum passes: 8 - Voodoo 5 6000 engaged");
+    ASSERT_STR("accum passes 10 status",
+               glr_actions_accum_passes_status_string(10),
+               "Accum passes: 10");
+    ASSERT_STR("accum passes 12 status",
+               glr_actions_accum_passes_status_string(12),
+               "Accum passes: 12");
+    ASSERT_STR("accum passes 14 status",
+               glr_actions_accum_passes_status_string(14),
+               "Accum passes: 14");
+    ASSERT_STR("accum passes 16 status (3dfx nod)",
+               glr_actions_accum_passes_status_string(16),
+               "Accum passes: 16 - Voodoo 5 9000 engaged - feel the breeze");
+
+    /* Verify cycling through GLR_CONFIG_ACCUM_PASSES updates the active status banner */
+    glr_ctrl_reset_all();
+    glr_config_set(GLR_CONFIG_ACCUM_PASSES, 0); /* 1 pass */
+    glr_cfg_cycle_key(GLR_CONFIG_ACCUM_PASSES, +1); /* 2 passes */
+    ASSERT_STR("cycling to 2 passes publishes Voodoo 4 4500",
+               ui_state_status_mut()->text,
+               "Accum passes: 2 - Voodoo 4 4500 engaged");
+
+    glr_cfg_cycle_key(GLR_CONFIG_ACCUM_PASSES, +1); /* 4 passes */
+    ASSERT_STR("cycling to 4 passes publishes Voodoo 5 5500",
+               ui_state_status_mut()->text,
+               "Accum passes: 4 - Voodoo 5 5500 engaged");
+
+    glr_config_set(GLR_CONFIG_ACCUM_PASSES, 3); /* 6 passes */
+    glr_cfg_cycle_key(GLR_CONFIG_ACCUM_PASSES, +1); /* 8 passes */
+    ASSERT_STR("cycling to 8 passes publishes Voodoo 5 6000",
+               ui_state_status_mut()->text,
+               "Accum passes: 8 - Voodoo 5 6000 engaged");
+
+    glr_config_set(GLR_CONFIG_ACCUM_PASSES, 7); /* 14 passes */
+    glr_cfg_cycle_key(GLR_CONFIG_ACCUM_PASSES, +1); /* 16 passes */
+    ASSERT_STR("cycling to 16 passes publishes Voodoo 5 9000 feel the breeze",
+               ui_state_status_mut()->text,
+               "Accum passes: 16 - Voodoo 5 9000 engaged - feel the breeze");
+}
+
 int main(void) {
     /* Before audio init, the actions layer must treat audio as disabled
      * (the --no-audio case): defaults application and the play/pause
@@ -3004,6 +3059,7 @@ int main(void) {
     test_cfg_bridge_resolves_symbolic_names();
     test_cfg_bridge_enforces_backdrop_grid_pair_order();
     test_scene_subset_and_defaults_agree();
+    test_accum_passes_status_strings();
 
     glr_audio_shutdown();
     return test_harness_report(&g_harness, "test_repl_actions");

@@ -3983,27 +3983,37 @@ int main() {
         glr_ctrl_router_handle_accum_samples_key('+');
         ASSERT_INT("accum +: cycle 1->2", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 2);
         ASSERT_INT("accum +: passes = steps[2]", rs->accum_passes, steps[2]);
+        ASSERT_STR("accum +: 4 passes nod status", ui_state_status_mut()->text,
+                   "Accum passes: 4 - Voodoo 5 5500 engaged");
 
         glr_ctrl_router_handle_accum_samples_key('='); /* '=' == '+' w/o shift */
         ASSERT_INT("accum =: cycle 2->3", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 3);
         ASSERT_INT("accum =: passes = steps[3]", rs->accum_passes, steps[3]);
+        ASSERT_STR("accum =: 6 passes status", ui_state_status_mut()->text,
+                   "Accum passes: 6");
 
         /* Decrement steps back down. */
         glr_ctrl_router_handle_accum_samples_key('-');
         ASSERT_INT("accum -: cycle 3->2", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 2);
         ASSERT_INT("accum -: passes = steps[2]", rs->accum_passes, steps[2]);
+        ASSERT_STR("accum -: 4 passes nod status", ui_state_status_mut()->text,
+                   "Accum passes: 4 - Voodoo 5 5500 engaged");
 
         /* Top clamp: last step + Ctrl++ stays there (no wrap). */
         glr_config_set(GLR_CONFIG_ACCUM_PASSES, top);
         glr_ctrl_router_handle_accum_samples_key('+');
         ASSERT_INT("accum +: capped at top", glr_config_get(GLR_CONFIG_ACCUM_PASSES), top);
         ASSERT_INT("accum +: passes = steps[top]", rs->accum_passes, steps[top]);
+        ASSERT_STR("accum +: 16 passes nod status", ui_state_status_mut()->text,
+                   "Accum passes: 16 - Voodoo 5 9000 engaged - feel the breeze");
 
         /* Bottom clamp: index 0 == 1 pass, Ctrl+- stays there (no wrap). */
         glr_config_set(GLR_CONFIG_ACCUM_PASSES, 0);
         glr_ctrl_router_handle_accum_samples_key('-');
         ASSERT_INT("accum -: floored at 1", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 0);
         ASSERT_INT("accum -: passes = 1", rs->accum_passes, 1);
+        ASSERT_STR("accum -: 1 pass status", ui_state_status_mut()->text,
+                   "Accum passes: 1");
 
         /* With the effect Off the fine-adjust is inert (consumed, no change). */
         rs->accum_effect = RENDER3D_ACCUM_EFFECT_OFF;

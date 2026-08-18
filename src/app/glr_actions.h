@@ -119,6 +119,7 @@ enum {
 #define AUDIO_CFG_ALL   1
 
 const char *glr_actions_audio_mode_status_string(int mode);
+const char *glr_actions_accum_passes_status_string(int passes);
 void glr_actions_apply_defaults(void);
 
 /* Install the export-config bridge that lets src/repl/export.c emit/parse

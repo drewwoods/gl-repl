@@ -1004,6 +1004,21 @@ void glr_actions_set_msaa_label(int samples) {
     g_msaa_display_label = msaa_label;
 }
 
+const char *glr_actions_accum_passes_status_string(int passes) {
+    switch (passes) {
+    case 2:  return "Accum passes: 2 - Voodoo 4 4500 engaged";
+    case 4:  return "Accum passes: 4 - Voodoo 5 5500 engaged";
+    case 8:  return "Accum passes: 8 - Voodoo 5 6000 engaged";
+    case 16: return "Accum passes: 16 - Voodoo 5 9000 engaged - feel the breeze";
+    case 1:  return "Accum passes: 1";
+    case 6:  return "Accum passes: 6";
+    case 10: return "Accum passes: 10";
+    case 12: return "Accum passes: 12";
+    case 14: return "Accum passes: 14";
+    default: return "Accum passes";
+    }
+}
+
 const char *glr_actions_audio_mode_status_string(int mode) {
     if (!glr_audio_is_enabled())
         return "Audio: disabled";
@@ -1236,6 +1251,9 @@ void glr_cfg_cycle_row(int row, int delta) {
                  glr_config_item_display_label(item),
                  glr_config_state_name(item->key, new_value));
         repl_set_status(cfg_status_buf);
+    } else if (item->key == GLR_CONFIG_ACCUM_PASSES) {
+        repl_set_status(glr_actions_accum_passes_status_string(
+            glr_state_render().accum_passes));
     } else if (grid_locked) {
         const char *backdrop_name =
             glr_config_state_name(GLR_CONFIG_BACKDROP, locked_backdrop);

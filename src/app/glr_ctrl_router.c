@@ -299,10 +299,7 @@ int glr_ctrl_router_handle_accum_samples_key(unsigned char key) {
         if (next > n - 1) next = n - 1;
         if (next != idx)
             glr_config_set(GLR_CONFIG_ACCUM_PASSES, next);
-        char msg[64];
-        snprintf(msg, sizeof(msg), "Accum passes: %s",
-                 glr_config_state_name(GLR_CONFIG_ACCUM_PASSES, next));
-        repl_set_status(msg);
+        repl_set_status(glr_actions_accum_passes_status_string(rs->accum_passes));
     }
     return 1;
 }
