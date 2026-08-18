@@ -2013,7 +2013,7 @@ TEST_TARGETS = \
 BENCH_TARGETS = \
 	bench bench-csv bench-web bench-web-csv bench-web-gl4es $(BENCH_TARGET_NAMES) \
 	bench-glut-bitmap bench-glut-bitmap-build bench-glut-bitmap-apple \
-	bench-glut-bitmap-freeglut glut-bitmap-freeglut-lib \
+	bench-glut-bitmap-freeglut \
 	bench-code-panel-text bench-code-panel-stencil bench-vertex-labels
 
 MAINTENANCE_TARGETS = \
@@ -2613,31 +2613,15 @@ BENCH_ARGS ?=
 
 # Standalone bitmap-font benchmark.  It intentionally has its own two small
 # binaries instead of joining BENCH_BINS: one links Apple GLUT and the other
-# links a separately configured freeglut, and both need a live macOS window.
-# Override both variables together to benchmark another checkout, for example:
-#   make bench-glut-bitmap \
-#     GLUT_BITMAP_FREEGLUT_SRC=$$HOME/src/freeglut-fork \
-#     GLUT_BITMAP_FREEGLUT_BUILD=build/glut-bitmap-bench/freeglut-fork
+# links freeglut, and both need a live macOS window.
 GLUT_BITMAP_BENCH_DIR := build/glut-bitmap-bench
 GLUT_BITMAP_BENCH_SRC := bench/bench_glut_bitmap.c
 GLUT_BITMAP_APPLE_BIN := $(GLUT_BITMAP_BENCH_DIR)/apple-glut
 GLUT_BITMAP_FREEGLUT_BIN := $(GLUT_BITMAP_BENCH_DIR)/freeglut
-GLUT_BITMAP_FREEGLUT_SRC ?= $(FREEGLUT_SRC)
-GLUT_BITMAP_FREEGLUT_BUILD ?= $(GLUT_BITMAP_BENCH_DIR)/freeglut-build
-GLUT_BITMAP_FREEGLUT_LIB := $(GLUT_BITMAP_FREEGLUT_BUILD)/lib/libglut.a
 GLUT_BITMAP_BENCH_ARGS ?=
 GLUT_BITMAP_BENCH_ARCH ?= $(shell uname -m)
 
 ifeq ($(UNAME_S),Darwin)
-glut-bitmap-freeglut-lib:
-	@mkdir -p $(GLUT_BITMAP_FREEGLUT_BUILD)
-	cmake -S $(GLUT_BITMAP_FREEGLUT_SRC) -B $(GLUT_BITMAP_FREEGLUT_BUILD) \
-	  -DFREEGLUT_COCOA=ON -DFREEGLUT_BUILD_STATIC_LIBS=ON \
-	  -DFREEGLUT_BUILD_SHARED_LIBS=OFF -DFREEGLUT_BUILD_DEMOS=OFF \
-	  -DCMAKE_BUILD_TYPE=Release \
-	  -DCMAKE_OSX_ARCHITECTURES=$(GLUT_BITMAP_BENCH_ARCH)
-	+cmake --build $(GLUT_BITMAP_FREEGLUT_BUILD) --target freeglut_static
-
 $(GLUT_BITMAP_APPLE_BIN): $(GLUT_BITMAP_BENCH_SRC)
 	@mkdir -p $(dir $@)
 	$(CC) -Wall -Wextra -O2 -std=c99 -D_GNU_SOURCE \
@@ -2645,13 +2629,13 @@ $(GLUT_BITMAP_APPLE_BIN): $(GLUT_BITMAP_BENCH_SRC)
 	  -DGL_SILENCE_DEPRECATION -DGLUT_BITMAP_BENCH_APPLE \
 	  $< -framework OpenGL -framework GLUT -o $@
 
-$(GLUT_BITMAP_FREEGLUT_BIN): $(GLUT_BITMAP_BENCH_SRC) glut-bitmap-freeglut-lib
+$(GLUT_BITMAP_FREEGLUT_BIN): $(GLUT_BITMAP_BENCH_SRC) $(FREEGLUT_STATIC_LIB)
 	@mkdir -p $(dir $@)
 	$(CC) -Wall -Wextra -O2 -std=c99 -D_GNU_SOURCE \
 	  -arch $(GLUT_BITMAP_BENCH_ARCH) \
 	  -DGL_SILENCE_DEPRECATION -DFREEGLUT_STATIC \
-	  -I$(GLUT_BITMAP_FREEGLUT_SRC)/include $< \
-	  $(GLUT_BITMAP_FREEGLUT_LIB) -lm -framework IOKit -framework Cocoa \
+	  -I$(FREEGLUT_INCLUDE_DIR) $< \
+	  $(FREEGLUT_STATIC_LIB) -lm -framework IOKit -framework Cocoa \
 	  -framework OpenGL -framework CoreVideo -o $@
 
 bench-glut-bitmap-build: $(GLUT_BITMAP_APPLE_BIN) $(GLUT_BITMAP_FREEGLUT_BIN) ## Build the isolated Apple GLUT/freeglut bitmap-font benchmarks.
@@ -2666,7 +2650,7 @@ bench-glut-bitmap: bench-glut-bitmap-build ## Compare Apple GLUT with freeglut b
 	@echo "==> Apple GLUT"
 	@$(GLUT_BITMAP_APPLE_BIN) $(GLUT_BITMAP_BENCH_ARGS)
 	@echo
-	@echo "==> freeglut ($(GLUT_BITMAP_FREEGLUT_SRC))"
+	@echo "==> freeglut"
 	@$(GLUT_BITMAP_FREEGLUT_BIN) $(GLUT_BITMAP_BENCH_ARGS)
 else
 bench-glut-bitmap-build bench-glut-bitmap-apple bench-glut-bitmap-freeglut bench-glut-bitmap:
