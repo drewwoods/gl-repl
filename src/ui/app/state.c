@@ -82,6 +82,10 @@ static void ui_state_status_history_push(const char *message, int kind) {
             if (last->dup_count < (unsigned int)-1)
                 last->dup_count++;
             last->seq = h->next_seq++;
+            /* A new occurrence after the banner expired is a fresh
+             * event, even if the text collapsed into the same row. */
+            if (kind == UI_STATUS_ERROR)
+                last->unread = 1;
             return;
         }
     }
@@ -100,6 +104,7 @@ static void ui_state_status_history_push(const char *message, int kind) {
     e->kind = kind;
     e->dup_count = 1;
     e->seq = h->next_seq++;
+    e->unread = (kind == UI_STATUS_ERROR);
 
     h->head = (h->head + 1) % UI_STATUS_HISTORY_CAP;
     if (h->count < UI_STATUS_HISTORY_CAP)
@@ -152,12 +157,28 @@ UiStatusHistory ui_state_status_history(void) {
     return g_ui_state.status_history;
 }
 
+/* Opening the list (or clicking the bell either way) is the read
+ * gesture: every live ERROR is acknowledged so the bell can rest. */
+static void ui_state_status_history_mark_read(void) {
+    UiStatusHistory *h = &g_ui_state.status_history;
+    int i;
+
+    for (i = 0; i < h->count; i++) {
+        int idx = ui_status_history_index(h, i);
+        if (idx >= 0)
+            h->entries[idx].unread = 0;
+    }
+}
+
 void ui_state_status_history_set_open(int open) {
     g_ui_state.status_history.open = open ? 1 : 0;
+    if (open)
+        ui_state_status_history_mark_read();
 }
 
 void ui_state_status_history_toggle(void) {
     g_ui_state.status_history.open = !g_ui_state.status_history.open;
+    ui_state_status_history_mark_read();
 }
 
 

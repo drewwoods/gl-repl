@@ -316,8 +316,9 @@ static void status_draw_bell(float cx, float ry, float w, float h,
 
 /* Draw the persistent messages bell + count. While a message is animating
  * the bell glows in the message hue and rings. At rest it stays error-red
- * if any ring entry is an ERROR (so a buried failure remains visible
- * after the banner collapses); otherwise it is muted. */
+ * while an unread ERROR is in the ring (so a buried failure remains
+ * visible after the banner collapses); opening the list marks it read
+ * and the bell returns to muted. */
 static void status_history_render_button(const UiRenderSnapshot *snap,
                                          StatusAnim anim) {
     int bx, by, bw, bh;
@@ -344,14 +345,14 @@ static void status_history_render_button(const UiRenderSnapshot *snap,
     glVertex2f((float)bx + 0.5f, (float)(by + bh) - 0.5f);
     glEnd();
 
-    /* Bell hue: rest muted, or error-red while an ERROR is still in
+    /* Bell hue: rest muted, or error-red while an unread ERROR is in
      * the ring. Warm toward the live message color while it animates
      * (accent for INFO, error red for ERROR), brightened by the pulse. */
     int ry_i = by + (bh - BELL_ICON_H) / 2 + 1;
     cx = (float)(bx + MSGBTN_PAD_X) + BELL_ICON_W * 0.5f;
     ry = (float)ry_i;
     glow = anim.active ? (0.45f + 0.55f * anim.pulse) : 0.0f;
-    hist_err = ui_status_history_has_error(&snap->status_history);
+    hist_err = ui_status_history_has_unread_error(&snap->status_history);
     rest = hist_err ? ui_rgba(UI_TOK_STATUS_ERR_TEXT)
                     : ui_rgba(UI_TOK_TEXT_MUTED);
     {

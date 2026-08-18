@@ -137,6 +137,8 @@ typedef struct {
     int          kind;       /* UiStatusKind */
     unsigned int dup_count;  /* collapsed consecutive duplicates, >= 1 */
     unsigned int seq;        /* monotonic id; larger == newer */
+    int          unread;     /* ERROR starts unread; opening the list
+                              * clears it. INFO / MUSIC stay 0. */
 } UiStatusEntry;
 
 typedef struct {
@@ -162,16 +164,19 @@ static inline int ui_status_history_index(const UiStatusHistory *h, int ordinal)
     return (start + ordinal) % UI_STATUS_HISTORY_CAP;
 }
 
-/* 1 if any live ring entry is UI_STATUS_ERROR. The messages bell uses
- * this so an error stays visible after its banner has collapsed, until
- * the entry is evicted. INFO and MUSIC do not trip it. */
-static inline int ui_status_history_has_error(const UiStatusHistory *h) {
+/* 1 if any live ring entry is an unread UI_STATUS_ERROR. The messages
+ * bell keys its rest color off this so a buried failure stays visible
+ * until the user opens the list (or the entry is evicted). A later
+ * INFO does not clear it; a read error does. */
+static inline int ui_status_history_has_unread_error(const UiStatusHistory *h) {
     int i;
     if (!h)
         return 0;
     for (i = 0; i < h->count; i++) {
         int idx = ui_status_history_index(h, i);
-        if (idx >= 0 && h->entries[idx].kind == UI_STATUS_ERROR)
+        if (idx >= 0 &&
+            h->entries[idx].kind == UI_STATUS_ERROR &&
+            h->entries[idx].unread)
             return 1;
     }
     return 0;

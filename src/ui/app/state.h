@@ -43,7 +43,8 @@ void             ui_state_status_set_music(const char *message);
 
 /* Recent-message history ring (session-only). Every status message is
  * pushed here by the private set-kind chokepoint; the inline viewer's
- * open/closed toggle rides along on the same struct. */
+ * open/closed toggle rides along on the same struct. Opening the list
+ * (set_open(1) or either side of toggle) marks ERROR entries read. */
 UiStatusHistory  ui_state_status_history(void);
 void             ui_state_status_history_set_open(int open);
 void             ui_state_status_history_toggle(void);

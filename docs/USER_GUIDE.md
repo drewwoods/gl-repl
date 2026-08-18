@@ -117,7 +117,8 @@ Top to bottom:
   rows that drive the torus, and the help card for `glutSolidSphere`.
 - **Message line** - the bottom row shows the most recent status message.
   Click the small button at its right end to pop up the recent-message
-  history. The bell stays red while any error is still in that history.
+  history. The bell stays red while that history holds an unread error,
+  and returns to muted once you open the list.
 
 For a guided flythrough of the menus without leaving the app, run the *Menus &
 Examples* entry from the [Tours](#guided-tours) menu.
