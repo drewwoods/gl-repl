@@ -238,7 +238,19 @@ Sets the fog color that distant geometry fades toward. Matching it to the glClea
 
 [command CMD_PUSH_ATTRIB]
 title = glPushAttrib
-Saves the state groups named in the mask onto the attribute stack. OR several GL_*_BIT tokens with | to save more than one group, or use GL_ALL_ATTRIB_BITS for all groups the REPL supports. Restore the saved state later with a matching glPopAttrib, so a local group of state changes does not leak into the rest of the scene. Parking the cursor on the line highlights the earlier setter lines whose values it saves.
+Saves state groups on the stack; restore with glPopAttrib.
+GL_CURRENT_BIT: color, normal, raster pos, edge flag
+GL_POINT_BIT: point size, attenuation, point smooth
+GL_LINE_BIT: line width, stipple pattern & repeat
+GL_POLYGON_BIT: cull/front face, mode, polygon offset
+GL_LIGHTING_BIT: shade/light model, materials, lights
+GL_FOG_BIT: fog mode, density, range, fog color
+GL_DEPTH_BUFFER_BIT: depth func, depth mask, clear depth
+GL_STENCIL_BUFFER_BIT: stencil func, stencil ops, mask, clear
+GL_COLOR_BUFFER_BIT: blend func, color mask, clear color
+GL_TRANSFORM_BIT: clip planes 0-5, GL_NORMALIZE
+GL_ENABLE_BIT: capability enables (GL_BLEND, etc.)
+GL_ALL_ATTRIB_BITS: union of all 11 groups above
 
 [command CMD_POP_ATTRIB]
 title = glPopAttrib
