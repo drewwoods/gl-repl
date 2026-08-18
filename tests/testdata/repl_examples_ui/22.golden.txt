@@ -102,27 +102,27 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);
-  glEnable(GL_DEPTH_TEST);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
   glEnable(GL_COLOR_MATERIAL);
-  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
   glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
   glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
   glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 
+  glEnable(GL_DEPTH_TEST);
   glEnable(GL_LIGHTING);
   glEnable(GL_NORMALIZE);
   glEnable(GL_LIGHT3);
   glEnable(GL_LIGHT2);
   glEnable(GL_LIGHT0);
   glShadeModel(GL_SMOOTH);
-
-  // --- Scene Geometry -----------------
-  // Arrow shape - concave, tessellated with per-vertex color
   glFrontFace(GL_CW);
+  glRotatef(10*t, 0, 0, 1);
+  // Same concave arrow as the previous example, plus a second contour: a
+  // smaller arrow traced inside the first. The tessellator's default odd
+  // winding rule fills a point only when it sits inside an odd number of
+  // contours, so the inner contour punches a hole.
   gluBegin(GLU_POLYGON);
     gluBegin(GLU_CONTOUR);
       gluNormal(0, 0, 1);
@@ -140,6 +140,18 @@ void display(void) {
       gluVertex(0, -1.1, 0);
       gluColor(0.55, 0.3, 1, 1);
       gluVertex(0, -0.45, 0);
+    gluEnd();
+    // Inner contour = the cutout. Grey so the hole edge reads against the
+    // colored face.
+    gluBegin(GLU_CONTOUR);
+      gluColor(0.45, 0.49, 0.58, 1);
+      gluVertex(-0.6, -0.225, 0);
+      gluVertex(-0.6, 0.225, 0);
+      gluVertex(0.2, 0.225, 0);
+      gluVertex(0.2, 0.55, 0);
+      gluVertex(0.85, 0, 0);
+      gluVertex(0.2, -0.55, 0);
+      gluVertex(0.2, -0.225, 0);
     gluEnd();
   gluEnd();
 --- render_state ---

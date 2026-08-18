@@ -100,16 +100,20 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
+
   // Traveling ripple ring: for + fmod + conditional deformation
   // ang is this segment's angle around the ring, named because all three
   // lines below need it; bump is the radial swell inside the ripple arc,
   // applied to x and y alike so the ring bulges outward, not sideways.
+
   static float phase, width, delta, amp, ang, bump, x, y;
   static float n = 400; // ring segment count
 
+  // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+  // --- Scene Geometry -----------------
   amp = 0.1 * sin(t * TAU);
   phase = fmod(t / 3, TAU);
   width = PI / 8;

@@ -1,9 +1,16 @@
-// @cfg vertex_outlines = 0
-// @cfg vertex_points = 0
-// @cfg light_indicators = 1
-// @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_OFF
 // @cfg backdrop = RENDER3D_BACKDROP_STARS
+// @cfg light_indicators = 1
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// --- Description -----------------
+// Dusk lighthouse atoll - a coherent feature tour:
+// One scene, many features: a parametric sea, a tessellated island with a
+// lagoon cutout, a lighthouse of stacked GLUT solids with a sweeping
+// translucent beam, a recursive tree (if / else if / else), GLUT-solid
+// rocks, additive-blended firefly points, and a moon with a halo ring.
+
+// --- Variables -----------------
 // Top-level scratch for the firefly loop at the bottom of the scene: x/y/z
 // vertex position, k/s its polar angle/radius. sea() and island() used to
 // borrow these too; both now name their own function-scoped locals, so
@@ -11,8 +18,9 @@
 static float x, y, z, k, s;
 static float fireflies = 44; // @tune
 static float flyRadius = 2.6; // @tune
-static float c = 3.0; // color scaling factor for sea sheet
+static float c = 3; // color scaling factor for sea sheet
 
+// --- Functions -----------------
 // --- sea(): animated water sheet (nested for + analytic normals) ---
 // Colored by wave height: deep azure troughs lift to bright azure crests.
 sea(half, cells, amp) {
@@ -86,14 +94,14 @@ island(r, lagoon) {
 lighthouse() {
   glPushMatrix();
     // Base rock - cone, apex up
-    glColor3f(0.30, 0.34, 0.42);
+    glColor3f(0.3, 0.34, 0.42);
     glPushMatrix();
       glRotatef(-90, 1, 0, 0);
       glutSolidCone(0.55, 0.5, 18, 3);
     glPopMatrix();
     glTranslatef(0, 0.42, 0);
     // Tapered tower
-    glColor3f(0.90, 0.93, 0.97);
+    glColor3f(0.9, 0.93, 0.97);
     glPushMatrix();
       glRotatef(-90, 1, 0, 0);
       glutSolidCone(0.34, 1.5, 22, 1);
@@ -124,11 +132,11 @@ lighthouse() {
 // --- tree(): recursion with if / else if / else tiered coloring ---
 tree(depth, len, twist) {
   if(depth >= 3) {
-    glColor3f(0.40, 0.36, 0.50);
+    glColor3f(0.4, 0.36, 0.5);
   } else if(depth >= 1) {
     glColor3f(0.50 - 0.03*depth, 0.50, 0.92);
   } else {
-    glColor3f(0.98, 0.74, 0.40);
+    glColor3f(0.98, 0.74, 0.4);
   }
   glLineWidth(depth + 1);
   glBegin(GL_LINES);
@@ -146,13 +154,13 @@ tree(depth, len, twist) {
     glPushMatrix();
       glTranslatef(0, len, 0);
       glRotatef(-29 - 6*cos(twist), 0, 0, 1);
-      glScalef(0.70, 0.70, 0.70);
+      glScalef(0.7, 0.7, 0.7);
       tree(depth - 1, len, twist + 0.3);
     glPopMatrix();
     glPushMatrix();
       glTranslatef(0, len*0.92, 0);
       glRotatef(16 + 5*sin(twist*1.3), 1, 0, 0);
-      glScalef(0.60, 0.60, 0.60);
+      glScalef(0.6, 0.6, 0.6);
       tree(depth - 1, len*0.86, twist + 0.5);
     glPopMatrix();
   } else {
@@ -164,34 +172,29 @@ tree(depth, len, twist) {
     glPopMatrix();
   }
 }
+glTranslatef(0.0000f, 0.0000f, -15.0000f);   // @camera dist
+glRotatef(26.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(-20.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glTranslatef(0.0f, 0.0f, -15.0f);   // @camera dist
-glRotatef(26.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(-20.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-glClearColor(0.05, 0.06, 0.08, 1.0);
+// --- Render State -------------------
+glClearColor(0.05, 0.06, 0.08, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-// ===== Dusk lighthouse atoll - a coherent feature tour =====
-// One scene, many features: a parametric sea, a tessellated island with a
-// lagoon cutout, a lighthouse of stacked GLUT solids with a sweeping
-// translucent beam, a recursive tree (if / else if / else), GLUT-solid
-// rocks, additive-blended firefly points, and a moon with a halo ring.
+
 glEnable(GL_DEPTH_TEST);
+glLineWidth(1);
+
 glEnable(GL_LIGHTING);
 glEnable(GL_NORMALIZE);
 glEnable(GL_LIGHT0);
 glEnable(GL_LIGHT2);
 glEnable(GL_LIGHT3);
-glShadeModel(GL_SMOOTH);
 glEnable(GL_COLOR_MATERIAL);
-glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
 glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
 glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16);
 
-// ===== Scene composition =====
-glLineWidth(1);
-
+// --- Scene Geometry -----------------
 // Sea sheet under everything
 glPushMatrix();
   glTranslatef(0, -0.62, 0);
@@ -221,12 +224,12 @@ glPushMatrix();
   glBegin(GL_TRIANGLES);
     glColor4f(0.98, 0.82, 0.45, 0.55);
     glVertex3f(0, 0, 0);
-    glColor4f(0.98, 0.82, 0.45, 0.0);
+    glColor4f(0.98, 0.82, 0.45, 0);
     glVertex3f(7, -0.5, 0.7);
     glVertex3f(7, 0.5, -0.7);
     glColor4f(0.98, 0.82, 0.45, 0.55);
     glVertex3f(0, 0, 0);
-    glColor4f(0.98, 0.82, 0.45, 0.0);
+    glColor4f(0.98, 0.82, 0.45, 0);
     glVertex3f(-7, 0.5, 0.7);
     glVertex3f(-7, -0.5, -0.7);
   glEnd();
@@ -246,8 +249,8 @@ glPopMatrix();
 for(i, 0, 7) {
   glPushMatrix();
     glRotatef(i*360/7 + 20, 0, 1, 0);
-    glTranslatef(2.0, -0.55, 0);
-    glColor3f(0.28, 0.31, 0.40);
+    glTranslatef(2, -0.55, 0);
+    glColor3f(0.28, 0.31, 0.4);
     glScalef(1, 0.55, 1);
     glutSolidSphere(0.16 + 0.07*rand(i, 7), 8, 6);
   glPopMatrix();
@@ -278,7 +281,7 @@ glEnable(GL_LIGHTING);
 
 // Moon with a violet halo ring, parked in the sky
 glPushMatrix();
-  glTranslatef(-3.6, 3.0, -2.0);
+  glTranslatef(-3.6, 3, -2);
   glDisable(GL_LIGHTING);
   glColor3f(0.92, 0.95, 0.98);
   glutSolidSphere(0.55, 22, 16);

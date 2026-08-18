@@ -9,10 +9,10 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_XZRULER */
+/* @cfg grid = GRID_THEME_CLASSIC */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
-/* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
+/* @cfg grid_brightness = GRID_BRIGHTNESS_DIM */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
@@ -29,8 +29,8 @@
 /* @cfg overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE */
 /* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF */
 /* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED */
-/* @cfg vertex_points = 1 */
-/* @cfg vertex_outlines = 1 */
+/* @cfg vertex_points = 0 */
+/* @cfg vertex_outlines = 0 */
 /* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */
 /* @cfg normal_vectors = 0 */
 /* @cfg polygon_highlight = 1 */
@@ -46,6 +46,8 @@
 /* @cfg paren_scope = 1 */
 /* @cfg audio = -1 */
 --- header_pre ---
+#define y0 _y0
+#define y1 _y1
 #include <stddef.h>
 #if defined(__APPLE__)
 #include <OpenGL/gl.h>
@@ -60,6 +62,8 @@
 #endif
 #include <math.h>
 #include <stdlib.h>
+#undef y0
+#undef y1
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -93,42 +97,51 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
+  glTranslatef(0.0000f, 0.0000f, -5.0000f);   // @camera dist
   glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(35.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float R = 2; // major radius (ring center to tube center)
-  static float r = 1; // minor radius (tube thickness)
-  static float n = 20; // @config segment count around both u and v
-  static float u, v, s; // current major/minor angles, color mix factor
-  static float tr; // tube-offset radius R + r*cos(v), read twice per vertex line
+  static float size = 3; // surface width and depth @tune
+  static float steps = 15; // strips across the surface @tune
+  static float amplitude = 0.4; // wave height @tune
+  static float frequency = 2.5; // wave density @tune
+  static float z_phase = 0.7; // z waves animate more slowly @tune
+  static float step_size;
+  static float half;
+  static float x0, x1, z, y0, y1;
+  static float color0, color1;
 
+
+  // Animated surface built from one triangle strip per x step.
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
   glEnable(GL_DEPTH_TEST);
-  // Flat vertex-colored torus (no lighting): GL_SMOOTH still Gouraud-
-  // interpolates the per-vertex glColor gradient across each quad.
-  glShadeModel(GL_SMOOTH);
-  n = floor(n); // keep n an integer
-  n = clamp(n, 3, 20); // clamp to avoid exceeding cmd limit
-  for(i, 0, n) {
-    glBegin(GL_QUAD_STRIP);
-      for(j, 0, n+1) {
-        // step v across the tube; emit two vertices, one at u=i and one at u=i+1
-        v = j*TAU/n;
-        tr = R + r*cos(v); // tube offset is the same for both vertices below
-        u = i*TAU/n;
-        s = 0.5 + 0.5 * sin(u + v);
-        glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
-        glVertex3f(tr*cos(u), tr*sin(u), r*sin(v));
-        u = (i+1)*TAU/n;
-        s = 0.5 + 0.5 * sin(u + v);
-        glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
-        glVertex3f(tr*cos(u), tr*sin(u), r*sin(v));
+
+  step_size = size / steps;
+  half = size * 0.5;
+
+  for(i, 0, steps) {
+    x0 = -half + i * step_size;
+    x1 = x0 + step_size;
+
+    glBegin(GL_TRIANGLE_STRIP);
+      for(j, 0, steps + 1) {
+        z = -half + j * step_size;
+
+        y0 = amplitude * sin(x0 * frequency + t) * cos(z * frequency + z_phase * t);
+        y1 = amplitude * sin(x1 * frequency + t) * cos(z * frequency + z_phase * t);
+
+        // Emit the high-x edge first so the upward-facing triangles are CCW.
+        color1 = 0.5 + 0.5 * y1 / amplitude;
+        glColor3f(1 - 0.85 * color1, 0.35 + 0.2 * color1, 0.2 + 0.8 * color1); // CORAL -> AZURE
+        glVertex3f(x1, y1, z);
+
+        color0 = 0.5 + 0.5 * y0 / amplitude;
+        glColor3f(1 - 0.85 * color0, 0.35 + 0.2 * color0, 0.2 + 0.8 * color0); // CORAL -> AZURE
+        glVertex3f(x0, y0, z);
       }
     glEnd();
   }

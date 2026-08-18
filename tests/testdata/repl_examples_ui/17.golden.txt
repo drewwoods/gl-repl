@@ -9,7 +9,7 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_CLASSIC */
+/* @cfg grid = GRID_THEME_XZRULER */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
@@ -27,7 +27,7 @@
 /* @cfg call_depth_tint = 0 */
 /* @cfg auto_normals = REPL_AUTONORMAL_OFF */
 /* @cfg overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE */
-/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF */
 /* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED */
 /* @cfg vertex_points = 1 */
 /* @cfg vertex_outlines = 1 */
@@ -93,59 +93,45 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -5.5000f);   // @camera dist
-  glRotatef(18.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(32.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
+  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(35.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  // camera
-  // eye: 0.000 1.600 3.800
-  // target: 0.000 1.100 0.000
-  // up: 0.000 1.000 0.000
-  // fov: 45.000
-  //
-  // Recursive call-tree debug trace. Each nested branch() call emits a
-  // console() message showing depth, segment length, and bend angle. The
-  // Console panel auto-indents each line by call depth, providing a live
-  // hierarchical trace of the recursion alongside the 3D geometry.
-  static float levels = 3; // @tune
-  static float len = 1.1; // @tune
-  static float spread = 28; // @tune
-  static float decay = 0.72; // @tune
+  static float R = 2; // major radius (ring center to tube center)
+  static float r = 1; // minor radius (tube thickness)
+  static float n = 20; // @config segment count around both u and v
+  static float u, v, s; // current major/minor angles, color mix factor
+  static float tr; // tube-offset radius R + r*cos(v), read twice per vertex line
 
-  branch(depth, length, angle) {
-    float sway, r, g, b;
-    console("branch depth=%f len=%f angle=%f", depth, length, angle);
-    glPushMatrix();
-      glRotatef(angle, 0, 0, 1);
-      glRotatef(angle * 0.4 + sin(t + depth) * 10, 0, 1, 0);
-      r = 0.25 + (3 - depth) * 0.22;
-      g = 0.85 - (3 - depth) * 0.15;
-      b = 0.95 - (3 - depth) * 0.20;
-      glColor3f(r, g, b);
-      glBegin(GL_LINES);
-        glVertex3f(0, 0, 0);
-        glVertex3f(0, length, 0);
-      glEnd();
-      glTranslatef(0, length, 0);
-      if(depth > 0) {
-        sway = sin(t * 1.5 + depth) * 6;
-        branch(depth - 1, length * decay, spread + sway);
-        branch(depth - 1, length * decay, -spread - sway);
-      }
-      if(depth <= 0) {
-        glColor3f(1, 0.85, 0.15);
-        glutSolidSphere(0.06, 6, 4);
-      }
-    glPopMatrix();
-  }
-
+  glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glLineWidth(2.2);
-  console("=== root t=%f levels=%f len=%f ===", t, levels, len);
-  branch(levels, len, 0);
+
+  glEnable(GL_DEPTH_TEST);
+  // Flat vertex-colored torus (no lighting): GL_SMOOTH still Gouraud-
+  // interpolates the per-vertex glColor gradient across each quad.
+  glShadeModel(GL_SMOOTH);
+  n = floor(n); // keep n an integer
+  n = clamp(n, 3, 20); // clamp to avoid exceeding cmd limit
+  for(i, 0, n) {
+    glBegin(GL_QUAD_STRIP);
+      for(j, 0, n+1) {
+        // step v across the tube; emit two vertices, one at u=i and one at u=i+1
+        v = j*TAU/n;
+        tr = R + r*cos(v); // tube offset is the same for both vertices below
+        u = i*TAU/n;
+        s = 0.5 + 0.5 * sin(u + v);
+        glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
+        glVertex3f(tr*cos(u), tr*sin(u), r*sin(v));
+        u = (i+1)*TAU/n;
+        s = 0.5 + 0.5 * sin(u + v);
+        glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
+        glVertex3f(tr*cos(u), tr*sin(u), r*sin(v));
+      }
+    glEnd();
+  }
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);

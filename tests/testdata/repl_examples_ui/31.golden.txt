@@ -9,13 +9,13 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_CLASSIC */
+/* @cfg grid = GRID_THEME_OFF */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
-/* @cfg grid_brightness = GRID_BRIGHTNESS_DIM */
+/* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
-/* @cfg light_theme = LIGHT_THEME_HEADLIGHT */
+/* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg light_indicators = 0 */
 /* @cfg view_mode = RENDER3D_VIEW_3D */
 /* @cfg projection = PROJ_PERSPECTIVE */
@@ -87,114 +87,157 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
-
-static GLfloat *repl_glfloat16(GLfloat m0, GLfloat m1, GLfloat m2, GLfloat m3,
-                   GLfloat m4, GLfloat m5, GLfloat m6, GLfloat m7,
-                   GLfloat m8, GLfloat m9, GLfloat m10, GLfloat m11,
-                   GLfloat m12, GLfloat m13, GLfloat m14, GLfloat m15) {
-  static GLfloat repl_glfloat16_buf[16];
-  repl_glfloat16_buf[0] = m0;   repl_glfloat16_buf[1] = m1;
-  repl_glfloat16_buf[2] = m2;   repl_glfloat16_buf[3] = m3;
-  repl_glfloat16_buf[4] = m4;   repl_glfloat16_buf[5] = m5;
-  repl_glfloat16_buf[6] = m6;   repl_glfloat16_buf[7] = m7;
-  repl_glfloat16_buf[8] = m8;   repl_glfloat16_buf[9] = m9;
-  repl_glfloat16_buf[10] = m10; repl_glfloat16_buf[11] = m11;
-  repl_glfloat16_buf[12] = m12; repl_glfloat16_buf[13] = m13;
-  repl_glfloat16_buf[14] = m14; repl_glfloat16_buf[15] = m15;
-  return repl_glfloat16_buf;
-}
 --- display_header ---
 void display(void) {
   glLoadIdentity();
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
-  // Eye-space light positions, set before the camera transform.
-  glLightfv(GL_LIGHT0, GL_POSITION, repl_glfloat4(0, 0, -1, 1));
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -7.9000f);   // @camera dist
-  glRotatef(24.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(-28.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -1.1500f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -7.5000f);   // @camera dist
+  glRotatef(4.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, 0.7000f, -0.0000f);   // @camera pan
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float lx, ly, lz; // orbiting lamp position, read by the matrix and the marker
+  static float pulse, bellR, bellH; // breath phase; bell radius/height pulse in opposition
+  static float ang, rad, topY; // frill scratch: segment angle, rim radius, rim height (tentacle() hangs off topY)
+  static float sway; // rim/tentacle sway -- read both at top level (frill) and inside tentacle()
+  static float segs = 26; // bell azimuth segments
+  static float rings = 9; // bell latitude strips
+  static float tentacles = 15; // @tune
+  static float tentLen = 2.4; // @tune
+  static float marineSnow = 110; // @tune
 
-  // The caster, drawn twice: once squashed by the shadow matrix, once for
-  // real. One definition means the two can never drift apart.
-  caster() {
-    glPushMatrix();
-      glTranslatef(0, 1.05, 0);
-      glRotatef(26*t, 0, 1, 0);
-      glutSolidTeapot(0.62);
-    glPopMatrix();
+  // bell: latitude strips from crown to just past the equator (it curls
+  // under). Everything except the alpha ripple depends only on the latitude
+  // index i, so the whole ring -- geometry AND color -- is hoisted out of the
+  // segment loop into function-scoped locals. u0/u1 are the two rows'
+  // normalized latitudes, computed once instead of six times per vertex pair,
+  // and ca/sa are the segment direction shared by both rows.
+  bellStrips(segs, rings, r, h) {
+    float phi0, phi1, radT, radB, yT, yB;
+    float u0, u1, a, ca, sa;
+    float rT, gT, aT, rB, gB, aB;
+    for(i, 0, rings) {
+      u0 = i/rings;
+      u1 = (i + 1)/rings;
+      phi0 = u0*PI*0.52;
+      phi1 = u1*PI*0.52;
+      radT = r*sin(phi0);
+      yT = h*cos(phi0);
+      radB = r*sin(phi1);
+      yB = h*cos(phi1);
+      rT = 0.10 + 0.30*u0;
+      gT = 0.35 + 0.45*u0;
+      aT = 0.05 + 0.20*u0*u0;
+      rB = 0.10 + 0.30*u1;
+      gB = 0.35 + 0.45*u1;
+      aB = 0.05 + 0.20*u1*u1;
+      glBegin(GL_TRIANGLE_STRIP);
+        for(j, 0, segs+1) {
+          a = j*TAU/segs;
+          ca = cos(a);
+          sa = sin(a);
+          glColor4f(rT, gT, 0.95, aT + 0.04*sin(a*6 - t*2));
+          glVertex3f(radT*ca, yT, radT*sa);
+          glColor4f(rB, gB, 0.95, aB + 0.04*sin(a*6 - t*2));
+          glVertex3f(radB*ca, yB, radB*sa);
+        }
+      glEnd();
+    }
   }
 
-  // Translate, rotate and scale cannot flatten a solid onto a plane -- that
-  // takes a matrix of their own. glMultMatrixf posts one onto the modelview
-  // stack: 16 column-major cells, either inline as below or read from a
-  // scratch array with glMultMatrixf(A).
-  //
-  // These cells are the classic planar shadow projection for the ground
-  // plane y = 0 and a point light at (lx, ly, lz). It maps every point to
-  // where the ray from the lamp through it crosses the floor, so drawing
-  // the SAME geometry under it draws the object's shadow. Cells are
-  // ordinary expressions, re-evaluated every frame, so moving the lamp
-  // moves the shadow -- no rebuild of the caster.
+  // one tentacle: a swaying line strip; alpha fades toward the tip and the
+  // pulse tugs the strand upward (the drop*drop term makes tips lag the bell)
+  tentacle(angAt, attach, len, phase, amp, cr, cg, cb) {
+    float ax, az, drop;
+    ax = cos(angAt)*attach;
+    az = sin(angAt)*attach;
+    glBegin(GL_LINE_STRIP);
+      for(s, 0, 14) {
+        drop = s/13;
+        sway = amp*(sin(t*1.4 + phase + drop*3.5) + 0.4*sin(t*2.3 + phase*1.7 + drop*6))*drop;
+        glColor4f(cr, cg, cb, 0.04 + 0.40*(1 - drop)*(1 - drop));
+        glVertex3f(ax*(1 + 0.2*drop) + sway, topY - drop*len + 0.15*pulse*drop*drop, az*(1 + 0.2*drop) + sway*0.55);
+      }
+    glEnd();
+  }
 
-  glClearColor(0.05, 0.06, 0.08, 1);
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_LIGHTING);
-  glEnable(GL_LIGHT0);
-  glEnable(GL_NORMALIZE);
-  glShadeModel(GL_SMOOTH);
-  glEnable(GL_COLOR_MATERIAL);
-  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  // Everything glows: additive blend with depth WRITES off (reads stay on).
+  // glDepthMask(GL_FALSE) is the classic translucency trick - without it the
+  // bell's far side would z-fight its near side and the tentacles would
+  // punch holes through the bell.
+  glClearColor(0.015, 0.03, 0.07, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  lx = 2.4*cos(0.5*t);
-  ly = 3.4;
-  lz = 2.4*sin(0.5*t);
+  glDisable(GL_LIGHTING);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glEnable(GL_LINE_SMOOTH);
+  glEnable(GL_POINT_SMOOTH);
+  glDepthMask(GL_FALSE);
+  pulse = sin(t*1.6);
+  bellR = 1.5*(1 + 0.10*pulse);
+  bellH = 1.1*(1 - 0.14*pulse);
 
-  // Floor first, so the shadow has something to land on.
-  glColor3f(0.92, 0.95, 0.98);
-  glBegin(GL_QUADS);
-    glNormal3f(0, 1, 0);
-    glVertex3f(-3.5, 0, -3.5);
-    glVertex3f(-3.5, 0, 3.5);
-    glVertex3f(3.5, 0, 3.5);
-    glVertex3f(3.5, 0, -3.5);
+  // marine snow: slow upward drift, wrapped with rem() so the field loops
+  glPointSize(7);
+  glBegin(GL_POINTS);
+    for(p, 0, marineSnow) {
+      glColor4f(0.55, 0.75, 0.95, 0.08 + 0.22*rand(p, 4));
+      // rise speed 0.15..0.5 per mote; rem() wraps y into [-3.2, 3.2]
+      glVertex3f(4.5*rand2(p, 0) + 0.2*sin(t*0.4 + p), rem(3.2*rand2(p, 1) + t*(0.15 + 0.35*rand(p, 3)), 6.4), 4.5*rand2(p, 2));
+    }
   glEnd();
 
-  // Shadow pass. The projection is singular -- it collapses y to 0 -- so
-  // the result lands exactly on the floor and would z-fight it. Painting
-  // with the depth test off and depth writes masked settles that: the
-  // shadow covers the floor it follows, and the lit pass below still
-  // draws over the shadow.
-  glDisable(GL_DEPTH_TEST);
-  glDepthMask(GL_FALSE);
-  glDisable(GL_LIGHTING);
-  glColor3f(0.05, 0.06, 0.08);
-  glPushMatrix();
-    glMultMatrixf((GLfloat[]){ly, 0, 0, 0, -lx, 0, -lz, -1, 0, 0, ly, 0, 0, 0, 0, ly});
-    caster();
-  glPopMatrix();
-  glEnable(GL_LIGHTING);
+  // gentle bob + tilt for the whole animal
+  glTranslatef(0.2*sin(t*0.4), 0.18*sin(t*0.5), 0);
+  glRotatef(8*sin(t*0.23), 0, 0, 1);
+  // segs/rings shadow the globals of the same name on purpose: the func takes
+  // what it needs as arguments, so it reads without looking outward.
+  bellStrips(segs, rings, bellR, bellH);
+
+  // scalloped frill hanging off the rim
+  rad = bellR*sin(PI*0.52);
+  topY = bellH*cos(PI*0.52);
+  glBegin(GL_TRIANGLE_STRIP);
+    for(j, 0, segs+1) {
+      ang = j*TAU/segs;
+      sway = -0.18 - 0.10*pulse + 0.10*sin(ang*9 + t*2.6);
+      glColor4f(0.45, 0.85, 1, 0.3);
+      glVertex3f(rad*cos(ang), topY, rad*sin(ang));
+      glColor4f(0.45, 0.85, 1, 0.03);
+      glVertex3f(rad*1.04*cos(ang), topY + sway, rad*1.04*sin(ang));
+    }
+  glEnd();
+  glLineWidth(1.6);
+  for(k, 0, tentacles) {
+    tentacle(k*TAU/tentacles + 0.2*rand2(k, 1), bellR*0.85, tentLen*(0.75 + 0.5*rand(k, 2)), rand(k, 3)*TAU, 0.3, 0.35, 0.75, 1.0);
+  }
+  // four thicker oral arms under the crown
+  glLineWidth(3.2);
+  for(k, 0, 4) {
+    tentacle(k*TAU/4 + 0.4, bellR*0.3, tentLen*1.2, k*1.7, 0.55, 1.0, 0.45, 0.75);
+  }
+  glLineWidth(1);
+
+  // bioluminescent core: two stacked soft points
+  glPointSize(30);
+  glBegin(GL_POINTS);
+    glColor4f(1, 0.55, 0.75, 0.3);
+    glVertex3f(0, bellH*0.3, 0);
+  glEnd();
+  glPointSize(13);
+  glBegin(GL_POINTS);
+    glColor4f(1, 0.8, 0.9, 0.55);
+    glVertex3f(0, bellH*0.32, 0);
+  glEnd();
+
+  // leave shared GL state the way we found it
   glDepthMask(GL_TRUE);
-  glEnable(GL_DEPTH_TEST);
-
-  // The caster itself, in the frame the shadow was cast from.
-  glColor3f(1, 0.35, 0.2);
-  caster();
-
-  // The lamp, so the sweep of the shadow reads as a light moving.
-  glDisable(GL_LIGHTING);
-  glColor3f(1, 0.85, 0.15);
-  glPushMatrix();
-    glTranslatef(lx, ly, lz);
-    glutSolidSphere(0.13, 12, 10);
-  glPopMatrix();
-  glEnable(GL_LIGHTING);
+  glDisable(GL_BLEND);
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
