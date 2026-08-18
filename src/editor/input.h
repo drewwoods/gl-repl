@@ -138,6 +138,10 @@ int editor_input_code_panel_hidden(void);
  * glr_ctrl.c. */
 void editor_input_code_panel_scroll(int direction);
 
+/* Autocomplete popup wheel scroll: steps the selected match index by delta
+ * and adjusts the scroll window without wrapping at the ends. */
+void editor_input_autocomplete_scroll_by(int delta);
+
 /* Move the active edit-line cursor to a source line and sync the input buffer
  * to that line's text. */
 void editor_navigate_to_line(int target);

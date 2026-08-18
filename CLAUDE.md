@@ -284,7 +284,7 @@ authority; don't re-derive a file's job from its name.
 | **src/app/** | Frame-time controller: display/reshape/init-GL, input routing, config, camera, audio, PLY export, profiling. See [`src/app/README.md`](src/app/README.md) |
 | **src/app/boot/** | Startup lifecycle - pre/without frame loop, reached only from [`gl_repl.c`](gl_repl.c). CLI parsing, `--dump-*`, init trace, capture env, frame pacer, splash. **Guard `check-app-boot-band`: the controller must not include these.** |
 | **src/repl/** | Language pipeline: parse → compile → apply → flatten → execute, plus specs, eval, scenes, export/import, tutorials. See `src/repl/ARCHITECTURE.md` |
-| **src/editor/** | Text document: key dispatch, commit transaction, [`EditorState`](src/editor/state.h#L199), clipboard/undo/search/replace. `edit_ops.{c,h}` stays REPL-free (`check-edit-ops-pure`) |
+| **src/editor/** | Text document: key dispatch, commit transaction, [`EditorState`](src/editor/state.h#L200), clipboard/undo/search/replace. `edit_ops.{c,h}` stays REPL-free (`check-edit-ops-pure`) |
 | **src/subsystems/** | Editor/UI-independent peers: `replay/`, `tutorial/`, `color_picker/`, `variable_panel/`, `edit_overlays/` |
 | **src/render3d/** | 3D scene renderer - **no REPL dependency** (proof: `render3d_demo`). Grid/axes/backdrop/lights/overlays/depth-viz/guides |
 | **src/ui/** | 2D view rendering + hit-test, **pure over snapshots**. `core/` primitives, `app/` panels + menus + layout, `subsystems/` peer renderers, `support/` prof panels |
@@ -360,7 +360,7 @@ follows is the trip-wire list.
 
 ### Frame & rendering
 
-[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L296) drives each frame: rebuild autonormals + flat
+[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L299) drives each frame: rebuild autonormals + flat
 program if dirty → build [`Render3dRenderConfig`](src/render3d/render_types.h#L139) → clear chrome + load camera
 + scissor (all **controller** policy - render3d owns no camera type, sets no
 scissor, clears no color/depth) → [`render3d_draw_scene()`](src/render3d/render.h#L139) (projection → user
@@ -399,7 +399,7 @@ frame baseline so accumulating programs don't compound.
 
 ### Two-level command model
 
-Source `GLCmd[]` (per-line canonical **text lives in [`EditorState`](src/editor/state.h#L199)'s editor
+Source `GLCmd[]` (per-line canonical **text lives in [`EditorState`](src/editor/state.h#L200)'s editor
 buffer, not on [`GLCmd`](src/repl/command.h#L127)**) → flat array (loops unrolled, funcs inlined, ifs
 resolved; each flat cmd records `src_cmd_idx` / `call_src_cmd_idx` /
 `func_scope_mask`) → executor emits GL. Any edit marks the flat array dirty;
@@ -411,7 +411,7 @@ execute-time re-eval.
 
 - **Interactive `;` key**: the input buffer does **not** contain the `;` -
   handlers must accept input without a trailing `;`.
-- **Bulk line feeding**: [`editor_feed_line()`](src/editor/input.h#L196)
+- **Bulk line feeding**: [`editor_feed_line()`](src/editor/input.h#L200)
   (clipboard paste, tests, editor-side loaders) and
   [`repl_load_apply_line()`](src/repl/load.h#L78) (file import, catalog load,
   replace - the pipeline TUs' twin) both receive the full line *including* `;`.
@@ -419,7 +419,7 @@ execute-time re-eval.
   `editor_feed_line()` runs `editor_try_commit_any()`, while
   `repl_load_apply_line()` runs `repl_compile_dispatch()`. Adding a structured
   form to one wrapper does not add it to the other.
-- Enter may or may not have `;`. [`editor_load_line_to_input()`](src/editor/input.h#L189) strips the
+- Enter may or may not have `;`. [`editor_load_line_to_input()`](src/editor/input.h#L193) strips the
   trailing `;`, so re-committing an existing line takes the no-semicolon
   path - handlers checking for `;` must also accept end-of-string.
 
@@ -673,7 +673,7 @@ aliases (candidate text materialized in glr_completion.c statics, filtered to
 slots with a live `CMD_FUNC_DEF` - alias names outlive deleted defs). Param
 hints resolve the callee through `repl_scan_func_name_token`, so `funcN(` and
 `drawCube(` behave alike. Search: Ctrl+F, state via
-[`editor_state_search()`](src/editor/state.h#L427).
+[`editor_state_search()`](src/editor/state.h#L428).
 
 ### Find / replace
 

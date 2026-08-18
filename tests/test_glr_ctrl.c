@@ -282,7 +282,11 @@ void test_replay_ui_hud_render(const struct UiRenderSnapshot *snap) {
 
 void test_ui_panels_render_code_panel(const UiRenderSnapshot *snap,
                                       UiCodePanelOutput *out) {
-    (void)snap; (void)out;
+    if (out) {
+        out->cursor_px = 100;
+        out->cursor_py = snap && snap->viewport.window_h > 0 ? snap->viewport.window_h - 100 : 400;
+        out->cursor_valid = 1;
+    }
 }
 void test_ui_autocomplete_panel_render(const UiRenderSnapshot *snap,
                                        int cursor_px, int cursor_py) {
@@ -7627,6 +7631,130 @@ static void test_depth_snapshot_stale_across_document_replacement(void) {
                glr_ctrl_depth_snapshot_view().valid, 1);
 }
 
+static void test_autocomplete_wheel_routing(void) {
+    printf("--- autocomplete popup wheel routing ---\n");
+    prepare_display_fixture();
+    glr_ctrl_reset_all();
+    glr_ctrl_reshape(800, 600);
+    ui_state_code_panel_mut()->panel_frac = 0.45f;
+    ui_state_code_panel_mut()->layout_mode = CODE_PANEL_LAYOUT_LEFT;
+
+    /* Add dummy lines so the editor has document content to scroll */
+    for (int i = 0; i < 20; i++) {
+        editor_feed_line("// comment line");
+    }
+    ASSERT_INT("document has 20 lines", repl_state_document_count(), 20);
+
+    /* 1. Set input text to trigger 12 glPushAttrib matches */
+    editor_load_line_to_input(0);
+    strcpy(editor_state_input_mut()->input, "glPushAttrib(GL_");
+    editor_state_input_mut()->input_len = (int)strlen(editor_state_input().input);
+    editor_state_input_mut()->cursor_pos = editor_state_input().input_len;
+    editor_completion_update();
+
+    ASSERT_INT("match_count is 12", editor_state_autocomplete()->match_count, 12);
+    ASSERT_INT("initial selected_idx is 0", editor_state_autocomplete()->selected_idx, 0);
+    ASSERT_INT("initial scroll_top is 0", editor_state_autocomplete()->scroll_top, 0);
+
+    /* Render frame to calculate and cache cursor anchor */
+    glr_ctrl_display_frame();
+
+    /* Find coordinates inside the popup */
+    int win_h = ui_state_viewport().window_h;
+    int pop_mx = 0;
+    int pop_my = 0;
+    int found_hit = 0;
+    for (int y = 10; y < win_h && !found_hit; y += 10) {
+        for (int x = 10; x < 400 && !found_hit; x += 10) {
+            if (glr_ctrl_autocomplete_popup_hit_test(x, y)) {
+                pop_mx = x;
+                pop_my = y;
+                found_hit = 1;
+            }
+        }
+    }
+    ASSERT_TRUE("found hit-test coordinates on popup", found_hit);
+    ASSERT_TRUE("popup hit-test succeeds at (pop_mx, pop_my)",
+                glr_ctrl_autocomplete_popup_hit_test(pop_mx, pop_my));
+
+    int base_scroll = editor_scroll();
+
+    /* 2. Wheel inside popup changes selection and does NOT scroll editor */
+    glr_ctrl_mousewheel(0, -1, pop_mx, pop_my);
+    ASSERT_INT("wheel +1 inside popup moves selected_idx to 1",
+               editor_state_autocomplete()->selected_idx, 1);
+    ASSERT_INT("wheel inside popup preserves editor_scroll",
+               editor_scroll(), base_scroll);
+
+    /* Scroll down to the end */
+    glr_ctrl_mousewheel(0, -15, pop_mx, pop_my);
+    ASSERT_INT("wheel to end clamps selected_idx to 11",
+               editor_state_autocomplete()->selected_idx, 11);
+    ASSERT_INT("wheel to end advances scroll_top to 2",
+               editor_state_autocomplete()->scroll_top, 2);
+    ASSERT_INT("editor_scroll still unchanged",
+               editor_scroll(), base_scroll);
+
+    /* 3. Wheel outside popup (over code panel) scrolls code panel */
+    int cpx, cpy, cpw, cph;
+    ui_layout_code_panel_rect(&cpx, &cpy, &cpw, &cph);
+    int outside_x = cpx + 20;
+    int outside_y = win_h - (cpy + 20);
+    if (glr_ctrl_autocomplete_popup_hit_test(outside_x, outside_y)) {
+        outside_y = win_h - (cpy + cph - 20);
+    }
+    ASSERT_TRUE("outside coord is not on popup",
+                !glr_ctrl_autocomplete_popup_hit_test(outside_x, outside_y));
+    ASSERT_TRUE("outside coord is on code panel",
+                editor_input_point_in_code_panel(outside_x, outside_y));
+
+    glr_ctrl_mousewheel(0, -2, outside_x, outside_y);
+    ASSERT_INT("wheel outside popup scrolls editor",
+               editor_scroll(), base_scroll + 2);
+    ASSERT_INT("wheel outside popup leaves autocomplete selected_idx intact",
+               editor_state_autocomplete()->selected_idx, 11);
+
+    /* 4. Non-scrollable popup (<= 10 matches) consumes wheel without wrapping */
+    strcpy(editor_state_input_mut()->input, "glBegin(gl_tri");
+    editor_state_input_mut()->input_len = (int)strlen(editor_state_input().input);
+    editor_state_input_mut()->cursor_pos = editor_state_input().input_len;
+    editor_completion_update();
+    ASSERT_INT("glBegin(gl_tri has 3 matches",
+               editor_state_autocomplete()->match_count, 3);
+    glr_ctrl_display_frame();
+
+    int short_pop_mx = 0;
+    int short_pop_my = 0;
+    int found_short_hit = 0;
+    for (int y = 10; y < win_h && !found_short_hit; y += 10) {
+        for (int x = 10; x < 400 && !found_short_hit; x += 10) {
+            if (glr_ctrl_autocomplete_popup_hit_test(x, y)) {
+                short_pop_mx = x;
+                short_pop_my = y;
+                found_short_hit = 1;
+            }
+        }
+    }
+    ASSERT_TRUE("found hit-test coordinates on short popup", found_short_hit);
+
+    int scroll_before = editor_scroll();
+    /* Scroll down */
+    glr_ctrl_mousewheel(0, -1, short_pop_mx, short_pop_my);
+    ASSERT_INT("short popup selects item 1",
+               editor_state_autocomplete()->selected_idx, 1);
+    ASSERT_INT("short popup preserves scroll_top 0",
+               editor_state_autocomplete()->scroll_top, 0);
+    ASSERT_INT("short popup consumes wheel (no editor scroll)",
+               editor_scroll(), scroll_before);
+
+    /* Scroll down again: clamps at index 2 without wrap */
+    glr_ctrl_mousewheel(0, -5, short_pop_mx, short_pop_my);
+    ASSERT_INT("short popup clamps at item 2",
+               editor_state_autocomplete()->selected_idx, 2);
+    ASSERT_INT("short popup still preserves editor scroll",
+               editor_scroll(), scroll_before);
+}
+
 int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
@@ -7736,6 +7864,7 @@ int main(void) {
     test_depth_snapshot_failed_read();
     test_depth_snapshot_uses_scene_rect();
     test_depth_snapshot_stale_across_document_replacement();
+    test_autocomplete_wheel_routing();
 
     printf("\n");
     return test_harness_report(&g_harness, "test_imrepl_ctrl");

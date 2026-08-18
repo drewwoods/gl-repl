@@ -2628,6 +2628,9 @@ static void route_wheel(int x, int y, int delta) {
                 (void)ui_menu_bar_handle_wheel_scroll(x, y, delta);
         } else if (glr_ctrl_router_handle_gl_state_popup_wheel(x, y, delta)) {
             /* Consumed by the OpenGL-state popup under the pointer. */
+        } else if (glr_ctrl_autocomplete_popup_hit_test(x, y)) {
+            /* Consumed by the autocomplete popup under the pointer. */
+            editor_input_autocomplete_scroll_by(delta);
         } else if (ui_panels_hit_test_assign_plot(&ui_snap, x, y).kind
                        != UI_HIT_NONE ||
                    ui_panels_hit_test_console(&ui_snap, x, y).kind

@@ -1,6 +1,6 @@
 # Scrollable Autocomplete Popup with Extended Match Capacity
 
-Status: **in-review**
+Status: **done**
 
 ## Context
 

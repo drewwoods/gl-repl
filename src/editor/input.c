@@ -2008,6 +2008,21 @@ static int handle_horizontal_special_key_route(int key) {
     }
 }
 
+static void ac_reveal_selected(EditorAutocompleteState *ac) {
+    if (ac->match_count <= MAX_AC_VISIBLE) {
+        ac->scroll_top = 0;
+        return;
+    }
+    int max_scroll = ac->match_count - MAX_AC_VISIBLE;
+    if (ac->selected_idx < ac->scroll_top) {
+        ac->scroll_top = ac->selected_idx;
+    } else if (ac->selected_idx >= ac->scroll_top + MAX_AC_VISIBLE) {
+        ac->scroll_top = ac->selected_idx - MAX_AC_VISIBLE + 1;
+    }
+    if (ac->scroll_top > max_scroll) ac->scroll_top = max_scroll;
+    if (ac->scroll_top < 0) ac->scroll_top = 0;
+}
+
 /* Up/Down: autocomplete cycle, shift-extend selection, or move cursor
  * line. Help-overlay scroll on Up/Down is router-side
  * (glr_ctrl_router_handle_help_scroll_special) and never reaches
@@ -2018,6 +2033,7 @@ static int handle_vertical_special_key_route(int key) {
     case GLUT_KEY_UP:
         if (ac->match_count > 1) {
             ac->selected_idx = (ac->selected_idx - 1 + ac->match_count) % ac->match_count;
+            ac_reveal_selected(ac);
             editor_completion_update_selected_preview();
         } else if (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT) {
             if (!editor_clipboard_sel_active()) {
@@ -2036,6 +2052,7 @@ static int handle_vertical_special_key_route(int key) {
     case GLUT_KEY_DOWN:
         if (ac->match_count > 1) {
             ac->selected_idx = (ac->selected_idx + 1) % ac->match_count;
+            ac_reveal_selected(ac);
             editor_completion_update_selected_preview();
         } else if (editor_input_active_modifiers() & GLUT_ACTIVE_SHIFT) {
             if (!editor_clipboard_sel_active()) {
@@ -2161,6 +2178,17 @@ int editor_input_code_panel_resize_cursor(void) {
 
 void editor_input_code_panel_scroll(int direction) {
     editor_scroll_set(editor_scroll() + direction);
+}
+
+void editor_input_autocomplete_scroll_by(int delta) {
+    EditorAutocompleteState *ac = editor_state_autocomplete_mut();
+    if (ac->match_count <= 0) return;
+    int new_idx = ac->selected_idx + delta;
+    if (new_idx < 0) new_idx = 0;
+    if (new_idx >= ac->match_count) new_idx = ac->match_count - 1;
+    ac->selected_idx = new_idx;
+    ac_reveal_selected(ac);
+    editor_completion_update_selected_preview();
 }
 
 static void editor_update_panel_frac_from_mouse(int x, int y) {

@@ -157,6 +157,7 @@ typedef struct {
     const char *insert_matches[MAX_AC_MATCHES];
     int         match_count;
     int         selected_idx;
+    int         scroll_top;
     char        ghost[MAX_LINE_LEN];
     char        hint[MAX_LINE_LEN];
 } EditorAutocompleteState;

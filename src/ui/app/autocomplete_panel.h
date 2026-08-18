@@ -15,6 +15,18 @@
 
 #include "ui/app/snapshot.h"
 
+/* Compute bounding rectangle in OpenGL bottom-left coordinates (out_x, out_y as
+ * bottom-left origin) for hit testing. Includes the candidate list box and the
+ * bottom "Tab to accept" hint caption. */
+void ui_autocomplete_panel_rect(const EditorAutocompleteState *ac,
+                                int cursor_px, int cursor_py,
+                                int *out_x, int *out_y, int *out_w, int *out_h);
+
+/* Returns 1 if (gl_x, gl_y) in bottom-left OpenGL window coordinates lands inside the popup rect. */
+int  ui_autocomplete_panel_hit_test(const EditorAutocompleteState *ac,
+                                    int cursor_px, int cursor_py,
+                                    int gl_x, int gl_y);
+
 /* Render the autocomplete popup once per frame from the supplied snapshot.
  * Performs no live REPL state reads. Renders nothing if autocomplete is not
  * active (no matches).

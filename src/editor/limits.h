@@ -5,6 +5,7 @@
 #define EDITOR_LIMITS_H
 
 #define MAX_INPUT_LEN   1024
-#define MAX_AC_MATCHES  10
+#define MAX_AC_MATCHES  128
+#define MAX_AC_VISIBLE  10
 
 #endif /* EDITOR_LIMITS_H */

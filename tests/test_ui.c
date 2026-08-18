@@ -87,6 +87,10 @@ static UiProfilePanelView pp_view(UiProfilePanelMode mode) {
     TEST_ASSERT_INT(&g_harness, label, got, expected); \
 } while (0)
 
+#define ASSERT_STR(label, got, expected) do { \
+    TEST_ASSERT_STR(&g_harness, label, got, expected); \
+} while (0)
+
 #define ASSERT_GL_CALLS(label, counter, min_calls) do { \
     TEST_ASSERT_TRUE(&g_harness, label, gl_stub_counts[counter] >= (min_calls)); \
 } while (0)
@@ -602,24 +606,170 @@ static void test_color_picker_active_line_no_revert(void) {
     ASSERT_TRUE("color persists after navigating away (b)", c2->args[2] == wb);
 }
 
+typedef struct {
+    char text[64];
+} AcTraceString;
+
+static int capture_ac_trace_strings(const char *path, AcTraceString *out, int cap) {
+    FILE *f = fopen(path, "r");
+    if (!f) return 0;
+    char line[256];
+    int count = 0;
+    int len = 0;
+    while (fgets(line, sizeof(line), f)) {
+        int ch = 0;
+        if (strncmp(line, "glRasterPos2f", 13) == 0) {
+            if (count < cap) {
+                out[count].text[0] = '\0';
+            }
+            count++;
+            len = 0;
+        } else if (sscanf(line, "glutBitmapCharacter %d", &ch) == 1 ||
+                   sscanf(line, "glutBitmapStringByte %d", &ch) == 1) {
+            int slot = count - 1;
+            if (slot >= 0 && slot < cap && len < 63) {
+                out[slot].text[len++] = (char)ch;
+                out[slot].text[len] = '\0';
+            }
+        }
+    }
+    fclose(f);
+    return count < cap ? count : cap;
+}
+
+typedef struct {
+    float x1, y1, x2, y2;
+} AcTraceRect;
+
+static int capture_ac_trace_rects(const char *path, AcTraceRect *out, int cap) {
+    FILE *f = fopen(path, "r");
+    if (!f) return 0;
+    char line[256];
+    int count = 0;
+    while (fgets(line, sizeof(line), f)) {
+        float x1, y1, x2, y2;
+        if (sscanf(line, "glRectf %f %f %f %f", &x1, &y1, &x2, &y2) == 4) {
+            if (count < cap) {
+                out[count].x1 = x1;
+                out[count].y1 = y1;
+                out[count].x2 = x2;
+                out[count].y2 = y2;
+            }
+            count++;
+        }
+    }
+    fclose(f);
+    return count < cap ? count : cap;
+}
+
 static void test_autocomplete_panel(void) {
     printf("Testing Autocomplete Panel...\n");
     gl_stub_counts_reset();
 
+    /* 1. Hidden when match_count == 0 */
     editor_state_autocomplete_mut()->match_count = 0;
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_autocomplete_panel_render(&s, 100, 100); }
     ASSERT_TRUE("ac hidden -> no GL calls", gl_stub_counts[GL_STUB_glBegin] == 0);
 
+    /* 2. Visible with 2 items (<= MAX_AC_VISIBLE, no scrollbar) */
     editor_state_autocomplete_mut()->match_count = 2;
     editor_state_autocomplete_mut()->matches[0] = "glVertex3f";
     editor_state_autocomplete_mut()->matches[1] = "glVertex2f";
     editor_state_autocomplete_mut()->selected_idx = 0;
+    editor_state_autocomplete_mut()->scroll_top = 0;
 
     gl_stub_counts_reset();
     { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_autocomplete_panel_render(&s, 100, 100); }
-    ASSERT_GL_CALLS("ac visible -> draws quads", GL_STUB_glBegin, 1);
-    ASSERT_GL_CALLS("ac visible -> draws text", GL_STUB_glRasterPos2f, 2);
-    ASSERT_GL_CALLS("ac visible -> calls glVertex2f", GL_STUB_glVertex2f, 4);
+    ASSERT_INT("ac 2 rows -> 2 text rows + 1 hint = 3 text draws",
+               gl_stub_counts[GL_STUB_glRasterPos2f], 3);
+    ASSERT_INT("ac 2 rows -> 1 panel rect + 1 selection rect = 2 rects",
+               gl_stub_counts[GL_STUB_glRectf], 2);
+
+    /* 3. 10/11 item scrollbar boundary test */
+    static const char *k_twelve_items[12] = {
+        "item0", "item1", "item2", "item3", "item4", "item5",
+        "item6", "item7", "item8", "item9", "item10", "item11"
+    };
+    /* Exactly 10 items (fits without scrollbar) */
+    editor_state_autocomplete_mut()->match_count = 10;
+    for (int i = 0; i < 10; i++) {
+        editor_state_autocomplete_mut()->matches[i] = k_twelve_items[i];
+    }
+    editor_state_autocomplete_mut()->selected_idx = 0;
+    editor_state_autocomplete_mut()->scroll_top = 0;
+
+    gl_stub_counts_reset();
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_autocomplete_panel_render(&s, 100, 100); }
+    ASSERT_INT("ac 10 items (boundary) -> 10 text rows + 1 hint = 11 text draws",
+               gl_stub_counts[GL_STUB_glRasterPos2f], 11);
+    ASSERT_INT("ac 10 items (boundary) -> no scrollbar (2 rects)",
+               gl_stub_counts[GL_STUB_glRectf], 2);
+
+    /* Exactly 11 items (first count with scrollbar) */
+    editor_state_autocomplete_mut()->match_count = 11;
+    editor_state_autocomplete_mut()->matches[10] = k_twelve_items[10];
+
+    gl_stub_counts_reset();
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_autocomplete_panel_render(&s, 100, 100); }
+    ASSERT_INT("ac 11 items (boundary) -> 10 visible text rows + 1 hint = 11 text draws",
+               gl_stub_counts[GL_STUB_glRasterPos2f], 11);
+    ASSERT_INT("ac 11 items (boundary) -> scrollbar present (4 rects)",
+               gl_stub_counts[GL_STUB_glRectf], 4);
+
+    /* 4. Visible with 12 items (> MAX_AC_VISIBLE, windowed to 10 rows + scrollbar) */
+    editor_state_autocomplete_mut()->match_count = 12;
+    editor_state_autocomplete_mut()->matches[11] = k_twelve_items[11];
+    editor_state_autocomplete_mut()->selected_idx = 0;
+    editor_state_autocomplete_mut()->scroll_top = 0;
+
+    gl_stub_counts_reset();
+    gl_stub_trace_open("build/test_ac_trace_top.txt");
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_autocomplete_panel_render(&s, 100, 100); }
+    gl_stub_trace_close();
+
+    ASSERT_INT("ac 12 rows at scroll_top 0 -> exactly 10 visible text rows + 1 hint = 11 text draws",
+               gl_stub_counts[GL_STUB_glRasterPos2f], 11);
+    ASSERT_INT("ac 12 rows -> 2 panel/selection rects + 2 scrollbar rects = 4 rects",
+               gl_stub_counts[GL_STUB_glRectf], 4);
+
+    AcTraceRect rects_top[8];
+    int n_rects_top = capture_ac_trace_rects("build/test_ac_trace_top.txt", rects_top, 8);
+    ASSERT_INT("captured 4 rects at scroll_top 0", n_rects_top, 4);
+
+    /* 5. Offset rendering at scroll_top = 2 & thumb movement */
+    editor_state_autocomplete_mut()->selected_idx = 11;
+    editor_state_autocomplete_mut()->scroll_top = 2;
+
+    gl_stub_counts_reset();
+    gl_stub_trace_open("build/test_ac_trace_bot.txt");
+    { UiRenderSnapshot s; make_test_ui_snapshot(&s); ui_autocomplete_panel_render(&s, 100, 100); }
+    gl_stub_trace_close();
+
+    AcTraceString captured[16];
+    int n_captured = capture_ac_trace_strings("build/test_ac_trace_bot.txt", captured, 16);
+    ASSERT_INT("captured 11 text rows", n_captured, 11);
+    ASSERT_STR("first drawn string is matches[2]", captured[0].text, "item2");
+    ASSERT_STR("tenth drawn string is matches[11]", captured[9].text, "item11");
+    ASSERT_STR("hint string is Tab to accept", captured[10].text, "Tab to accept");
+
+    AcTraceRect rects_bot[8];
+    int n_rects_bot = capture_ac_trace_rects("build/test_ac_trace_bot.txt", rects_bot, 8);
+    ASSERT_INT("captured 4 rects at scroll_top 2", n_rects_bot, 4);
+
+    /* Verify thumb moved downward between scroll_top 0 and scroll_top 2 */
+    ASSERT_TRUE("scrollbar thumb top moved down when scrolled",
+                rects_bot[3].y2 < rects_top[3].y2);
+    ASSERT_TRUE("scrollbar thumb bot moved down when scrolled",
+                rects_bot[3].y1 < rects_top[3].y1);
+
+    /* 6. Geometry & hit testing */
+    int rx, ry, rw, rh;
+    ui_autocomplete_panel_rect(editor_state_autocomplete(), 100, 100, &rx, &ry, &rw, &rh);
+    ASSERT_TRUE("popup rect has positive dimensions", rw > 0 && rh > 0);
+    ASSERT_TRUE("hit test inside popup rect",
+                ui_autocomplete_panel_hit_test(editor_state_autocomplete(), 100, 100, rx + 10, ry + 10));
+    ASSERT_TRUE("hit test outside popup rect",
+                !ui_autocomplete_panel_hit_test(editor_state_autocomplete(), 100, 100, rx - 20, ry));
 }
 
 static void test_variable_panel(void) {

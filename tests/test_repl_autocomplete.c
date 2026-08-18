@@ -583,6 +583,142 @@ int main() {
         ASSERT_STR("scratch array input after accept", editor_state_input().input, "A[");
     }
 
+    /* 9. Full glPushAttrib match set (12 matches) & keyboard scrolling */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        set_input_text("glPushAttrib(GL_");
+        editor_completion_update();
+
+        ASSERT_INT("glPushAttrib has all 12 matches", g_ac_count, 12);
+        ASSERT_STR("match 0",  g_ac_insert_matches[0],  "GL_ALL_ATTRIB_BITS");
+        ASSERT_STR("match 1",  g_ac_insert_matches[1],  "GL_COLOR_BUFFER_BIT");
+        ASSERT_STR("match 2",  g_ac_insert_matches[2],  "GL_CURRENT_BIT");
+        ASSERT_STR("match 3",  g_ac_insert_matches[3],  "GL_DEPTH_BUFFER_BIT");
+        ASSERT_STR("match 4",  g_ac_insert_matches[4],  "GL_ENABLE_BIT");
+        ASSERT_STR("match 5",  g_ac_insert_matches[5],  "GL_FOG_BIT");
+        ASSERT_STR("match 6",  g_ac_insert_matches[6],  "GL_LIGHTING_BIT");
+        ASSERT_STR("match 7",  g_ac_insert_matches[7],  "GL_LINE_BIT");
+        ASSERT_STR("match 8",  g_ac_insert_matches[8],  "GL_POINT_BIT");
+        ASSERT_STR("match 9",  g_ac_insert_matches[9],  "GL_POLYGON_BIT");
+        ASSERT_STR("match 10", g_ac_insert_matches[10], "GL_STENCIL_BUFFER_BIT");
+        ASSERT_STR("match 11", g_ac_insert_matches[11], "GL_TRANSFORM_BIT");
+
+        /* Initial window state */
+        ASSERT_INT("initial selected_idx is 0", editor_state_autocomplete()->selected_idx, 0);
+        ASSERT_INT("initial scroll_top is 0", editor_state_autocomplete()->scroll_top, 0);
+
+        /* Step down across rows 1..9: scroll_top stays 0 */
+        for (int i = 1; i <= 9; i++) {
+            editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+            ASSERT_INT("selected_idx follows step", editor_state_autocomplete()->selected_idx, i);
+            ASSERT_INT("scroll_top stays 0 for top 10 rows", editor_state_autocomplete()->scroll_top, 0);
+        }
+
+        /* Step down to row 10: scroll_top advances to 1 */
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("selected_idx at 10", editor_state_autocomplete()->selected_idx, 10);
+        ASSERT_INT("scroll_top advances to 1", editor_state_autocomplete()->scroll_top, 1);
+
+        /* Step down to row 11: scroll_top advances to 2 */
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("selected_idx at 11", editor_state_autocomplete()->selected_idx, 11);
+        ASSERT_INT("scroll_top advances to 2", editor_state_autocomplete()->scroll_top, 2);
+
+        /* Wraparound Down from 11 -> 0: scroll_top resets to 0 */
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("wrap down -> selected_idx is 0", editor_state_autocomplete()->selected_idx, 0);
+        ASSERT_INT("wrap down -> scroll_top is 0", editor_state_autocomplete()->scroll_top, 0);
+
+        /* Wraparound Up from 0 -> 11: scroll_top jumps to 2 */
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("wrap up -> selected_idx is 11", editor_state_autocomplete()->selected_idx, 11);
+        ASSERT_INT("wrap up -> scroll_top is 2", editor_state_autocomplete()->scroll_top, 2);
+
+        /* Accept the 11th item (GL_TRANSFORM_BIT) */
+        glr_completion_accept_autocomplete();
+        ASSERT_STR("accept at bottom completes GL_TRANSFORM_BIT",
+                   editor_state_input().input, "glPushAttrib(GL_TRANSFORM_BIT)");
+    }
+
+    /* 10. Large match lists: glEnable (25) & broad "gl" prefix (>= 60) */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        set_input_text("glEnable(GL_");
+        editor_completion_update();
+        ASSERT_INT("glEnable(GL_ offers all 25 capabilities", g_ac_count, 25);
+
+        set_input_text("gl");
+        editor_completion_update();
+        ASSERT_TRUE("broad 'gl' prefix matches >= 60 functions", g_ac_count >= 60);
+    }
+
+    /* 11. Direct wheel scrolling helper */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        set_input_text("glPushAttrib(GL_");
+        editor_completion_update();
+
+        /* Wheel up at top: stays at 0 (does not wrap) */
+        editor_input_autocomplete_scroll_by(-1);
+        ASSERT_INT("wheel up at 0 stays at 0", editor_state_autocomplete()->selected_idx, 0);
+        ASSERT_INT("wheel up at 0 scroll_top is 0", editor_state_autocomplete()->scroll_top, 0);
+
+        /* Wheel down by 5 */
+        editor_input_autocomplete_scroll_by(5);
+        ASSERT_INT("wheel down +5 selected_idx", editor_state_autocomplete()->selected_idx, 5);
+        ASSERT_INT("wheel down +5 scroll_top", editor_state_autocomplete()->scroll_top, 0);
+
+        /* Wheel down past end: clamps to 11 without wrap */
+        editor_input_autocomplete_scroll_by(10);
+        ASSERT_INT("wheel down past end clamps to 11", editor_state_autocomplete()->selected_idx, 11);
+        ASSERT_INT("wheel down past end scroll_top is 2", editor_state_autocomplete()->scroll_top, 2);
+    }
+
+    /* 12. Snapshot capture / restore preserves scroll_top */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        set_input_text("glPushAttrib(GL_");
+        editor_completion_update();
+        editor_input_autocomplete_scroll_by(11);
+        ASSERT_INT("pre-capture scroll_top is 2", editor_state_autocomplete()->scroll_top, 2);
+
+        EditorSessionSnapshot snap;
+        editor_state_session_capture(&snap);
+
+        editor_state_autocomplete_clear();
+        ASSERT_INT("post-clear scroll_top is 0", editor_state_autocomplete()->scroll_top, 0);
+
+        editor_state_session_restore(&snap);
+        ASSERT_INT("post-restore scroll_top is 2", editor_state_autocomplete()->scroll_top, 2);
+        ASSERT_INT("post-restore selected_idx is 11", editor_state_autocomplete()->selected_idx, 11);
+        ASSERT_INT("post-restore match_count is 12", editor_state_autocomplete()->match_count, 12);
+    }
+
+    /* 13. Snapshot restore after different completion mode */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        set_input_text("glPushAttrib(GL_");
+        editor_completion_update();
+        editor_input_autocomplete_scroll_by(11);
+        ASSERT_INT("pre-capture scroll_top is 2", editor_state_autocomplete()->scroll_top, 2);
+
+        EditorSessionSnapshot snap;
+        editor_state_session_capture(&snap);
+
+        /* Trigger a completely different completion mode (enum slot for glColorMaterial) */
+        set_input_text("glColorMaterial(GL_FR");
+        editor_completion_update();
+        ASSERT_INT("new completion match count", g_ac_count, 2);
+        ASSERT_INT("new completion scroll_top is 0", editor_state_autocomplete()->scroll_top, 0);
+
+        /* Restore snapshot and verify editor autocomplete model fields */
+        editor_state_session_restore(&snap);
+        ASSERT_INT("restored model scroll_top is 2", editor_state_autocomplete()->scroll_top, 2);
+        ASSERT_INT("restored model selected_idx is 11", editor_state_autocomplete()->selected_idx, 11);
+        ASSERT_INT("restored model match_count is 12", editor_state_autocomplete()->match_count, 12);
+        ASSERT_STR("restored model match 11", editor_state_autocomplete()->matches[11], "GL_TRANSFORM_BIT");
+    }
+
     printf("\n");
     return test_harness_report(&g_harness, "test_repl_autocomplete");
 }

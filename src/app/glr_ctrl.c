@@ -146,6 +146,11 @@ static char g_command_description_title[96];
  * what the active mode is called. */
 static char g_buffer_viz_legend_title[48];
 
+/* Last-rendered editor cursor pixel anchor for autocomplete popup hit testing. */
+static int g_last_ac_cursor_px = 0;
+static int g_last_ac_cursor_py = 0;
+static int g_last_ac_cursor_valid = 0;
+
 /* Gap kept between the replay HUD's top edge and the overlay panel stack.
  * The easing itself lives in the overlay layout engine (overlay_layout.c). */
 #define GLR_CTRL_REPLAY_PANEL_CLEARANCE_PX 10
@@ -1039,6 +1044,7 @@ void glr_ctrl_reset_transients(void) {
     color_picker_stop();
     ui_state_command_description_close();
     glr_ctrl_router_reset_code_panel_drag();
+    g_last_ac_cursor_valid = 0;
 }
 
 /* Non-static: the input router (src/app/glr_ctrl_router.c) applies dispatch
@@ -3452,6 +3458,9 @@ void glr_ctrl_display_frame(void) {
     prof_begin(PROF_CODE_PANEL);
     UiCodePanelOutput cp_out = { 0, 0, 0 };
     ui_panels_render_code_panel(&ui_snap, &cp_out);
+    g_last_ac_cursor_px = cp_out.cursor_px;
+    g_last_ac_cursor_py = cp_out.cursor_py;
+    g_last_ac_cursor_valid = cp_out.cursor_valid;
     prof_end(PROF_CODE_PANEL);
 
     /* Assignment-value plot. Drawn before the panel block because the
@@ -3883,6 +3892,16 @@ static int glr_ctrl_gl_state_anchor_is_valid(int source_line_idx) {
 
     anchor_cmd = repl_state_document_cmd_at(source_line_idx);
     return anchor_cmd && anchor_cmd->type == CMD_EMPTY;
+}
+
+int glr_ctrl_autocomplete_popup_hit_test(int mouse_x, int mouse_y) {
+    if (!g_last_ac_cursor_valid)
+        return 0;
+    const EditorAutocompleteState *ac = editor_state_autocomplete();
+    if (!ac || ac->match_count < 1)
+        return 0;
+    int gl_y = ui_state_viewport().window_h - mouse_y;
+    return ui_autocomplete_panel_hit_test(ac, g_last_ac_cursor_px, g_last_ac_cursor_py, mouse_x, gl_y);
 }
 
 /* Build the right-click OpenGL-state popup's per-frame view. Validates that

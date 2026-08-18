@@ -13,6 +13,7 @@ historical context and are not in the table below.
 
 | Plan | Landed | What it shipped |
 |---|---|---|
+| [`scrollable-autocomplete-popup.md`](scrollable-autocomplete-popup.md) | 2026-08-18 | Scrollable autocomplete popup with extended match capacity (`MAX_AC_MATCHES = 128`, `MAX_AC_VISIBLE = 10`), windowed rendering from `scroll_top`, flyout scrollbar, keep-in-view keyboard navigation, and mouse wheel hit-test routing under the edit cursor. |
 | `console-command.md` | 2026-08-17 | `console(...)` command and floating overlay Console panel: formatted trace output with call-depth auto-indentation, line overflow tracking, C export/import support, and interface menu integration. |
 | `user-guide-consistency-review.md` | 2026-08-14 | USER_GUIDE editorial pass: display-baseline/`glClear`, Ctrl+Shift+H, tour transport, common CLI, accum ladder, replay keys, PLY scope; language/overlay sections halved; math/shadows/stateless to TUTORIAL, driver oracles to CONTRIBUTING. |
 | `render3d-clarity-review.md` | 2026-08-14 | Clarity and consistency review of `src/render3d`: header contracts, quality helpers, post-FX decoupling, derived camera pose on `Render3dFrameRenderContext`, palette/winding tokens, `g_grid_theme_traits` table, bounds validation, text helper routing, and pipeline doc updates. |

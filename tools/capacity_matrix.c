@@ -140,8 +140,8 @@ static const CapRow rows[] = {
 
     /* Autocomplete match list size. */
     { "MAX_AC_MATCHES", MAX_AC_MATCHES,
-      sizeof(char *),
-      "EditorAutocompleteState.matches[] - pointers into static const strings" },
+      3 * sizeof(char *) + sizeof(int),
+      "EditorAutocompleteState (matches[], insert_matches[]) + parallel provider statics (g_ac_func_matches[], g_ac_alias_slots[])" },
 
     /* Workspace header line cap. Each line is a full source-line-length string. */
     { "MAX_WORKSPACE_HEADER_LINES", MAX_WORKSPACE_HEADER_LINES,

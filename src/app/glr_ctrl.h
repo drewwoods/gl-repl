@@ -141,6 +141,9 @@ void glr_ctrl_close_help(void);
 
 void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap);
 
+/* Hit test over the active autocomplete popup using the last-rendered cursor anchor. */
+int glr_ctrl_autocomplete_popup_hit_test(int mouse_x, int mouse_y);
+
 /* Per-frame view for the floating right-click OpenGL-state popup table.
  * Validates the anchor (closing if no longer a visually blank committed/live
  * editor row), rebuilds the report from the live flat program, and resolves
