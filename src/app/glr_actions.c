@@ -1085,6 +1085,20 @@ void glr_action_toggle_view_mode(void) {
     }
 }
 
+/* Cycle any config item by key via the same Config-row path the bindings
+ * and menu use, so clicks get the status message, persistence, and
+ * render-state sync for free. Used by code-panel statusbar readouts. */
+void glr_cfg_cycle_key(GlrConfigKey key, int delta) {
+    int n = 0;
+    const GlrConfigItem *items = glr_config_items(&n);
+    for (int i = 0; i < n; i++) {
+        if (items[i].key == key) {
+            glr_cfg_cycle_row(i, delta);
+            return;
+        }
+    }
+}
+
 void glr_cfg_cycle_row(int row, int delta) {
     const GlrConfigItem *item = glr_config_item_at(row);
 

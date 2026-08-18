@@ -302,6 +302,32 @@ static void test_cfg_cycling(void) {
     glr_action_toggle_view_mode();
     ASSERT_INT("view mode toggled to 3D", glr_config_get(GLR_CONFIG_ORTHO_MODE), 0);
     ASSERT_STR("view mode status 3D", g_last_status, "View mode: 3D");
+
+    /* glr_cfg_cycle_key: cycles any config item by key, sharing the keybind/menu
+     * status line and render sync. Used by statusbar readouts. */
+    glr_config_set(GLR_CONFIG_ACCUM_EFFECT, RENDER3D_ACCUM_EFFECT_OFF);
+    glr_cfg_cycle_key(GLR_CONFIG_ACCUM_EFFECT, +1);
+    ASSERT_INT("accum effect cycled forward", glr_config_get(GLR_CONFIG_ACCUM_EFFECT), RENDER3D_ACCUM_EFFECT_AA);
+    glr_cfg_cycle_key(GLR_CONFIG_ACCUM_EFFECT, -1);
+    ASSERT_INT("accum effect cycled backward", glr_config_get(GLR_CONFIG_ACCUM_EFFECT), RENDER3D_ACCUM_EFFECT_OFF);
+
+    glr_config_set(GLR_CONFIG_ACCUM_PASSES, 0); /* 1 pass */
+    glr_cfg_cycle_key(GLR_CONFIG_ACCUM_PASSES, +1);
+    ASSERT_INT("accum passes cycled forward", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 1);
+    glr_cfg_cycle_key(GLR_CONFIG_ACCUM_PASSES, -1);
+    ASSERT_INT("accum passes cycled backward", glr_config_get(GLR_CONFIG_ACCUM_PASSES), 0);
+
+    glr_config_set(GLR_CONFIG_VERTEX_LABELS, OVERLAY_VERTEX_LABEL_OFF);
+    glr_cfg_cycle_key(GLR_CONFIG_VERTEX_LABELS, +1);
+    ASSERT_INT("vertex labels cycled forward", glr_config_get(GLR_CONFIG_VERTEX_LABELS), OVERLAY_VERTEX_LABEL_INDEX);
+    glr_cfg_cycle_key(GLR_CONFIG_VERTEX_LABELS, -1);
+    ASSERT_INT("vertex labels cycled backward", glr_config_get(GLR_CONFIG_VERTEX_LABELS), OVERLAY_VERTEX_LABEL_OFF);
+
+    glr_config_set(GLR_CONFIG_OVERLAY_SCOPE, OVERLAY_SCOPE_LAST_INSTANCE);
+    glr_cfg_cycle_key(GLR_CONFIG_OVERLAY_SCOPE, +1);
+    ASSERT_INT("overlay scope cycled forward", glr_config_get(GLR_CONFIG_OVERLAY_SCOPE), OVERLAY_SCOPE_ALL_INSTANCES);
+    glr_cfg_cycle_key(GLR_CONFIG_OVERLAY_SCOPE, -1);
+    ASSERT_INT("overlay scope cycled backward", glr_config_get(GLR_CONFIG_OVERLAY_SCOPE), OVERLAY_SCOPE_LAST_INSTANCE);
 }
 
 /* The view-mode swatch's pure visual-state selector. Render3dViewMode:

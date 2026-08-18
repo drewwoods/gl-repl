@@ -21,6 +21,7 @@
 #define GLR_ACTIONS_H
 
 #include "app/glr_paths.h"
+#include "app/glr_config.h"
 
 /* Top-level menu identifiers. Matches the menu bar structure (File / Scene /
  * Tutorials / Tours / Config / Audio) used by ui_menu_bar and by this
@@ -137,6 +138,11 @@ void glr_cfg_cycle_row(int row, int delta);
  * Config-row cycle, so it shares the keybind/menu status + transition.
  * Called by the menu-bar 2D/3D swatch click. */
 void glr_action_toggle_view_mode(void);
+
+/* Cycle any config item by GlrConfigKey forward (+1) or backward (-1).
+ * Reuses the Config-row cycle, so it shares the menu/keybind status
+ * message and render sync. Called by code-panel statusbar readouts. */
+void glr_cfg_cycle_key(GlrConfigKey key, int delta);
 
 /* Reset the code-panel cursor blink state after navigation moves the cursor. */
 void glr_action_cursor_blink_reset(void);

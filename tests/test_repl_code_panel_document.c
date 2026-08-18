@@ -13,10 +13,13 @@
 #include "repl/state.h"
 #include "repl/state_owners.h"
 #include "subsystems/replay/replay_state.h"
+#include "app/glr_actions.h"
+#include "app/glr_config.h"
 #include "ui/app/layout.h"
 #include "ui/core/metrics.h"
 #include "ui/app/repl_code_panel.h"
 #include "ui/app/panels.h"
+#include "subsystems/edit_overlays/edit_overlays.h"
 #include "support/test_harness.h"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
@@ -285,6 +288,194 @@ static void test_expanded_replay_color_comments_match_values(TestHarness *h) {
                 glu_color.has && fabsf(glu_color.r - 0.1f) < 1e-4f &&
                 fabsf(glu_color.g - 0.6f) < 1e-4f &&
                 fabsf(glu_color.b - 0.9f) < 1e-4f);
+}
+
+
+/* Effect states the Config row cycles through, derived from the enum
+ * rather than pinned to a literal so a new mode can't silently make the
+ * wrap assertions below vacuous. */
+#define ACCUM_PASS_STATES 9
+#define VERTEX_LABEL_STATES (OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE + 1)
+#define OVERLAY_SCOPE_STATES (OVERLAY_SCOPE_SINGLE_POLYGON + 1)
+
+/* Scan the statusbar row for the first x owning `kind`, or -1. */
+static int statusbar_hit_x(const UiRenderSnapshot *snap, int status_my,
+                           int kind) {
+    int cp_x, cp_w;
+    ui_layout_code_panel_rect(&cp_x, NULL, &cp_w, NULL);
+    for (int mx = cp_x; mx < cp_x + cp_w; mx++)
+        if (ui_repl_code_panel_hit_test(snap, mx, status_my).kind == kind)
+            return mx;
+    return -1;
+}
+
+/* Statusbar interactive readouts: AA status, Vertex labels, Overlay scope.
+ * They sit AFTER the cursor cost readout in the left cluster, and each is
+ * a click target - left advances the state, right steps it back.
+ * Both directions go through the real dispatch
+ * (glr_ctrl_router_handle_code_panel_hit / glr_ctrl_mouse), not the action
+ * helper directly, so missing switch arms fail here. */
+static void test_statusbar_readouts(TestHarness *h) {
+    UiRenderSnapshot snap;
+    UiReplCodePanelLayout layout;
+    int cp_y, status_my;
+    int aa_x_plain, aa_x_with_cost, aa_y;
+    int vlabel_x_plain, vlabel_x_with_cost;
+    int scope_x_plain, scope_x_with_cost;
+    int val_before;
+
+    printf("Testing statusbar readouts position + clicks (AA, Vertex Labels, Overlay Scope)...\n");
+
+    reset_doc_fixture();
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
+    ui_state_viewport_set_size(1600, 300);   /* wide -> whole cluster fits */
+    glr_ctrl_sync_ui_chrome();
+    editor_feed_line("glClearColor(0, 0, 0, 1);");   /* line 0: plain */
+    editor_feed_line("for(i, 0, 8) {");               /* line 1: scope */
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(i, 0, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("}");
+
+    glr_state_render_mut()->use_accum = 1;
+    glr_config_set(GLR_CONFIG_ACCUM_EFFECT, RENDER3D_ACCUM_EFFECT_AA);
+    glr_config_set(GLR_CONFIG_ACCUM_PASSES, 4); /* 8 passes */
+    glr_config_set(GLR_CONFIG_VERTEX_LABELS, OVERLAY_VERTEX_LABEL_INDEX);
+    glr_config_set(GLR_CONFIG_OVERLAY_SCOPE, OVERLAY_SCOPE_LAST_INSTANCE);
+
+    ui_layout_code_panel_rect(NULL, &cp_y, NULL, NULL);
+    status_my = ui_state_viewport().window_h - (cp_y + STATUSBAR_H / 2);
+    aa_y = cp_y + STATUSBAR_H / 2;
+
+    /* Cursor on a plain top-level line (cost 1): no cost readout. */
+    editor_navigate_to_line(0);
+    build_doc(&snap, &layout);
+    TEST_ASSERT_TRUE(h, "cursor on a plain line shows no cost readout",
+                     snap.cursor_cost_label[0] == '\0');
+    aa_x_plain = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_AA_STATUS);
+    vlabel_x_plain = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_VERTEX_LABELS_STATUS);
+    scope_x_plain = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_OVERLAY_SCOPE_STATUS);
+    TEST_ASSERT_TRUE(h, "AA readout is hit-testable", aa_x_plain >= 0);
+    TEST_ASSERT_TRUE(h, "Vertex Labels readout is hit-testable", vlabel_x_plain >= 0);
+    TEST_ASSERT_TRUE(h, "Overlay Scope readout is hit-testable", scope_x_plain >= 0);
+    TEST_ASSERT_TRUE(h, "readout ordering: AA < VLabels < Scope",
+                     aa_x_plain < vlabel_x_plain && vlabel_x_plain < scope_x_plain);
+
+    /* Cursor on the for-loop head: the "scope cmds N" readout appears.
+     * State readouts are centered in the panel, so they do NOT shift when
+     * cursor cost appears/disappears. */
+    editor_navigate_to_line(1);
+    build_doc(&snap, &layout);
+    TEST_ASSERT_TRUE(h, "cursor on the loop head shows a cost readout",
+                     snap.cursor_cost_label[0] != '\0');
+    aa_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_AA_STATUS);
+    vlabel_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_VERTEX_LABELS_STATUS);
+    scope_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_OVERLAY_SCOPE_STATUS);
+    TEST_ASSERT_TRUE(h, "cost readout does not shift centered AA readout", aa_x_with_cost == aa_x_plain);
+    TEST_ASSERT_TRUE(h, "cost readout does not shift centered VLabels readout", vlabel_x_with_cost == vlabel_x_plain);
+    TEST_ASSERT_TRUE(h, "cost readout does not shift centered Scope readout", scope_x_with_cost == scope_x_plain);
+
+    /* Left click AA -> advances accum passes, through the dispatch switch. */
+    val_before = glr_config_get(GLR_CONFIG_ACCUM_PASSES);
+    {
+        UiHit ah = ui_hit_none();
+        ah.kind = UI_HIT_CODE_AA_STATUS;
+        glr_ctrl_router_handle_code_panel_hit(ah, aa_x_with_cost, aa_y);
+    }
+    TEST_ASSERT_TRUE(h, "left click advances accum passes",
+                     glr_config_get(GLR_CONFIG_ACCUM_PASSES) ==
+                         (val_before + 1) % ACCUM_PASS_STATES);
+
+    /* Right press AA -> decrements accum passes, through the real mouse callback. */
+    build_doc(&snap, &layout);
+    aa_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_AA_STATUS);
+    val_before = glr_config_get(GLR_CONFIG_ACCUM_PASSES);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, aa_x_with_cost, status_my);
+    TEST_ASSERT_TRUE(h, "right click decrements accum passes",
+                     glr_config_get(GLR_CONFIG_ACCUM_PASSES) ==
+                         (val_before - 1 + ACCUM_PASS_STATES) % ACCUM_PASS_STATES);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, aa_x_with_cost, status_my);
+
+    /* Left click Vertex Labels -> next mode, through dispatch switch. */
+    build_doc(&snap, &layout);
+    vlabel_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_VERTEX_LABELS_STATUS);
+    val_before = glr_config_get(GLR_CONFIG_VERTEX_LABELS);
+    {
+        UiHit vh = ui_hit_none();
+        vh.kind = UI_HIT_CODE_VERTEX_LABELS_STATUS;
+        glr_ctrl_router_handle_code_panel_hit(vh, vlabel_x_with_cost, aa_y);
+    }
+    TEST_ASSERT_TRUE(h, "left click advances vertex labels",
+                     glr_config_get(GLR_CONFIG_VERTEX_LABELS) ==
+                         (val_before + 1) % VERTEX_LABEL_STATES);
+
+    /* Right press Vertex Labels -> previous mode, re-probing hit x. */
+    build_doc(&snap, &layout);
+    vlabel_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_VERTEX_LABELS_STATUS);
+    val_before = glr_config_get(GLR_CONFIG_VERTEX_LABELS);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, vlabel_x_with_cost, status_my);
+    TEST_ASSERT_TRUE(h, "right click decrements vertex labels",
+                     glr_config_get(GLR_CONFIG_VERTEX_LABELS) ==
+                         (val_before - 1 + VERTEX_LABEL_STATES) % VERTEX_LABEL_STATES);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, vlabel_x_with_cost, status_my);
+
+    /* Left click Overlay Scope -> next mode, through dispatch switch. */
+    build_doc(&snap, &layout);
+    scope_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_OVERLAY_SCOPE_STATUS);
+    val_before = glr_config_get(GLR_CONFIG_OVERLAY_SCOPE);
+    {
+        UiHit sh_hit = ui_hit_none();
+        sh_hit.kind = UI_HIT_CODE_OVERLAY_SCOPE_STATUS;
+        glr_ctrl_router_handle_code_panel_hit(sh_hit, scope_x_with_cost, aa_y);
+    }
+    TEST_ASSERT_TRUE(h, "left click advances overlay scope",
+                     glr_config_get(GLR_CONFIG_OVERLAY_SCOPE) ==
+                         (val_before + 1) % OVERLAY_SCOPE_STATES);
+
+    /* Right press Overlay Scope -> previous mode, re-probing hit x. */
+    build_doc(&snap, &layout);
+    scope_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_OVERLAY_SCOPE_STATUS);
+    val_before = glr_config_get(GLR_CONFIG_OVERLAY_SCOPE);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, scope_x_with_cost, status_my);
+    TEST_ASSERT_TRUE(h, "right click decrements overlay scope",
+                     glr_config_get(GLR_CONFIG_OVERLAY_SCOPE) ==
+                         (val_before - 1 + OVERLAY_SCOPE_STATES) % OVERLAY_SCOPE_STATES);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, scope_x_with_cost, status_my);
+
+    /* Constrained panel width (800x300 viewport in left layout -> 360px panel):
+     * center state configs are culled before right editor buttons. */
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    ui_state_viewport_set_size(800, 300);
+    glr_ctrl_sync_ui_chrome();
+    ui_layout_code_panel_rect(NULL, &cp_y, NULL, NULL);
+    status_my = ui_state_viewport().window_h - (cp_y + STATUSBAR_H / 2);
+    build_doc(&snap, &layout);
+    TEST_ASSERT_TRUE(h, "center AA readout culled on narrow 360px panel",
+                     statusbar_hit_x(&snap, status_my, UI_HIT_CODE_AA_STATUS) == -1);
+    TEST_ASSERT_TRUE(h, "center VLabels readout culled on narrow 360px panel",
+                     statusbar_hit_x(&snap, status_my, UI_HIT_CODE_VERTEX_LABELS_STATUS) == -1);
+    TEST_ASSERT_TRUE(h, "center Scope readout culled on narrow 360px panel",
+                     statusbar_hit_x(&snap, status_my, UI_HIT_CODE_OVERLAY_SCOPE_STATUS) == -1);
+    TEST_ASSERT_TRUE(h, "right help button remains visible on narrow 360px panel",
+                     statusbar_hit_x(&snap, status_my, UI_HIT_HELP_TOGGLE) >= 0);
+    TEST_ASSERT_TRUE(h, "right focus button remains visible on narrow 360px panel",
+                     statusbar_hit_x(&snap, status_my, UI_HIT_CODE_FOCUS_TOGGLE) >= 0);
+
+    /* On plain line (no cost): editor chips extend further left (trash, copy, etc.). */
+    editor_navigate_to_line(0);
+    build_doc(&snap, &layout);
+    TEST_ASSERT_TRUE(h, "right trash button visible on plain line at 360px width",
+                     statusbar_hit_x(&snap, status_my, UI_HIT_CODE_CLEAR_ALL) >= 0);
+    TEST_ASSERT_TRUE(h, "right copy button visible on plain line at 360px width",
+                     statusbar_hit_x(&snap, status_my, UI_HIT_CODE_COPY) >= 0);
+
+    glr_config_set(GLR_CONFIG_ACCUM_EFFECT, CFG_DEFAULT_ACCUM_EFFECT);
+    glr_config_set(GLR_CONFIG_ACCUM_PASSES, CFG_DEFAULT_ACCUM_PASSES);
+    glr_config_set(GLR_CONFIG_VERTEX_LABELS, CFG_DEFAULT_VERTEX_LABELS);
+    glr_config_set(GLR_CONFIG_OVERLAY_SCOPE, CFG_DEFAULT_OVERLAY_SCOPE);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    ui_state_viewport_set_size(1600, 300);
+    glr_ctrl_sync_ui_chrome();
 }
 
 int main(void) {
@@ -600,6 +791,7 @@ int main(void) {
     }
 
     test_attrib_bit_tokens_align_on_edit_line(&g_harness);
+    test_statusbar_readouts(&g_harness);
 
     return test_harness_report(&g_harness, "repl_code_panel_document");
 }

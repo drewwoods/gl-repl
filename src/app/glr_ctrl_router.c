@@ -1521,6 +1521,18 @@ static int route_code_redo_hit(void) {
     return 1;
 }
 
+/* Clickable statusbar config readouts (AA, Vertex labels, Overlay scope).
+ * Left-press steps the config item forward, right-press back - both
+ * through the shared Config-row cycle, so clicks behave exactly like the
+ * corresponding keybinds and Config menu rows (status message and
+ * render sync included). */
+static int route_code_cfg_cycle_hit(GlrConfigKey key, int delta) {
+    glr_cfg_cycle_key(key, delta);
+    glr_ctrl_router_reset_code_panel_drag();
+    editor_request_redraw();
+    return 1;
+}
+
 /* UI_HIT_HELP_TOGGLE: the statusbar "F1 help" keycap. Same action as
  * the F1 key - go through the shared toggle so the overlay tab/scroll
  * reset identically. */
@@ -1853,6 +1865,7 @@ static void route_right_code_panel_hit(const UiHit *hit, int x, int y) {
  *   - variable slider row -> log-mode drag begin;
  *   - histogram legend entry -> solo that series (left toggles one, right
  *     narrows the plot to one);
+ *   - statusbar AA readout -> backward-cycle the accum effect;
  *   - scene / no hit -> camera (right-drag pan);
  *   - code text -> command help card / OpenGL-state inspector
  *     (route_right_code_panel_hit);
@@ -1943,6 +1956,16 @@ static void route_right_press(int x, int y) {
         return;
     case UI_HIT_HISTOGRAM_SERIES_TOGGLE:
         route_histogram_series_solo_hit(&hit);
+        return;
+    case UI_HIT_CODE_AA_STATUS:
+        /* Backward through accum passes, matching the Config flyout's right-press. */
+        route_code_cfg_cycle_hit(GLR_CONFIG_ACCUM_PASSES, -1);
+        return;
+    case UI_HIT_CODE_VERTEX_LABELS_STATUS:
+        route_code_cfg_cycle_hit(GLR_CONFIG_VERTEX_LABELS, -1);
+        return;
+    case UI_HIT_CODE_OVERLAY_SCOPE_STATUS:
+        route_code_cfg_cycle_hit(GLR_CONFIG_OVERLAY_SCOPE, -1);
         return;
     case UI_HIT_SCENE:
     case UI_HIT_NONE:
@@ -2418,6 +2441,12 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_code_redo_hit(); break;
     case UI_HIT_CODE_FOCUS_TOGGLE:
         consumed = route_code_focus_toggle_hit(); break;
+    case UI_HIT_CODE_AA_STATUS:
+        consumed = route_code_cfg_cycle_hit(GLR_CONFIG_ACCUM_PASSES, +1); break;
+    case UI_HIT_CODE_VERTEX_LABELS_STATUS:
+        consumed = route_code_cfg_cycle_hit(GLR_CONFIG_VERTEX_LABELS, +1); break;
+    case UI_HIT_CODE_OVERLAY_SCOPE_STATUS:
+        consumed = route_code_cfg_cycle_hit(GLR_CONFIG_OVERLAY_SCOPE, +1); break;
     case UI_HIT_HELP_TOGGLE:
         consumed = route_help_toggle_hit(); break;
     case UI_HIT_CODE_PANEL_TAB:

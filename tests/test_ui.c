@@ -755,7 +755,7 @@ static void test_ui_panels_hit_test(void) {
         glr_ctrl_reset_all();
         glr_state_presentation_mut()->code_panel_layout = layouts[li];
         glr_ctrl_sync_ui_chrome();
-        ui_state_viewport_set_size(800, 600);
+        ui_state_viewport_set_size(1200, 600);
         ui_state_code_panel_mut()->panel_frac = 0.45f;
         editor_scroll_follow_cursor_set(0);
         editor_feed_line("glBegin(GL_POINTS);");
@@ -802,10 +802,14 @@ static void test_ui_panels_hit_test(void) {
         }
 
         /* Statusbar strip (bottom STATUSBAR_H of the panel) consumes
-         * clicks as panel chrome. */
+         * clicks as panel chrome. Probed over the leading "N/M cmds"
+         * readout: the strip's actionable segments (the right-hand chip
+         * cluster, the AA readout at the end of the left cluster) own
+         * their own kinds, so an arbitrary strip pixel is not a chrome
+         * control point. */
         snprintf(lbl, sizeof lbl, "statusbar consumes clicks%s", tag);
         h = ui_panels_hit_test_current_snapshot(
-                cp_x + cp_w / 2, win_h - (cp_y + STATUSBAR_H / 2), 0);
+                cp_x + CODE_MARGIN_X, win_h - (cp_y + STATUSBAR_H / 2), 0);
         ASSERT_TRUE(lbl, h.kind == UI_HIT_CODE_PANEL_CHROME);
 
         if (cp_w >= 700) {
@@ -816,6 +820,9 @@ static void test_ui_panels_hit_test(void) {
             int saw_paste = 0;
             int saw_undo = 0;
             int saw_redo = 0;
+            int saw_aa = 0;
+            int saw_vlabels = 0;
+            int saw_scope = 0;
             int status_my = win_h - (cp_y + STATUSBAR_H / 2);
             int mx;
 
@@ -828,6 +835,12 @@ static void test_ui_panels_hit_test(void) {
                 if (h.kind == UI_HIT_CODE_PASTE)     saw_paste = 1;
                 if (h.kind == UI_HIT_CODE_UNDO)      saw_undo = 1;
                 if (h.kind == UI_HIT_CODE_REDO)      saw_redo = 1;
+                if (h.kind == UI_HIT_CODE_AA_STATUS)
+                    saw_aa = 1;
+                if (h.kind == UI_HIT_CODE_VERTEX_LABELS_STATUS)
+                    saw_vlabels = 1;
+                if (h.kind == UI_HIT_CODE_OVERLAY_SCOPE_STATUS)
+                    saw_scope = 1;
             }
             snprintf(lbl, sizeof lbl, "statusbar trash hit kind%s", tag);
             ASSERT_TRUE(lbl, saw_clear);
@@ -841,6 +854,12 @@ static void test_ui_panels_hit_test(void) {
             ASSERT_TRUE(lbl, saw_undo);
             snprintf(lbl, sizeof lbl, "statusbar redo hit kind%s", tag);
             ASSERT_TRUE(lbl, saw_redo);
+            snprintf(lbl, sizeof lbl, "statusbar AA hit kind%s", tag);
+            ASSERT_TRUE(lbl, saw_aa);
+            snprintf(lbl, sizeof lbl, "statusbar vertex labels hit kind%s", tag);
+            ASSERT_TRUE(lbl, saw_vlabels);
+            snprintf(lbl, sizeof lbl, "statusbar overlay scope hit kind%s", tag);
+            ASSERT_TRUE(lbl, saw_scope);
         }
     }
 }
@@ -1702,9 +1721,13 @@ static void test_statusbar_action_tooltips(void) {
         UI_HIT_CODE_CLEAR_ALL,
         UI_HIT_CODE_FOCUS_TOGGLE,
         UI_HIT_HELP_TOGGLE,
+        UI_HIT_CODE_AA_STATUS,
+        UI_HIT_CODE_VERTEX_LABELS_STATUS,
+        UI_HIT_CODE_OVERLAY_SCOPE_STATUS,
     };
     static const char *const names[] = {
         "undo", "redo", "copy", "cut", "paste", "clear", "focus", "help",
+        "AA readout", "Vertex labels readout", "Overlay scope readout",
     };
     UiRenderSnapshot snap;
     int hit_x[sizeof(kinds) / sizeof(kinds[0])];

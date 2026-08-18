@@ -19,6 +19,9 @@ typedef enum {
     UI_HIT_CODE_UNDO,
     UI_HIT_CODE_REDO,
     UI_HIT_CODE_FOCUS_TOGGLE,
+    UI_HIT_CODE_AA_STATUS,   /* statusbar "AA off"/"AA 8x"/"Blur 8x" readout */
+    UI_HIT_CODE_VERTEX_LABELS_STATUS, /* statusbar "VLabels off"/etc. readout */
+    UI_HIT_CODE_OVERLAY_SCOPE_STATUS, /* statusbar "Scope last"/etc. readout */
     UI_HIT_HELP_TOGGLE,
     UI_HIT_CODE_PANEL_TAB,
     UI_HIT_CODE_PANEL_WORKSPACE_CHIP, /* tab strip's leading workspace chip */

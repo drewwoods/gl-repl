@@ -22,6 +22,7 @@
 #include "ui/core/text_layout.h"
 #include "ui/core/text_panel.h"
 #include "ui/core/theme.h"
+#include "subsystems/edit_overlays/edit_overlays.h"
 #include "subsystems/tutorial/tutorial_animation.h"
 
 #include <ctype.h>
@@ -2657,20 +2658,45 @@ typedef struct {
     char cost[32];
     char line[64];
     char aa[32];
+    char vlabel[32];
+    char scope[32];
     char unbal[32];
     int  cmds_w;
     int  cost_w;
     int  line_w;
+    int  aa_x;                  /* window-x of the AA readout (clickable) */
     int  aa_w;
+    int  vlabel_x;              /* window-x of the Vertex labels readout (clickable) */
+    int  vlabel_w;
+    int  scope_x;               /* window-x of the Overlay scope readout (clickable) */
+    int  scope_w;
     int  unbal_w;
     int  has_cost;
     int  has_aa;
+    int  has_vlabel;
+    int  has_scope;
     int  has_unbal;
-    int  right_edge;
+    int  left_edge;             /* window-x just past the last left-cluster glyph */
+    int  center_end_x;          /* window-x just past the last center-cluster glyph */
+    int  right_edge;            /* window-x just past the last drawn glyph (center if visible, else left) */
 } ReplStatusbarLeft;
 
+static int repl_code_panel_statusbar_undo_kx(int sx, int sw, int sh) {
+    int kh = sh - 6;
+    int kw = kh + 4;
+    int help_kx  = sx + sw - CODE_MARGIN_X - kw;
+    int focus_kx = help_kx - 12 - kw;
+    int trash_kx = focus_kx - 12 - kw;
+    int paste_kx = trash_kx - 6 - kw;
+    int cut_kx   = paste_kx - 4 - kw;
+    int copy_kx  = cut_kx - 4 - kw;
+    int redo_kx  = copy_kx - 6 - kw;
+    int undo_kx  = redo_kx - 4 - kw;
+    return undo_kx;
+}
+
 static ReplStatusbarLeft repl_code_panel_statusbar_left(
-        const UiRenderSnapshot *snap, int sx) {
+        const UiRenderSnapshot *snap, int sx, int sw, int sh) {
     ReplStatusbarLeft L;
     int tx = sx + CODE_MARGIN_X;
     int edit_line = snap->edit_line;
@@ -2697,24 +2723,6 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
     L.line_w = (int)strlen(L.line) * FONT_SMALL_W;
     tx += L.line_w;
 
-    L.has_aa = snap->render.use_accum ? 1 : 0;
-    if (L.has_aa) {
-        tx += STATUSBAR_SEP_W;
-        if (snap->render.accum_effect != RENDER3D_ACCUM_EFFECT_OFF &&
-            snap->render.accum_passes > 1)
-            snprintf(L.aa, sizeof L.aa, "%s %dx",
-                     RENDER3D_ACCUM_EFFECT_IS_BLUR(snap->render.accum_effect)
-                         ? "Blur" : "AA",
-                     snap->render.accum_passes);
-        else
-            snprintf(L.aa, sizeof L.aa, "AA off");
-        L.aa_w = (int)strlen(L.aa) * FONT_SMALL_W;
-        tx += L.aa_w;
-    } else {
-        L.aa[0] = '\0';
-        L.aa_w = 0;
-    }
-
     L.has_unbal = snap->unbalanced_count > 0;
     if (L.has_unbal) {
         tx += STATUSBAR_SEP_W;
@@ -2731,11 +2739,9 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
     }
 
     /* Cursor budget readout ("fn cmds 2480", "scope cmds 230"): how
-     * much of the flat budget the cursor's scope spends. Kept LAST in
-     * the left cluster - it appears/disappears and changes width as
-     * the cursor moves, so anything placed after it would jitter. The
-     * controller leaves the label empty when there's nothing worth
-     * showing (plain lines costing <= 1, comments, empty buffer). */
+     * much of the flat budget the cursor's scope spends. The controller
+     * leaves the label empty when there's nothing worth showing (plain
+     * lines costing <= 1, comments, empty buffer). */
     L.has_cost = snap->cursor_cost_label[0] != '\0';
     if (L.has_cost) {
         tx += STATUSBAR_SEP_W;
@@ -2748,12 +2754,165 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
         L.cost_w = 0;
     }
 
-    L.right_edge = tx;
+    L.left_edge = tx;
+
+    /* Center cluster: state configs (AA/passes, Vertex labels, Overlay scope).
+     * Formatted first to measure width, then centered symmetrically at
+     * sx + sw / 2 so cursor movements / cost label changes don't shift them.
+     * When panel width is constrained, center labels are culled (scope ->
+     * vlabel -> aa) before any right-hand editor buttons are hidden. */
+    L.has_aa = snap->render.use_accum ? 1 : 0;
+    if (L.has_aa) {
+        const char *effect_name = "AA";
+        if (snap->render.accum_effect == RENDER3D_ACCUM_EFFECT_BLUR)
+            effect_name = "Blur";
+        else if (snap->render.accum_effect == RENDER3D_ACCUM_EFFECT_BLUR_CAMERA)
+            effect_name = "Cam";
+
+        if (snap->render.accum_effect != RENDER3D_ACCUM_EFFECT_OFF &&
+            snap->render.accum_passes > 1)
+            snprintf(L.aa, sizeof L.aa, "%s %dx",
+                     effect_name,
+                     snap->render.accum_passes);
+        else
+            snprintf(L.aa, sizeof L.aa, "AA off");
+        L.aa_w = (int)strlen(L.aa) * FONT_SMALL_W;
+    } else {
+        L.aa[0] = '\0';
+        L.aa_w = 0;
+    }
+
+    /* Vertex labels readout. */
+    {
+        int vlabel_mode = snap->config_values[GLR_CONFIG_VERTEX_LABELS];
+        switch ((OverlayVertexLabelMode)vlabel_mode) {
+        case OVERLAY_VERTEX_LABEL_INDEX:
+            snprintf(L.vlabel, sizeof L.vlabel, "VL idx");
+            break;
+        case OVERLAY_VERTEX_LABEL_INDEX_POS:
+            snprintf(L.vlabel, sizeof L.vlabel, "VL pos");
+            break;
+        case OVERLAY_VERTEX_LABEL_INDEX_WORLD:
+            snprintf(L.vlabel, sizeof L.vlabel, "VL world");
+            break;
+        case OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE:
+            snprintf(L.vlabel, sizeof L.vlabel, "VL fine");
+            break;
+        case OVERLAY_VERTEX_LABEL_OFF:
+        default:
+            snprintf(L.vlabel, sizeof L.vlabel, "VL off");
+            break;
+        }
+        L.vlabel_w = (int)strlen(L.vlabel) * FONT_SMALL_W;
+        L.has_vlabel = 1;
+    }
+
+    /* Overlay scope readout. */
+    {
+        int scope_mode = snap->config_values[GLR_CONFIG_OVERLAY_SCOPE];
+        switch ((OverlayScope)scope_mode) {
+        case OVERLAY_SCOPE_ALL_INSTANCES:
+            snprintf(L.scope, sizeof L.scope, "Sc all");
+            break;
+        case OVERLAY_SCOPE_WHOLE_SCENE:
+            snprintf(L.scope, sizeof L.scope, "Sc scene");
+            break;
+        case OVERLAY_SCOPE_SINGLE_POLYGON:
+            snprintf(L.scope, sizeof L.scope, "Sc poly");
+            break;
+        case OVERLAY_SCOPE_LAST_INSTANCE:
+        default:
+            snprintf(L.scope, sizeof L.scope, "Sc last");
+            break;
+        }
+        L.scope_w = (int)strlen(L.scope) * FONT_SMALL_W;
+        L.has_scope = 1;
+    }
+
+    /* Calculate horizontal limits for the center cluster:
+     * Must stay right of left_edge + gap, and left of undo_kx - gap (the
+     * leftmost candidate right chip, allowing all editor buttons to stay visible). */
+    {
+        int gap = FONT_SMALL_W;
+        int left_limit = L.left_edge + gap;
+        int right_limit = (sw > 0 && sh > 0)
+                              ? (repl_code_panel_statusbar_undo_kx(sx, sw, sh) - gap)
+                              : (sx + 100000);
+        int start_x = 0, end_x = 0;
+        int count = 0;
+
+        for (int pass = 0; pass < 4; pass++) {
+            if (pass == 1) L.has_scope = 0;
+            if (pass == 2) L.has_vlabel = 0;
+            if (pass == 3) L.has_aa = 0;
+
+            count = 0;
+            int center_w = 0;
+            if (L.has_aa) { center_w += L.aa_w; count++; }
+            if (L.has_vlabel) { center_w += (count > 0 ? STATUSBAR_SEP_W : 0) + L.vlabel_w; count++; }
+            if (L.has_scope) { center_w += (count > 0 ? STATUSBAR_SEP_W : 0) + L.scope_w; count++; }
+
+            if (count == 0) {
+                start_x = end_x = 0;
+                break;
+            }
+
+            start_x = sx + (sw - center_w) / 2;
+            end_x = start_x + center_w;
+
+            if (start_x >= left_limit && end_x <= right_limit) {
+                break;
+            }
+        }
+
+        if (count > 0) {
+            int cx = start_x;
+            int first = 1;
+            if (L.has_aa) {
+                L.aa_x = cx;
+                cx += L.aa_w;
+                first = 0;
+            } else {
+                L.aa_x = 0;
+            }
+            if (L.has_vlabel) {
+                if (!first) cx += STATUSBAR_SEP_W;
+                L.vlabel_x = cx;
+                cx += L.vlabel_w;
+                first = 0;
+            } else {
+                L.vlabel_x = 0;
+            }
+            if (L.has_scope) {
+                if (!first) cx += STATUSBAR_SEP_W;
+                L.scope_x = cx;
+                cx += L.scope_w;
+            } else {
+                L.scope_x = 0;
+            }
+            L.center_end_x = end_x;
+            L.right_edge = end_x;
+        } else {
+            L.has_aa = 0;
+            L.has_vlabel = 0;
+            L.has_scope = 0;
+            L.aa_x = L.vlabel_x = L.scope_x = 0;
+            L.center_end_x = 0;
+            L.right_edge = L.left_edge;
+        }
+    }
+
     return L;
 }
 
 typedef struct {
     int text_y;
+    int aa_kx, aa_kw;           /* center-cluster AA readout (clickable text) */
+    int aa_visible;
+    int vlabel_kx, vlabel_kw;   /* center-cluster Vertex labels readout */
+    int vlabel_visible;
+    int scope_kx, scope_kw;     /* center-cluster Overlay scope readout */
+    int scope_visible;
     int help_kx, help_kw;
     int focus_kx, focus_kw;
     int trash_kx, trash_kw;
@@ -2763,25 +2922,36 @@ typedef struct {
     int undo_kx, undo_kw;
     int redo_kx, redo_kw;
     int ky, kh;                 /* keycap box y / h (shared) */
-    int trash_visible;          /* 0 when it would collide with left text */
+    int trash_visible;          /* 0 when it would collide with left/center text */
     int copy_visible;
     int cut_visible;
     int paste_visible;
     int undo_visible;
     int redo_visible;
-    int focus_visible;          /* 0 when it would collide with left text */
+    int focus_visible;          /* 0 when it would collide with left/center text */
     int help_visible;
 } ReplStatusbarHints;
 
 static ReplStatusbarHints repl_code_panel_statusbar_hints(
         const UiRenderSnapshot *snap, int sx, int sy, int sw, int sh) {
     ReplStatusbarHints h;
-    int left_end    = repl_code_panel_statusbar_left(snap, sx).right_edge;
+    ReplStatusbarLeft L = repl_code_panel_statusbar_left(snap, sx, sw, sh);
+    int left_bound  = (L.center_end_x > 0) ? L.center_end_x : L.left_edge;
     int gap         = FONT_SMALL_W;   /* one cell of breathing room */
 
     h.text_y     = sy + (sh - FONT_SMALL_H) / 2 + 1;
     h.ky         = sy + 3;
     h.kh         = sh - 6;
+
+    h.aa_visible     = L.has_aa;
+    h.aa_kx          = L.aa_x;
+    h.aa_kw          = L.aa_w;
+    h.vlabel_visible = L.has_vlabel;
+    h.vlabel_kx      = L.vlabel_x;
+    h.vlabel_kw      = L.vlabel_w;
+    h.scope_visible  = L.has_scope;
+    h.scope_kx       = L.scope_x;
+    h.scope_kw       = L.scope_w;
 
     h.help_kw = h.kh + 4;
     h.help_kx = sx + sw - CODE_MARGIN_X - h.help_kw;
@@ -2801,18 +2971,18 @@ static ReplStatusbarHints repl_code_panel_statusbar_hints(
     h.undo_kw     = h.kh + 4;
     h.undo_kx     = h.redo_kx - 4 - h.undo_kw;
 
-    /* The right cluster is always drawn from the right edge; the left
-     * text from the left. On narrow/default panels they collide, so
-     * suppress whichever right chip the left text would reach. Keyboard
-     * shortcuts still work when a chip is hidden. */
-    h.help_visible  = (h.help_kx  >= left_end + gap);
-    h.focus_visible = (h.focus_kx >= left_end + gap);
-    h.trash_visible = (h.trash_kx >= left_end + gap);
-    h.paste_visible = (h.paste_kx >= left_end + gap);
-    h.cut_visible   = (h.cut_kx   >= left_end + gap);
-    h.copy_visible  = (h.copy_kx  >= left_end + gap);
-    h.redo_visible  = (h.redo_kx  >= left_end + gap);
-    h.undo_visible  = (h.undo_kx  >= left_end + gap);
+    /* The right cluster is always drawn from the right edge. On narrow
+     * panels, right chips are suppressed when they would reach left_bound.
+     * Because center items are culled before right chips, left_bound drops
+     * back to left_edge on constrained widths so editor buttons fit. */
+    h.help_visible  = (h.help_kx  >= left_bound + gap);
+    h.focus_visible = (h.focus_kx >= left_bound + gap);
+    h.trash_visible = (h.trash_kx >= left_bound + gap);
+    h.paste_visible = (h.paste_kx >= left_bound + gap);
+    h.cut_visible   = (h.cut_kx   >= left_bound + gap);
+    h.copy_visible  = (h.copy_kx  >= left_bound + gap);
+    h.redo_visible  = (h.redo_kx  >= left_bound + gap);
+    h.undo_visible  = (h.undo_kx  >= left_bound + gap);
     return h;
 }
 
@@ -2864,6 +3034,24 @@ static int repl_code_panel_statusbar_hint_hit_kind(
                                       h->help_kx, h->ky,
                                       h->help_kw, h->kh))
         return UI_HIT_HELP_TOGGLE;
+    /* Left cluster text readouts: tested with the inset ky/kh box so top/bottom
+     * divider drag bands are not swallowed. Classified after chips so chips win
+     * on any overlap. */
+    if (h->aa_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      h->aa_kx, h->ky,
+                                      h->aa_kw, h->kh))
+        return UI_HIT_CODE_AA_STATUS;
+    if (h->vlabel_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      h->vlabel_kx, h->ky,
+                                      h->vlabel_kw, h->kh))
+        return UI_HIT_CODE_VERTEX_LABELS_STATUS;
+    if (h->scope_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      h->scope_kx, h->ky,
+                                      h->scope_kw, h->kh))
+        return UI_HIT_CODE_OVERLAY_SCOPE_STATUS;
     return UI_HIT_CODE_PANEL_CHROME;
 }
 
@@ -2943,6 +3131,20 @@ static int repl_code_panel_statusbar_tooltip_for_hit(
         repl_code_panel_statusbar_tooltip_set(
             tooltip, "Code focus", KM_KEY(GLR_CODE_FOCUS),
             KM_MODS(GLR_CODE_FOCUS), 0, h->focus_kx, h->focus_kw);
+        return 1;
+    case UI_HIT_CODE_AA_STATUS:
+        repl_code_panel_statusbar_tooltip_set_label(
+            tooltip, "Accum passes", h->aa_kx, h->aa_kw);
+        return 1;
+    case UI_HIT_CODE_VERTEX_LABELS_STATUS:
+        repl_code_panel_statusbar_tooltip_set(
+            tooltip, "Vertex labels", KM_KEY(GLR_VERTEX_LABELS),
+            KM_MODS(GLR_VERTEX_LABELS), 1, h->vlabel_kx, h->vlabel_kw);
+        return 1;
+    case UI_HIT_CODE_OVERLAY_SCOPE_STATUS:
+        repl_code_panel_statusbar_tooltip_set(
+            tooltip, "Overlay scope", KM_KEY(GLR_OVERLAY_SCOPE),
+            KM_MODS(GLR_OVERLAY_SCOPE), 1, h->scope_kx, h->scope_kw);
         return 1;
     case UI_HIT_HELP_TOGGLE:
         /* F1 is a GLUT special key, so is_special = 1 (like menu_bar's
@@ -3368,7 +3570,7 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
 
     h = repl_code_panel_statusbar_hints(snap, cp_x, sy, cp_w, sh);
     {
-        ReplStatusbarLeft L = repl_code_panel_statusbar_left(snap, cp_x);
+        ReplStatusbarLeft L = repl_code_panel_statusbar_left(snap, cp_x, cp_w, sh);
         int text_y = h.text_y;
         int tx = cp_x + CODE_MARGIN_X;
 
@@ -3385,13 +3587,6 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
         gl2d_draw_string((float)tx, (float)text_y, L.line, FONT_SMALL);
         tx += L.line_w;
 
-        if (L.has_aa) {
-            repl_code_panel_statusbar_sep(&tx, sy, sh);
-            ui_clr(UI_TOK_TEXT_MUTED);
-            gl2d_draw_string((float)tx, (float)text_y, L.aa, FONT_SMALL);
-            tx += L.aa_w;
-        }
-
         if (L.has_unbal) {
             repl_code_panel_statusbar_sep(&tx, sy, sh);
             ui_clr(UI_TOK_STATUS_WARN);
@@ -3404,6 +3599,35 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
             ui_clr(UI_TOK_ACCENT);
             gl2d_draw_string((float)tx, (float)text_y, L.cost, FONT_SMALL);
             tx += L.cost_w;
+        }
+
+        /* Center cluster: state configs centered in the panel. */
+        {
+            int first = 1;
+            if (L.has_aa) {
+                ui_clr(UI_TOK_TEXT_MUTED);
+                gl2d_draw_string((float)L.aa_x, (float)text_y, L.aa, FONT_SMALL);
+                first = 0;
+            }
+
+            if (L.has_vlabel) {
+                if (!first) {
+                    int sep_x = L.vlabel_x - STATUSBAR_SEP_W;
+                    repl_code_panel_statusbar_sep(&sep_x, sy, sh);
+                }
+                ui_clr(UI_TOK_TEXT_MUTED);
+                gl2d_draw_string((float)L.vlabel_x, (float)text_y, L.vlabel, FONT_SMALL);
+                first = 0;
+            }
+
+            if (L.has_scope) {
+                if (!first) {
+                    int sep_x = L.scope_x - STATUSBAR_SEP_W;
+                    repl_code_panel_statusbar_sep(&sep_x, sy, sh);
+                }
+                ui_clr(UI_TOK_TEXT_MUTED);
+                gl2d_draw_string((float)L.scope_x, (float)text_y, L.scope, FONT_SMALL);
+            }
         }
         prof_end(PROF_CODE_PANEL_OVERLAY_STATUS_TEXT);
 

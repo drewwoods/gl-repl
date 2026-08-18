@@ -1643,7 +1643,7 @@ values through these seams:
 
 | Seam | Purpose |
 |---|---|
-| Config bridge | [`glr_actions_install_export_cfg_bridge()`](../src/app/glr_actions.h#L126) exposes `@cfg` reads and writes without coupling export to app config modules. |
+| Config bridge | [`glr_actions_install_export_cfg_bridge()`](../src/app/glr_actions.h#L127) exposes `@cfg` reads and writes without coupling export to app config modules. |
 | Camera bridge | [`glr_camera_export_install_bridge()`](../src/app/glr_camera_export.h#L14) formats the tagged `@camera` rows and applies a resolved pose; it does not parse - src/repl/camera_header.c is the one reader. |
 | Reshape-projection bridge | Supplies the active perspective or orthographic projection to export and code-panel calculations. |
 | Camera-distance source | Supplies executor point-size fallback data without linking [`glr_camera.c`](../src/app/glr_camera.c). |
