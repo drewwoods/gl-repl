@@ -1226,6 +1226,7 @@ static void test_catalog_cfg_lines(void) {
                      strcmp(name, "Blending & Transparency") == 0 ||
                      strcmp(name, "Fog") == 0 ||
                      strcmp(name, "Bitmap Text") == 0 ||
+                     strcmp(name, "Console Output") == 0 ||
                      strcmp(name, "If & Conditionals") == 0 ||
                      /* Dense-solid entries share g_tutorial_dense_solid_cfg to
                       * switch the vertex overlays off - see the staging
@@ -2469,6 +2470,7 @@ static void test_phase_c_catalog_full_walk(void) {
         "Two-Sided Lighting",
         "Culling & Winding",
         "Bitmap Text",
+        "Console Output",
         "Expressions & Motion",
         "Transform Stacks & Hierarchy",
         "Watching a Program Run",
@@ -2479,10 +2481,11 @@ static void test_phase_c_catalog_full_walk(void) {
         "Loops Beyond the Ring",
     };
 
-    /* 29 shipped entries: Depth Test Triangle retired, plus Tier 1 and
-     * Loops Beyond the Ring. Function Scope is blocked (no float decls). */
-    ASSERT_INT("catalog contains 29 tutorials",
-               repl_tutorial_count(), 29);
+    /* 30 shipped entries: Depth Test Triangle retired, plus Tier 1,
+     * Loops Beyond the Ring, and Console Output. Function Scope is
+     * blocked (no float decls). */
+    ASSERT_INT("catalog contains 30 tutorials",
+               repl_tutorial_count(), 30);
 
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         char label[160];

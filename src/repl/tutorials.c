@@ -1131,6 +1131,54 @@ static const TutorialStep g_tutorial_bitmap_text_steps[] = {
     STEP_SENTINEL,
 };
 
+/* "Console Output" - sibling of Bitmap Text for the other formatted-text
+ * primitive. label() draws in the scene at a raster position; console()
+ * writes to the floating Console panel, so the lesson opens that panel
+ * with a SET and never needs glRasterPos. A 6-wedge triangle fan is
+ * the payload: each rim iteration prints ang/x/y, which also shows
+ * that console is legal inside glBegin. Forced 2D so the fan reads
+ * face-on under the shared tutorial pose. Call-depth indent is named
+ * in the closing NOTE rather than demonstrated: that needs a function,
+ * and Functions is still Advanced when this sits in Intermediate. */
+static const char *const g_tutorial_console_output_cfg[] = {
+    "// @cfg view_mode = RENDER3D_VIEW_2D",
+    NULL,
+};
+
+static const TutorialStep g_tutorial_console_output_steps[] = {
+    STEP_NOTE(
+        "// console writes a formatted debug line to the Console panel rather than drawing text in the scene."),
+    STEP_SET(NULL,
+        "// The Console panel opens empty. Each console() command this frame adds a line.",
+        "console_panel", 1),
+    STEP_APPEND(NULL,
+        "// A triangle fan shares one center. Open the batch.",
+        "glBegin(GL_TRIANGLE_FAN)"),
+    STEP_APPEND(NULL,
+        "// Place the shared center at the origin.",
+        "glVertex2f(0, 0)"),
+    STEP_APPEND(NULL,
+        "// Walk six wedges around the rim; i = 6 repeats the first rim point to close the fan.",
+        "for(i, 0, 7) {"),
+    STEP_APPEND(NULL,
+        "// Place this rim vertex from its angle around the circle.",
+        "glVertex2f(cos(i * TAU / 6) * 2, sin(i * TAU / 6) * 2)"),
+    STEP_APPEND(NULL,
+        "// Print this iteration's angle and position. console is legal inside glBegin.",
+        "console(\"ang %f x %f y %f\", i * TAU / 6, cos(i * TAU / 6) * 2, sin(i * TAU / 6) * 2)"),
+    STEP_APPEND(NULL,
+        "// Close the loop.",
+        "}"),
+    STEP_APPEND(NULL,
+        "// Close the batch to fill the fan.",
+        "glEnd()"),
+    STEP_NOTE(
+        "// console formats each %f as 6 characters, with a leading minus when negative; the format text cannot contain parentheses, commas, or backslashes."),
+    STEP_NOTE(
+        "// Lines emitted from functions indent by call depth."),
+    STEP_SENTINEL,
+};
+
 /* No camera-only scaffold here, unlike the other comparison tutorials: a
  * func-open step and a `setup` array are mutually exclusive (the validator
  * rejects the pair - func relocation would desync locked rows). So the three
@@ -1603,6 +1651,13 @@ static const TutorialEntry g_tutorials[] = {
         .name       = "Bitmap Text",
         .steps      = g_tutorial_bitmap_text_steps,
         .cfg        = g_tutorial_bitmap_text_cfg,
+        .tag_names  = (const char *const []){ "REPL Language", NULL },
+        .subheading = "Intermediate",
+    },
+    {
+        .name       = "Console Output",
+        .steps      = g_tutorial_console_output_steps,
+        .cfg        = g_tutorial_console_output_cfg,
         .tag_names  = (const char *const []){ "REPL Language", NULL },
         .subheading = "Intermediate",
     },
