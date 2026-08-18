@@ -85,6 +85,7 @@ IF(NOT WIN32)
 ENDIF()
 
 OPTION(FREEGLUT_COCOA "Build support for Cocoa" OFF)
+OPTION(FREEGLUT_COCOA_SCROLLING_DELTA "Use pixel-based scrolling deltas on Cocoa" OFF)
 
 # Headless off-screen rendering via OSMesa (no window system at all). OS-agnostic;
 # overrides the native platform on every OS, hence mutually exclusive with the
@@ -929,6 +930,7 @@ ADD_DEMO(subwin          progs/demos/subwin/subwin.c)
 ADD_DEMO(timer           progs/demos/timer/timer.c)
 ADD_DEMO(timer_callback  progs/demos/timer_callback/timer.c)
 ADD_DEMO(keyboard        progs/demos/keyboard/keyboard.c)
+ADD_DEMO(mouse           progs/demos/mouse/mouse.c)
 ADD_DEMO(indexed_color   progs/demos/indexed_color/idxcol.c)
 ADD_DEMO(3dview          progs/demos/3dview/3dview.c)
 ADD_DEMO(accum           progs/demos/accum/accum.c)

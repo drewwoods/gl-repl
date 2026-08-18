@@ -144,7 +144,7 @@ else
   FREEGLUT_STATIC_LIB     := $(FREEGLUT_BUILD)/lib/libglut.a
   FREEGLUT_CMAKE_LAUNCHER :=
   ifeq ($(UNAME_S),Darwin)
-    FREEGLUT_CMAKE_BACKEND := -DFREEGLUT_COCOA=ON
+    FREEGLUT_CMAKE_BACKEND := -DFREEGLUT_COCOA=ON -DFREEGLUT_COCOA_SCROLLING_DELTA=ON
   else
     # Linux windowed: the stock X11/GLX backend. Only reached under
     # FREEGLUT_VENDOR_LINUX=1 (see below) - the default Linux build links
