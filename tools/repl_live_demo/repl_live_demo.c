@@ -505,14 +505,22 @@ typedef struct {
 static const GLfloat g_light_model_ambient[4] = { 0.15f, 0.15f, 0.20f, 1.0f };
 
 static const DemoLight g_demo_lights[DEMO_LIGHT_COUNT] = {
-    { {  2.0f,  4.0f,  5.0f, 0.0f }, { 0.80f, 0.80f, 0.75f, 1.0f },
-      { 0.10f, 0.10f, 0.12f, 1.0f }, { 1.00f, 1.00f, 0.95f, 1.0f } },
-    { { -3.0f,  2.0f, -2.0f, 1.0f }, { 0.45f, 0.30f, 0.15f, 1.0f },
-      { 0.05f, 0.03f, 0.02f, 1.0f }, { 0.30f, 0.20f, 0.10f, 1.0f } },
-    { {  0.0f, -1.0f,  3.0f, 1.0f }, { 0.15f, 0.25f, 0.50f, 1.0f },
-      { 0.02f, 0.03f, 0.06f, 1.0f }, { 0.10f, 0.15f, 0.35f, 1.0f } },
-    { {  1.0f,  1.0f, -4.0f, 0.0f }, { 0.35f, 0.35f, 0.40f, 1.0f },
-      { 0.05f, 0.05f, 0.06f, 1.0f }, { 0.20f, 0.20f, 0.25f, 1.0f } },
+    { .pos      = {  2.0f,  4.0f,  5.0f, 0.0f },
+      .diffuse  = { 0.80f, 0.80f, 0.75f, 1.0f },
+      .ambient  = { 0.10f, 0.10f, 0.12f, 1.0f },
+      .specular = { 1.00f, 1.00f, 0.95f, 1.0f } },
+    { .pos      = { -3.0f,  2.0f, -2.0f, 1.0f },
+      .diffuse  = { 0.45f, 0.30f, 0.15f, 1.0f },
+      .ambient  = { 0.05f, 0.03f, 0.02f, 1.0f },
+      .specular = { 0.30f, 0.20f, 0.10f, 1.0f } },
+    { .pos      = {  0.0f, -1.0f,  3.0f, 1.0f },
+      .diffuse  = { 0.15f, 0.25f, 0.50f, 1.0f },
+      .ambient  = { 0.02f, 0.03f, 0.06f, 1.0f },
+      .specular = { 0.10f, 0.15f, 0.35f, 1.0f } },
+    { .pos      = {  1.0f,  1.0f, -4.0f, 0.0f },
+      .diffuse  = { 0.35f, 0.35f, 0.40f, 1.0f },
+      .ambient  = { 0.05f, 0.05f, 0.06f, 1.0f },
+      .specular = { 0.20f, 0.20f, 0.25f, 1.0f } },
 };
 
 /* The per-frame state the *host* owns, and nothing else. It is a short list on

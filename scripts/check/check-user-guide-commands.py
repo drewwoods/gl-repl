@@ -97,11 +97,12 @@ def parse_command_titles(desc_txt: str, spec_c: str) -> dict[str, str]:
     Primary source: command_descriptions.txt — the `title = ...` line of each
     [command CMD_XXX] section.
 
-    Fallback: command_spec.c — the first positional string in each
-    k_enum_command_specs[] and k_std_command_specs[] row (the GL function name,
-    e.g. "glEnable").  Used for commands like CMD_ENABLE / CMD_DISABLE that
+    Fallback: command_spec.c spec-table rows (the GL function name, e.g.
+    "glEnable").  Used for commands like CMD_ENABLE / CMD_DISABLE that
     intentionally have no [command ...] entry in command_descriptions.txt
     (their popup descriptions come from the capability lookup path instead).
+    Accepts both designated rows (k_enum_command_specs) and headed
+    positional rows (k_std_command_specs).
     """
     mapping: dict[str, str] = {}
 
@@ -117,8 +118,16 @@ def parse_command_titles(desc_txt: str, spec_c: str) -> dict[str, str]:
         if title_m:
             mapping[cmd_type] = title_m.group(1).strip()
 
-    # Fallback: k_enum_command_specs[] — rows like:
-    #   { "glEnable", CMD_ENABLE, ... }
+    # Designated rows: { .name = "glEnable", .type = CMD_ENABLE, ... }
+    for m in re.finditer(
+        r'\.name\s*=\s*"([^"]+)"\s*,\s*\.type\s*=\s*(CMD_[A-Z0-9_]+)',
+        spec_c,
+    ):
+        gl_name, cmd_type = m.group(1), m.group(2)
+        if cmd_type not in mapping:
+            mapping[cmd_type] = gl_name
+
+    # Positional rows: { "glColor3f", CMD_COLOR3F, ... }
     for m in re.finditer(
         r'\{\s*"([^"]+)"\s*,\s*(CMD_[A-Z0-9_]+)\s*,',
         spec_c,
@@ -126,10 +135,6 @@ def parse_command_titles(desc_txt: str, spec_c: str) -> dict[str, str]:
         gl_name, cmd_type = m.group(1), m.group(2)
         if cmd_type not in mapping:
             mapping[cmd_type] = gl_name
-
-    # Fallback: k_std_command_specs[] — rows like:
-    #   { "glColor3f", CMD_COLOR3F, ... }
-    # (same pattern; already covered by the loop above)
 
     return mapping
 

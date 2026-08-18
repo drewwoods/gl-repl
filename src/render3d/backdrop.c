@@ -1154,19 +1154,19 @@ typedef struct BackdropEnvLight {
 
 static const BackdropEnvLight k_sunset_lights[] = {
     /* Golden-pink sun key from the disc's direction (low, toward -Z). */
-    { GL_LIGHT4,
+    { .id = GL_LIGHT4,
       .pos      = { 0.0f,  5.0f, -24.0f, 0.0f },
       .diffuse  = { 0.85f, 0.42f, 0.28f, 1.0f },
       .ambient  = { 0.05f, 0.02f, 0.03f, 1.0f },
       .specular = { 1.00f, 0.60f, 0.40f, 1.0f } },
     /* Violet dusk-sky fill from high behind the viewer. */
-    { GL_LIGHT5,
+    { .id = GL_LIGHT5,
       .pos      = {  0.2f,  0.6f,  1.0f, 0.0f },
       .diffuse  = { 0.26f, 0.12f, 0.42f, 1.0f },
       .ambient  = { 0.02f, 0.01f, 0.04f, 1.0f },
       .specular = { 0.15f, 0.08f, 0.25f, 1.0f } },
     /* Hot-pink bounce off the neon floor, from below. */
-    { GL_LIGHT6,
+    { .id = GL_LIGHT6,
       .pos      = {  0.0f, -1.0f,  0.15f, 0.0f },
       .diffuse  = { 0.38f, 0.08f, 0.26f, 1.0f },
       .ambient  = { 0.00f, 0.00f, 0.00f, 1.0f },
@@ -1180,19 +1180,19 @@ static const BackdropEnvLight k_sunset_lights[] = {
  * contract as the sunset rig. */
 static const BackdropEnvLight k_nebula_lights[] = {
     /* Magenta nebula key, high toward the band's bright side. */
-    { GL_LIGHT4,
+    { .id = GL_LIGHT4,
       .pos      = {  0.45f,  0.65f, -0.60f, 0.0f },
       .diffuse  = { 0.55f, 0.18f, 0.48f, 1.0f },
       .ambient  = { 0.04f, 0.01f, 0.04f, 1.0f },
       .specular = { 0.65f, 0.30f, 0.60f, 1.0f } },
     /* Teal gas rim from the opposite low quarter. */
-    { GL_LIGHT5,
+    { .id = GL_LIGHT5,
       .pos      = { -0.55f,  0.20f,  0.65f, 0.0f },
       .diffuse  = { 0.10f, 0.34f, 0.40f, 1.0f },
       .ambient  = { 0.01f, 0.02f, 0.03f, 1.0f },
       .specular = { 0.15f, 0.40f, 0.45f, 1.0f } },
     /* Indigo chart-floor bounce, from below. */
-    { GL_LIGHT6,
+    { .id = GL_LIGHT6,
       .pos      = {  0.00f, -1.00f,  0.10f, 0.0f },
       .diffuse  = { 0.14f, 0.12f, 0.34f, 1.0f },
       .ambient  = { 0.00f, 0.00f, 0.00f, 1.0f },
@@ -1205,19 +1205,19 @@ static const BackdropEnvLight k_nebula_lights[] = {
  * cool rather than warm-directional.  Same GL_LIGHT4..6 contract. */
 static const BackdropEnvLight k_polar_day_lights[] = {
     /* Cool white zenith key, straight overhead - the open arctic sky. */
-    { GL_LIGHT4,
+    { .id = GL_LIGHT4,
       .pos      = { 1.0f,  0.2f,  0.0f, 0.0f },
       .diffuse  = { 0.28f, 0.36f, 0.42f, 1.0f },
       .ambient  = { 0.10f, 0.12f, 0.15f, 1.0f },
       .specular = { 0.22f, 0.34f, 0.48f, 1.0f } },
     /* Steel-blue horizon fill from low behind the viewer. */
-    { GL_LIGHT5,
+    { .id = GL_LIGHT5,
       .pos      = { 0.15f, 0.20f,  1.00f, 0.0f },
       .diffuse  = { 0.30f, 0.44f, 0.62f, 1.0f },
       .ambient  = { 0.02f, 0.03f, 0.05f, 1.0f },
       .specular = { 0.22f, 0.34f, 0.48f, 1.0f } },
     /* Pale glacial bounce from below - the ice-sheet reflection. */
-    { GL_LIGHT6,
+    { .id = GL_LIGHT6,
       .pos      = { -1.0f, -0.2f,  0.10f, 0.0f },
       .diffuse  = { 0.28f, 0.36f, 0.42f, 1.0f },
       .ambient  = { 0.00f, 0.00f, 0.00f, 1.0f },

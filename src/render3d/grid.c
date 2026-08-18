@@ -40,9 +40,9 @@
  * draw-in styles). This is a transition-only effect: at full opacity the
  * grid renders through the exact edge-fade path below, unchanged. Tune the
  * motion with the GRID_REVEAL_* constants and assign each theme an
- * { axis, head } pair in g_grid_theme_traits[]; all of it is meant to be edited and
- * recompiled. A reveal is { axis, head=0 } for a plain dissolve with no head
- * wave, or { axis, head=1 } for the bright leading-edge draw-head. */
+ * { .axis, .head } pair in g_grid_theme_traits[]; all of it is meant to be edited and
+ * recompiled. A reveal is { .axis } for a plain dissolve with no head
+ * wave, or { .axis, .head = 1 } for the bright leading-edge draw-head. */
 typedef enum {
     GRID_REVEAL_RADIAL = 0,  /* grow outward from the origin (the classic look) */
     GRID_REVEAL_SWEEP_X,     /* planar wipe along +X  (plotter, left-to-right)  */
@@ -75,13 +75,13 @@ typedef struct GridThemeTraits {
 } GridThemeTraits;
 
 static const GridThemeTraits g_grid_theme_traits[GRID_THEME_COUNT] = {
-    [GRID_THEME_CLASSIC]   = { .uses_edge_fade = 1, .reveal = { GRID_REVEAL_RADIAL,   0, 0.0f } },
-    [GRID_THEME_TRON]      = { .uses_edge_fade = 1, .reveal = { GRID_REVEAL_SWEEP_X,  1, 7.0f } },
-    [GRID_THEME_EMBER]     = { .uses_edge_fade = 1, .reveal = { GRID_REVEAL_RADIAL,   1, 7.0f } },
-    [GRID_THEME_AURORA]    = { .uses_edge_fade = 1, .reveal = { GRID_REVEAL_RADIAL,   0, 0.0f } },
-    [GRID_THEME_SYNTHWAVE] = { .uses_edge_fade = 1, .reveal = { GRID_REVEAL_DIAGONAL, 1, 6.6f } },
-    [GRID_THEME_XZRULER]   = { .uses_edge_fade = 1, .reveal = { GRID_REVEAL_RADIAL,   0, 0.0f } },
-    [GRID_THEME_STARCHART] = { .uses_edge_fade = 1, .reveal = { GRID_REVEAL_RADIAL,   0, 4.0f } },
+    [GRID_THEME_CLASSIC]   = { .uses_edge_fade = 1, .reveal = { .axis = GRID_REVEAL_RADIAL } },
+    [GRID_THEME_TRON]      = { .uses_edge_fade = 1, .reveal = { .axis = GRID_REVEAL_SWEEP_X,  .head = 1, .time = 7.0f } },
+    [GRID_THEME_EMBER]     = { .uses_edge_fade = 1, .reveal = { .axis = GRID_REVEAL_RADIAL,   .head = 1, .time = 7.0f } },
+    [GRID_THEME_AURORA]    = { .uses_edge_fade = 1, .reveal = { .axis = GRID_REVEAL_RADIAL } },
+    [GRID_THEME_SYNTHWAVE] = { .uses_edge_fade = 1, .reveal = { .axis = GRID_REVEAL_DIAGONAL, .head = 1, .time = 6.6f } },
+    [GRID_THEME_XZRULER]   = { .uses_edge_fade = 1, .reveal = { .axis = GRID_REVEAL_RADIAL } },
+    [GRID_THEME_STARCHART] = { .uses_edge_fade = 1, .reveal = { .axis = GRID_REVEAL_RADIAL,   .time = 4.0f } },
     [GRID_THEME_OCEAN]     = { .uses_fog = 1 },
     [GRID_THEME_RADAR]     = { .uses_nv_fog = 1 },
 };

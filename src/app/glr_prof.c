@@ -122,16 +122,17 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
      * anything: its capture runs after both Host Overlays and Frame Work have
      * closed, so indenting it under either would read as a 2 ms child of a 9 us
      * row, and Present is derived by subtracting it out. */
-    [PROF_FRAME_TOTAL]                       = { "Frame Time",      0, 1, 0, 1 },
-    [PROF_FRAME_WORK]                        = { "Frame Work",      0, 0, 0 },
-    [PROF_DEPTH_SNAPSHOT]                    = { "Depth Snapshot",  0, 0 },
-    [PROF_PRESENT]                           = { "Present",         0, 0, 1 },
+    [PROF_FRAME_TOTAL]                       = { .label = "Frame Time",
+                                                .is_total = 1, .is_frame_total = 1 },
+    [PROF_FRAME_WORK]                        = { .label = "Frame Work" },
+    [PROF_DEPTH_SNAPSHOT]                    = { .label = "Depth Snapshot" },
+    [PROF_PRESENT]                           = { .label = "Present", .is_slack = 1 },
 };
 
 ProfSectionInfo prof_section_info(ProfSection s) {
     if (s >= 0 && s < PROF_SECTION_COUNT && k_sections[s].label != NULL)
         return k_sections[s];
-    ProfSectionInfo unknown = { "?", 0, 0, 0, 0 };
+    ProfSectionInfo unknown = { .label = "?" };
     return unknown;
 }
 

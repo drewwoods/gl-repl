@@ -322,20 +322,23 @@ typedef struct {
 static char g_point_atten_bootstrap_line[96];
 
 static const InitBootstrapEntry g_init_bootstrap_repl[] = {
-    { "// Background color used by glClear at the start of every frame.", NULL },
-    { "glClearColor(0.10, 0.10, 0.10, 1.0);", NULL },
-    { "// Blending: standard src-over for translucent geometry.", NULL },
-    { "glEnable(GL_BLEND);", NULL },
-    { "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);", NULL },
-        { "// Point attenuation: points hold a constant world-space footprint,", REPL_EXPORT_CFG_SLUG_POINT_ATTENUATION },
-        { "// shrinking as 1/distance like everything else under perspective.", REPL_EXPORT_CFG_SLUG_POINT_ATTENUATION },
+    { .repl_line = "// Background color used by glClear at the start of every frame." },
+    { .repl_line = "glClearColor(0.10, 0.10, 0.10, 1.0);" },
+    { .repl_line = "// Blending: standard src-over for translucent geometry." },
+    { .repl_line = "glEnable(GL_BLEND);" },
+    { .repl_line = "glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);" },
+    { .repl_line = "// Point attenuation: points hold a constant world-space footprint,",
+      .toggle_slug = REPL_EXPORT_CFG_SLUG_POINT_ATTENUATION },
+    { .repl_line = "// shrinking as 1/distance like everything else under perspective.",
+      .toggle_slug = REPL_EXPORT_CFG_SLUG_POINT_ATTENUATION },
     /* Near-pure-quadratic attenuation: derived_size = size/sqrt(a + c*d^2)
      * with d the per-vertex eye distance. The quadratic term c = 1/REF_DIST^2
      * dominates at any normal viewing distance, so size scales as ~1/d ->
      * constant on-screen footprint, matching the software fallback
      * size*REF_DIST/cam_dist. Text formatted at startup from the shared
      * REPL_POINT_SIZE_REF_DIST (see g_point_atten_bootstrap_line). */
-    { g_point_atten_bootstrap_line, REPL_EXPORT_CFG_SLUG_POINT_ATTENUATION },
+    { .repl_line = g_point_atten_bootstrap_line,
+      .toggle_slug = REPL_EXPORT_CFG_SLUG_POINT_ATTENUATION },
 };
 
 /* Helper: look up a cfg toggle via the installed bridge. Returns the

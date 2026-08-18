@@ -617,7 +617,8 @@ static const ReplFuncCompletion k_func_completions[] = {
 
 /* One positional enum-arg slot. Keeps the spec table rows readable now
  * that each enum command carries an explicit args[] array. */
-#define ENUM_SLOT(tbl_, usage_, kind_) { (tbl_), (usage_), (kind_), NULL }
+#define ENUM_SLOT(tbl_, usage_, kind_) \
+    { .enums = (tbl_), .usage = (usage_), .kind = (kind_) }
 
 /* Strict token-only slot - the behavior-neutral baseline for every
  * non-bool enum slot (and, until the bool-slot policy lands, for
@@ -635,116 +636,136 @@ static const ReplFuncCompletion k_func_completions[] = {
 
 /* Bitfield slot with one canonical alias for the union of every table bit. */
 #define ENUM_SLOT_BITS_ALL(tbl_, usage_, alias_) \
-    { (tbl_), (usage_), REPL_ENUM_SLOT_ENUM_BITFIELD, (alias_) }
+    { .enums = (tbl_), .usage = (usage_), \
+      .kind = REPL_ENUM_SLOT_ENUM_BITFIELD, .bitfield_all_alias = (alias_) }
 
 static const ReplEnumCommandSpec k_enum_command_specs[] = {
-    { "glBegin",         CMD_BEGIN,          1, "%sglBegin(%s);",            1,
-        .args = { ENUM_SLOT_TOK(k_begin_modes, "Unknown mode. Try GL_TRIANGLES, GL_TRIANGLE_STRIP, ...") } },
-    { "glBlendFunc",     CMD_BLEND_FUNC,     2, "%sglBlendFunc(%s, %s);",    0,
-        .args = { ENUM_SLOT_TOK(k_blend_src_factors, "sfactor: GL_SRC_ALPHA"),
-                  ENUM_SLOT_TOK(k_blend_dst_factors, "dfactor: GL_ONE_MINUS_SRC_ALPHA, GL_ONE") } },
-    { "glClear",         CMD_CLEAR,          1, "%sglClear(%s);",            0,
-        .args = { ENUM_SLOT_BITS(k_clear_bits,
-                                 "mask: GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, "
-                                 "GL_STENCIL_BUFFER_BIT, or several OR'd with |") } },
+    { .name = "glBegin", .type = CMD_BEGIN, .num_args = 1,
+      .fmt = "%sglBegin(%s);", .indent_type = 1,
+      .args = { ENUM_SLOT_TOK(k_begin_modes, "Unknown mode. Try GL_TRIANGLES, GL_TRIANGLE_STRIP, ...") } },
+    { .name = "glBlendFunc", .type = CMD_BLEND_FUNC, .num_args = 2,
+      .fmt = "%sglBlendFunc(%s, %s);",
+      .args = { ENUM_SLOT_TOK(k_blend_src_factors, "sfactor: GL_SRC_ALPHA"),
+                ENUM_SLOT_TOK(k_blend_dst_factors, "dfactor: GL_ONE_MINUS_SRC_ALPHA, GL_ONE") } },
+    { .name = "glClear", .type = CMD_CLEAR, .num_args = 1,
+      .fmt = "%sglClear(%s);",
+      .args = { ENUM_SLOT_BITS(k_clear_bits,
+                               "mask: GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, "
+                               "GL_STENCIL_BUFFER_BIT, or several OR'd with |") } },
     /* glClearStencil is parsed by a custom branch (num_args -1) because the
      * value is an integer in 0..255 that must be truncated and clamped the
      * way glStencilFunc's ref is - the std float path would let the warm
      * flatten write a raw evaluated float straight into args[]. */
-    { "glClearStencil",  CMD_CLEAR_STENCIL, -1, NULL,                        0,
-        .args = { { NULL, "value: expression or 0xNN literal in 0..255",
-                    REPL_ENUM_SLOT_ENUM_ONLY, NULL } } },
+    { .name = "glClearStencil", .type = CMD_CLEAR_STENCIL, .num_args = -1,
+      .args = { { .usage = "value: expression or 0xNN literal in 0..255",
+                  .kind = REPL_ENUM_SLOT_ENUM_ONLY } } },
     /* glClipPlane is parsed by a custom branch (num_args -1). args[] is
      * kept only so slot-indexed autocomplete offers the plane tokens;
      * the (GLdouble[]){a, b, c, d} equation is handled by the custom
      * parser, not the generalized enum loop. */
-    { "glClipPlane",     CMD_CLIP_PLANE,    -1, NULL,                        0,
-        .args = { ENUM_SLOT_TOK(k_clip_planes, "plane: GL_CLIP_PLANE0 .. GL_CLIP_PLANE5") } },
-    { "glColorMask",     CMD_COLOR_MASK,     4, "%sglColorMask(%s, %s, %s, %s);", 0,
-        .args = { ENUM_SLOT_BOOL("red: GL_TRUE or GL_FALSE"),
-                  ENUM_SLOT_BOOL("green: GL_TRUE or GL_FALSE"),
-                  ENUM_SLOT_BOOL("blue: GL_TRUE or GL_FALSE"),
-                  ENUM_SLOT_BOOL("alpha: GL_TRUE or GL_FALSE") } },
-    { "glColorMaterial", CMD_COLOR_MATERIAL, 2, "%sglColorMaterial(%s, %s);", 0,
-        .args = { ENUM_SLOT_TOK(k_face_types, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"),
-                  ENUM_SLOT_TOK(k_color_material_modes, "mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE") } },
-    { "glCullFace",      CMD_CULL_FACE,      1, "%sglCullFace(%s);",         0,
-        .args = { ENUM_SLOT_TOK(k_face_types, "Try GL_BACK, GL_FRONT, or GL_FRONT_AND_BACK") } },
-    { "glDepthFunc",     CMD_DEPTH_FUNC,     1, "%sglDepthFunc(%s);",        0,
-        .args = { ENUM_SLOT_TOK(k_depth_funcs, "Try GL_LESS, GL_LEQUAL, GL_ALWAYS, ...") } },
-    { "glDepthMask",     CMD_DEPTH_MASK,     1, "%sglDepthMask(%s);",        0,
-        .args = { ENUM_SLOT_BOOL("Try GL_TRUE or GL_FALSE") } },
-    { "glEdgeFlag",      CMD_EDGE_FLAG,      1, "%sglEdgeFlag(%s);",         0,
-        .args = { ENUM_SLOT_BOOL("Try GL_TRUE or GL_FALSE") } },
-    { "glDisable",       CMD_DISABLE,        1, "%sglDisable(%s);",          0,
-        .args = { ENUM_SLOT_TOK(k_enable_caps, "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL") } },
-    { "glEnable",        CMD_ENABLE,         1, "%sglEnable(%s);",           0,
-        .args = { ENUM_SLOT_TOK(k_enable_caps, "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL") } },
+    { .name = "glClipPlane", .type = CMD_CLIP_PLANE, .num_args = -1,
+      .args = { ENUM_SLOT_TOK(k_clip_planes, "plane: GL_CLIP_PLANE0 .. GL_CLIP_PLANE5") } },
+    { .name = "glColorMask", .type = CMD_COLOR_MASK, .num_args = 4,
+      .fmt = "%sglColorMask(%s, %s, %s, %s);",
+      .args = { ENUM_SLOT_BOOL("red: GL_TRUE or GL_FALSE"),
+                ENUM_SLOT_BOOL("green: GL_TRUE or GL_FALSE"),
+                ENUM_SLOT_BOOL("blue: GL_TRUE or GL_FALSE"),
+                ENUM_SLOT_BOOL("alpha: GL_TRUE or GL_FALSE") } },
+    { .name = "glColorMaterial", .type = CMD_COLOR_MATERIAL, .num_args = 2,
+      .fmt = "%sglColorMaterial(%s, %s);",
+      .args = { ENUM_SLOT_TOK(k_face_types, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"),
+                ENUM_SLOT_TOK(k_color_material_modes, "mode: GL_AMBIENT, GL_DIFFUSE, GL_SPECULAR, GL_EMISSION, GL_AMBIENT_AND_DIFFUSE") } },
+    { .name = "glCullFace", .type = CMD_CULL_FACE, .num_args = 1,
+      .fmt = "%sglCullFace(%s);",
+      .args = { ENUM_SLOT_TOK(k_face_types, "Try GL_BACK, GL_FRONT, or GL_FRONT_AND_BACK") } },
+    { .name = "glDepthFunc", .type = CMD_DEPTH_FUNC, .num_args = 1,
+      .fmt = "%sglDepthFunc(%s);",
+      .args = { ENUM_SLOT_TOK(k_depth_funcs, "Try GL_LESS, GL_LEQUAL, GL_ALWAYS, ...") } },
+    { .name = "glDepthMask", .type = CMD_DEPTH_MASK, .num_args = 1,
+      .fmt = "%sglDepthMask(%s);",
+      .args = { ENUM_SLOT_BOOL("Try GL_TRUE or GL_FALSE") } },
+    { .name = "glEdgeFlag", .type = CMD_EDGE_FLAG, .num_args = 1,
+      .fmt = "%sglEdgeFlag(%s);",
+      .args = { ENUM_SLOT_BOOL("Try GL_TRUE or GL_FALSE") } },
+    { .name = "glDisable", .type = CMD_DISABLE, .num_args = 1,
+      .fmt = "%sglDisable(%s);",
+      .args = { ENUM_SLOT_TOK(k_enable_caps, "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL") } },
+    { .name = "glEnable", .type = CMD_ENABLE, .num_args = 1,
+      .fmt = "%sglEnable(%s);",
+      .args = { ENUM_SLOT_TOK(k_enable_caps, "Try GL_DEPTH_TEST, GL_LIGHTING, GL_COLOR_MATERIAL") } },
     /* glFogf is parsed by a custom branch (num_args -1). args[] is kept
      * only so slot-indexed autocomplete offers the pname tokens; the
      * trailing scalar value is a full expression handled by the custom
      * parser (GL_FOG_MODE lives on glFogi, GL_FOG_COLOR on glFogfv). */
-    { "glFogf",          CMD_FOG_F,         -1, NULL,                        0,
-        .args = { ENUM_SLOT_TOK(k_fog_f_pnames, "pname: GL_FOG_DENSITY, GL_FOG_START, GL_FOG_END") } },
+    { .name = "glFogf", .type = CMD_FOG_F, .num_args = -1,
+      .args = { ENUM_SLOT_TOK(k_fog_f_pnames, "pname: GL_FOG_DENSITY, GL_FOG_START, GL_FOG_END") } },
     /* glFogfv is parsed by a custom branch (num_args -1): the
      * (GLfloat[]){r, g, b, a} compound literal is handled there, not by
      * the generalized enum loop. */
-    { "glFogfv",         CMD_FOG_FV,        -1, NULL,                        0,
-        .args = { ENUM_SLOT_TOK(k_fog_color_pnames, "pname: GL_FOG_COLOR") } },
-    { "glFogi",          CMD_FOG_I,          2, "%sglFogi(%s, %s);",         0,
-        .args = { ENUM_SLOT_TOK(k_fog_i_pnames, "pname: GL_FOG_MODE"),
-                  ENUM_SLOT_TOK(k_fog_modes, "mode: GL_LINEAR, GL_EXP, GL_EXP2") } },
-    { "glFrontFace",     CMD_FRONT_FACE,     1, "%sglFrontFace(%s);",        0,
-        .args = { ENUM_SLOT_TOK(k_front_face, "Try GL_CW or GL_CCW") } },
-    { "glLightModeli",   CMD_LIGHT_MODEL_I,  2, "%sglLightModeli(%s, %s);",  0,
-        .args = { ENUM_SLOT_TOK(k_light_model_params, "pname: GL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER"),
-                  ENUM_SLOT(k_bool_vals, "param: GL_TRUE, GL_FALSE, or integer", REPL_ENUM_SLOT_ENUM_OR_EXPR) } },
+    { .name = "glFogfv", .type = CMD_FOG_FV, .num_args = -1,
+      .args = { ENUM_SLOT_TOK(k_fog_color_pnames, "pname: GL_FOG_COLOR") } },
+    { .name = "glFogi", .type = CMD_FOG_I, .num_args = 2,
+      .fmt = "%sglFogi(%s, %s);",
+      .args = { ENUM_SLOT_TOK(k_fog_i_pnames, "pname: GL_FOG_MODE"),
+                ENUM_SLOT_TOK(k_fog_modes, "mode: GL_LINEAR, GL_EXP, GL_EXP2") } },
+    { .name = "glFrontFace", .type = CMD_FRONT_FACE, .num_args = 1,
+      .fmt = "%sglFrontFace(%s);",
+      .args = { ENUM_SLOT_TOK(k_front_face, "Try GL_CW or GL_CCW") } },
+    { .name = "glLightModeli", .type = CMD_LIGHT_MODEL_I, .num_args = 2,
+      .fmt = "%sglLightModeli(%s, %s);",
+      .args = { ENUM_SLOT_TOK(k_light_model_params, "pname: GL_LIGHT_MODEL_TWO_SIDE, GL_LIGHT_MODEL_LOCAL_VIEWER"),
+                ENUM_SLOT(k_bool_vals, "param: GL_TRUE, GL_FALSE, or integer", REPL_ENUM_SLOT_ENUM_OR_EXPR) } },
     /* glLineStipple is parsed by a custom branch (num_args -1): both slots
      * are expressions, but a 0xNNNN pattern has to survive commit as hex,
      * which the arg-re-rendering std path cannot do. The row carries no
      * enum tokens - it is here so the name still resolves to its CmdType
      * (syntax category, state report) like every other spec'd command. */
-    { "glLineStipple",   CMD_LINE_STIPPLE,  -1, NULL,                        0,
-        .args = { { NULL,
+    { .name = "glLineStipple", .type = CMD_LINE_STIPPLE, .num_args = -1,
+      .args = { { .usage =
                     "Usage: glLineStipple(factor, pattern) - pattern is an expression, or a decimal or 0xNNNN literal in 0..65535",
-                    REPL_ENUM_SLOT_ENUM_ONLY, NULL } } },
+                  .kind = REPL_ENUM_SLOT_ENUM_ONLY } } },
     /* glMaterialf is parsed by a custom branch (num_args -2). args[] is
      * kept only so slot-indexed autocomplete offers the face/pname
      * tokens; the trailing scalar value is handled by the custom parser.
      * pname slot is GL_SHININESS-only by design (RGBA pnames live on
      * glMaterialfv). */
-    { "glMaterialf",     CMD_MATERIALF,     -2, NULL,                        0,
-        .args = { ENUM_SLOT_TOK(k_face_types, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"),
-                  ENUM_SLOT_TOK(k_material_shininess_only, "pname: GL_SHININESS (RGBA pnames need glMaterialfv)") } },
+    { .name = "glMaterialf", .type = CMD_MATERIALF, .num_args = -2,
+      .args = { ENUM_SLOT_TOK(k_face_types, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"),
+                ENUM_SLOT_TOK(k_material_shininess_only, "pname: GL_SHININESS (RGBA pnames need glMaterialfv)") } },
     /* glMaterialfv is parsed by a custom branch (num_args -2). args[] is
      * kept only so slot-indexed autocomplete still offers face/param
      * tokens; abs(num_args) == 2 is the autocomplete slot count. The
      * third arg (the (GLfloat[]){...} compound literal) is handled by
      * the custom parser, not the generalized enum loop. */
-    { "glMaterialfv",    CMD_MATERIALFV,    -2, NULL,                        0,
-        .args = { ENUM_SLOT_TOK(k_face_types, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"),
-                  ENUM_SLOT_TOK(k_material_params, "pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS") } },
-    { "glPolygonMode",   CMD_POLYGON_MODE,   2, "%sglPolygonMode(%s, %s);",  0,
-        .args = { ENUM_SLOT_TOK(k_face_types, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"),
-                  ENUM_SLOT_TOK(k_polygon_modes, "mode: GL_FILL, GL_LINE, GL_POINT") } },
-    { "glPushAttrib",    CMD_PUSH_ATTRIB,    1, "%sglPushAttrib(%s);",       0,
-        .args = { ENUM_SLOT_BITS_ALL(k_attrib_bits,
-                                     "mask: GL_CURRENT_BIT, GL_ENABLE_BIT, GL_LIGHTING_BIT, "
-                                     "GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_STENCIL_BUFFER_BIT, "
-                                     "GL_TRANSFORM_BIT, GL_FOG_BIT, "
-                                     "GL_POINT_BIT, GL_LINE_BIT, GL_POLYGON_BIT, GL_ALL_ATTRIB_BITS, "
-                                     "or several OR'd with |",
-                                     "GL_ALL_ATTRIB_BITS") } },
-    { "glShadeModel",    CMD_SHADE_MODEL,    1, "%sglShadeModel(%s);",       0,
-        .args = { ENUM_SLOT_TOK(k_shade_models, "Try GL_SMOOTH or GL_FLAT") } },
-    { "glStencilFunc",   CMD_STENCIL_FUNC,  -1, NULL,                           0,
-        .args = { ENUM_SLOT_TOK(k_depth_funcs, "func: GL_NEVER, GL_LESS, GL_EQUAL, ...") } },
-    { "glStencilMask",   CMD_STENCIL_MASK,  -1, NULL,                           0,
-        .args = { { NULL, "mask: decimal or 0xNN literal in 0..255", REPL_ENUM_SLOT_ENUM_ONLY, NULL } } },
-    { "glStencilOp",     CMD_STENCIL_OP,     3, "%sglStencilOp(%s, %s, %s);", 0,
-        .args = { ENUM_SLOT_TOK(k_stencil_ops, "sfail: GL_KEEP, GL_ZERO, GL_REPLACE, ..."),
-                  ENUM_SLOT_TOK(k_stencil_ops, "dpfail: GL_KEEP, GL_ZERO, GL_REPLACE, ..."),
-                  ENUM_SLOT_TOK(k_stencil_ops, "dppass: GL_KEEP, GL_ZERO, GL_REPLACE, ...") } },
+    { .name = "glMaterialfv", .type = CMD_MATERIALFV, .num_args = -2,
+      .args = { ENUM_SLOT_TOK(k_face_types, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"),
+                ENUM_SLOT_TOK(k_material_params, "pname: GL_DIFFUSE, GL_AMBIENT, GL_SPECULAR, GL_SHININESS") } },
+    { .name = "glPolygonMode", .type = CMD_POLYGON_MODE, .num_args = 2,
+      .fmt = "%sglPolygonMode(%s, %s);",
+      .args = { ENUM_SLOT_TOK(k_face_types, "face: GL_FRONT, GL_BACK, GL_FRONT_AND_BACK"),
+                ENUM_SLOT_TOK(k_polygon_modes, "mode: GL_FILL, GL_LINE, GL_POINT") } },
+    { .name = "glPushAttrib", .type = CMD_PUSH_ATTRIB, .num_args = 1,
+      .fmt = "%sglPushAttrib(%s);",
+      .args = { ENUM_SLOT_BITS_ALL(k_attrib_bits,
+                                   "mask: GL_CURRENT_BIT, GL_ENABLE_BIT, GL_LIGHTING_BIT, "
+                                   "GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_STENCIL_BUFFER_BIT, "
+                                   "GL_TRANSFORM_BIT, GL_FOG_BIT, "
+                                   "GL_POINT_BIT, GL_LINE_BIT, GL_POLYGON_BIT, GL_ALL_ATTRIB_BITS, "
+                                   "or several OR'd with |",
+                                   "GL_ALL_ATTRIB_BITS") } },
+    { .name = "glShadeModel", .type = CMD_SHADE_MODEL, .num_args = 1,
+      .fmt = "%sglShadeModel(%s);",
+      .args = { ENUM_SLOT_TOK(k_shade_models, "Try GL_SMOOTH or GL_FLAT") } },
+    { .name = "glStencilFunc", .type = CMD_STENCIL_FUNC, .num_args = -1,
+      .args = { ENUM_SLOT_TOK(k_depth_funcs, "func: GL_NEVER, GL_LESS, GL_EQUAL, ...") } },
+    { .name = "glStencilMask", .type = CMD_STENCIL_MASK, .num_args = -1,
+      .args = { { .usage = "mask: decimal or 0xNN literal in 0..255",
+                  .kind = REPL_ENUM_SLOT_ENUM_ONLY } } },
+    { .name = "glStencilOp", .type = CMD_STENCIL_OP, .num_args = 3,
+      .fmt = "%sglStencilOp(%s, %s, %s);",
+      .args = { ENUM_SLOT_TOK(k_stencil_ops, "sfail: GL_KEEP, GL_ZERO, GL_REPLACE, ..."),
+                ENUM_SLOT_TOK(k_stencil_ops, "dpfail: GL_KEEP, GL_ZERO, GL_REPLACE, ..."),
+                ENUM_SLOT_TOK(k_stencil_ops, "dppass: GL_KEEP, GL_ZERO, GL_REPLACE, ...") } },
     { .name = NULL }
 };
 
@@ -776,24 +797,30 @@ static const ReplStdCommandSpec k_std_command_specs[] = {
 };
 
 #define CMD_TYPE_SPEC(type_, semicolon_, category_) \
-    [type_] = { #type_, NULL, (semicolon_), (category_), 1 }
+    [type_] = { .name = #type_, .needs_semicolon = (semicolon_), \
+                .category = (category_), .valid_in_begin = 1 }
 
 /* Same as CMD_TYPE_SPEC but provides a user-facing display name (the GL
  * function name, e.g. "glBegin") used by error messages. The symbolic
  * `#type_` name is still kept on .name for dumps. */
 #define CMD_TYPE_SPEC_NAMED(type_, display_, semicolon_, category_) \
-    [type_] = { #type_, (display_), (semicolon_), (category_), 1 }
+    [type_] = { .name = #type_, .display_name = (display_), \
+                .needs_semicolon = (semicolon_), .category = (category_), \
+                .valid_in_begin = 1 }
 
 /* Same as CMD_TYPE_SPEC but marks the command as illegal inside a glBegin
  * block. The parser rejects these at commit time; the executor no longer
  * defensively auto-closes the begin block for them. */
 #define CMD_TYPE_SPEC_NOT_IN_BEGIN(type_, semicolon_, category_) \
-    [type_] = { #type_, NULL, (semicolon_), (category_), 0 }
+    [type_] = { .name = #type_, .needs_semicolon = (semicolon_), \
+                .category = (category_), .valid_in_begin = 0 }
 
 /* Combined: not-in-begin + display_name. Used by the GL commands whose
  * error message uses the GL name (glPointSize, glRasterPos3f, glutSolid*). */
 #define CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(type_, display_, semicolon_, category_) \
-    [type_] = { #type_, (display_), (semicolon_), (category_), 0 }
+    [type_] = { .name = #type_, .display_name = (display_), \
+                .needs_semicolon = (semicolon_), .category = (category_), \
+                .valid_in_begin = 0 }
 
 /* Keyed by CmdType via [type_]= designated initializers, so row order is
  * cosmetic (not load-bearing) - they track the CmdType enum order for
