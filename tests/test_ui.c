@@ -823,6 +823,7 @@ static void test_ui_panels_hit_test(void) {
             int saw_aa = 0;
             int saw_vlabels = 0;
             int saw_scope = 0;
+            int saw_poly = 0;
             int status_my = win_h - (cp_y + STATUSBAR_H / 2);
             int mx;
 
@@ -841,6 +842,8 @@ static void test_ui_panels_hit_test(void) {
                     saw_vlabels = 1;
                 if (h.kind == UI_HIT_CODE_OVERLAY_SCOPE_STATUS)
                     saw_scope = 1;
+                if (h.kind == UI_HIT_CODE_POLY_HIGHLIGHT_STATUS)
+                    saw_poly = 1;
             }
             snprintf(lbl, sizeof lbl, "statusbar trash hit kind%s", tag);
             ASSERT_TRUE(lbl, saw_clear);
@@ -860,6 +863,8 @@ static void test_ui_panels_hit_test(void) {
             ASSERT_TRUE(lbl, saw_vlabels);
             snprintf(lbl, sizeof lbl, "statusbar overlay scope hit kind%s", tag);
             ASSERT_TRUE(lbl, saw_scope);
+            snprintf(lbl, sizeof lbl, "statusbar polygon highlight hit kind%s", tag);
+            ASSERT_TRUE(lbl, saw_poly);
         }
     }
 }
@@ -1724,10 +1729,12 @@ static void test_statusbar_action_tooltips(void) {
         UI_HIT_CODE_AA_STATUS,
         UI_HIT_CODE_VERTEX_LABELS_STATUS,
         UI_HIT_CODE_OVERLAY_SCOPE_STATUS,
+        UI_HIT_CODE_POLY_HIGHLIGHT_STATUS,
     };
     static const char *const names[] = {
         "undo", "redo", "copy", "cut", "paste", "clear", "focus", "help",
         "AA readout", "Vertex labels readout", "Overlay scope readout",
+        "Polygon highlight readout",
     };
     UiRenderSnapshot snap;
     int hit_x[sizeof(kinds) / sizeof(kinds[0])];

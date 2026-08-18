@@ -1967,6 +1967,9 @@ static void route_right_press(int x, int y) {
     case UI_HIT_CODE_OVERLAY_SCOPE_STATUS:
         route_code_cfg_cycle_hit(GLR_CONFIG_OVERLAY_SCOPE, -1);
         return;
+    case UI_HIT_CODE_POLY_HIGHLIGHT_STATUS:
+        route_code_cfg_cycle_hit(GLR_CONFIG_POLY_HIGHLIGHT, -1);
+        return;
     case UI_HIT_SCENE:
     case UI_HIT_NONE:
         glr_ctrl_router_handle_camera_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN,
@@ -2447,6 +2450,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_code_cfg_cycle_hit(GLR_CONFIG_VERTEX_LABELS, +1); break;
     case UI_HIT_CODE_OVERLAY_SCOPE_STATUS:
         consumed = route_code_cfg_cycle_hit(GLR_CONFIG_OVERLAY_SCOPE, +1); break;
+    case UI_HIT_CODE_POLY_HIGHLIGHT_STATUS:
+        consumed = route_code_cfg_cycle_hit(GLR_CONFIG_POLY_HIGHLIGHT, +1); break;
     case UI_HIT_HELP_TOGGLE:
         consumed = route_help_toggle_hit(); break;
     case UI_HIT_CODE_PANEL_TAB:

@@ -2660,6 +2660,7 @@ typedef struct {
     char aa[32];
     char vlabel[32];
     char scope[32];
+    char poly[32];
     char unbal[32];
     int  cmds_w;
     int  cost_w;
@@ -2670,11 +2671,14 @@ typedef struct {
     int  vlabel_w;
     int  scope_x;               /* window-x of the Overlay scope readout (clickable) */
     int  scope_w;
+    int  poly_x;                /* window-x of the Polygon highlight readout (clickable) */
+    int  poly_w;
     int  unbal_w;
     int  has_cost;
     int  has_aa;
     int  has_vlabel;
     int  has_scope;
+    int  has_poly;
     int  has_unbal;
     int  left_edge;             /* window-x just past the last left-cluster glyph */
     int  center_end_x;          /* window-x just past the last center-cluster glyph */
@@ -2756,11 +2760,11 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
 
     L.left_edge = tx;
 
-    /* Center cluster: state configs (AA/passes, Vertex labels, Overlay scope).
+    /* Center cluster: state configs (AA/passes, Vertex labels, Overlay scope, Polygon highlight).
      * Formatted first to measure width, then centered symmetrically at
      * sx + sw / 2 so cursor movements / cost label changes don't shift them.
-     * When panel width is constrained, center labels are culled (scope ->
-     * vlabel -> aa) before any right-hand editor buttons are hidden. */
+     * When panel width is constrained, center labels are culled (poly ->
+     * scope -> vlabel -> aa) before any right-hand editor buttons are hidden. */
     L.has_aa = snap->render.use_accum ? 1 : 0;
     if (L.has_aa) {
         const char *effect_name = "AA";
@@ -2829,6 +2833,25 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
         L.has_scope = 1;
     }
 
+    /* Polygon highlight readout. */
+    {
+        int poly_mode = snap->config_values[GLR_CONFIG_POLY_HIGHLIGHT];
+        switch ((PolyHighlightMode)poly_mode) {
+        case POLY_HIGHLIGHT_OFF:
+            snprintf(L.poly, sizeof L.poly, "PH off");
+            break;
+        case POLY_HIGHLIGHT_CLIPPED_CULLED:
+            snprintf(L.poly, sizeof L.poly, "PH cull");
+            break;
+        case POLY_HIGHLIGHT_ON:
+        default:
+            snprintf(L.poly, sizeof L.poly, "PH on");
+            break;
+        }
+        L.poly_w = (int)strlen(L.poly) * FONT_SMALL_W;
+        L.has_poly = 1;
+    }
+
     /* Calculate horizontal limits for the center cluster:
      * Must stay right of left_edge + gap, and left of undo_kx - gap (the
      * leftmost candidate right chip, allowing all editor buttons to stay visible). */
@@ -2841,16 +2864,18 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
         int start_x = 0, end_x = 0;
         int count = 0;
 
-        for (int pass = 0; pass < 4; pass++) {
-            if (pass == 1) L.has_scope = 0;
-            if (pass == 2) L.has_vlabel = 0;
-            if (pass == 3) L.has_aa = 0;
+        for (int pass = 0; pass < 5; pass++) {
+            if (pass == 1) L.has_poly = 0;
+            if (pass == 2) L.has_scope = 0;
+            if (pass == 3) L.has_vlabel = 0;
+            if (pass == 4) L.has_aa = 0;
 
             count = 0;
             int center_w = 0;
             if (L.has_aa) { center_w += L.aa_w; count++; }
             if (L.has_vlabel) { center_w += (count > 0 ? STATUSBAR_SEP_W : 0) + L.vlabel_w; count++; }
             if (L.has_scope) { center_w += (count > 0 ? STATUSBAR_SEP_W : 0) + L.scope_w; count++; }
+            if (L.has_poly) { center_w += (count > 0 ? STATUSBAR_SEP_W : 0) + L.poly_w; count++; }
 
             if (count == 0) {
                 start_x = end_x = 0;
@@ -2887,8 +2912,16 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
                 if (!first) cx += STATUSBAR_SEP_W;
                 L.scope_x = cx;
                 cx += L.scope_w;
+                first = 0;
             } else {
                 L.scope_x = 0;
+            }
+            if (L.has_poly) {
+                if (!first) cx += STATUSBAR_SEP_W;
+                L.poly_x = cx;
+                cx += L.poly_w;
+            } else {
+                L.poly_x = 0;
             }
             L.center_end_x = end_x;
             L.right_edge = end_x;
@@ -2896,7 +2929,8 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
             L.has_aa = 0;
             L.has_vlabel = 0;
             L.has_scope = 0;
-            L.aa_x = L.vlabel_x = L.scope_x = 0;
+            L.has_poly = 0;
+            L.aa_x = L.vlabel_x = L.scope_x = L.poly_x = 0;
             L.center_end_x = 0;
             L.right_edge = L.left_edge;
         }
@@ -2913,6 +2947,8 @@ typedef struct {
     int vlabel_visible;
     int scope_kx, scope_kw;     /* center-cluster Overlay scope readout */
     int scope_visible;
+    int poly_kx, poly_kw;       /* center-cluster Polygon highlight readout */
+    int poly_visible;
     int help_kx, help_kw;
     int focus_kx, focus_kw;
     int trash_kx, trash_kw;
@@ -2952,6 +2988,9 @@ static ReplStatusbarHints repl_code_panel_statusbar_hints(
     h.scope_visible  = L.has_scope;
     h.scope_kx       = L.scope_x;
     h.scope_kw       = L.scope_w;
+    h.poly_visible   = L.has_poly;
+    h.poly_kx        = L.poly_x;
+    h.poly_kw        = L.poly_w;
 
     h.help_kw = h.kh + 4;
     h.help_kx = sx + sw - CODE_MARGIN_X - h.help_kw;
@@ -3052,6 +3091,11 @@ static int repl_code_panel_statusbar_hint_hit_kind(
                                       h->scope_kx, h->ky,
                                       h->scope_kw, h->kh))
         return UI_HIT_CODE_OVERLAY_SCOPE_STATUS;
+    if (h->poly_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      h->poly_kx, h->ky,
+                                      h->poly_kw, h->kh))
+        return UI_HIT_CODE_POLY_HIGHLIGHT_STATUS;
     return UI_HIT_CODE_PANEL_CHROME;
 }
 
@@ -3145,6 +3189,11 @@ static int repl_code_panel_statusbar_tooltip_for_hit(
         repl_code_panel_statusbar_tooltip_set(
             tooltip, "Overlay scope", KM_KEY(GLR_OVERLAY_SCOPE),
             KM_MODS(GLR_OVERLAY_SCOPE), 1, h->scope_kx, h->scope_kw);
+        return 1;
+    case UI_HIT_CODE_POLY_HIGHLIGHT_STATUS:
+        repl_code_panel_statusbar_tooltip_set(
+            tooltip, "Polygon highlight", KM_KEY(GLR_POLY_HIGHLIGHT),
+            KM_MODS(GLR_POLY_HIGHLIGHT), 0, h->poly_kx, h->poly_kw);
         return 1;
     case UI_HIT_HELP_TOGGLE:
         /* F1 is a GLUT special key, so is_special = 1 (like menu_bar's
@@ -3627,6 +3676,16 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
                 }
                 ui_clr(UI_TOK_TEXT_MUTED);
                 gl2d_draw_string((float)L.scope_x, (float)text_y, L.scope, FONT_SMALL);
+                first = 0;
+            }
+
+            if (L.has_poly) {
+                if (!first) {
+                    int sep_x = L.poly_x - STATUSBAR_SEP_W;
+                    repl_code_panel_statusbar_sep(&sep_x, sy, sh);
+                }
+                ui_clr(UI_TOK_TEXT_MUTED);
+                gl2d_draw_string((float)L.poly_x, (float)text_y, L.poly, FONT_SMALL);
             }
         }
         prof_end(PROF_CODE_PANEL_OVERLAY_STATUS_TEXT);

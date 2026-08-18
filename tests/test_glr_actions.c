@@ -328,6 +328,12 @@ static void test_cfg_cycling(void) {
     ASSERT_INT("overlay scope cycled forward", glr_config_get(GLR_CONFIG_OVERLAY_SCOPE), OVERLAY_SCOPE_ALL_INSTANCES);
     glr_cfg_cycle_key(GLR_CONFIG_OVERLAY_SCOPE, -1);
     ASSERT_INT("overlay scope cycled backward", glr_config_get(GLR_CONFIG_OVERLAY_SCOPE), OVERLAY_SCOPE_LAST_INSTANCE);
+
+    glr_config_set(GLR_CONFIG_POLY_HIGHLIGHT, POLY_HIGHLIGHT_OFF);
+    glr_cfg_cycle_key(GLR_CONFIG_POLY_HIGHLIGHT, +1);
+    ASSERT_INT("polygon highlight cycled forward", glr_config_get(GLR_CONFIG_POLY_HIGHLIGHT), POLY_HIGHLIGHT_ON);
+    glr_cfg_cycle_key(GLR_CONFIG_POLY_HIGHLIGHT, -1);
+    ASSERT_INT("polygon highlight cycled backward", glr_config_get(GLR_CONFIG_POLY_HIGHLIGHT), POLY_HIGHLIGHT_OFF);
 }
 
 /* The view-mode swatch's pure visual-state selector. Render3dViewMode:

@@ -322,9 +322,10 @@ static void test_statusbar_readouts(TestHarness *h) {
     int aa_x_plain, aa_x_with_cost, aa_y;
     int vlabel_x_plain, vlabel_x_with_cost;
     int scope_x_plain, scope_x_with_cost;
+    int poly_x_plain, poly_x_with_cost;
     int val_before;
 
-    printf("Testing statusbar readouts position + clicks (AA, Vertex Labels, Overlay Scope)...\n");
+    printf("Testing statusbar readouts position + clicks (AA, Vertex Labels, Overlay Scope, Poly Highlight)...\n");
 
     reset_doc_fixture();
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
@@ -342,6 +343,7 @@ static void test_statusbar_readouts(TestHarness *h) {
     glr_config_set(GLR_CONFIG_ACCUM_PASSES, 4); /* 8 passes */
     glr_config_set(GLR_CONFIG_VERTEX_LABELS, OVERLAY_VERTEX_LABEL_INDEX);
     glr_config_set(GLR_CONFIG_OVERLAY_SCOPE, OVERLAY_SCOPE_LAST_INSTANCE);
+    glr_config_set(GLR_CONFIG_POLY_HIGHLIGHT, POLY_HIGHLIGHT_ON);
 
     ui_layout_code_panel_rect(NULL, &cp_y, NULL, NULL);
     status_my = ui_state_viewport().window_h - (cp_y + STATUSBAR_H / 2);
@@ -355,11 +357,15 @@ static void test_statusbar_readouts(TestHarness *h) {
     aa_x_plain = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_AA_STATUS);
     vlabel_x_plain = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_VERTEX_LABELS_STATUS);
     scope_x_plain = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_OVERLAY_SCOPE_STATUS);
+    poly_x_plain = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_POLY_HIGHLIGHT_STATUS);
     TEST_ASSERT_TRUE(h, "AA readout is hit-testable", aa_x_plain >= 0);
     TEST_ASSERT_TRUE(h, "Vertex Labels readout is hit-testable", vlabel_x_plain >= 0);
     TEST_ASSERT_TRUE(h, "Overlay Scope readout is hit-testable", scope_x_plain >= 0);
-    TEST_ASSERT_TRUE(h, "readout ordering: AA < VLabels < Scope",
-                     aa_x_plain < vlabel_x_plain && vlabel_x_plain < scope_x_plain);
+    TEST_ASSERT_TRUE(h, "Poly Highlight readout is hit-testable", poly_x_plain >= 0);
+    TEST_ASSERT_TRUE(h, "readout ordering: AA < VLabels < Scope < Poly",
+                     aa_x_plain < vlabel_x_plain &&
+                     vlabel_x_plain < scope_x_plain &&
+                     scope_x_plain < poly_x_plain);
 
     /* Cursor on the for-loop head: the "scope cmds N" readout appears.
      * State readouts are centered in the panel, so they do NOT shift when
@@ -371,9 +377,11 @@ static void test_statusbar_readouts(TestHarness *h) {
     aa_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_AA_STATUS);
     vlabel_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_VERTEX_LABELS_STATUS);
     scope_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_OVERLAY_SCOPE_STATUS);
+    poly_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_POLY_HIGHLIGHT_STATUS);
     TEST_ASSERT_TRUE(h, "cost readout does not shift centered AA readout", aa_x_with_cost == aa_x_plain);
     TEST_ASSERT_TRUE(h, "cost readout does not shift centered VLabels readout", vlabel_x_with_cost == vlabel_x_plain);
     TEST_ASSERT_TRUE(h, "cost readout does not shift centered Scope readout", scope_x_with_cost == scope_x_plain);
+    TEST_ASSERT_TRUE(h, "cost readout does not shift centered Poly Highlight readout", poly_x_with_cost == poly_x_plain);
 
     /* Left click AA -> advances accum passes, through the dispatch switch. */
     val_before = glr_config_get(GLR_CONFIG_ACCUM_PASSES);
@@ -442,6 +450,29 @@ static void test_statusbar_readouts(TestHarness *h) {
                          (val_before - 1 + OVERLAY_SCOPE_STATES) % OVERLAY_SCOPE_STATES);
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, scope_x_with_cost, status_my);
 
+    /* Left click Polygon Highlight -> next mode, through dispatch switch. */
+    build_doc(&snap, &layout);
+    poly_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_POLY_HIGHLIGHT_STATUS);
+    val_before = glr_config_get(GLR_CONFIG_POLY_HIGHLIGHT);
+    {
+        UiHit ph_hit = ui_hit_none();
+        ph_hit.kind = UI_HIT_CODE_POLY_HIGHLIGHT_STATUS;
+        glr_ctrl_router_handle_code_panel_hit(ph_hit, poly_x_with_cost, aa_y);
+    }
+    TEST_ASSERT_TRUE(h, "left click advances polygon highlight",
+                     glr_config_get(GLR_CONFIG_POLY_HIGHLIGHT) ==
+                         (val_before + 1) % POLY_HIGHLIGHT_COUNT);
+
+    /* Right press Polygon Highlight -> previous mode, re-probing hit x. */
+    build_doc(&snap, &layout);
+    poly_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_POLY_HIGHLIGHT_STATUS);
+    val_before = glr_config_get(GLR_CONFIG_POLY_HIGHLIGHT);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, poly_x_with_cost, status_my);
+    TEST_ASSERT_TRUE(h, "right click decrements polygon highlight",
+                     glr_config_get(GLR_CONFIG_POLY_HIGHLIGHT) ==
+                         (val_before - 1 + POLY_HIGHLIGHT_COUNT) % POLY_HIGHLIGHT_COUNT);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, poly_x_with_cost, status_my);
+
     /* Constrained panel width (800x300 viewport in left layout -> 360px panel):
      * center state configs are culled before right editor buttons. */
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
@@ -456,6 +487,8 @@ static void test_statusbar_readouts(TestHarness *h) {
                      statusbar_hit_x(&snap, status_my, UI_HIT_CODE_VERTEX_LABELS_STATUS) == -1);
     TEST_ASSERT_TRUE(h, "center Scope readout culled on narrow 360px panel",
                      statusbar_hit_x(&snap, status_my, UI_HIT_CODE_OVERLAY_SCOPE_STATUS) == -1);
+    TEST_ASSERT_TRUE(h, "center Poly Highlight readout culled on narrow 360px panel",
+                     statusbar_hit_x(&snap, status_my, UI_HIT_CODE_POLY_HIGHLIGHT_STATUS) == -1);
     TEST_ASSERT_TRUE(h, "right help button remains visible on narrow 360px panel",
                      statusbar_hit_x(&snap, status_my, UI_HIT_HELP_TOGGLE) >= 0);
     TEST_ASSERT_TRUE(h, "right focus button remains visible on narrow 360px panel",
@@ -473,6 +506,7 @@ static void test_statusbar_readouts(TestHarness *h) {
     glr_config_set(GLR_CONFIG_ACCUM_PASSES, CFG_DEFAULT_ACCUM_PASSES);
     glr_config_set(GLR_CONFIG_VERTEX_LABELS, CFG_DEFAULT_VERTEX_LABELS);
     glr_config_set(GLR_CONFIG_OVERLAY_SCOPE, CFG_DEFAULT_OVERLAY_SCOPE);
+    glr_config_set(GLR_CONFIG_POLY_HIGHLIGHT, CFG_DEFAULT_HIGHLIGHT_POLY);
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
     ui_state_viewport_set_size(1600, 300);
     glr_ctrl_sync_ui_chrome();
