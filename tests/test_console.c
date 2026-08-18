@@ -97,13 +97,14 @@ static void test_capture_formatting_and_indentation(void) {
     ASSERT_INT("total count is 3", view.total_count, 3);
     ASSERT_INT("overflow count is 0", view.overflow_count, 0);
 
-    ASSERT_STR("line 0 text", view.lines[0].text, "x=1.5, y=2.5");
+    ASSERT_STR("line 0 text", view.lines[0].text, "x= 1.500, y= 2.500");
     ASSERT_INT("line 0 depth", view.lines[0].call_depth, 0);
 
-    ASSERT_STR("line 1 text", view.lines[1].text, "  sub % 100=100%");
+    ASSERT_STR("line 1 text", view.lines[1].text, "  sub % 100= 100.0%");
     ASSERT_INT("line 1 depth", view.lines[1].call_depth, 1);
 
-    ASSERT_STR("line 2 text", view.lines[2].text, "      1 2 3 4 5 6 7 8");
+    ASSERT_STR("line 2 text", view.lines[2].text,
+               "       1.000  2.000  3.000  4.000  5.000  6.000  7.000  8.000");
     ASSERT_INT("line 2 depth", view.lines[2].call_depth, 3);
 }
 
@@ -126,13 +127,43 @@ static void test_exec_limit_clamping(void) {
     console_capture(cmds, 3, 2);
     ConsoleView view = console_view();
     ASSERT_INT("exec limit clamped count to 2", view.count, 2);
-    ASSERT_STR("line 0", view.lines[0].text, "step 1");
-    ASSERT_STR("line 1", view.lines[1].text, "step 2");
+    ASSERT_STR("line 0", view.lines[0].text, "step  1.000");
+    ASSERT_STR("line 1", view.lines[1].text, "step  2.000");
 
     /* Clamped to 0 */
     console_capture(cmds, 3, 0);
     view = console_view();
     ASSERT_INT("exec limit 0 gives 0 lines", view.count, 0);
+}
+
+static void test_label_float_is_fixed_signed_width(void) {
+    static const struct {
+        float       v;
+        const char *want;
+    } cases[] = {
+        {  0.0f,     " 0.000" },
+        { -0.0f,     "-0.000" },
+        {  1.25f,    " 1.250" },
+        { -1.5f,     "-1.500" },
+        {  10.0f,    " 10.00" },
+        {  42.0f,    " 42.00" },
+        {  100.0f,   " 100.0" },
+        {  1000.0f,  " 1000." },
+        {  10000.0f, " 10000" },
+        {  1.0e-4f,  " 1.0-4" },
+        { -3.0e6f,   "-3.0e6" },
+    };
+    char buf[16];
+    int i;
+
+    for (i = 0; i < (int)(sizeof(cases) / sizeof(cases[0])); i++) {
+        int n = repl_format_label_string(buf, (int)sizeof(buf),
+                                         "%f", &cases[i].v, 1);
+        ASSERT_INT("label float field width", n, REPL_LABEL_FLOAT_WIDTH);
+        ASSERT_STR("label float field text", buf, cases[i].want);
+        ASSERT_TRUE("label float field starts with space or minus",
+                    buf[0] == ' ' || buf[0] == '-');
+    }
 }
 
 static void test_overflow_handling(void) {
@@ -163,6 +194,7 @@ int main(void) {
     test_capture_when_closed();
     test_capture_formatting_and_indentation();
     test_exec_limit_clamping();
+    test_label_float_is_fixed_signed_width();
     test_overflow_handling();
 
     return test_harness_report(&g_harness, "test_console");

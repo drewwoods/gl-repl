@@ -27,10 +27,16 @@ void repl_canonical_input_view(const char *src,
 
 void repl_format_source_float(char *out, int out_sz, float v);
 
+/* One `%f` substitution in label()/console() is this many characters.
+ * Negatives start with '-'; positives use a leading space so the digits
+ * stay aligned. Fixed width keeps a live console line from shifting as
+ * values change. Exported C helpers keep `%g`. */
+#define REPL_LABEL_FLOAT_WIDTH 6
+
 /* Format a format-string payload (used by CMD_LABEL and CMD_CONSOLE).
- * Walks `fmt`, expanding `%f` from `args[0..num_args-1]` formatted with `%g`,
- * and `%%` to literal '%'. Returns the number of characters written
- * (excluding trailing NUL). */
+ * Walks `fmt`, expanding `%f` from `args[0..num_args-1]` as a
+ * REPL_LABEL_FLOAT_WIDTH-character field, and `%%` to literal '%'.
+ * Returns the number of characters written (excluding trailing NUL). */
 int  repl_format_label_string(char *out, int out_sz,
                              const char *fmt,
                              const float *args, int num_args);

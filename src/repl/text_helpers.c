@@ -90,6 +90,113 @@ void repl_format_source_float(char *out, int out_sz, float v) {
     snprintf(out, (size_t)out_sz, "%.9g", (double)v);
 }
 
+/* Scientific fallback that is always REPL_LABEL_FLOAT_WIDTH characters:
+ *   |exp| <= 9  →   1.2e3 /  1.2-4
+ *   |exp| >= 10 →   1e+38 /  1e-38
+ * Positives keep a leading space so they stay aligned with '-'. */
+static void format_label_float_sci(char *field, float v) {
+    int neg = signbit(v);
+    float a = fabsf(v);
+    int exp = (int)floorf(log10f(a));
+    float m = a / powf(10.0f, (float)exp);
+    if (m < 1.0f) {
+        m *= 10.0f;
+        exp--;
+    } else if (m >= 10.0f) {
+        m /= 10.0f;
+        exp++;
+    }
+
+    if (exp > 9 || exp < -9) {
+        int d = (int)(m + 0.5f);
+        if (d >= 10) {
+            d = 1;
+            exp++;
+        }
+        snprintf(field, REPL_LABEL_FLOAT_WIDTH + 1, "%c%de%+03d",
+                 neg ? '-' : ' ', d, exp);
+        return;
+    }
+
+    int md = (int)(m * 10.0f + 0.5f);
+    if (md >= 100) {
+        md = 10;
+        exp++;
+        if (exp > 9) {
+            snprintf(field, REPL_LABEL_FLOAT_WIDTH + 1, "%c1e%+03d",
+                     neg ? '-' : ' ', exp);
+            return;
+        }
+    }
+    if (exp >= 0)
+        snprintf(field, REPL_LABEL_FLOAT_WIDTH + 1, "%c%d.%de%d",
+                 neg ? '-' : ' ', md / 10, md % 10, exp);
+    else
+        snprintf(field, REPL_LABEL_FLOAT_WIDTH + 1, "%c%d.%d-%d",
+                 neg ? '-' : ' ', md / 10, md % 10, -exp);
+}
+
+/* One %f field: exactly REPL_LABEL_FLOAT_WIDTH characters. A leading
+ * space stands in for '+', so ` 1.250` stays aligned with `-1.250`.
+ * Prefer fixed point (` 1.250`, ` 12.34`, ` 100.0`, ` 1000.`);
+ * scientific only when that would not fit or would collapse a
+ * non-zero value to ±0.000. */
+static int format_label_float(char *out, int out_sz, float v) {
+    char field[REPL_LABEL_FLOAT_WIDTH + 1];
+    int n;
+
+    if (!out || out_sz <= 0)
+        return 0;
+
+    if (isnan(v)) {
+        memcpy(field, signbit(v) ? "-  nan" : "   nan",
+               REPL_LABEL_FLOAT_WIDTH);
+        field[REPL_LABEL_FLOAT_WIDTH] = '\0';
+    } else if (isinf(v)) {
+        memcpy(field, v < 0.0f ? "-  inf" : "   inf",
+               REPL_LABEL_FLOAT_WIDTH);
+        field[REPL_LABEL_FLOAT_WIDTH] = '\0';
+    } else {
+        static const char *const fixed[] = {
+            "% .3f", "% .2f", "% .1f", "% .0f",
+        };
+        int accepted = 0;
+        int i;
+        for (i = 0; i < (int)(sizeof(fixed) / sizeof(fixed[0])); i++) {
+            char scratch[32];
+            int wrote = snprintf(scratch, sizeof(scratch), fixed[i],
+                                 (double)v);
+            if (wrote == REPL_LABEL_FLOAT_WIDTH) {
+                if (i == 0 && v != 0.0f &&
+                    (strcmp(scratch, " 0.000") == 0 ||
+                     strcmp(scratch, "-0.000") == 0))
+                    break;
+                memcpy(field, scratch, REPL_LABEL_FLOAT_WIDTH + 1);
+                accepted = 1;
+                break;
+            }
+            if (wrote == REPL_LABEL_FLOAT_WIDTH - 1 &&
+                i == (int)(sizeof(fixed) / sizeof(fixed[0])) - 1) {
+                /*  1000 ..  9999 is 5 characters; trail a '.' to fill. */
+                scratch[REPL_LABEL_FLOAT_WIDTH - 1] = '.';
+                scratch[REPL_LABEL_FLOAT_WIDTH] = '\0';
+                memcpy(field, scratch, REPL_LABEL_FLOAT_WIDTH + 1);
+                accepted = 1;
+                break;
+            }
+        }
+        if (!accepted)
+            format_label_float_sci(field, v);
+    }
+
+    n = REPL_LABEL_FLOAT_WIDTH;
+    if (n > out_sz - 1)
+        n = out_sz - 1;
+    memcpy(out, field, (size_t)n);
+    out[n] = '\0';
+    return n;
+}
+
 int repl_format_label_string(char *out, int out_sz,
                              const char *fmt,
                              const float *args, int num_args) {
@@ -103,12 +210,8 @@ int repl_format_label_string(char *out, int out_sz,
 
     while (*fmt && off < out_sz - 1) {
         if (fmt[0] == '%' && fmt[1] == 'f' && sub_idx < sub_count && args) {
-            int written = snprintf(out + off, (size_t)(out_sz - off),
-                                   "%g", (double)args[sub_idx]);
-            if (written > 0) {
-                off += written;
-                if (off >= out_sz) off = out_sz - 1;
-            }
+            off += format_label_float(out + off, out_sz - off,
+                                      args[sub_idx]);
             sub_idx++;
             fmt += 2;
         } else if (fmt[0] == '%' && fmt[1] == '%') {

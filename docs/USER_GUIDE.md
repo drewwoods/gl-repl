@@ -605,9 +605,11 @@ label("Earth phase = %f", t);
 ```
 
 - `label("fmt", a, b, c, d)` draws bitmap text at the current raster
-  position. Up to 4 substitution args; `%f` substitutes a value, `%%` is a
-  literal percent. The string literal is limited to 64 characters and may not
-  contain `//`, `(`, `)`, `,`, or backslashes.
+  position. Up to 4 substitution args; `%f` substitutes a 6-character field
+  (` 1.250`, `-0.017`) with a leading minus when negative, `%%` is a literal
+  percent. The string literal
+  is limited to 64 characters and may not contain `//`, `(`, `)`, `,`, or
+  backslashes.
 - This is a REPL convenience, not a real GL call - exported C files include
   a self-contained `label()` helper so they still compile standalone.
 
@@ -627,16 +629,17 @@ With lighting on, the text colour is the *lit* result latched at the
 
 - `console("fmt", a, b, c, ...)` outputs formatted debug strings to a floating
   **Console panel** in the scene overlay. Up to 8 substitution arguments;
-  `%f` substitutes a value formatted via `%g`, and `%%` produces a literal
-  percent sign. The format string is limited to 64 characters and may not
-  contain `//`, `(`, `)`, `,`, or backslashes.
+  `%f` substitutes a 6-character field (` 1.250`, `-0.017`) with a leading
+  minus when negative so a live line does not shift as values change, and
+  `%%` produces a literal percent sign. The format string is limited to 64
+  characters and may not contain `//`, `(`, `)`, `,`, or backslashes.
 - Lines emitted from functions are auto-indented by `2 * call_depth` spaces to
   visually mirror the execution tree.
 - Legal anywhere in a scene, including inside `glBegin` / `glEnd` blocks.
 - In the REPL: When frame replay is active, console output scrubs with the
   replay position.
 - In standalone C export: Emits a `console()` helper that prints unindented
-  lines directly to `stdout`.
+  lines directly to `stdout`, still using `%g` for each `%f`.
 
 ### Math expressions
 

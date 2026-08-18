@@ -2776,11 +2776,11 @@ exporter emits a helper function (`write_label_helper`, `write_rand_helper`,
 etc.), the helper's behavior **must match the REPL executor case** to the
 nearest visible bit. Divergence examples to guard against:
 
-- `label("%f", x)` rendering `1.000000` in exported output but `1` in the
-  REPL because the REPL's CMD_LABEL case substitutes `%f` with `%g`
-  formatting while the exported helper uses real `vsnprintf("%f", …)`.
-  Fix: either match formatting in the helper, or change REPL semantics -
-  but they must agree.
+- `label("%f", x)` / `console("%f", x)` render a fixed 6-character field
+  in the REPL (` 1.250`, `-0.017`) so a live line does not shift. Exported
+  `label()` / `console()` helpers keep `%g` on purpose: standalone C
+  writing to stdout has no HUD to keep still. That width is a REPL
+  presentation choice, not a language-value change.
 - A REPL primitive whose live executor relies on the per-frame state
   reset in [`src/render3d/render.c`](../src/render3d/render.c) (e.g. `glDisable(GL_LIGHTING)` baseline,
   default specular `{0.4,0.4,0.4,1}` and shininess `30`) but whose

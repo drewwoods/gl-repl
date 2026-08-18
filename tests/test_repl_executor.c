@@ -834,8 +834,8 @@ static void test_glut_bitmap_string(void) {
                 gl_stub_counts[GL_STUB_glutBitmapCharacter] == 2);
 
     /* Format with %f: substitution is applied at execute time. The
-     * expanded text "v=1.25" is 6 chars. args[0..3] hold the
-     * substitution values. */
+     * expanded text "v= 1.250" is 8 chars (2 literal + a 6-char field).
+     * args[0..3] hold the substitution values. */
     gl_stub_counts_reset();
     memset(cmds, 0, sizeof(cmds));
     cmds[0].type = CMD_LABEL;
@@ -848,7 +848,7 @@ static void test_glut_bitmap_string(void) {
     repl_execute_program(&opts);
 
     ASSERT_TRUE("label %f substitution emits expanded length",
-                gl_stub_counts[GL_STUB_glutBitmapCharacter] == 6);
+                gl_stub_counts[GL_STUB_glutBitmapCharacter] == 8);
 
     /* %% renders as a single literal '%'. */
     gl_stub_counts_reset();
