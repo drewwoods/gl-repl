@@ -19,9 +19,10 @@ typedef enum {
     UI_HIT_CODE_UNDO,
     UI_HIT_CODE_REDO,
     UI_HIT_CODE_FOCUS_TOGGLE,
-    UI_HIT_CODE_AA_STATUS,   /* statusbar "AA off"/"AA 8x"/"Blur 8x" readout */
+    UI_HIT_CODE_AA_STATUS,   /* statusbar "AA"/"Blur"/"Cam"/"noAA" effect readout */
+    UI_HIT_CODE_AA_PASSES_STATUS, /* statusbar "1x"..."16x" passes readout */
     UI_HIT_CODE_VERTEX_LABELS_STATUS, /* statusbar "VL off"/etc. readout */
-    UI_HIT_CODE_OVERLAY_SCOPE_STATUS, /* statusbar "Sc last"/etc. readout */
+    UI_HIT_CODE_OVERLAY_SCOPE_STATUS, /* statusbar "OS last"/etc. readout */
     UI_HIT_CODE_POLY_HIGHLIGHT_STATUS, /* statusbar "PH on"/etc. readout */
     UI_HIT_HELP_TOGGLE,
     UI_HIT_CODE_PANEL_TAB,

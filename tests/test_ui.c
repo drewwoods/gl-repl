@@ -821,6 +821,7 @@ static void test_ui_panels_hit_test(void) {
             int saw_undo = 0;
             int saw_redo = 0;
             int saw_aa = 0;
+            int saw_aa_passes = 0;
             int saw_vlabels = 0;
             int saw_scope = 0;
             int saw_poly = 0;
@@ -838,6 +839,8 @@ static void test_ui_panels_hit_test(void) {
                 if (h.kind == UI_HIT_CODE_REDO)      saw_redo = 1;
                 if (h.kind == UI_HIT_CODE_AA_STATUS)
                     saw_aa = 1;
+                if (h.kind == UI_HIT_CODE_AA_PASSES_STATUS)
+                    saw_aa_passes = 1;
                 if (h.kind == UI_HIT_CODE_VERTEX_LABELS_STATUS)
                     saw_vlabels = 1;
                 if (h.kind == UI_HIT_CODE_OVERLAY_SCOPE_STATUS)
@@ -857,8 +860,10 @@ static void test_ui_panels_hit_test(void) {
             ASSERT_TRUE(lbl, saw_undo);
             snprintf(lbl, sizeof lbl, "statusbar redo hit kind%s", tag);
             ASSERT_TRUE(lbl, saw_redo);
-            snprintf(lbl, sizeof lbl, "statusbar AA hit kind%s", tag);
+            snprintf(lbl, sizeof lbl, "statusbar AA mode hit kind%s", tag);
             ASSERT_TRUE(lbl, saw_aa);
+            snprintf(lbl, sizeof lbl, "statusbar AA passes hit kind%s", tag);
+            ASSERT_TRUE(lbl, saw_aa_passes);
             snprintf(lbl, sizeof lbl, "statusbar vertex labels hit kind%s", tag);
             ASSERT_TRUE(lbl, saw_vlabels);
             snprintf(lbl, sizeof lbl, "statusbar overlay scope hit kind%s", tag);
@@ -1727,13 +1732,14 @@ static void test_statusbar_action_tooltips(void) {
         UI_HIT_CODE_FOCUS_TOGGLE,
         UI_HIT_HELP_TOGGLE,
         UI_HIT_CODE_AA_STATUS,
+        UI_HIT_CODE_AA_PASSES_STATUS,
         UI_HIT_CODE_VERTEX_LABELS_STATUS,
         UI_HIT_CODE_OVERLAY_SCOPE_STATUS,
         UI_HIT_CODE_POLY_HIGHLIGHT_STATUS,
     };
     static const char *const names[] = {
         "undo", "redo", "copy", "cut", "paste", "clear", "focus", "help",
-        "AA readout", "Vertex labels readout", "Overlay scope readout",
+        "AA readout", "AA passes readout", "Vertex labels readout", "Overlay scope readout",
         "Polygon highlight readout",
     };
     UiRenderSnapshot snap;

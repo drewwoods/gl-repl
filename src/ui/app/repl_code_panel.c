@@ -2722,26 +2722,30 @@ typedef struct {
     char cost[32];
     char line[64];
     char aa[32];
-    char vlabel[32];
+    char aa_passes[16];
     char scope[32];
+    char vlabel[32];
     char poly[32];
     char unbal[32];
     int  cmds_w;
     int  cost_w;
     int  line_w;
-    int  aa_x;                  /* window-x of the AA readout (clickable) */
+    int  aa_x;                  /* window-x of the AA mode readout (clickable) */
     int  aa_w;
-    int  vlabel_x;              /* window-x of the Vertex labels readout (clickable) */
-    int  vlabel_w;
+    int  aa_passes_x;           /* window-x of the AA passes readout (clickable) */
+    int  aa_passes_w;
     int  scope_x;               /* window-x of the Overlay scope readout (clickable) */
     int  scope_w;
+    int  vlabel_x;              /* window-x of the Vertex labels readout (clickable) */
+    int  vlabel_w;
     int  poly_x;                /* window-x of the Polygon highlight readout (clickable) */
     int  poly_w;
     int  unbal_w;
     int  has_cost;
     int  has_aa;
-    int  has_vlabel;
+    int  has_aa_passes;
     int  has_scope;
+    int  has_vlabel;
     int  has_poly;
     int  has_unbal;
     int  left_edge;             /* window-x just past the last left-cluster glyph */
@@ -2824,30 +2828,42 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
 
     L.left_edge = tx;
 
-    /* Center cluster: state configs (AA/passes, Vertex labels, Overlay scope, Polygon highlight).
+    /* Center cluster: state configs (AA mode, AA passes, Overlay scope, Vertex labels, Polygon highlight).
      * Formatted first to measure width, then centered symmetrically at
      * sx + sw / 2 so cursor movements / cost label changes don't shift them.
      * When panel width is constrained, center labels are culled (poly ->
-     * scope -> vlabel -> aa) before any right-hand editor buttons are hidden. */
+     * vlabel -> scope -> aa_passes -> aa) before any right-hand editor buttons are hidden. */
     L.has_aa = snap->render.use_accum ? 1 : 0;
     if (L.has_aa) {
-        const char *effect_name = "AA";
-        if (snap->render.accum_effect == RENDER3D_ACCUM_EFFECT_BLUR)
-            effect_name = "Blur";
-        else if (snap->render.accum_effect == RENDER3D_ACCUM_EFFECT_BLUR_CAMERA)
-            effect_name = "Cam";
-
-        if (snap->render.accum_effect != RENDER3D_ACCUM_EFFECT_OFF &&
-            snap->render.accum_passes > 1)
-            snprintf(L.aa, sizeof L.aa, "%s %dx",
-                     effect_name,
-                     snap->render.accum_passes);
-        else
-            snprintf(L.aa, sizeof L.aa, "AA off");
+        switch (snap->render.accum_effect) {
+        case RENDER3D_ACCUM_EFFECT_AA:
+            snprintf(L.aa, sizeof L.aa, "AA");
+            break;
+        case RENDER3D_ACCUM_EFFECT_BLUR:
+            snprintf(L.aa, sizeof L.aa, "Blur");
+            break;
+        case RENDER3D_ACCUM_EFFECT_BLUR_CAMERA:
+            snprintf(L.aa, sizeof L.aa, "Cam");
+            break;
+        case RENDER3D_ACCUM_EFFECT_OFF:
+        default:
+            snprintf(L.aa, sizeof L.aa, "noAA");
+            break;
+        }
         L.aa_w = (int)strlen(L.aa) * FONT_SMALL_W;
     } else {
         L.aa[0] = '\0';
         L.aa_w = 0;
+    }
+
+    L.has_aa_passes = snap->render.use_accum ? 1 : 0;
+    if (L.has_aa_passes) {
+        snprintf(L.aa_passes, sizeof L.aa_passes, "%dx",
+                 snap->render.accum_passes > 0 ? snap->render.accum_passes : 1);
+        L.aa_passes_w = (int)strlen(L.aa_passes) * FONT_SMALL_W;
+    } else {
+        L.aa_passes[0] = '\0';
+        L.aa_passes_w = 0;
     }
 
     /* Overlay scope readout. */
@@ -2928,15 +2944,24 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
         int start_x = 0, end_x = 0;
         int count = 0;
 
-        for (int pass = 0; pass < 5; pass++) {
+        for (int pass = 0; pass < 6; pass++) {
             if (pass == 1) L.has_poly = 0;
             if (pass == 2) L.has_vlabel = 0;
             if (pass == 3) L.has_scope = 0;
-            if (pass == 4) L.has_aa = 0;
+            if (pass == 4) L.has_aa_passes = 0;
+            if (pass == 5) L.has_aa = 0;
 
             count = 0;
             int center_w = 0;
-            if (L.has_aa) { center_w += L.aa_w; count++; }
+            if (L.has_aa || L.has_aa_passes) {
+                if (L.has_aa && L.has_aa_passes)
+                    center_w += L.aa_w + FONT_SMALL_W + L.aa_passes_w;
+                else if (L.has_aa)
+                    center_w += L.aa_w;
+                else
+                    center_w += L.aa_passes_w;
+                count++;
+            }
             if (L.has_scope) { center_w += (count > 0 ? STATUSBAR_SEP_W : 0) + L.scope_w; count++; }
             if (L.has_vlabel) { center_w += (count > 0 ? STATUSBAR_SEP_W : 0) + L.vlabel_w; count++; }
             if (L.has_poly) { center_w += (count > 0 ? STATUSBAR_SEP_W : 0) + L.poly_w; count++; }
@@ -2957,12 +2982,23 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
         if (count > 0) {
             int cx = start_x;
             int first = 1;
-            if (L.has_aa) {
-                L.aa_x = cx;
-                cx += L.aa_w;
+            if (L.has_aa || L.has_aa_passes) {
+                if (L.has_aa && L.has_aa_passes) {
+                    L.aa_x = cx;
+                    L.aa_passes_x = cx + L.aa_w + FONT_SMALL_W;
+                    cx += L.aa_w + FONT_SMALL_W + L.aa_passes_w;
+                } else if (L.has_aa) {
+                    L.aa_x = cx;
+                    L.aa_passes_x = 0;
+                    cx += L.aa_w;
+                } else {
+                    L.aa_x = 0;
+                    L.aa_passes_x = cx;
+                    cx += L.aa_passes_w;
+                }
                 first = 0;
             } else {
-                L.aa_x = 0;
+                L.aa_x = L.aa_passes_x = 0;
             }
             if (L.has_scope) {
                 if (!first) cx += STATUSBAR_SEP_W;
@@ -2991,10 +3027,11 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
             L.right_edge = end_x;
         } else {
             L.has_aa = 0;
+            L.has_aa_passes = 0;
             L.has_scope = 0;
             L.has_vlabel = 0;
             L.has_poly = 0;
-            L.aa_x = L.scope_x = L.vlabel_x = L.poly_x = 0;
+            L.aa_x = L.aa_passes_x = L.scope_x = L.vlabel_x = L.poly_x = 0;
             L.center_end_x = 0;
             L.right_edge = L.left_edge;
         }
@@ -3005,12 +3042,14 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
 
 typedef struct {
     int text_y;
-    int aa_kx, aa_kw;           /* center-cluster AA readout (clickable text) */
+    int aa_kx, aa_kw;           /* center-cluster AA mode readout (clickable text) */
     int aa_visible;
-    int vlabel_kx, vlabel_kw;   /* center-cluster Vertex labels readout */
-    int vlabel_visible;
+    int aa_passes_kx, aa_passes_kw; /* center-cluster AA passes readout (clickable text) */
+    int aa_passes_visible;
     int scope_kx, scope_kw;     /* center-cluster Overlay scope readout */
     int scope_visible;
+    int vlabel_kx, vlabel_kw;   /* center-cluster Vertex labels readout */
+    int vlabel_visible;
     int poly_kx, poly_kw;       /* center-cluster Polygon highlight readout */
     int poly_visible;
     int help_kx, help_kw;
@@ -3043,18 +3082,21 @@ static ReplStatusbarHints repl_code_panel_statusbar_hints(
     h.ky         = sy + 3;
     h.kh         = sh - 6;
 
-    h.aa_visible     = L.has_aa;
-    h.aa_kx          = L.aa_x;
-    h.aa_kw          = L.aa_w;
-    h.vlabel_visible = L.has_vlabel;
-    h.vlabel_kx      = L.vlabel_x;
-    h.vlabel_kw      = L.vlabel_w;
-    h.scope_visible  = L.has_scope;
-    h.scope_kx       = L.scope_x;
-    h.scope_kw       = L.scope_w;
-    h.poly_visible   = L.has_poly;
-    h.poly_kx        = L.poly_x;
-    h.poly_kw        = L.poly_w;
+    h.aa_visible        = L.has_aa;
+    h.aa_kx             = L.aa_x;
+    h.aa_kw             = L.aa_w;
+    h.aa_passes_visible = L.has_aa_passes;
+    h.aa_passes_kx      = L.aa_passes_x;
+    h.aa_passes_kw      = L.aa_passes_w;
+    h.scope_visible     = L.has_scope;
+    h.scope_kx          = L.scope_x;
+    h.scope_kw          = L.scope_w;
+    h.vlabel_visible    = L.has_vlabel;
+    h.vlabel_kx         = L.vlabel_x;
+    h.vlabel_kw         = L.vlabel_w;
+    h.poly_visible      = L.has_poly;
+    h.poly_kx           = L.poly_x;
+    h.poly_kw           = L.poly_w;
 
     h.help_kw = h.kh + 4;
     h.help_kx = sx + sw - CODE_MARGIN_X - h.help_kw;
@@ -3145,16 +3187,21 @@ static int repl_code_panel_statusbar_hint_hit_kind(
                                       h->aa_kx, h->ky,
                                       h->aa_kw, h->kh))
         return UI_HIT_CODE_AA_STATUS;
-    if (h->vlabel_visible &&
+    if (h->aa_passes_visible &&
         repl_code_panel_point_in_rect(mx, gl_y,
-                                      h->vlabel_kx, h->ky,
-                                      h->vlabel_kw, h->kh))
-        return UI_HIT_CODE_VERTEX_LABELS_STATUS;
+                                      h->aa_passes_kx, h->ky,
+                                      h->aa_passes_kw, h->kh))
+        return UI_HIT_CODE_AA_PASSES_STATUS;
     if (h->scope_visible &&
         repl_code_panel_point_in_rect(mx, gl_y,
                                       h->scope_kx, h->ky,
                                       h->scope_kw, h->kh))
         return UI_HIT_CODE_OVERLAY_SCOPE_STATUS;
+    if (h->vlabel_visible &&
+        repl_code_panel_point_in_rect(mx, gl_y,
+                                      h->vlabel_kx, h->ky,
+                                      h->vlabel_kw, h->kh))
+        return UI_HIT_CODE_VERTEX_LABELS_STATUS;
     if (h->poly_visible &&
         repl_code_panel_point_in_rect(mx, gl_y,
                                       h->poly_kx, h->ky,
@@ -3241,8 +3288,13 @@ static int repl_code_panel_statusbar_tooltip_for_hit(
             KM_MODS(GLR_CODE_FOCUS), 0, h->focus_kx, h->focus_kw);
         return 1;
     case UI_HIT_CODE_AA_STATUS:
+        repl_code_panel_statusbar_tooltip_set(
+            tooltip, "Accum effect", KM_KEY(GLR_ACCUM_EFFECT),
+            KM_MODS(GLR_ACCUM_EFFECT), 0, h->aa_kx, h->aa_kw);
+        return 1;
+    case UI_HIT_CODE_AA_PASSES_STATUS:
         repl_code_panel_statusbar_tooltip_set_label(
-            tooltip, "Accum passes", h->aa_kx, h->aa_kw);
+            tooltip, "Accum passes", h->aa_passes_kx, h->aa_passes_kw);
         return 1;
     case UI_HIT_CODE_VERTEX_LABELS_STATUS:
         repl_code_panel_statusbar_tooltip_set(
@@ -3723,8 +3775,9 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
          * and pointing at the scope readout bands the set it governs. */
         {
             int first = 1;
-            int aa_active = snap->render.accum_effect != RENDER3D_ACCUM_EFFECT_OFF &&
+            int aa_mode_active = snap->render.accum_effect != RENDER3D_ACCUM_EFFECT_OFF &&
                             snap->render.accum_passes > 1;
+            int aa_passes_active = snap->render.accum_passes > 1;
             int vlabel_active =
                 snap->config_values[GLR_CONFIG_VERTEX_LABELS] != OVERLAY_VERTEX_LABEL_OFF;
             int poly_active =
@@ -3759,8 +3812,14 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
             }
 
             if (L.has_aa) {
-                repl_code_panel_statusbar_state_color(aa_active);
+                repl_code_panel_statusbar_state_color(aa_mode_active);
                 gl2d_draw_string((float)L.aa_x, (float)text_y, L.aa, FONT_SMALL);
+                first = 0;
+            }
+
+            if (L.has_aa_passes) {
+                repl_code_panel_statusbar_state_color(aa_passes_active);
+                gl2d_draw_string((float)L.aa_passes_x, (float)text_y, L.aa_passes, FONT_SMALL);
                 first = 0;
             }
 

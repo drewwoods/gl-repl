@@ -1958,7 +1958,9 @@ static void route_right_press(int x, int y) {
         route_histogram_series_solo_hit(&hit);
         return;
     case UI_HIT_CODE_AA_STATUS:
-        /* Backward through accum passes, matching the Config flyout's right-press. */
+        route_code_cfg_cycle_hit(GLR_CONFIG_ACCUM_EFFECT, -1);
+        return;
+    case UI_HIT_CODE_AA_PASSES_STATUS:
         route_code_cfg_cycle_hit(GLR_CONFIG_ACCUM_PASSES, -1);
         return;
     case UI_HIT_CODE_VERTEX_LABELS_STATUS:
@@ -2445,6 +2447,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
     case UI_HIT_CODE_FOCUS_TOGGLE:
         consumed = route_code_focus_toggle_hit(); break;
     case UI_HIT_CODE_AA_STATUS:
+        consumed = route_code_cfg_cycle_hit(GLR_CONFIG_ACCUM_EFFECT, +1); break;
+    case UI_HIT_CODE_AA_PASSES_STATUS:
         consumed = route_code_cfg_cycle_hit(GLR_CONFIG_ACCUM_PASSES, +1); break;
     case UI_HIT_CODE_VERTEX_LABELS_STATUS:
         consumed = route_code_cfg_cycle_hit(GLR_CONFIG_VERTEX_LABELS, +1); break;

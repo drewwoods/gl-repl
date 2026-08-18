@@ -318,14 +318,15 @@ static int statusbar_hit_x(const UiRenderSnapshot *snap, int status_my,
 static void test_statusbar_readouts(TestHarness *h) {
     UiRenderSnapshot snap;
     UiReplCodePanelLayout layout;
-    int cp_y, status_my;
-    int aa_x_plain, aa_x_with_cost, aa_y;
+    int cp_y, status_my, aa_y;
+    int aa_x_plain, aa_x_with_cost;
+    int aa_passes_x_plain, aa_passes_x_with_cost;
     int vlabel_x_plain, vlabel_x_with_cost;
     int scope_x_plain, scope_x_with_cost;
     int poly_x_plain, poly_x_with_cost;
     int val_before;
 
-    printf("Testing statusbar readouts position + clicks (AA, Vertex Labels, Overlay Scope, Poly Highlight)...\n");
+    printf("Testing statusbar readouts position + clicks (AA Mode, AA Passes, Overlay Scope, Vertex Labels, Poly Highlight)...\n");
 
     reset_doc_fixture();
     glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
@@ -355,15 +356,18 @@ static void test_statusbar_readouts(TestHarness *h) {
     TEST_ASSERT_TRUE(h, "cursor on a plain line shows no cost readout",
                      snap.cursor_cost_label[0] == '\0');
     aa_x_plain = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_AA_STATUS);
-    vlabel_x_plain = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_VERTEX_LABELS_STATUS);
+    aa_passes_x_plain = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_AA_PASSES_STATUS);
     scope_x_plain = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_OVERLAY_SCOPE_STATUS);
+    vlabel_x_plain = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_VERTEX_LABELS_STATUS);
     poly_x_plain = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_POLY_HIGHLIGHT_STATUS);
-    TEST_ASSERT_TRUE(h, "AA readout is hit-testable", aa_x_plain >= 0);
-    TEST_ASSERT_TRUE(h, "Vertex Labels readout is hit-testable", vlabel_x_plain >= 0);
+    TEST_ASSERT_TRUE(h, "AA mode readout is hit-testable", aa_x_plain >= 0);
+    TEST_ASSERT_TRUE(h, "AA passes readout is hit-testable", aa_passes_x_plain >= 0);
     TEST_ASSERT_TRUE(h, "Overlay Scope readout is hit-testable", scope_x_plain >= 0);
+    TEST_ASSERT_TRUE(h, "Vertex Labels readout is hit-testable", vlabel_x_plain >= 0);
     TEST_ASSERT_TRUE(h, "Poly Highlight readout is hit-testable", poly_x_plain >= 0);
-    TEST_ASSERT_TRUE(h, "readout ordering: AA < Scope < VLabels < Poly",
-                     aa_x_plain < scope_x_plain &&
+    TEST_ASSERT_TRUE(h, "readout ordering: AA mode < AA passes < Scope < VLabels < Poly",
+                     aa_x_plain < aa_passes_x_plain &&
+                     aa_passes_x_plain < scope_x_plain &&
                      scope_x_plain < vlabel_x_plain &&
                      vlabel_x_plain < poly_x_plain);
 
@@ -375,34 +379,59 @@ static void test_statusbar_readouts(TestHarness *h) {
     TEST_ASSERT_TRUE(h, "cursor on the loop head shows a cost readout",
                      snap.cursor_cost_label[0] != '\0');
     aa_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_AA_STATUS);
-    vlabel_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_VERTEX_LABELS_STATUS);
+    aa_passes_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_AA_PASSES_STATUS);
     scope_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_OVERLAY_SCOPE_STATUS);
+    vlabel_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_VERTEX_LABELS_STATUS);
     poly_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_POLY_HIGHLIGHT_STATUS);
-    TEST_ASSERT_TRUE(h, "cost readout does not shift centered AA readout", aa_x_with_cost == aa_x_plain);
-    TEST_ASSERT_TRUE(h, "cost readout does not shift centered VLabels readout", vlabel_x_with_cost == vlabel_x_plain);
+    TEST_ASSERT_TRUE(h, "cost readout does not shift centered AA mode readout", aa_x_with_cost == aa_x_plain);
+    TEST_ASSERT_TRUE(h, "cost readout does not shift centered AA passes readout", aa_passes_x_with_cost == aa_passes_x_plain);
     TEST_ASSERT_TRUE(h, "cost readout does not shift centered Scope readout", scope_x_with_cost == scope_x_plain);
+    TEST_ASSERT_TRUE(h, "cost readout does not shift centered VLabels readout", vlabel_x_with_cost == vlabel_x_plain);
     TEST_ASSERT_TRUE(h, "cost readout does not shift centered Poly Highlight readout", poly_x_with_cost == poly_x_plain);
 
-    /* Left click AA -> advances accum passes, through the dispatch switch. */
-    val_before = glr_config_get(GLR_CONFIG_ACCUM_PASSES);
+    /* Left click AA mode -> advances accum effect, through the dispatch switch. */
+    val_before = glr_config_get(GLR_CONFIG_ACCUM_EFFECT);
     {
         UiHit ah = ui_hit_none();
         ah.kind = UI_HIT_CODE_AA_STATUS;
         glr_ctrl_router_handle_code_panel_hit(ah, aa_x_with_cost, aa_y);
     }
+    TEST_ASSERT_TRUE(h, "left click advances accum effect",
+                     glr_config_get(GLR_CONFIG_ACCUM_EFFECT) ==
+                         (val_before + 1) % 4);
+
+    /* Right press AA mode -> decrements accum effect, through the real mouse callback. */
+    build_doc(&snap, &layout);
+    aa_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_AA_STATUS);
+    val_before = glr_config_get(GLR_CONFIG_ACCUM_EFFECT);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, aa_x_with_cost, status_my);
+    TEST_ASSERT_TRUE(h, "right click decrements accum effect",
+                     glr_config_get(GLR_CONFIG_ACCUM_EFFECT) ==
+                         (val_before - 1 + 4) % 4);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, aa_x_with_cost, status_my);
+
+    /* Left click AA passes -> advances accum passes, through the dispatch switch. */
+    build_doc(&snap, &layout);
+    aa_passes_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_AA_PASSES_STATUS);
+    val_before = glr_config_get(GLR_CONFIG_ACCUM_PASSES);
+    {
+        UiHit ah = ui_hit_none();
+        ah.kind = UI_HIT_CODE_AA_PASSES_STATUS;
+        glr_ctrl_router_handle_code_panel_hit(ah, aa_passes_x_with_cost, aa_y);
+    }
     TEST_ASSERT_TRUE(h, "left click advances accum passes",
                      glr_config_get(GLR_CONFIG_ACCUM_PASSES) ==
                          (val_before + 1) % ACCUM_PASS_STATES);
 
-    /* Right press AA -> decrements accum passes, through the real mouse callback. */
+    /* Right press AA passes -> decrements accum passes, through the real mouse callback. */
     build_doc(&snap, &layout);
-    aa_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_AA_STATUS);
+    aa_passes_x_with_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_AA_PASSES_STATUS);
     val_before = glr_config_get(GLR_CONFIG_ACCUM_PASSES);
-    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, aa_x_with_cost, status_my);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_DOWN, aa_passes_x_with_cost, status_my);
     TEST_ASSERT_TRUE(h, "right click decrements accum passes",
                      glr_config_get(GLR_CONFIG_ACCUM_PASSES) ==
                          (val_before - 1 + ACCUM_PASS_STATES) % ACCUM_PASS_STATES);
-    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, aa_x_with_cost, status_my);
+    glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, aa_passes_x_with_cost, status_my);
 
     /* Left click Vertex Labels -> next mode, through dispatch switch. */
     build_doc(&snap, &layout);
@@ -481,12 +510,14 @@ static void test_statusbar_readouts(TestHarness *h) {
     ui_layout_code_panel_rect(NULL, &cp_y, NULL, NULL);
     status_my = ui_state_viewport().window_h - (cp_y + STATUSBAR_H / 2);
     build_doc(&snap, &layout);
-    TEST_ASSERT_TRUE(h, "center AA readout culled on narrow 360px panel",
+    TEST_ASSERT_TRUE(h, "center AA mode readout culled on narrow 360px panel",
                      statusbar_hit_x(&snap, status_my, UI_HIT_CODE_AA_STATUS) == -1);
-    TEST_ASSERT_TRUE(h, "center VLabels readout culled on narrow 360px panel",
-                     statusbar_hit_x(&snap, status_my, UI_HIT_CODE_VERTEX_LABELS_STATUS) == -1);
+    TEST_ASSERT_TRUE(h, "center AA passes readout culled on narrow 360px panel",
+                     statusbar_hit_x(&snap, status_my, UI_HIT_CODE_AA_PASSES_STATUS) == -1);
     TEST_ASSERT_TRUE(h, "center Scope readout culled on narrow 360px panel",
                      statusbar_hit_x(&snap, status_my, UI_HIT_CODE_OVERLAY_SCOPE_STATUS) == -1);
+    TEST_ASSERT_TRUE(h, "center VLabels readout culled on narrow 360px panel",
+                     statusbar_hit_x(&snap, status_my, UI_HIT_CODE_VERTEX_LABELS_STATUS) == -1);
     TEST_ASSERT_TRUE(h, "center Poly Highlight readout culled on narrow 360px panel",
                      statusbar_hit_x(&snap, status_my, UI_HIT_CODE_POLY_HIGHLIGHT_STATUS) == -1);
     TEST_ASSERT_TRUE(h, "right help button remains visible on narrow 360px panel",
