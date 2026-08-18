@@ -87,13 +87,22 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
+
+static GLdouble *repl_gldouble4(GLdouble a, GLdouble b, GLdouble c, GLdouble d) {
+  static GLdouble repl_gldouble4_buf[4];
+  repl_gldouble4_buf[0] = a;
+  repl_gldouble4_buf[1] = b;
+  repl_gldouble4_buf[2] = c;
+  repl_gldouble4_buf[3] = d;
+  return repl_gldouble4_buf;
+}
 --- display_header ---
 void display(void) {
   glLoadIdentity();
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -15.0000f);   // @camera dist
+  glTranslatef(0.0000f, 0.0000f, -9.5000f);   // @camera dist
   glRotatef(26.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
   glRotatef(-20.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
@@ -103,9 +112,10 @@ void display(void) {
   // --- Description -----------------
   // Dusk lighthouse atoll - a coherent feature tour:
   // One scene, many features: a parametric sea, a tessellated island with a
-  // lagoon cutout, a lighthouse of stacked GLUT solids with a sweeping
+  // lagoon cutout, a classic banded lighthouse with a sweeping
   // translucent beam, a recursive tree (if / else if / else), GLUT-solid
-  // rocks, additive-blended firefly points, and a moon with a halo ring.
+  // rocks, additive-blended firefly points, and a clip-plane carved moon
+  // with an additive glowing corona and stippled halo ring.
 
   // --- Variables -----------------
   // Top-level scratch for the firefly loop at the bottom of the scene: x/y/z
@@ -159,70 +169,174 @@ void display(void) {
     }
   }
 
-  // --- island(): tessellated landmass with a lagoon cutout (GLU tess) ---
+  // --- island(): tessellated landmass with a lagoon cutout and 3D cliff skirts ---
   island(r, lagoon) {
-    float k, x, z; // coastline radius; lagoon vertex position
+    float a, k, x, z, ct, st;
+    // 1. Top plateau surface (GLU polygon with carved lagoon cutout)
     glFrontFace(GL_CW);
     gluBegin(GLU_POLYGON);
-      // Outer wobbly coastline
+      // Outer wobbly coastline contour (strictly periodic)
       gluBegin(GLU_CONTOUR);
         gluNormal(0, 1, 0);
         for(i, 0, 30) {
-          k = r*(1 + 0.16*sin(i*0.9) + 0.09*cos(i*1.7));
-          gluColor(0.22 + 0.12*sin(i*0.5), 0.40 + 0.10*cos(i*0.7), 0.46 + 0.08*sin(i));
-          gluVertex(k*cos(i*TAU/30), 0, k*sin(i*TAU/30));
+          a = i*TAU/30;
+          k = r*(1 + 0.16*sin(3*a) + 0.09*cos(5*a));
+          gluColor(0.22 + 0.10*sin(2*a), 0.40 + 0.08*cos(3*a), 0.44 + 0.06*sin(a));
+          gluVertex(k*cos(a), 0, k*sin(a));
         }
       gluEnd();
-      // Inner lagoon contour, wound the opposite way (note the -i*TAU/20): under
-      // the tessellator's odd winding rule the reversed contour carves the hole.
+      // Inner lagoon contour (reversed winding carves the hole)
       gluBegin(GLU_CONTOUR);
         for(i, 0, 20) {
-          x = lagoon*cos(-i*TAU/20) - r*0.35;
-          z = lagoon*sin(-i*TAU/20) + r*0.2;
-          gluColor(0.08, 0.14, 0.2, 1);
+          a = -i*TAU/20;
+          x = lagoon*cos(a) - r*0.35;
+          z = lagoon*sin(a) + r*0.2;
+          gluColor(0.1, 0.18, 0.24, 1);
           gluVertex(x, 0, z);
         }
       gluEnd();
     gluEnd();
     glFrontFace(GL_CCW);
+
+    // 2. Outer shoreline cliff skirt (seamless loop from 0 to 30)
+    glBegin(GL_QUAD_STRIP);
+      for(i, 0, 31) {
+        a = i*TAU/30;
+        k = r*(1 + 0.16*sin(3*a) + 0.09*cos(5*a));
+        ct = cos(a);
+        st = sin(a);
+        glNormal3f(ct, 0.3, st);
+        glColor3f(0.20 + 0.08*sin(2*a), 0.32 + 0.06*cos(3*a), 0.36);
+        glVertex3f(k*ct, 0, k*st);
+        glColor3f(0.12, 0.18, 0.24);
+        glVertex3f((k + 0.12)*ct, -0.32, (k + 0.12)*st);
+      }
+    glEnd();
+
+    // 3. Inner lagoon basin skirt (seamless loop from 0 to 20)
+    glBegin(GL_QUAD_STRIP);
+      for(i, 0, 21) {
+        a = i*TAU/20;
+        ct = cos(a);
+        st = sin(a);
+        x = lagoon*ct - r*0.35;
+        z = lagoon*st + r*0.2;
+        glNormal3f(-ct, 0.4, -st);
+        glColor3f(0.14, 0.24, 0.28);
+        glVertex3f(x, 0, z);
+        glColor3f(0.08, 0.14, 0.2);
+        glVertex3f(lagoon*0.75*ct - r*0.35, -0.28, lagoon*0.75*st + r*0.2);
+      }
+    glEnd();
   }
 
-  // --- lighthouse(): stacked GLUT solids (cone / torus / sphere) ---
+  // --- lighthouse(): classic tapered tower with gallery and lantern ---
   lighthouse() {
+    float a, c, s;
     glPushMatrix();
-      // Base rock - cone, apex up
-      glColor3f(0.3, 0.34, 0.42);
+      // 1. Base foundation plinth (dark slate cylinder)
+      glColor3f(0.28, 0.3, 0.36);
+      glBegin(GL_QUAD_STRIP);
+        for(i, 0, 17) {
+          a = i*TAU/16;
+          c = cos(a);
+          s = sin(a);
+          glNormal3f(c, 0, s);
+          glVertex3f(0.44*c, 0.24, 0.44*s);
+          glVertex3f(0.48*c, 0.00, 0.48*s);
+        }
+      glEnd();
+      glBegin(GL_TRIANGLE_FAN);
+        glNormal3f(0, 1, 0);
+        glVertex3f(0, 0.24, 0);
+        for(i, 0, 17) {
+          a = i*TAU/16;
+          glVertex3f(0.44*cos(a), 0.24, 0.44*sin(a));
+        }
+      glEnd();
+
+      // 2. Tapered tower shaft with red and white bands
+      // Lower white section (y = 0.24 to 0.78)
+      glColor3f(0.92, 0.93, 0.96);
+      glBegin(GL_QUAD_STRIP);
+        for(i, 0, 17) {
+          a = i*TAU/16;
+          c = cos(a);
+          s = sin(a);
+          glNormal3f(c, 0.1, s);
+          glVertex3f(0.34*c, 0.78, 0.34*s);
+          glVertex3f(0.40*c, 0.24, 0.40*s);
+        }
+      glEnd();
+
+      // Middle red band (y = 0.78 to 1.32)
+      glColor3f(1, 0.35, 0.2);
+      glBegin(GL_QUAD_STRIP);
+        for(i, 0, 17) {
+          a = i*TAU/16;
+          c = cos(a);
+          s = sin(a);
+          glNormal3f(c, 0.1, s);
+          glVertex3f(0.28*c, 1.32, 0.28*s);
+          glVertex3f(0.34*c, 0.78, 0.34*s);
+        }
+      glEnd();
+
+      // Upper white section (y = 1.32 to 1.78)
+      glColor3f(0.92, 0.93, 0.96);
+      glBegin(GL_QUAD_STRIP);
+        for(i, 0, 17) {
+          a = i*TAU/16;
+          c = cos(a);
+          s = sin(a);
+          glNormal3f(c, 0.1, s);
+          glVertex3f(0.23*c, 1.78, 0.23*s);
+          glVertex3f(0.28*c, 1.32, 0.28*s);
+        }
+      glEnd();
+
+      // 3. Gallery deck / balcony (dark slate platform)
+      glColor3f(0.22, 0.24, 0.3);
       glPushMatrix();
-        glRotatef(-90, 1, 0, 0);
-        glutSolidCone(0.55, 0.5, 18, 3);
-      glPopMatrix();
-      glTranslatef(0, 0.42, 0);
-      // Tapered tower
-      glColor3f(0.9, 0.93, 0.97);
-      glPushMatrix();
-        glRotatef(-90, 1, 0, 0);
-        glutSolidCone(0.34, 1.5, 22, 1);
-      glPopMatrix();
-      // Coral band wrapping the tower
-      glPushMatrix();
-        glTranslatef(0, 0.62, 0);
+        glTranslatef(0, 1.78, 0);
         glRotatef(90, 1, 0, 0);
-        glColor3f(0.98, 0.46, 0.36);
-        glutSolidTorus(0.04, 0.22, 10, 22);
+        glutSolidTorus(0.035, 0.25, 8, 16);
       glPopMatrix();
-      // Lantern - shiny amber bulb
-      glTranslatef(0, 1.5, 0);
-      glColor3f(0.98, 0.82, 0.45);
+
+      // 4. Lantern room - glowing warm lamp inside
+      glTranslatef(0, 1.92, 0);
+      glColor3f(1, 0.85, 0.15);
       glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 90);
-      glutSolidSphere(0.2, 16, 12);
+      glutSolidSphere(0.12, 14, 10);
       glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16);
-      // Violet roof cone
-      glColor3f(0.62, 0.52, 0.95);
+
+      // Lantern cage / glass framing
+      glColor3f(0.24, 0.26, 0.32);
+      glLineWidth(2);
+      glBegin(GL_LINES);
+        for(i, 0, 6) {
+          a = i*TAU/6;
+          c = cos(a);
+          s = sin(a);
+          glVertex3f(0.18*c, -0.14, 0.18*s);
+          glVertex3f(0.18*c, 0.14, 0.18*s);
+        }
+      glEnd();
+      glLineWidth(1);
+
+      // 5. Conical roof cap (dark slate)
+      glColor3f(0.2, 0.22, 0.28);
       glPushMatrix();
-        glTranslatef(0, 0.16, 0);
+        glTranslatef(0, 0.14, 0);
         glRotatef(-90, 1, 0, 0);
-        glutSolidCone(0.24, 0.32, 14, 1);
+        glutSolidCone(0.24, 0.28, 16, 1);
       glPopMatrix();
+      // Finial ball on top
+      glPushMatrix();
+        glTranslatef(0, 0.43, 0);
+        glutSolidSphere(0.035, 8, 6);
+      glPopMatrix();
+
     glPopMatrix();
   }
 
@@ -270,6 +384,29 @@ void display(void) {
     }
   }
 
+  // --- fire_flies() - additive point sprites drifting over the atoll
+  fire_flies(num) {
+    glPushAttrib(GL_POINT_BIT | GL_LIGHTING_BIT | GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+    glDisable(GL_LIGHTING);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    glEnable(GL_POINT_SMOOTH);
+    glPointSize(7);
+    glBegin(GL_POINTS);
+      for(i, 0, fireflies) {
+        k = rand(i, 0)*TAU;
+        s = 1.2 + rand(i, 1)*flyRadius;
+        x = cos(k + t*(0.25 + rand(i, 2)*0.4))*s;
+        z = sin(k + t*(0.25 + rand(i, 2)*0.4))*s;
+        y = 0.1 + 1.4*rand(i, 3) + 0.18*sin(t*2 + i);
+        glColor4f(0.98, 0.74 + 0.22*rand(i, 4), 0.42, 0.75);
+        glVertex3f(x, y, z);
+      }
+    glEnd();
+    glPopAttrib();
+  }
+
   // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -294,33 +431,137 @@ void display(void) {
     sea(5.5, 13, 0.16);
   glPopMatrix();
 
-  // Island shelf just above the water
+  // Island shelf raised above the water waves
   glPushMatrix();
-    glTranslatef(0, -0.5, 0);
+    glTranslatef(0, -0.38, 0);
     island(2.2, 0.45);
   glPopMatrix();
 
   // Lighthouse on the island
   glPushMatrix();
-    glTranslatef(0.5, -0.5, 0.1);
+    glTranslatef(0.5, -0.38, 0.1);
     lighthouse();
+  glPopMatrix();
+
+  // Wind-swayed tree across the island
+  glPushMatrix();
+    glTranslatef(-1.2, -0.38, 0.4);
+    glRotatef(4*sin(t*0.4), 0, 0, 1);
+    tree(3, 0.62, t*0.2);
+  glPopMatrix();
+
+  // Ring of rocks around the shoreline (loop + GLUT solids)
+  for(i, 0, 7) {
+    glPushMatrix();
+      glRotatef(i*360/7 + 20, 0, 1, 0);
+      glTranslatef(1.55, -0.42, 0);
+      glColor3f(0.28, 0.31, 0.4);
+      glScalef(1, 0.55, 1);
+      glutSolidSphere(0.16 + 0.07*rand(i, 7), 8, 6);
+    glPopMatrix();
+  }
+
+  // Some June-bugs
+  fire_flies(fireflies);
+
+  // Moon: crescent carved by glClipPlane, radiant corona & stippled halo
+  glPushMatrix();
+    glTranslatef(-3.2, 2.5, -2);
+    glRotatef(-28, 0, 0, 1);
+    glRotatef(25, 0, 1, 0);
+
+    // 1. Soft glowing corona (additive blended radial fan)
+    glDisable(GL_LIGHTING);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    glBegin(GL_TRIANGLE_FAN);
+      glColor4f(0.55, 0.3, 1, 0.45);
+      glVertex3f(0, 0, -0.15);
+      for(i, 0, 33) {
+        glColor4f(0.42, 0.32, 0.85, 0);
+        glVertex3f(1.4*cos(i*TAU/32), 1.4*sin(i*TAU/32), -0.15);
+      }
+    glEnd();
+
+    // 2. Stippled celestial halo ring (glLineStipple)
+    glEnable(GL_LINE_STIPPLE);
+    glLineStipple(2, 0xCCCC);
+    glLineWidth(1);
+    glBegin(GL_LINE_LOOP);
+      for(i, 0, 48) {
+        glColor4f(0.55, 0.3, 1, 0.75);
+        glVertex3f(1.05*cos(i*TAU/48), 1.05*sin(i*TAU/48), 0);
+      }
+    glEnd();
+    glDisable(GL_LINE_STIPPLE);
+    glLineWidth(1);
+    glDisable(GL_BLEND);
+    glDepthMask(GL_TRUE);
+
+    // 3. Crescent moon carved with glClipPlane
+    glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0.65, 0.15, 0.45, -0.02});
+    glEnable(GL_CLIP_PLANE0);
+    glColor3f(0.993333, 0.989095, 0.887378);
+    glutSolidSphere(0.56, 24, 18);
+    glDisable(GL_CLIP_PLANE0);
+
+    // 4. Earthshine dark-side sphere
+    glColor3f(0.12, 0.15, 0.25);
+    glutSolidSphere(0.53, 20, 14);
+
+    // 5. Visible lunar craters and maria on the dark earthshine face
+    // Large crater with dark floor and raised rim
+    glPushMatrix();
+      glTranslatef(0.16, 0.12, 0.49);
+      glRotatef(-14, 1, 0, 0);
+      glRotatef(18, 0, 1, 0);
+      glColor3f(0.05, 0.07, 0.12);
+      glutSolidSphere(0.07, 10, 8);
+      glColor3f(0.32, 0.36, 0.54);
+      glutSolidTorus(0.035, 0.08, 6, 14);
+    glPopMatrix();
+
+    // Medium crater
+    glPushMatrix();
+      glTranslatef(-0.08, -0.16, 0.5);
+      glRotatef(18, 1, 0, 0);
+      glRotatef(-10, 0, 1, 0);
+      glColor3f(0.06, 0.08, 0.14);
+      glutSolidSphere(0.055, 8, 6);
+      glColor3f(0.3, 0.34, 0.5);
+      glutSolidTorus(0.038, 0.055, 6, 12);
+    glPopMatrix();
+
+    // Terminator crater with illuminated rim
+    glPushMatrix();
+      glTranslatef(-0.2, 0.08, 0.48);
+      glRotatef(-10, 1, 0, 0);
+      glRotatef(-22, 0, 1, 0);
+      glColor3f(0.06, 0.08, 0.14);
+      glutSolidSphere(0.055, 8, 6);
+      glColor3f(0.55, 0.6, 0.78);
+      glutSolidTorus(0.038, 0.05, 6, 10);
+    glPopMatrix();
+
+    glEnable(GL_LIGHTING);
   glPopMatrix();
 
   // Sweeping light beams from the lantern (blend + depth-mask off)
   glPushMatrix();
-    glTranslatef(0.5, 1.42, 0.1);
+    glTranslatef(0.5, 1.54, 0.1);
     glRotatef(t*55, 0, 1, 0);
     glDisable(GL_LIGHTING);
     glDepthMask(GL_FALSE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE);
     glBegin(GL_TRIANGLES);
-      glColor4f(0.98, 0.82, 0.45, 0.55);
+      glColor4f(1, 0.85, 0.15, 0.55);
       glVertex3f(0, 0, 0);
       glColor4f(0.98, 0.82, 0.45, 0);
       glVertex3f(7, -0.5, 0.7);
       glVertex3f(7, 0.5, -0.7);
-      glColor4f(0.98, 0.82, 0.45, 0.55);
+      glColor4f(1, 0.85, 0.15, 0.55);
       glVertex3f(0, 0, 0);
       glColor4f(0.98, 0.82, 0.45, 0);
       glVertex3f(-7, 0.5, 0.7);
@@ -331,66 +572,10 @@ void display(void) {
     glEnable(GL_LIGHTING);
   glPopMatrix();
 
-  // Wind-swayed tree across the island
-  glPushMatrix();
-    glTranslatef(-1.2, -0.5, 0.4);
-    glRotatef(4*sin(t*0.4), 0, 0, 1);
-    tree(3, 0.62, t*0.2);
-  glPopMatrix();
-
-  // Ring of rocks around the shoreline (loop + GLUT solids)
-  for(i, 0, 7) {
-    glPushMatrix();
-      glRotatef(i*360/7 + 20, 0, 1, 0);
-      glTranslatef(2, -0.55, 0);
-      glColor3f(0.28, 0.31, 0.4);
-      glScalef(1, 0.55, 1);
-      glutSolidSphere(0.16 + 0.07*rand(i, 7), 8, 6);
-    glPopMatrix();
-  }
-
-  // Fireflies - additive point sprites drifting over the atoll
-  glDisable(GL_LIGHTING);
-  glDepthMask(GL_FALSE);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-  glEnable(GL_POINT_SMOOTH);
-  glPointSize(7);
-  glBegin(GL_POINTS);
-    for(i, 0, fireflies) {
-      k = rand(i, 0)*TAU;
-      s = 1.2 + rand(i, 1)*flyRadius;
-      x = cos(k + t*(0.25 + rand(i, 2)*0.4))*s;
-      z = sin(k + t*(0.25 + rand(i, 2)*0.4))*s;
-      y = 0.1 + 1.4*rand(i, 3) + 0.18*sin(t*2 + i);
-      glColor4f(0.98, 0.74 + 0.22*rand(i, 4), 0.42, 0.75);
-      glVertex3f(x, y, z);
-    }
-  glEnd();
-  glDisable(GL_POINT_SMOOTH);
-  glDepthMask(GL_TRUE);
-  glDisable(GL_BLEND);
-  glEnable(GL_LIGHTING);
-
-  // Moon with a violet halo ring, parked in the sky
-  glPushMatrix();
-    glTranslatef(-3.6, 3, -2);
-    glDisable(GL_LIGHTING);
-    glColor3f(0.92, 0.95, 0.98);
-    glutSolidSphere(0.55, 22, 16);
-    glBegin(GL_LINE_LOOP);
-      for(i, 0, 48) {
-        glColor3f(0.62, 0.52, 0.95);
-        glVertex3f(0.92*cos(i*TAU/48), 0.92*sin(i*TAU/48), 0);
-      }
-    glEnd();
-    glEnable(GL_LIGHTING);
-  glPopMatrix();
-
   // Caption readout (glRasterPos + bitmap label)
   glDisable(GL_LIGHTING);
   glColor3f(0.92, 0.95, 0.98);
-  glRasterPos3f(-3.2, 2.2, 0);
+  glRasterPos3f(-3.2, 1.4, 0);
   label("dusk atoll");
   glEnable(GL_LIGHTING);
 --- render_state ---
