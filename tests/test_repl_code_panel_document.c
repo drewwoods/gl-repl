@@ -362,10 +362,10 @@ static void test_statusbar_readouts(TestHarness *h) {
     TEST_ASSERT_TRUE(h, "Vertex Labels readout is hit-testable", vlabel_x_plain >= 0);
     TEST_ASSERT_TRUE(h, "Overlay Scope readout is hit-testable", scope_x_plain >= 0);
     TEST_ASSERT_TRUE(h, "Poly Highlight readout is hit-testable", poly_x_plain >= 0);
-    TEST_ASSERT_TRUE(h, "readout ordering: AA < VLabels < Scope < Poly",
-                     aa_x_plain < vlabel_x_plain &&
-                     vlabel_x_plain < scope_x_plain &&
-                     scope_x_plain < poly_x_plain);
+    TEST_ASSERT_TRUE(h, "readout ordering: AA < Scope < VLabels < Poly",
+                     aa_x_plain < scope_x_plain &&
+                     scope_x_plain < vlabel_x_plain &&
+                     vlabel_x_plain < poly_x_plain);
 
     /* Cursor on the for-loop head: the "scope cmds N" readout appears.
      * State readouts are centered in the panel, so they do NOT shift when

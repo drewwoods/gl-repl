@@ -2850,6 +2850,28 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
         L.aa_w = 0;
     }
 
+    /* Overlay scope readout. */
+    {
+        int scope_mode = snap->config_values[GLR_CONFIG_OVERLAY_SCOPE];
+        switch ((OverlayScope)scope_mode) {
+        case OVERLAY_SCOPE_ALL_INSTANCES:
+            snprintf(L.scope, sizeof L.scope, "OS all");
+            break;
+        case OVERLAY_SCOPE_WHOLE_SCENE:
+            snprintf(L.scope, sizeof L.scope, "OS scene");
+            break;
+        case OVERLAY_SCOPE_SINGLE_POLYGON:
+            snprintf(L.scope, sizeof L.scope, "OS poly");
+            break;
+        case OVERLAY_SCOPE_LAST_INSTANCE:
+        default:
+            snprintf(L.scope, sizeof L.scope, "OS last");
+            break;
+        }
+        L.scope_w = (int)strlen(L.scope) * FONT_SMALL_W;
+        L.has_scope = 1;
+    }
+
     /* Vertex labels readout. */
     {
         int vlabel_mode = snap->config_values[GLR_CONFIG_VERTEX_LABELS];
@@ -2873,28 +2895,6 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
         }
         L.vlabel_w = (int)strlen(L.vlabel) * FONT_SMALL_W;
         L.has_vlabel = 1;
-    }
-
-    /* Overlay scope readout. */
-    {
-        int scope_mode = snap->config_values[GLR_CONFIG_OVERLAY_SCOPE];
-        switch ((OverlayScope)scope_mode) {
-        case OVERLAY_SCOPE_ALL_INSTANCES:
-            snprintf(L.scope, sizeof L.scope, "Sc all");
-            break;
-        case OVERLAY_SCOPE_WHOLE_SCENE:
-            snprintf(L.scope, sizeof L.scope, "Sc scene");
-            break;
-        case OVERLAY_SCOPE_SINGLE_POLYGON:
-            snprintf(L.scope, sizeof L.scope, "Sc poly");
-            break;
-        case OVERLAY_SCOPE_LAST_INSTANCE:
-        default:
-            snprintf(L.scope, sizeof L.scope, "Sc last");
-            break;
-        }
-        L.scope_w = (int)strlen(L.scope) * FONT_SMALL_W;
-        L.has_scope = 1;
     }
 
     /* Polygon highlight readout. */
@@ -2930,15 +2930,15 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
 
         for (int pass = 0; pass < 5; pass++) {
             if (pass == 1) L.has_poly = 0;
-            if (pass == 2) L.has_scope = 0;
-            if (pass == 3) L.has_vlabel = 0;
+            if (pass == 2) L.has_vlabel = 0;
+            if (pass == 3) L.has_scope = 0;
             if (pass == 4) L.has_aa = 0;
 
             count = 0;
             int center_w = 0;
             if (L.has_aa) { center_w += L.aa_w; count++; }
-            if (L.has_vlabel) { center_w += (count > 0 ? STATUSBAR_SEP_W : 0) + L.vlabel_w; count++; }
             if (L.has_scope) { center_w += (count > 0 ? STATUSBAR_SEP_W : 0) + L.scope_w; count++; }
+            if (L.has_vlabel) { center_w += (count > 0 ? STATUSBAR_SEP_W : 0) + L.vlabel_w; count++; }
             if (L.has_poly) { center_w += (count > 0 ? STATUSBAR_SEP_W : 0) + L.poly_w; count++; }
 
             if (count == 0) {
@@ -2964,14 +2964,6 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
             } else {
                 L.aa_x = 0;
             }
-            if (L.has_vlabel) {
-                if (!first) cx += STATUSBAR_SEP_W;
-                L.vlabel_x = cx;
-                cx += L.vlabel_w;
-                first = 0;
-            } else {
-                L.vlabel_x = 0;
-            }
             if (L.has_scope) {
                 if (!first) cx += STATUSBAR_SEP_W;
                 L.scope_x = cx;
@@ -2979,6 +2971,14 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
                 first = 0;
             } else {
                 L.scope_x = 0;
+            }
+            if (L.has_vlabel) {
+                if (!first) cx += STATUSBAR_SEP_W;
+                L.vlabel_x = cx;
+                cx += L.vlabel_w;
+                first = 0;
+            } else {
+                L.vlabel_x = 0;
             }
             if (L.has_poly) {
                 if (!first) cx += STATUSBAR_SEP_W;
@@ -2991,10 +2991,10 @@ static ReplStatusbarLeft repl_code_panel_statusbar_left(
             L.right_edge = end_x;
         } else {
             L.has_aa = 0;
-            L.has_vlabel = 0;
             L.has_scope = 0;
+            L.has_vlabel = 0;
             L.has_poly = 0;
-            L.aa_x = L.vlabel_x = L.scope_x = L.poly_x = 0;
+            L.aa_x = L.scope_x = L.vlabel_x = L.poly_x = 0;
             L.center_end_x = 0;
             L.right_edge = L.left_edge;
         }
@@ -3743,16 +3743,16 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
             /* Band first, so every group member draws over it. */
             if (group_lit) {
                 int gx0 = 0, gx1 = 0;
-                if (L.has_vlabel) {
-                    gx0 = L.vlabel_x;
-                    gx1 = L.vlabel_x + L.vlabel_w;
-                }
                 if (L.has_scope) {
-                    if (!gx1) gx0 = L.scope_x;
+                    gx0 = L.scope_x;
                     gx1 = L.scope_x + L.scope_w;
                 }
+                if (L.has_vlabel) {
+                    if (!gx0) gx0 = L.vlabel_x;
+                    gx1 = L.vlabel_x + L.vlabel_w;
+                }
                 if (L.has_poly) {
-                    if (!gx1) gx0 = L.poly_x;
+                    if (!gx0) gx0 = L.poly_x;
                     gx1 = L.poly_x + L.poly_w;
                 }
                 repl_code_panel_statusbar_group_band(gx0, gx1, h.ky, h.kh);
@@ -3764,16 +3764,6 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
                 first = 0;
             }
 
-            if (L.has_vlabel) {
-                if (!first) {
-                    int sep_x = L.vlabel_x - STATUSBAR_SEP_W;
-                    repl_code_panel_statusbar_sep(&sep_x, sy, sh);
-                }
-                repl_code_panel_statusbar_state_color(vlabel_active);
-                gl2d_draw_string((float)L.vlabel_x, (float)text_y, L.vlabel, FONT_SMALL);
-                first = 0;
-            }
-
             if (L.has_scope) {
                 if (!first) {
                     int sep_x = L.scope_x - STATUSBAR_SEP_W;
@@ -3781,6 +3771,16 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
                 }
                 repl_code_panel_statusbar_state_color(scope_active);
                 gl2d_draw_string((float)L.scope_x, (float)text_y, L.scope, FONT_SMALL);
+                first = 0;
+            }
+
+            if (L.has_vlabel) {
+                if (!first) {
+                    int sep_x = L.vlabel_x - STATUSBAR_SEP_W;
+                    repl_code_panel_statusbar_sep(&sep_x, sy, sh);
+                }
+                repl_code_panel_statusbar_state_color(vlabel_active);
+                gl2d_draw_string((float)L.vlabel_x, (float)text_y, L.vlabel, FONT_SMALL);
                 first = 0;
             }
 
