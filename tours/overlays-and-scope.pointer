@@ -28,10 +28,11 @@ scroll 0
 echo scene:0.25,0.76 24 3.4 The cursor line selects the active geometry.
 glide code:20 1.0
 click code:20
+glide scene:0.75,0.5 1.0
 pause 1.8
 
 # Polygon highlight
-echo scene:0.25,0.76 24 3.6 Polygon highlight (Ctrl+P) outlines the shape at the cursor.
+echo scene:0.25,0.76 24 3.6 Polygon highlight (Ctrl+P) outlines the shape drawn by the code at the cursor.
 pause 3.6
 echo scene:0.25,0.76 24 3.2 Ctrl+P cycles highlight: Clipped -> Off -> On.
 key \cP
@@ -50,12 +51,11 @@ skey f7
 pause 2.8
 
 # Overlay scope
-echo scene:0.25,0.76 24 3.8 Scope (F8) controls WHICH instances receive overlays.
+echo scene:0.25,0.76 24 3.8 Scope (F8) controls WHICH instances receive overlays\nDefault scope is Last instance: only the cursor's call.
 pause 3.8
-echo scene:0.25,0.76 24 3.6 Default scope is Last instance: only the cursor's call.
-pause 3.6
-echo scene:0.25,0.76 24 3.8 F8 switches to All instances across all triangle calls!
 skey f8
+echo scene:0.25,0.76 24 3.8 F8 switches to All instances across all triangle calls!\nNote both triangles are highlighted
+ring scene:0.25,0.5 1.0
 pause 3.5
 echo scene:0.25,0.76 24 3.6 Whole scene numbers every vertex across the entire program.
 skey f8
@@ -71,8 +71,12 @@ pause 2.5
 echo scene:0.25,0.76 24 3.4 Moving to the quad branch shifts focus to the center quad.
 glide code:10 0.9
 click code:10
-pause 2.4
+pause 1.4
+glide scene:0.5,0.5 1.0
+ring  scene:0.5,0.5 1.0
 
 echo scene:0.25,0.76 24 3.6 Status bar chips (OS, VL, PH) show and cycle states too!
+glide scene:0.5,0 1.0
+ring  scene:0.5,0 1.0
 pause 3.6
 echo scene:0.25,0.76 24 3.6 Tour finished - it's all yours!
