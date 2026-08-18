@@ -162,6 +162,21 @@ static inline int ui_status_history_index(const UiStatusHistory *h, int ordinal)
     return (start + ordinal) % UI_STATUS_HISTORY_CAP;
 }
 
+/* 1 if any live ring entry is UI_STATUS_ERROR. The messages bell uses
+ * this so an error stays visible after its banner has collapsed, until
+ * the entry is evicted. INFO and MUSIC do not trip it. */
+static inline int ui_status_history_has_error(const UiStatusHistory *h) {
+    int i;
+    if (!h)
+        return 0;
+    for (i = 0; i < h->count; i++) {
+        int idx = ui_status_history_index(h, i);
+        if (idx >= 0 && h->entries[idx].kind == UI_STATUS_ERROR)
+            return 1;
+    }
+    return 0;
+}
+
 /* Camera pose is intentionally not part of the UI chrome types. See
  * glr_camera.h for the app-owned orbit/pan/zoom state. */
 

@@ -315,7 +315,9 @@ static void status_draw_bell(float cx, float ry, float w, float h,
 }
 
 /* Draw the persistent messages bell + count. While a message is animating
- * the bell glows in the message hue and rings; otherwise it rests neutral. */
+ * the bell glows in the message hue and rings. At rest it stays error-red
+ * if any ring entry is an ERROR (so a buried failure remains visible
+ * after the banner collapses); otherwise it is muted. */
 static void status_history_render_button(const UiRenderSnapshot *snap,
                                          StatusAnim anim) {
     int bx, by, bw, bh;
@@ -324,6 +326,7 @@ static void status_history_render_button(const UiRenderSnapshot *snap,
     float cx, ry, glow;
     float bell[3];
     int text_x, text_y, i;
+    int hist_err;
 
     if (!ui_panels_status_history_button_rect(snap, &bx, &by, &bw, &bh))
         return;
@@ -341,14 +344,16 @@ static void status_history_render_button(const UiRenderSnapshot *snap,
     glVertex2f((float)bx + 0.5f, (float)(by + bh) - 0.5f);
     glEnd();
 
-    /* Bell hue: rest neutral, warm to the live message color while it
-     * animates (accent for INFO, error red for ERROR), brightened by
-     * the pulse. */
+    /* Bell hue: rest muted, or error-red while an ERROR is still in
+     * the ring. Warm toward the live message color while it animates
+     * (accent for INFO, error red for ERROR), brightened by the pulse. */
     int ry_i = by + (bh - BELL_ICON_H) / 2 + 1;
     cx = (float)(bx + MSGBTN_PAD_X) + BELL_ICON_W * 0.5f;
     ry = (float)ry_i;
     glow = anim.active ? (0.45f + 0.55f * anim.pulse) : 0.0f;
-    rest = ui_rgba(UI_TOK_TEXT_MUTED);
+    hist_err = ui_status_history_has_error(&snap->status_history);
+    rest = hist_err ? ui_rgba(UI_TOK_STATUS_ERR_TEXT)
+                    : ui_rgba(UI_TOK_TEXT_MUTED);
     {
         const float *hue = (snap->status.kind == UI_STATUS_ERROR)
                                ? ui_rgba(UI_TOK_STATUS_ERR_TEXT)
@@ -375,7 +380,7 @@ static void status_history_render_button(const UiRenderSnapshot *snap,
 
     text_x = bx + MSGBTN_PAD_X + BELL_ICON_W + BELL_GAP;
     text_y = by + (bh - FONT_SMALL_H) / 2 + 1;
-    ui_clr(UI_TOK_TEXT_MUTED);
+    ui_clr(hist_err ? UI_TOK_STATUS_ERR_TEXT : UI_TOK_TEXT_MUTED);
     gl2d_draw_string((float)text_x, (float)text_y, label, FONT_SMALL);
 }
 

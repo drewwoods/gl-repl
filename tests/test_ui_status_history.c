@@ -14,10 +14,12 @@
 #include "ui/app/layout.h"
 #include "ui/app/snapshot.h"
 #include "ui/core/metrics.h"
+#include "ui/core/theme.h"
 #include "support/test_harness.h"
 #include <GL/gl_stub_counts.h>
 #endif
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -104,6 +106,45 @@ static void test_consecutive_dedup(void) {
     h = ui_state_status_history();
     ASSERT_INT_EQ("non-consecutive dup is a fresh entry", h.count, 3);
     ASSERT_INT_EQ("fresh entry dup_count resets", (int)newest(&h)->dup_count, 1);
+}
+
+static void test_has_error(void) {
+    UiStatusHistory h;
+    int i;
+    char buf[32];
+
+    ui_state_reset();
+    h = ui_state_status_history();
+    ASSERT_INT_EQ("empty has no error", ui_status_history_has_error(&h), 0);
+    ASSERT_INT_EQ("null history has no error",
+                  ui_status_history_has_error(NULL), 0);
+
+    ui_state_status_set("info-line");
+    h = ui_state_status_history();
+    ASSERT_INT_EQ("info-only has no error", ui_status_history_has_error(&h), 0);
+
+    ui_state_status_set_music("now playing");
+    h = ui_state_status_history();
+    ASSERT_INT_EQ("music is not an error", ui_status_history_has_error(&h), 0);
+
+    ui_state_status_set_error("boom");
+    h = ui_state_status_history();
+    ASSERT_INT_EQ("error is visible", ui_status_history_has_error(&h), 1);
+
+    /* A later INFO must not hide a still-resident error: that is the
+     * buried-banner case the bell color keys off. */
+    ui_state_status_set("later info");
+    h = ui_state_status_history();
+    ASSERT_INT_EQ("buried error still counts", ui_status_history_has_error(&h), 1);
+
+    /* Fill the ring with unique INFOs so the error is evicted. */
+    for (i = 0; i < UI_STATUS_HISTORY_CAP; i++) {
+        snprintf(buf, sizeof(buf), "info-%02d", i);
+        ui_state_status_set(buf);
+    }
+    h = ui_state_status_history();
+    ASSERT_INT_EQ("evicted error no longer counts",
+                  ui_status_history_has_error(&h), 0);
 }
 
 static void test_kind_preserved(void) {
@@ -247,6 +288,45 @@ static void test_button_hit_and_render(void) {
                 gl_stub_counts[GL_STUB_glutBitmapString] > 0);
 }
 
+/* Idle button (banner already collapsed) must still emit the error hue
+ * when the ring holds an ERROR - that is the buried-message cue. */
+static void test_idle_bell_red_when_history_has_error(void) {
+    UiRenderSnapshot snap;
+    const float *err = ui_rgba(UI_TOK_STATUS_ERR_TEXT);
+    const char *path = "test_ui_status_history_bell_color.tmp";
+    FILE *f;
+    char line[256];
+    int saw_err = 0;
+
+    prime_layout();
+    ui_state_status_set_error("boom");
+    ui_state_status_mut()->ttl = 0;   /* banner gone; ring still holds it */
+    fill_snap(&snap);
+    snap.status.ttl = 0;
+    snap.status.text[0] = '\0';
+
+    gl_stub_trace_open(path);
+    ui_panels_render_scene_status(&snap);
+    gl_stub_trace_close();
+
+    f = fopen(path, "r");
+    ASSERT_TRUE("bell color trace opened", f != NULL);
+    if (f) {
+        while (fgets(line, (int)sizeof(line), f)) {
+            float r = 0.0f, g = 0.0f, b = 0.0f, a = 0.0f;
+            if (sscanf(line, "glColor4f %f %f %f %f", &r, &g, &b, &a) != 4)
+                continue;
+            if (fabsf(r - err[0]) < 0.002f &&
+                fabsf(g - err[1]) < 0.002f &&
+                fabsf(b - err[2]) < 0.002f)
+                saw_err = 1;
+        }
+        fclose(f);
+    }
+    remove(path);
+    ASSERT_TRUE("idle bell uses error hue when history has error", saw_err);
+}
+
 static void test_open_list_renders_and_consumes(void) {
     UiRenderSnapshot snap;
     int i;
@@ -269,12 +349,14 @@ static void test_open_list_renders_and_consumes(void) {
 int main(void) {
     test_ring_order_and_cap();
     test_consecutive_dedup();
+    test_has_error();
     test_kind_preserved();
     test_refresh_preserves_age();
     test_reset_clears();
     test_toggle();
     test_button_geometry();
     test_button_hit_and_render();
+    test_idle_bell_red_when_history_has_error();
     test_open_list_renders_and_consumes();
     return test_harness_report(&g_harness, "test_ui_status_history");
 }
