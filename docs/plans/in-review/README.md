@@ -6,4 +6,4 @@ or to `../active/` if implementation begins immediately.
 
 | Plan | Topic |
 |---|---|
-| *(none)* | |
+| [`scrollable-autocomplete-popup.md`](scrollable-autocomplete-popup.md) | Scrollable autocomplete popup with extended match capacity |
