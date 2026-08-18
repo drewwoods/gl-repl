@@ -1048,6 +1048,28 @@ static void test_tours_menu_dispatch(void) {
                glr_pointer_script_tour_active(), 0);
 }
 
+static void test_all_catalog_tours_playback_to_completion(void) {
+    int n = glr_tours_count();
+    for (int t = 0; t < n; t++) {
+        glr_ctrl_reset_all();
+        glr_ctrl_reshape(1200, 800);
+        ASSERT_INT("start catalog tour",
+                   glr_action_menu_item_activate(GLR_MENU_TOURS, t), 1);
+        int max_frames = 5000;
+        int frames = 0;
+        while (glr_pointer_script_tour_active() && frames++ < max_frames) {
+            glr_pointer_script_frame();
+        }
+        ASSERT_TRUE("tour completed frames without infinite hang",
+                    frames < max_frames);
+        ASSERT_TRUE("tour did not fail with missing target",
+                    strcmp(g_last_status, "Tour stopped (target not found)") != 0);
+        ASSERT_TRUE("tour did not fail with unavailable target",
+                    strcmp(g_last_status, "Tour stopped (target unavailable)") != 0);
+        glr_pointer_script_stop();
+    }
+}
+
 /* Done is presented at least once, then a tour with no final caption closes on
  * the next frame. A final caption keeps Done alive for its authored lifetime. */
 static void test_tour_done_auto_closes(void) {
@@ -1266,6 +1288,47 @@ static void test_tour_sequential_steps_and_pause(void) {
                glr_pointer_script_start_tour("Cfg", "cfg.pointer", cfg_bad_val, 1), 0);
     ASSERT_INT("incomplete cfg rejected",
                glr_pointer_script_start_tour("Cfg", "cfg.pointer", cfg_incomplete, 1), 0);
+}
+
+static void test_tour_scroll_verb_and_auto_scroll(void) {
+    static const char *const scroll_valid[] = {
+        "scroll 0",
+        "scroll 15",
+        "scroll code:20"
+    };
+    static const char *const scroll_neg[] = { "scroll -1" };
+    static const char *const scroll_junk[] = { "scroll abc" };
+    static const char *const scroll_empty[] = { "scroll" };
+
+    glr_ctrl_reset_all();
+    glr_ctrl_reshape(1200, 800);
+    repl_load_example(7); /* Function branching (args + if) has 41 lines */
+
+    ASSERT_INT("valid scroll tour loads",
+               glr_pointer_script_start_tour("Scroll", "scroll.pointer", scroll_valid, 3), 1);
+    glr_pointer_script_frame(); /* baseline capture */
+    glr_pointer_script_frame(); /* scroll 0 fires */
+    ASSERT_INT("scroll 0 sets scroll to 0", editor_state_scroll().scroll, 0);
+    glr_pointer_script_frame(); /* scroll 15 fires */
+    ASSERT_INT("scroll 15 sets scroll to 15", editor_state_scroll().scroll, 15);
+    glr_pointer_script_frame(); /* scroll code:20 fires */
+    ASSERT_TRUE("scroll code:20 scrolled code panel", editor_state_scroll().scroll <= 20);
+    glr_pointer_script_stop();
+
+    ASSERT_INT("negative scroll rejected",
+               glr_pointer_script_start_tour("Scroll", "scroll.pointer", scroll_neg, 1), 0);
+    ASSERT_INT("bad scroll arg rejected",
+               glr_pointer_script_start_tour("Scroll", "scroll.pointer", scroll_junk, 1), 0);
+    ASSERT_INT("empty scroll rejected",
+               glr_pointer_script_start_tour("Scroll", "scroll.pointer", scroll_empty, 1), 0);
+
+    /* Test auto-scrolling on code: target when off-screen */
+    glr_ctrl_set_code_panel_scroll(30); /* scroll down so line 5 is offscreen */
+    ASSERT_INT("panel scrolled down", editor_state_scroll().scroll, 30);
+    int mx = 0, my = 0;
+    int res = glr_ctrl_code_line_point("5", &mx, &my);
+    ASSERT_INT("offscreen line 5 resolved with auto-scroll", res, 1);
+    ASSERT_TRUE("auto-scroll moved scroll up", editor_state_scroll().scroll <= 5);
 }
 
 /* Audit #20: glr_config_set(GLR_CONFIG_AUDIO_MODE, ...) routes through
@@ -2866,9 +2929,11 @@ int main(void) {
     test_tutorial_start_applies_cfg();
     test_tutorial_menu_dispatch();
     test_tours_menu_dispatch();
+    test_all_catalog_tours_playback_to_completion();
     test_tour_done_auto_closes();
     test_tour_paced_key();
     test_tour_sequential_steps_and_pause();
+    test_tour_scroll_verb_and_auto_scroll();
     test_compute_profile_mode_names();
     test_replay_expand_mode_names();
     test_audio_config_direct_set();

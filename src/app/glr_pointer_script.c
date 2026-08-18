@@ -92,6 +92,7 @@ typedef enum {
     PS_WHEEL,
     PS_VIEW,
     PS_CFG,
+    PS_SCROLL,
     PS_KEY,
     PS_SKEY,
     PS_CHORD,
@@ -112,6 +113,7 @@ typedef struct {
     int    button;                 /* down/up: GLUT_LEFT/RIGHT_BUTTON    */
     int    wheel_dir;              /* wheel: +1 / -1                     */
     int    view_mode;              /* view: RENDER3D_VIEW_2D / _3D       */
+    int    scroll_row;             /* scroll: top row (-1 = use target)  */
     char   slug[32];               /* cfg: stable configuration slug     */
     char   value_str[64];          /* cfg: symbolic or integer value     */
     int    special;                /* skey/chord: GLUT_KEY_* code, or    */
@@ -523,6 +525,35 @@ static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
         snprintf(ev->slug, sizeof(ev->slug), "%s", slug);
         snprintf(ev->value_str, sizeof(ev->value_str), "%s", val);
         return 1;
+    }
+    if (strcmp(verb, "scroll") == 0) {
+        int val = 0;
+        int nread = 0;
+        ev->verb = PS_SCROLL;
+        if (sscanf(args, "%d%n", &val, &nread) == 1 && val >= 0) {
+            const char *rest = args + nread;
+            while (*rest == ' ' || *rest == '\t' || *rest == '\n' || *rest == '\r')
+                rest++;
+            if (*rest != '\0' && *rest != '#')
+                return -1;
+            ev->scroll_row = val;
+            ev->target[0] = '\0';
+            return 1;
+        }
+        char target_str[PS_MAX_TARGET];
+        if (sscanf(args, "%63s%n", target_str, &nread) == 1) {
+            const char *rest = args + nread;
+            while (*rest == ' ' || *rest == '\t' || *rest == '\n' || *rest == '\r')
+                rest++;
+            if (*rest != '\0' && *rest != '#')
+                return -1;
+            if (strncmp(target_str, "code:", 5) == 0 && target_str[5] != '\0') {
+                snprintf(ev->target, sizeof(ev->target), "%s", target_str);
+                ev->scroll_row = -1;
+                return 1;
+            }
+        }
+        return -1;
     }
     if (strncmp(verb, "key", 3) == 0 &&
         (verb[3] == '\0' || verb[3] == '@')) {
@@ -1037,6 +1068,14 @@ static void ps_fire(const PsEvent *ev) {
     case PS_CFG:
         repl_cfg_set_text(ev->slug, ev->value_str);
         break;
+    case PS_SCROLL:
+        if (ev->target[0] && strncmp(ev->target, "code:", 5) == 0) {
+            int mx, my;
+            glr_ctrl_code_line_point(ev->target + 5, &mx, &my);
+        } else if (ev->scroll_row >= 0) {
+            glr_ctrl_set_code_panel_scroll(ev->scroll_row);
+        }
+        break;
     case PS_KEY:
         ps_type_flush();
         if (ev->cps > 0.0f) {
@@ -1290,6 +1329,14 @@ static void ps_finish_event_immediate(const PsEvent *ev, int allow_overlays) {
         break;
     case PS_CFG:
         repl_cfg_set_text(ev->slug, ev->value_str);
+        break;
+    case PS_SCROLL:
+        if (ev->target[0] && strncmp(ev->target, "code:", 5) == 0) {
+            int mx, my;
+            glr_ctrl_code_line_point(ev->target + 5, &mx, &my);
+        } else if (ev->scroll_row >= 0) {
+            glr_ctrl_set_code_panel_scroll(ev->scroll_row);
+        }
         break;
     case PS_KEY:
         ps_type_flush();

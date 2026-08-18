@@ -146,7 +146,7 @@ top-left), or one of these symbolic tokens:
 | `scene:<x>,<y>` | A fraction of the live scene viewport, measured from its top-left. For example, `scene:0.5,0.5` is its center. |
 | `shell:<label>` | An Emscripten browser-shell control outside the canvas. Currently `shell:new` targets the top **New** button. |
 | `helptab:<label>` | A tab of the F1 help overlay: `overview`, `commands`, `keys`, `about`. Only resolves while the overlay is open. |
-| `code:<label>` or `code:<n>` | A code-panel row - the first *visible* row whose canonical text the label prefixes (`code:glcolor3f`), or a line by the number in the panel's gutter (`code:3`, 1-based like the `GLR_*` capture hooks). Only resolves for a row currently scrolled into view. |
+| `code:<label>` or `code:<n>` | A code-panel row - the first row whose canonical text the label prefixes (`code:glcolor3f`), or a line by the number in the panel's gutter (`code:3`, 1-based like the `GLR_*` capture hooks). Automatically scrolls the code panel to bring the row into view if currently off-screen. |
 
 Labels use a case-insensitive normalized prefix match. In target labels, `_`
 matches a space, so `sub:3d:torus_knot` can match **Torus knot**.
@@ -201,6 +201,7 @@ an unintended interaction.
 | Right-drag release | `rightup [point]` | Optionally moves, then releases the right button. |
 | Wheel | `wheel <nonzero-integer>` | Sends a wheel event at the current pointer. `1` and `-1` are the usual directions. |
 | View mode | `view 3d` or `view 2d` | Idempotently selects a view mode. If a change is needed, autoplay waits for the normal animated transition to settle. |
+| Scroll | `scroll <row>` or `scroll code:<target>` | Scrolls the code panel to the specified top row (e.g. `scroll 0`), or so that the code target is visible. |
 | Config | `cfg <slug> <value>` | Sets a configuration setting by stable slug and symbolic (or integer) value. |
 | Text | `key <text>` | Sends every character through the normal keyboard handler immediately. |
 | Paced text | `key@<chars-per-second> <text>` | Types the payload on the frame clock, one character at a time. The next untimed step waits for it. |

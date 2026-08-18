@@ -455,6 +455,10 @@ int glr_ctrl_code_line_point(const char *spec, int *mx, int *my) {
         int line = atoi(spec) - 1;
         if (line < 0 || line >= count)
             return 0;
+        if (ui_repl_code_panel_source_line_point(&snap, line, mx, my))
+            return 1;
+        glr_ctrl_set_code_panel_scroll(line < 3 ? 0 : line - 2);
+        glr_ctrl_build_ui_snapshot(&snap);
         return ui_repl_code_panel_source_line_point(&snap, line, mx, my);
     }
 
@@ -468,6 +472,16 @@ int glr_ctrl_code_line_point(const char *spec, int *mx, int *my) {
             continue;
         if (ui_repl_code_panel_source_line_point(&snap, i, mx, my))
             return 1;
+    }
+    for (int i = 0; i < count; i++) {
+        const char *text = editor_buffer_line(i);
+        while (text && (*text == ' ' || *text == '\t'))
+            text++;
+        if (!glr_ctrl_target_label_matches(text, spec))
+            continue;
+        glr_ctrl_set_code_panel_scroll(i < 3 ? 0 : i - 2);
+        glr_ctrl_build_ui_snapshot(&snap);
+        return ui_repl_code_panel_source_line_point(&snap, i, mx, my);
     }
     return 0;
 }

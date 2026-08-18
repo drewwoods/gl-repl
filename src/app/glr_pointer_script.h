@@ -39,7 +39,7 @@
  *   code:glrotatef        code-panel row, by normalized prefix of its
  *                         canonical text, or by the line number the panel's
  *                         gutter shows (code:3 = line 3, 1-based, same as the
- *                         GLR_* capture hooks); must be scrolled into view
+ *                         GLR_* capture hooks); auto-scrolls into view if off-screen
  *   shell:new             Emscripten shell's DOM New button (web only)
  *   scene:0.55,0.30       fraction of the scene viewport rect (x,y from
  *                         its top-left)
@@ -66,6 +66,7 @@
  *                             # Shift+right-drag pans camera vertically
  *   3.8  wheel -1             # mouse wheel, +1/-1
  *   3.9  view 3d              # ensure 3D; transition only when currently 2D
+ *   4.0  scroll 0             # scroll code panel (row index or code:target)
  *   4.0  cfg vertex_labels 0  # set config slug value symbolically or as int
  *   4.0  ring sub:3d:torus_knot 1.5   # pulsing highlight ring for 1.5s
  *   5.0  key glColor3f(       # feed text through the keyboard dispatch
