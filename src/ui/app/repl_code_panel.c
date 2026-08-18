@@ -2637,6 +2637,70 @@ static void repl_code_panel_statusbar_sep(int *tx, int sy, int sh) {
     *tx += 8;
 }
 
+/* Emphasis for one center-cluster state readout.
+ *
+ * Colour answers exactly one question for every readout - "is this
+ * setting changing what I see right now?" - so the four stay readable as
+ * a set instead of each inventing a scale:
+ *
+ *   active  -> UI_TOK_ACCENT      the setting is doing something
+ *   inert   -> dimmed TEXT_MUTED  it is on screen but has no effect
+ *
+ * The value itself is already in the text ("Sc scene" vs "Sc poly"), so
+ * colour deliberately does not also encode which mode is selected. A
+ * brightness ramp over the four scopes was considered and rejected: the
+ * cycle order (last, all, scene, poly) is not the width order, so a
+ * narrow-to-wide ramp would jump backwards on the last click of every
+ * cycle - and four steps of grey are not separable in 8x13 bitmap text.
+ *
+ * Text colour carries state and nothing else. The overlay family's hover
+ * cue is the band behind it (repl_code_panel_statusbar_group_band), not a
+ * lift applied here: a lift would have to brighten an inert grey and an
+ * already-full-strength accent by different means, so hovering a family
+ * whose members were all on produced no cue at all. */
+static void repl_code_panel_statusbar_state_color(int active) {
+    if (active)
+        ui_clr(UI_TOK_ACCENT);
+    else
+        ui_clr_a(UI_TOK_TEXT_MUTED, 0.50f);
+}
+
+/* Common-region band behind the overlay family, drawn while the pointer
+ * is over the Overlay scope readout: it names the set that scope governs.
+ * Drawn once, under all of them, so the cue is the same whether a given
+ * readout is inert or active - which a per-glyph brightness lift cannot
+ * be, having no headroom over an already-full-strength accent. Bounds
+ * come from whichever members survived the width cull; the band uses the
+ * keycap box (ky/kh) so it lines up with the hit rectangles it is
+ * advertising. */
+static void repl_code_panel_statusbar_group_band(int x0, int x1,
+                                                 int ky, int kh) {
+    if (x1 <= x0)
+        return;
+    ui_clr_a(UI_TOK_ACCENT_GLOW_BG, 0.55f);
+    glRectf((float)(x0 - 4), (float)ky, (float)(x1 + 4), (float)(ky + kh));
+}
+
+/* Does anything currently read Overlay scope? Scope is a modifier with no
+ * output of its own - it selects *which* vertices the overlay family acts
+ * on (edit_overlays.c: the vertex-label walk, normal_vector_in_scope,
+ * cursor_scope_selects_one_instance for outlines and the polygon
+ * highlight, and the transform-guide instance pick in glr_ctrl.c). With
+ * every consumer off it governs nothing, so it renders inert whatever its
+ * value - and lights up again as a consequence of switching one on, which
+ * is the dependency made visible without drawing a connector. */
+static int repl_code_panel_overlay_scope_is_live(const UiRenderSnapshot *snap) {
+    return snap->config_values[GLR_CONFIG_VERTEX_LABELS] != OVERLAY_VERTEX_LABEL_OFF ||
+           snap->config_values[GLR_CONFIG_POLY_HIGHLIGHT] != POLY_HIGHLIGHT_OFF ||
+           snap->config_values[GLR_CONFIG_NORMAL_VECTORS] != 0 ||
+           snap->config_values[GLR_CONFIG_VERTEX_OUTLINES] != 0 ||
+           /* Transform guides: RENDER3D_XFORM_GUIDE_OFF is the name, but
+            * it lives in render3d/ and check-layer-coupling forbids a ui/
+            * file including that band. Its X-macro list leads with OFF, so
+            * 0 is the off state - as it is for every row above. */
+           snap->config_values[GLR_CONFIG_XFORM_GUIDE_MODE] != 0;
+}
+
 /* Right-aligned statusbar cluster: compact editor action chips
  * (undo/redo/copy/cut/paste/clear), a code-focus chip, and a help
  * chip. Every chip carries a 13x12 pixel-art bitmap glyph (no keycode
@@ -3650,11 +3714,52 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
             tx += L.cost_w;
         }
 
-        /* Center cluster: state configs centered in the panel. */
+        /* Center cluster: state configs centered in the panel.
+         *
+         * Colour says whether each setting is currently doing anything
+         * (see repl_code_panel_statusbar_state_color). Membership is left
+         * to hover: Vertex labels, Overlay scope and Polygon highlight are
+         * one family - all governed by Overlay scope, which AA is not -
+         * and pointing at the scope readout bands the set it governs. */
         {
             int first = 1;
+            int aa_active = snap->render.accum_effect != RENDER3D_ACCUM_EFFECT_OFF &&
+                            snap->render.accum_passes > 1;
+            int vlabel_active =
+                snap->config_values[GLR_CONFIG_VERTEX_LABELS] != OVERLAY_VERTEX_LABEL_OFF;
+            int poly_active =
+                snap->config_values[GLR_CONFIG_POLY_HIGHLIGHT] != POLY_HIGHLIGHT_OFF;
+            int scope_active = repl_code_panel_overlay_scope_is_live(snap);
+            int hover_kind = repl_code_panel_statusbar_hint_hit_kind(
+                &h, snap->pointer.mouse_x,
+                snap->viewport.window_h - snap->pointer.mouse_y);
+            /* Only Overlay scope reveals the group. It is the modifier -
+             * it selects which vertices the others act on - so pointing
+             * at it asks "what does this govern?", which is the question
+             * the band answers. Pointing at a governed readout asks
+             * nothing about its siblings. */
+            int group_lit = hover_kind == UI_HIT_CODE_OVERLAY_SCOPE_STATUS;
+
+            /* Band first, so every group member draws over it. */
+            if (group_lit) {
+                int gx0 = 0, gx1 = 0;
+                if (L.has_vlabel) {
+                    gx0 = L.vlabel_x;
+                    gx1 = L.vlabel_x + L.vlabel_w;
+                }
+                if (L.has_scope) {
+                    if (!gx1) gx0 = L.scope_x;
+                    gx1 = L.scope_x + L.scope_w;
+                }
+                if (L.has_poly) {
+                    if (!gx1) gx0 = L.poly_x;
+                    gx1 = L.poly_x + L.poly_w;
+                }
+                repl_code_panel_statusbar_group_band(gx0, gx1, h.ky, h.kh);
+            }
+
             if (L.has_aa) {
-                ui_clr(UI_TOK_TEXT_MUTED);
+                repl_code_panel_statusbar_state_color(aa_active);
                 gl2d_draw_string((float)L.aa_x, (float)text_y, L.aa, FONT_SMALL);
                 first = 0;
             }
@@ -3664,7 +3769,7 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
                     int sep_x = L.vlabel_x - STATUSBAR_SEP_W;
                     repl_code_panel_statusbar_sep(&sep_x, sy, sh);
                 }
-                ui_clr(UI_TOK_TEXT_MUTED);
+                repl_code_panel_statusbar_state_color(vlabel_active);
                 gl2d_draw_string((float)L.vlabel_x, (float)text_y, L.vlabel, FONT_SMALL);
                 first = 0;
             }
@@ -3674,7 +3779,7 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
                     int sep_x = L.scope_x - STATUSBAR_SEP_W;
                     repl_code_panel_statusbar_sep(&sep_x, sy, sh);
                 }
-                ui_clr(UI_TOK_TEXT_MUTED);
+                repl_code_panel_statusbar_state_color(scope_active);
                 gl2d_draw_string((float)L.scope_x, (float)text_y, L.scope, FONT_SMALL);
                 first = 0;
             }
@@ -3684,7 +3789,7 @@ static void repl_code_panel_draw_statusbar(const UiRenderSnapshot *snap,
                     int sep_x = L.poly_x - STATUSBAR_SEP_W;
                     repl_code_panel_statusbar_sep(&sep_x, sy, sh);
                 }
-                ui_clr(UI_TOK_TEXT_MUTED);
+                repl_code_panel_statusbar_state_color(poly_active);
                 gl2d_draw_string((float)L.poly_x, (float)text_y, L.poly, FONT_SMALL);
             }
         }
