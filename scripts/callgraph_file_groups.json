@@ -97,6 +97,7 @@
         "ui/support/cpuprof.c",
         "ui/support/memprof.c",
         "ui/app/repl_code_panel.c",
+        "ui/app/repl_code_panel_statusbar.c",
         "ui/core/tabbed_overlay.c"
       ]
     },

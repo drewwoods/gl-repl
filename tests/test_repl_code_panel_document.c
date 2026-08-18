@@ -18,6 +18,7 @@
 #include "ui/app/layout.h"
 #include "ui/core/metrics.h"
 #include "ui/app/repl_code_panel.h"
+#include "ui/app/repl_code_panel_statusbar_test.h"
 #include "ui/app/panels.h"
 #include "subsystems/edit_overlays/edit_overlays.h"
 #include "support/test_harness.h"
@@ -543,6 +544,171 @@ static void test_statusbar_readouts(TestHarness *h) {
     glr_ctrl_sync_ui_chrome();
 }
 
+static void test_statusbar_cull_rank_independent_of_order(TestHarness *h) {
+    UiRenderSnapshot snap;
+    UiReplCodePanelLayout layout;
+    int status_my;
+    int found = 0;
+
+    printf("Testing statusbar center cull rank is independent of table order...\n");
+    reset_doc_fixture();
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_state_render_mut()->use_accum = 1;
+    glr_config_set(GLR_CONFIG_ACCUM_EFFECT, RENDER3D_ACCUM_EFFECT_AA);
+    glr_config_set(GLR_CONFIG_ACCUM_PASSES, 4);
+    glr_config_set(GLR_CONFIG_VERTEX_LABELS, OVERLAY_VERTEX_LABEL_INDEX);
+    glr_config_set(GLR_CONFIG_OVERLAY_SCOPE, OVERLAY_SCOPE_LAST_INSTANCE);
+    glr_config_set(GLR_CONFIG_POLY_HIGHLIGHT, POLY_HIGHLIGHT_ON);
+    editor_feed_line("glClearColor(0, 0, 0, 1);");
+
+    for (int win_w = 900; win_w <= 1400 && !found; win_w += 20) {
+        int cp_y;
+        ui_state_viewport_set_size(win_w, 300);
+        glr_ctrl_sync_ui_chrome();
+        ui_layout_code_panel_rect(NULL, &cp_y, NULL, NULL);
+        status_my = ui_state_viewport().window_h - (cp_y + STATUSBAR_H / 2);
+        build_doc(&snap, &layout);
+        if (statusbar_hit_x(&snap, status_my, UI_HIT_CODE_AA_STATUS) >= 0 &&
+            statusbar_hit_x(&snap, status_my, UI_HIT_CODE_POLY_HIGHLIGHT_STATUS) < 0)
+            found = 1;
+    }
+
+    TEST_ASSERT_TRUE(h,
+                     "Poly cull_rank is higher than AA even though AA is first in the table",
+                     repl_code_panel_statusbar_cull_rank_for_test(
+                         UI_HIT_CODE_POLY_HIGHLIGHT_STATUS) >
+                     repl_code_panel_statusbar_cull_rank_for_test(
+                         UI_HIT_CODE_AA_STATUS));
+    TEST_ASSERT_TRUE(h, "mid-width panel keeps AA after culling Poly",
+                     found);
+
+    glr_config_set(GLR_CONFIG_ACCUM_EFFECT, CFG_DEFAULT_ACCUM_EFFECT);
+    glr_config_set(GLR_CONFIG_ACCUM_PASSES, CFG_DEFAULT_ACCUM_PASSES);
+    glr_config_set(GLR_CONFIG_VERTEX_LABELS, CFG_DEFAULT_VERTEX_LABELS);
+    glr_config_set(GLR_CONFIG_OVERLAY_SCOPE, CFG_DEFAULT_OVERLAY_SCOPE);
+    glr_config_set(GLR_CONFIG_POLY_HIGHLIGHT, CFG_DEFAULT_HIGHLIGHT_POLY);
+    ui_state_viewport_set_size(1600, 300);
+    glr_ctrl_sync_ui_chrome();
+}
+
+static void test_statusbar_hover_band_host(TestHarness *h) {
+    UiRenderSnapshot snap;
+    UiReplCodePanelLayout layout;
+    int cp_x, cp_y, cp_w, cp_h, status_my;
+    int scope_x, vlabel_x, poly_x;
+    int x0, x1;
+
+    printf("Testing statusbar overlay hover band is host-only...\n");
+    reset_doc_fixture();
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
+    ui_state_viewport_set_size(1600, 300);
+    glr_ctrl_sync_ui_chrome();
+    glr_state_render_mut()->use_accum = 1;
+    glr_config_set(GLR_CONFIG_VERTEX_LABELS, OVERLAY_VERTEX_LABEL_INDEX);
+    glr_config_set(GLR_CONFIG_POLY_HIGHLIGHT, POLY_HIGHLIGHT_ON);
+    editor_feed_line("glClearColor(0, 0, 0, 1);");
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    status_my = ui_state_viewport().window_h - (cp_y + STATUSBAR_H / 2);
+    build_doc(&snap, &layout);
+    scope_x = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_OVERLAY_SCOPE_STATUS);
+    vlabel_x = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_VERTEX_LABELS_STATUS);
+    poly_x = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_POLY_HIGHLIGHT_STATUS);
+    TEST_ASSERT_TRUE(h, "hover-band fixture has OS/VL/PH",
+                     scope_x >= 0 && vlabel_x >= 0 && poly_x >= 0);
+
+    ui_state_pointer_set_pos(scope_x, status_my);
+    build_doc(&snap, &layout);
+    TEST_ASSERT_TRUE(h, "hovering Overlay Scope draws the group band",
+                     repl_code_panel_statusbar_group_band_for_test(
+                         &snap, cp_x, cp_y, cp_w, STATUSBAR_H, &x0, &x1));
+    TEST_ASSERT_TRUE(h, "group band spans OS through PH",
+                     x0 <= scope_x && x1 >= poly_x);
+
+    ui_state_pointer_set_pos(vlabel_x, status_my);
+    build_doc(&snap, &layout);
+    TEST_ASSERT_TRUE(h, "hovering Vertex Labels does not draw the group band",
+                     !repl_code_panel_statusbar_group_band_for_test(
+                         &snap, cp_x, cp_y, cp_w, STATUSBAR_H, NULL, NULL));
+
+    ui_state_pointer_set_pos(poly_x, status_my);
+    build_doc(&snap, &layout);
+    TEST_ASSERT_TRUE(h, "hovering Polygon Highlight does not draw the group band",
+                     !repl_code_panel_statusbar_group_band_for_test(
+                         &snap, cp_x, cp_y, cp_w, STATUSBAR_H, NULL, NULL));
+
+    glr_config_set(GLR_CONFIG_VERTEX_LABELS, CFG_DEFAULT_VERTEX_LABELS);
+    glr_config_set(GLR_CONFIG_POLY_HIGHLIGHT, CFG_DEFAULT_HIGHLIGHT_POLY);
+    ui_state_pointer_set_pos(0, 0);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    ui_state_viewport_set_size(1600, 300);
+    glr_ctrl_sync_ui_chrome();
+}
+
+static void test_statusbar_right_chips_do_not_repack(TestHarness *h) {
+    UiRenderSnapshot snap;
+    UiReplCodePanelLayout layout;
+    int cp_y, status_my;
+    int help_plain, help_cost, focus_plain, focus_cost;
+    static const int k_interior[] = {
+        UI_HIT_CODE_UNDO, UI_HIT_CODE_REDO, UI_HIT_CODE_COPY,
+        UI_HIT_CODE_CUT, UI_HIT_CODE_PASTE, UI_HIT_CODE_CLEAR_ALL
+    };
+    int interior_plain[6];
+    int interior_cost[6];
+    int hid = 0;
+
+    printf("Testing statusbar right chips keep x when inner chips hide...\n");
+    reset_doc_fixture();
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    ui_state_viewport_set_size(800, 300);
+    glr_ctrl_sync_ui_chrome();
+    editor_feed_line("glClearColor(0, 0, 0, 1);");
+    editor_feed_line("for(i, 0, 8) {");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(i, 0, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("}");
+    ui_layout_code_panel_rect(NULL, &cp_y, NULL, NULL);
+    status_my = ui_state_viewport().window_h - (cp_y + STATUSBAR_H / 2);
+
+    editor_navigate_to_line(0);
+    build_doc(&snap, &layout);
+    help_plain = statusbar_hit_x(&snap, status_my, UI_HIT_HELP_TOGGLE);
+    focus_plain = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_FOCUS_TOGGLE);
+    for (int i = 0; i < 6; i++)
+        interior_plain[i] = statusbar_hit_x(&snap, status_my, k_interior[i]);
+    TEST_ASSERT_TRUE(h, "help visible without cost readout", help_plain >= 0);
+    TEST_ASSERT_TRUE(h, "focus visible without cost readout", focus_plain >= 0);
+
+    editor_navigate_to_line(1);
+    build_doc(&snap, &layout);
+    TEST_ASSERT_TRUE(h, "cost readout present for no-repack fixture",
+                     snap.cursor_cost_label[0] != '\0');
+    help_cost = statusbar_hit_x(&snap, status_my, UI_HIT_HELP_TOGGLE);
+    focus_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_FOCUS_TOGGLE);
+    for (int i = 0; i < 6; i++)
+        interior_cost[i] = statusbar_hit_x(&snap, status_my, k_interior[i]);
+    TEST_ASSERT_TRUE(h, "help x unchanged when the left cluster grows",
+                     help_cost == help_plain);
+    TEST_ASSERT_TRUE(h, "focus x unchanged when the left cluster grows",
+                     focus_cost == focus_plain);
+    /* Interior chips: still-visible ones keep their x. At least one that
+     * was visible on the short left cluster must hide, so this is not
+     * just "the rightmost items never move". */
+    for (int i = 0; i < 6; i++) {
+        if (interior_plain[i] >= 0 && interior_cost[i] >= 0)
+            TEST_ASSERT_TRUE(h, "interior chip x unchanged when still visible",
+                             interior_cost[i] == interior_plain[i]);
+        if (interior_plain[i] >= 0 && interior_cost[i] < 0)
+            hid++;
+    }
+    TEST_ASSERT_TRUE(h, "an interior chip hides when the left cluster grows",
+                     hid > 0);
+
+    ui_state_viewport_set_size(1600, 300);
+    glr_ctrl_sync_ui_chrome();
+}
+
 int main(void) {
     UiRenderSnapshot snap;
     UiReplCodePanelLayout layout;
@@ -857,6 +1023,9 @@ int main(void) {
 
     test_attrib_bit_tokens_align_on_edit_line(&g_harness);
     test_statusbar_readouts(&g_harness);
+    test_statusbar_cull_rank_independent_of_order(&g_harness);
+    test_statusbar_hover_band_host(&g_harness);
+    test_statusbar_right_chips_do_not_repack(&g_harness);
 
     return test_harness_report(&g_harness, "repl_code_panel_document");
 }

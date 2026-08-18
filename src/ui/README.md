@@ -101,6 +101,7 @@ source-line targets.
 | [`app/snapshot.h`](app/snapshot.h) | [`UiRenderSnapshot`](app/snapshot.h#L91) - the read-only per-frame bundle every renderer takes |
 | [`app/panels.c`](app/panels.c) / `.h` | Top-level panel bridge: code panel + status banner, prioritizes overlay/menu hits |
 | [`app/repl_code_panel.c`](app/repl_code_panel.c) / `.h` | REPL-aware adapter: builds rows from snapshots, maps hits to source lines |
+| [`app/repl_code_panel_statusbar.c`](app/repl_code_panel_statusbar.c) / `.h` | Code-panel status strip: one item table (align, hit, tooltip, draw) solved once for render / hit-test / tooltip |
 | [`app/menu_bar.c`](app/menu_bar.c) / `.h` | Menu bar, dropdowns, flyout submenus, search slot |
 | [`app/scene_tabs.c`](app/scene_tabs.c) / `.h` | Scene tab strip (snapshot-pure render + whole-band hit-test) |
 | [`app/variable_panel_view.c`](app/variable_panel_view.c) / `.h` | Projects app snapshots into the variable-slider panel view |
