@@ -16,7 +16,7 @@ shape(scale, phase) {
     glEnd();
   }
   if(scale <= 1) {
-    glColor3f(0.15, 0.55, 1);
+    glColor3f(0.55, 0.3, 1);
     glBegin(GL_TRIANGLES);
       glNormal3f(0, 0, 1);
       glVertex3f(cos(phase)*0.9*scale, sin(phase)*0.9*scale, 0);
