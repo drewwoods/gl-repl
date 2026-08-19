@@ -10,7 +10,10 @@
  * cursor + click ripple + highlight ring make the pointer visible in the
  * captured video.
  *
- * Script format: one event per line, `#` comments. There are two forms:
+ * Script format: one event per line, `#` comments. Shared native/web scripts
+ * may use the small conditional subset `#ifdef __EMSCRIPTEN__`, `#ifndef
+ * __EMSCRIPTEN__`, `#else`, and `#endif`; inactive branches are ignored by
+ * both built-in tours and GLR_POINTER_SCRIPT recordings. There are two forms:
  *
  * - Untimed lines (`verb ...`) run sequentially. The next step starts after
  *   the previous glide, click release, paced key, ring, or pause has

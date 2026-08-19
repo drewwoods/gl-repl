@@ -40,6 +40,7 @@
 #define PS_MAX_EVENTS   256
 #define PS_MAX_KEY_TEXT 512
 #define PS_MAX_TARGET   64
+#define PS_MAX_CONDITIONAL_DEPTH 16
 /* Rendered-frame clock rate: script seconds -> frames (GLR_FRAME_DT_SECS). */
 #define PS_FPS          60.0f
 /* Frames between a click's press and its synthesized release (~0.1s). */
@@ -361,6 +362,146 @@ static int ps_parse_mods(const char *tok) {
         }
     }
     return mask;
+}
+
+/* Tiny, deliberately non-C preprocessor for shared native/web tour sources.
+ * The generated arrays retain every physical source line, while this filter
+ * selects the branch at runtime so the same file also works as a direct
+ * GLR_POINTER_SCRIPT input. The only build feature exposed to tour authors is
+ * the platform macro __EMSCRIPTEN__. */
+typedef struct {
+    int parent_active;
+    int condition_selected;
+    int else_seen;
+} PsConditionalFrame;
+
+typedef struct {
+    PsConditionalFrame frames[PS_MAX_CONDITIONAL_DEPTH];
+    int depth;
+    int active;
+} PsConditionalState;
+
+static void ps_conditionals_init(PsConditionalState *state) {
+    memset(state, 0, sizeof(*state));
+    state->active = 1;
+}
+
+static void ps_skip_space(const char **p) {
+    while (**p == ' ' || **p == '\t' || **p == '\n' || **p == '\r')
+        (*p)++;
+}
+
+static int ps_conditional_trailing_ok(const char *p) {
+    ps_skip_space(&p);
+    return *p == '\0' || *p == '#';
+}
+
+/* Returns 1 when the line is a conditional directive, 0 for an ordinary
+ * comment/event line, and -1 for a malformed/unsupported directive. */
+static int ps_conditional_line(const char *line, PsConditionalState *state,
+                               char *error, size_t error_cap) {
+    char directive[16];
+    int nread = 0;
+    const char *p = line;
+
+    ps_skip_space(&p);
+    if (*p != '#') return 0;
+    p++;
+    while (*p == ' ' || *p == '\t') p++;
+    if (sscanf(p, "%15[A-Za-z]%n", directive, &nread) != 1)
+        return 0; /* ordinary `#` comment */
+    p += nread;
+
+    if (strcmp(directive, "ifdef") == 0 ||
+        strcmp(directive, "ifndef") == 0) {
+        char macro[32];
+        int macro_read = 0;
+        int condition;
+
+        if (sscanf(p, " %31s%n", macro, &macro_read) != 1 ||
+            !ps_conditional_trailing_ok(p + macro_read)) {
+            snprintf(error, error_cap,
+                     "malformed #%s (expected #%s __EMSCRIPTEN__)",
+                     directive, directive);
+            return -1;
+        }
+        if (strcmp(macro, "__EMSCRIPTEN__") != 0) {
+            snprintf(error, error_cap,
+                     "unsupported conditional macro %s (use __EMSCRIPTEN__)",
+                     macro);
+            return -1;
+        }
+#if defined(__EMSCRIPTEN__)
+        condition = 1;
+#else
+        condition = 0;
+#endif
+        if (strcmp(directive, "ifndef") == 0)
+            condition = !condition;
+        if (state->depth >= PS_MAX_CONDITIONAL_DEPTH) {
+            snprintf(error, error_cap, "conditional nesting is too deep (max %d)",
+                     PS_MAX_CONDITIONAL_DEPTH);
+            return -1;
+        }
+        PsConditionalFrame *frame = &state->frames[state->depth++];
+        frame->parent_active = state->active;
+        frame->condition_selected = condition;
+        frame->else_seen = 0;
+        state->active = frame->parent_active && condition;
+        return 1;
+    }
+
+    if (strcmp(directive, "else") == 0) {
+        if (!ps_conditional_trailing_ok(p)) {
+            snprintf(error, error_cap, "malformed #else");
+            return -1;
+        }
+        if (state->depth == 0) {
+            snprintf(error, error_cap, "#else without a conditional");
+            return -1;
+        }
+        PsConditionalFrame *frame = &state->frames[state->depth - 1];
+        if (frame->else_seen) {
+            snprintf(error, error_cap, "duplicate #else");
+            return -1;
+        }
+        frame->else_seen = 1;
+        state->active = frame->parent_active && !frame->condition_selected;
+        return 1;
+    }
+
+    if (strcmp(directive, "endif") == 0) {
+        if (!ps_conditional_trailing_ok(p)) {
+            snprintf(error, error_cap, "malformed #endif");
+            return -1;
+        }
+        if (state->depth == 0) {
+            snprintf(error, error_cap, "#endif without a conditional");
+            return -1;
+        }
+        PsConditionalFrame frame = state->frames[--state->depth];
+        state->active = frame.parent_active;
+        return 1;
+    }
+
+    /* Do not silently accept a C preprocessor form that looks like a tour
+     * conditional but has no meaning in this grammar. Other # lines remain
+     * ordinary comments for existing recording metadata. */
+    if (strcmp(directive, "if") == 0 || strcmp(directive, "elif") == 0 ||
+        strcmp(directive, "define") == 0 || strcmp(directive, "undef") == 0) {
+        snprintf(error, error_cap,
+                 "unsupported #%s (use #ifdef/#ifndef/#else/#endif)",
+                 directive);
+        return -1;
+    }
+    return 0;
+}
+
+static int ps_conditionals_finish(const PsConditionalState *state,
+                                  char *error, size_t error_cap) {
+    if (state->depth == 0) return 1;
+    snprintf(error, error_cap, "unterminated conditional");
+    return 0;
 }
 
 /* Scan a point from the front of `args`: either literal "<x> <y>" pixels
@@ -704,9 +845,21 @@ int glr_pointer_script_load_env(void) {
     char line[512];
     int lineno = 0;
     int mode = -1;
+    char conditional_error[128];
+    PsConditionalState conditionals;
+    ps_conditionals_init(&conditionals);
     g_event_count = 0;
     while (fgets(line, sizeof(line), fp)) {
         lineno++;
+        int conditional = ps_conditional_line(
+            line, &conditionals, conditional_error, sizeof(conditional_error));
+        if (conditional < 0) {
+            fprintf(stderr, "gl-repl: GLR_POINTER_SCRIPT: %s:%d: %s\n",
+                    path, lineno, conditional_error);
+            exit(1);
+        }
+        if (conditional > 0 || !conditionals.active)
+            continue;
         PsEvent ev;
         int timed = 0;
         int r = ps_parse_line(line, &ev, &timed);
@@ -724,6 +877,12 @@ int glr_pointer_script_load_env(void) {
         }
         ev.source_line = lineno;
         g_events[g_event_count++] = ev;
+    }
+    if (!ps_conditionals_finish(&conditionals, conditional_error,
+                                sizeof(conditional_error))) {
+        fprintf(stderr, "gl-repl: GLR_POINTER_SCRIPT: %s: %s\n",
+                path, conditional_error);
+        exit(1);
     }
     fclose(fp);
 
@@ -797,7 +956,20 @@ int glr_pointer_script_start_tour(const char *name, const char *file,
                                   const char *const *lines, int line_count) {
     glr_pointer_script_stop();
     g_event_count = 0;
+    char conditional_error[128];
+    PsConditionalState conditionals;
+    ps_conditionals_init(&conditionals);
     for (int i = 0; i < line_count; i++) {
+        int conditional = ps_conditional_line(
+            lines[i], &conditionals, conditional_error, sizeof(conditional_error));
+        if (conditional < 0) {
+            fprintf(stderr, "gl-repl: tour script line %d: %s\n",
+                    i + 1, conditional_error);
+            g_event_count = 0;
+            return 0;
+        }
+        if (conditional > 0 || !conditionals.active)
+            continue;
         PsEvent ev;
         int timed = 0;
         int r = ps_parse_line(lines[i], &ev, &timed);
@@ -821,6 +993,12 @@ int glr_pointer_script_start_tour(const char *name, const char *file,
         }
         ev.source_line = i + 1;
         g_events[g_event_count++] = ev;
+    }
+    if (!ps_conditionals_finish(&conditionals, conditional_error,
+                                sizeof(conditional_error))) {
+        fprintf(stderr, "gl-repl: tour script: %s\n", conditional_error);
+        g_event_count = 0;
+        return 0;
     }
     if (g_event_count == 0) return 0;
     g_sequential = 1;

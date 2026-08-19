@@ -9,7 +9,8 @@
  * exact same dispatch path as live input. Tour content is file-backed like the
  * example scenes - .pointer files under tours/ listed by tours/catalog.ini
  * (or catalog-emscripten.ini for the web-safe set) and compiled in by
- * scripts/gen_tours.py. The Tours menu lists the
+ * scripts/gen_tours.py. Shared scripts can use the __EMSCRIPTEN__ conditional
+ * grammar for small platform-specific branches. The Tours menu lists the
  * catalog; activating an entry hands the script to
  * glr_pointer_script_start_tour, which plays it as a controlled tour with
  * replay-style transport (Space play/pause, arrows step/back, +/- speed,

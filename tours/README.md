@@ -21,8 +21,10 @@ build. The same scripts can drive an offline recording through
 1. Create a top-level `.pointer` file here, using the untimed,
    completion-driven form described below.
 2. Add a section to [`catalog.ini`](catalog.ini). If the tour also works in the
-   browser, add it to [`catalog-emscripten.ini`](catalog-emscripten.ini), using
-   a web-specific script when the two platforms need different targets.
+   browser, add the matching section to
+   [`catalog-emscripten.ini`](catalog-emscripten.ini). Keep platform-specific
+   steps in one script with the conditional grammar below; use a separate
+   script only when the tour's overall flow is genuinely different.
    Section order is the order in the Tours menu.
 3. Validate the catalog:
 
@@ -164,8 +166,9 @@ click shell:new
 glide scene:0.55,0.30 0.6
 ```
 
-Native builds cannot resolve `shell:` targets, so keep them in script variants
-selected only by `catalog-emscripten.ini`.
+Native builds cannot resolve `shell:` targets, so put them in an
+`#ifdef __EMSCRIPTEN__` branch (or, for a genuinely different flow, in a
+script selected only by `catalog-emscripten.ini`).
 
 Row targets require their parent dropdown to be open. For a hover-opened
 flyout, use this sequence rather than gliding diagonally into it:
@@ -317,10 +320,36 @@ name = Camera & Views
 - `name` is the case-insensitively unique, user-visible Tours-menu label.
 - Section order determines menu order.
 
-The native and web catalogs may use the same section identifier and display
-name while pointing at different `.pointer` files. This lets a tour preserve
-the same menu entry while substituting browser-shell targets or examples that
-exist in the web catalog.
+The native and web catalogs should use the same section identifier, display
+name, and `.pointer` file when the tour has only a few platform-specific
+steps. The script can isolate those steps with `__EMSCRIPTEN__` conditionals.
+The catalogs may still point at different files when the overall flow really
+needs to diverge.
+
+## Native/web conditionals
+
+The pointer grammar supports a deliberately small preprocessor-like subset:
+
+```text
+#ifdef __EMSCRIPTEN__
+glide shell:new 0.8
+click shell:new
+#else
+glide menu:file 0.8
+click
+glide item:new_scene 0.5
+click
+#endif
+```
+
+`#ifndef __EMSCRIPTEN__` is also supported. Conditionals may nest, and each
+`#ifdef`/`#ifndef` may have at most one `#else`; `#elif`, `#define`, and other
+C-preprocessor features are intentionally not part of the grammar. The
+inactive branch is not parsed as an event, so it may contain targets that do
+not exist on the other platform. Physical source lines are retained for tour
+HUDs and diagnostics. The generator validates the branch selected by the
+catalog, while the runtime applies the same selection to direct
+`GLR_POINTER_SCRIPT` recordings.
 
 [`scripts/gen_tours.py`](../scripts/gen_tours.py) embeds the catalog's scripts
 into the built binary. Do not edit the generated include in `build/`.

@@ -681,13 +681,14 @@ BENCH_DATA_CATALOG = $(BENCH_DATA_DIR)/catalog.ini
 BENCH_DATA_SCENE_SRCS = $(wildcard $(BENCH_DATA_DIR)/scenes/*.glr)
 GENERATED_BENCH_DATA_INC = build/generated/bench_repl_data.inc
 # Tours have no index-keyed goldens. Every WEB=1 compile -- shipping web
-# and test-web -- uses catalog-emscripten.ini so File-menu scripts are
-# replaced by the shell: variants the browser (and the node fallback) can
-# resolve.
+# and test-web -- uses the web catalog and evaluates __EMSCRIPTEN__ branches
+# in shared .pointer sources for the browser (and node fallback).
 ifeq ($(WEB),1)
 TOURS_CATALOG = tours/catalog-emscripten.ini
+TOURS_PLATFORM = emscripten
 else
 TOURS_CATALOG = tours/catalog.ini
+TOURS_PLATFORM = native
 endif
 TOUR_SCRIPT_SRCS = $(wildcard tours/*.pointer)
 GENERATED_TOURS_INC = build/generated/glr_tours_data.inc
@@ -1455,7 +1456,8 @@ $(OBJDIR)/$(BENCH_DATA_DIR)/bench_examples.o: $(GENERATED_BENCH_DATA_INC)
 
 $(GENERATED_TOURS_INC): FORCE scripts/gen_tours.py $(TOURS_CATALOG) $(TOUR_SCRIPT_SRCS)
 	@mkdir -p $(dir $@)
-	python3 scripts/gen_tours.py --catalog $(TOURS_CATALOG) --out $@
+	python3 scripts/gen_tours.py --catalog $(TOURS_CATALOG) \
+		--platform $(TOURS_PLATFORM) --out $@
 
 $(OBJDIR)/src/app/glr_tours.o: $(GENERATED_TOURS_INC)
 
@@ -2450,7 +2452,8 @@ check-examples-catalog: ## Validate the file-backed built-in example catalog.
 	@python3 scripts/gen_examples.py --check --catalog $(EXAMPLES_CATALOG) $(EXAMPLES_CATALOG_GENERATOR_FLAGS)
 
 check-tours-catalog: ## Validate the file-backed guided-tour catalog.
-	@python3 scripts/gen_tours.py --check --catalog $(TOURS_CATALOG)
+	@python3 scripts/gen_tours.py --check --catalog $(TOURS_CATALOG) \
+		--platform $(TOURS_PLATFORM)
 
 check-command-descriptions: ## Validate complete GL command/capability popup descriptions.
 	@python3 scripts/gen_command_descriptions.py --check \

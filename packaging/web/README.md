@@ -110,9 +110,11 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   see `-sEXPORTED_FUNCTIONS` in the Makefile's `WEB=1` block.
 - **Guided tours**: the in-canvas Tours menu uses
   [`tours/catalog-emscripten.ini`](../../tours/catalog-emscripten.ini). Its
-  Editing Basics variant targets `shell:new`; the pointer-script bridge
-  resolves that symbolic target against the real DOM New button and queues
-  its existing click handler instead of relying on the hidden native File menu.
+  shared Editing Basics script selects a `shell:new` branch; the pointer-script
+  bridge resolves that symbolic target against the real DOM New button and
+  queues its existing click handler instead of relying on the hidden native
+  File menu. The same conditional source remains usable for native tours and
+  direct `GLR_POINTER_SCRIPT` recordings.
 - **URL sharing**: the *share* button encodes the whole scene into
   `location.hash` so a copy-pasted link reproduces it - no server involved,
   works on static hosting. Payload format is

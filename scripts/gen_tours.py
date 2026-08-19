@@ -5,9 +5,9 @@ Mirrors scripts/gen_examples.py: the catalog names each tour and points at
 its pointer-script file (grammar: src/app/glr_pointer_script.h); this script
 embeds every script as a C string array plus one catalog table, consumed by
 src/app/glr_tours.c via build/generated/glr_tours_data.inc. Section order is
-the Tours menu row order. Comment/blank lines are embedded verbatim — the
-runtime parser skips them, and keeping them preserves the file's line
-numbering in any load-time error report.
+the Tours menu row order. Comment/blank lines and conditional lines are
+embedded verbatim — the runtime parser skips inactive branches, and keeping
+them preserves the file's line numbering in any load-time error report.
 """
 
 from __future__ import annotations
@@ -21,6 +21,9 @@ from pathlib import Path
 
 REQUIRED_KEYS = {"file", "name"}
 SECTION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+CONDITIONAL_RE = re.compile(r"^\s*#\s*(ifdef|ifndef|else|endif)\b(.*)$")
+UNSUPPORTED_CONDITIONAL_RE = re.compile(r"^\s*#\s*(if|elif|define|undef)\b")
+SUPPORTED_MACRO = "__EMSCRIPTEN__"
 
 
 class TourError(Exception):
@@ -60,7 +63,82 @@ def symbol_for_section(section: str) -> str:
     return f"g_tour_{body}"
 
 
-def read_catalog(catalog_path: Path) -> list[dict[str, object]]:
+def active_script_lines(
+    lines: list[str], *, platform: str, source: str
+) -> list[tuple[int, str]]:
+    """Validate tour conditionals and return the selected physical lines.
+
+    Conditional lines remain in the generated C array so runtime error/HUD
+    source lines still refer to the author's file. This helper only selects
+    the branch used by the requested catalog for generator-side validation.
+    """
+
+    # parent-active, condition-selected, else-seen, opening line
+    stack: list[tuple[bool, bool, bool, int]] = []
+    active = True
+    selected: list[tuple[int, str]] = []
+
+    for lineno, line in enumerate(lines, start=1):
+        match = CONDITIONAL_RE.match(line)
+        if match:
+            directive, rest = match.groups()
+            rest = rest.strip()
+            if directive in {"ifdef", "ifndef"}:
+                tokens = rest.split()
+                if not tokens or tokens[0] != SUPPORTED_MACRO:
+                    raise TourError(
+                        f"{source}:{lineno}: conditional must name "
+                        f"{SUPPORTED_MACRO}"
+                    )
+                if len(tokens) > 1 and tokens[1] != "#":
+                    raise TourError(
+                        f"{source}:{lineno}: unexpected text after #{directive}"
+                    )
+                if len(stack) >= 16:
+                    raise TourError(f"{source}:{lineno}: conditional nesting is too deep")
+                condition = (platform == "emscripten")
+                if directive == "ifndef":
+                    condition = not condition
+                stack.append((active, condition, False, lineno))
+                active = active and condition
+                continue
+
+            if rest and not rest.startswith("#"):
+                raise TourError(
+                    f"{source}:{lineno}: unexpected text after #{directive}"
+                )
+            if directive == "else":
+                if not stack:
+                    raise TourError(f"{source}:{lineno}: #else without a conditional")
+                parent_active, condition, else_seen, opened_at = stack[-1]
+                if else_seen:
+                    raise TourError(f"{source}:{lineno}: duplicate #else")
+                stack[-1] = (parent_active, condition, True, opened_at)
+                active = parent_active and not condition
+                continue
+
+            if directive == "endif":
+                if not stack:
+                    raise TourError(f"{source}:{lineno}: #endif without a conditional")
+                parent_active, _condition, _else_seen, _opened_at = stack.pop()
+                active = parent_active
+                continue
+
+        elif UNSUPPORTED_CONDITIONAL_RE.match(line):
+            raise TourError(
+                f"{source}:{lineno}: use #ifdef/#ifndef/#else/#endif; "
+                "other preprocessor directives are not supported"
+            )
+
+        if active:
+            selected.append((lineno, line))
+
+    if stack:
+        raise TourError(f"{source}:{stack[-1][2]}: unterminated conditional")
+    return selected
+
+
+def read_catalog(catalog_path: Path, *, platform: str) -> list[dict[str, object]]:
     base_dir = catalog_path.parent.resolve()
 
     parser = configparser.ConfigParser(interpolation=None, strict=True)
@@ -132,7 +210,13 @@ def read_catalog(catalog_path: Path) -> list[dict[str, object]]:
         seen_symbols[symbol] = section
 
         lines = file_path.read_text(encoding="utf-8").splitlines()
-        if not any(line.strip() and not line.lstrip().startswith("#") for line in lines):
+        selected_lines = active_script_lines(
+            lines, platform=platform, source=str(file_path)
+        )
+        if not any(
+            line.strip() and not line.lstrip().startswith("#")
+            for _lineno, line in selected_lines
+        ):
             raise TourError(f"[{section}] tour script has no events: {rel_file}")
 
         # Controlled tours (glr_pointer_script_start_tour) are untimed,
@@ -140,7 +224,7 @@ def read_catalog(catalog_path: Path) -> list[dict[str, object]]:
         # absolute-time grammar the transport controls cannot step; the
         # runtime rejects it too, but failing here keeps a bad catalog out of
         # the build. A comment/blank line never counts as an executable line.
-        for lineno, line in enumerate(lines, start=1):
+        for lineno, line in selected_lines:
             stripped = line.lstrip()
             if not stripped or stripped.startswith("#"):
                 continue
@@ -209,12 +293,18 @@ def write_if_changed(path: Path, text: str) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--catalog", type=Path, default=repo_root() / "tours" / "catalog.ini")
+    ap.add_argument(
+        "--platform",
+        choices=("native", "emscripten"),
+        default="native",
+        help="platform used to validate #ifdef branches (default: native)",
+    )
     ap.add_argument("--out", type=Path, help="write the generated include here")
     ap.add_argument("--check", action="store_true", help="validate the catalog only")
     args = ap.parse_args()
 
     try:
-        entries = read_catalog(args.catalog.resolve())
+        entries = read_catalog(args.catalog.resolve(), platform=args.platform)
     except TourError as exc:
         print(f"gen_tours: {exc}", file=sys.stderr)
         return 1

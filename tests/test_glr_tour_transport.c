@@ -5,8 +5,9 @@
  * Space/arrow/speed transport handlers, observing glr_pointer_script_tour_view().
  * Covers: baseline-pending -> playing, pause freezes virtual time, speed ladder
  * + persistence, immediate Right step (paused / at Done), Space restart from
- * Done, timestamped-tour rejection, comment/blank exclusion + physical source
- * lines, filename metadata, backstep from Done / between events / in-flight,
+ * Done, timestamped-tour rejection, native/web conditionals, comment/blank
+ * exclusion + physical source lines, filename metadata, backstep from Done /
+ * between events / in-flight,
  * 32-event seek chunking, baseline reconstruction of a REPL commit, immediate
  * reconstructed camera easing, and application/camera tick suppression while
  * a multi-frame seek is active.
@@ -247,6 +248,54 @@ static void test_timestamped_tour_rejected(void) {
     int r = glr_pointer_script_start_tour("T", "f", lines, 1);
     ASSERT_INT("timestamped tour rejected", r, 0);
     ASSERT_INT("no tour active", glr_pointer_script_tour_view().active, 0);
+}
+
+static void test_platform_conditionals(void) {
+    const char *lines[] = {
+        "#ifndef __EMSCRIPTEN__", /* line 1 */
+        "move 101 101",            /* native event, line 2 */
+        "#else",                   /* line 3 */
+        "move 202 202",            /* web event, line 4 */
+        "#endif",                  /* line 5 */
+        "#ifdef __EMSCRIPTEN__",  /* line 6 */
+        "move 303 303",            /* web event, line 7 */
+        "#else",                   /* line 8 */
+        "move 404 404",            /* native event, line 9 */
+        "#endif",                  /* line 10 */
+    };
+
+    start_tour(lines, (int)(sizeof(lines) / sizeof(lines[0])));
+    ASSERT_INT("conditionals leave two active events",
+               glr_pointer_script_tour_view().total_events, 2);
+
+    frames(2); /* baseline + first move */
+    GlrTourPlaybackView v = glr_pointer_script_tour_view();
+#if defined(__EMSCRIPTEN__)
+    ASSERT_INT("web branch keeps physical source line", v.source_line, 4);
+#else
+    ASSERT_INT("native branch keeps physical source line", v.source_line, 2);
+#endif
+
+    frames(1); /* first move completes; second move fires */
+    v = glr_pointer_script_tour_view();
+#if defined(__EMSCRIPTEN__)
+    ASSERT_INT("web second branch keeps physical source line", v.source_line, 7);
+#else
+    ASSERT_INT("native second branch keeps physical source line", v.source_line, 9);
+#endif
+
+    const char *bad_else[] = { "#else", "move 1 1" };
+    ASSERT_INT("#else without #ifdef is rejected",
+               glr_pointer_script_start_tour("Bad", "bad.pointer",
+                                              bad_else, 2), 0);
+    const char *bad_end[] = { "#ifdef __EMSCRIPTEN__", "move 1 1" };
+    ASSERT_INT("unterminated conditional is rejected",
+               glr_pointer_script_start_tour("Bad", "bad.pointer",
+                                              bad_end, 2), 0);
+    const char *bad_if[] = { "#if defined(__EMSCRIPTEN__)", "move 1 1" };
+    ASSERT_INT("unsupported preprocessor form is rejected",
+               glr_pointer_script_start_tour("Bad", "bad.pointer",
+                                              bad_if, 2), 0);
 }
 
 static void test_comments_blanks_and_source_line(void) {
@@ -1045,6 +1094,7 @@ int main(void) {
     test_space_restart_from_done();
     test_speed_persists_through_done_restart();
     test_timestamped_tour_rejected();
+    test_platform_conditionals();
     test_comments_blanks_and_source_line();
     test_normal_ring_delays_done();
     test_stepped_ring_immediate_done_and_backstep();
