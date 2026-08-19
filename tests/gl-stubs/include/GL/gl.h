@@ -61,6 +61,7 @@ typedef double GLclampd;
 #define GL_POLYGON 0x0009
 
 #define GL_ACCUM 0x0100
+#define GL_LOAD 0x0101
 #define GL_RETURN 0x0102
 
 #define GL_FRONT 0x0404
@@ -99,6 +100,7 @@ typedef double GLclampd;
 #define GL_ACCUM_BUFFER_BIT 0x00000200
 #define GL_STENCIL_BUFFER_BIT 0x00000400
 #define GL_COLOR_BUFFER_BIT 0x00004000
+#define GL_DITHER 0x0BD0
 
 #define GL_PACK_ALIGNMENT 0x0D05
 #define GL_UNPACK_ALIGNMENT 0x0CF5
@@ -300,6 +302,7 @@ static inline void glTexParameteri(GLenum target, GLenum pname, GLint param) { G
 static inline void glBlendFunc(GLenum sfactor, GLenum dfactor) { GL_STUB_TRACE_LINE("glBlendFunc %u %u\n", (unsigned)sfactor, (unsigned)dfactor); gl_stub_tick(GL_STUB_glBlendFunc); }
 static inline void glBlendEquation(GLenum mode) { GL_STUB_TRACE_LINE("glBlendEquation %u\n", (unsigned)mode); gl_stub_tick(GL_STUB_glBlendEquation); }
 static inline void glClear(GLbitfield mask) { GL_STUB_TRACE_LINE("glClear %u\n", (unsigned)mask); gl_stub_tick(GL_STUB_glClear); }
+static inline void glClearAccum(GLfloat r, GLfloat g, GLfloat b, GLfloat a) { GL_STUB_TRACE_LINE("glClearAccum %g %g %g %g\n", (double)r, (double)g, (double)b, (double)a); gl_stub_tick(GL_STUB_glClearAccum); }
 static inline void glClearDepth(GLclampd depth) { GL_STUB_TRACE_LINE("glClearDepth %g\n", (double)depth); gl_stub_tick(GL_STUB_glClearDepth); }
 static inline void glClearStencil(GLint s) { GL_STUB_TRACE_LINE("glClearStencil %d\n", (int)s); gl_stub_tick(GL_STUB_glClearStencil); }
 /* No framebuffer in the stubs: report "nothing in front" (far depth 1.0) so

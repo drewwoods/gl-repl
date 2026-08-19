@@ -230,6 +230,7 @@ These are make variables or script/test env vars. Pass make variables as
 | `BIN` | `scripts/docs-assets.sh`. | `gl-repl` binary for doc media generation; default `build/release-osmesa/gl-repl`. |
 | `OUT` | `scripts/docs-assets.sh`. | Output directory for generated documentation media. |
 | `BENCH_ARGS` | Makefile bench targets. | Extra arguments passed to every benchmark binary. |
+| `RENDER_BENCH_ARGS` | `make bench-render`. | Extra arguments for the shared native rendering benchmark, such as `--reps 20 --strict`. |
 | `SANITIZER_CHECKERS` | Makefile `analyze`. | Clang static-analyzer checker list. |
 | `ANALYZE_EXCLUDE` | Makefile `analyze`. | Space-separated source list excluded from static analysis. |
 | `OUT_DIR`, `SRC_DIR`, `TEST_DIR`, `TOOLS_DIR`, `BENCH_DIR` | `scripts/code-smells.sh`. | Input/output directories for the code-smell audit script. |
@@ -254,6 +255,41 @@ FREEGLUT_CAPTURE_FILE=/tmp/shot ./build/release-osmesa/gl-repl --example "Parame
 kill -USR1 $!                                    # writes /tmp/shot-0000.ppm
 magick /tmp/shot-0000.ppm shot.png               # PPM -> PNG to view
 ```
+
+### Rendering benchmark and web/gl4es regression lane
+
+The shared [`bench/bench_render.c`](../bench/bench_render.c) harness runs
+fixed-function draw workloads and reports timing plus framebuffer metrics.
+Use the native build for a local baseline; use OSMesa when no display is
+available:
+
+```bash
+make bench-render
+make bench-render FREEGLUT_OSMESA=1 RENDER_BENCH_ARGS="--csv --reps 20"
+```
+
+Native runs report oracle failures as warnings by default because some native
+contexts lack features that web gl4es emulates, such as an accumulation
+buffer. Add `--strict` when those feature-invariant checks should make the
+benchmark exit non-zero; the browser build enables strict mode automatically.
+The checks use coverage and color probes, not exact framebuffer hashes.
+
+The web-driven path is the regression lane for gl4es patches:
+
+```bash
+make bench-web-gl4es
+python3 scripts/web-serve.py build/release-web
+```
+
+Open `gl4es-render.html` from that server. It exercises triangles, batched
+points, wide/polygon lines, attrib-stack restoration, `glAccum`, perspective
+bitmap raster positions, and front/back color-material state. The page sets
+`document.title` to `PASS gl4es render bench` or `FAIL gl4es render bench` and
+publishes per-case timing/coverage/probe data in `window.gl4esRenderBench`.
+The checks use feature invariants rather than exact pixels, since WebGL
+antialiasing and color output can differ between browsers and GPUs. The other
+pages built by `bench-web-gl4es` remain useful for narrower line/display-list
+investigations.
 
 The same vendored freeglut capture hook also works in native Cocoa/X11 builds:
 `kill -USR1 <pid>` posts a redisplay and captures `GL_BACK` just before swap,

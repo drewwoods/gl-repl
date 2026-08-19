@@ -210,6 +210,24 @@ oracles under `build/release-web/`, including
 `gl4es-line-width-cases.html`. The cases page exercises state transitions and
 compiled-list lifetimes that the ordinary wasm test lane cannot observe.
 
+The same target also builds `gl4es-render.html` from the shared
+[`bench/bench_render.c`](../../bench/bench_render.c) harness. It runs the
+native-compatible fixed-function workload through gl4es and covers batched
+triangles, point-size capture, wide and polygon-mode lines, attrib-stack
+restoration, accumulation, perspective bitmap raster positions, and
+front/back color-material state. Each case reports draw time plus coverage and
+probe metrics; the browser page publishes `window.gl4esRenderBench` and sets
+`document.title` to `PASS gl4es render bench` or `FAIL gl4es render bench`.
+This deliberately uses feature invariants instead of an exact screenshot, so
+the result remains meaningful across WebGL drivers and antialiasing modes.
+
+For a native baseline, run `make bench-render` (or
+`make bench-render FREEGLUT_OSMESA=1` on a headless machine). The native run
+prints the same metrics and timing rows. Native oracle failures are warnings
+unless `--strict` is passed through `RENDER_BENCH_ARGS`; strict mode makes a
+failed coverage/color invariant return non-zero. The browser build enables
+strict mode automatically, and does not compare exact framebuffer hashes.
+
 ### Web-aware tests, and the exclusion list
 
 74 of the 76 binaries run under node. Where a test asserted behavior the web

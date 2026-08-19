@@ -39,6 +39,7 @@ extern "C" {
     X(glBlendFunc)                     \
     X(glBlendEquation)                 \
     X(glClear)                         \
+    X(glClearAccum)                    \
     X(glClearColor)                    \
     X(glClearDepth)                    \
     X(glClearStencil)                  \

@@ -1379,7 +1379,7 @@ $(COMPILE_REPORT_WEB_TEST_SUMMARY): $(addprefix $(BINDIR)/,$(WEB_TEST_BINS))
 
 ALL_OBJS = $(sort $(SAMPLE_OBJS) $(TEST_OBJS) $(BENCH_OBJS))
 
-DEPS = $(ALL_OBJS:.o=.d)
+DEPS = $(ALL_OBJS:.o=.d) $(RENDER_BENCH_OBJ:.o=.d)
 
 $(GENERATED_EXAMPLES_INC): FORCE scripts/gen_examples.py $(EXAMPLES_CATALOG) $(EXAMPLE_SCENE_SRCS)
 	@mkdir -p $(dir $@)
@@ -2026,7 +2026,7 @@ TEST_TARGETS = \
 	$(RUN_TEST_TARGETS) $(RUN_TEST_FILE_TARGETS)
 
 BENCH_TARGETS = \
-	bench bench-csv bench-web bench-web-csv bench-web-gl4es $(BENCH_TARGET_NAMES) \
+	bench bench-csv bench-render bench-render-csv bench-web bench-web-csv bench-web-gl4es $(BENCH_TARGET_NAMES) \
 	bench-glut-bitmap bench-glut-bitmap-build bench-glut-bitmap-apple \
 	bench-glut-bitmap-freeglut \
 	bench-code-panel-text bench-code-panel-stencil bench-vertex-labels
@@ -2626,6 +2626,31 @@ install-completions: ## Add the bundled zsh completions to ~/.zshrc (idempotent;
 # BENCH_ARGS to pass through flags, e.g. `make bench BENCH_ARGS="--iters 20"`.
 BENCH_ARGS ?=
 
+# Shared fixed-function rendering benchmark. The native target runs the same
+# source against the platform GL stack; the web target below links it into a
+# browser page with gl4es. Keep it outside BENCH_BINS because it needs a live
+# GL context rather than the node-safe REPL benchmark link.
+RENDER_BENCH_SRC := bench/bench_render.c
+RENDER_BENCH_OBJ := $(OBJDIR)/$(RENDER_BENCH_SRC:.c=.o)
+RENDER_BENCH_BIN := $(BINDIR)/bench_render
+RENDER_BENCH_ARGS ?=
+
+ifneq ($(WEB),1)
+$(RENDER_BENCH_BIN): $(RENDER_BENCH_OBJ) $(GL_STUB_COUNTS_OBJS) | $(COMPILE_REPORT_START)
+	@mkdir -p $(dir $@)
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(RENDER_BENCH_OBJ) $(GL_STUB_COUNTS_OBJS) $(GL_LDFLAGS) -o $@
+
+bench-render: $(RENDER_BENCH_BIN) ## Run the shared native rendering benchmark (use FREEGLUT_OSMESA=1 for headless CI).
+	$(RENDER_BENCH_BIN) $(RENDER_BENCH_ARGS) $(BENCH_ARGS)
+
+bench-render-csv: $(RENDER_BENCH_BIN) ## Run the shared native rendering benchmark as CSV.
+	$(RENDER_BENCH_BIN) --csv $(RENDER_BENCH_ARGS) $(BENCH_ARGS)
+else
+bench-render bench-render-csv:
+	@echo "ERROR: bench-render is the native target; use bench-web-gl4es for the browser/gl4es build." >&2
+	@exit 1
+endif
+
 # Standalone bitmap-font benchmark.  It intentionally has its own two small
 # binaries instead of joining BENCH_BINS: one links Apple GLUT and the other
 # links freeglut, and both need a live macOS window.
@@ -2857,6 +2882,7 @@ bench-web-csv: require-emcc ## Run the wasm benchmarks with --csv output (machin
 GL4ES_POLYGON_LINE_BENCH_SRC = packaging/web/bench/gl4es_polygon_line.c
 GL4ES_LINE_WIDTH_BENCH_SRC = packaging/web/bench/gl4es_line_width.c
 GL4ES_LINE_WIDTH_CASES_BENCH_SRC = packaging/web/bench/gl4es_line_width_cases.c
+GL4ES_RENDER_BENCH_SRC = bench/bench_render.c
 GL4ES_POLYGON_LINE_BENCH_BINS = \
 	$(WEB_BINDIR)/gl4es-polygon-line-immediate.html \
 	$(WEB_BINDIR)/gl4es-polygon-line-display-list.html
@@ -2864,15 +2890,18 @@ GL4ES_LINE_WIDTH_BENCH_BINS = \
 	$(WEB_BINDIR)/gl4es-line-width.html
 GL4ES_LINE_WIDTH_CASES_BENCH_BINS = \
 	$(WEB_BINDIR)/gl4es-line-width-cases.html
+GL4ES_RENDER_BENCH_BINS = \
+	$(WEB_BINDIR)/gl4es-render.html
 
-bench-web-gl4es: require-emcc ## Build browser gl4es polygon-line and line-width benchmarks.
+bench-web-gl4es: require-emcc ## Build browser gl4es rendering benchmarks and coverage oracles.
 	scripts/web-deps.sh
-	$(MAKE) WEB=1 $(GL4ES_POLYGON_LINE_BENCH_BINS) $(GL4ES_LINE_WIDTH_BENCH_BINS) $(GL4ES_LINE_WIDTH_CASES_BENCH_BINS)
+	$(MAKE) WEB=1 $(GL4ES_POLYGON_LINE_BENCH_BINS) $(GL4ES_LINE_WIDTH_BENCH_BINS) $(GL4ES_LINE_WIDTH_CASES_BENCH_BINS) $(GL4ES_RENDER_BENCH_BINS)
 	@echo "Serve with: python3 scripts/web-serve.py $(WEB_BINDIR)"
 	@echo "Immediate:   http://localhost:8000/gl4es-polygon-line-immediate.html"
 	@echo "Display list: http://localhost:8000/gl4es-polygon-line-display-list.html"
 	@echo "Line width:   http://localhost:8000/gl4es-line-width.html"
 	@echo "Cases:        http://localhost:8000/gl4es-line-width-cases.html"
+	@echo "Render suite: http://localhost:8000/gl4es-render.html (PASS/FAIL in document.title and window.gl4esRenderBench)"
 
 ifeq ($(WEB),1)
 $(WEB_BINDIR)/gl4es-polygon-line-immediate.html: $(GL4ES_POLYGON_LINE_BENCH_SRC) \
@@ -2901,6 +2930,13 @@ $(WEB_BINDIR)/gl4es-line-width-cases.html: $(GL4ES_LINE_WIDTH_CASES_BENCH_SRC) \
 	@mkdir -p $(dir $@)
 	$(CC) $(GL_HEADER_CFLAGS) -Isrc \
 		$(GL4ES_LINE_WIDTH_CASES_BENCH_SRC) packaging/web/gl4es_bootstrap.c \
+		$(WEB_GL_ARCHIVES) $(WEB_RUNTIME_LDFLAGS) -o $@
+
+$(WEB_BINDIR)/gl4es-render.html: $(GL4ES_RENDER_BENCH_SRC) \
+		packaging/web/gl4es_bootstrap.c $(WEB_GL_ARCHIVES)
+	@mkdir -p $(dir $@)
+	$(CC) $(GL_HEADER_CFLAGS) -Isrc \
+		$(GL4ES_RENDER_BENCH_SRC) packaging/web/gl4es_bootstrap.c \
 		$(WEB_GL_ARCHIVES) $(WEB_RUNTIME_LDFLAGS) -o $@
 endif
 
