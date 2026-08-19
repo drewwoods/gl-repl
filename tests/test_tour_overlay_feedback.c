@@ -326,7 +326,7 @@ static void test_caption_newline_renders_two_lines(void) {
                 g_bitmap_max_y - g_bitmap_min_y > 10.0f);
 }
 
-/* Stroke captions emit line loop/segment vertices for stroke fonts and quad plate. */
+/* Stroke captions emit line loop/segment vertices for the two-pass halo + glyphs. */
 static void test_stroke_caption_renders(void) {
     const char *lines[] = {
         "echo stroke scene:0.25,0.76 24 3.6 Stroke text"

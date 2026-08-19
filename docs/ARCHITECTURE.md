@@ -1323,7 +1323,7 @@ Runtime shape:
 Tours-menu tours are **controlled tours**: an untimed pointer script wrapped in
 replay-style transport. The engine lives in
 [`src/app/glr_pointer_script.c`](../src/app/glr_pointer_script.c) alongside the
-env-capture run kind (`GLR_POINTER_SCRIPT`), distinguished by a [`PsRunKind`](../src/app/glr_pointer_script.c#L160)
+env-capture run kind (`GLR_POINTER_SCRIPT`), distinguished by a [`PsRunKind`](../src/app/glr_pointer_script.c#L168)
 enum - only `PS_RUN_CONTROLLED_TOUR` gets a HUD, transport, and a Done linger
 that auto-closes after the final caption expires; env capture is never canceled
 and never auto-stops.
@@ -1343,7 +1343,7 @@ Runtime shape:
 
 * **Virtual clock vs rendered frames.** The host schedules
   `glr_ctrl_run_scripted_input_frame()` once per rendered frame; that controller
-  stage drives [`glr_pointer_script_frame()`](../src/app/glr_pointer_script.h#L242),
+  stage drives [`glr_pointer_script_frame()`](../src/app/glr_pointer_script.h#L253),
   which forks on run kind. A playing tour accumulates
   `frame_credit += speed` and spends whole credits as *virtual tour frames*
   (`0.25×`-`16×` discrete ladder), so speed rescales pointer-script timing
@@ -1352,7 +1352,7 @@ Runtime shape:
   frames.
 * **Event accounting.** `g_next_event` / `g_current_event` / `g_completed_events`
   are tracked separately. Firing an event does not count it complete; its
-  [`PsWait`](../src/app/glr_pointer_script.c#L210) completing does (immediate verbs complete the following virtual
+  [`PsWait`](../src/app/glr_pointer_script.c#L222) completing does (immediate verbs complete the following virtual
   frame). Done requires `completed == count` with no in-flight event. During
   **normal playback** a `ring` is an authored beat - `PS_WAIT_RING` holds until
   its duration elapses, so a trailing ring delays Done - while `echo` and the
@@ -1388,7 +1388,7 @@ Runtime shape:
   playback (only the most-recent still-live echo/ripple shows), so rewinding
   into a caption's on-screen window brings the caption back.
 * **HUD.** The controller populates `snap->tour` from
-  [`glr_pointer_script_tour_view()`](../src/app/glr_pointer_script.h#L163) and renders
+  [`glr_pointer_script_tour_view()`](../src/app/glr_pointer_script.h#L174) and renders
   [`src/ui/subsystems/tour_hud.c`](../src/ui/subsystems/tour_hud.c) at the top
   of the scene, before the compositor pass and separate from the bottom replay
   HUD, so a tour demonstrating replay shows both. It defaults to a compact
@@ -1923,7 +1923,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L139) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L299) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L300) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame - here a 2D/3D switch would let row-count see one

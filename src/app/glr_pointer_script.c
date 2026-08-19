@@ -2477,10 +2477,11 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
     }
 
     /* Echo caption: text (e.g. "Ctrl+K") pinned at a screen spot to label
-     * how the next action was triggered. Drawn in either fixed GLUT bitmap
-     * font or scalable GLUT stroke font (GLUT_STROKE_ROMAN /
-     * GLUT_STROKE_MONO_ROMAN) on top of a translucent dark plate so glyphs
-     * read clearly over any scene geometry. The whole caption eases in/out. */
+     * how the next action was triggered. Eased in/out.
+     * Rendered in the tour accent color (UI_TOK_ACCENT_ALT):
+     * - Scalable GLUT stroke fonts render over a two-pass dark halo (UI_TOK_SCRIM).
+     * - Fixed-size GLUT bitmap fonts render on top of a translucent dark
+     *   scrim plate (UI_TOK_SCRIM). */
     if (g_echo_start >= 0 && g_frame - g_echo_start < g_echo_dur &&
         g_echo_text[0]) {
         /* Plate padding around the glyph box, px. Asymmetric on purpose: the
@@ -2547,39 +2548,58 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
                        font_descent - pad_y;
         plate_top = first_cy + font_ascent + pad_y;
 
-        ui_clr_a(UI_TOK_SCRIM, alpha * 0.72f);
-        glBegin(GL_QUADS);
-        glVertex2f(cx - pad_x,     plate_bottom);
-        glVertex2f(cx + w + pad_x, plate_bottom);
-        glVertex2f(cx + w + pad_x, plate_top);
-        glVertex2f(cx - pad_x,     plate_top);
-        glEnd();
-
-        ui_clr_a(UI_TOK_TEXT_ON_HILITE, alpha);
         if (stroke_font) {
-            float stroke_lw = fmaxf(1.5f, g_echo_size * 0.08f);
-            glLineWidth(stroke_lw);
-        }
-        line = g_echo_text;
-        for (int row = 0; row < line_count; row++) {
-            const char *end = strchr(line, '\n');
-            size_t len = end ? (size_t)(end - line) : strlen(line);
-            float line_w = stroke_font
-                ? ps_stroke_width(stroke_font, stroke_scale, line, len)
-                : ps_bitmap_width(bitmap_font.font, line, len);
-            float line_x = cx + (w - line_w) * 0.5f;
-            float line_y = first_cy - (float)row * line_step;
-            if (stroke_font) {
-                ps_stroke_text(line_x, line_y, stroke_font, stroke_scale,
-                               line, len);
-            } else {
-                ps_bitmap_text(line_x, line_y, bitmap_font.font, line, len);
+            /* Stroke text: two-pass rendering with a dark halo underneath and
+             * the tour accent color (UI_TOK_ACCENT_ALT) for glyph bodies. */
+            float halo_lw = g_echo_size * 0.09f + 2.0f;
+            float body_lw = fmaxf(1.5f, g_echo_size * 0.05f + 1.0f);
+
+            for (int pass = 0; pass < 2; pass++) {
+                if (pass == 0) {
+                    ui_clr_a(UI_TOK_SCRIM, alpha * 0.85f);
+                    glLineWidth(halo_lw);
+                } else {
+                    ui_clr_a(UI_TOK_ACCENT_ALT, alpha);
+                    glLineWidth(body_lw);
+                }
+                const char *line_p = g_echo_text;
+                for (int row = 0; row < line_count; row++) {
+                    const char *end = strchr(line_p, '\n');
+                    size_t len = end ? (size_t)(end - line_p) : strlen(line_p);
+                    float line_w = ps_stroke_width(stroke_font, stroke_scale,
+                                                   line_p, len);
+                    float line_x = cx + (w - line_w) * 0.5f;
+                    float line_y = first_cy - (float)row * line_step;
+                    ps_stroke_text(line_x, line_y, stroke_font, stroke_scale,
+                                   line_p, len);
+                    if (!end) break;
+                    line_p = end + 1;
+                }
             }
-            if (!end) break;
-            line = end + 1;
-        }
-        if (stroke_font)
             glLineWidth(1.0f);
+        } else {
+            /* Bitmap text: draw translucent dark scrim plate, then text on top */
+            ui_clr_a(UI_TOK_SCRIM, alpha * 0.72f);
+            glBegin(GL_QUADS);
+            glVertex2f(cx - pad_x,     plate_bottom);
+            glVertex2f(cx + w + pad_x, plate_bottom);
+            glVertex2f(cx + w + pad_x, plate_top);
+            glVertex2f(cx - pad_x,     plate_top);
+            glEnd();
+
+            ui_clr_a(UI_TOK_ACCENT_ALT, alpha);
+            const char *line_p = g_echo_text;
+            for (int row = 0; row < line_count; row++) {
+                const char *end = strchr(line_p, '\n');
+                size_t len = end ? (size_t)(end - line_p) : strlen(line_p);
+                float line_w = ps_bitmap_width(bitmap_font.font, line_p, len);
+                float line_x = cx + (w - line_w) * 0.5f;
+                float line_y = first_cy - (float)row * line_step;
+                ps_bitmap_text(line_x, line_y, bitmap_font.font, line_p, len);
+                if (!end) break;
+                line_p = end + 1;
+            }
+        }
     }
 
     ps_draw_cursor(g_px, (float)win_h - g_py);
