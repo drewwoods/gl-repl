@@ -576,7 +576,7 @@ else
 COVERAGE_LDFLAGS =
 endif
 
-all: gl-repl
+all: gl-repl ## Build the default target (gl-repl).
 
 # Used by generated files that must always refresh their checked output.
 FORCE:
@@ -1558,7 +1558,7 @@ render3d-asset-builder: ## Build separate render3d-asset-builder binary with hig
 # Shared by `web` and `bench-web`. A prerequisite rather than a copy of the
 # check in each recipe -- the advice is long enough that two copies would
 # drift apart.
-require-emcc:
+require-emcc: ## Fail with setup advice unless emcc is on PATH (prerequisite of the web targets).
 	@command -v emcc >/dev/null 2>&1 || { \
 		echo "ERROR: emcc not found on PATH."; \
 		echo ""; \
@@ -2428,6 +2428,15 @@ fix-unicode: ## Replace configured Unicode in project C, Markdown, and scene sou
 check-unicode: ## Hard guard: apply configured Unicode replacements in project C, Markdown, and scene sources.
 	@python3 scripts/count-unicode.py --check --c-files --glr-files
 
+# Make's own interface guards. They scrape the Makefile *source text* (the
+# only universe an awk pass can see); the generated test-*/run-test-* aliases
+# are out of scope by design. Cheap enough to sit in the standard gate.
+check-make-target-documented: ## Hard guard: every source-declared Make target carries a help description comment.
+	@bash scripts/check/check-make-target-documented.sh
+
+check-make-no-duplicate-help: ## Hard guard: no Make target is documented on two declarations (help would print it twice).
+	@bash scripts/check/check-make-no-duplicate-help.sh
+
 CHECK_TARGETS = \
 	check-trailing-whitespace \
 	check-depth-capture-after-finish \
@@ -2446,7 +2455,9 @@ CHECK_TARGETS = \
 	check-state-ownership \
 	check-ui-text-panel-pure \
 	check-public-api-usage \
-	check-duplicate-api-decls
+	check-duplicate-api-decls \
+	check-make-target-documented \
+	check-make-no-duplicate-help
 
 check: ## Run all checks.
 	@set -e; \
@@ -2755,8 +2766,7 @@ $(CODE_PANEL_STENCIL_BENCH_BIN): $(CODE_PANEL_STENCIL_BENCH_SRC) $(FREEGLUT_STAT
 	  $(FREEGLUT_STATIC_LIB) -lm \
 	  -framework IOKit -framework Cocoa -framework OpenGL -framework CoreVideo -o $@
 
-bench-code-panel-stencil: $(CODE_PANEL_STENCIL_BENCH_BIN) ## Benchmark stencil-routed vs per-span-glColor code-panel text (Linux/macOS; opens a short-lived window).
-	$(CODE_PANEL_STENCIL_BENCH_BIN) $(CODE_PANEL_STENCIL_BENCH_ARGS) $(ARGS)
+CODE_PANEL_STENCIL_BENCH_OK := 1
 else ifeq ($(UNAME_S),Linux)
 ifeq ($(FREEGLUT_VENDOR_LINUX),1)
 $(CODE_PANEL_STENCIL_BENCH_BIN): $(CODE_PANEL_STENCIL_BENCH_SRC) $(FREEGLUT_STATIC_LIB)
@@ -2772,10 +2782,16 @@ $(CODE_PANEL_STENCIL_BENCH_BIN): $(CODE_PANEL_STENCIL_BENCH_SRC)
 	  $< -lglut -lGL -lGLU -lm -o $@
 endif
 
-bench-code-panel-stencil: $(CODE_PANEL_STENCIL_BENCH_BIN) ## Benchmark stencil-routed vs per-span-glColor code-panel text (Linux/macOS; opens a short-lived window).
+CODE_PANEL_STENCIL_BENCH_OK := 1
+endif
+
+# One declaration, one `## ` doc, all three platform behaviours: the build rules
+# branch above, the run rule does not. A second documented declaration in an
+# else-arm would print twice in help (check-make-no-duplicate-help).
+bench-code-panel-stencil: $(if $(CODE_PANEL_STENCIL_BENCH_OK),$(CODE_PANEL_STENCIL_BENCH_BIN)) ## Benchmark stencil-routed vs per-span-glColor code-panel text (Linux/macOS; opens a short-lived window).
+ifdef CODE_PANEL_STENCIL_BENCH_OK
 	$(CODE_PANEL_STENCIL_BENCH_BIN) $(CODE_PANEL_STENCIL_BENCH_ARGS) $(ARGS)
 else
-bench-code-panel-stencil:
 	@echo "ERROR: bench-code-panel-stencil targets Linux/macOS (needs freeglut)." >&2
 	@exit 1
 endif
@@ -2804,18 +2820,20 @@ $(VERTEX_LABEL_BENCH_BIN): $(VERTEX_LABEL_BENCH_SRC) $(FREEGLUT_STATIC_LIB)
 	  $(FREEGLUT_STATIC_LIB) -lm \
 	  -framework IOKit -framework Cocoa -framework OpenGL -framework CoreVideo -o $@
 
-bench-vertex-labels: $(VERTEX_LABEL_BENCH_BIN) ## Benchmark the vertex-number overlay's depth readback, glyph draw, and matrix reads (Linux/macOS; opens a short-lived window).
-	$(VERTEX_LABEL_BENCH_BIN) $(VERTEX_LABEL_BENCH_ARGS) $(ARGS)
+VERTEX_LABEL_BENCH_OK := 1
 else ifeq ($(UNAME_S),Linux)
 $(VERTEX_LABEL_BENCH_BIN): $(VERTEX_LABEL_BENCH_SRC)
 	@mkdir -p $(dir $@)
 	$(CC) -Wall -Wextra -O2 -std=c99 -D_GNU_SOURCE \
 	  $< -lglut -lGL -lGLU -lm -o $@
 
-bench-vertex-labels: $(VERTEX_LABEL_BENCH_BIN) ## Benchmark the vertex-number overlay's depth readback, glyph draw, and matrix reads (Linux/macOS; opens a short-lived window).
+VERTEX_LABEL_BENCH_OK := 1
+endif
+
+bench-vertex-labels: $(if $(VERTEX_LABEL_BENCH_OK),$(VERTEX_LABEL_BENCH_BIN)) ## Benchmark the vertex-number overlay's depth readback, glyph draw, and matrix reads (Linux/macOS; opens a short-lived window).
+ifdef VERTEX_LABEL_BENCH_OK
 	$(VERTEX_LABEL_BENCH_BIN) $(VERTEX_LABEL_BENCH_ARGS) $(ARGS)
 else
-bench-vertex-labels:
 	@echo "ERROR: bench-vertex-labels targets Linux/macOS (needs freeglut)." >&2
 	@exit 1
 endif
