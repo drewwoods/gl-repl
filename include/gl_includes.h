@@ -28,6 +28,21 @@
     #include <GL/freeglut.h>
 #endif
 
+/* macOS Cmd-key modifier bit. freeglut's Cocoa backend (the vendored
+ * third_party/freeglut we build on macOS) sets GLUT_ACTIVE_SUPER when Cmd is
+ * held and declares it in <GL/freeglut_ext.h>. The Apple GLUT framework
+ * (`make glut`), X11/Linux and the GL stubs don't ship the constant, so
+ * mirror freeglut's own value here rather than defining it away: one bit
+ * number project-wide means a scripted or test modifier mask spells Cmd the
+ * same on every build, and the SUPER -> Ctrl aliasing in
+ * editor_input_active_modifiers stays exercisable under the stubs. No backend
+ * that lacks the constant ever sets bit 3 (GLUT delivers only
+ * SHIFT/CTRL/ALT), so the mirror cannot alias a real modifier. Defined after
+ * the GL headers above, so the real declaration always wins. */
+#ifndef GLUT_ACTIVE_SUPER
+#define GLUT_ACTIVE_SUPER 0x0008
+#endif
+
 /* M_PI is part of POSIX <math.h> but optional in ISO C. Define the
  * fallback here (the canonical home shared by gl_repl.h) so every TU
  * that pulls in this aggregator can use M_PI without each file

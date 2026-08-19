@@ -50,6 +50,22 @@ int  repl_parse_identifier_list(const char *src, const char *leading_keyword,
                                 char names[][REPL_PREDEF_NAME_MAX], int max_names);
 int  repl_parse_func_name_token(const char **p_inout, int *fn);
 
+/* Does `src` read as a function *call* rather than a definition?
+ *
+ * `(` with no `{` is the whole discriminator, and it has to be applied
+ * BEFORE parse_repl_func_signature: that parser accepts `funcN()` and
+ * `funcN(a)` with no brace, because it also has to accept the brace-less
+ * `funcN` and `funcN(a)` forms that a `{` on the next line completes. So the
+ * signature grammar alone cannot tell `func6(a);` (a call passing variable
+ * `a`) from `func6(a) {` (a definition taking parameter `a`) - only the
+ * brace can.
+ *
+ * repl_compile_func_def_kernel quick-rejects on exactly this test, which is
+ * what makes it the authoritative call/def split; anyone who needs to predict
+ * whether text will commit as a definition must consult the same predicate
+ * rather than re-deriving it. */
+int  repl_text_is_func_call_shaped(const char *src);
+
 /* Scan the `float` declaration keyword at `p`, after skipping leading
  * whitespace and an optional canonical `static ` prefix (see
  * format_decl_text - the exporter emits `static float ...`, so the

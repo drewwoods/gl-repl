@@ -75,16 +75,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* macOS Cmd-key support. freeglut's Cocoa backend (the vendored
- * third_party/freeglut we build on macOS) sets GLUT_ACTIVE_SUPER when Cmd is
- * held, exposing it via <GL/freeglut.h>. The Apple GLUT framework (`make glut`)
- * and X11/Linux builds don't deliver Cmd, so the constant is absent there;
- * define it to 0 in that case so the bitwise checks below compile out to
- * no-ops without #ifdef-cluttering the call sites. */
-#ifndef GLUT_ACTIVE_SUPER
-#define GLUT_ACTIVE_SUPER 0
-#endif
-
 /* Code-panel input metrics local to the editor dispatcher. */
 #define CP_PAGE_SCROLL_ROWS 5
 
@@ -1139,6 +1129,10 @@ static CommitResult commit_before_navigation(void) {
     tutorial_cancel_pending();
     editor_completion_clear();
     return COMMIT_REJECTED;
+}
+
+int editor_input_commit_before_navigation(void) {
+    return commit_before_navigation() != COMMIT_REJECTED;
 }
 
 void editor_navigate_to_line(int target) {

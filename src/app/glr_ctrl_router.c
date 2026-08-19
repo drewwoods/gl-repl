@@ -70,6 +70,7 @@
 #include "subsystems/replay/replay_annotations.h"
 #include "repl/source_scope.h"
 #include "repl/state_views.h"
+#include "repl/text_helpers.h"
 #include "repl/tutorials.h"
 #include "subsystems/assign_plot/assign_plot.h"
 #include "subsystems/console/console.h"
@@ -1348,6 +1349,105 @@ void glr_ctrl_router_select_word_at(int line_idx, int char_idx) {
     editor_cursor_pos_extend_selection(word_end);
 }
 
+/* Check whether the active dirty input buffer is declaring function slot `fn`.
+ *
+ * Getting this wrong is destructive, not merely wrong: a false positive sends
+ * the click down the auto-commit path, and a commit that then fails rolls back
+ * through editor_undo_snapshot_restore, which discards the typed row (see
+ * restore_commit_attempt_committed_state in src/editor/input.c). An ordinary
+ * same-row click commits nothing, so Ctrl+click would destroy work a plain
+ * click preserves. The predicate therefore has to be no looser than what the
+ * commit will actually do.
+ *
+ * Both halves of the commit's own rule are needed, in its order:
+ *   - repl_text_is_func_call_shaped - `(` with no `{` is a call. This is the
+ *     load-bearing half: parse_repl_func_signature accepts `func6()` and
+ *     `func6(a)` brace-less, so it alone cannot separate a call passing
+ *     variable `a` from a definition taking parameter `a`.
+ *   - parse_repl_func_signature - the definition grammar proper, which rejects
+ *     a non-identifier parameter list such as `func6(1)`. */
+static int pending_input_defines_func(int fn) {
+    if (!editor_input_has_uncommitted_change())
+        return 0;
+    const char *input = editor_state_input().input;
+    if (repl_text_is_func_call_shaped(input))
+        return 0;
+    char param_names[MAX_EXPR_VARS][REPL_PREDEF_NAME_MAX];
+    int param_count = 0;
+    int pending_fn = -1;
+    if (!parse_repl_func_signature(input, &pending_fn,
+                                   param_names, MAX_EXPR_VARS, &param_count))
+        return 0;
+    return pending_fn == fn;
+}
+
+/* Ctrl+Left Click: Go to function definition.
+ * Extracts the function identifier under the click, checks if the definition
+ * exists or is being created in the dirty input buffer, auto-commits any
+ * pending edit, looks up the definition in the post-commit AST, and navigates
+ * to it. Falls back cleanly to ordinary click handling if the clicked token is
+ * not a function or if no definition exists. */
+static int route_func_def_click_hit(const UiHit *hit) {
+    /* Cmd arrives as Ctrl here - editor_input_active_modifiers mirrors
+     * GLUT_ACTIVE_SUPER into GLUT_ACTIVE_CTRL. The Shift arm of
+     * route_code_text_hit already claimed every Shift press that carries a
+     * usable char_idx, so the Shift test below only restates that ordering
+     * for a caller reading this routine on its own; it is not what keeps
+     * shift-range selection working. */
+    int mods = editor_input_active_modifiers();
+    if ((mods & GLUT_ACTIVE_SHIFT) || !(mods & GLUT_ACTIVE_CTRL))
+        return 0;
+    if (hit->line_idx < 0 || hit->line_idx >= repl_state_document_count() || hit->char_idx < 0)
+        return 0;
+
+    const char *text;
+    int len;
+    if (hit->line_idx == editor_state_edit_line()) {
+        text = editor_state_input().input;
+        len = editor_state_input().input_len;
+    } else {
+        const char *raw = editor_buffer_line(hit->line_idx);
+        repl_canonical_input_view(raw, &text, &len);
+    }
+
+    int start = hit->char_idx, end = hit->char_idx;
+    editor_input_word_bounds_at(text, len, hit->char_idx, &start, &end);
+    if (start < 0 || end <= start || end > len)
+        return 0;
+
+    const char *p = text + start;
+    int fn = -1;
+    if (!repl_parse_func_name_token(&p, &fn) || p != text + end)
+        return 0;
+
+    /* Preflight: if the function is not defined in the AST and not being
+     * declared in the pending input buffer, fall back without committing. */
+    int target = repl_source_scope_find_func_def_line(fn);
+    if (target < 0 && !pending_input_defines_func(fn))
+        return 0;
+
+    /* From here the click is ours whichever way the commit goes, so every
+     * exit below leaves the same state: epilog + drag disarmed. */
+    if (!editor_input_commit_before_navigation()) {
+        route_code_click_epilog();
+        glr_ctrl_router_reset_code_panel_drag();
+        return 1;
+    }
+
+    target = repl_source_scope_find_func_def_line(fn);
+    if (target < 0) {
+        route_code_click_epilog();
+        glr_ctrl_router_reset_code_panel_drag();
+        return 1;
+    }
+
+    editor_navigate_to_line(target);
+    editor_scroll_follow_cursor_set(1);
+    route_code_click_epilog();
+    glr_ctrl_router_reset_code_panel_drag();
+    return 1;
+}
+
 /* UI_HIT_CODE_TEXT: navigate to clicked line, set cursor column, arm
  * the selection drag anchor. A press that hits the same (line, char)
  * as the previous press within DOUBLE_CLICK_MS reads as a double-click
@@ -1402,15 +1502,26 @@ static int route_code_text_hit(const UiHit *hit) {
         return 1;
     }
 
+    /* Record the press before the func-def route can consume it: a
+     * consumed Ctrl+click still happened at this (line, char), and
+     * leaving the previous press stamped would let plain-click,
+     * Ctrl+click, plain-click at one column read as a double-click. */
     unsigned int now_ms = current_double_click_ms();
-    int is_double_click = (g_last_text_press_line == hit->line_idx &&
-                           g_last_text_press_char == hit->char_idx &&
-                           hit->line_idx >= 0 &&
-                           hit->char_idx >= 0 &&
-                           now_ms - g_last_text_press_ms < DOUBLE_CLICK_MS);
+    int prev_press_line = g_last_text_press_line;
+    int prev_press_char = g_last_text_press_char;
+    unsigned int prev_press_ms = g_last_text_press_ms;
     g_last_text_press_ms   = now_ms;
     g_last_text_press_line = hit->line_idx;
     g_last_text_press_char = hit->char_idx;
+
+    if (route_func_def_click_hit(hit))
+        return 1;
+
+    int is_double_click = (prev_press_line == hit->line_idx &&
+                           prev_press_char == hit->char_idx &&
+                           hit->line_idx >= 0 &&
+                           hit->char_idx >= 0 &&
+                           now_ms - prev_press_ms < DOUBLE_CLICK_MS);
 
     if (is_double_click) {
         glr_ctrl_router_select_word_at(hit->line_idx, hit->char_idx);

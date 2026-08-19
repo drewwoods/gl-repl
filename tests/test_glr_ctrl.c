@@ -6782,6 +6782,282 @@ static void test_func_nav_special_beats_replay_and_help(void) {
     editor_input_set_modifier_provider_for_test(NULL);
 }
 
+static unsigned int s_ctrl_click_clock_ms = 1000;
+static unsigned int ctrl_click_clock_provider(void) {
+    s_ctrl_click_clock_ms += 1000;
+    return s_ctrl_click_clock_ms;
+}
+
+static void test_ctrl_click_go_to_func_def(void) {
+    printf("--- imrepl_ctrl Ctrl+Click go to function definition ---\n");
+    UiHit hit;
+    memset(&hit, 0, sizeof(hit));
+    hit.kind = UI_HIT_CODE_TEXT;
+
+    glr_ctrl_reset_all();
+    s_ctrl_click_clock_ms = 1000;
+    glr_ctrl_router_set_double_click_clock_for_test(ctrl_click_clock_provider);
+    repl_func_alias_clear_all();
+    repl_func_alias_set(1, "my_star");
+    editor_feed_line("func0() {");            /* 0: func0 def */
+    editor_feed_line("  glColor3f(1,0,0);");  /* 1: func0 body */
+    editor_feed_line("}");                    /* 2: func0 end */
+    editor_feed_line("func1() {");            /* 3: func1 def (alias: my_star) */
+    editor_feed_line("  glColor3f(0,1,0);");  /* 4: func1 body */
+    editor_feed_line("}");                    /* 5: func1 end */
+    editor_feed_line("func0();");             /* 6: standalone call to func0 */
+    editor_feed_line("my_star();");           /* 7: aliased call to func1 */
+    editor_feed_line("glVertex3f(0, 0, 0); // func2 callsite"); /* 8: comment call to func2 */
+    editor_feed_line("glVertex3f(0, 0, 0); // func0 callsite"); /* 9: comment call to func0 */
+
+    ASSERT_INT("document has 10 lines", repl_state_document_count(), 10);
+
+    editor_input_set_modifier_provider_for_test(simulated_mods_provider);
+
+    /* 1. Standalone CMD_CALL: Ctrl+Click on func0(); -> lands on line 0 */
+    g_simulated_mods = GLUT_ACTIVE_CTRL;
+    hit.line_idx = 6; hit.char_idx = 2;
+    int consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("ctrl-click func0() consumed", consumed, 1);
+    ASSERT_INT("ctrl-click func0() lands on line 0", editor_state_edit_line(), 0);
+    ASSERT_INT("scroll follow cursor armed after func jump", editor_scroll_follow_cursor(), 1);
+    ASSERT_INT("drag disarmed after jump", g_code_panel_drag_active, 0);
+
+    /* 2. macOS Cmd (GLUT_ACTIVE_SUPER) normalization */
+    g_simulated_mods = GLUT_ACTIVE_SUPER;
+    hit.line_idx = 6; hit.char_idx = 2;
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("cmd-click func0() consumed", consumed, 1);
+    ASSERT_INT("cmd-click func0() lands on line 0", editor_state_edit_line(), 0);
+
+    /* 3. Aliased call: Ctrl+Click on my_star(); -> lands on line 3 */
+    g_simulated_mods = GLUT_ACTIVE_CTRL;
+    hit.line_idx = 7; hit.char_idx = 3;
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("ctrl-click my_star() consumed", consumed, 1);
+    ASSERT_INT("ctrl-click my_star() lands on line 3", editor_state_edit_line(), 3);
+    ASSERT_INT("drag disarmed after my_star jump", g_code_panel_drag_active, 0);
+
+    /* 4. Search and Autocomplete cleanup on successful navigation */
+    editor_state_search_mut()->active = 1;
+    editor_state_search_mut()->query_len = 3;
+    editor_state_autocomplete_mut()->match_count = 2;
+    hit.line_idx = 6; hit.char_idx = 2;
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("ctrl-click with active search/ac consumed", consumed, 1);
+    ASSERT_INT("search dismissed on jump", editor_state_search()->active, 0);
+    ASSERT_INT("search query cleared on jump", editor_state_search()->query_len, 0);
+    ASSERT_INT("autocomplete dismissed on jump", editor_state_autocomplete()->match_count, 0);
+
+    /* 5. Call inside comment: Ctrl+Click on func0 in // func0 callsite -> lands on line 0 */
+    hit.line_idx = 9; hit.char_idx = 26;
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("ctrl-click func0 in comment consumed", consumed, 1);
+    ASSERT_INT("ctrl-click func0 in comment lands on line 0", editor_state_edit_line(), 0);
+
+    /* 6. Ctrl+Shift precedence: Shift wins, triggers selection, does NOT jump */
+    editor_navigate_to_line(8);
+    g_simulated_mods = GLUT_ACTIVE_CTRL | GLUT_ACTIVE_SHIFT;
+    hit.line_idx = 6; hit.char_idx = 2;
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("ctrl+shift+click consumed by selection route", consumed, 1);
+    ASSERT_TRUE("ctrl+shift+click active selection", editor_clipboard_sel_active());
+    ASSERT_INT("ctrl+shift+click anchor line", editor_state_selection_anchor(), 8);
+    ASSERT_INT("ctrl+shift+click navigated to clicked line 6", editor_state_edit_line(), 6);
+    editor_selection_clear_line_range();
+
+    /* 7. Invalid hit positions fall back to ordinary click */
+    g_simulated_mods = GLUT_ACTIVE_CTRL;
+    hit.line_idx = 6; hit.char_idx = -1;
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("invalid char_idx falls back to ordinary click (consumed)", consumed, 1);
+    ASSERT_INT("edit line stays at 6", editor_state_edit_line(), 6);
+
+    hit.line_idx = -1; hit.char_idx = 2;
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("negative line_idx falls back to ordinary click", consumed, 1);
+
+    hit.line_idx = 999; hit.char_idx = 2;
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("out-of-bounds line_idx falls back to ordinary click", consumed, 1);
+
+    /* 8. Click on definition line itself: consumed, drag disarmed */
+    editor_navigate_to_line(0);
+    hit.line_idx = 0; hit.char_idx = 2;
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("ctrl-click on definition line consumed", consumed, 1);
+    ASSERT_INT("stays on line 0", editor_state_edit_line(), 0);
+    ASSERT_INT("drag disarmed on self click", g_code_panel_drag_active, 0);
+
+    /* 9. Function definition created by pending edit:
+     * User types func2() { on row 9, Ctrl-clicks func2 callsite at row 8.
+     * Preflight recognizes pending func2 definition -> commits -> jumps to new definition! */
+    editor_navigate_to_line(9);
+    editor_input_set_text("func2() {");
+    ASSERT_TRUE("dirty edit is pending", editor_input_has_uncommitted_change());
+    ASSERT_INT("func2 not yet in AST", repl_source_scope_find_func_def_line(2), -1);
+    hit.line_idx = 8; hit.char_idx = 26; /* "func2" in comment on line 8 */
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("ctrl-click on func2 callsite while defining func2 consumed", consumed, 1);
+    int func2_def = repl_source_scope_find_func_def_line(2);
+    ASSERT_TRUE("func2 def created in AST", func2_def >= 0);
+    ASSERT_INT("navigated to newly created func2 definition", editor_state_edit_line(), func2_def);
+
+    /* 9b. Definition removed by pending edit:
+     * User renames my_star() { (slot 1 at line 3) into func3() { (slot 3).
+     * Ctrl-clicking my_star(); callsite at line 10 auto-commits the rename,
+     * finds slot 1 gone post-commit, consumes the event, and safely keeps
+     * cursor on the committed edit line without misnavigating to stale row. */
+    editor_navigate_to_line(3);
+    editor_load_line_to_input(3);
+    editor_input_set_text("func3() {");
+    ASSERT_TRUE("rename edit is pending", editor_input_has_uncommitted_change());
+    hit.line_idx = 10; hit.char_idx = 3; /* my_star(); callsite at line 10 */
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("ctrl-click with removed definition consumed", consumed, 1);
+    ASSERT_INT("my_star slot 1 no longer exists post-commit", repl_source_scope_find_func_def_line(1), -1);
+    ASSERT_TRUE("func3 slot 3 created post-commit", repl_source_scope_find_func_def_line(3) >= 0);
+    ASSERT_INT("cursor advances to func3 body line 4", editor_state_edit_line(), 4);
+    editor_load_line_to_input(editor_state_edit_line());
+
+    /* 10. Undefined function does NOT commit pending edit when clicked on same row */
+    editor_navigate_to_line(repl_state_document_count());
+    editor_feed_line("// func5 func10 12345 { ; }"); /* test row at end of doc */
+    int test_row = repl_state_document_count() - 1;
+
+    editor_navigate_to_line(test_row);
+    editor_load_line_to_input(test_row);
+    editor_input_set_text("// func5 dirty edit");
+    ASSERT_TRUE("dirty edit pending at test_row", editor_input_has_uncommitted_change());
+    hit.line_idx = test_row; hit.char_idx = 4; /* "func5" on current edit line */
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("undefined func5 falls back to ordinary click", consumed, 1);
+    ASSERT_TRUE("pending edit on current line was NOT committed", editor_input_has_uncommitted_change());
+    ASSERT_STR("pending edit text preserved", editor_state_input().input, "// func5 dirty edit");
+    editor_load_line_to_input(test_row); /* restore clean line */
+
+    /* 10b. A CALL to an undefined slot typed in the input row is not a
+     * definition. The preflight must not mistake it for one: committing
+     * would be rejected and the rollback discards the typed row, so a
+     * Ctrl+click would destroy work an ordinary same-row click preserves.
+     *
+     * All three parenthesized call forms, because they fail the definition
+     * test for two different reasons and only one is caught by the
+     * signature grammar: `func6(1)` has a non-identifier parameter list, but
+     * `func6()` and `func6(a)` parse as brace-less signatures and are
+     * separated from a definition only by the absent `{`
+     * (repl_text_is_func_call_shaped). */
+    {
+        const char *call_forms[3] = { "func6(1)", "func6()", "func6(a)" };
+        for (int ci = 0; ci < 3; ci++) {
+            editor_navigate_to_line(test_row);
+            editor_load_line_to_input(test_row);
+            editor_input_set_text(call_forms[ci]);
+            ASSERT_TRUE("call-in-progress pending at test_row",
+                        editor_input_has_uncommitted_change());
+            ASSERT_INT("func6 undefined before the click",
+                       repl_source_scope_find_func_def_line(6), -1);
+            hit.line_idx = test_row; hit.char_idx = 1; /* "func6" in the input row */
+            consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+            ASSERT_INT("call to undefined func falls back to ordinary click",
+                       consumed, 1);
+            ASSERT_TRUE("call-in-progress was NOT committed",
+                        editor_input_has_uncommitted_change());
+            ASSERT_STR("call-in-progress text preserved",
+                       editor_state_input().input, call_forms[ci]);
+            ASSERT_INT("still no func6 definition",
+                       repl_source_scope_find_func_def_line(6), -1);
+            ASSERT_INT("document unchanged by refused preflight",
+                       repl_state_document_count(), test_row + 1);
+            editor_load_line_to_input(test_row); /* restore clean line */
+        }
+    }
+
+    /* 10c. The definition form of the same slot still arms the preflight -
+     * the same text as the refused `func6(a)` above, plus the `{` that is
+     * what actually makes it a definition. */
+    editor_navigate_to_line(test_row);
+    editor_load_line_to_input(test_row);
+    editor_input_set_text("func6(a) {");
+    hit.line_idx = test_row; hit.char_idx = 1;
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("definition-in-progress consumes the click", consumed, 1);
+    ASSERT_TRUE("func6 definition committed",
+                repl_source_scope_find_func_def_line(6) >= 0);
+    editor_load_line_to_input(editor_state_edit_line());
+    test_row = repl_state_document_count() - 1;
+
+    /* 11. Individual non-function tokens fall back to ordinary click */
+    /* 11a. func10 (not a slot 0..9) */
+    editor_navigate_to_line(0);
+    editor_load_line_to_input(0);
+    glr_ctrl_router_reset_code_panel_drag();
+    hit.line_idx = test_row; hit.char_idx = 10; /* "func10" */
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("func10 falls back to ordinary click", consumed, 1);
+    ASSERT_INT("navigated to test_row", editor_state_edit_line(), test_row);
+    editor_load_line_to_input(editor_state_edit_line());
+
+    /* 11b. Number token "12345" */
+    editor_navigate_to_line(0);
+    editor_load_line_to_input(0);
+    glr_ctrl_router_reset_code_panel_drag();
+    hit.line_idx = test_row; hit.char_idx = 18; /* "12345" */
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("number token falls back to ordinary click", consumed, 1);
+    ASSERT_INT("navigated to test_row", editor_state_edit_line(), test_row);
+    editor_load_line_to_input(editor_state_edit_line());
+
+    /* 11c. Punctuation "{" */
+    editor_navigate_to_line(0);
+    editor_load_line_to_input(0);
+    glr_ctrl_router_reset_code_panel_drag();
+    hit.line_idx = test_row; hit.char_idx = 22; /* "{" */
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("punctuation '{' falls back to ordinary click", consumed, 1);
+    ASSERT_INT("navigated to test_row", editor_state_edit_line(), test_row);
+    editor_load_line_to_input(editor_state_edit_line());
+
+    /* 11d. Punctuation ";" */
+    editor_navigate_to_line(0);
+    editor_load_line_to_input(0);
+    glr_ctrl_router_reset_code_panel_drag();
+    hit.line_idx = test_row; hit.char_idx = 24; /* ";" */
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("punctuation ';' falls back to ordinary click", consumed, 1);
+    ASSERT_INT("navigated to test_row", editor_state_edit_line(), test_row);
+    editor_load_line_to_input(editor_state_edit_line());
+
+    /* 11e. Whitespace */
+    editor_navigate_to_line(0);
+    editor_load_line_to_input(0);
+    glr_ctrl_router_reset_code_panel_drag();
+    hit.line_idx = test_row; hit.char_idx = 2; /* whitespace */
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("whitespace falls back to ordinary click", consumed, 1);
+    ASSERT_INT("navigated to test_row", editor_state_edit_line(), test_row);
+    editor_load_line_to_input(editor_state_edit_line());
+
+    /* 12. Pending edit rejection preserves error status and aborts navigation */
+    g_simulated_mods = GLUT_ACTIVE_CTRL;
+    editor_navigate_to_line(0);
+    editor_load_line_to_input(0);
+    editor_input_set_text("func0(bad syntax !!!");
+    EditorAutocompleteState *ac = editor_state_autocomplete_mut();
+    ac->match_count = 3;
+    glr_ctrl_router_reset_code_panel_drag();
+    hit.line_idx = 10; hit.char_idx = 2; /* func0(); callsite at line 10 */
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("rejected edit consumes event", consumed, 1);
+    ASSERT_INT("rejected edit keeps cursor on dirty line 0", editor_state_edit_line(), 0);
+    ASSERT_INT("autocomplete cleared on commit rejection", editor_state_autocomplete()->match_count, 0);
+    editor_load_line_to_input(0); /* restore clean line */
+
+    g_simulated_mods = 0;
+    glr_ctrl_router_set_double_click_clock_for_test(NULL);
+    editor_input_set_modifier_provider_for_test(NULL);
+}
+
 static void test_special_key_shortcuts(void) {
     printf("--- imrepl_ctrl special key shortcuts ---\n");
     prepare_display_fixture();
@@ -7905,6 +8181,7 @@ int main(void) {
     test_color_picker_materialfv();
     test_special_key_shortcuts();
     test_func_nav_special_beats_replay_and_help();
+    test_ctrl_click_go_to_func_def();
     test_scene_cycle_skips_failed_examples();
     test_promotion_keeps_example_catalog_place();
     test_scripted_chord_reaches_shift_shortcuts();

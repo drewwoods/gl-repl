@@ -3445,8 +3445,12 @@ ReplCompileResult repl_compile_func_def_kernel(const char *input,
     }
 
     /* Quick-reject inputs that look like function calls (have `(` and
-     * no `{`). They go through the normal command parser. */
-    if (strchr(trimmed, '(') != NULL && strchr(trimmed, '{') == NULL) {
+     * no `{`). They go through the normal command parser. This test is the
+     * authoritative call/def split - see repl_text_is_func_call_shaped, which
+     * homes it so callers that need to PREDICT this outcome (the Ctrl+click
+     * go-to-definition preflight) apply the same rule instead of re-deriving
+     * a looser one from parse_repl_func_signature. */
+    if (repl_text_is_func_call_shaped(trimmed)) {
         out->valid = 0;
         return REPL_COMPILE_OK;
     }

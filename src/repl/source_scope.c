@@ -481,6 +481,26 @@ int repl_source_scope_prev_func_def(int pos) {
     return repl_source_scope_view_prev_func_def(live_source_scope_view(), pos);
 }
 
+int repl_source_scope_view_find_func_def_line(const ReplSourceScopeView *view,
+                                             int fn) {
+    if (!view || !view->cmds || fn < 0 || fn >= REPL_FUNC_SLOT_COUNT)
+        return -1;
+    for (int i = 0; i < view->count; i++) {
+        if (!view->cmds[i].valid || view->cmds[i].type != CMD_FUNC_DEF)
+            continue;
+        /* `fn` is range-checked above, so matching it is the whole test -
+         * a malformed def carrying an out-of-range args[0] can never
+         * equal it. */
+        if ((int)view->cmds[i].args[0] == fn)
+            return i;
+    }
+    return -1;
+}
+
+int repl_source_scope_find_func_def_line(int fn) {
+    return repl_source_scope_view_find_func_def_line(live_source_scope_view(), fn);
+}
+
 /* Is `pos` inside a for-loop body that `break` / `continue` may target?
  *
  * Same open-block stack as nearest_open_block_at, but read from the

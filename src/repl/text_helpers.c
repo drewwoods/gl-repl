@@ -426,6 +426,11 @@ int repl_parse_func_name_token(const char **p_inout, int *fn) {
     return repl_parse_func_name_token_with_pending_alias(p_inout, fn, NULL, -1);
 }
 
+int repl_text_is_func_call_shaped(const char *src) {
+    if (!src) return 0;
+    return strchr(src, '(') != NULL && strchr(src, '{') == NULL;
+}
+
 int parse_repl_func_signature(const char *src, int *fn,
                               char param_names[][REPL_PREDEF_NAME_MAX], int max_params,
                               int *param_count) {

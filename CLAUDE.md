@@ -411,7 +411,7 @@ execute-time re-eval.
 
 - **Interactive `;` key**: the input buffer does **not** contain the `;` -
   handlers must accept input without a trailing `;`.
-- **Bulk line feeding**: [`editor_feed_line()`](src/editor/input.h#L200)
+- **Bulk line feeding**: [`editor_feed_line()`](src/editor/input.h#L205)
   (clipboard paste, tests, editor-side loaders) and
   [`repl_load_apply_line()`](src/repl/load.h#L78) (file import, catalog load,
   replace - the pipeline TUs' twin) both receive the full line *including* `;`.
@@ -419,7 +419,7 @@ execute-time re-eval.
   `editor_feed_line()` runs `editor_try_commit_any()`, while
   `repl_load_apply_line()` runs `repl_compile_dispatch()`. Adding a structured
   form to one wrapper does not add it to the other.
-- Enter may or may not have `;`. [`editor_load_line_to_input()`](src/editor/input.h#L193) strips the
+- Enter may or may not have `;`. [`editor_load_line_to_input()`](src/editor/input.h#L198) strips the
   trailing `;`, so re-committing an existing line takes the no-semicolon
   path - handlers checking for `;` must also accept end-of-string.
 
@@ -562,7 +562,7 @@ catalog (`test_camera_header_parity`).
 
 State in [`replay_state_view()`](src/subsystems/replay/replay_state.h#L140); playback/fade/input split across
 `src/subsystems/replay/`. During playback the flat count is clamped to
-[`replay_exec_limit()`](src/subsystems/replay/replay.h#L79); fade-batch ring renders old geometry in a blended
+[`replay_exec_limit()`](src/subsystems/replay/replay.h#L81); fade-batch ring renders old geometry in a blended
 pass. Fade replays skip `CMD_CLEAR`, and clamps never cut below the
 program's leading `glClear` (`replay_frame_setup_limit`).
 Assignment annotations associate prior rows with the current invocation by

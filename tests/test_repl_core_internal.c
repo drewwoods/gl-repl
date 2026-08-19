@@ -235,6 +235,30 @@ int main() {
                    repl_source_scope_prev_func_def(repl_state_document_count()), 5);
         ASSERT_INT("next func from append row",
                    repl_source_scope_next_func_def(repl_state_document_count()), -1);
+
+        /* find_func_def_slot assertions */
+        ASSERT_INT("find slot 0 def line", repl_source_scope_find_func_def_line(0), 0);
+        ASSERT_INT("find slot 1 def line", repl_source_scope_find_func_def_line(1), 5);
+        ASSERT_INT("find slot 2 (undefined) returns -1", repl_source_scope_find_func_def_line(2), -1);
+        ASSERT_INT("find slot -1 out-of-range returns -1", repl_source_scope_find_func_def_line(-1), -1);
+        ASSERT_INT("find slot 10 out-of-range returns -1", repl_source_scope_find_func_def_line(10), -1);
+        ASSERT_INT("view: find slot 0", repl_source_scope_view_find_func_def_line(&view, 0), 0);
+        ASSERT_INT("view: find slot 1", repl_source_scope_view_find_func_def_line(&view, 1), 5);
+        ASSERT_INT("view: find slot 2", repl_source_scope_view_find_func_def_line(&view, 2), -1);
+
+        /* Malformed CMD_FUNC_DEF with out-of-range args[0] */
+        GLCmd malformed_cmds[3];
+        memset(malformed_cmds, 0, sizeof(malformed_cmds));
+        malformed_cmds[0].valid = 1; malformed_cmds[0].type = CMD_FUNC_DEF;
+        malformed_cmds[0].args[0] = 99.0f; /* Invalid slot */
+        malformed_cmds[1].valid = 1; malformed_cmds[1].type = CMD_FUNC_DEF;
+        malformed_cmds[1].args[0] = -5.0f; /* Invalid negative slot */
+        ReplSourceScopeView mal_view;
+        repl_source_scope_view_bind(&mal_view, malformed_cmds, 2);
+        ASSERT_INT("malformed slot 99 not found",
+                   repl_source_scope_view_find_func_def_line(&mal_view, 99), -1);
+        ASSERT_INT("malformed slot 0 not matched",
+                   repl_source_scope_view_find_func_def_line(&mal_view, 0), -1);
     }
 
     /* Nested if/else inside a function: enclosing is the FUNC_DEF, not
@@ -292,7 +316,7 @@ int main() {
         ASSERT_INT("unmatched func: body end is -1", end, -1);
 
         /* A later FUNC_DEF must not be treated as this function's closer.
-         * next_func_def from the unmatched body still reports it — editor
+         * next_func_def from the unmatched body still reports it - editor
          * policy must not follow that jump. */
         GLCmd with_later[5];
         ReplSourceScopeView later_view;

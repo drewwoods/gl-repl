@@ -146,6 +146,11 @@ void editor_input_autocomplete_scroll_by(int delta);
  * to that line's text. */
 void editor_navigate_to_line(int target);
 
+/* Commit any pending modified input on the active row before navigation.
+ * Returns 1 on success (or if no commit was needed), 0 if the commit was
+ * rejected (with error status published). */
+int editor_input_commit_before_navigation(void);
+
 /* Rename-capture predicate. The inline rename overlay is a hard modal:
  * when active, every keystroke must land in the rename buffer ahead of
  * the controller-side router. glr_ctrl_keyboard / _special invoke

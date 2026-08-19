@@ -2581,10 +2581,21 @@ static void test_keymap_event_is_strict(void) {
     ASSERT_INT("Ctrl byte, mods SHIFT, Ctrl+Shift held -> match",
                keymap_event_is(KEY_CTRL_C, KEY_CTRL_C, GLUT_ACTIVE_SHIFT), 1);
 
-    /* (The macOS Cmd/SUPER normalization is only meaningful on the real
-     * freeglut Cocoa build - GLUT_ACTIVE_SUPER is 0 under the GL stubs - so
-     * it isn't asserted here; see keymap_event_is in src/editor/input.c.)
-     * A binding that explicitly requires Ctrl (audio arrows) needs it. */
+    /* macOS Cmd/SUPER normalization (see editor_input_active_modifiers and
+     * keymap_event_is in src/editor/input.c): the accessor mirrors SUPER into
+     * Ctrl and the matcher then strips SUPER, so Cmd alone drives both a
+     * control-byte binding and a Ctrl-required one exactly as real Ctrl does.
+     * GLUT_ACTIVE_SUPER carries freeglut's bit value on every build, stubs
+     * included, so this is assertable off the Cocoa backend. */
+    g_test_mods = GLUT_ACTIVE_SUPER;
+    ASSERT_INT("Ctrl byte, mods 0, Cmd held -> match (SUPER aliases Ctrl)",
+               keymap_event_is(KEY_CTRL_S, KEY_CTRL_S, 0), 1);
+    ASSERT_INT("Ctrl-required, Cmd held -> match (SUPER aliases Ctrl)",
+               keymap_event_is(GLUT_KEY_LEFT, GLUT_KEY_LEFT, GLUT_ACTIVE_CTRL), 1);
+    ASSERT_INT("plain binding, Cmd held -> no match (Ctrl alias is strict)",
+               keymap_event_is(GLUT_KEY_F12, GLUT_KEY_F12, GLUT_ACTIVE_SHIFT), 0);
+
+    /* A binding that explicitly requires Ctrl (audio arrows) needs it. */
     g_test_mods = GLUT_ACTIVE_CTRL;
     ASSERT_INT("Ctrl-required, Ctrl held -> match",
                keymap_event_is(GLUT_KEY_LEFT, GLUT_KEY_LEFT, GLUT_ACTIVE_CTRL), 1);

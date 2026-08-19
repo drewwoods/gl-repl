@@ -179,6 +179,14 @@ int repl_source_scope_view_prev_func_def(const ReplSourceScopeView *view,
                                          int pos);
 int repl_source_scope_prev_func_def(int pos);
 
+/* Locate the definition of function slot `fn`. Returns the position of the
+ * first CMD_FUNC_DEF whose args[0] is `fn`, or -1 when the slot has no
+ * definition (or `fn` is outside 0..REPL_FUNC_SLOT_COUNT-1). Positions are
+ * document row indices, the same space as _next_func_def / _prev_func_def. */
+int repl_source_scope_view_find_func_def_line(const ReplSourceScopeView *view,
+                                              int fn);
+int repl_source_scope_find_func_def_line(int fn);
+
 /* Returns 1 if `pos` sits inside a for-loop body that a `break` / `continue`
  * statement there would bind to. If-blocks between the statement and the loop
  * are transparent; an enclosing CMD_FUNC_DEF is a hard boundary. Used by the
