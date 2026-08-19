@@ -17,12 +17,10 @@ This patch:
   so glPushAttrib(GL_ALL_ATTRIB_BITS) cannot leak (0.1, -1000) into
   the next scene;
 - caches GL_ALIASED_LINE_WIDTH_RANGE (hardext.maxlinewidth) and
-  GL_DEPTH_BITS (default 16, clamp [8, 32]) once at init, including
-  on the notest path (Emscripten always calls GetHardwareExtensions
-  with notest; a skipped probe left maxlinewidth=0 so width 1 took
-  the quad expander, and depthbits=0 so r = 2^0 = 1). Defaults are
-  1 and 16 before the probe; gl4es_polygon_offset_ndc_d also clamps
-  bits to [8, 32] else 16;
+  GL_DEPTH_BITS (default 16, clamp [8, 32]) once when a GL context
+  exists. The Emscripten notest path has no context yet, so it keeps
+  the safe defaults (max linewidth 1, depth bits 16) instead of
+  probing through an unset WebGL context;
 - lands a shared MV/P save/poke/restore helper that dirties mvp,
   inv_mv, and normal on both poke and restore;
 - applies P_row2 += d * P_row3 around polygon-mode line draws, with
@@ -434,15 +432,13 @@ diff --git a/src/glx/hardext.c b/src/glx/hardext.c
 index c89a1237..9d6fafbe 100644
 --- a/src/glx/hardext.c
 +++ b/src/glx/hardext.c
-@@ -88,6 +88,41 @@ static int testTextureCubeLod() {
+@@ -88,6 +88,39 @@ static int testTextureCubeLod() {
      return compiled;
  }
 
-+/* Line-width range and depth bits. Called from the notest path as well
-+ * as the full test: Emscripten always runs GetHardwareExtensions with
-+ * notest (no gles_getProcAddress hook; see gl4es-accum-fbo). A skipped
-+ * probe leaves maxlinewidth=0 (width 1 takes the quad path) and
-+ * depthbits=0 (r = ldexpf(1, 0) = 1, |d| clamps to 1). */
++/* Line-width range and depth bits. Only call this after a GL context
++ * exists: the Emscripten notest path runs before glutCreateWindow and
++ * therefore keeps the defaults installed by GetHardwareExtensions. */
 +static void probe_line_width_and_depth(void)
 +{
 +    GLfloat linewidthrange[2] = {1.0f, 1.0f};
@@ -484,19 +480,13 @@ index c89a1237..9d6fafbe 100644
 +    hardext.depthbits = 16;
 
      hardext.esversion = globals4es.es;
-@@ -129,6 +166,7 @@ void GetHardwareExtensions(int notest)
-             hardext.glsl300es = 1;
- #endif
-         }
-+        probe_line_width_and_depth();
-         return;
-     }
- #if defined(BCMHOST) && !defined(ANDROID)
-@@ -391,6 +429,7 @@ void GetHardwareExtensions(int notest)
+@@ -391,6 +429,9 @@ void GetHardwareExtensions(int notest)
      // Now get some max stuffs
      gles_glGetIntegerv(GL_MAX_TEXTURE_SIZE, &hardext.maxsize);
      SHUT_LOGD("Max texture size: %d\n", hardext.maxsize);
++#if !defined(__EMSCRIPTEN__)
 +    probe_line_width_and_depth();
++#endif
      gles_glGetIntegerv((hardext.esversion==1)?GL_MAX_TEXTURE_UNITS:GL_MAX_TEXTURE_IMAGE_UNITS, &hardext.maxtex);
      if (hardext.esversion==1) {
          gles_glGetIntegerv(GL_MAX_LIGHTS, &hardext.maxlights);

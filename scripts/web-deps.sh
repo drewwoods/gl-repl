@@ -111,6 +111,12 @@ apply_gl4es_patches() {
 	if [ "$GL4ES_DIR" = "$WEB_DEPS_ROOT/gl4es" ]; then
 		echo -e "${CYAN}gl4es patch set changed; resetting $GL4ES_SHA and reapplying ...${NC}"
 		git -C "$GL4ES_DIR" reset --hard --quiet "$GL4ES_SHA"
+		# Earlier patches can add source files that are untracked in the
+		# upstream checkout (for example accum.c/accum.h). reset --hard does
+		# not remove those files, so the next git apply can fail with
+		# "already exists in working directory". The managed checkout is
+		# disposable; remove only its untracked files before reapplying.
+		git -C "$GL4ES_DIR" clean -fd --quiet
 		# Applied files get a fresh mtime from git apply, but unpatched
 		# sources take the pin's timestamp and can look older than
 		# build_wasm/*.o from the previous patch set. Drop the archive
