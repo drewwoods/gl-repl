@@ -16,6 +16,7 @@
 #include "app/glr_tours.h"
 #include "app/glr_pointer_script.h"
 #include "repl/host_effects.h"
+#include "repl/scenes.h"
 #include "subsystems/replay/replay.h"
 
 #include <stdio.h>
@@ -25,6 +26,7 @@ typedef struct {
     const char        *file;   /* catalog-relative .pointer filename */
     const char *const *lines;
     int                line_count;
+    int                prereq_free_scenes;
 } TourEntry;
 
 /* Defines g_tours[] plus one g_tour_<id>[] line array per catalog entry. */
@@ -39,8 +41,27 @@ const char *glr_tours_name(int idx) {
     return g_tours[idx].name;
 }
 
+int glr_tours_prereq_free_scenes(int idx) {
+    if (idx < 0 || idx >= glr_tours_count()) return 0;
+    return g_tours[idx].prereq_free_scenes;
+}
+
 int glr_tours_start_at_checkpoint(int idx, const char *checkpoint) {
     if (idx < 0 || idx >= glr_tours_count()) return 0;
+    if (g_tours[idx].prereq_free_scenes > 0) {
+        int free_scenes = MAX_USER_SCENES - repl_user_scene_count();
+        if (free_scenes < g_tours[idx].prereq_free_scenes) {
+            char err[128];
+            snprintf(err, sizeof(err),
+                     "Cannot start tour '%s': need %d free scene slot%s (all %d full). Delete a scene first.",
+                     g_tours[idx].name,
+                     g_tours[idx].prereq_free_scenes,
+                     g_tours[idx].prereq_free_scenes == 1 ? "" : "s",
+                     MAX_USER_SCENES);
+            repl_set_status_error(err);
+            return 0;
+        }
+    }
     if (!glr_pointer_script_start_tour_at_checkpoint(
             g_tours[idx].name, g_tours[idx].file, g_tours[idx].lines,
             g_tours[idx].line_count, checkpoint)) {

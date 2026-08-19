@@ -32,6 +32,7 @@
 /* Catalog queries for the Tours menu. */
 int         glr_tours_count(void);
 const char *glr_tours_name(int idx);
+int         glr_tours_prereq_free_scenes(int idx);
 
 /* Start tour `idx`: load its script into the pointer-script engine, stop any
  * active REPL replay before the tour baseline is captured, and set the status

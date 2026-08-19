@@ -25,6 +25,8 @@ build. The same scripts can drive an offline recording through
    [`catalog-emscripten.ini`](catalog-emscripten.ini). Keep platform-specific
    steps in one script with the conditional grammar below; use a separate
    script only when the tour's overall flow is genuinely different.
+   If the tour creates new scenes (e.g. via `item:new_scene`), declare
+   `prereq_free_scenes = 1` so launch fails cleanly if all scene slots are full.
    Section order is the order in the Tours menu.
 3. Validate the catalog:
 

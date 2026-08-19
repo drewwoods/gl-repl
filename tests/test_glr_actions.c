@@ -1078,6 +1078,54 @@ static void test_tours_menu_dispatch(void) {
                glr_pointer_script_tour_active(), 0);
 }
 
+/* A tour that creates a new scene requires at least one free user scene slot.
+ * When all slots are full, glr_tours_start rejects launch and sets an error
+ * without corrupting the active scene. When a slot is freed, it starts normally. */
+static void test_tour_prereq_free_scenes(void) {
+    glr_ctrl_reset_all();
+
+    int editing_basics_idx = -1;
+    for (int i = 0; i < glr_tours_count(); i++) {
+        if (strcmp(glr_tours_name(i), "Editing Basics") == 0) {
+            editing_basics_idx = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("found editing-basics tour", editing_basics_idx >= 0);
+    ASSERT_INT("editing-basics requires 1 free scene slot",
+               glr_tours_prereq_free_scenes(editing_basics_idx), 1);
+
+    for (int i = 0; i < MAX_USER_SCENES; i++) {
+        ASSERT_TRUE("allocate scene slot", repl_scenes_create_empty_user_scene() >= 0);
+    }
+    ASSERT_INT("all 8 scene slots occupied", repl_user_scene_count(), MAX_USER_SCENES);
+
+    /* Starting Editing Basics when full fails */
+    ASSERT_INT("editing-basics launch rejected when scene slots full",
+               glr_tours_start(editing_basics_idx), 0);
+    ASSERT_INT("tour not active", glr_pointer_script_tour_active(), 0);
+    ASSERT_TRUE("error status set",
+                strstr(g_last_status, "need 1 free scene slot") != NULL);
+
+    /* Tours without prerequisites (e.g. Start Here) can still start */
+    int start_here_idx = 0;
+    ASSERT_INT("start-here has 0 prereq scenes",
+               glr_tours_prereq_free_scenes(start_here_idx), 0);
+    ASSERT_INT("start-here launch succeeds when slots full",
+               glr_tours_start(start_here_idx), 1);
+    glr_pointer_script_stop();
+
+    /* Free a scene slot */
+    repl_user_scene_delete(0);
+    ASSERT_INT("7 scene slots occupied", repl_user_scene_count(), MAX_USER_SCENES - 1);
+
+    /* Starting Editing Basics now succeeds */
+    ASSERT_INT("editing-basics launch succeeds with free slot",
+               glr_tours_start(editing_basics_idx), 1);
+    ASSERT_INT("tour active", glr_pointer_script_tour_active(), 1);
+    glr_pointer_script_stop();
+}
+
 static void test_all_catalog_tours_playback_to_completion(void) {
     int n = glr_tours_count();
     for (int t = 0; t < n; t++) {
@@ -3077,6 +3125,7 @@ int main(void) {
     test_tutorial_start_applies_cfg();
     test_tutorial_menu_dispatch();
     test_tours_menu_dispatch();
+    test_tour_prereq_free_scenes();
     test_all_catalog_tours_playback_to_completion();
 #if defined(__EMSCRIPTEN__)
     test_web_shell_new_creates_scene();

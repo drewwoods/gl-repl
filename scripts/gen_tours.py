@@ -20,6 +20,8 @@ from pathlib import Path
 
 
 REQUIRED_KEYS = {"file", "name"}
+OPTIONAL_KEYS = {"prereq_free_scenes"}
+ALLOWED_KEYS = REQUIRED_KEYS | OPTIONAL_KEYS
 SECTION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 CONDITIONAL_RE = re.compile(r"^\s*#\s*(ifdef|ifndef|else|endif)\b(.*)$")
 UNSUPPORTED_CONDITIONAL_RE = re.compile(r"^\s*#\s*(if|elif|define|undef)\b")
@@ -193,7 +195,7 @@ def read_catalog(catalog_path: Path, *, platform: str) -> list[dict[str, object]
 
         keys = set(parser[section].keys())
         missing = REQUIRED_KEYS - keys
-        extra = keys - REQUIRED_KEYS
+        extra = keys - ALLOWED_KEYS
         if missing:
             raise TourError(f"[{section}] missing required key(s): {', '.join(sorted(missing))}")
         if extra:
@@ -201,6 +203,17 @@ def read_catalog(catalog_path: Path, *, platform: str) -> list[dict[str, object]
 
         name = parser[section]["name"].strip()
         rel_file = parser[section]["file"].strip()
+        prereq_free_scenes = 0
+        if "prereq_free_scenes" in parser[section]:
+            val = parser[section]["prereq_free_scenes"].strip()
+            try:
+                prereq_free_scenes = int(val)
+                if prereq_free_scenes < 0 or prereq_free_scenes > 8:
+                    raise ValueError
+            except ValueError:
+                raise TourError(
+                    f"[{section}] prereq_free_scenes must be an integer between 0 and 8 (found {val!r})"
+                )
         if not name:
             raise TourError(f"[{section}] name must not be empty")
         if not rel_file:
@@ -299,6 +312,7 @@ def read_catalog(catalog_path: Path, *, platform: str) -> list[dict[str, object]
                 "file": rel_file,
                 "symbol": symbol,
                 "lines": lines,
+                "prereq_free_scenes": prereq_free_scenes,
             }
         )
 
@@ -327,7 +341,8 @@ def render(entries: list[dict[str, object]]) -> str:
             f"{c_string(str(entry['file']))}, {entry['symbol']},"
         )
         out.append(
-            f"      (int)(sizeof({entry['symbol']}) / sizeof({entry['symbol']}[0])) }},"
+            f"      (int)(sizeof({entry['symbol']}) / sizeof({entry['symbol']}[0])),\n"
+            f"      {entry['prereq_free_scenes']} }},"
         )
     out.append("};")
     out.append("")
