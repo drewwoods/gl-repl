@@ -7,8 +7,10 @@
 # /bin/bash); pin it so recipe behavior is identical everywhere.
 SHELL := /bin/bash
 
+#? CC: compiler command (default gcc; Apple clang on macOS).
 CC = gcc
 ifeq ($(origin CC),command line)
+#? MSAN_CC: compiler used by debug-msan / test-msan (default clang).
 MSAN_CC ?= $(CC)
 else
 MSAN_CC ?= clang
@@ -20,11 +22,14 @@ GL_STUB_INCLUDE := $(abspath tests/gl-stubs/include)
 TEST_DIR := tests
 BENCH_DIR := bench
 BENCH_DATA_DIR := $(BENCH_DIR)/bench-data
+#? ZSHRC: shell rc that install-completions appends to (default ~/.zshrc).
 ZSHRC ?= $(HOME)/.zshrc
 ZSH_COMPLETIONS_DIR := $(PROJECT_ROOT)/scripts/completions
 
 # Concise, timed compile summaries are the default. Set either V=1 or
 # VERBOSE=1 to restore the compiler command and its output for every source.
+#? V: 1 restores the full compiler/linker command per file (default: timed one-line summaries).
+#? VERBOSE: accepted spelling of V=1.
 V ?=
 VERBOSE ?=
 
@@ -49,6 +54,7 @@ UNAME_S := $(shell uname -s)
 
 # Declared (empty by default) so `make --warn-undefined-variables` stays
 # quiet; empty still fails the `ifeq ($(USE_GL_STUBS),1)` gates below.
+#? USE_GL_STUBS: 1 compiles against the bundled no-op GL/GLU/GLUT headers (no GL libs needed).
 USE_GL_STUBS ?=
 
 # Vendored freeglut (third_party/freeglut), built as a static library with the
@@ -59,6 +65,7 @@ USE_GL_STUBS ?=
 FREEGLUT_SRC        := third_party/freeglut
 # `make glut` (Apple GLUT framework fallback) passes FREEGLUT_VENDOR=0 to skip
 # building/linking the vendored library.
+#? FREEGLUT_VENDOR: 0 skips the vendored static freeglut (what `make glut` passes).
 FREEGLUT_VENDOR     ?= 1
 
 # FREEGLUT_LIB_PATH=<path/to/libglut.a> links an *external* static freeglut
@@ -81,7 +88,9 @@ FREEGLUT_VENDOR     ?= 1
 # Everything the archive itself does not carry (frameworks on macOS, X11 libs on
 # Linux) still comes from the platform link line below, so an external build has
 # to be a static freeglut for the *same* backend as the arm you are building.
+#? FREEGLUT_LIB_PATH: link this external static libglut.a instead of the vendored build.
 FREEGLUT_LIB_PATH   ?=
+#? FREEGLUT_INCLUDE_DIR: headers to pair with FREEGLUT_LIB_PATH when they differ from the vendored ones.
 FREEGLUT_INCLUDE_DIR ?= $(FREEGLUT_SRC)/include
 
 # FREEGLUT_VENDOR_LINUX=1 opts the *windowed Linux* build into the vendored
@@ -93,6 +102,7 @@ FREEGLUT_INCLUDE_DIR ?= $(FREEGLUT_SRC)/include
 # record-video.sh silently produce nothing against the system library.
 # (The Linux OSMesa build vendors unconditionally; only this windowed path is
 # a choice.) Needs cmake plus the X11/GL dev headers.
+#? FREEGLUT_VENDOR_LINUX: 1 links the vendored static freeglut on Linux (required for frame capture).
 FREEGLUT_VENDOR_LINUX ?= 0
 
 # An external archive is linked by path, which on Linux is the vendored-style
@@ -109,6 +119,7 @@ endif
 # with no display. The OSMesa backend lives in the vendored tree only after
 # re-vendoring from a freeglut that carries it (see VENDORED.txt). Build dir and
 # static-lib name are kept distinct from the Cocoa build so the two coexist.
+#? FREEGLUT_OSMESA: 1 builds the headless OSMesa backend (still a native build).
 FREEGLUT_OSMESA     ?= 0
 
 # WEB=1 builds against Emscripten (emcc) for the browser/wasm target instead
@@ -119,6 +130,7 @@ FREEGLUT_OSMESA     ?= 0
 #
 # WEB=1 USE_GL_STUBS=1 IS supported and is what `make test-web` uses: emcc
 # against the no-op GL stubs, no gl4es, no browser. See WEB_TEST_LDFLAGS.
+#? WEB: 1 selects the Emscripten/wasm build (needs emcc).
 WEB                 ?= 0
 ifeq ($(WEB),1)
   CC := emcc
@@ -269,6 +281,8 @@ RELEASE_CFLAGS = \
 # results must not differ between the two builds.
 DEBUG_CHECK_CFLAGS = -DGLR_DEBUG_CHECKS=1
 
+#? NO_SAN: 1 disables the debug build's sanitizers.
+#? NOSAN: accepted spelling of NO_SAN=1.
 ifeq ($(NOSAN),1)
 NO_SAN := 1
 endif
@@ -276,11 +290,13 @@ endif
 # `ASAN=0` is the positive-polarity spelling of the more precise project-wide
 # `NO_SAN=1`; both select the no-sanitizer debug build. `ASAN=1` is the
 # explicit affirmative (sanitizers on, which is also the default).
+#? ASAN: positive-polarity sanitizer switch; ASAN=0 == NO_SAN=1, ASAN=1 is the default.
 ASAN ?=
 ifeq ($(ASAN),0)
 NO_SAN := 1
 endif
 
+#? SAN: debug sanitizer: address (ASan+UBSan, default) | memory (MSan, needs clang).
 SAN ?= address
 DEBUG_SAN_SUFFIX =
 
@@ -329,6 +345,7 @@ QUICK_CFLAGS = \
 # An explicit `BUILD=...` on the command line or in the environment always
 # wins, so `make coverage` (BUILD=coverage) and `make test BUILD=release`
 # keep working.
+#? BUILD: build mode: release | quick | debug | coverage (tests default to debug).
 ifeq ($(origin BUILD),command line)
 # explicit BUILD - honor it
 else ifeq ($(origin BUILD),environment)
@@ -354,6 +371,9 @@ endif
 # across modes and would drown the useful part of the line; DEBUG_INFO_CFLAGS
 # is added back because it is selected by BUILD and is the reason a quick
 # build reports `-g0 -O0`, for example.
+#? CFLAGS: extra user C flags appended to the selected build mode (the hook for -D defines).
+CFLAGS ?=
+
 BUILD_REPORT_FLAGS = $(DEBUG_INFO_CFLAGS) \
 	$(filter-out $(COMMON_CFLAGS),$(BUILD_CFLAGS)) \
 	$(CPPFLAGS) $(CFLAGS)
@@ -639,6 +659,7 @@ HDRS = \
 # catalog: the example goldens are keyed by catalog index, so the trimmed
 # set would fail test_repl_core_examples for a reason that has nothing to
 # do with wasm.
+#? EXAMPLES_CATALOG: catalog compiled into the example table (an override may use the runtime catalog shape).
 ifeq ($(WEB)$(USE_GL_STUBS),1)
 EXAMPLES_CATALOG ?= examples/catalog-emscripten.ini
 else
@@ -1359,8 +1380,12 @@ RUN_TEST_FILE_TARGETS = $(addprefix run-,$(TEST_BINS))
 BENCH_TARGET_NAMES = $(subst _,-,$(BENCH_BINS))
 BENCH_OBJS = $(foreach bin,$(BENCH_BINS),$($(bin)_OBJS))
 
+#? TEST_JOBS: cap on parallel test binaries (empty = unbounded).
+#? ARGS: extra arguments passed to the binary a target runs (every bench and run-test-* honours it).
+#? TEST_VERBOSE: 1 turns on per-example export/compile logging in the test suite.
 TEST_JOBS ?=
 ARGS ?=
+TEST_VERBOSE ?=
 
 COMPILE_REPORT_TEST_SUMMARY := $(COMPILE_REPORT_DIR)/tests-summary
 $(COMPILE_REPORT_TEST_SUMMARY): $(addprefix $(BINDIR)/,$(TEST_BINS))
@@ -1699,6 +1724,7 @@ release-config: ## Edit + save the release build plan (.release.ini) via the arr
 # Download the music pack from the GitHub release into the local assets folder
 # (MUSIC_DEST, default assets/). Pull from a specific release with MUSIC_TAG=...
 # (scripts/fetch-music.sh defaults to the assets-v1 asset release otherwise).
+#? MUSIC_DEST: directory `make fetch-music` unpacks the music pack into (default assets).
 MUSIC_DEST ?= assets
 fetch-music: ## Download the music pack from the GitHub release into MUSIC_DEST (default assets/).
 	bash scripts/fetch-music.sh --dir "$(MUSIC_DEST)" $(if $(MUSIC_TAG),--tag "$(MUSIC_TAG)",)
@@ -2437,6 +2463,9 @@ check-make-target-documented: ## Hard guard: every source-declared Make target c
 check-make-no-duplicate-help: ## Hard guard: no Make target is documented on two declarations (help would print it twice).
 	@bash scripts/check/check-make-no-duplicate-help.sh
 
+check-make-var-documented: ## Hard guard: PUBLIC_MAKE_VARS and the variable annotations help-vars renders agree.
+	@PUBLIC_MAKE_VARS='$(PUBLIC_MAKE_VARS)' bash scripts/check/check-make-var-documented.sh
+
 CHECK_TARGETS = \
 	check-trailing-whitespace \
 	check-depth-capture-after-finish \
@@ -2457,7 +2486,8 @@ CHECK_TARGETS = \
 	check-public-api-usage \
 	check-duplicate-api-decls \
 	check-make-target-documented \
-	check-make-no-duplicate-help
+	check-make-no-duplicate-help \
+	check-make-var-documented
 
 check: ## Run all checks.
 	@set -e; \
@@ -2494,6 +2524,9 @@ $(RUN_TEST_TARGETS): run-%:
 $(RUN_TEST_FILE_TARGETS): run-%:
 	+$(MAKE) --no-print-directory internal-test-case \
 		USE_GL_STUBS=1 TEST_CASE=$*
+
+#? TEST_CASE: binary name selected by internal-test-case (set by the test-<name> pattern rules).
+TEST_CASE ?=
 
 internal-test-case: $$(BINDIR)/$$(TEST_CASE)
 	@REPL_EXPORT_CC="$(CC)" \
@@ -2668,6 +2701,7 @@ GLUT_BITMAP_BENCH_DIR := build/glut-bitmap-bench
 GLUT_BITMAP_BENCH_SRC := bench/bench_glut_bitmap.c
 GLUT_BITMAP_APPLE_BIN := $(GLUT_BITMAP_BENCH_DIR)/apple-glut
 GLUT_BITMAP_FREEGLUT_BIN := $(GLUT_BITMAP_BENCH_DIR)/freeglut
+#? GLUT_BITMAP_BENCH_ARGS: default arguments for bench-glut-bitmap (ARGS is appended after them).
 GLUT_BITMAP_BENCH_ARGS ?=
 GLUT_BITMAP_BENCH_ARCH ?= $(shell uname -m)
 
@@ -2731,6 +2765,7 @@ CODE_PANEL_TEXT_BENCH_DEP_SRCS = src/ui/core/text_layout.c \
 CODE_PANEL_TEXT_BENCH_OBJS = $(OBJDIR)/bench/bench_code_panel_text.o \
                              $(addprefix $(OBJDIR)/,$(CODE_PANEL_TEXT_BENCH_DEP_SRCS:.c=.o))
 CODE_PANEL_TEXT_BENCH_BIN := $(BINDIR)/bench_code_panel_text
+#? CODE_PANEL_TEXT_BENCH_ARGS: default arguments for bench-code-panel-text (ARGS is appended after them).
 CODE_PANEL_TEXT_BENCH_ARGS ?=
 
 ifneq ($(filter Linux Darwin,$(UNAME_S)),)
@@ -2756,6 +2791,7 @@ endif
 # bench_code_panel_text.c, whose corpus and harness it shares.
 CODE_PANEL_STENCIL_BENCH_SRC := bench/bench_code_panel_stencil.c
 CODE_PANEL_STENCIL_BENCH_BIN := build/code-panel-stencil-bench/bench
+#? CODE_PANEL_STENCIL_BENCH_ARGS: default arguments for bench-code-panel-stencil (ARGS is appended after them).
 CODE_PANEL_STENCIL_BENCH_ARGS ?=
 
 ifeq ($(UNAME_S),Darwin)
@@ -2810,6 +2846,7 @@ endif
 # Run it twice, plain and with __GL_SYNC_TO_VBLANK=0, and compare.
 VERTEX_LABEL_BENCH_SRC  := bench/bench_vertex_label_readback.c
 VERTEX_LABEL_BENCH_BIN  := build/vertex-label-bench/bench
+#? VERTEX_LABEL_BENCH_ARGS: default arguments for bench-vertex-labels (ARGS is appended after them).
 VERTEX_LABEL_BENCH_ARGS ?=
 
 ifeq ($(UNAME_S),Darwin)
@@ -3105,6 +3142,8 @@ glut: ## Rebuild using the Apple GLUT framework instead of freeglut.
 # tools/glprobe/glprobe_glut.h instead of its own #ifdef __APPLE__ GLUT block;
 # see tools/glprobe/README.md. Binary lands at build/glprobe/<basename>.
 GLPROBE_SRCS = tools/glprobe/glprobe.c src/support/mesh_ply.c
+#? SAMPLE: required operand of glprobe / extract: the standalone GL sample .c to build.
+SAMPLE ?=
 GLPROBE_DIR  = build/glprobe$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)
 GLPROBE_BIN  = $(GLPROBE_DIR)/$(basename $(notdir $(SAMPLE)))
 
@@ -3221,6 +3260,11 @@ callgraph-static: ## Generate static call graph using cflow -> Mermaid diagram.
 	@echo "Call graph saved to callgraph-static.mmd"
 	@echo "Visualize at: https://mermaid.live or with: npx @mermaid-js/mermaid-cli"
 
+#? ENTRY: required operand of callgraph-static-entry; optional root for the other callgraph targets.
+ENTRY ?=
+#? CALLGRAPH_FILES_GROUP_CONFIG: JSON file grouping for callgraph-files (default scripts/callgraph_file_groups.json).
+CALLGRAPH_FILES_GROUP_CONFIG ?=
+
 callgraph-static-entry: ## Generate call graph from specific entry point (ENTRY=function_name).
 	@if ! command -v cflow &> /dev/null; then \
 		echo "ERROR: cflow not found. Install with: brew install cflow"; exit 1; \
@@ -3302,100 +3346,87 @@ callgraph-files: ## Generate file-level Mermaid dependency graph (optional ENTRY
 	fi
 	@echo "Visualize at: https://mermaid.live or with: npx @mermaid-js/mermaid-cli"
 
+# ---------------------------------------------------------------------------
+# Help, in three tiers, all generated from this file:
+#
+#   make help          the handful of targets a newcomer runs
+#   make help-<verb>   one family at a time - help-check, help-bench, help-test
+#   make help-details  every documented target, grouped, for grepping
+#   make help-vars     the public variable interface
+#
+# Nothing below is a hand-maintained inventory. Targets come from their `## `
+# doc comments (check-make-target-documented keeps every target carrying one),
+# variables from the `#? ` annotations at their declarations. Long-form build
+# and runtime documentation - GLR_* env hooks, freeglut vendoring, compile-time
+# defines - lives in docs/ADVANCED_USAGE.md, where it goes stale visibly,
+# instead of in 70 lines of printf here.
+# ---------------------------------------------------------------------------
+
+# The public variable interface. `#? ` is deliberately opt-in: most of this
+# file's `?=` declarations are internals (the per-test *_RUN definitions,
+# *_CFLAGS, *_DIR) and annotating them would rebuild in help-vars exactly the
+# dump this scheme exists to delete. check-make-var-documented ties this list
+# and the `#? ` annotations together in both directions.
+PUBLIC_MAKE_VARS := \
+	ARGS ASAN BUILD CALLGRAPH_FILES_GROUP_CONFIG CC CFLAGS \
+	CODE_PANEL_STENCIL_BENCH_ARGS CODE_PANEL_TEXT_BENCH_ARGS \
+	ENTRY EXAMPLES_CATALOG \
+	FREEGLUT_INCLUDE_DIR FREEGLUT_LIB_PATH FREEGLUT_OSMESA \
+	FREEGLUT_VENDOR FREEGLUT_VENDOR_LINUX \
+	GLUT_BITMAP_BENCH_ARGS MSAN_CC MUSIC_DEST NOSAN NO_SAN \
+	SAMPLE SAN TEST_CASE TEST_JOBS TEST_VERBOSE \
+	USE_GL_STUBS V VERBOSE VERTEX_LABEL_BENCH_ARGS WEB ZSHRC
+
 help: ## Show the common targets (run make help-details for the full list).
 	@printf "Immediate-mode REPL - common Make targets\n\n"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {d[$$1]=$$2} \
 		END {split("gl-repl clean test test-full fetch-music help help-details",o," "); \
 		for (i=1;i<=7;i++) printf "  %-16s %s\n", o[i], d[o[i]]}' $(MAKEFILE_LIST)
-	@printf "\nRun 'make help-details' for all targets, build modes, and runtime/env notes.\n"
+	@printf "\nOne family at a time:  make help-check, make help-bench, make help-test\n"
+	@printf "Variables:             make help-vars\n"
+	@printf "Everything:            make help-details\n"
 
-help-details: ## Show available targets and build-mode notes.
-	@printf "Immediate-mode REPL Make targets\n\n"
-	@printf "Build modes:\n"
+# One family per invocation - the actual onion-peel: nobody needs all of the
+# targets at once, they need one verb's worth. A pattern rule rather than a
+# target per family, so a new family costs nothing.
+#
+# NOT .PHONY-able: .PHONY has no effect on pattern rules, so a file named
+# `help-check` in the repo root would make Make report "up to date" and skip
+# the recipe. FORCE is the fix.
+help-%: FORCE ## Show one family of targets, e.g. make help-check, make help-bench.
+	@printf "Targets: %s-*\n\n" "$*"
+	@awk -F':.*## ' -v p="$*" '/^[a-zA-Z0-9_.-]+:.*## / && $$1 ~ ("^" p "(-|$$)") \
+		{printf "  %-30s %s\n", $$1, $$2}' \
+		$(firstword $(MAKEFILE_LIST)) | sort -u
+	@awk -F':.*## ' -v p="$*" '/^[a-zA-Z0-9_.-]+:.*## / && $$1 ~ ("^" p "(-|$$)") {found=1} \
+		END {if (!found) printf "  (no targets in this family; make help-details lists them all)\n"}' \
+		$(firstword $(MAKEFILE_LIST))
+
+help-vars: ## Show the public Make variables (pass them as make <target> NAME=value).
+	@printf "Public Make variables - pass as: make <target> NAME=value\n\n"
+	@awk '/^#[?] /{ line = substr($$0, 4); i = index(line, ":"); \
+		printf "  %-30s %s\n", substr(line, 1, i - 1), substr(line, i + 2) }' \
+		$(firstword $(MAKEFILE_LIST)) | sort
+	@printf "\nRuntime env vars (GLR_*, FREEGLUT_*) and the compile-time defines:\n"
+	@printf "  docs/ADVANCED_USAGE.md > Environment variables\n"
+
+help-details: ## Show every documented target, grouped by family.
+	@printf "Immediate-mode REPL - all Make targets\n\n"
+	@printf "Build modes (BUILD=release | quick | debug | coverage):\n"
 	@printf "  common flags:  %s\n" "$(COMMON_CFLAGS)" | fold -s -w 100 | sed '1!s/^/                 /'
-	@printf "  default:       \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(RELEASE_CFLAGS))"
+	@printf "  release:       \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(RELEASE_CFLAGS))"
 	@printf "  quick:         \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(QUICK_CFLAGS))"
 	@printf "  debug:         \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(DEBUG_CFLAGS))"
 	@printf "  coverage:      \$$(common_flags) %s \n\n" "$(filter-out $(COMMON_CFLAGS),$(COVERAGE_CFLAGS))"
-	@printf "GL stubs:        make test (or test-stubs); ordinary individual tests use stubs automatically.\n"
-	@printf "Web build:       make web (or scripts/build-web.sh for a cold start with no\n"
-	@printf "                 emsdk sourced yet), then make web-serve. See packaging/web/README.md.\n"
-	@printf "Web catalog:     make web EXAMPLES_CATALOG=tests/scenes/general/catalog.ini\n"
-	@printf "                 compiles an alternate example catalog into the web build.\n"
-	@printf "Runtime env:\n"
-	@printf "  - GLR_NO_POINT_PARAMETER=1 ./gl-repl forces the no-glPointParameterfv\n"
-	@printf "    path (camera-distance glPointSize fallback). Support is otherwise\n"
-	@printf "    auto-detected from the GL context at startup; there is no build\n"
-	@printf "    flag. See docs/ARCHITECTURE.md > Core Subsystem Features & Integrations > Runtime GL Capability Detection.\n"
-	@printf "  - GLR_NO_GPU_PROF=1 ./gl-repl disables the GPU timer queries behind\n"
-	@printf "    the profile panel's GPU column (the column reads \"--\"). Otherwise\n"
-	@printf "    auto-detected at startup: GL_ARB_timer_query / GL 3.3 timestamps\n"
-	@printf "    preferred (additive), GL_EXT_timer_query elapsed brackets as the\n"
-	@printf "    fallback (Apple GL 2.1); no build flag. Same doc section.\n"
-	@printf "  - GLR_AUDIO_HITCH_MS=N ./gl-repl sets the audio-worker hitch\n"
-	@printf "    threshold (default 50ms; 0 disables). --no-audio skips audio\n"
-	@printf "    init to isolate startup stalls; startup prints an [init +Ns]\n"
-	@printf "    trace per phase.\n"
-	@printf "  - GLR_PROF_DUMP=N ./gl-repl prints the profile panel's rows to\n"
-	@printf "    stderr every N frames (running averages, ms, indented by\n"
-	@printf "    section depth) - the panel in a form a shell loop can diff, so\n"
-	@printf "    a feature can be A/B'd without a window or a screenshot.\n"
-	@printf "    GLR_PROF_DUMP_MIN_MS sets the row cutoff (default 0.02; 0 prints\n"
-	@printf "    every section). Read the rows as attribution, not work: a section\n"
-	@printf "    holding a synchronous GL readback absorbs the driver's pipeline\n"
-	@printf "    drain, which on a render-ahead driver is most of a refresh\n"
-	@printf "    interval. If a row lands near the vsync period, re-run with\n"
-	@printf "    __GL_SYNC_TO_VBLANK=0 before believing it; make bench-vertex-labels\n"
-	@printf "    reproduces both sides. See docs/ADVANCED_USAGE.md > Diagnostics.\n"
-	@printf "  - GLR_DETAILED_PROF=1 ./gl-repl (or --detailed-prof) promotes\n"
-	@printf "    the optional fine-grained init-trace phases (glutInit split,\n"
-	@printf "    audio playlist sub-steps, first-two-frames triple); default\n"
-	@printf "    off. See docs/ARCHITECTURE.md > Core Subsystem Features & Integrations > Startup & Audio-Worker Diagnostics.\n"
-	@printf "Build options:\n"
-	@printf "  - UI_THEME_DEFAULT=N picks the compile-time UI color scheme\n"
-	@printf "    (0 green default, 1 warm, 2 cyan, 3 amber, 4 violet, 5 mono),\n"
-	@printf "    e.g. make gl-repl CFLAGS=-DUI_THEME_DEFAULT=1. Defined in\n"
-	@printf "    config.h, range-checked in src/ui/core/theme.h. See\n"
-	@printf "    docs/ARCHITECTURE.md > UI Color Theming.\n"
-	@printf "  - SAN=memory selects MemorySanitizer for debug builds (separate build/debug-msan dir).\n"
-	@printf "    make debug-msan builds the full target set with SAN=memory CC=$(MSAN_CC).\n"
-	@printf "    make test-msan runs the stubbed test suite with SAN=memory CC=$(MSAN_CC).\n"
-	@printf "  - NO_SAN=1 (or NOSAN=1/ASAN=0) disables debug-build sanitizers.\n"
-	@printf "  - FREEGLUT_VENDOR_LINUX=1 (Linux, windowed) links the vendored static\n"
-	@printf "    freeglut (X11/GLX) instead of the distro's -lglut, e.g.\n"
-	@printf "    make gl-repl FREEGLUT_VENDOR_LINUX=1. Needed for frame capture:\n"
-	@printf "    system freeglut has no capture hooks, so SIGUSR1 screenshots,\n"
-	@printf "    FREEGLUT_CAPTURE_FRAMES/_STREAM and the docs-assets/record-gif/\n"
-	@printf "    record-video scripts silently produce nothing without it. Needs\n"
-	@printf "    cmake + X11/GL dev headers; separate build/*-fgvendor objdir, so it\n"
-	@printf "    coexists with the default build. macOS always vendors and the Linux\n"
-	@printf "    OSMesa build (FREEGLUT_OSMESA=1) vendors unconditionally; neither\n"
-	@printf "    needs this flag. See docs/ADVANCED_USAGE.md > Windowed capture on Linux.\n"
-	@printf "  - FREEGLUT_LIB_PATH=<path/to/libglut.a> links an external static\n"
-	@printf "    freeglut instead of the vendored one - for trying a different\n"
-	@printf "    fork/branch without re-vendoring. Pair it with\n"
-	@printf "    FREEGLUT_INCLUDE_DIR=<path/to/include> whenever that build's\n"
-	@printf "    <GL/freeglut.h> differs from the vendored header (upstream\n"
-	@printf "    freeglut, which lacks the capture declarations, is exactly that),\n"
-	@printf "    e.g. make gl-repl FREEGLUT_LIB_PATH=~/src/freeglut/build/lib/libglut.a\n"
-	@printf "    FREEGLUT_INCLUDE_DIR=~/src/freeglut/include. Nothing is built from\n"
-	@printf "    third_party/freeglut; separate build/*-fgext objdir. On Linux it\n"
-	@printf "    implies FREEGLUT_VENDOR_LINUX=1 (archive by path, no -lglut).\n"
-	@printf "    See docs/ADVANCED_USAGE.md > External freeglut.\n"
-	@printf "  - GLR_AUDIO_NO_THREAD=1 (e.g. make gl-repl CFLAGS=-DGLR_AUDIO_NO_THREAD=1)\n"
-	@printf "    drops the audio background worker thread: the playlist lifecycle ops\n"
-	@printf "    (file open/uninit, state save) run synchronously, drained from\n"
-	@printf "    glr_audio_tick() on the caller. Auto-enabled on Emscripten (no\n"
-	@printf "    -pthread); set =0 to force the thread on. The toggle is contained\n"
-	@printf "    entirely in src/app/glr_audio.c.\n"
-	@printf "Build output:    concise timed lines per compiled/linked file plus the longest build steps.\n"
-	@printf "                 V=1 (or VERBOSE=1) restores each compiler/linker command and its output.\n"
-	@printf "User CFLAGS are appended to the selected build mode.\n\n"
-	@printf "Tests:           make test runs the headless stub suite; set TEST_JOBS=N to limit jobs.\n\n"
-	@printf "Individual tests can be built with make test-eval, or built and run with\n"
-	@printf "                 make run-test-eval. Pass arguments with ARGS, e.g.\n"
-	@printf "                 make run-test-repl-core-examples ARGS='--show-mismatch'.\n\n"
-	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / && $$1 !~ /^check-/ {printf "  %-24s %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
+	@awk -f scripts/make-help.awk $(firstword $(MAKEFILE_LIST))
+	@printf "Individual tests: make test-eval builds one; make run-test-eval builds and runs it.\n"
+	@printf "                  Those two families are generated per test binary, so they are not\n"
+	@printf "                  listed above; make test-<name> for any tests/test_<name>.c.\n"
+	@printf "Arguments:        ARGS is passed to whatever a target runs, e.g.\n"
+	@printf "                  make run-test-repl-core-examples ARGS='--show-mismatch'.\n\n"
+	@printf "Variables:        make help-vars\n"
+	@printf "Build/runtime env, OSMesa, capture, freeglut vendoring: docs/ADVANCED_USAGE.md\n"
+	@printf "Web build:        packaging/web/README.md\n"
 
 # Keep procedural targets phony without maintaining a second copy of every
 # check-* rule. The Makefile already uses this source-driven approach for help.

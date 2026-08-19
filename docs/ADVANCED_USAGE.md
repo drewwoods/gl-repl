@@ -193,6 +193,11 @@ implements them.
 These are make variables or script/test env vars. Pass make variables as
 `make target NAME=value`; export script vars when invoking the script directly.
 
+`make help-vars` prints the public Make variables straight from their
+declarations - it is generated from the Makefile, so it cannot drift. The
+table below is the wider set, including the script and test env vars Make
+never sees.
+
 | Variable | Where | Effect |
 |---|---|---|
 | `CC` | Makefile, `scripts/check/check-c99.sh`, export tests. | Compiler command. The test runner passes it to export-compile checks as `REPL_EXPORT_CC`. |
@@ -237,6 +242,15 @@ These are make variables or script/test env vars. Pass make variables as
 | `CLANG_TIDY_CHECKS` | `scripts/code-smells.sh`. | clang-tidy check filter. |
 | `MIN_TOKENS`, `PMD_IMAGE` | `scripts/code-smells.sh`. | PMD CPD duplicate-token threshold and Docker image. |
 | `LIZARD_CCN`, `LIZARD_LEN` | `scripts/code-smells.sh`. | Lizard complexity and function-length thresholds. |
+
+### Compile-time defines
+
+Neither is a Make variable: both are `-D` defines, passed through `CFLAGS`.
+
+| Define | Values / default | Effect |
+|---|---|---|
+| `UI_THEME_DEFAULT` | `0` green (default), `1` warm, `2` cyan, `3` amber, `4` violet, `5` mono. | Compile-time UI color scheme, e.g. `make gl-repl CFLAGS=-DUI_THEME_DEFAULT=1`. Defined in [`config.h`](../config.h), range-checked in [`src/ui/core/theme.h`](../src/ui/core/theme.h). See [ARCHITECTURE.md > UI Color Theming](ARCHITECTURE.md#ui-color-theming). |
+| `GLR_AUDIO_NO_THREAD` | `1` drops the worker; `0` forces it on. Auto-enabled on Emscripten (no `-pthread`). | Runs the playlist lifecycle ops (file open/uninit, state save) synchronously, drained from `glr_audio_tick()` on the caller, e.g. `make gl-repl CFLAGS=-DGLR_AUDIO_NO_THREAD=1`. Contained entirely in [`src/app/glr_audio.c`](../src/app/glr_audio.c). |
 
 ## Headless rendering (OSMesa)
 
