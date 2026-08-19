@@ -1387,6 +1387,27 @@ TEST_JOBS ?=
 ARGS ?=
 TEST_VERBOSE ?=
 
+# How a report is shaped is an axis, not a target: FORMAT=csv replaces
+# bench-csv / bench-render-csv / bench-web-csv, three targets whose only
+# content was one flag, and it is available to every present and future bench.
+# Scope is the bench family - `gen-`/`show-` style reports pick their output
+# shape with their own operand, and a CSV of a call graph means nothing.
+#? FORMAT: report shape for the bench family: human (default) | csv.
+FORMAT ?= human
+ifneq ($(filter-out human csv,$(FORMAT)),)
+$(error unsupported FORMAT=$(FORMAT); use FORMAT=human or FORMAT=csv)
+endif
+BENCH_FORMAT_FLAGS = $(if $(filter csv,$(FORMAT)),--csv,)
+# Under FORMAT=csv the lane also drops its progress echoes and build summary,
+# so stdout is exactly the machine-readable rows - which is what the three
+# deleted -csv recipes did by hand.
+BENCH_QUIET = $(filter csv,$(FORMAT))
+
+# Make can drop one prerequisite without a second copy of the recipe, which is
+# all test-no-checks ever was.
+#? SKIP_CHECKS: 1 drops the `check` prerequisite from the test lanes.
+SKIP_CHECKS ?=
+
 COMPILE_REPORT_TEST_SUMMARY := $(COMPILE_REPORT_DIR)/tests-summary
 $(COMPILE_REPORT_TEST_SUMMARY): $(addprefix $(BINDIR)/,$(TEST_BINS))
 	@bash scripts/compile-report.sh summary "$(COMPILE_REPORT_DIR)"
@@ -2436,6 +2457,9 @@ check-make-var-documented: ## Hard guard: PUBLIC_MAKE_VARS and the variable anno
 check-make-phony-derived: ## Hard guard: every documented Make target is .PHONY (a same-named file must not satisfy it).
 	@bash scripts/check/check-make-phony-derived.sh
 
+check-make-fix-pairs: ## Hard guard: every fix-* Make target has the check-* guard it is the mutating twin of.
+	@bash scripts/check/check-make-fix-pairs.sh
+
 CHECK_TARGETS = \
 	check-trailing-whitespace \
 	check-depth-capture-after-finish \
@@ -2458,7 +2482,8 @@ CHECK_TARGETS = \
 	check-make-target-documented \
 	check-make-no-duplicate-help \
 	check-make-var-documented \
-	check-make-phony-derived
+	check-make-phony-derived \
+	check-make-fix-pairs
 
 check: ## Run all checks.
 	@set -e; \
@@ -2536,17 +2561,10 @@ rebuild-golden: ## Rebuild all golden examples from test_repl_core_examples.
 internal-rebuild-golden: $(BINDIR)/test_repl_core_examples
 	@$(BINDIR)/test_repl_core_examples --update-golden
 
-test-stubs: check ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs.
+test-stubs: $(if $(filter 1,$(SKIP_CHECKS)),,check) ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs (SKIP_CHECKS=1 drops the check gate).
 	+$(MAKE) --no-print-directory internal-test-suite \
 		USE_GL_STUBS=1 BUILD=$(BUILD) \
 		NO_SAN=$(if $(filter undefined,$(origin NO_SAN)),1,$(NO_SAN))
-
-test-no-checks: ## Build and run tests using local GL stubs, without running pre-checks.
-	+$(MAKE) --no-print-directory internal-test-suite \
-		USE_GL_STUBS=1 BUILD=$(BUILD) \
-		NO_SAN=$(if $(filter undefined,$(origin NO_SAN)),1,$(NO_SAN))
-
-test-only: test-no-checks ## Alias for test-no-checks.
 
 test-asan-ubsan: ## Build and run the stubbed test suite under AddressSanitizer + UBSan (forces sanitizers on regardless of environment).
 	+$(MAKE) --no-print-directory internal-test-suite \
@@ -2654,13 +2672,10 @@ $(RENDER_BENCH_BIN): $(RENDER_BENCH_OBJ) $(GL_STUB_COUNTS_OBJS) | $(COMPILE_REPO
 	@mkdir -p $(dir $@)
 	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(RENDER_BENCH_OBJ) $(GL_STUB_COUNTS_OBJS) $(GL_LDFLAGS) -o $@
 
-bench-render: $(RENDER_BENCH_BIN) ## Run the shared native rendering benchmark (use FREEGLUT_OSMESA=1 for headless CI).
-	$(RENDER_BENCH_BIN) $(ARGS)
-
-bench-render-csv: $(RENDER_BENCH_BIN) ## Run the shared native rendering benchmark as CSV.
-	$(RENDER_BENCH_BIN) --csv $(ARGS)
+bench-render: $(RENDER_BENCH_BIN) ## Run the shared native rendering benchmark (FORMAT=csv for CSV; FREEGLUT_OSMESA=1 for headless CI).
+	$(RENDER_BENCH_BIN) $(BENCH_FORMAT_FLAGS) $(ARGS)
 else
-bench-render bench-render-csv:
+bench-render:
 	@echo "ERROR: bench-render is the native target; use bench-web-gl4es for the browser/gl4es build." >&2
 	@exit 1
 endif
@@ -2850,15 +2865,10 @@ capacity-matrix: ## Print state-scaling matrix: per-tunable bytes-per-unit, curr
 	@$(CC) $(COMMON_CFLAGS) tools/capacity_matrix.c -o build/capacity_matrix
 	@./build/capacity_matrix
 
-bench: $(BENCH_TARGET_NAMES) $(COMPILE_REPORT_BENCH_SUMMARY) ## Build and run the REPL runtime benchmarks.
+bench: $(BENCH_TARGET_NAMES) $(if $(BENCH_QUIET),,$(COMPILE_REPORT_BENCH_SUMMARY)) ## Build and run the REPL runtime benchmarks (FORMAT=csv for machine-readable rows).
 	@for b in $(BENCH_BINS); do \
-		echo "==> $$b $(ARGS)"; \
-		$(BINDIR)/$$b $(ARGS) || exit $$?; \
-	done
-
-bench-csv: $(BENCH_TARGET_NAMES) ## Run benchmarks with --csv output (machine readable).
-	@for b in $(BENCH_BINS); do \
-		$(BINDIR)/$$b --csv $(ARGS) || exit $$?; \
+		$(if $(BENCH_QUIET),:,echo "==> $$b $(ARGS)") ; \
+		$(BINDIR)/$$b $(BENCH_FORMAT_FLAGS) $(ARGS) || exit $$?; \
 	done
 
 # The same benchmarks compiled to wasm and run under node, because wasm is
@@ -2873,31 +2883,18 @@ bench-csv: $(BENCH_TARGET_NAMES) ## Run benchmarks with --csv output (machine re
 # node has no GPU, and fade_batches (the one sub-benchmark that emits GL)
 # skips itself here. A regression that lives in the draw path will not show
 # up in these numbers.
-bench-web: require-emcc ## Build and run the REPL runtime benchmarks as wasm under node (web-side CPU cost only; needs emcc + node).
+bench-web: require-emcc ## Build and run the REPL runtime benchmarks as wasm under node (FORMAT=csv for machine-readable rows; needs emcc + node).
 	@command -v node >/dev/null 2>&1 || { \
 		echo "ERROR: node not found on PATH -- bench-web runs the wasm build headless under node."; \
 		exit 1; \
 	}
-	scripts/web-deps.sh
+	@scripts/web-deps.sh $(if $(BENCH_QUIET),>/dev/null,)
 	@for b in $(BENCH_BINS); do \
-		$(MAKE) --no-print-directory WEB=1 $(WEB_BINDIR)/$$b || exit $$?; \
+		$(MAKE) --no-print-directory WEB=1 $(WEB_BINDIR)/$$b $(if $(BENCH_QUIET),>/dev/null,) || exit $$?; \
 	done
 	@for b in $(BENCH_BINS); do \
-		echo "==> $$b (wasm/node) $(ARGS)"; \
-		node $(WEB_BINDIR)/$$b $(ARGS) || exit $$?; \
-	done
-
-bench-web-csv: require-emcc ## Run the wasm benchmarks with --csv output (machine readable).
-	@command -v node >/dev/null 2>&1 || { \
-		echo "ERROR: node not found on PATH -- bench-web runs the wasm build headless under node."; \
-		exit 1; \
-	}
-	@scripts/web-deps.sh >/dev/null
-	@for b in $(BENCH_BINS); do \
-		$(MAKE) --no-print-directory WEB=1 $(WEB_BINDIR)/$$b >/dev/null || exit $$?; \
-	done
-	@for b in $(BENCH_BINS); do \
-		node $(WEB_BINDIR)/$$b --csv $(ARGS) || exit $$?; \
+		$(if $(BENCH_QUIET),:,echo "==> $$b (wasm/node) $(ARGS)") ; \
+		node $(WEB_BINDIR)/$$b $(BENCH_FORMAT_FLAGS) $(ARGS) || exit $$?; \
 	done
 
 # Browser-only companion to bench-web. Unlike the node benchmarks above, this
@@ -3318,6 +3315,35 @@ callgraph-files: ## Generate file-level Mermaid dependency graph (optional ENTRY
 	@echo "Visualize at: https://mermaid.live or with: npx @mermaid-js/mermaid-cli"
 
 # ---------------------------------------------------------------------------
+# Deprecated target spellings.
+#
+# Each one is now an axis on a lane that already exists - FORMAT=csv for the
+# report shape, SKIP_CHECKS=1 for the check gate - so the target carried no
+# behaviour of its own, only a flag. They stay as forwarders because they are
+# public names; the note goes to stderr so a piped CSV is unaffected.
+# ---------------------------------------------------------------------------
+
+bench-csv: ## Deprecated spelling of: make bench FORMAT=csv.
+	@printf 'note: bench-csv is deprecated - use `make bench FORMAT=csv`.\n' >&2
+	+$(MAKE) --no-print-directory bench FORMAT=csv
+
+bench-render-csv: ## Deprecated spelling of: make bench-render FORMAT=csv.
+	@printf 'note: bench-render-csv is deprecated - use `make bench-render FORMAT=csv`.\n' >&2
+	+$(MAKE) --no-print-directory bench-render FORMAT=csv
+
+bench-web-csv: ## Deprecated spelling of: make bench-web FORMAT=csv.
+	@printf 'note: bench-web-csv is deprecated - use `make bench-web FORMAT=csv`.\n' >&2
+	+$(MAKE) --no-print-directory bench-web FORMAT=csv
+
+test-no-checks: ## Deprecated spelling of: make test-stubs SKIP_CHECKS=1.
+	@printf 'note: test-no-checks is deprecated - use `make test SKIP_CHECKS=1`.\n' >&2
+	+$(MAKE) --no-print-directory test-stubs SKIP_CHECKS=1
+
+test-only: ## Deprecated spelling of: make test-stubs SKIP_CHECKS=1.
+	@printf 'note: test-only is deprecated - use `make test SKIP_CHECKS=1`.\n' >&2
+	+$(MAKE) --no-print-directory test-stubs SKIP_CHECKS=1
+
+# ---------------------------------------------------------------------------
 # Help, in three tiers, all generated from this file:
 #
 #   make help          the handful of targets a newcomer runs
@@ -3341,11 +3367,11 @@ callgraph-files: ## Generate file-level Mermaid dependency graph (optional ENTRY
 PUBLIC_MAKE_VARS := \
 	ARGS ASAN BUILD CALLGRAPH_FILES_GROUP_CONFIG CC CFLAGS \
 	CODE_PANEL_STENCIL_BENCH_ARGS CODE_PANEL_TEXT_BENCH_ARGS \
-	ENTRY EXAMPLES_CATALOG \
+	ENTRY EXAMPLES_CATALOG FORMAT \
 	FREEGLUT_INCLUDE_DIR FREEGLUT_LIB_PATH FREEGLUT_OSMESA \
 	FREEGLUT_VENDOR FREEGLUT_VENDOR_LINUX \
 	GLUT_BITMAP_BENCH_ARGS MSAN_CC MUSIC_DEST NOSAN NO_SAN \
-	SAMPLE SAN TEST_CASE TEST_JOBS TEST_VERBOSE \
+	SAMPLE SAN SKIP_CHECKS TEST_CASE TEST_JOBS TEST_VERBOSE \
 	USE_GL_STUBS V VERBOSE VERTEX_LABEL_BENCH_ARGS WEB ZSHRC
 
 help: ## Show the common targets (run make help-details for the full list).

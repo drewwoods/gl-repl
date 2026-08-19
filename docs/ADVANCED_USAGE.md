@@ -216,8 +216,11 @@ never sees.
 | `FREEGLUT_OSMESA` | Makefile. | `1` builds vendored freeglut with the headless OSMesa backend. |
 | `FREEGLUT_VENDOR` | Makefile. | `0` skips the vendored freeglut static library, used by the `make glut` fallback. |
 | `APP_ICON_SVG` | Makefile `make app`. | Source SVG for the generated macOS `.icns`. |
+| `SKIP_CHECKS` | Makefile. | `1` drops the `check` prerequisite from the test lanes: `make test SKIP_CHECKS=1` is the suite with no guard gate. |
+| `FORMAT` | Makefile bench targets. | Report shape: `human` (default) or `csv`. `make bench FORMAT=csv`, `make bench-render FORMAT=csv`, `make bench-web FORMAT=csv`; under `csv` the lane also drops its progress echoes so stdout is exactly the machine-readable rows. |
 | `TEST_JOBS` | Makefile, `scripts/run-tests.sh`. | Limits parallel test binaries; empty/`0` means unbounded parallel runner behavior. |
 | `ARGS` | Makefile `run-test-*` and bench targets. | Extra arguments passed to the binaries run by the target, e.g. `make run-test-repl-core-examples ARGS='--show-mismatch'` or `make bench ARGS='--iters 20'`. |
+| `<BENCH>_BENCH_ARGS` | Makefile. | Per-bench default arguments (`GLUT_BITMAP_BENCH_ARGS`, `CODE_PANEL_TEXT_BENCH_ARGS`, `CODE_PANEL_STENCIL_BENCH_ARGS`, `VERTEX_LABEL_BENCH_ARGS`); `ARGS` is appended after them. |
 | `TEST_LOG_DIR` | `scripts/run-tests.sh`. | Directory for per-test logs; default `build/test-logs/run-<pid>`. |
 | `NO_COLOR` | Test runners. | Disables ANSI color output. |
 | `FORCE_COLOR`, `CLICOLOR_FORCE` | Test runners. | Forces ANSI color output when `NO_COLOR` is unset. |
