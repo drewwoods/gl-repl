@@ -635,10 +635,11 @@ HDRS = \
 	gl_repl.h \
 	source_document.h
 
-# The trimmed emscripten catalog belongs to the shipping web build only. The
-# `make test-web` lane (WEB=1 USE_GL_STUBS=1) keeps the native catalog: the
-# example goldens are keyed by catalog index, so the trimmed set would fail
-# test_repl_core_examples for a reason that has nothing to do with wasm.
+# The trimmed emscripten example catalog belongs to the shipping web build
+# only. The `make test-web` lane (WEB=1 USE_GL_STUBS=1) keeps the native
+# catalog: the example goldens are keyed by catalog index, so the trimmed
+# set would fail test_repl_core_examples for a reason that has nothing to
+# do with wasm.
 ifeq ($(WEB)$(USE_GL_STUBS),1)
 EXAMPLES_CATALOG ?= examples/catalog-emscripten.ini
 else
@@ -649,7 +650,11 @@ GENERATED_EXAMPLES_INC = build/generated/repl_examples_data.inc
 BENCH_DATA_CATALOG = $(BENCH_DATA_DIR)/catalog.ini
 BENCH_DATA_SCENE_SRCS = $(wildcard $(BENCH_DATA_DIR)/scenes/*.glr)
 GENERATED_BENCH_DATA_INC = build/generated/bench_repl_data.inc
-ifeq ($(WEB)$(USE_GL_STUBS),1)
+# Tours have no index-keyed goldens. Every WEB=1 compile -- shipping web
+# and test-web -- uses catalog-emscripten.ini so File-menu scripts are
+# replaced by the shell: variants the browser (and the node fallback) can
+# resolve.
+ifeq ($(WEB),1)
 TOURS_CATALOG = tours/catalog-emscripten.ini
 else
 TOURS_CATALOG = tours/catalog.ini

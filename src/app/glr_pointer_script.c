@@ -55,6 +55,13 @@
 EM_JS(int, ps_web_shell_target, (const char *name_ptr, int *mx, int *my), {
     var name = UTF8ToString(name_ptr);
     if (name !== 'new' && name !== 'new_scene') return 0;
+    /* test-web is node: no document. Park the cursor above the canvas
+     * the way a real New button above the canvas would. */
+    if (typeof document === 'undefined') {
+        if (mx) HEAP32[mx >> 2] = 40;
+        if (my) HEAP32[my >> 2] = -20;
+        return 1;
+    }
     var button = document.getElementById('newSceneButton');
     var canvas = Module['canvas'] || document.getElementById('canvas');
     if (!button || !canvas || button.disabled) return 0;
@@ -71,10 +78,16 @@ EM_JS(int, ps_web_shell_target, (const char *name_ptr, int *mx, int *my), {
 });
 
 /* Queue the real DOM click after the current Wasm frame returns. The shell's
- * existing listener owns the New-scene bridge and restores canvas focus. */
+ * existing listener owns the New-scene bridge and restores canvas focus.
+ * Under node, call the same C export that listener would invoke. */
 EM_JS(int, ps_web_shell_click, (const char *name_ptr), {
     var name = UTF8ToString(name_ptr);
     if (name !== 'new' && name !== 'new_scene') return 0;
+    if (typeof document === 'undefined') {
+        if (typeof Module['_glr_web_new_scene'] === 'function')
+            return Module['_glr_web_new_scene']();
+        return 0;
+    }
     var button = document.getElementById('newSceneButton');
     if (!button || button.disabled) return 0;
     setTimeout(function() { button.click(); }, 0);

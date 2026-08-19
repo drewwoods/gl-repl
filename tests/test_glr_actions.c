@@ -1070,6 +1070,24 @@ static void test_all_catalog_tours_playback_to_completion(void) {
     }
 }
 
+#if defined(__EMSCRIPTEN__)
+/* catalog-emscripten.ini's Editing Basics clicks shell:new. Under node
+ * there is no DOM button; the pointer-script fallback must still invoke
+ * glr_web_new_scene() so that click is not a no-op. */
+static void test_web_shell_new_creates_scene(void) {
+    static const char *const script[] = { "click shell:new" };
+    glr_ctrl_reset_all();
+    int n0 = repl_user_scene_count();
+    ASSERT_INT("shell:new click tour loads",
+               glr_pointer_script_start_tour("New", "n.pointer", script, 1), 1);
+    glr_pointer_script_frame(); /* baseline capture */
+    glr_pointer_script_frame(); /* click fires */
+    ASSERT_INT("headless shell:new creates a user scene",
+               repl_user_scene_count(), n0 + 1);
+    glr_pointer_script_stop();
+}
+#endif
+
 /* Done is presented at least once, then a tour with no final caption closes on
  * the next frame. A final caption keeps Done alive for its authored lifetime. */
 static void test_tour_done_auto_closes(void) {
@@ -2952,6 +2970,9 @@ int main(void) {
     test_tutorial_menu_dispatch();
     test_tours_menu_dispatch();
     test_all_catalog_tours_playback_to_completion();
+#if defined(__EMSCRIPTEN__)
+    test_web_shell_new_creates_scene();
+#endif
     test_tour_done_auto_closes();
     test_tour_paced_key();
     test_tour_sequential_steps_and_pause();
