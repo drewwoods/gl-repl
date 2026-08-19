@@ -2033,39 +2033,6 @@ gl-tests: $(addprefix $(BINDIR)/,$(GL_TEST_BINS)) ## Run real-GL UI state tests 
 	  printf '$(CYAN)==> %s$(NC)\n' "$$b"; "$$b" || exit $$?; \
 	done
 
-# Public targets use kebab-case. Binary names retain their existing underscores,
-# so the demo targets above create links with the names users execute.
-BUILD_TARGETS = \
-	all gl-repl app demos $(DEMO_TARGETS) render3d-asset-builder \
-	web web-serve glut debug debug-msan
-
-PACKAGE_TARGETS = \
-	release release-build release-upload release-config fetch-music \
-	icon-regen icon-cube icon-cube-strong
-
-TEST_TARGETS = \
-	test test-detailed test-stubs test-asan-ubsan test-msan test-full \
-	test-scenes internal-test-scenes \
-	test-web internal-test-suite-web \
-	rebuild-golden internal-test-suite internal-test-case \
-	internal-rebuild-golden gl-tests $(TEST_TARGET_NAMES) \
-	$(RUN_TEST_TARGETS) $(RUN_TEST_FILE_TARGETS)
-
-BENCH_TARGETS = \
-	bench bench-csv bench-render bench-render-csv bench-web bench-web-csv bench-web-gl4es $(BENCH_TARGET_NAMES) \
-	bench-glut-bitmap bench-glut-bitmap-build bench-glut-bitmap-apple \
-	bench-glut-bitmap-freeglut \
-	bench-code-panel-text bench-code-panel-stencil bench-vertex-labels
-
-MAINTENANCE_TARGETS = \
-	check audit-editor-ownership fix-doc-links find-trailing-whitespace \
-	keymap-list config-list check-config-slugs palette-list unicode-count fix-unicode capacity-matrix lines lines-test coverage analyze \
-	clean distclean freeglut-clean install-hooks install-completions \
-	render3d-hot-lib require-emcc \
-	callgraph-static callgraph-static-entry callgraph-profile \
-	callgraph-graphviz callgraph-html callgraph-files \
-	help help-details FORCE
-
 # The vendored static freeglut (macOS) is a build-time artifact, so every binary
 # whose link line embeds its archive path through $(GL_LDFLAGS) must order-only
 # depend on it - otherwise those links run before the archive exists and fail.
@@ -2466,6 +2433,9 @@ check-make-no-duplicate-help: ## Hard guard: no Make target is documented on two
 check-make-var-documented: ## Hard guard: PUBLIC_MAKE_VARS and the variable annotations help-vars renders agree.
 	@PUBLIC_MAKE_VARS='$(PUBLIC_MAKE_VARS)' bash scripts/check/check-make-var-documented.sh
 
+check-make-phony-derived: ## Hard guard: every documented Make target is .PHONY (a same-named file must not satisfy it).
+	@bash scripts/check/check-make-phony-derived.sh
+
 CHECK_TARGETS = \
 	check-trailing-whitespace \
 	check-depth-capture-after-finish \
@@ -2487,7 +2457,8 @@ CHECK_TARGETS = \
 	check-duplicate-api-decls \
 	check-make-target-documented \
 	check-make-no-duplicate-help \
-	check-make-var-documented
+	check-make-var-documented \
+	check-make-phony-derived
 
 check: ## Run all checks.
 	@set -e; \
@@ -3428,11 +3399,31 @@ help-details: ## Show every documented target, grouped by family.
 	@printf "Build/runtime env, OSMesa, capture, freeglut vendoring: docs/ADVANCED_USAGE.md\n"
 	@printf "Web build:        packaging/web/README.md\n"
 
-# Keep procedural targets phony without maintaining a second copy of every
-# check-* rule. The Makefile already uses this source-driven approach for help.
-CHECK_PHONY_TARGETS := $(sort $(shell awk -F: '/^check-[[:alnum:]_.-]+:/ {print $$1}' $(firstword $(MAKEFILE_LIST))))
+# .PHONY, derived. Two universes feed it, and both have to be here:
+#
+#   documented source targets - scraped from the `## ` doc every target
+#     carries (check-make-target-documented is what makes that true, and
+#     check-make-phony-derived is what keeps this scrape honest).
+#   generated and internal names - TEST_TARGET_NAMES, RUN_TEST_TARGETS,
+#     RUN_TEST_FILE_TARGETS and BENCH_TARGET_NAMES are produced by $(eval)
+#     from TEST_BINS/BENCH_BINS, and internal-* targets carry no `## `. No
+#     source scraper can see any of them, so they stay explicit: dropping
+#     them would let a stray file named `test-eval` or `run-test-eval` in the
+#     repo root silently satisfy the target.
+#
+# What the scrape deletes is the five hand-copied inventories of *documented*
+# names (BUILD_TARGETS, PACKAGE_TARGETS, TEST_TARGETS, BENCH_TARGETS,
+# MAINTENANCE_TARGETS), which is where the drift actually was.
+# `#` starts a comment in a variable assignment (recipe lines are exempt, which
+# is why the help scrapers above can spell the marker literally). HASH smuggles
+# it into the pattern; without it this line silently truncates at the marker and
+# the scrape comes back empty.
+HASH := \#
+DOCUMENTED_PHONY_TARGETS := $(sort $(shell awk -F: '/^[a-zA-Z0-9_.-]+:.*$(HASH)$(HASH) / {print $$1}' $(firstword $(MAKEFILE_LIST))))
+INTERNAL_TARGETS := $(sort $(shell awk -F: '/^internal-[a-zA-Z0-9_.-]*:/ {print $$1}' $(firstword $(MAKEFILE_LIST))))
 
-.PHONY: $(BUILD_TARGETS) $(PACKAGE_TARGETS) $(TEST_TARGETS) \
-	$(BENCH_TARGETS) $(MAINTENANCE_TARGETS) $(CHECK_PHONY_TARGETS)
+.PHONY: $(DOCUMENTED_PHONY_TARGETS) $(INTERNAL_TARGETS) FORCE \
+	$(TEST_TARGET_NAMES) $(RUN_TEST_TARGETS) $(RUN_TEST_FILE_TARGETS) \
+	$(BENCH_TARGET_NAMES)
 
 -include $(DEPS)
