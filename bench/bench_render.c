@@ -436,10 +436,13 @@ static void publish_summary(void)
     EM_ASM({
         var failed = $0 !== 0;
         var status = failed ? "FAIL" : "PASS";
-        window.gl4esRenderBench = {
-            status: status, cases: $1, failures: $0,
-            strict: $2 !== 0, results: window.gl4esRenderBenchResults || []
-        };
+        var bench = {};
+        bench.status = status;
+        bench.cases = $1;
+        bench.failures = $0;
+        bench.strict = $2 !== 0;
+        bench.results = window.gl4esRenderBenchResults || [];
+        window.gl4esRenderBench = bench;
         document.documentElement.setAttribute("data-gl4es-render-bench", status);
         document.title = status + " gl4es render bench";
     }, g_failures, g_case_count, g_strict);

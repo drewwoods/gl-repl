@@ -2934,7 +2934,7 @@ $(WEB_BINDIR)/gl4es-line-width-cases.html: $(GL4ES_LINE_WIDTH_CASES_BENCH_SRC) \
 $(WEB_BINDIR)/gl4es-render.html: $(GL4ES_RENDER_BENCH_SRC) \
 		packaging/web/gl4es_bootstrap.c $(WEB_GL_ARCHIVES)
 	@mkdir -p $(dir $@)
-	$(CC) $(GL_HEADER_CFLAGS) -Isrc \
+	$(CC) $(GL_HEADER_CFLAGS) -Iinclude -Isrc \
 		$(GL4ES_RENDER_BENCH_SRC) packaging/web/gl4es_bootstrap.c \
 		$(WEB_GL_ARCHIVES) $(WEB_RUNTIME_LDFLAGS) -o $@
 endif
