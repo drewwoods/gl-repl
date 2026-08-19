@@ -75,6 +75,13 @@ fixing the previous ones. Landed as a ratchet instead:
   §4.5's `check-make-fix-pairs-check`.
 - **`check-make-target-grammar` landed before the renames**, as a
   shrink-only ratchet rather than the post-rename assertion §4.1 describes.
+- **`FORMAT` is scoped to the lanes that implement it**, not to the whole
+  bench family as §2 assumes: only `bench_repl`, `bench_extedit` and
+  `bench_render` have a `--csv` mode. The windowed benches refuse
+  `FORMAT=csv` (`BENCH_FORMAT_UNSUPPORTED`) instead of silently returning
+  human output, on the same principle §2 states for `ARGS` - a target that
+  ignores an axis it is documented to have is a bug. The two build-only lanes
+  take neither.
 - **`.PHONY` gained three names the hand lists had dropped**: `test-no-checks`,
   `test-only` and (new) `help-vars`. That drift is the concrete argument for
   §4.4.

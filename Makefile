@@ -1389,19 +1389,33 @@ TEST_VERBOSE ?=
 
 # How a report is shaped is an axis, not a target: FORMAT=csv replaces
 # bench-csv / bench-render-csv / bench-web-csv, three targets whose only
-# content was one flag, and it is available to every present and future bench.
-# Scope is the bench family - `gen-`/`show-` style reports pick their output
-# shape with their own operand, and a CSV of a call graph means nothing.
-#? FORMAT: report shape for the bench family: human (default) | csv.
+# content was one flag.
+#
+# Scope is a bench lane whose binary implements --csv: bench / bench-web
+# (bench_repl, bench_extedit) and bench-render. The windowed benches
+# (bench-glut-bitmap*, bench-code-panel-*, bench-vertex-labels) print one
+# human table and have no CSV mode, so they REFUSE FORMAT=csv through
+# BENCH_FORMAT_UNSUPPORTED rather than silently handing back human output -
+# a lane that ignores an axis it is documented to have is the same defect as
+# one that ignores ARGS. The two lanes that only build (bench-glut-bitmap-build,
+# bench-web-gl4es) take neither ARGS nor FORMAT: there is nothing to pass them
+# to. Nothing outside the bench family takes FORMAT at all - a `gen-`/`show-`
+# report picks its shape with its own operand, and a CSV of a call graph means
+# nothing.
+#? FORMAT: report shape for the bench lanes that implement it (bench, bench-web, bench-render): human (default) | csv.
 FORMAT ?= human
 ifneq ($(filter-out human csv,$(FORMAT)),)
 $(error unsupported FORMAT=$(FORMAT); use FORMAT=human or FORMAT=csv)
 endif
 BENCH_FORMAT_FLAGS = $(if $(filter csv,$(FORMAT)),--csv,)
-# Under FORMAT=csv the lane also drops its progress echoes and build summary,
-# so stdout is exactly the machine-readable rows - which is what the three
-# deleted -csv recipes did by hand.
+# Under FORMAT=csv the lane drops its progress echoes, its build summary and
+# make's own command echo, so the recipe's own output is exactly the
+# machine-readable rows. What it cannot silence is a *cold* build: the compile
+# lines for the bench binaries print before the recipe runs at all, exactly as
+# they did for the deleted -csv targets. Build once, then pipe.
 BENCH_QUIET = $(filter csv,$(FORMAT))
+# First line of every bench recipe whose binary has no --csv mode.
+BENCH_FORMAT_UNSUPPORTED = @$(if $(BENCH_QUIET),printf 'ERROR: %s has no CSV mode; it prints one human table. Drop FORMAT=csv.\n' '$@' >&2; exit 1,:)
 
 # Make can drop one prerequisite without a second copy of the recipe, which is
 # all test-no-checks ever was.
@@ -2678,7 +2692,7 @@ $(RENDER_BENCH_BIN): $(RENDER_BENCH_OBJ) $(GL_STUB_COUNTS_OBJS) | $(COMPILE_REPO
 	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(RENDER_BENCH_OBJ) $(GL_STUB_COUNTS_OBJS) $(GL_LDFLAGS) -o $@
 
 bench-render: $(RENDER_BENCH_BIN) ## Run the shared native rendering benchmark (FORMAT=csv for CSV; FREEGLUT_OSMESA=1 for headless CI).
-	$(RENDER_BENCH_BIN) $(BENCH_FORMAT_FLAGS) $(ARGS)
+	$(if $(BENCH_QUIET),@,)$(RENDER_BENCH_BIN) $(BENCH_FORMAT_FLAGS) $(ARGS)
 else
 bench-render:
 	@echo "ERROR: bench-render is the native target; use bench-web-gl4es for the browser/gl4es build." >&2
@@ -2716,12 +2730,15 @@ $(GLUT_BITMAP_FREEGLUT_BIN): $(GLUT_BITMAP_BENCH_SRC) $(FREEGLUT_STATIC_LIB)
 bench-glut-bitmap-build: $(GLUT_BITMAP_APPLE_BIN) $(GLUT_BITMAP_FREEGLUT_BIN) ## Build the isolated Apple GLUT/freeglut bitmap-font benchmarks.
 
 bench-glut-bitmap-apple: $(GLUT_BITMAP_APPLE_BIN) ## Benchmark successive glutBitmapCharacter calls using Apple GLUT.
+	$(BENCH_FORMAT_UNSUPPORTED)
 	$(GLUT_BITMAP_APPLE_BIN) $(GLUT_BITMAP_BENCH_ARGS) $(ARGS)
 
 bench-glut-bitmap-freeglut: $(GLUT_BITMAP_FREEGLUT_BIN) ## Benchmark freeglut character-loop and glutBitmapString paths.
+	$(BENCH_FORMAT_UNSUPPORTED)
 	$(GLUT_BITMAP_FREEGLUT_BIN) $(GLUT_BITMAP_BENCH_ARGS) $(ARGS)
 
 bench-glut-bitmap: bench-glut-bitmap-build ## Compare Apple GLUT with freeglut bitmap rendering (macOS, opens two short-lived windows).
+	$(BENCH_FORMAT_UNSUPPORTED)
 	@echo "==> Apple GLUT"
 	@$(GLUT_BITMAP_APPLE_BIN) $(GLUT_BITMAP_BENCH_ARGS) $(ARGS)
 	@echo
@@ -2765,6 +2782,7 @@ $(CODE_PANEL_TEXT_BENCH_BIN): $(CODE_PANEL_TEXT_BENCH_OBJS)
 	$(CC) $(OBJ_CFLAGS) $(CODE_PANEL_TEXT_BENCH_OBJS) $(GL_LDFLAGS) -o $@
 
 bench-code-panel-text: $(CODE_PANEL_TEXT_BENCH_BIN) ## Benchmark code-panel text submission vs span fragmentation (Linux/macOS; opens a short-lived window).
+	$(BENCH_FORMAT_UNSUPPORTED)
 	$(CODE_PANEL_TEXT_BENCH_BIN) $(CODE_PANEL_TEXT_BENCH_ARGS) $(ARGS)
 else
 bench-code-panel-text:
@@ -2817,6 +2835,7 @@ endif
 # else-arm would print twice in help (check-make-no-duplicate-help).
 bench-code-panel-stencil: $(if $(CODE_PANEL_STENCIL_BENCH_OK),$(CODE_PANEL_STENCIL_BENCH_BIN)) ## Benchmark stencil-routed vs per-span-glColor code-panel text (Linux/macOS; opens a short-lived window).
 ifdef CODE_PANEL_STENCIL_BENCH_OK
+	$(BENCH_FORMAT_UNSUPPORTED)
 	$(CODE_PANEL_STENCIL_BENCH_BIN) $(CODE_PANEL_STENCIL_BENCH_ARGS) $(ARGS)
 else
 	@echo "ERROR: bench-code-panel-stencil targets Linux/macOS (needs freeglut)." >&2
@@ -2860,6 +2879,7 @@ endif
 
 bench-vertex-labels: $(if $(VERTEX_LABEL_BENCH_OK),$(VERTEX_LABEL_BENCH_BIN)) ## Benchmark the vertex-number overlay's depth readback, glyph draw, and matrix reads (Linux/macOS; opens a short-lived window).
 ifdef VERTEX_LABEL_BENCH_OK
+	$(BENCH_FORMAT_UNSUPPORTED)
 	$(VERTEX_LABEL_BENCH_BIN) $(VERTEX_LABEL_BENCH_ARGS) $(ARGS)
 else
 	@echo "ERROR: bench-vertex-labels targets Linux/macOS (needs freeglut)." >&2
@@ -3466,7 +3486,7 @@ help-details: ## Show every documented target, grouped by family (excludes check
 	@printf "  quick:         \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(QUICK_CFLAGS))"
 	@printf "  debug:         \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(DEBUG_CFLAGS))"
 	@printf "  coverage:      \$$(common_flags) %s \n\n" "$(filter-out $(COMMON_CFLAGS),$(COVERAGE_CFLAGS))"
-	@awk -f scripts/make-help.awk $(firstword $(MAKEFILE_LIST))
+	@awk -v roots='$(ROOT_TARGETS)' -f scripts/make-help.awk $(firstword $(MAKEFILE_LIST))
 	@printf "\033[1mGenerated targets and documentation\033[0m:\n"
 	@printf "  Individual tests: make test-eval builds one; make run-test-eval builds and runs it.\n"
 	@printf "                    Those two families are generated per test binary, so they are not\n"
