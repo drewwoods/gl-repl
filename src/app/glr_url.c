@@ -59,18 +59,24 @@ void glr_url_tick(void) {
     s_url_pid_count = write_idx;
 }
 
-static void glr_url_track_child(pid_t pid) {
-    if (pid <= 0)
-        return;
+static int glr_url_reserve_pid_slot(void) {
     glr_url_tick();
-    if (s_url_pid_count >= s_url_pid_cap) {
-        int new_cap = s_url_pid_cap == 0 ? 8 : s_url_pid_cap * 2;
-        pid_t *new_pids = (pid_t *)realloc(s_url_pids, (size_t)new_cap * sizeof(pid_t));
-        if (!new_pids)
-            return;
-        s_url_pids = new_pids;
-        s_url_pid_cap = new_cap;
-    }
+    if (s_url_pid_count < s_url_pid_cap)
+        return 1;
+
+    int new_cap = s_url_pid_cap == 0 ? 8 : s_url_pid_cap * 2;
+    pid_t *new_pids = (pid_t *)realloc(s_url_pids,
+                                       (size_t)new_cap * sizeof(pid_t));
+    if (!new_pids)
+        return 0;
+    s_url_pids = new_pids;
+    s_url_pid_cap = new_cap;
+    return 1;
+}
+
+static void glr_url_track_child(pid_t pid) {
+    if (pid <= 0 || s_url_pid_count >= s_url_pid_cap)
+        return;
     s_url_pids[s_url_pid_count++] = pid;
 }
 
@@ -145,12 +151,15 @@ int glr_url_open(const char *url) {
 #else
                     const char *launcher = "xdg-open";
 #endif
-                    char *const argv[] = { (char *)launcher, (char *)url, NULL };
-                    pid_t pid = 0;
-                    int rc = posix_spawnp(&pid, launcher, &actions, &attr, argv, environ);
-                    if (rc == 0) {
-                        glr_url_track_child(pid);
-                        ok = 1;
+                    if (glr_url_reserve_pid_slot()) {
+                        char *const argv[] = { (char *)launcher, (char *)url, NULL };
+                        pid_t pid = 0;
+                        int rc = posix_spawnp(&pid, launcher, &actions, &attr,
+                                              argv, environ);
+                        if (rc == 0) {
+                            glr_url_track_child(pid);
+                            ok = 1;
+                        }
                     }
                 }
             }

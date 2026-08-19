@@ -4387,7 +4387,6 @@ void glr_ctrl_reset_all(void) {
     console_reset();
     replay_state_reset();
     color_picker_state_reset();
-    glr_url_shutdown();
     /* Hard reset rather than an outro: a wholesale world reset is not a tour
      * the user chose to leave, so there is no exit to animate. */
     glr_tour_presence_reset();
@@ -5190,6 +5189,7 @@ void glr_ctrl_on_frame_timer(void) {
 void glr_shutdown(void) {
     glr_ctrl_depth_snapshot_free();
     glr_audio_shutdown();
+    glr_url_shutdown();
     hidden_lines_destroy_resources();
     repl_executor_destroy_resources();
 }
