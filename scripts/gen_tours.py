@@ -90,7 +90,10 @@ def active_script_lines(
                         f"{source}:{lineno}: conditional must name "
                         f"{SUPPORTED_MACRO}"
                     )
-                if len(tokens) > 1 and tokens[1] != "#":
+                if (
+                    len(tokens) > 1
+                    and not rest[len(tokens[0]):].lstrip().startswith("#")
+                ):
                     raise TourError(
                         f"{source}:{lineno}: unexpected text after #{directive}"
                     )
@@ -134,7 +137,7 @@ def active_script_lines(
             selected.append((lineno, line))
 
     if stack:
-        raise TourError(f"{source}:{stack[-1][2]}: unterminated conditional")
+        raise TourError(f"{source}:{stack[-1][3]}: unterminated conditional")
     return selected
 
 
@@ -210,33 +213,42 @@ def read_catalog(catalog_path: Path, *, platform: str) -> list[dict[str, object]
         seen_symbols[symbol] = section
 
         lines = file_path.read_text(encoding="utf-8").splitlines()
-        selected_lines = active_script_lines(
-            lines, platform=platform, source=str(file_path)
+        validation_platforms = [platform]
+        validation_platforms.extend(
+            other for other in ("native", "emscripten") if other != platform
         )
-        if not any(
-            line.strip() and not line.lstrip().startswith("#")
-            for _lineno, line in selected_lines
-        ):
-            raise TourError(f"[{section}] tour script has no events: {rel_file}")
-
-        # Controlled tours (glr_pointer_script_start_tour) are untimed,
-        # completion-driven scripts. A leading timestamp selects the legacy
-        # absolute-time grammar the transport controls cannot step; the
-        # runtime rejects it too, but failing here keeps a bad catalog out of
-        # the build. A comment/blank line never counts as an executable line.
-        for lineno, line in selected_lines:
-            stripped = line.lstrip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            first = stripped.split(None, 1)[0]
-            try:
-                float(first)
-            except ValueError:
-                continue
-            raise TourError(
-                f"[{section}] {rel_file}:{lineno}: tour scripts must use "
-                f"untimed, completion-driven events (found timestamp {first!r})"
+        for validation_platform in validation_platforms:
+            selected_lines = active_script_lines(
+                lines, platform=validation_platform, source=str(file_path)
             )
+            if not any(
+                line.strip() and not line.lstrip().startswith("#")
+                for _lineno, line in selected_lines
+            ):
+                raise TourError(
+                    f"[{section}] tour script has no events for "
+                    f"{validation_platform}: {rel_file}"
+                )
+
+            # Controlled tours (glr_pointer_script_start_tour) are untimed,
+            # completion-driven scripts. A leading timestamp selects the
+            # legacy absolute-time grammar the transport controls cannot
+            # step; the runtime rejects it too, but failing here keeps a bad
+            # catalog out of the build. A comment/blank line never counts as
+            # an executable line.
+            for lineno, line in selected_lines:
+                stripped = line.lstrip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                first = stripped.split(None, 1)[0]
+                try:
+                    float(first)
+                except ValueError:
+                    continue
+                raise TourError(
+                    f"[{section}] {rel_file}:{lineno}: tour scripts must use "
+                    f"untimed, completion-driven events (found timestamp {first!r})"
+                )
 
         entries.append(
             {

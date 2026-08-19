@@ -347,9 +347,9 @@ click
 C-preprocessor features are intentionally not part of the grammar. The
 inactive branch is not parsed as an event, so it may contain targets that do
 not exist on the other platform. Physical source lines are retained for tour
-HUDs and diagnostics. The generator validates the branch selected by the
-catalog, while the runtime applies the same selection to direct
-`GLR_POINTER_SCRIPT` recordings.
+HUDs and diagnostics. The generator validates both platform branches before
+embedding the script, while the runtime applies the selected platform to
+direct `GLR_POINTER_SCRIPT` recordings.
 
 [`scripts/gen_tours.py`](../scripts/gen_tours.py) embeds the catalog's scripts
 into the built binary. Do not edit the generated include in `build/`.
