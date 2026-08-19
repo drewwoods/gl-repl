@@ -504,8 +504,7 @@ ifeq ($(WEB),1)
 GL_HEADER_CFLAGS = \
 	-include $(GL4ES_DIR)/include/GL/gl.h \
 	-I$(GL4ES_DIR)/include -I$(GLU_DIR)/include -I$(FREEGLUT_INCLUDE_DIR) \
-	-DUSE_MGL_NAMESPACE -DCFG_DEFAULT_VERTEX_OUTLINES=0 \
-	-DCFG_DEFAULT_VERTEX_POINTS=1 -std=gnu99
+	-DUSE_MGL_NAMESPACE -std=gnu99
 # The trailing -std=gnu99 lands after COMMON_CFLAGS' -std=c99 on the compile
 # line (GL_HEADER_CFLAGS is folded in after -std=c99 there), so it wins for
 # this build only -- miniaudio's WebAudio backend needs EM_ASM, a gnu-mode
