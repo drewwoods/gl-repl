@@ -2,7 +2,7 @@ freeglut vendored into this tree.
 
 upstream: https://github.com/drewwoods/freeglut
 ref:      high-stroke-count
-sha:      bd19e95ddc32fdb8567e156a76e3b44d898cc87e
+sha:      ffa4481e82c0cd11d038ecf6549ca8224f5bce88
 
 Produced by:
   FREEGLUT_REPO=https://github.com/drewwoods/freeglut scripts/vendor-freeglut.sh high-stroke-count

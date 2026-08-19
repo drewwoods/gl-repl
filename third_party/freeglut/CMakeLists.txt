@@ -86,6 +86,7 @@ ENDIF()
 
 OPTION(FREEGLUT_COCOA "Build support for Cocoa" OFF)
 OPTION(FREEGLUT_COCOA_SCROLLING_DELTA "Use pixel-based scrolling deltas on Cocoa" OFF)
+OPTION(FREEGLUT_COCOA_MOUSEWHEEL_X_AXIS "Report horizontal mouse wheel movement via glutMouseWheelFunc on Cocoa" OFF)
 
 # Headless off-screen rendering via OSMesa (no window system at all). OS-agnostic;
 # overrides the native platform on every OS, hence mutually exclusive with the
@@ -600,6 +601,12 @@ IF(FREEGLUT_COCOA)
     FIND_LIBRARY(COREVIDEO_FRAMEWORK CoreVideo)
     LIST(APPEND LIBS ${COCOA_FRAMEWORK} ${OPENGL_FRAMEWORK} ${IOKIT_FRAMEWORK} ${COREVIDEO_FRAMEWORK})
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-deprecated-declarations")
+    IF(FREEGLUT_COCOA_SCROLLING_DELTA)
+        ADD_DEFINITIONS(-DFREEGLUT_COCOA_SCROLLING_DELTA)
+    ENDIF()
+    IF(FREEGLUT_COCOA_MOUSEWHEEL_X_AXIS)
+        ADD_DEFINITIONS(-DFREEGLUT_COCOA_MOUSEWHEEL_X_AXIS)
+    ENDIF()
 ENDIF()
 
 IF(CMAKE_COMPILER_IS_GNUCC)
