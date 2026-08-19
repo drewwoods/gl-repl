@@ -366,8 +366,9 @@ int glr_ctrl_router_handle_tutorial_ack_key(unsigned char key);     /* Enter/Tab
 int glr_ctrl_router_handle_replay_special(int key);                 /* replay-active forwarding */
 int glr_ctrl_router_handle_cfg_special_shortcut(int key);           /* cfg shortcut on F-keys */
 int glr_ctrl_router_handle_horizontal_audio_special(int key);       /* Ctrl+Left/Right audio */
+int glr_ctrl_router_handle_func_nav_special(int key);               /* Ctrl+Up/Down function landmarks; claimed before replay/help */
 int glr_ctrl_router_handle_help_tab_special(int key);               /* Left/Right help-tab */
-int glr_ctrl_router_handle_help_scroll_special(int key);            /* Up/Down/PageUp/Down when help visible */
+int glr_ctrl_router_handle_help_scroll_special(int key);            /* plain Up/Down/PageUp/Down when help visible */
 int glr_ctrl_router_handle_help_toggle_special(int key);            /* F1 */
 int glr_ctrl_router_handle_help_click(int button, int state, int x, int y); /* tab / click-away */
 void glr_ctrl_help_scroll_by(int delta);                            /* clamped help scroll */

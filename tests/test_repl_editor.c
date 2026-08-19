@@ -3205,6 +3205,231 @@ int main() {
         ASSERT_INT("page down cancels scroll_follow_cursor", g_scroll_follow_cursor, 0);
     }
 
+    /* Ctrl+Up / Ctrl+Down jump function landmarks: declaration, closing
+     * brace, then the neighbouring function. A press with nowhere to go
+     * is a no-op. Cursor lands at end-of-line (the loaded declaration). */
+    {
+        int saved_mods = g_mock_modifiers;
+
+        glr_ctrl_reset_all();
+        editor_feed_line("func0() {");            /* 0 */
+        editor_feed_line("  glColor3f(1,0,0);");  /* 1 */
+        editor_feed_line("}");                    /* 2 */
+        editor_feed_line("func1() {");            /* 3 */
+        editor_feed_line("  glColor3f(0,1,0);");  /* 4 */
+        editor_feed_line("}");                    /* 5 */
+        editor_feed_line("glVertex3f(0,0,0);");   /* 6 */
+        editor_feed_line("glVertex3f(1,0,0);");   /* 7 */
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+
+        editor_navigate_to_line(0);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl-down from header: func0 closer",
+                   editor_state_edit_line(), 2);
+        ASSERT_INT("ctrl-down lands at end of line",
+                   editor_cursor_pos(), editor_input_len());
+
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl-down from closer: func1 header",
+                   editor_state_edit_line(), 3);
+
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl-down from func1 header: closer",
+                   editor_state_edit_line(), 5);
+
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl-down at last closer: stay",
+                   editor_state_edit_line(), 5);
+
+        editor_navigate_to_line(1);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl-down from body: closer",
+                   editor_state_edit_line(), 2);
+
+        editor_navigate_to_line(1);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("ctrl-up from body: header",
+                   editor_state_edit_line(), 0);
+
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("ctrl-up from first header: stay",
+                   editor_state_edit_line(), 0);
+
+        editor_selection_start(0);
+        editor_selection_set_end(2);
+        ASSERT_TRUE("selection active on first-header no-op",
+                    editor_clipboard_sel_active());
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("ctrl-up no-op at first header stays put",
+                   editor_state_edit_line(), 0);
+        ASSERT_INT("ctrl-up no-op at first header clears selection",
+                   editor_clipboard_sel_active(), 0);
+
+        editor_navigate_to_line(repl_state_document_count());
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("ctrl-up from append row: last func header",
+                   editor_state_edit_line(), 3);
+        editor_navigate_to_line(repl_state_document_count());
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl-down from append row: stay",
+                   editor_state_edit_line(), repl_state_document_count());
+
+        editor_navigate_to_line(4);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("ctrl-up from func1 body: func1 header",
+                   editor_state_edit_line(), 3);
+
+        editor_navigate_to_line(3);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("ctrl-up from func1 header: func0 header",
+                   editor_state_edit_line(), 0);
+
+        editor_navigate_to_line(5);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("ctrl-up from closer: current header",
+                   editor_state_edit_line(), 3);
+
+        editor_navigate_to_line(6);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("ctrl-up from outside: prev header",
+                   editor_state_edit_line(), 3);
+
+        editor_navigate_to_line(6);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl-down from outside past funcs: stay",
+                   editor_state_edit_line(), 6);
+
+        g_mock_modifiers = 0;
+        editor_navigate_to_line(0);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("plain down from header still moves one line",
+                   editor_state_edit_line(), 1);
+
+        /* Ctrl+Shift must NOT trigger func nav (exact keymap match) */
+        g_mock_modifiers = GLUT_ACTIVE_CTRL | GLUT_ACTIVE_SHIFT;
+        editor_navigate_to_line(0);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl+shift+down extends selection, not func nav",
+                   editor_state_edit_line(), 1);
+
+        /* Selection range is cleared on func nav */
+        g_mock_modifiers = 0;
+        editor_selection_start(0);
+        editor_selection_set_end(2);
+        ASSERT_TRUE("selection active before func nav", editor_clipboard_sel_active());
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("selection cleared after func nav", editor_clipboard_sel_active(), 0);
+
+        /* Autocomplete popup: Ctrl+Down wins over suggestion cycling */
+        editor_navigate_to_line(0);
+        EditorAutocompleteState *ac = editor_state_autocomplete_mut();
+        ac->match_count = 5;
+        ac->selected_idx = 0;
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl+down with active autocomplete jumps to func closer",
+                   editor_state_edit_line(), 2);
+        ac->match_count = 0;
+
+        /* Pending input auto-commit before func nav target calculation */
+        editor_navigate_to_line(6);
+        set_editor_input("glColor3f(0.5, 0.5, 0.5);");
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("ctrl+up auto-commits modified row before navigation",
+                   editor_state_edit_line(), 3);
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Nested if/else inside a function: Ctrl+Down from either arm lands
+     * on the function closer, not the if-end. */
+    {
+        int saved_mods = g_mock_modifiers;
+
+        glr_ctrl_reset_all();
+        editor_feed_line("func0() {");
+        editor_feed_line("  if(1) {");
+        editor_feed_line("    glColor3f(1,0,0);");
+        editor_feed_line("  } else {");
+        editor_feed_line("    glColor3f(0,1,0);");
+        editor_feed_line("  }");
+        editor_feed_line("}");
+        ASSERT_INT("nested-if nav setup: last row is func closer",
+                   repl_state_document_cmds()[repl_state_document_count() - 1].type,
+                   CMD_FUNC_END);
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_navigate_to_line(2);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl-down from if-arm: func closer",
+                   editor_state_edit_line(), repl_state_document_count() - 1);
+
+        editor_navigate_to_line(4);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl-down from else-arm: func closer",
+                   editor_state_edit_line(), repl_state_document_count() - 1);
+
+        editor_navigate_to_line(4);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("ctrl-up from else-arm: func header",
+                   editor_state_edit_line(), 0);
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Unmatched closer: Ctrl+Down stays in the broken function instead of
+     * jumping to a later FUNC_DEF. */
+    {
+        int saved_mods = g_mock_modifiers;
+
+        glr_ctrl_reset_all();
+        editor_feed_line("func0() {");
+        editor_feed_line("  glColor3f(1,0,0);");
+        editor_feed_line("}");
+        editor_feed_line("func1() {");
+        editor_feed_line("  glColor3f(0,1,0);");
+        editor_feed_line("}");
+        ASSERT_INT("unmatched-nav setup: row 2 is func0 closer",
+                   repl_state_document_cmds()[2].type, CMD_FUNC_END);
+        editor_delete_cmd_range(2, 1, "func closer");
+        ASSERT_INT("unmatched-nav: func1 header shifted to 2",
+                   repl_state_document_cmds()[2].type, CMD_FUNC_DEF);
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_navigate_to_line(1);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl-down inside unmatched func: stay",
+                   editor_state_edit_line(), 1);
+
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("ctrl-up inside unmatched func: header",
+                   editor_state_edit_line(), 0);
+
+        g_mock_modifiers = saved_mods;
+    }
+
+    /* Function nav on document with no functions: safe no-op */
+    {
+        int saved_mods = g_mock_modifiers;
+        glr_ctrl_reset_all();
+        editor_feed_line("glVertex3f(0,0,0);");
+        editor_feed_line("glVertex3f(1,1,1);");
+        editor_navigate_to_line(0);
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl-down with no functions: stay at 0",
+                   editor_state_edit_line(), 0);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("ctrl-up with no functions: stay at 0",
+                   editor_state_edit_line(), 0);
+
+        g_mock_modifiers = saved_mods;
+    }
+
     /* Regression: pressing Up when the cursor is below the visible area
      * must scroll the viewport to reveal it. */
     {

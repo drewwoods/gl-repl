@@ -2785,6 +2785,17 @@ static void test_help_key_tabs_use_keymap_labels(void) {
                 help_tab_contains_binding("Editor", shortcut, "Save Scene"));
 
     keymap_binding_to_string(shortcut, (int)sizeof(shortcut),
+                             KM_KEY(GLR_PREV_FUNC), KM_MODS(GLR_PREV_FUNC), 1);
+    ASSERT_TRUE("help Editor tab renders Prev Func shortcut from keymap",
+                help_tab_contains_binding("Editor", shortcut,
+                                          "current function declaration"));
+    keymap_binding_to_string(shortcut, (int)sizeof(shortcut),
+                             KM_KEY(GLR_NEXT_FUNC), KM_MODS(GLR_NEXT_FUNC), 1);
+    ASSERT_TRUE("help Editor tab renders Next Func shortcut from keymap",
+                help_tab_contains_binding("Editor", shortcut,
+                                          "current function closing brace"));
+
+    keymap_binding_to_string(shortcut, (int)sizeof(shortcut),
                              KM_KEY(GLR_NEXT_EXAMPLE), KM_MODS(GLR_NEXT_EXAMPLE), 1);
     ASSERT_TRUE("help Scene tab renders Next Example shortcut from keymap",
                 help_tab_contains_binding("Scene", shortcut, "Next example / scene"));

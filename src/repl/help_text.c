@@ -391,6 +391,10 @@ const ReplHelpContent *repl_help_text_build(void) {
     nk = key_emit(nk, "  Backspace            \tDelete character or selected lines");
     nk = key_emit(nk, "  Tab / Enter          \tAccept autocomplete suggestion");
     nk = key_emit(nk, "  Up / Down            \tNavigate lines");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_PREV_FUNC), KM_MODS(GLR_PREV_FUNC), 1, "",
+                          "Previous function / current function declaration");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_NEXT_FUNC), KM_MODS(GLR_NEXT_FUNC), 1, "",
+                          "Next function / current function closing brace");
     nk = key_emit(nk, "  Left / Right         \tMove cursor within line");
     nk = key_emit_binding(nk, "Home / ", KM_KEY(GLR_LINE_START), KM_MODS(GLR_LINE_START), 0, "",
                           "Jump to start of line");
@@ -464,7 +468,7 @@ const ReplHelpContent *repl_help_text_build(void) {
     nk = key_emit_binding(nk, "", KM_KEY(GLR_REPLAY_JUMP), KM_MODS(GLR_REPLAY_JUMP), 0, "",
                           "Jump replay to cursor line (first geometry at/after)");
     nk = key_emit(nk, "  Space                \tPause / resume replay");
-    nk = key_emit(nk, "  + / -                \tChange replay speed");
+    nk = key_emit(nk, "  + / - / Up / Down    \tChange replay speed (Ctrl+Up/Down still jump functions)");
     nk = key_emit(nk, "  m / M                \tToggle polygon / vertex replay mode");
     nk = key_emit(nk, "  e / E                \tCycle Replay expand (Off / Expanded / Verbose)");
     nk = key_emit(nk, "  n / N                \tCycle replay normals (off / vector / + direction)");

@@ -228,9 +228,9 @@ int editor_input_active_modifiers(void) {
  * normalized to drop the modifier the key already IMPLIES - a KEY_CTRL_*
  * control byte carries Ctrl, and on macOS the Cmd/SUPER alias that the
  * accessor mirrors into Ctrl. SUPER is always dropped; Ctrl is dropped
- * unless the binding explicitly requires it (the Ctrl+Arrow audio
- * bindings). Modifier variants are matched separately through the keymap
- * pairs, so dispatch order cannot make them alias. */
+ * unless the binding explicitly requires it (the Ctrl+Arrow audio and
+ * function-nav bindings). Modifier variants are matched separately through
+ * the keymap pairs, so dispatch order cannot make them alias. */
 int keymap_event_is(int event_key, int binding_key, int binding_mods) {
     if (event_key != binding_key)
         return 0;
@@ -1885,8 +1885,8 @@ int editor_feed_line(const char *line) {
  * Special-key dispatch (F-keys, arrows, Page Up/Down, Home/End).
  *
  * Editor concerns only: rename modal capture, search-overlay arrows,
- * bare cursor moves (Left/Right + Home/End), autocomplete cycle,
- * shift-extend selection, and code-panel page scroll.
+ * bare cursor moves (Left/Right + Home/End), Ctrl+Up/Down function nav,
+ * autocomplete cycle, shift-extend selection, and code-panel page scroll.
  *
  * Non-editor concerns (replay forwarding, cfg special shortcut,
  * Ctrl+Left/Right audio, help-tab toggle, help-overlay scroll, F1
@@ -2023,12 +2023,70 @@ static void ac_reveal_selected(EditorAutocompleteState *ac) {
     if (ac->scroll_top < 0) ac->scroll_top = 0;
 }
 
-/* Up/Down: autocomplete cycle, shift-extend selection, or move cursor
- * line. Help-overlay scroll on Up/Down is router-side
- * (glr_ctrl_router_handle_help_scroll_special) and never reaches
- * this dispatcher when help is visible. */
+/* Ctrl+Up/Down: function landmarks. Inside a function (including the
+ * declaration and the closing `}`), Up lands on the current FUNC_DEF and
+ * Down on the matching `}`; a second press in the same direction then
+ * jumps to the previous / next function declaration. Outside any function
+ * the same chords jump straight to prev / next FUNC_DEF. Nowhere to go
+ * is a no-op (the chord is still consumed so it cannot fall through to
+ * line motion or autocomplete). An unmatched closer is also a no-op on
+ * Down: the cursor stays in the broken function instead of skipping to
+ * a later FUNC_DEF. Like plain Up/Down, a no-op still clears a line
+ * selection. */
+static int handle_func_nav_special_key_route(int key) {
+    int dir;
+    int pos;
+    int def = -1;
+    int end = -1;
+    int target = -1;
+    int stay = 0;
+
+    if (keymap_event_is(key, GLR_PREV_FUNC))
+        dir = -1;
+    else if (keymap_event_is(key, GLR_NEXT_FUNC))
+        dir = 1;
+    else
+        return 0;
+
+    /* Auto-commit pending edits before querying the AST so the target
+     * calculation reflects the newly committed structure. */
+    if (current_input_needs_navigation_commit()) {
+        if (commit_before_navigation() == COMMIT_REJECTED)
+            return 1;
+    }
+
+    pos = editor_state_edit_line();
+    if (repl_source_scope_enclosing_func_at(pos, &def, &end)) {
+        if (dir > 0) {
+            if (end < 0)
+                stay = 1;
+            else if (pos != end)
+                target = end;
+        } else if (pos != def) {
+            target = def;
+        }
+    }
+    if (!stay && target < 0)
+        target = dir > 0
+            ? repl_source_scope_next_func_def(pos)
+            : repl_source_scope_prev_func_def(pos);
+    editor_selection_clear_line_range();
+    if (target >= 0 && target != pos)
+        editor_navigate_to_line(target);
+    return 1;
+}
+
+/* Up/Down: function nav (Ctrl), autocomplete cycle, shift-extend
+ * selection, or move cursor line. Help-overlay scroll on Up/Down is
+ * router-side (glr_ctrl_router_handle_help_scroll_special) and never
+ * reaches this dispatcher when help is visible. Ctrl+Up/Down is claimed
+ * for function nav in the router before help scroll and replay speed. */
 static int handle_vertical_special_key_route(int key) {
     EditorAutocompleteState *ac = editor_state_autocomplete_mut();
+
+    if (handle_func_nav_special_key_route(key))
+        return 1;
+
     switch (key) {
     case GLUT_KEY_UP:
         if (ac->match_count > 1) {
@@ -2096,8 +2154,8 @@ static int handle_page_scroll_special_key_route(int key) {
  * forwarding, cfg special shortcut, audio prev/next, help tab,
  * help scroll, F1 help toggle, F12 scene cycle) are routed by
  * src/app/glr_ctrl.c directly to their owning subsystem before this runs.
- * The bare cursor moves, autocomplete cycle, selection navigation,
- * and code-panel page scroll stay here. */
+ * The bare cursor moves, Ctrl+Up/Down function nav, autocomplete cycle,
+ * selection navigation, and code-panel page scroll stay here. */
 static void special_func(int key, int x, int y) {
     (void)x;
     (void)y;

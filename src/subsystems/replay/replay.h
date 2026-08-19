@@ -17,7 +17,9 @@
  *   - Ctrl+R toggles replay through the controller's config-shortcut path.
  *   - Ctrl+K jumps to the current edit line and pauses there.
  *   - Space toggles play/pause or restarts from DONE.
- *   - Left/Right step one replay unit; Up/Down and +/- adjust speed.
+ *   - Left/Right step one replay unit; plain Up/Down and +/- adjust speed
+ *     (Ctrl+Up/Down is editor function-nav and is claimed by the router
+ *     before replay sees the event).
  *   - M switches vertex/polygon replay mode; E cycles code expansion.
  *   - N cycles replay normal display: off, vector, vector + direction.
  *   - V toggles the replay focused-vertex label.

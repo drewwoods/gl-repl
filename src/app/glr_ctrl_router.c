@@ -354,6 +354,14 @@ int glr_ctrl_router_handle_horizontal_audio_special(int key) {
     return 1;
 }
 
+/* Ctrl+Up / Ctrl+Down are editor function-landmark chords. special_dispatch
+ * claims them before replay (plain Up/Down = speed) and help (plain Up/Down
+ * = scroll) so the exact keymap binding always reaches the editor. */
+int glr_ctrl_router_handle_func_nav_special(int key) {
+    return keymap_event_is(key, GLR_PREV_FUNC) ||
+           keymap_event_is(key, GLR_NEXT_FUNC);
+}
+
 /* Snapshot of the live help overlay for pure geometry queries
  * (scroll clamp, click hit-test). Mirrors the per-frame state the
  * renderer is handed in glr_ctrl_display_frame. */
@@ -502,6 +510,10 @@ int glr_ctrl_router_handle_help_tab_special(int key) {
 
 int glr_ctrl_router_handle_help_scroll_special(int key) {
     if (!ui_state_help().visible)
+        return 0;
+    /* Ctrl+Up/Down is function nav; leave it for the editor. */
+    if (keymap_event_is(key, GLR_PREV_FUNC) ||
+        keymap_event_is(key, GLR_NEXT_FUNC))
         return 0;
     switch (key) {
     case GLUT_KEY_UP:        glr_ctrl_help_scroll_by(-1); return 1;
@@ -2784,6 +2796,14 @@ static void special_dispatch(int key, int x, int y) {
     }
     if (editor_input_file_prompt_capture_special(key)) {
         glr_ctrl_router_dismiss_gl_state_for_editor_input();
+        return;
+    }
+
+    /* Function nav is an exact Ctrl+Up/Down binding. Claim it before
+     * replay speed and help scroll, which both consume bare Up/Down. */
+    if (glr_ctrl_router_handle_func_nav_special(key)) {
+        glr_ctrl_router_dismiss_gl_state_for_editor_input();
+        editor_merge_input_effects(editor_handle_special(key, x, y));
         return;
     }
 

@@ -1918,6 +1918,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Backspace | Delete character or selected lines |
 | Tab | Autocomplete (Tab/Enter accepts) |
 | Up / Down | Navigate lines |
+| Ctrl+Up / Ctrl+Down | Previous / next function. Inside a function: Up jumps to the declaration, Down to the closing `}`. Still jumps functions during replay and with help open (plain Up/Down keep changing replay speed / scrolling help) |
 | Left / Right | Move cursor within line |
 | Home / Ctrl+A | Start of line |
 | End / Ctrl+E | End of line |

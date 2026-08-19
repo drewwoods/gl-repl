@@ -390,6 +390,97 @@ CmdType repl_source_scope_nearest_open_block_at(int pos) {
     return repl_source_scope_view_nearest_open_block_at(live_source_scope_view(), pos);
 }
 
+int repl_source_scope_view_enclosing_func_at(const ReplSourceScopeView *view,
+                                            int pos,
+                                            int *out_def, int *out_end) {
+    int stack[REPL_MAX_BLOCK_NEST_DEPTH];
+    int depth = 0;
+    int def = -1;
+
+    if (!view || !view->cmds)
+        return 0;
+    if (pos < 0)
+        pos = 0;
+    if (pos > view->count)
+        pos = view->count;
+
+    for (int i = 0; i < pos && i < view->count; i++) {
+        if (!view->cmds[i].valid)
+            continue;
+        CmdType t = view->cmds[i].type;
+        if (repl_cmd_is_block_head(t)) {
+            if (depth < REPL_MAX_BLOCK_NEST_DEPTH)
+                stack[depth++] = i;
+        } else if (repl_cmd_is_block_end(t)) {
+            if (depth > 0)
+                depth--;
+        }
+    }
+    /* Sitting on a FUNC_DEF row belongs to that function even if an
+     * unmatched outer function is still on the stack. The walk is i < pos,
+     * so a header at `pos` has not been pushed. */
+    if (pos >= 0 && pos < view->count &&
+        view->cmds[pos].valid && view->cmds[pos].type == CMD_FUNC_DEF) {
+        def = pos;
+    } else {
+        for (int d = depth - 1; d >= 0; d--) {
+            if (view->cmds[stack[d]].type == CMD_FUNC_DEF) {
+                def = stack[d];
+                break;
+            }
+        }
+    }
+    if (def < 0)
+        return 0;
+    int end = repl_source_scope_view_find_block_end(view, def);
+    if (end >= view->count || !view->cmds[end].valid || view->cmds[end].type != CMD_FUNC_END)
+        end = -1;
+    if (out_def)
+        *out_def = def;
+    if (out_end)
+        *out_end = end;
+    return 1;
+}
+
+int repl_source_scope_enclosing_func_at(int pos, int *out_def, int *out_end) {
+    return repl_source_scope_view_enclosing_func_at(live_source_scope_view(),
+                                                   pos, out_def, out_end);
+}
+
+int repl_source_scope_view_next_func_def(const ReplSourceScopeView *view,
+                                         int pos) {
+    if (!view || !view->cmds)
+        return -1;
+    if (pos < 0)
+        pos = -1;
+    for (int i = pos + 1; i < view->count; i++) {
+        if (view->cmds[i].valid && view->cmds[i].type == CMD_FUNC_DEF)
+            return i;
+    }
+    return -1;
+}
+
+int repl_source_scope_next_func_def(int pos) {
+    return repl_source_scope_view_next_func_def(live_source_scope_view(), pos);
+}
+
+int repl_source_scope_view_prev_func_def(const ReplSourceScopeView *view,
+                                         int pos) {
+    if (!view || !view->cmds)
+        return -1;
+    if (pos > view->count)
+        pos = view->count;
+    for (int i = pos - 1; i >= 0; i--) {
+        if (view->cmds[i].valid && view->cmds[i].type == CMD_FUNC_DEF)
+            return i;
+    }
+    return -1;
+}
+
+int repl_source_scope_prev_func_def(int pos) {
+    return repl_source_scope_view_prev_func_def(live_source_scope_view(), pos);
+}
+
 /* Is `pos` inside a for-loop body that `break` / `continue` may target?
  *
  * Same open-block stack as nearest_open_block_at, but read from the

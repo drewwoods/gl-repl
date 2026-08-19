@@ -162,6 +162,157 @@ int main() {
         ASSERT_INT("repl_source_scope_nearest_open_block_at(1)", repl_source_scope_nearest_open_block_at(1), CMD_FOR_BEGIN);
     }
 
+    /* 6c. Function-navigation queries: enclosing includes the header and
+     * closer; nested for/if is transparent; next/prev are strict. */
+    {
+        int def = -2, end = -2;
+
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("func0() {");            /* 0  def */
+        editor_feed_line("  for(i, 0, 1) {");     /* 1  nested for */
+        editor_feed_line("    glColor3f(1,0,0);");/* 2  body */
+        editor_feed_line("  }");                  /* 3  for end */
+        editor_feed_line("}");                    /* 4  func0 end */
+        editor_feed_line("func1() {");            /* 5  def */
+        editor_feed_line("  glColor3f(0,1,0);");  /* 6  body */
+        editor_feed_line("}");                    /* 7  func1 end */
+        editor_feed_line("glVertex3f(0,0,0);");   /* 8  outside */
+        editor_feed_line("glVertex3f(1,0,0);");   /* 9  outside */
+
+        ASSERT_INT("enclosing on func0 header",
+                   repl_source_scope_enclosing_func_at(0, &def, &end), 1);
+        ASSERT_INT("enclosing func0 header def", def, 0);
+        ASSERT_INT("enclosing func0 header end", end, 4);
+        ASSERT_INT("enclosing nested-for body",
+                   repl_source_scope_enclosing_func_at(2, &def, &end), 1);
+        ASSERT_INT("enclosing nested-for def", def, 0);
+        ASSERT_INT("enclosing nested-for end", end, 4);
+        ASSERT_INT("enclosing on func0 closer",
+                   repl_source_scope_enclosing_func_at(4, &def, &end), 1);
+        ASSERT_INT("enclosing func0 closer def", def, 0);
+        ASSERT_INT("enclosing on func1 header",
+                   repl_source_scope_enclosing_func_at(5, &def, &end), 1);
+        ASSERT_INT("enclosing func1 header def", def, 5);
+        ASSERT_INT("enclosing func1 header end", end, 7);
+        ASSERT_INT("enclosing outside after funcs",
+                   repl_source_scope_enclosing_func_at(8, &def, &end), 0);
+
+        ASSERT_INT("next func from func0 header",
+                   repl_source_scope_next_func_def(0), 5);
+        ASSERT_INT("next func from func0 closer",
+                   repl_source_scope_next_func_def(4), 5);
+        ASSERT_INT("next func from last header",
+                   repl_source_scope_next_func_def(5), -1);
+        ASSERT_INT("prev func from func0 header",
+                   repl_source_scope_prev_func_def(0), -1);
+        ASSERT_INT("prev func from func1 header",
+                   repl_source_scope_prev_func_def(5), 0);
+        ASSERT_INT("prev func from outside",
+                   repl_source_scope_prev_func_def(8), 5);
+        ASSERT_INT("prev func from past end",
+                   repl_source_scope_prev_func_def(10), 5);
+
+        /* Explicit ReplSourceScopeView query tests */
+        ReplSourceScopeView view;
+        repl_source_scope_view_bind(&view, repl_state_document_cmds(),
+                                    repl_state_document_count());
+        ASSERT_INT("view: enclosing on func0 header",
+                   repl_source_scope_view_enclosing_func_at(&view, 0, &def, &end), 1);
+        ASSERT_INT("view: enclosing func0 def", def, 0);
+        ASSERT_INT("view: enclosing func0 end", end, 4);
+        ASSERT_INT("view: enclosing outside",
+                   repl_source_scope_view_enclosing_func_at(&view, 8, &def, &end), 0);
+        ASSERT_INT("view: next func from 0",
+                   repl_source_scope_view_next_func_def(&view, 0), 5);
+        ASSERT_INT("view: prev func from 10 (append row)",
+                   repl_source_scope_view_prev_func_def(&view, 10), 5);
+        ASSERT_INT("view: prev func negative pos",
+                   repl_source_scope_view_prev_func_def(&view, -1), -1);
+        ASSERT_INT("enclosing on append row after closed funcs",
+                   repl_source_scope_enclosing_func_at(
+                       repl_state_document_count(), &def, &end), 0);
+        ASSERT_INT("prev func from append row",
+                   repl_source_scope_prev_func_def(repl_state_document_count()), 5);
+        ASSERT_INT("next func from append row",
+                   repl_source_scope_next_func_def(repl_state_document_count()), -1);
+    }
+
+    /* Nested if/else inside a function: enclosing is the FUNC_DEF, not
+     * the if-chain, from either arm. */
+    {
+        GLCmd cmds[7];
+        ReplSourceScopeView view;
+        int def = -2, end = -2;
+
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].valid = 1; cmds[0].type = CMD_FUNC_DEF;
+        cmds[1].valid = 1; cmds[1].type = CMD_IF_BEGIN;
+        cmds[2].valid = 1; cmds[2].type = CMD_COLOR3F;
+        cmds[3].valid = 1; cmds[3].type = CMD_ELSE;
+        cmds[4].valid = 1; cmds[4].type = CMD_COLOR3F;
+        cmds[5].valid = 1; cmds[5].type = CMD_IF_END;
+        cmds[6].valid = 1; cmds[6].type = CMD_FUNC_END;
+        repl_source_scope_view_bind(&view, cmds, 7);
+
+        ASSERT_INT("enclosing if-arm is func",
+                   repl_source_scope_view_enclosing_func_at(&view, 2, &def, &end), 1);
+        ASSERT_INT("enclosing if-arm def", def, 0);
+        ASSERT_INT("enclosing if-arm end", end, 6);
+        ASSERT_INT("enclosing else-arm is func",
+                   repl_source_scope_view_enclosing_func_at(&view, 4, &def, &end), 1);
+        ASSERT_INT("enclosing else-arm def", def, 0);
+        ASSERT_INT("enclosing else-arm end", end, 6);
+        ASSERT_INT("enclosing else separator is func",
+                   repl_source_scope_view_enclosing_func_at(&view, 3, &def, &end), 1);
+        ASSERT_INT("enclosing if-end is func",
+                   repl_source_scope_view_enclosing_func_at(&view, 5, &def, &end), 1);
+    }
+
+    /* 6a2. Unmatched function block handling in source_scope */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        GLCmd unmatched_cmds[4] = {0};
+        unmatched_cmds[0].valid = 1; unmatched_cmds[0].type = CMD_VERTEX3F;
+        unmatched_cmds[1].valid = 1; unmatched_cmds[1].type = CMD_FUNC_DEF;
+        unmatched_cmds[2].valid = 1; unmatched_cmds[2].type = CMD_COLOR3F;
+        /* No CMD_FUNC_END */
+
+        ReplSourceScopeView unbal_view;
+        repl_source_scope_view_bind(&unbal_view, unmatched_cmds, 3);
+        int def = -99, end = -99;
+        ASSERT_INT("unmatched func: enclosing returns 1",
+                   repl_source_scope_view_enclosing_func_at(&unbal_view, 1, &def, &end), 1);
+        ASSERT_INT("unmatched func: def is 1", def, 1);
+        ASSERT_INT("unmatched func: end is -1", end, -1);
+
+        def = -99; end = -99;
+        ASSERT_INT("unmatched func: enclosing from body returns 1",
+                   repl_source_scope_view_enclosing_func_at(&unbal_view, 2, &def, &end), 1);
+        ASSERT_INT("unmatched func: body def is 1", def, 1);
+        ASSERT_INT("unmatched func: body end is -1", end, -1);
+
+        /* A later FUNC_DEF must not be treated as this function's closer.
+         * next_func_def from the unmatched body still reports it — editor
+         * policy must not follow that jump. */
+        GLCmd with_later[5];
+        ReplSourceScopeView later_view;
+
+        memset(with_later, 0, sizeof(with_later));
+        with_later[0].valid = 1; with_later[0].type = CMD_FUNC_DEF;
+        with_later[1].valid = 1; with_later[1].type = CMD_COLOR3F;
+        with_later[2].valid = 1; with_later[2].type = CMD_FUNC_DEF;
+        with_later[3].valid = 1; with_later[3].type = CMD_COLOR3F;
+        with_later[4].valid = 1; with_later[4].type = CMD_FUNC_END;
+        repl_source_scope_view_bind(&later_view, with_later, 5);
+        ASSERT_INT("unmatched then later func: enclosing body",
+                   repl_source_scope_view_enclosing_func_at(
+                       &later_view, 1, &def, &end), 1);
+        ASSERT_INT("unmatched then later func: def stays first", def, 0);
+        ASSERT_INT("unmatched then later func: closer unmatched", end, -1);
+        ASSERT_INT("unmatched then later func: next_func_def from body",
+                   repl_source_scope_view_next_func_def(&later_view, 1), 2);
+    }
+
     /* 6b. indent helpers with buf_sz == 0 must not write past the buffer.
      * Surround a 1-byte target with sentinels and confirm they survive.
      * Pre-fix the cmd_indent / cmd_tess_indent overloads wrote '\0' to

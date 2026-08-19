@@ -77,11 +77,14 @@
 # every declaration was a global, whose predef slot outlives the row; a
 # function-scoped local's binding *is* its prologue row, so an unchecked
 # replace leaves every assignment to that name resolving against nothing.
-# The guard is the shared one all five declaration-replacement routes now
-# call, so this admits one symbol rather than duplicating the check.
+# 2026-08-19: input_c bumped +3 for repl_source_scope_enclosing_func_at,
+# repl_source_scope_next_func_def, and repl_source_scope_prev_func_def.
+# Function landmark navigation (Ctrl+Up / Ctrl+Down) needs to query
+# enclosing function boundaries and adjacent function declarations
+# directly from the document scope model.
 #
 # Ratchet down as migrations land. The plan target
 # (docs/plans/done/editor-demo.md) is ~5 per file.
 
-input_c: 27
+input_c: 30
 commit_c: 29

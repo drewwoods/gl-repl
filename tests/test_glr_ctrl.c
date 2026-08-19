@@ -6728,6 +6728,60 @@ static void test_color_picker_materialfv(void) {
     color_picker_stop();
 }
 
+static void test_func_nav_special_beats_replay_and_help(void) {
+    printf("--- imrepl_ctrl Ctrl+Up/Down function nav beats replay/help ---\n");
+    float speed_before;
+    int scroll_before;
+
+    glr_ctrl_reset_all();
+    editor_feed_line("func0() {");
+    editor_feed_line("  glColor3f(1,0,0);");
+    editor_feed_line("}");
+    editor_feed_line("func1() {");
+    editor_feed_line("  glColor3f(0,1,0);");
+    editor_feed_line("}");
+    ASSERT_INT("func-nav router setup: 6 rows", repl_state_document_count(), 6);
+    ASSERT_INT("func-nav router setup: row 0 is func0",
+               repl_state_document_cmds()[0].type, CMD_FUNC_DEF);
+
+    editor_input_set_modifier_provider_for_test(simulated_mods_provider);
+    g_simulated_mods = GLUT_ACTIVE_CTRL;
+    editor_navigate_to_line(0);
+
+    replay_state_mut()->active = 1;
+    replay_state_mut()->state = REPLAY_PLAYING;
+    replay_state_mut()->speed = 1.0f;
+    speed_before = replay_state_mut()->speed;
+    glr_ctrl_special(GLUT_KEY_DOWN, 0, 0);
+    ASSERT_INT("ctrl-down during replay jumps to func closer",
+               editor_state_edit_line(), 2);
+    ASSERT_TRUE("ctrl-down during replay leaves speed unchanged",
+                replay_state_mut()->speed == speed_before);
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+
+    editor_navigate_to_line(0);
+    ui_state_help_mut()->visible = 1;
+    editor_help_session_set_scroll(10);
+    scroll_before = editor_help_session_scroll();
+    glr_ctrl_special(GLUT_KEY_DOWN, 0, 0);
+    ASSERT_INT("ctrl-down with help open jumps to func closer",
+               editor_state_edit_line(), 2);
+    ASSERT_INT("ctrl-down with help open leaves help scroll",
+               editor_help_session_scroll(), scroll_before);
+
+    g_simulated_mods = 0;
+    editor_navigate_to_line(0);
+    glr_ctrl_special(GLUT_KEY_DOWN, 0, 0);
+    ASSERT_INT("plain down with help open still scrolls help, not func nav",
+               editor_state_edit_line(), 0);
+    ASSERT_TRUE("plain down with help open scrolled help",
+                editor_help_session_scroll() != scroll_before);
+
+    ui_state_help_mut()->visible = 0;
+    editor_input_set_modifier_provider_for_test(NULL);
+}
+
 static void test_special_key_shortcuts(void) {
     printf("--- imrepl_ctrl special key shortcuts ---\n");
     prepare_display_fixture();
@@ -7850,6 +7904,7 @@ int main(void) {
     test_mouse_routing_and_hit_testing();
     test_color_picker_materialfv();
     test_special_key_shortcuts();
+    test_func_nav_special_beats_replay_and_help();
     test_scene_cycle_skips_failed_examples();
     test_promotion_keeps_example_catalog_place();
     test_scripted_chord_reaches_shift_shortcuts();

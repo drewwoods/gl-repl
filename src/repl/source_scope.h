@@ -160,6 +160,25 @@ int  repl_source_scope_cmd_indent_chars(int pos);
 int     repl_source_scope_find_block_end(int begin_idx);
 CmdType repl_source_scope_nearest_open_block_at(int pos);
 
+/* Function-navigation queries. "Enclosing" includes the CMD_FUNC_DEF and
+ * matching CMD_FUNC_END rows, so a cursor sitting on the header or closer
+ * still belongs to that function. Nested for/if frames are transparent.
+ *
+ * repl_source_scope_enclosing_func_at() writes the FUNC_DEF index and its
+ * matching closer (or -1 if unmatched) and returns 1, or 0 when `pos` is
+ * outside any function. next/prev return the first FUNC_DEF strictly after
+ * / before `pos`, or -1. */
+int repl_source_scope_view_enclosing_func_at(const ReplSourceScopeView *view,
+                                            int pos,
+                                            int *out_def, int *out_end);
+int repl_source_scope_enclosing_func_at(int pos, int *out_def, int *out_end);
+int repl_source_scope_view_next_func_def(const ReplSourceScopeView *view,
+                                         int pos);
+int repl_source_scope_next_func_def(int pos);
+int repl_source_scope_view_prev_func_def(const ReplSourceScopeView *view,
+                                         int pos);
+int repl_source_scope_prev_func_def(int pos);
+
 /* Returns 1 if `pos` sits inside a for-loop body that a `break` / `continue`
  * statement there would bind to. If-blocks between the statement and the loop
  * are transparent; an enclosing CMD_FUNC_DEF is a hard boundary. Used by the
