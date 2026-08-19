@@ -49,7 +49,7 @@ END {
         for (k = 1; k <= nf; k++) {
             f = fams[k]
             if ((f == "general") != (pass == 0)) continue
-            printf "%s\n", (f == "general" ? "general - build, run, maintain" : f "-*")
+            printf "\033[1m%s\033[0m\n", (f == "general" ? "general - build, run, maintain" : f "-*")
             for (i = 1; i <= n; i++)
                 if (family[names[i]] == f) printf "  %-30s %s\n", names[i], desc[names[i]]
             printf "\n"

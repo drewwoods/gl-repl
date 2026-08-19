@@ -3414,7 +3414,7 @@ LEGACY_TARGETS := \
 	palette-list rebuild-golden render3d-hot-lib require-emcc unicode-count
 
 help: ## Show the common targets (run make help-details for the full list).
-	@printf "Immediate-mode REPL - common Make targets\n\n"
+	@printf "\033[1mImmediate-mode REPL - common Make targets\033[0m\n\n"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {d[$$1]=$$2} \
 		END {split("gl-repl clean test test-full fetch-music help help-details",o," "); \
 		for (i=1;i<=7;i++) printf "  %-16s %s\n", o[i], d[o[i]]}' $(MAKEFILE_LIST)
@@ -3431,7 +3431,7 @@ help: ## Show the common targets (run make help-details for the full list).
 # `help-bench` in the repo root would make Make report "up to date" and skip
 # the recipe. FORCE is the fix.
 help-%: FORCE ## Show one family of targets, e.g. make help-bench, make help-test.
-	@printf "Targets: %s-*\n\n" "$*"
+	@printf "\033[1mTargets: %s-*\033[0m\n\n" "$*"
 	@awk -F':.*## ' -v p="$*" '/^[a-zA-Z0-9_.-]+:.*## / && $$1 ~ ("^" p "(-|$$)") \
 		{printf "  %-30s %s\n", $$1, $$2}' \
 		$(firstword $(MAKEFILE_LIST)) | sort -u
@@ -3440,7 +3440,7 @@ help-%: FORCE ## Show one family of targets, e.g. make help-bench, make help-tes
 		$(firstword $(MAKEFILE_LIST))
 
 help-check: FORCE ## Show all check-* guards and ratchets.
-	@printf "Check targets (guards, linters, ratchets) - run all with: make check\n\n"
+	@printf "\033[1mCheck targets (guards, linters, ratchets)\033[0m - run all with: make check\n\n"
 	@awk -F':.*## ' '/^[a-zA-Z0-9_.-]+:.*## / && $$1 ~ /^check-/ \
 		{printf "  %-30s %s\n", $$1, $$2}' \
 		$(firstword $(MAKEFILE_LIST)) | sort -u
@@ -3451,7 +3451,7 @@ help-check: FORCE ## Show all check-* guards and ratchets.
 help-checks: help-check ## Alias for make help-check.
 
 help-vars: ## Show the public Make variables (pass them as make <target> NAME=value).
-	@printf "Public Make variables - pass as: make <target> NAME=value\n\n"
+	@printf "\033[1mPublic Make variables\033[0m - pass as: make <target> NAME=value\n\n"
 	@awk '/^#[?] /{ line = substr($$0, 4); i = index(line, ":"); \
 		printf "  %-30s %s\n", substr(line, 1, i - 1), substr(line, i + 2) }' \
 		$(firstword $(MAKEFILE_LIST)) | sort
@@ -3459,23 +3459,24 @@ help-vars: ## Show the public Make variables (pass them as make <target> NAME=va
 	@printf "  docs/ADVANCED_USAGE.md > Environment variables\n"
 
 help-details: ## Show every documented target, grouped by family (excludes check-* guards; see make help-check).
-	@printf "Immediate-mode REPL - all Make targets\n\n"
-	@printf "Build modes (BUILD=release | quick | debug | coverage):\n"
+	@printf "\033[1mImmediate-mode REPL - all Make targets\033[0m\n\n"
+	@printf "\033[1mBuild modes\033[0m (BUILD=release | quick | debug | coverage):\n"
 	@printf "  common flags:  %s\n" "$(COMMON_CFLAGS)" | fold -s -w 100 | sed '1!s/^/                 /'
 	@printf "  release:       \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(RELEASE_CFLAGS))"
 	@printf "  quick:         \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(QUICK_CFLAGS))"
 	@printf "  debug:         \$$(common_flags) %s \n" "$(filter-out $(COMMON_CFLAGS),$(DEBUG_CFLAGS))"
 	@printf "  coverage:      \$$(common_flags) %s \n\n" "$(filter-out $(COMMON_CFLAGS),$(COVERAGE_CFLAGS))"
 	@awk -f scripts/make-help.awk $(firstword $(MAKEFILE_LIST))
-	@printf "Individual tests: make test-eval builds one; make run-test-eval builds and runs it.\n"
-	@printf "                  Those two families are generated per test binary, so they are not\n"
-	@printf "                  listed above; make test-<name> for any tests/test_<name>.c.\n"
-	@printf "Arguments:        ARGS is passed to whatever a target runs, e.g.\n"
-	@printf "                  make run-test-repl-core-examples ARGS='--show-mismatch'.\n\n"
-	@printf "Checks / guards:  make help-check\n"
-	@printf "Variables:        make help-vars\n"
-	@printf "Build/runtime env, OSMesa, capture, freeglut vendoring: docs/ADVANCED_USAGE.md\n"
-	@printf "Web build:        packaging/web/README.md\n"
+	@printf "\033[1mGenerated targets and documentation\033[0m:\n"
+	@printf "  Individual tests: make test-eval builds one; make run-test-eval builds and runs it.\n"
+	@printf "                    Those two families are generated per test binary, so they are not\n"
+	@printf "                    listed above; make test-<name> for any tests/test_<name>.c.\n"
+	@printf "  Arguments:        ARGS is passed to whatever a target runs, e.g.\n"
+	@printf "                    make run-test-repl-core-examples ARGS='--show-mismatch'.\n\n"
+	@printf "  Checks / guards:  make help-check\n"
+	@printf "  Variables:        make help-vars\n"
+	@printf "  Build/runtime env, OSMesa, capture, freeglut vendoring: docs/ADVANCED_USAGE.md\n"
+	@printf "  Web build:        packaging/web/README.md\n"
 
 # .PHONY, derived. Two universes feed it, and both have to be here:
 #
