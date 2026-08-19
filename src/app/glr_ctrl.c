@@ -3115,6 +3115,10 @@ int glr_ctrl_start_tour(int tour_idx) {
     return glr_tours_start(tour_idx);
 }
 
+int glr_ctrl_start_tour_at_checkpoint(int tour_idx, const char *checkpoint) {
+    return glr_tours_start_at_checkpoint(tour_idx, checkpoint);
+}
+
 void glr_ctrl_start_tutorial(int tutorial_idx) {
     glr_ctrl_reset_transients();
     editor_undo_note_wholesale_replacement();

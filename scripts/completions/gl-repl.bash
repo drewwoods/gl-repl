@@ -12,7 +12,7 @@
 _gl_repl_opts='-h --help --accum --no-accum --no-audio --dump-code --dump-flat
 --flat-histogram --call-tree --dump-state-layout --detailed-prof --export-c --export-glr
 --export-ply --export-ply-srgb --assets --example --examples-dir --time
---window --watch --tutorial --tour --list-examples --list-tutorials --list-tours --list-config --lint-scenes'
+--window --watch --tutorial --tour --tour-stop --list-examples --list-tutorials --list-tours --list-config --lint-scenes'
 
 # Catalog names carry spaces, parens and '&', so candidates have to come back
 # shell-escaped (or bare inside an open quote) to survive as one argument.
@@ -80,6 +80,7 @@ _gl_repl_complete() {
         --example)      _gl_repl_names "$cur" --list-examples ; return 0 ;;
         --tutorial)     _gl_repl_names "$cur" --list-tutorials ; return 0 ;;
         --tour)         _gl_repl_names "$cur" --list-tours    ; return 0 ;;
+        --tour-stop)    return 0 ;;   # free-form checkpoint id
         --assets|--examples-dir|--lint-scenes)
                         _gl_repl_paths "$cur" ""              ; return 0 ;;
         --export-c)     _gl_repl_paths "$cur" '*.c'           ; return 0 ;;

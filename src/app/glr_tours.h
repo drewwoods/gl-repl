@@ -38,4 +38,8 @@ const char *glr_tours_name(int idx);
  * line. Returns 1 on success, 0 on a bad index or script error. */
 int glr_tours_start(int idx);
 
+/* Start tour `idx` and seek to an authoring checkpoint before pausing. A NULL
+ * checkpoint preserves normal playback. */
+int glr_tours_start_at_checkpoint(int idx, const char *checkpoint);
+
 #endif /* GLR_TOURS_H */

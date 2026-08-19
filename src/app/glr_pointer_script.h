@@ -13,7 +13,10 @@
  * Script format: one event per line, `#` comments. Shared native/web scripts
  * may use the small conditional subset `#ifdef __EMSCRIPTEN__`, `#ifndef
  * __EMSCRIPTEN__`, `#else`, and `#endif`; inactive branches are ignored by
- * both built-in tours and GLR_POINTER_SCRIPT recordings. There are two forms:
+ * both built-in tours and GLR_POINTER_SCRIPT recordings. `# @checkpoint <id>`
+ * is an authoring marker, not an event; a built-in tour launched with
+ * `--tour-stop <id>` fast-forwards to that boundary and pauses. There are two
+ * forms:
  *
  * - Untimed lines (`verb ...`) run sequentially. The next step starts after
  *   the previous glide, click release, paced key, ring, or pause has
@@ -146,6 +149,7 @@ typedef struct {
     int                  current_event;
     int                  total_events;
     int                  source_line;
+    const char          *checkpoint;   /* marker at the current boundary, or NULL */
 } GlrTourPlaybackView;
 
 /* Start a controlled tour from an in-memory grammar array (the Tours menu
@@ -157,6 +161,14 @@ typedef struct {
  * glr_pointer_script_frame(). Returns 1 on success, 0 on a parse/mode error. */
 int glr_pointer_script_start_tour(const char *name, const char *file,
                                   const char *const *lines, int line_count);
+
+/* Start a controlled tour and, after its baseline is captured, seek to the
+ * named `# @checkpoint` marker and pause there. `checkpoint` may be NULL to
+ * start normally. Returns 0 when the marker is absent or the script fails to
+ * parse. */
+int glr_pointer_script_start_tour_at_checkpoint(
+    const char *name, const char *file, const char *const *lines,
+    int line_count, const char *checkpoint);
 
 /* Snapshot of the controlled-tour transport for the HUD and tests. Safe to
  * call any time; reports active == 0 when no controlled tour is running. */

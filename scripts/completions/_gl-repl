@@ -24,6 +24,7 @@ _gl_repl() {
         '--example[start with a built-in example]:example:->examples' \
         '--tutorial[start with an interactive tutorial]:tutorial:->tutorials' \
         '--tour[play a guided tour on launch]:tour:->tours' \
+        '--tour-stop[fast-forward a tour to a checkpoint]:checkpoint:' \
         '--list-examples[print the built-in examples and exit]' \
         '--list-tutorials[print the built-in tutorials and exit]' \
         '--list-tours[print the built-in guided tours and exit]' \

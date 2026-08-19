@@ -1333,6 +1333,12 @@ before the next frame captures the controlled tour's rewind baseline. Tours
 therefore never inherit replay's narrowed execution/render state, and Back
 cannot restore it.
 
+Tour authors can add `# @checkpoint <id>` comments to name event boundaries.
+The marker is ignored during ordinary playback; `--tour-stop <id>` restores
+the tour baseline, fast-executes the prefix, and leaves the transport paused at
+that boundary. This keeps long tours easy to inspect without adding a second
+script or changing their normal presentation.
+
 Runtime shape:
 
 * **Virtual clock vs rendered frames.** The host schedules

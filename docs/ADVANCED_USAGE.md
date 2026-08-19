@@ -10,7 +10,7 @@ day-to-day features (editing, the language, the panels), see the
 
 ```
 gl-repl [file.c | workspace/ | -] [--example name|n] [--tutorial name|n]
-        [--tour name|n]
+        [--tour name|n] [--tour-stop checkpoint]
         [--time secs] [--window WxH]
         [--export-c out.c] [--export-glr out.glr]
         [--export-ply out.ply [--export-ply-srgb]]
@@ -37,6 +37,7 @@ gl-repl [file.c | workspace/ | -] [--example name|n] [--tutorial name|n]
 | `--examples-dir` *dir* | Load `catalog.ini` + its scene files from *dir* at runtime instead of the compiled-in examples. The tree ships one such directory: [`tests/scenes/stress/`](../tests/scenes/stress/README.md). |
 | `--lint-scenes` *dir* | Validate every `.glr` in *dir* against the canonical document order and `@camera` tags, print every violation, and exit (no window). See [Scene-file headers](#scene-file-headers). |
 | `--tour` *name*\|*n* | Start and play a built-in guided tour on launch (case-insensitive name, or 1-based index). Space play/pause, arrows step, Esc exit. |
+| `--tour-stop` *id* | With `--tour`, fast-forward to `# @checkpoint id` and pause there. Checkpoints are authoring markers and are ignored during normal playback. |
 | `--list-tours` | Print the built-in guided tours and exit. |
 | `--list-config` | Print the tab-separated config labels and stable `@cfg` slugs and exit. |
 | `--time` *secs* | Initial value of the animation variable `t` (applied after any `--example` load). Overrides `GLR_TIME`. |

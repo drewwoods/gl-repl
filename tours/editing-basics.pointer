@@ -17,6 +17,7 @@ glide item:new_scene 0.5     # New Scene row
 click
 #endif
 echo bitmap scene:0.25,0.76 24 3.4 A new scene seeds the GL boilerplate.
+# @checkpoint after-new-scene
 ring code:1 0.5
 ring code:2 0.5
 ring code:3 0.5
@@ -25,8 +26,9 @@ ring code:5 0.5
 ring code:6 0.5
 
 echo bitmap scene:0.25,0.76 24 3.4 Type a command; the ; key commits it.
+# @checkpoint before-geometry
 
-# enter
+# ctrl+j - enter
 key \cj
 key@20 // Let's create a rotating triangle surrounded by a torus
 key ;
@@ -34,7 +36,7 @@ key@10 glRotatef(
 pause 0.2
 key@5 t * 40, 0, 1, 0)
 pause 1.0
-echo bitmap scene:0.25,0.76 24 3.0 Note how we can see the effect for transformation in real time
+echo mono code:3 24 3.0 Note how we can see the effect for transformation in real time
 key ;
 echo bitmap scene:0.25,0.76 24 3.0 t is the animation clock (Ctrl+T).
 key@10 glBegin(GL_TRIANGLES)
@@ -59,6 +61,7 @@ key ;
 key@20 glEnd()
 key ;
 echo bitmap scene:0.25,0.76 24 3.6 The gray ghost is autocomplete (Tab).
+# @checkpoint before-torus
 key@20 glutSolidT
 pause 1.6                       # let the autocomplete ghost linger
 key@20 orus(0.25, 1.4, 16, 32)

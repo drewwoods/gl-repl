@@ -97,6 +97,7 @@ static void test_defaults(void) {
     ASSERT_INT("no example selected", o.example_index, -1);
     ASSERT_INT("no tutorial selected", o.tutorial_index, -1);
     ASSERT_INT("no tour selected", o.tour_index, -1);
+    ASSERT_TRUE("no tour checkpoint", o.tour_stop == NULL);
 }
 
 static void test_positional_input_file(void) {
@@ -427,6 +428,16 @@ static void test_tour_resolution(void) {
     char *av5[] = { "gl-repl", "--tour", t_sub, NULL };
     ASSERT_INT("--tour substring proceeds", parse_v(&o, &code, av5), 1);
     ASSERT_TRUE("substring resolves tour index", o.tour_index >= 0);
+
+    char *av6[] = { "gl-repl", "--tour", "1", "--tour-stop",
+                    "before-torus", NULL };
+    ASSERT_INT("--tour-stop proceeds with --tour", parse_v(&o, &code, av6), 1);
+    ASSERT_INT("--tour-stop keeps tour index", o.tour_index, 0);
+    ASSERT_STR("--tour-stop captures checkpoint", o.tour_stop, "before-torus");
+
+    char *av7[] = { "gl-repl", "--tour-stop", "before-torus", NULL };
+    ASSERT_INT("--tour-stop needs --tour", parse_v(&o, &code, av7), 0);
+    ASSERT_INT("--tour-stop missing tour exit code", code, 1);
 }
 
 

@@ -292,6 +292,7 @@ void glr_ctrl_render_script_overlay(int win_w, int win_h);
  * chrome that says which mode the app is in. */
 void glr_ctrl_render_tour_presence(int win_w, int win_h);
 int  glr_ctrl_start_tour(int tour_idx);
+int  glr_ctrl_start_tour_at_checkpoint(int tour_idx, const char *checkpoint);
 /* Replace the live document with an interactive tutorial, including the
  * controller-owned transient/undo/depth cleanup used by catalog switches. */
 void glr_ctrl_start_tutorial(int tutorial_idx);

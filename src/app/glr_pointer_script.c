@@ -40,6 +40,8 @@
 #define PS_MAX_EVENTS   256
 #define PS_MAX_KEY_TEXT 512
 #define PS_MAX_TARGET   64
+#define PS_MAX_CHECKPOINTS 64
+#define PS_MAX_CHECKPOINT_NAME 64
 #define PS_MAX_CONDITIONAL_DEPTH 16
 /* Rendered-frame clock rate: script seconds -> frames (GLR_FRAME_DT_SECS). */
 #define PS_FPS          60.0f
@@ -152,6 +154,12 @@ typedef struct {
                                    /* echo: caption text to draw         */
 } PsEvent;
 
+typedef struct {
+    char name[PS_MAX_CHECKPOINT_NAME];
+    int event_index;             /* number of active events before marker */
+    int source_line;             /* physical script line (1-based)        */
+} PsCheckpoint;
+
 /* Which run kind is active (see the header). Two kinds only: the env-driven
  * capture hook (GLR_POINTER_SCRIPT - never canceled, never auto-stops, may be
  * timed or untimed) and the menu-driven controlled tour (untimed, transport
@@ -166,6 +174,8 @@ static PsRunKind g_run_kind = PS_RUN_NONE;
 
 static PsEvent g_events[PS_MAX_EVENTS];
 static int     g_event_count = 0;
+static PsCheckpoint g_checkpoints[PS_MAX_CHECKPOINTS];
+static int     g_checkpoint_count = 0;
 static int     g_active = 0;
 
 static int g_frame = 0;        /* rendered-frame clock, first frame = 0  */
@@ -196,6 +206,8 @@ static int   g_tour_hud_expanded = 0;   /* compact by default; not rewound  */
 static GlrTourSnapshot *g_baseline = NULL;  /* rewind baseline (NULL until   */
                                             /* BASELINE_PENDING resolves)    */
 static int   g_seek_target = -1;        /* SEEKING: prefix length to reach  */
+static int   g_seek_pause_at_target = 0; /* explicit checkpoint stop         */
+static int   g_start_checkpoint_target = -1;
 /* Stays asserted through the render/tick phase of every seek frame, including
  * the frame whose prefix replay transitions Seeking -> Paused. */
 static int   g_suppress_app_tick = 0;
@@ -251,10 +263,10 @@ static int   g_ring_start = -1, g_ring_dur = 0;
 static float g_ring_x = 0.0f, g_ring_y = 0.0f;
 
 /* Active echo caption: text shown at a fixed screen spot. */
-static int   g_echo_start = -1, g_echo_dur = 0;
-static float g_echo_x = 0.0f, g_echo_y = 0.0f, g_echo_size = 0.0f;
+static int         g_echo_start = -1, g_echo_dur = 0;
+static float       g_echo_x = 0.0f, g_echo_y = 0.0f, g_echo_size = 0.0f;
 static PsEchoStyle g_echo_style = PS_ECHO_BITMAP;
-static char  g_echo_text[PS_MAX_KEY_TEXT] = "";
+static char        g_echo_text[PS_MAX_KEY_TEXT] = "";
 
 static float ps_smoothstep(float t) {
     if (t < 0.0f) t = 0.0f;
@@ -510,6 +522,54 @@ static int ps_conditionals_finish(const PsConditionalState *state,
     if (state->depth == 0) return 1;
     snprintf(error, error_cap, "unterminated conditional");
     return 0;
+}
+
+/* Parse the authoring-only checkpoint comment. Returns 1 for a marker, 0 for
+ * an ordinary comment, and -1 for a malformed marker. The marker is a
+ * comment so normal playback has no synthetic event to execute. */
+static int ps_checkpoint_line(const char *line, char *name, size_t name_cap,
+                              char *error, size_t error_cap) {
+    const char *p = line;
+    const char *start;
+    size_t len;
+
+    ps_skip_space(&p);
+    if (*p != '#') return 0;
+    p++;
+    ps_skip_space(&p);
+    if (strncmp(p, "@checkpoint", 11) != 0 ||
+        (p[11] != '\0' && !isspace((unsigned char)p[11])))
+        return 0;
+    p += 11;
+    ps_skip_space(&p);
+    if (!isalnum((unsigned char)*p)) {
+        snprintf(error, error_cap, "# @checkpoint needs a name");
+        return -1;
+    }
+    start = p;
+    while (isalnum((unsigned char)*p) || *p == '_' || *p == '-' || *p == '.')
+        p++;
+    len = (size_t)(p - start);
+    if (len >= name_cap) {
+        snprintf(error, error_cap, "checkpoint name is too long (max %d)",
+                 (int)name_cap - 1);
+        return -1;
+    }
+    memcpy(name, start, len);
+    name[len] = '\0';
+    ps_skip_space(&p);
+    if (*p != '\0' && *p != '#') {
+        snprintf(error, error_cap, "unexpected text after # @checkpoint");
+        return -1;
+    }
+    return 1;
+}
+
+static int ps_checkpoint_find(const char *name) {
+    for (int i = 0; i < g_checkpoint_count; i++)
+        if (strcmp(g_checkpoints[i].name, name) == 0)
+            return i;
+    return -1;
 }
 
 /* Scan a point from the front of `args`: either literal "<x> <y>" pixels
@@ -875,6 +935,8 @@ int glr_pointer_script_load_env(void) {
     int lineno = 0;
     int mode = -1;
     char conditional_error[128];
+    char checkpoint_name[PS_MAX_CHECKPOINT_NAME];
+    char checkpoint_error[128];
     PsConditionalState conditionals;
     ps_conditionals_init(&conditionals);
     g_event_count = 0;
@@ -888,6 +950,16 @@ int glr_pointer_script_load_env(void) {
             exit(1);
         }
         if (conditional > 0 || !conditionals.active)
+            continue;
+        int checkpoint = ps_checkpoint_line(
+            line, checkpoint_name, sizeof(checkpoint_name),
+            checkpoint_error, sizeof(checkpoint_error));
+        if (checkpoint < 0) {
+            fprintf(stderr, "gl-repl: GLR_POINTER_SCRIPT: %s:%d: %s\n",
+                    path, lineno, checkpoint_error);
+            exit(1);
+        }
+        if (checkpoint > 0)
             continue;
         PsEvent ev;
         int timed = 0;
@@ -982,11 +1054,16 @@ static void ps_reset_runtime(void) {
     g_type_text[0] = '\0';
 }
 
-int glr_pointer_script_start_tour(const char *name, const char *file,
-                                  const char *const *lines, int line_count) {
+int glr_pointer_script_start_tour_at_checkpoint(
+    const char *name, const char *file, const char *const *lines, int line_count,
+    const char *checkpoint) {
     glr_pointer_script_stop();
     g_event_count = 0;
+    g_checkpoint_count = 0;
+    g_start_checkpoint_target = -1;
     char conditional_error[128];
+    char checkpoint_name[PS_MAX_CHECKPOINT_NAME];
+    char checkpoint_error[128];
     PsConditionalState conditionals;
     ps_conditionals_init(&conditionals);
     for (int i = 0; i < line_count; i++) {
@@ -1000,6 +1077,40 @@ int glr_pointer_script_start_tour(const char *name, const char *file,
         }
         if (conditional > 0 || !conditionals.active)
             continue;
+        int checkpoint_line = ps_checkpoint_line(
+            lines[i], checkpoint_name, sizeof(checkpoint_name),
+            checkpoint_error, sizeof(checkpoint_error));
+        if (checkpoint_line < 0) {
+            fprintf(stderr, "gl-repl: tour script line %d: %s\n",
+                    i + 1, checkpoint_error);
+            g_event_count = 0;
+            g_checkpoint_count = 0;
+            return 0;
+        }
+        if (checkpoint_line > 0) {
+            if (ps_checkpoint_find(checkpoint_name) >= 0) {
+                fprintf(stderr, "gl-repl: tour script line %d: duplicate "
+                                "checkpoint %s\n",
+                        i + 1, checkpoint_name);
+                g_event_count = 0;
+                g_checkpoint_count = 0;
+                return 0;
+            }
+            if (g_checkpoint_count >= PS_MAX_CHECKPOINTS) {
+                fprintf(stderr, "gl-repl: tour script: too many checkpoints "
+                                "(max %d)\n", PS_MAX_CHECKPOINTS);
+                g_event_count = 0;
+                g_checkpoint_count = 0;
+                return 0;
+            }
+            snprintf(g_checkpoints[g_checkpoint_count].name,
+                     sizeof(g_checkpoints[g_checkpoint_count].name), "%s",
+                     checkpoint_name);
+            g_checkpoints[g_checkpoint_count].event_index = g_event_count;
+            g_checkpoints[g_checkpoint_count].source_line = i + 1;
+            g_checkpoint_count++;
+            continue;
+        }
         PsEvent ev;
         int timed = 0;
         int r = ps_parse_line(lines[i], &ev, &timed);
@@ -1031,6 +1142,18 @@ int glr_pointer_script_start_tour(const char *name, const char *file,
         return 0;
     }
     if (g_event_count == 0) return 0;
+    if (checkpoint && checkpoint[0]) {
+        int checkpoint_idx = ps_checkpoint_find(checkpoint);
+        if (checkpoint_idx < 0) {
+            fprintf(stderr, "gl-repl: tour script: unknown checkpoint %s\n",
+                    checkpoint);
+            g_event_count = 0;
+            g_checkpoint_count = 0;
+            return 0;
+        }
+        g_start_checkpoint_target =
+            g_checkpoints[checkpoint_idx].event_index;
+    }
     g_sequential = 1;
     ps_reset_runtime();
     g_active = 1;
@@ -1044,6 +1167,12 @@ int glr_pointer_script_start_tour(const char *name, const char *file,
      * baseline), and event zero must not fire before the snapshot exists. */
     g_tour_state = GLR_TOUR_BASELINE_PENDING;
     return 1;
+}
+
+int glr_pointer_script_start_tour(const char *name, const char *file,
+                                  const char *const *lines, int line_count) {
+    return glr_pointer_script_start_tour_at_checkpoint(
+        name, file, lines, line_count, NULL);
 }
 
 static void ps_dispatch_move(float x, float y) {
@@ -1124,6 +1253,9 @@ void glr_pointer_script_stop(void) {
     g_tour_file = NULL;
     g_tour_hud_expanded = 0;
     g_seek_target = -1;
+    g_seek_pause_at_target = 0;
+    g_start_checkpoint_target = -1;
+    g_checkpoint_count = 0;
     ps_reset_runtime();
 }
 
@@ -1476,6 +1608,18 @@ static int ps_tour_hud_source_line(void) {
     return g_events[g_event_count - 1].source_line;
 }
 
+/* A checkpoint names the boundary immediately before its following event.
+ * Keep it visible while that boundary is current, including while the next
+ * event is in flight, so a stop-at-checkpoint launch has a stable HUD label. */
+static const char *ps_tour_checkpoint_name(void) {
+    if (g_run_kind != PS_RUN_CONTROLLED_TOUR)
+        return NULL;
+    for (int i = g_checkpoint_count - 1; i >= 0; i--)
+        if (g_checkpoints[i].event_index == g_completed_events)
+            return g_checkpoints[i].name;
+    return NULL;
+}
+
 /* Execute one event to completion synchronously, bypassing its PsWait. Shared
  * by the Right-Arrow step and the fast-seek prefix. `allow_overlays` gates the
  * decorative ring/echo/ripple: suppressed for historical seek events, permitted
@@ -1737,7 +1881,8 @@ static void ps_tour_advance_one_virtual_frame(void) {
  * overlays, restore the baseline, re-sync controller chrome, and reset the
  * script cursor. The prefix [0, target) is fast-executed by ps_tour_seek_step
  * across subsequent frames. */
-static void ps_tour_begin_seek(int target) {
+static void ps_tour_begin_seek(int target, int pause_at_target) {
+    g_seek_pause_at_target = pause_at_target;
     if (!g_baseline) {
         g_tour_state = GLR_TOUR_PAUSED;
         return;
@@ -1898,14 +2043,16 @@ static void ps_tour_seek_step(void) {
         return;
     if (g_next_event >= g_seek_target) {
         int target = g_seek_target;
+        int pause_at_target = g_seek_pause_at_target;
         g_current_event = -1;
         g_step_wait = PS_WAIT_NONE;
         g_seek_target = -1;
+        g_seek_pause_at_target = 0;
         ps_tour_camera_reconstruction_end();
         /* Re-create the overlays live playback would still show here (the
          * still-live caption the user rewound expecting to see). */
         ps_tour_restore_landing_overlays(target);
-        if (g_completed_events >= g_event_count)
+        if (g_completed_events >= g_event_count && !pause_at_target)
             ps_tour_enter_done();
         else
             g_tour_state = GLR_TOUR_PAUSED;
@@ -1961,7 +2108,7 @@ static void ps_tour_backstep(void) {
     } else {
         return;   /* baseline pending, seeking, stepping, off: consume, no-op */
     }
-    ps_tour_begin_seek(target);
+    ps_tour_begin_seek(target, 0);
 }
 
 /* Speed ladder step, clamped. Affects only pointer-script timing. */
@@ -1976,7 +2123,7 @@ static void ps_tour_speed_adjust(int dir) {
 /* Done -> restart: restore the baseline (a seek to target 0, no prefix) and
  * replay from the start at the current speed. */
 static void ps_tour_restart(void) {
-    ps_tour_begin_seek(0);
+    ps_tour_begin_seek(0, 0);
     if (g_tour_state == GLR_TOUR_SEEKING) {   /* baseline existed */
         g_seek_target = -1;
         ps_tour_camera_reconstruction_end();
@@ -2024,7 +2171,13 @@ static void ps_tour_frame(void) {
         }
         ps_tour_seed_pointer();
         g_frame_credit = 0.0f;
-        g_tour_state = GLR_TOUR_PLAYING;
+        if (g_start_checkpoint_target >= 0) {
+            int target = g_start_checkpoint_target;
+            g_start_checkpoint_target = -1;
+            ps_tour_begin_seek(target, 1);
+        } else {
+            g_tour_state = GLR_TOUR_PLAYING;
+        }
         break;
     case GLR_TOUR_PLAYING:
         g_frame_credit += k_tour_speeds[g_speed_idx];
@@ -2068,6 +2221,7 @@ GlrTourPlaybackView glr_pointer_script_tour_view(void) {
     v.current_event = g_current_event;
     v.total_events = g_event_count;
     v.source_line = ps_tour_hud_source_line();
+    v.checkpoint = ps_tour_checkpoint_name();
     return v;
 }
 

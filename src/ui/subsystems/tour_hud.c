@@ -106,10 +106,13 @@ static void tour_hud_build_line1(char *dst, size_t dstsz, int max_chars,
     const char *state = tour_hud_state_text(v->state);
     int step  = tour_hud_step_number(v);
     int total = v->total_events;
-    char cand[4][256];
+    char cand[5][256];
     int n = 0;
 
     tour_hud_speed_text(speed_txt, sizeof(speed_txt), v->speed);
+    if (v->checkpoint && v->checkpoint[0])
+        snprintf(cand[n++], 256, "Tour  %s | %s | %s | @%s | Step %d / %d",
+                 name, state, speed_txt, v->checkpoint, step, total);
     if (v->source_line > 0 && file[0])
         snprintf(cand[n++], 256, "Tour  %s | %s | %s | Step %d / %d | %s:%d",
                  name, state, speed_txt, step, total, file, v->source_line);

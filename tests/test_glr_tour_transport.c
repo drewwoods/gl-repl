@@ -43,6 +43,15 @@ static void start_tour(const char *const *lines, int n) {
     glr_pointer_script_start_tour("Test Tour", "test.pointer", lines, n);
 }
 
+static int start_tour_at_checkpoint(const char *const *lines, int n,
+                                    const char *checkpoint) {
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(1200, 800);
+    ui_state_pointer_set(100, 100, -1);
+    return glr_pointer_script_start_tour_at_checkpoint(
+        "Test Tour", "test.pointer", lines, n, checkpoint);
+}
+
 static void frames(int n) {
     for (int i = 0; i < n; i++)
         glr_pointer_script_frame();
@@ -318,6 +327,59 @@ static void test_comments_blanks_and_source_line(void) {
     v = glr_pointer_script_tour_view();
     ASSERT_INT("event 1 in flight", v.current_event, 1);
     ASSERT_INT("event 1 source line", v.source_line, 5);
+}
+
+static void test_checkpoints_seek_and_pause(void) {
+    const char *lines[] = {
+        "move 100 100",
+        "# @checkpoint middle",
+        "move 200 200",
+        "# @checkpoint end"
+    };
+    GlrTourPlaybackView v;
+
+    ASSERT_INT("checkpoint start succeeds",
+               start_tour_at_checkpoint(lines, 4, "middle"), 1);
+    ASSERT_INT("checkpoint does not add an event",
+               glr_pointer_script_tour_view().total_events, 2);
+    frames(1);  /* capture baseline and begin the prefix seek */
+    ASSERT_INT("checkpoint launch enters seeking",
+               glr_pointer_script_tour_view().state, GLR_TOUR_SEEKING);
+    ASSERT_TRUE("checkpoint seek settles paused",
+                run_until_state(GLR_TOUR_PAUSED, 10));
+    v = glr_pointer_script_tour_view();
+    ASSERT_INT("checkpoint lands after its prefix", v.completed_events, 1);
+    ASSERT_INT("checkpoint has no in-flight event", v.current_event, -1);
+    ASSERT_TRUE("checkpoint name is visible",
+                v.checkpoint && strcmp(v.checkpoint, "middle") == 0);
+
+    /* A marker after the final event is still a pause boundary, not Done. */
+    ASSERT_INT("final checkpoint start succeeds",
+               start_tour_at_checkpoint(lines, 4, "end"), 1);
+    frames(1);
+    ASSERT_TRUE("final checkpoint seek settles paused",
+                run_until_state(GLR_TOUR_PAUSED, 10));
+    v = glr_pointer_script_tour_view();
+    ASSERT_INT("final checkpoint completes its prefix", v.completed_events, 2);
+    ASSERT_INT("final checkpoint stays paused", v.state, GLR_TOUR_PAUSED);
+    ASSERT_TRUE("final checkpoint name is visible",
+                v.checkpoint && strcmp(v.checkpoint, "end") == 0);
+
+    /* Normal playback ignores markers entirely. */
+    start_tour(lines, 4);
+    ASSERT_INT("normal playback ignores checkpoint lines",
+               glr_pointer_script_tour_view().total_events, 2);
+
+    const char *bad_name[] = { "# @checkpoint bad name", "move 1 1" };
+    ASSERT_INT("malformed checkpoint is rejected",
+               start_tour_at_checkpoint(bad_name, 2, NULL), 0);
+    const char *duplicate[] = {
+        "# @checkpoint same", "move 1 1", "# @checkpoint same"
+    };
+    ASSERT_INT("duplicate checkpoint is rejected",
+               start_tour_at_checkpoint(duplicate, 3, NULL), 0);
+    ASSERT_INT("unknown checkpoint is rejected",
+               start_tour_at_checkpoint(lines, 4, "missing"), 0);
 }
 
 static void test_backstep_from_done(void) {
@@ -1096,6 +1158,7 @@ int main(void) {
     test_timestamped_tour_rejected();
     test_platform_conditionals();
     test_comments_blanks_and_source_line();
+    test_checkpoints_seek_and_pause();
     test_normal_ring_delays_done();
     test_stepped_ring_immediate_done_and_backstep();
     test_normal_click_waits_release();

@@ -39,11 +39,11 @@ const char *glr_tours_name(int idx) {
     return g_tours[idx].name;
 }
 
-int glr_tours_start(int idx) {
+int glr_tours_start_at_checkpoint(int idx, const char *checkpoint) {
     if (idx < 0 || idx >= glr_tours_count()) return 0;
-    if (!glr_pointer_script_start_tour(g_tours[idx].name, g_tours[idx].file,
-                                       g_tours[idx].lines,
-                                       g_tours[idx].line_count)) {
+    if (!glr_pointer_script_start_tour_at_checkpoint(
+            g_tours[idx].name, g_tours[idx].file, g_tours[idx].lines,
+            g_tours[idx].line_count, checkpoint)) {
         repl_set_status_error("Tour script failed to load");
         return 0;
     }
@@ -55,9 +55,18 @@ int glr_tours_start(int idx) {
     if (replay_active())
         replay_stop();
     char msg[96];
-    snprintf(msg, sizeof(msg),
-             "Tour: %s  (Space play/pause, arrows step, Esc exit)",
-             g_tours[idx].name);
+    if (checkpoint && checkpoint[0])
+        snprintf(msg, sizeof(msg),
+                 "Tour: %s  (checkpoint %s, Space resumes, Esc exit)",
+                 g_tours[idx].name, checkpoint);
+    else
+        snprintf(msg, sizeof(msg),
+                 "Tour: %s  (Space play/pause, arrows step, Esc exit)",
+                 g_tours[idx].name);
     repl_set_status(msg);
     return 1;
+}
+
+int glr_tours_start(int idx) {
+    return glr_tours_start_at_checkpoint(idx, NULL);
 }

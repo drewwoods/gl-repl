@@ -66,6 +66,8 @@ static void print_usage(const char *prog) {
             "  --tour <name|idx>  Start and play a built-in guided tour on\n"
             "               launch (name is case-insensitive; or a 1-based\n"
             "               index). Space play/pause, arrows step, Esc exit.\n"
+            "  --tour-stop <id>  Start --tour paused at a # @checkpoint <id>\n"
+            "               marker, after fast-forwarding its prefix.\n"
             "  --list-tours  Print the built-in guided tours and exit\n"
             "  --list-config  Print config labels and stable @cfg slugs and exit\n"
             "  --watch      Re-read the positional file whenever an external\n"
@@ -301,6 +303,7 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
     const char *example_arg = NULL;       /* --example NAME|IDX (unresolved) */
     const char *tutorial_arg = NULL;      /* --tutorial NAME|IDX (unresolved) */
     const char *tour_arg = NULL;          /* --tour NAME|IDX (unresolved)    */
+    const char *tour_stop_arg = NULL;     /* --tour-stop CHECKPOINT           */
     const char *lint_scenes_dir = NULL;
     int list_examples_flag = 0;
     int list_tutorials_flag = 0;
@@ -384,6 +387,14 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
         }
         else if (strcmp(argv[i], "--tour") == 0 && i + 1 < argc)
             tour_arg = argv[++i];
+        else if (strcmp(argv[i], "--tour-stop") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "gl-repl: --tour-stop needs a checkpoint id\n");
+                *exit_code = 1;
+                return 0;
+            }
+            tour_stop_arg = argv[++i];
+        }
         else if (strcmp(argv[i], "--list-tours") == 0) {
             list_tours_flag = 1;
         }
@@ -446,6 +457,17 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
         return 0;
     }
 
+    if (tour_stop_arg && !tour_arg) {
+        fprintf(stderr, "gl-repl: --tour-stop needs --tour\n");
+        *exit_code = 1;
+        return 0;
+    }
+    if (tour_stop_arg && !tour_stop_arg[0]) {
+        fprintf(stderr, "gl-repl: --tour-stop needs a checkpoint id\n");
+        *exit_code = 1;
+        return 0;
+    }
+
     /* Resolve --example up front: a bad name fails fast (before opening a
      * window) and the error lists what is available. */
     if (example_arg) {
@@ -480,6 +502,7 @@ int glr_cli_parse(int argc, char **argv, GlrCliOptions *out, int *exit_code) {
             *exit_code = 1;
             return 0;
         }
+        out->tour_stop = tour_stop_arg;
     }
 
     return 1;

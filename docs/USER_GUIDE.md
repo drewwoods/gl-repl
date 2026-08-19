@@ -247,6 +247,7 @@ Start one from the menu, or from the command line:
 ```bash
 ./gl-repl --list-tours
 ./gl-repl --tour "Menus & Examples"
+./gl-repl --tour editing-basics --tour-stop before-torus
 ```
 
 - *Menus & Examples* - browses the Scene example flyouts, loads a showcase
@@ -1870,6 +1871,7 @@ environment variable, is in
 --tutorial <name|idx>  start an interactive tutorial (case-insensitive name or 1-based index)
 --list-tutorials       print the built-in tutorials and exit
 --tour <name|idx>      start a guided tour (case-insensitive name or 1-based index)
+--tour-stop <id>       with --tour, fast-forward to # @checkpoint <id> and pause
 --list-tours           print the built-in tours and exit
 --list-config           print config labels and stable @cfg slugs and exit
 --time <secs>          initial animation time t (also GLR_TIME; --time wins)

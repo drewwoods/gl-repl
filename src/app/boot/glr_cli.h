@@ -63,6 +63,7 @@ typedef struct GlrCliOptions {
     int example_index;             /* resolved --example, else -1               */
     int tutorial_index;            /* resolved --tutorial, else -1              */
     int tour_index;                /* resolved --tour, else -1                  */
+    const char *tour_stop;          /* --tour-stop checkpoint, else NULL         */
 } GlrCliOptions;
 
 /* Parse argv into *out (zeroed then populated with defaults). Handles the

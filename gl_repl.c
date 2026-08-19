@@ -390,7 +390,11 @@ int main(int argc, char **argv) {
      * live layout once the main loop is drawing. Any real key/click cancels. */
     if (opts.tour_index >= 0) {
         splash_skip();       /* start clean - no splash band over the tour */
-        glr_ctrl_start_tour(opts.tour_index);
+        if (opts.tour_stop)
+            glr_ctrl_start_tour_at_checkpoint(opts.tour_index,
+                                               opts.tour_stop);
+        else
+            glr_ctrl_start_tour(opts.tour_index);
     }
     glr_init_trace("REPL bootstrap done");
     glr_ctrl_set_accum(opts.use_accum);

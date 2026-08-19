@@ -100,6 +100,20 @@ Environment-driven recording scripts
 Each nonblank, non-comment line is one event. A line beginning with `#` is a
 comment. Inline comments work after most events, but **not** after `key` or
 `echo`: everything after those verbs' fixed arguments is payload text.
+The authoring marker `# @checkpoint <id>` is a comment with special meaning:
+it names the event boundary immediately after all preceding events, but does
+not add a step to normal playback.
+
+To iterate on a long tour, launch it paused at a checkpoint:
+
+```bash
+./gl-repl --tour editing-basics --tour-stop before-torus
+```
+
+The prefix is reconstructed quickly using the tour's deterministic seek path;
+normal playback ignores all checkpoints. Checkpoint IDs start with a letter or
+number and may contain letters, numbers, `.`, `_`, and `-`; IDs must be unique
+within each platform's active branch.
 
 There are two mutually exclusive timing styles:
 
@@ -121,8 +135,10 @@ lifetime, and following events run while the caption remains visible. Put a
 # Completion-driven tour
 glide menu:file 0.6
 click
+# @checkpoint after-new-scene
 glide item:new_scene 0.4
 click
+# @checkpoint before-torus
 echo bitmap scene:0.25,0.76 18 2.5 A caption can label the next action.
 glide scene:0.55,0.30 0.8
 pause 0.5

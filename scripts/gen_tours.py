@@ -23,7 +23,11 @@ REQUIRED_KEYS = {"file", "name"}
 SECTION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 CONDITIONAL_RE = re.compile(r"^\s*#\s*(ifdef|ifndef|else|endif)\b(.*)$")
 UNSUPPORTED_CONDITIONAL_RE = re.compile(r"^\s*#\s*(if|elif|define|undef)\b")
+CHECKPOINT_RE = re.compile(r"^\s*#\s*@checkpoint\b(.*)$")
+CHECKPOINT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 SUPPORTED_MACRO = "__EMSCRIPTEN__"
+CHECKPOINT_NAME_MAX = 63
+CHECKPOINT_MAX = 64
 
 
 class TourError(Exception):
@@ -61,6 +65,25 @@ def symbol_for_section(section: str) -> str:
     if not body:
         raise TourError(f"section [{section}] does not form a C symbol")
     return f"g_tour_{body}"
+
+
+def checkpoint_name(line: str, *, source: str, lineno: int) -> str | None:
+    match = CHECKPOINT_RE.match(line)
+    if not match:
+        return None
+
+    rest = match.group(1).strip()
+    tokens = rest.split()
+    if not tokens:
+        raise TourError(f"{source}:{lineno}: # @checkpoint needs a name")
+    name = tokens[0]
+    if len(name) > CHECKPOINT_NAME_MAX or not CHECKPOINT_NAME_RE.match(name):
+        raise TourError(
+            f"{source}:{lineno}: invalid checkpoint name {name!r}"
+        )
+    if len(tokens) > 1 and not rest[len(name):].lstrip().startswith("#"):
+        raise TourError(f"{source}:{lineno}: unexpected text after # @checkpoint")
+    return name
 
 
 def active_script_lines(
@@ -221,6 +244,25 @@ def read_catalog(catalog_path: Path, *, platform: str) -> list[dict[str, object]
             selected_lines = active_script_lines(
                 lines, platform=validation_platform, source=str(file_path)
             )
+            checkpoints: set[str] = set()
+            for lineno, line in selected_lines:
+                checkpoint = checkpoint_name(
+                    line, source=str(file_path), lineno=lineno
+                )
+                if checkpoint is None:
+                    continue
+                if checkpoint in checkpoints:
+                    raise TourError(
+                        f"[{section}] {rel_file}:{lineno}: duplicate "
+                        f"checkpoint {checkpoint!r} for {validation_platform}"
+                    )
+                if len(checkpoints) >= CHECKPOINT_MAX:
+                    raise TourError(
+                        f"[{section}] {rel_file}:{lineno}: too many checkpoints "
+                        f"for {validation_platform} (max {CHECKPOINT_MAX})"
+                    )
+                checkpoints.add(checkpoint)
+
             if not any(
                 line.strip() and not line.lstrip().startswith("#")
                 for _lineno, line in selected_lines
