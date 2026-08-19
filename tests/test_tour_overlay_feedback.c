@@ -320,8 +320,8 @@ static void test_caption_newline_renders_two_lines(void) {
     glr_pointer_script_frame();
 
     ASSERT_TRUE("multiline caption overlay captured", capture_overlay() > 0);
-    ASSERT_INT("caption newline is not rendered as two glyphs",
-               g_bitmap_count, 9);
+    ASSERT_INT("caption newline rendered across 2 halo passes and body pass",
+               g_bitmap_count, 27);
     ASSERT_TRUE("caption glyphs occupy two baselines",
                 g_bitmap_max_y - g_bitmap_min_y > 10.0f);
 }

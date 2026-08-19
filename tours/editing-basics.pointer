@@ -16,14 +16,19 @@ click
 glide item:new_scene 0.5     # New Scene row
 click
 #endif
+
+# recenter camera
+chord ctrl+shift c
+
 echo bitmap scene:0.20,0.20 24 3.4 A new scene seeds the GL boilerplate.
 # @checkpoint after-new-scene
-ring code:1 0.5
-ring code:2 0.5
-ring code:3 0.5
-ring code:4 0.5
-ring code:5 0.5
-ring code:6 0.5
+glide code:3 0.2
+ring  code:1 0.3
+ring  code:2 0.3
+ring  code:3 0.3
+ring  code:4 0.3
+ring  code:5 0.3
+ring  code:6 0.3
 
 echo bitmap scene:0.15,0.20 24 3.4 Type a command; the ; key commits it.
 

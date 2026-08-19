@@ -97,8 +97,8 @@
  *                             # (style <stroke|mono|bitmap>, point, cap
  *                             # height px, on-screen seconds). Echo does not
  *                             # delay the next event; use `pause` when a
- *                             # Caption renders in tour accent (UI_TOK_ACCENT_ALT):
- *                             # bitmap over dark plate; stroke/mono with dark halo;
+ *                             # Caption renders in tour accent (UI_TOK_ACCENT_ALT)
+ *                             # with dark halo (UI_TOK_SCRIM) for all styles;
  *                             # `\n` starts a new centered caption line
  *
  * The same actions can be completion-driven by omitting timestamps:

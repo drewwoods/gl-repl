@@ -12,6 +12,7 @@
 #include "app/glr_camera.h"       /* deterministic camera reconstruction scope */
 #include "app/glr_config.h"       /* GLR_CONFIG_ORTHO_MODE */
 #include "app/glr_ctrl.h"
+#include "app/glr_tour_presence.h" /* GLR_TOUR_PRESENCE_BREATHE_FRAMES */
 #include "app/glr_tour_snapshot.h" /* whole-app baseline for backstep/restart */
 #include "repl/cfg_baseline.h"   /* repl_cfg_set_text / repl_cfg_known */
 #include "repl/host_effects.h"   /* repl_set_status_error (tour target loss) */
@@ -2478,10 +2479,8 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
 
     /* Echo caption: text (e.g. "Ctrl+K") pinned at a screen spot to label
      * how the next action was triggered. Eased in/out.
-     * Rendered in the tour accent color (UI_TOK_ACCENT_ALT):
-     * - Scalable GLUT stroke fonts render over a two-pass dark halo (UI_TOK_SCRIM).
-     * - Fixed-size GLUT bitmap fonts render on top of a translucent dark
-     *   scrim plate (UI_TOK_SCRIM). */
+     * Rendered in the tour accent color (UI_TOK_ACCENT_ALT) with a dark halo
+     * (UI_TOK_SCRIM) for both scalable stroke fonts and fixed bitmap fonts. */
     if (g_echo_start >= 0 && g_frame - g_echo_start < g_echo_dur &&
         g_echo_text[0]) {
         /* Plate padding around the glyph box, px. Asymmetric on purpose: the
@@ -2548,6 +2547,14 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
                        font_descent - pad_y;
         plate_top = first_cy + font_ascent + pad_y;
 
+        /* Breathing alpha modulation on the accent text (0.78..1.00 alpha),
+         * synced with the tour's ambient border breath (~3 s). Held steady
+         * when the tour clock is frozen (paused inspection view). */
+        float breathe = 0.5f + 0.5f * sinf((float)g_frame *
+                                           (float)(2.0 * M_PI) /
+                                           (float)GLR_TOUR_PRESENCE_BREATHE_FRAMES);
+        float text_alpha = alpha * (clock_frozen ? 1.0f : (0.78f + 0.22f * breathe));
+
         if (stroke_font) {
             /* Stroke text: two-pass rendering with a dark halo underneath and
              * the tour accent color (UI_TOK_ACCENT_ALT) for glyph bodies. */
@@ -2559,7 +2566,7 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
                     ui_clr_a(UI_TOK_SCRIM, alpha * 0.85f);
                     glLineWidth(halo_lw);
                 } else {
-                    ui_clr_a(UI_TOK_ACCENT_ALT, alpha);
+                    ui_clr_a(UI_TOK_ACCENT_ALT, text_alpha);
                     glLineWidth(body_lw);
                 }
                 const char *line_p = g_echo_text;
@@ -2578,16 +2585,30 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
             }
             glLineWidth(1.0f);
         } else {
-            /* Bitmap text: draw translucent dark scrim plate, then text on top */
-            ui_clr_a(UI_TOK_SCRIM, alpha * 0.72f);
-            glBegin(GL_QUADS);
-            glVertex2f(cx - pad_x,     plate_bottom);
-            glVertex2f(cx + w + pad_x, plate_bottom);
-            glVertex2f(cx + w + pad_x, plate_top);
-            glVertex2f(cx - pad_x,     plate_top);
-            glEnd();
+            /* Bitmap text: two-pass diagonal dark halo at (-1,-1) and (1,1)
+             * (UI_TOK_SCRIM) to keep Apple GL bitmap rasterization costs low
+             * (~3 passes total instead of 9), followed by the tour accent color
+             * (UI_TOK_ACCENT_ALT) for glyph bodies. */
+            static const float k_halo[][2] = {
+                { -1.0f, -1.0f },
+                {  1.0f,  1.0f },
+            };
+            ui_clr_a(UI_TOK_SCRIM, alpha * 0.85f);
+            for (size_t i = 0; i < sizeof(k_halo) / sizeof(k_halo[0]); i++) {
+                const char *line_p = g_echo_text;
+                for (int row = 0; row < line_count; row++) {
+                    const char *end = strchr(line_p, '\n');
+                    size_t len = end ? (size_t)(end - line_p) : strlen(line_p);
+                    float line_w = ps_bitmap_width(bitmap_font.font, line_p, len);
+                    float line_x = cx + (w - line_w) * 0.5f + k_halo[i][0];
+                    float line_y = first_cy - (float)row * line_step + k_halo[i][1];
+                    ps_bitmap_text(line_x, line_y, bitmap_font.font, line_p, len);
+                    if (!end) break;
+                    line_p = end + 1;
+                }
+            }
 
-            ui_clr_a(UI_TOK_ACCENT_ALT, alpha);
+            ui_clr_a(UI_TOK_ACCENT_ALT, text_alpha);
             const char *line_p = g_echo_text;
             for (int row = 0; row < line_count; row++) {
                 const char *end = strchr(line_p, '\n');
