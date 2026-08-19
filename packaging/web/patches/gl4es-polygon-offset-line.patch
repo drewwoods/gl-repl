@@ -432,7 +432,7 @@ diff --git a/src/glx/hardext.c b/src/glx/hardext.c
 index c89a1237..9d6fafbe 100644
 --- a/src/glx/hardext.c
 +++ b/src/glx/hardext.c
-@@ -88,6 +88,39 @@ static int testTextureCubeLod() {
+@@ -88,6 +88,41 @@ static int testTextureCubeLod() {
      return compiled;
  }
 
@@ -465,6 +465,8 @@ index c89a1237..9d6fafbe 100644
 +            bits = 32;
 +    }
 +    hardext.depthbits = bits;
++    if (gles_glGetError)
++        gles_glGetError();
 +    SHUT_LOGD("Max line width: %d\n", hardext.maxlinewidth);
 +    SHUT_LOGD("Depth bits: %d\n", hardext.depthbits);
 +}

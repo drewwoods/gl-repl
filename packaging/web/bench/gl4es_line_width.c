@@ -21,7 +21,7 @@
 #define LINE_X0 (-0.8f)
 #define LINE_X1 ( 0.8f)
 #define LINE_PX  ((LINE_X1 - LINE_X0) * (BENCH_WIDTH * 0.5f)) /* 512 */
-#define COVERAGE_FLOOR_W1  800
+#define COVERAGE_FLOOR_W1  ((int)(N_SEGS * LINE_PX * 1.0f * 0.8f)) /* 16384 */
 #define COVERAGE_FLOOR_W6  ((int)(N_SEGS * LINE_PX * 6 * 0.8f)) /* 98304 */
 #define LOOP_EDGE_PX  (0.6f * (BENCH_WIDTH * 0.5f)) /* 192 */
 #define COVERAGE_FLOOR_LOOP_DELTA  ((int)(LOOP_EDGE_PX * 4 * 0.5f)) /* 384 */

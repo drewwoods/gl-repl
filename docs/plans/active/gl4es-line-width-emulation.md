@@ -153,29 +153,32 @@ The four items above plus the half-width ribbon were already in
 the committed patches (`1b9d87b6`, `721452cb`). A follow-up review
 of a stale worktree still reported three of them; the files on
 `main` already had the viewport skip, the bench `glViewport`, and
-the wide-path-before-`list2VBO` order. Remaining work:
+the wide-path-before-`list2VBO` order. Corrections recorded here:
 
-1. **P1 — notest never probed `maxlinewidth` / `depthbits`.**
-   Emscripten always calls `GetHardwareExtensions(notest=1)`
-   (`gles_getProcAddress` is missing; see `gl4es-accum-fbo`).
-   The first p1 cut inserted the gets after `GL_MAX_TEXTURE_SIZE`,
-   which is past `if (notest) return`. Zero `maxlinewidth` sent
-   width 1 through the expander; zero `depthbits` made
-   `r = ldexpf(1, 0) = 1`. Patch 1 now defaults to 1 and 16,
-   probes on the notest return *and* the full-test path, and
-   `gl4es_polygon_offset_ndc_d` clamps bits to `[8, 32]` else 16.
-   Patch 2 treats `maxlinewidth < 1` as 1 as well.
+1. **P1 — the first cut did not initialize `maxlinewidth` /
+   `depthbits` safely.** Emscripten calls
+   `GetHardwareExtensions(notest=1)` (`gles_getProcAddress` is
+   missing; see `gl4es-accum-fbo`) before `glutCreateWindow`, so the
+   first p1 cut inserted the gets after `GL_MAX_TEXTURE_SIZE`, past
+   `if (notest) return`. Zero `maxlinewidth` sent width 1 through
+   the expander; zero `depthbits` made `r = ldexpf(1, 0) = 1`.
+   Patch 1 now installs defaults of 1 and 16 before that return. It
+   probes only on the native context-backed path; Emscripten keeps
+   those safe defaults because no WebGL context exists during the
+   constructor. `gl4es_polygon_offset_ndc_d` also clamps bits to
+   `[8, 32]` else 16. Patch 2 treats `maxlinewidth < 1` as 1 as well.
 2. **P2 — `web-deps.sh` treated any failed `git apply --check`
    as “already applied”.** An existing `third_party/web/gl4es`
    that still had the first cut of the width patch would keep
    building it after the patch file gained `wide_realloc` and
    `glLineWidthx`. The patch *set* is now stamped
    (`pinSHA:sha256(all patch files)`) in
-   `$GL4ES_DIR/.gl4es-patches.sha` and `PINNED.txt`. The managed
-   clone resets to the pin, drops `libGL.a` + `build_wasm`, and
-   reapplies when the stamp changes. A `GL4ES_DIR` override is
-   never reset: apply if `--check` passes, accept if
-   `--reverse --check` passes, otherwise exit 1.
+   `$GL4ES_DIR/.gl4es-patches.sha` and `PINNED.txt`. When the stamp
+   changes, the managed clone resets to the pin, drops `libGL.a` +
+   `build_wasm`, and reapplies only if the checkout is clean; local
+   edits cause a hard error so the reset cannot discard them. A
+   `GL4ES_DIR` override is never reset: apply if `--check` passes,
+   accept if `--reverse --check` passes, otherwise exit 1.
 3. **P2 — first named-list draw uploaded an unused object-space
    VBO.** Already ordered in `721452cb` (wide decision before
    `list2VBO`); regenerated p2 still has that order. Confirmed
@@ -218,10 +221,12 @@ opens with `PUSH_IF_COMPILING(glLineWidth)` (`loader.h:119–128`):
   `gl4es_flush()` and fall through
 
 `pending` implies `active`, so the later
-`if (hardext.maxlinewidth > 1) FLUSH_BEGINEND` is dead code.
-Immediate-mode batches already flush on every width change, WebGL
-included. Deleting the skip changes nothing. The point-size patch
-is the wrong template here: `gl4es_glPointSize` lives in
+The reproducible baseline contains a leftover
+`if (hardext.maxlinewidth > 1) FLUSH_BEGINEND` guard, but it is
+redundant: `PUSH_IF_COMPILING` already flushes a pending batch.
+Patch 2 removes that guard without changing the ordinary
+immediate-mode flush semantics. The point-size patch is the wrong
+template here: `gl4es_glPointSize` lives in
 `pointsprite.c` with no `PUSH_IF_COMPILING` at all, which is why
 that wrapper had to grow its own compile/flush path.
 
@@ -301,9 +306,10 @@ patches applied):
   as a strip and skips the closing last→first segment on purpose.
   The width expander must emit that edge; the stipple helper will
   not.
-- `src/glx/hardext.c` already records `hardext.maxlinewidth` from
-  `GL_ALIASED_LINE_WIDTH_RANGE`. That is the trigger, not a new
-  probe. It is an `int`.
+- `src/glx/hardext.c` is where patch 1 adds the defaulted
+  `hardext.maxlinewidth` cache and the native context-safe
+  `GL_ALIASED_LINE_WIDTH_RANGE` probe. It is an `int`; Emscripten
+  keeps the default of 1 during pre-context startup.
 - `0x0B22` (`GL_LINE_WIDTH_RANGE` in `const.h` /
   `GL_SMOOTH_LINE_WIDTH_RANGE` in `gles.h`) and
   `GL_ALIASED_LINE_WIDTH_RANGE` have **no** getter cases. They fall
@@ -462,9 +468,10 @@ if (d < -1.f) d = -1.f;
 
 - `r = 2^{-depth_bits}`, the minimum resolvable
   window-depth unit.
-- cache `GL_DEPTH_BITS` **once at init**
+- cache `GL_DEPTH_BITS` **once when a GL context exists**
   (`hardext.depthbits` next to the `maxlinewidth`
-  probe). If the get is `<= 0`, default to 16. Clamp
+  probe; Emscripten keeps the default during startup). If the get is
+  `<= 0`, default to 16. Clamp
   the stored bits to `[8, 32]` so `r` is neither 1
   nor 0. A per-draw `glGet` is the WebGL sync stall
   that `gl4es-getter-client-state` exists to kill.
@@ -1022,7 +1029,7 @@ let the bias work drift into patch 2.
 | `src/gl/state.h` / `enable.c` | `polyline_offset` shadow; `GO` + `isenabled`; do not forward the enum to GLES (`proxy_GO` would) |
 | `src/gl/stack.h` / `stack.c` | `polygon_offset_line` on `GL_ENABLE_BIT` and `GL_POLYGON_BIT`; **factor/units on `GL_POLYGON_BIT` only**; pop via `gl4es_glPolygonOffset`; close the LINE + factor/units TODOs |
 | `src/gl/wrap/gles.c` / `getter.c` | mirror factor/units from **both** `glPolygonOffset` and `glPolygonOffsetx` (16.16 → float) |
-| `src/glx/hardext.h` / `hardext.c` | cache `GL_ALIASED_LINE_WIDTH_RANGE` (`hardext.maxlinewidth`) and `GL_DEPTH_BITS` (`hardext.depthbits`, default 16, clamp `[8, 32]`) once at init. The width probe was not in any earlier official patch. |
+| `src/glx/hardext.h` / `hardext.c` | default/cache `GL_ALIASED_LINE_WIDTH_RANGE` (`hardext.maxlinewidth`) and `GL_DEPTH_BITS` (`hardext.depthbits`, default 16, clamp `[8, 32]`); probe only on a context-backed native path. The width probe was not in any earlier official patch. |
 | `src/gl/matrix.h` / `matrix.c` | shared save/poke/restore helper; dirties `mvp` / `inv_mv` / `normal` on both poke and restore |
 | `src/gl/listdraw.c` | when `polyline_offset` and polygon-mode lines: **projection-row depth bias** around the line draw (`P_row2 += d · P_row3`, scaled and clamped as above). Never write `line_arrays->vert`. FILL-around-`GL_LINES` is a GLES no-op |
 

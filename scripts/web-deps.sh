@@ -109,6 +109,11 @@ apply_gl4es_patches() {
 	fi
 
 	if [ "$GL4ES_DIR" = "$WEB_DEPS_ROOT/gl4es" ]; then
+		if [ -n "$(git -C "$GL4ES_DIR" status --porcelain)" ]; then
+			echo -e "${RED}Error: managed GL4ES tree has local edits; refusing to reset it.${NC}" >&2
+			echo "Reset or delete $GL4ES_DIR manually, then re-run the web build." >&2
+			exit 1
+		fi
 		echo -e "${CYAN}gl4es patch set changed; resetting $GL4ES_SHA and reapplying ...${NC}"
 		git -C "$GL4ES_DIR" reset --hard --quiet "$GL4ES_SHA"
 		# Earlier patches can add source files that are untracked in the
