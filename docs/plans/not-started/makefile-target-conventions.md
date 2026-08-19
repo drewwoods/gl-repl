@@ -8,8 +8,9 @@ over a target set with no grammar, so it cannot be generated and a reader
 cannot predict a name.
 
 **The two halves of this plan are independent and should be judged
-separately.** Generated help (§3) and the mechanical cleanups (§6 steps 1-4)
-work on today's names, change no invocation, and carry most of the value. The
+separately.** Generated help (§3) and the mechanical cleanups (§6 steps 1-3)
+work on today's names, change no invocation, and carry most of the value;
+step 4 is small but does delete five public names. The
 naming grammar (§2) is a larger, optional second pass with a ~150-file
 reference blast radius.
 
@@ -37,7 +38,7 @@ Prefix distribution of the documented source set:
 |---|---|---|
 | `check-` | 92 | guards (the `check` aggregator is separate) |
 | `bench-` | 16 | benchmarks |
-| `test-` | 10 | hand-written lanes (+267 generated aliases) |
+| `test-` | 10 | hand-written lanes (+258 generated aliases) |
 | `callgraph-` | 6 | analysis |
 | `*-demo` | 9 | **suffix**, not prefix (`HEADLESS_DEMO_TARGETS`) |
 | `release-`, `icon-`, `install-`, `fix-`, `audit-`, ... | ~25 | one-offs |
@@ -112,7 +113,6 @@ outside one printf at the bottom of `help-details`.
 |---|---|---|
 | *(none)* | build a **named artifact** (the target *is* the artifact) | build failure |
 | `run-` | build **and execute** | the program's status |
-| `demo-` | build **and run** a standalone feature demo | the demo's status |
 | `test-` | a test lane | test failure |
 | `bench-` | a benchmark lane | run failure |
 | `check-` | a guard: findings **are** violations | non-zero on any finding |
@@ -161,7 +161,6 @@ kept, 16 `bench-*`, 4 `release-*`, `fix-doc-links`, `fix-unicode`,
 
 | Before | After |
 |---|---|
-| `repl-demo`, `repl-live-demo`, `editor-demo`, `render3d-demo`, `render3d-hot`, `memprof-demo`, `cpuprof-demo`, `variable-panel-demo`, `color-picker-demo`, `assign-plot-demo` | `demo-repl`, `demo-repl-live`, `demo-editor`, `demo-render3d`, `demo-render3d-hot`, `demo-memprof`, `demo-cpuprof`, `demo-variable-panel`, `demo-color-picker`, `demo-assign-plot` |
 | `render3d-hot-lib` | `internal-render3d-hot-lib` (its doc already says "invoked by the running hot host") |
 | `require-emcc` | `internal-require-emcc` |
 | `gl-tests` | `test-gl` |
@@ -219,9 +218,18 @@ lanes already use combinations a single enum cannot express.
 simultaneously. OSMesa is itself native. So:
 
 ```make
-PLATFORM   ?= native      #? Where it runs: native | web
-GL_BACKEND ?= stubs       #? What GL is linked: stubs | system | gl4es | osmesa
+# Deliberately UNSET by default -- see below.
+PLATFORM   ?=             #? Where it runs: native | web  (default: per-target)
+GL_BACKEND ?=             #? What GL is linked: stubs | system | gl4es | osmesa
 ```
+
+**Neither may carry a global default.** `USE_GL_STUBS ?=` is empty today, so a
+global `GL_BACKEND ?= stubs` that mapped to `USE_GL_STUBS=1` would build
+`gl-repl`, `app`, `glut` and `debug` against the no-op stubs -- not today's
+contract. The sugar therefore applies **only when the variable is passed on the
+command line** (`$(filter command line,$(origin GL_BACKEND))`); when unset,
+every target keeps the flags it passes today. `test`/`test-stubs` already
+forward `USE_GL_STUBS=1` into a recursive `make` and need no default at all.
 
 Valid combinations (the guard rejects the rest with a usage line):
 
@@ -234,7 +242,7 @@ Valid combinations (the guard rejects the rest with a usage line):
 | `web` | `gl4es` | wasm + gl4es -> WebGL2 | `make web` |
 | `web` | `osmesa` | **invalid** (Makefile 118-119 says so explicitly) | -- |
 
-Two further native backends do **not** fit a three-value enum and must not be
+Two further native backends do **not** fit the enum and must not be
 forced into one: `FREEGLUT_VENDOR_LINUX=1` (vendored static freeglut on Linux,
 required for capture) and `make glut` (`FREEGLUT_VENDOR=0`, Apple GLUT
 framework). Adding `vendor-linux` and `apple-glut` values would conflate *which
@@ -242,7 +250,7 @@ GL* with *which freeglut*, repeating the mistake this section exists to fix.
 
 **Therefore the raw flags stay public and supported.** `PLATFORM`/`GL_BACKEND`
 are *sugar* that set `WEB` / `USE_GL_STUBS` / `FREEGLUT_OSMESA`; they name the
-three common combinations and nothing else. `FREEGLUT_VENDOR_LINUX`,
+five valid combinations in the table above and nothing else. `FREEGLUT_VENDOR_LINUX`,
 `FREEGLUT_LIB_PATH`, `FREEGLUT_VENDOR` and `make glut` keep working exactly as
 today and are documented in `help-vars` alongside the sugar. If the sugar
 cannot express a combination, the flags are the answer -- not a new enum value.
@@ -270,16 +278,21 @@ overloads "system" past usefulness. The web-real value is spelled **`gl4es`**.
 **`test-stubs` is NOT renamed or removed.** A repo-wide scan (excluding
 `docs/plans/`, see §5) finds **16 files** referencing `make test-stubs` --
 both CI workflows, the pre-push hook, CLAUDE.md, four test sources, five
-READMEs and one skill. It is the documented headless contract. It stays a
-first-class named target that happens to be spelled
-`test PLATFORM=native GL_BACKEND=stubs` internally. The two-axis model exists
-to make the *other* combinations expressible, not to rename the common one.
+READMEs and one skill. It is the documented headless contract. It stays a first-class named target that
+forwards `USE_GL_STUBS=1` recursively, exactly as it does today. The two-axis
+sugar exists to make the *other* combinations expressible from the command
+line, not to re-implement the common one.
 
 `bench-web-gl4es` does not collapse -- it is a genuinely different benchmark
 subject (browser draw path), so it becomes `bench-gl4es` and asserts
-`PLATFORM=web GL_BACKEND=system`.
+`PLATFORM=web GL_BACKEND=gl4es`.
 
 #### Report format (`FORMAT`)
+
+Scope is the **bench family only**. `gen-callgraph` picks its output shape with
+`KIND=` (mermaid/dot/html), which is a different axis with no CSV member;
+`show-*` targets print one human table. Widening `FORMAT` to "bench/gen" would
+promise `gen-callgraph FORMAT=csv`, which means nothing.
 
 ```make
 FORMAT ?= human           #? Report format for bench/show targets: human | csv
@@ -304,8 +317,9 @@ and `test-no-checks` both delete.
 ### Argument conventions (a rule, not a per-target choice)
 
 - `ARGS` is the **only** passthrough for a target that executes something.
-  Every `run-*`, `demo-*` and `bench-*` honours it (which is why `demo-` is
-  defined as build-and-run above, not build-only). A target that runs a binary
+  Every `run-*` and `bench-*` honours it. The demo targets do **not**: they only
+  link and `ln -sfn` a binary (`repl-demo`, Makefile 1804-1805), so there is
+  nothing to pass arguments to. A target that runs a binary
   and does not honour `ARGS` is a bug.
 - A target that needs a **required** operand takes it in one variable named
   for the operand (`SAMPLE=`, `ENTRY=`, `TEST_CASE=`), and errors with a usage
@@ -318,8 +332,8 @@ and `test-no-checks` both delete.
   convention already collapsed at its single use site. Deleting them breaks
   muscle memory and outer scripts for no new capability. `help-vars` names one
   canonical spelling per switch and lists the others as accepted.
-- Document both passthrough channels together: `ARGS` (18 sites, every `run-*`,
-  `demo-*` and `bench-*`) and the four per-bench `*_BENCH_ARGS` defaults.
+- Document both passthrough channels together: `ARGS` (18 sites, every `run-*`
+  and `bench-*`) and the four per-bench `*_BENCH_ARGS` defaults.
 
 ## 3. Peeling the onion: three-tier help
 
@@ -333,7 +347,10 @@ newcomer runs.
 per verb -- zero maintenance as verbs are added:
 
 ```make
-help-%: ## Show targets for one verb, e.g. help-check, help-bench, help-show.
+# NOT .PHONY-able: .PHONY has no effect on pattern rules, so a file named
+# `help-check` in the repo root would make Make report "up to date" and skip
+# the recipe (verified). FORCE (already defined at Makefile 582) is the fix.
+help-%: FORCE ## Show targets for one verb, e.g. help-check, help-bench, help-show.
 	@printf "Targets: %s-*\n\n" "$*"
 	@awk -F':.*## ' -v p="$*" '$$1 ~ ("^" p "(-|$$)") {printf "  %-28s %s\n", $$1, $$2}' \
 		$(MAKEFILE_LIST) | sort
@@ -351,7 +368,7 @@ and scrape it:
 BUILD ?= release        #? Build mode: release | quick | debug | coverage
 PLATFORM   ?= native    #? Where it runs: native | web
 GL_BACKEND ?= stubs     #? What GL is linked: stubs | system | gl4es | osmesa
-FORMAT     ?= human     #? Report format for bench/gen targets: human | csv
+FORMAT     ?= human     #? Report format for bench targets: human | csv
 SKIP_CHECKS ?=          #? 1 skips the `check` prereq on test lanes
 NO_SAN     ?=           #? 1 disables debug sanitizers (accepted: NOSAN=1, ASAN=0)
 ARGS ?=                 #? Extra arguments passed to the executed binary
@@ -376,16 +393,34 @@ and has nothing to do with Make target names, so it is a stylistic precedent,
 not a code one.
 
 **Each guard must state which universe it scrapes** (source text vs
-`make -pnR`). The 267 generated `test-*`/`run-test-*` aliases are invisible to
+`make -pnR`). The 258 generated `test-*`/`run-test-*` aliases are invisible to
 a source scraper, so every guard below is scoped to **source declarations**
 and explicitly exempts `internal-*`, `FORCE`, `.PHONY` helpers, `ifeq`-`else`
 error stubs, and generated pattern aliases.
 
 ### 4.1 `check-make-target-grammar`
 
-Every target with a recipe must be a bare verb, start with a verb from the
-verb set, be in `ROOT_TARGETS` (the nine artifact-named roots), or be in
-`DEPRECATED_ALIASES`. The inventory above is the proof that this closes today
+Every target with a recipe must match one of exactly five cases:
+
+```
+bare verb | <verb>-* | ROOT_TARGETS | FOREVER_ALIASES | DEPRECATED_ALIASES
+```
+
+`ROOT_TARGETS` is the full artifact/never-renamed set -- **24 names**, not
+nine:
+
+```make
+ROOT_TARGETS := all gl-repl gl-repl-unchained render3d-asset-builder app web \
+                demos glut FORCE \
+                web-serve freeglut-clean debug-msan glprobe glprobe-preload \
+                render3d-demo render3d-hot repl-demo repl-live-demo \
+                editor-demo memprof-demo cpuprof-demo variable-panel-demo \
+                color-picker-demo assign-plot-demo
+```
+
+The second block is bucket (a) from §2 -- never renamed, so never a forwarder.
+`web-serve`, `freeglut-clean` and `debug-msan` are there precisely because
+`serve-`, `freeglut-` and `debug-` are not verbs and these names are staying. The inventory above is the proof that this closes today
 with an empty residual; the guard keeps it closed.
 
 ### 4.2 `check-make-target-documented`
@@ -406,8 +441,14 @@ evaluating the Makefile. The whole guard is one line -- fail if it prints
 anything:
 
 ```sh
-awk -F':.*## ' '/^[a-zA-Z0-9_.-]+:.*## /{print $1}' Makefile | sort | uniq -d
+dupes=$(awk -F':.*## ' '/^[a-zA-Z0-9_.-]+:.*## /{print $1}' Makefile | sort | uniq -d)
+[ -z "$dupes" ] || { printf 'target documented more than once:\n%s\n' "$dupes" >&2; exit 1; }
 ```
+
+**The exit status must be taken from the capture, not the pipeline.**
+`... | uniq -d` exits 0 whether or not it printed anything, so the bare
+pipeline is a guard that can never fail -- verified. Same trap applies to any
+`grep`-less scraper in 4.1/4.2/4.5.
 
 `bench-code-panel-text` is the in-repo proof this works: it is declared under
 `ifneq ($(filter Linux Darwin,$(UNAME_S)),)` with a supported arm and an error
@@ -464,7 +505,10 @@ What the scrape kills is the five hand-copied inventories of *documented* names
 (`BUILD_TARGETS`, `PACKAGE_TARGETS`, ...), which is where the drift actually is.
 
 Guard form: fail if a **documented source** target is missing from `.PHONY`.
-It must not fail on a generated alias, which it cannot enumerate.
+It must not fail on a generated alias, which it cannot enumerate, and it must
+exempt **pattern rules** (`help-%`): `.PHONY` does not apply to them, so they
+carry a `FORCE` prerequisite instead (see §3). A guard that demanded `help-%`
+be phony would be demanding something Make cannot honour.
 
 ### 4.5 `check-make-fix-pairs-check`
 
@@ -506,13 +550,16 @@ rg --hidden -l -g '!docs/plans/**' -g '!.git/**' 'make[^\n]*\btest-stubs\b' .
 | Target | Files | Notes |
 |---|---|---|
 | `test-stubs` | **16** | both CI workflows, pre-push hook, CLAUDE.md, 4 test sources, 5 READMEs, 1 skill |
-| `test-web` | 12 | |
-| `gl-tests` | 10 | |
-| `keymap-list`, `web-serve` | 8 each | |
-| `freeglut-clean` | 7 | |
-| `rebuild-golden` | 6 | |
-| `config-list`, `fetch-music` | 4 each | |
+| `gl-tests` | 11 | |
+| `test-web` | 7 | |
+| `web-serve` | 6 | |
+| `keymap-list`, `freeglut-clean`, `fetch-music` | 5 each | |
+| `config-list` | 4 | |
+| `rebuild-golden` | 3 | |
 | `distclean` | 0 | free to rename; kept as a `FOREVER_ALIAS` on name-age grounds only |
+
+Every row above is measured with the command below, not the earlier
+`docs/plans`-polluted universe.
 
 `coverage`'s earlier "1 file" was the opposite error -- the bare string matches
 ~50 non-target hits (`BUILD=coverage`, lcov paths), so it needs a
@@ -582,17 +629,25 @@ worth the ~150 doc/CI reference updates.
 5. *(optional)* **`PLATFORM`/`GL_BACKEND` sugar.** Additive only: the raw flags
    keep working, `test-stubs`/`test-web`/`glut` keep their names. Update the
    `MAKECMDGOALS` filter (which omits `test-web` today) and CI in the same
-   commit. Do not land this until `test-full` and `bench-web-gl4es` are
-   written into the model.
+   commit. `test-full` stays a named meta-lane and is
+   **not** a `PLATFORM`x`GL_BACKEND` cell -- it sequences demos, sanitized
+   stubs, scenes, msan, `gl-repl`, `gl-tests`, `bench` and `glut`, each with
+   its own backend.
 6. *(optional)* **Verb renames + grammar guard**, with `DEPRECATED_ALIASES`
    forwarders.
 
 ### Names that keep a forwarder permanently
 
-Not "for one release" -- indefinitely. These are load-bearing in CI, hooks,
-skills and muscle memory: `test-stubs` (16 files), `test-web` (12),
-`gl-tests` (10), `keymap-list` (8), `web-serve` (8), `freeglut-clean` (7),
-`distclean` (0 files, but the name predates this repo).
+Exactly bucket (b) from §2 -- three names, renamed but with the old spelling
+allow-listed forever in `FOREVER_ALIASES`:
+
+`gl-tests` (11 referencing files), `keymap-list` (5), `distclean` (0 files,
+kept on name-age grounds alone).
+
+Everything else that "must not break" is bucket (a): `test-stubs`, `test-web`,
+`web-serve`, `freeglut-clean`, `debug-msan`, `glprobe*` and the nine demos are
+**never renamed**, so they need no forwarder at all. Conflating the two is the
+contradiction the three-bucket table exists to prevent.
 
 ## 7. What deliberately does not change
 
@@ -600,16 +655,16 @@ skills and muscle memory: `test-stubs` (16 files), `test-web` (12),
   their bulk is `make help-check` plus keeping them out of the default help --
   not merging them. Merging would cost the per-guard failure message, which is
   the whole value.
-- `test-stubs` and `test-web` keep their names permanently (95 and 12
+- `test-stubs` and `test-web` keep their names permanently (16 and 7
   referencing files). The sugar expresses combinations; it does not rename the
   common lanes.
-- The `*-demo` -> `demo-*` rename is the **weakest** item in step 6 and may be
-  dropped. `repl-demo` matches `tools/repl_demo/` and the on-disk binary name,
-  which is the same artifact-named-target exemption `gl-repl` already gets.
-  Consistency with the directory may be worth more than consistency with the
-  verb table. **If that rename is dropped, the nine `*-demo` names must be
-  added to `ROOT_TARGETS`** or `check-make-target-grammar` (4.1) fails on the
-  day it lands.
+- **The `*-demo` -> `demo-*` rename is dropped.** Two independent reasons:
+  `repl-demo` matches `tools/repl_demo/` and the on-disk binary (the same
+  artifact-named exemption `gl-repl` gets), and a `demo-` *verb* would have to
+  mean build-and-run for `ARGS` to apply -- which would make `make demo-repl`
+  launch an interactive window and, worse, make `test-full` do so when it
+  builds `HEADLESS_DEMO_TARGETS` as compile proofs. The nine names join
+  `ROOT_TARGETS` and nothing changes.
 - `gl-repl` keeps its name. It is the product.
 - `BUILD` keeps its name and values.
 - `internal-*` stays the marker for "implementation, do not type this".
