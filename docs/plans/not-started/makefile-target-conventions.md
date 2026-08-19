@@ -22,9 +22,11 @@ scrapes:**
 - **source** -- names literally declared in the Makefile text: 192
   declarations, **185 unique names**. This is what awk/grep see.
 - **evaluated** -- what Make knows after `$(eval)`: the `built_test_binary`
-  /`RUN_TEST_TARGETS` machinery generates **267** further `test-*` / `run-test-*`
-  aliases from 86 `TEST_BINS`. A source scraper cannot see these; only
-  `make -pnR` can.
+  /`RUN_TEST_TARGETS` machinery generates **258** further `test-*` / `run-test-*`
+  aliases from 86 `TEST_BINS` -- `TEST_TARGET_NAMES`, `RUN_TEST_TARGETS` and
+  `RUN_TEST_FILE_TARGETS` are 86 names each (**258**), and the inventory
+  script's 267 is those plus the 9 hand-written `test-*` lanes its regex also
+  matches. A source scraper cannot see the generated ones; only `make -pnR` can.
 
 `make help-details` is 182 lines and scrapes only the source universe, minus
 the 92 `check-*` targets it filters out (`$$1 !~ /^check-/`).
@@ -110,12 +112,12 @@ outside one printf at the bottom of `help-details`.
 |---|---|---|
 | *(none)* | build a **named artifact** (the target *is* the artifact) | build failure |
 | `run-` | build **and execute** | the program's status |
-| `demo-` | build a standalone feature demo | build failure |
+| `demo-` | build **and run** a standalone feature demo | the demo's status |
 | `test-` | a test lane | test failure |
 | `bench-` | a benchmark lane | run failure |
 | `check-` | a guard: findings **are** violations | non-zero on any finding |
 | `fix-` | the mutating twin of a `check-` (must pair 1:1) | non-zero on failure to fix |
-| `show-` | print a report; never mutates project state | see below |
+| `show-` | print a report to stdout; writes no files | see below |
 | `gen-` | regenerate a checked-in artifact | non-zero on failure |
 | `clean-` | remove build output | non-zero on failure |
 | `install-` | mutate the developer's environment / fetch assets | non-zero on failure |
@@ -155,7 +157,7 @@ kept, 16 `bench-*`, 4 `release-*`, `fix-doc-links`, `fix-unicode`,
 `install-hooks`, `install-completions`, `help`, `help-details`, all
 `run-test-*` and `internal-*`.
 
-**Renamed (43):**
+**Renamed (~41):**
 
 | Before | After |
 |---|---|
@@ -164,28 +166,38 @@ kept, 16 `bench-*`, 4 `release-*`, `fix-doc-links`, `fix-unicode`,
 | `require-emcc` | `internal-require-emcc` |
 | `gl-tests` | `test-gl` |
 | `coverage` | `test-coverage` (it runs the suite; the report is a side effect) |
-| `extract`, `glprobe`, `glprobe-preload` | `run-extract`, `run-glprobe`, `run-glprobe-preload` |
+| `extract` | `run-extract` (it runs a program to emit `.ply`/`.glr`) |
+| `glprobe`, `glprobe-preload` | **unchanged** -- both only *build* (`built $(GLPROBE_BIN)`); `run-` would misdescribe them. They join `ROOT_TARGETS` as artifact builds with a required `SAMPLE=`. |
 | `keymap-list`, `config-list`, `palette-list` | `show-keymap`, `show-config`, `show-palette` |
 | `capacity-matrix`, `unicode-count` | `show-capacity`, `show-unicode` |
 | `lines`, `lines-test` | `show-lines`, `show-lines SCOPE=test` |
 | `find-trailing-whitespace` | `show-trailing-whitespace` |
 | `audit-editor-ownership` | `show-editor-ownership` |
 | `analyze` | `show-analyze` |
-| `callgraph-static`, `-static-entry`, `-profile`, `-graphviz`, `-html`, `-files` | `show-callgraph KIND=static\|profile\|graphviz\|html\|files` (+ `ENTRY=`) -- 6 targets collapse to 1 |
+| `callgraph-static`, `-static-entry`, `-profile`, `-graphviz`, `-html`, `-files` | **`gen-callgraph KIND=static\|profile\|graphviz\|html\|files`** (+ `ENTRY=`) -- 6 collapse to 1. `gen-`, not `show-`: these write `callgraph*.mmd` / `.dot` / `.html` / `callgrind.out*` into the repo root (`clean` deletes them at Makefile 3066). Keep each recipe's trailing "saved to <path>" echo and any visualizer hint. |
 | `icon-regen`, `icon-cube`, `icon-cube-strong` | `gen-icon ICON=retro-a\|cube\|cube-strong` -- 3 collapse to 1 |
 | `rebuild-golden` | `gen-golden` |
 | `distclean` | `clean-all` **(forwarder kept forever; the name predates this repo)** |
 | `fetch-music` | `install-music` |
-| `debug`, `debug-msan` | `all BUILD=debug`, `all BUILD=debug SAN=memory` |
+| `debug` | `all BUILD=debug` |
+| `debug-msan` | **unchanged.** It is not merely `SAN=memory`: the recipe also sets `CC=$(MSAN_CC)` and skips with a warning on Darwin. Folding it into a `BUILD=`/`SAN=` spelling loses both -- the same oversimplification as `PLATFORM=web` vs `make web`. It stays a named wrapper, like `test-msan`. |
 
 **Deleted (3):** `test-only` (alias), `test-no-checks` (-> `SKIP_CHECKS=1`),
 `bench-glut-bitmap-build` (build-only member of a run family).
 
-**Deprecation.** Every rename keeps a `.PHONY` forwarder listed in a
-`DEPRECATED_ALIASES` variable. `check-make-target-grammar` allow-lists exactly
-that list and nothing else, so the forwarders are visibly temporary rather than
-silently permanent, and CI does not fail during the transition. A follow-up
-commit empties the list.
+**Alias policy -- three buckets, not one.** An earlier draft had every rename
+enter a `DEPRECATED_ALIASES` list "a follow-up commit empties", while §6 also
+promised some names a forwarder forever. Those contradict: emptying the list
+makes the grammar guard reject the permanent names. The buckets are:
+
+| Bucket | Members | Guard treatment |
+|---|---|---|
+| **(a) Never renamed** | `test-stubs`, `test-web`, `web-serve`, `freeglut-clean`, `glprobe`, `glprobe-preload`, `debug-msan`, and the nine `*-demo` if that rename is dropped | canonical names; nothing to allow-list beyond `ROOT_TARGETS` |
+| **(b) `FOREVER_ALIASES`** | `distclean`, `keymap-list`, `gl-tests` | renamed, but the old name is load-bearing in hooks/CI/muscle memory; allow-listed **permanently** |
+| **(c) `DEPRECATED_ALIASES`** | the rest (`capacity-matrix`, `fetch-music`, `unicode-count`, ...) | allow-listed temporarily; a follow-up commit empties this list only |
+
+Note (a) is the largest bucket and it needs no forwarder at all -- those names
+were never in the rename table. Only (b) and (c) are forwarders.
 
 ### The two axes that become variables
 
@@ -208,7 +220,7 @@ simultaneously. OSMesa is itself native. So:
 
 ```make
 PLATFORM   ?= native      #? Where it runs: native | web
-GL_BACKEND ?= stubs       #? What GL is linked: stubs | system | osmesa
+GL_BACKEND ?= stubs       #? What GL is linked: stubs | system | gl4es | osmesa
 ```
 
 Valid combinations (the guard rejects the rest with a usage line):
@@ -219,7 +231,7 @@ Valid combinations (the guard rejects the rest with a usage line):
 | `native` | `system` | real GL context | `gl-tests`, `make gl-repl` |
 | `native` | `osmesa` | headless real rasterizer | `FREEGLUT_OSMESA=1` |
 | `web` | `stubs` | wasm under node, no GL | `test-web`, `bench-web` |
-| `web` | `system` | wasm + gl4es -> WebGL2 | `make web` |
+| `web` | `gl4es` | wasm + gl4es -> WebGL2 | `make web` |
 | `web` | `osmesa` | **invalid** (Makefile 118-119 says so explicitly) | -- |
 
 Two further native backends do **not** fit a three-value enum and must not be
@@ -235,21 +247,30 @@ three common combinations and nothing else. `FREEGLUT_VENDOR_LINUX`,
 today and are documented in `help-vars` alongside the sugar. If the sugar
 cannot express a combination, the flags are the answer -- not a new enum value.
 
-**Defaults are chosen so no current invocation changes meaning.** `make test`
-stays the stubbed headless gate, period -- its default is
-`GL_BACKEND=stubs`, not `system`, because that *is* the contract 95 files
-depend on. `make test GL_BACKEND=system` is `gl-tests` (the small display-
-requiring opt-in set), **not** "the whole suite against a window". `make
-gl-repl` defaults `GL_BACKEND=system` in its own rule, because building the
-app against stubs is the unusual case.
+**These are global, parse-time flags -- there is no per-target backend.**
+`USE_GL_STUBS` / `WEB` / `FREEGLUT_OSMESA` are consumed by `ifeq` at parse
+time, so they bind once per `make` invocation. A target-specific
+`gl-repl: GL_BACKEND = system` cannot reach those `ifeq`s. The only existing
+per-goal mechanism is the `MAKECMDGOALS` filter at Makefile 336, already used
+for `BUILD`.
 
-That per-target default is deliberate and is the one place the axis is not
-uniform. The alternative -- one global default -- would silently change either
-`make test` or `make gl-repl`.
+So the model is: **`PLATFORM`/`GL_BACKEND` are global sugar that set the raw
+flags; the named targets remain the dispatchers.** `test` is always stubbed,
+`gl-tests` is always a real context, `web` is always gl4es. An earlier draft
+promised `make test GL_BACKEND=system` == `gl-tests` and a different default
+for `gl-repl` -- that is not expressible, and `make test gl-repl` in one
+invocation cannot have two backends anyway. Retracted.
 
-**`test-stubs` is NOT renamed or removed.** A repo-wide scan finds **95 files**
-referencing `make test-stubs` (CI, the pre-push hook, CLAUDE.md, all four
-`.claude/skills/`, docs). It is the documented headless contract. It stays a
+If a dispatcher is ever wanted, it must be written as an explicit `ifeq`
+inside the recipe, with mixed goals documented as sharing one backend.
+
+Also: `GL_BACKEND=system` under `PLATFORM=web` would mean gl4es->WebGL2, which
+overloads "system" past usefulness. The web-real value is spelled **`gl4es`**.
+
+**`test-stubs` is NOT renamed or removed.** A repo-wide scan (excluding
+`docs/plans/`, see §5) finds **16 files** referencing `make test-stubs` --
+both CI workflows, the pre-push hook, CLAUDE.md, four test sources, five
+READMEs and one skill. It is the documented headless contract. It stays a
 first-class named target that happens to be spelled
 `test PLATFORM=native GL_BACKEND=stubs` internally. The two-axis model exists
 to make the *other* combinations expressible, not to rename the common one.
@@ -283,7 +304,8 @@ and `test-no-checks` both delete.
 ### Argument conventions (a rule, not a per-target choice)
 
 - `ARGS` is the **only** passthrough for a target that executes something.
-  Every `run-*`, `demo-*` and `bench-*` honours it. A target that runs a binary
+  Every `run-*`, `demo-*` and `bench-*` honours it (which is why `demo-` is
+  defined as build-and-run above, not build-only). A target that runs a binary
   and does not honour `ARGS` is a bug.
 - A target that needs a **required** operand takes it in one variable named
   for the operand (`SAMPLE=`, `ENTRY=`, `TEST_CASE=`), and errors with a usage
@@ -315,8 +337,9 @@ help-%: ## Show targets for one verb, e.g. help-check, help-bench, help-show.
 	@printf "Targets: %s-*\n\n" "$*"
 	@awk -F':.*## ' -v p="$*" '$$1 ~ ("^" p "(-|$$)") {printf "  %-28s %s\n", $$1, $$2}' \
 		$(MAKEFILE_LIST) | sort
-``` `make help-check` finally makes the 92 guards
-discoverable; `make help-bench`, `make help-test`, `make help-show` likewise.
+```
+
+`make help-check` finally makes the 92 guards discoverable; `make help-bench`, `make help-test`, `make help-show` likewise.
 This is the actual onion-peel: nobody needs all 185 at once, they need one
 verb's worth.
 
@@ -326,8 +349,11 @@ and scrape it:
 
 ```make
 BUILD ?= release        #? Build mode: release | quick | debug | coverage
-PLATFORM ?= native      #? Where it runs: native | web | osmesa | stubs
-FORMAT ?= human         #? Report format for bench/show targets: human | csv
+PLATFORM   ?= native    #? Where it runs: native | web
+GL_BACKEND ?= stubs     #? What GL is linked: stubs | system | gl4es | osmesa
+FORMAT     ?= human     #? Report format for bench/gen targets: human | csv
+SKIP_CHECKS ?=          #? 1 skips the `check` prereq on test lanes
+NO_SAN     ?=           #? 1 disables debug sanitizers (accepted: NOSAN=1, ASAN=0)
 ARGS ?=                 #? Extra arguments passed to the executed binary
 ```
 
@@ -376,7 +402,12 @@ declares once per arm of a platform conditional, and a naive scraper cannot
 tell that from copy-paste. What is never legitimate is the same target name
 carrying a `## ` doc more than once -- that is precisely the defect (help
 prints twice), it is platform-independent, and it is greppable without
-evaluating the Makefile.
+evaluating the Makefile. The whole guard is one line -- fail if it prints
+anything:
+
+```sh
+awk -F':.*## ' '/^[a-zA-Z0-9_.-]+:.*## /{print $1}' Makefile | sort | uniq -d
+```
 
 `bench-code-panel-text` is the in-repo proof this works: it is declared under
 `ifneq ($(filter Linux Darwin,$(UNAME_S)),)` with a supported arm and an error
@@ -411,17 +442,29 @@ two arms that matter. Documented as a limitation rather than pretended away.
 
 ### 4.4 `check-make-phony-derived`
 
-Assert the five hand-maintained `*_TARGETS` lists are gone, replaced by one
-single-pass scrape (five separate `$(shell awk ...)` calls at parse time would
-tax every `make` invocation):
+**The scrape replaces the hand-maintained lists only for documented source
+targets. It must NOT be the whole `.PHONY`.** `TEST_TARGET_NAMES`,
+`RUN_TEST_TARGETS` and `RUN_TEST_FILE_TARGETS` expand to **86 names each --
+258 generated aliases** that no source scraper can see, plus five
+`internal-*` procedural targets that carry no `## `. Dropping them from
+`.PHONY` means a stray file named `test-eval` or `run-test-eval` in the repo
+root silently satisfies the target. That hazard is why the hand lists exist;
+it is not only about `check-*`.
 
 ```make
 PHONY_TARGETS := $(sort $(shell awk -F: '/^[a-zA-Z0-9_.-]+:.*## / {print $$1}' \
                                  $(firstword $(MAKEFILE_LIST))))
-.PHONY: $(PHONY_TARGETS) $(ROOT_TARGETS) $(DEPRECATED_ALIASES)
+.PHONY: $(PHONY_TARGETS) $(ROOT_TARGETS) $(FOREVER_ALIASES) $(DEPRECATED_ALIASES) \
+        $(TEST_TARGET_NAMES) $(RUN_TEST_TARGETS) $(RUN_TEST_FILE_TARGETS) \
+        $(BENCH_TARGET_NAMES) $(INTERNAL_TARGETS)
 ```
 
-Guard form: fail if a documented target is missing from `.PHONY`.
+The generated and internal families stay **explicit**, next to the scrape.
+What the scrape kills is the five hand-copied inventories of *documented* names
+(`BUILD_TARGETS`, `PACKAGE_TARGETS`, ...), which is where the drift actually is.
+
+Guard form: fail if a **documented source** target is missing from `.PHONY`.
+It must not fail on a generated alias, which it cannot enumerate.
 
 ### 4.5 `check-make-fix-pairs-check`
 
@@ -430,28 +473,54 @@ and both conform; the guard keeps `fix-` from becoming a junk drawer.
 
 ### 4.6 `check-make-var-documented`
 
-Every `?=` variable at the top level carries a `#?` comment, so `help-vars`
-is complete by construction. This is what makes Tier 3 trustworthy.
+**`#?` is opt-in, not universal.** The Makefile has **58** top-level `?=`
+declarations, of which **26** are generated `test_*_RUN` runner definitions,
+plus `SANITIZER_CHECKERS`, `ANALYZE_EXCLUDE`, `GLUT_BITMAP_BENCH_ARCH`,
+`EXTRA_LDFLAGS`, `DEBUG_INFO_CFLAGS`, `GL4ES_DIR` and similar internals.
+Requiring `#?` on all of them would rebuild, in `help-vars`, exactly the
+70-line dump this plan exists to delete.
+
+Instead, declare the public interface explicitly:
+
+```make
+PUBLIC_MAKE_VARS := BUILD SAN NO_SAN ARGS V TEST_JOBS FORMAT SKIP_CHECKS \
+                    PLATFORM GL_BACKEND SAMPLE ENTRY TEST_CASE ...
+```
+
+Guard form: every name in `PUBLIC_MAKE_VARS` has a `#?` comment at its
+declaration, and `help-vars` renders exactly that set. Private variables
+(`*_RUN`, `*_CFLAGS`, `*_DIR`) stay undocumented by design.
 
 All six join `CHECK_TARGETS` so `make check` runs them.
 
 ## 5. Blast radius
 
-Repo-wide scan for `make <target>` outside `docs/plans/`, by referencing file
-count. This is what makes forwarders non-negotiable for the renames:
+Recounted with the correct universe -- an earlier draft's "95 files" for
+`test-stubs` counted `docs/plans/done/`, which is 86 historical records, not
+callers:
+
+```sh
+rg --hidden -l -g '!docs/plans/**' -g '!.git/**' 'make[^\n]*\btest-stubs\b' .
+```
 
 | Target | Files | Notes |
 |---|---|---|
-| `test-stubs` | **95** | CI, pre-push hook, CLAUDE.md, all four skills, docs |
+| `test-stubs` | **16** | both CI workflows, pre-push hook, CLAUDE.md, 4 test sources, 5 READMEs, 1 skill |
 | `test-web` | 12 | |
 | `gl-tests` | 10 | |
 | `keymap-list`, `web-serve` | 8 each | |
 | `freeglut-clean` | 7 | |
 | `rebuild-golden` | 6 | |
 | `config-list`, `fetch-music` | 4 each | |
-| `debug-msan` | 3 | |
-| `coverage` | 1 | |
-| `distclean`, `lines` | 0 | free to rename |
+| `distclean` | 0 | free to rename; kept as a `FOREVER_ALIAS` on name-age grounds only |
+
+`coverage`'s earlier "1 file" was the opposite error -- the bare string matches
+~50 non-target hits (`BUILD=coverage`, lcov paths), so it needs a
+target-anchored recount before step 6.
+
+**16, not 95, is still decisive**: it includes both CI workflows and the
+pre-push hook. But the earlier claim that "all four `.claude/skills/`"
+reference it was wrong -- only `gl-repl-new-command` does.
 
 Callers to update on any rename, in dependency order:
 
@@ -465,14 +534,16 @@ Callers to update on any rename, in dependency order:
 1. `.githooks/pre-push` -- `check-trailing-whitespace`, `test-stubs BUILD=quick`.
 2. `.github/workflows/ci-linux.yml`, `ci-macos.yml` -- `check-c99`,
    `test-stubs`, `gl-repl`.
-3. `.claude/skills/` -- `gl-repl-config-toggle` (`config-list`, `keymap-list`),
-   `gl-repl-new-command` (`test-stubs`), `gl-repl-capture` (`FREEGLUT_OSMESA=1`,
-   `fetch-music`).
+3. `.claude/skills/` -- `gl-repl-new-command` (`test-stubs`),
+   `gl-repl-config-toggle` (`config-list`, `keymap-list`), `gl-repl-capture`
+   (`FREEGLUT_OSMESA=1`, `fetch-music`).
 4. `CLAUDE.md` / `AGENTS.md` build+test tables, `docs/CONTRIBUTING.md`,
    `docs/RELEASE.md`, `docs/ADVANCED_USAGE.md`, `tests/README.md`,
    `packaging/web/README.md`.
-5. `scripts/completions/` -- and `check-completions` must be re-run, since it
-   asserts the completion set matches the documented options.
+5. `scripts/completions/` -- **only if** a Make-target completion file is ever
+   added. `check-completions` compares `gl-repl --help` against the zsh
+   completions and has nothing to say about Make target names, so it is not
+   currently in this blast radius.
 
 The 95-file `test-stubs` count is the reason 2.x keeps it as a first-class
 name rather than folding it into `PLATFORM`/`GL_BACKEND`.
@@ -480,8 +551,12 @@ name rather than folding it into `PLATFORM`/`GL_BACKEND`.
 ## 6. Suggested sequencing
 
 **The help work is independent of the grammar and ships first.** Generated
-help, derived `.PHONY` and the `FORMAT` collapse all work on today's names,
-need no renames and no closed verb set. The grammar is a *later, optional*
+help and derived `.PHONY` work on today's names and need no renames.
+**Steps 1-3 are invocation-neutral; step 4 is not** -- it deletes five public
+names (`bench-csv`, `bench-render-csv`, `bench-web-csv`, `test-no-checks`,
+`test-only`). Either it keeps `.PHONY` forwarders for those five, or it joins
+the announced cut with 5-6. It is listed at 4 because it is small and
+self-contained, not because it is free. The grammar is a *later, optional*
 pass -- if steps 1-4 land and the tree reads fine, step 5-6 may simply not be
 worth the ~150 doc/CI reference updates.
 
@@ -498,10 +573,12 @@ worth the ~150 doc/CI reference updates.
    unit of risk.
 3. **Derive `.PHONY`.** Replace the five hand-maintained `*_TARGETS` lists with
    the single-pass scrape. Land `check-make-phony-derived`. Pure deletion.
-4. **`FORMAT` + `SKIP_CHECKS`.** Delete `bench-csv`, `bench-render-csv`,
-   `bench-web-csv`; convert `test-no-checks`/`test-only` to `SKIP_CHECKS=1`
-   **in the same commit** that removes them, and update the `MAKECMDGOALS`
-   filter at Makefile 336 which names both by hand.
+4. **`FORMAT` + `SKIP_CHECKS`** *(first step that changes public names)*.
+   Delete `bench-csv`, `bench-render-csv`, `bench-web-csv`; convert
+   `test-no-checks`/`test-only` to `SKIP_CHECKS=1` **in the same commit** that
+   removes them; keep `.PHONY` forwarders for all five unless this step is
+   deferred into the announced cut. Update the `MAKECMDGOALS` filter at
+   Makefile 336, which names `test-no-checks` and `test-only` by hand.
 5. *(optional)* **`PLATFORM`/`GL_BACKEND` sugar.** Additive only: the raw flags
    keep working, `test-stubs`/`test-web`/`glut` keep their names. Update the
    `MAKECMDGOALS` filter (which omits `test-web` today) and CI in the same
@@ -513,7 +590,7 @@ worth the ~150 doc/CI reference updates.
 ### Names that keep a forwarder permanently
 
 Not "for one release" -- indefinitely. These are load-bearing in CI, hooks,
-skills and muscle memory: `test-stubs` (95 files), `test-web` (12),
+skills and muscle memory: `test-stubs` (16 files), `test-web` (12),
 `gl-tests` (10), `keymap-list` (8), `web-serve` (8), `freeglut-clean` (7),
 `distclean` (0 files, but the name predates this repo).
 
@@ -530,7 +607,9 @@ skills and muscle memory: `test-stubs` (95 files), `test-web` (12),
   dropped. `repl-demo` matches `tools/repl_demo/` and the on-disk binary name,
   which is the same artifact-named-target exemption `gl-repl` already gets.
   Consistency with the directory may be worth more than consistency with the
-  verb table.
+  verb table. **If that rename is dropped, the nine `*-demo` names must be
+  added to `ROOT_TARGETS`** or `check-make-target-grammar` (4.1) fails on the
+  day it lands.
 - `gl-repl` keeps its name. It is the product.
 - `BUILD` keeps its name and values.
 - `internal-*` stays the marker for "implementation, do not type this".
