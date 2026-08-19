@@ -205,6 +205,11 @@ call goes anywhere - the same blind spot as `bench-web`, and the reason the
 recent gl4es polygon-line and vertex-label regressions would not have been
 caught here. That still needs a browser lane.
 
+For the gl4es draw path, `make bench-web-gl4es` builds browser-side coverage
+oracles under `build/release-web/`, including
+`gl4es-line-width-cases.html`. The cases page exercises state transitions and
+compiled-list lifetimes that the ordinary wasm test lane cannot observe.
+
 ### Web-aware tests, and the exclusion list
 
 74 of the 76 binaries run under node. Where a test asserted behavior the web

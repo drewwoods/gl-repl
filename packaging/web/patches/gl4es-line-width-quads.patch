@@ -33,6 +33,8 @@ perspective-correct.
 - Degenerate segments use the same half-extent and a real square.
 - hardext.maxlinewidth < 1 is treated as 1 so a failed probe cannot
   send width 1 through the expander.
+- preserve instanced draw semantics by replaying the generated triangle
+  array once per `instanceCount` with the fixed-pipeline instance ID.
 - Returns GL4ES_WIDE_HANDLED vs GL4ES_WIDE_FALLBACK.
 
 Applied last in GL4ES_PATCHES.
@@ -162,7 +164,7 @@ index 603f329f..30446747 100644
 
  //#define DEBUG
  #ifdef DEBUG
-@@ -164,3 +175,567 @@ GLfloat *gen_stipple_tex_coords(GLfloat *vert, GLushort *sindices, modeinit_t *m
+@@ -164,3 +175,576 @@ GLfloat *gen_stipple_tex_coords(GLfloat *vert, GLushort *sindices, modeinit_t *m
      DBG(printf("\n");)
      return tex;
  }
@@ -565,9 +567,11 @@ index 603f329f..30446747 100644
 +    const GLfloat *normal, int normal_stride,
 +    GLfloat * const *tex, const int *tex_stride, int maxtex,
 +    const GLushort *indices, int count,
-+    int from_polygon_mode)
++    int from_polygon_mode, int instance_count)
 +{
 +    if (!vert || count < 2)
++        return GL4ES_WIDE_HANDLED;
++    if (instance_count <= 0)
 +        return GL4ES_WIDE_HANDLED;
 +
 +    GLfloat width = gl4es_mirror_line_width;
@@ -725,7 +729,14 @@ index 603f329f..30446747 100644
 +    if (glstate->texture.client != old_client)
 +        gl4es_glClientActiveTexture(GL_TEXTURE0 + old_client);
 +
-+    gles_glDrawArrays(GL_TRIANGLES, 0, out);
++    if (instance_count == 1) {
++        gles_glDrawArrays(GL_TRIANGLES, 0, out);
++    } else {
++        for (glstate->instanceID = 0; glstate->instanceID < instance_count;
++                ++glstate->instanceID)
++            gles_glDrawArrays(GL_TRIANGLES, 0, out);
++        glstate->instanceID = 0;
++    }
 +
 +    wide_draw_end(&saved);
 +    return GL4ES_WIDE_HANDLED;
@@ -761,7 +772,7 @@ index b5413cab..443ca826 100644
 +    const GLfloat *normal, int normal_stride,
 +    GLfloat * const *tex, const int *tex_stride, int maxtex,
 +    const GLushort *indices, int count,
-+    int from_polygon_mode);
++    int from_polygon_mode, int instance_count);
 +
  #endif // _GL4ES_LINE_H
 diff --git a/src/gl/listdraw.c b/src/gl/listdraw.c
@@ -859,7 +870,7 @@ index 15ffc58e..925da928 100644
 +                        wmode, wvert, wvert_s, wcolor, wcolor_s,
 +                        wsec, wsec_s, wfog, wfog_s, wnorm, wnorm_s,
 +                        wtex, wtex_stride, wmaxtex, wind, wcount,
-+                        from_polygon_mode) == GL4ES_WIDE_HANDLED);
++                        from_polygon_mode, list->instanceCount) == GL4ES_WIDE_HANDLED);
 +            }
 +        }
 +        if (!wide_drew) {

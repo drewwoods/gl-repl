@@ -1,7 +1,8 @@
 # gl4es `glLineWidth` emulation via screen-space quads
 
-Status: **active** (patches landed; coverage bench now passes
-headless. Headful outline / named-list cases still open.)
+Status: **active** (patches landed; the focused browser case matrix and
+headful outline smoke check pass. Canonical fog/clip screenshots and a
+full-scene frame-rate sweep remain open.)
 Date: 2026-08-19
 Scope: Emscripten / WebGL2 build only (two local gl4es patches).
 Native Cocoa / GLX / OSMesa are unchanged — they already rasterize
@@ -185,17 +186,47 @@ the wide-path-before-`list2VBO` order. Corrections recorded here:
    by apply-check of the full `GL4ES_PATCHES` chain on a fresh
    pin.
 
+### Focused case verification (2026-08-19)
+
+The focused browser matrix is now covered by
+`packaging/web/bench/gl4es_line_width_cases.c`, built by
+`make bench-web-gl4es`. In the Codex in-app browser, the local WebGL2
+run reported:
+
+```text
+line-width cases: reset=4096 cull=10300 near=584 stipple=1024 client-loop=5040/4184 instances=102/0 lists=2048/2048/3584/2048 poly-list=4842 fill=49152/0 offset-line=70648/1072 fog=3072 clip=256 failures=0
+```
+
+That closes the focused checks for trailing width reset, culling, near-plane
+clipping, stipple, client-array loop closure, compiled-list width changes,
+source-list deletion, mixed-width lists, polygon-mode list caching, fill
+offset isolation, and width-1 polygon offset. `fog=3072` confirms that the
+known fog deviation still produces geometry, while `clip=256` confirms the
+documented native-width fallback when a live clip plane is enabled.
+
+The implementation review also found that the first wide-path version drew
+an instanced render list once instead of replaying it for `instanceCount`
+(and could draw once for `primcount=0`). The patch now preserves the existing
+fixed-pipeline instance-ID loop; the rebuilt gl4es archive and browser case
+page pass after that change.
+
+The existing width oracle still reports
+`w1 20480 w1.5 32768 w3 61440 w6 122880 loop 2672 strip 2104 zero 16`.
+The polygon-line timing oracle reports 130,500 covered pixels for both
+immediate and display-list paths. A headful gl-repl smoke check also enabled
+Vertex outlines, cycled the outline style through Bold and Inverted, and
+orbited the scene without visible z-fighting or a width-reset artifact.
+
 ### Still open (plan verification, not done)
 
-- Case 2 / 2a / 2b headful outline-over-face (width 1, then Bold
-  7.5 px) on polygon-mode / GLUT solids.
-- Case 2c fill-offset must not leak onto genuine wide chrome.
-- Cases 3–9 (cull-on, trailing-reset, near-plane, stipple+width,
-  loop-close vs strip, wireframe 60 FPS / 1 px, named-list suite).
-- Fogged and clip-plane screenshots of the Known deviations.
-  The coverage bench (case 1 + loop-close vs a missing edge) is
-  done headless; a strip-vs-loop visual oracle is still useful
-  headful.
+Remaining verification is deliberately narrower:
+
+- Capture canonical gl-repl screenshots for the fog and live-clip known
+  deviations, so the visual behavior is documented rather than inferred
+  only from coverage.
+- Run one sustained canonical wireframe scene and record the browser frame
+  cadence / 1 px fallback, rather than treating the microbenchmarks as an
+  application-level FPS claim.
 
 ## Problem
 

@@ -50,6 +50,14 @@ Known deviations, by design: fog and lighting are off for the expanded draw; a l
 
 Coverage oracle: `make bench-web-gl4es` builds `gl4es-line-width.html`. After fixing the extra `* 0.5` on the NDC half-extent, headless Chrome/SwiftShader (640×480) reports `line-width w1 20480 w1.5 32768 w3 61440 w6 122880 loop 2672 strip 2104 zero 16`. w6 is exactly `40×512×6`. The w6 floor is now `N_SEGS * 512 * 6 * 0.8` so a half-width implementation fails; loop − strip must be about one edge. Details: `docs/plans/active/gl4es-line-width-emulation.md`.
 
+The same target also builds `gl4es-line-width-cases.html`, a state and
+compiled-list regression page. Its current browser result is recorded in the
+plan; it covers trailing resets, culling, near-plane clipping, stipple,
+client-array loop closure, named-list copy/delete, polygon-mode list caching,
+fill-offset isolation, width-1 polygon offset, and the wide path's
+`instanceCount` replay. The page intentionally reports the known fog and
+live-clip fallbacks instead of treating them as failures.
+
 ## 2026-08-02: the point-smooth workarounds come out
 
 `gl4es-point-smooth.patch` is what the two chrome vertex-marker sites were
