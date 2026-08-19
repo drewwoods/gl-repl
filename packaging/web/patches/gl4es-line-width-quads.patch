@@ -12,11 +12,15 @@ perspective-correct.
 - expand_wide_lines in line.c: 4D near-plane clip (z+w=0), pixel-space
   2D perpendicular, square caps, GL_LINE_LOOP close. Half-extent in
   NDC is width/vp (window = (ndc+1)*vp/2); do not multiply by 0.5.
-  Skip when the tracked viewport is unset. Cached object-space
-  line_arrays are never written.
-- listdraw.c hooks before list2VBO and line_arrays_to_vbo. Stipple
-  generation temporarily raises list->maxtex and restores it when
-  the array is cleared.
+  Skip when the tracked viewport is unset (width or height < 1) --
+  do not clamp those to 1, which made the NDC delta equal the width
+  and filled the clip volume. Cached object-space line_arrays are
+  never written.
+- listdraw.c decides the wide path before list2VBO and
+  line_arrays_to_vbo, so a named display list does not upload an
+  unused object-space VBO on the first draw. Stipple generation
+  temporarily raises list->maxtex and restores it when the array
+  is cleared.
 - drawing.c intercepts GL_LINES / LINE_STRIP / LINE_LOOP
   (from_polygon_mode = 0).
 - Polygon-mode edges with GL_POLYGON_OFFSET_LINE get GLES FILL
@@ -27,6 +31,8 @@ perspective-correct.
 - wide_ensure allocates newly required attribute buffers even when
   vertex capacity is already large enough.
 - Degenerate segments use the same half-extent and a real square.
+- hardext.maxlinewidth < 1 is treated as 1 so a failed probe cannot
+  send width 1 through the expander.
 - Returns GL4ES_WIDE_HANDLED vs GL4ES_WIDE_FALLBACK.
 
 Applied last in GL4ES_PATCHES.
@@ -61,7 +67,7 @@ index f4a57fed..1a93221d 100644
  #include "matvec.h"
 +#include "line.h"
  #include "texgen.h"
- 
+
 +#ifndef GL_LINE_WIDTH_GRANULARITY
 +#define GL_LINE_WIDTH_GRANULARITY 0x0B23
 +#endif
@@ -129,7 +135,7 @@ index f4a57fed..1a93221d 100644
              matrix_transpose(TOP(projection_matrix), tmp);
              for(int i=0; i<16; i++) params[i] = tmp[i];
 diff --git a/src/gl/line.c b/src/gl/line.c
-index 603f329f..aafc12f3 100644
+index 603f329f..30446747 100644
 --- a/src/gl/line.c
 +++ b/src/gl/line.c
 @@ -1,12 +1,23 @@
@@ -138,7 +144,7 @@ index 603f329f..aafc12f3 100644
  #include <stdio.h>
 +#include <stdlib.h>
 +#include <string.h>
- 
+
 +#include "../glx/hardext.h"
 +#include "buffers.h"
  #include "debug.h"
@@ -153,17 +159,20 @@ index 603f329f..aafc12f3 100644
 +#include "wrap/gl4es.h"
 +
 +extern GLfloat gl4es_mirror_line_width;
- 
+
  //#define DEBUG
  #ifdef DEBUG
-@@ -164,3 +175,559 @@ GLfloat *gen_stipple_tex_coords(GLfloat *vert, GLushort *sindices, modeinit_t *m
+@@ -164,3 +175,567 @@ GLfloat *gen_stipple_tex_coords(GLfloat *vert, GLushort *sindices, modeinit_t *m
      DBG(printf("\n");)
      return tex;
  }
 +
 +int gl4es_wide_lines_needed(void)
 +{
-+    if (gl4es_mirror_line_width <= (GLfloat)hardext.maxlinewidth)
++    int maxw = hardext.maxlinewidth;
++    if (maxw < 1)
++        maxw = 1;
++    if (gl4es_mirror_line_width <= (GLfloat)maxw)
 +        return 0;
 +    /* raster.viewport is 0 until the first glViewport. Treating that
 +     * as 1 px makes Δndc = width and fills the clip volume. */
@@ -564,8 +573,13 @@ index 603f329f..aafc12f3 100644
 +    GLfloat width = gl4es_mirror_line_width;
 +    if (width > GL4ES_EMULATED_LINE_WIDTH_MAX)
 +        width = GL4ES_EMULATED_LINE_WIDTH_MAX;
-+    if (width <= (GLfloat)hardext.maxlinewidth)
-+        return GL4ES_WIDE_FALLBACK;
++    {
++        int maxw = hardext.maxlinewidth;
++        if (maxw < 1)
++            maxw = 1;
++        if (width <= (GLfloat)maxw)
++            return GL4ES_WIDE_FALLBACK;
++    }
 +
 +    GLfloat vp_w = (GLfloat)glstate->raster.viewport.width;
 +    GLfloat vp_h = (GLfloat)glstate->raster.viewport.height;
@@ -723,7 +737,7 @@ index b5413cab..443ca826 100644
 @@ -4,8 +4,29 @@
  #include "gles.h"
  #include "list.h"
- 
+
 +#ifndef GL4ES_EMULATED_LINE_WIDTH_MAX
 +#define GL4ES_EMULATED_LINE_WIDTH_MAX 64.0f
 +#endif
@@ -736,7 +750,7 @@ index b5413cab..443ca826 100644
  void APIENTRY_GL4ES gl4es_glLineStipple(GLuint factor, GLushort pattern);
  GLfloat *gen_stipple_tex_coords(GLfloat *vert, GLushort *sindices, modeinit_t *modes, int stride, int length, GLfloat* noalloctex);
  void bind_stipple_tex();
- 
+
 +int gl4es_wide_lines_needed(void);
 +int gl4es_draw_wide_lines(
 +    GLenum mode,
@@ -773,9 +787,9 @@ index 15ffc58e..925da928 100644
          #define RS(A, len) if(glstate->texgenedsz[A]<len) {free(glstate->texgened[A]); glstate->texgened[A]=malloc(4*sizeof(GLfloat)*len); glstate->texgenedsz[A]=len; } use_texgen[A]=1
          // cannot use list->maxtex because some TMU can be using TexGen or point sprites...
 @@ -899,11 +903,83 @@ void draw_renderlist(renderlist_t *list) {
- 
+
          realize_textures(1);
- 
+
 +        /* Wide-line quads: expand from CPU arrays and skip both
 +         * list2VBO and line_arrays_to_vbo (and therefore
 +         * listActiveVBO). Object-space caches stay unuploaded. */
@@ -863,7 +877,7 @@ index 15ffc58e..925da928 100644
              listInactiveVBO(&line_vbo_view, line_saved);
 +        } /* !wide_drew */
          clear_line_arrays(&transient_line_arrays);
- 
+
          #define TEXTURE(A) if (cur_tex!=A) {gl4es_glClientActiveTexture(A+GL_TEXTURE0); cur_tex=A;}
 @@ -1058,6 +1135,7 @@ void draw_renderlist(renderlist_t *list) {
              if(!list->use_glstate)   //TODO: avoid that malloc/free...
@@ -874,21 +888,34 @@ index 15ffc58e..925da928 100644
              if(glstate->gleshard->active!=stipple_tmu)
                  gl4es_glActiveTexture(GL_TEXTURE0+stipple_tmu);
 diff --git a/src/gl/wrap/gles.c b/src/gl/wrap/gles.c
-index 01586bc9..5036fe72 100644
+index 88e6eb95..5036fe72 100644
 --- a/src/gl/wrap/gles.c
 +++ b/src/gl/wrap/gles.c
-@@ -1406,6 +1406,10 @@ void APIENTRY_GL4ES gl4es_glLineWidth(GLfloat width) {
+@@ -1406,21 +1406,10 @@ void APIENTRY_GL4ES gl4es_glLineWidth(GLfloat width) {
  #endif
      {
          extern GLfloat gl4es_mirror_line_width;
+-        // A repeated width is a no-op: nothing to flush, nothing to tell the
+-        // driver. gl4es_mirror_line_width is authoritative (every path that
+-        // changes the width, glPopAttrib and display-list replay included,
+-        // comes back through here).
 +        // Same-width early-out is *after* PUSH_IF_COMPILING: a compiled
 +        // glLineWidth(4) must record even when the live mirror is already 4.
-+        if (gl4es_mirror_line_width == width)
-+            return;
+         if (gl4es_mirror_line_width == width)
+             return;
+-        // Same trap as glPointSize: immediate-mode geometry is batched and
+-        // drawn later, so a width set between primitives would otherwise apply
+-        // to the ones already recorded. Flush only where the driver can
+-        // actually widen a line -- a stack reporting
+-        // GL_ALIASED_LINE_WIDTH_RANGE [1, 1] (most GLES/WebGL, including
+-        // ANGLE) renders every width identically, so the flush would break
+-        // batching and change no pixel.
+-        if (hardext.maxlinewidth > 1)
+-            FLUSH_BEGINEND;
          gl4es_mirror_line_width = width;
      }
      gles_glLineWidth(width);
-@@ -1418,6 +1422,13 @@ void APIENTRY_GL4ES gl4es_glLineWidthx(GLfixed width) {
+@@ -1433,6 +1422,13 @@ void APIENTRY_GL4ES gl4es_glLineWidthx(GLfixed width) {
  #ifndef direct_glLineWidthx
      PUSH_IF_COMPILING(glLineWidthx)
  #endif

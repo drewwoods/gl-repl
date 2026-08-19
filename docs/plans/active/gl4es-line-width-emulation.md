@@ -147,6 +147,41 @@ Polygon-offset factor/units, PushAttrib restore, projection-row
 bias, and “wide path before `line_arrays_to_vbo`” were already
 correct in `233d34d4` and were not retouched.
 
+### Post-land review (round 3)
+
+The four items above plus the half-width ribbon were already in
+the committed patches (`1b9d87b6`, `721452cb`). A follow-up review
+of a stale worktree still reported three of them; the files on
+`main` already had the viewport skip, the bench `glViewport`, and
+the wide-path-before-`list2VBO` order. Remaining work:
+
+1. **P1 — notest never probed `maxlinewidth` / `depthbits`.**
+   Emscripten always calls `GetHardwareExtensions(notest=1)`
+   (`gles_getProcAddress` is missing; see `gl4es-accum-fbo`).
+   The first p1 cut inserted the gets after `GL_MAX_TEXTURE_SIZE`,
+   which is past `if (notest) return`. Zero `maxlinewidth` sent
+   width 1 through the expander; zero `depthbits` made
+   `r = ldexpf(1, 0) = 1`. Patch 1 now defaults to 1 and 16,
+   probes on the notest return *and* the full-test path, and
+   `gl4es_polygon_offset_ndc_d` clamps bits to `[8, 32]` else 16.
+   Patch 2 treats `maxlinewidth < 1` as 1 as well.
+2. **P2 — `web-deps.sh` treated any failed `git apply --check`
+   as “already applied”.** An existing `third_party/web/gl4es`
+   that still had the first cut of the width patch would keep
+   building it after the patch file gained `wide_realloc` and
+   `glLineWidthx`. The patch *set* is now stamped
+   (`pinSHA:sha256(all patch files)`) in
+   `$GL4ES_DIR/.gl4es-patches.sha` and `PINNED.txt`. The managed
+   clone resets to the pin, drops `libGL.a` + `build_wasm`, and
+   reapplies when the stamp changes. A `GL4ES_DIR` override is
+   never reset: apply if `--check` passes, accept if
+   `--reverse --check` passes, otherwise exit 1.
+3. **P2 — first named-list draw uploaded an unused object-space
+   VBO.** Already ordered in `721452cb` (wide decision before
+   `list2VBO`); regenerated p2 still has that order. Confirmed
+   by apply-check of the full `GL4ES_PATCHES` chain on a fresh
+   pin.
+
 ### Still open (plan verification, not done)
 
 - Case 2 / 2a / 2b headful outline-over-face (width 1, then Bold

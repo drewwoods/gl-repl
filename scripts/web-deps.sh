@@ -12,14 +12,17 @@
 #
 # ENVIRONMENT
 #   GL4ES_DIR   Reuse an existing gl4es checkout instead of cloning one into
-#               third_party/web/gl4es. Skips the clone/checkout step entirely
-#               (builds whatever is already there); default:
-#               third_party/web/gl4es
+#               third_party/web/gl4es. The managed clone is reset to the pin
+#               when the patch stamp changes. An override is never reset:
+#               current patches must apply or already reverse-apply, else
+#               the script exits 1. Default: third_party/web/gl4es
 #   GLU_DIR     Same, for the GLU checkout. Default: third_party/web/GLU
 #
 # Idempotent: skips the clone+build for a library whose static archive
-# already exists. Delete the archive (or the whole third_party/web/<lib>
-# dir) to force a rebuild.
+# already exists *and* whose patch stamp still matches. Delete the
+# archive (or the whole third_party/web/<lib> dir) to force a rebuild.
+# Changing any file in GL4ES_PATCHES (or the pin SHA) also forces the
+# managed gl4es clone to reset, reapply, and rebuild.
 #
 # Resolved SHAs are recorded in third_party/web/PINNED.txt.
 
@@ -75,21 +78,70 @@ if ! command -v emcc >/dev/null 2>&1; then
 fi
 
 # Local fixes not yet in a public gl4es fork (see each patch file's header
-# for the why). Idempotent: `git apply --check` skips a patch that's
-# already applied -- so reusing an existing GL4ES_DIR that already carries
-# the fix (e.g. a local working checkout) or re-running against an
-# already-patched clone is a no-op, not a failure.
+# for the why). The patch *set* is stamped by hashing every file in
+# GL4ES_PATCHES. A failed `git apply --check` is NOT treated as "already
+# applied": that hid stale trees when a patch file was updated in place
+# (the old version was applied, the new one no longer reverse-applies).
+#
+# The managed clone (third_party/web/gl4es) is reset to GL4ES_SHA and
+# reapplied when the stamp changes. A GL4ES_DIR override is never reset;
+# mismatch there is a hard error so an older applied version cannot
+# silently keep building.
+GL4ES_PATCH_STAMP="$GL4ES_DIR/.gl4es-patches.sha"
+
+gl4es_patches_sha() {
+	local patch_hash
+	if command -v sha256sum >/dev/null 2>&1; then
+		patch_hash="$(cat "${GL4ES_PATCHES[@]}" | sha256sum | awk '{print $1}')"
+	else
+		patch_hash="$(cat "${GL4ES_PATCHES[@]}" | shasum -a 256 | awk '{print $1}')"
+	fi
+	printf '%s:%s\n' "$GL4ES_SHA" "$patch_hash"
+}
+
 apply_gl4es_patches() {
-	local patch
+	local patch want have
+	want="$(gl4es_patches_sha)"
+	have="$(cat "$GL4ES_PATCH_STAMP" 2>/dev/null || true)"
+	if [ "$have" = "$want" ]; then
+		echo -e "${GREEN}gl4es local patches already current.${NC}"
+		return
+	fi
+
+	if [ "$GL4ES_DIR" = "$WEB_DEPS_ROOT/gl4es" ]; then
+		echo -e "${CYAN}gl4es patch set changed; resetting $GL4ES_SHA and reapplying ...${NC}"
+		git -C "$GL4ES_DIR" reset --hard --quiet "$GL4ES_SHA"
+		# Applied files get a fresh mtime from git apply, but unpatched
+		# sources take the pin's timestamp and can look older than
+		# build_wasm/*.o from the previous patch set. Drop the archive
+		# and the wasm build dir so the rebuild cannot keep old objects.
+		rm -f "$GL4ES_LIB"
+		rm -rf "$GL4ES_DIR/build_wasm"
+		for patch in "${GL4ES_PATCHES[@]}"; do
+			echo -e "${CYAN}Applying $(basename "$patch") ...${NC}"
+			( cd "$GL4ES_DIR" && git apply "$patch" )
+		done
+		printf '%s\n' "$want" > "$GL4ES_PATCH_STAMP"
+		GL4ES_PATCH_APPLIED=1
+		return
+	fi
+
+	echo -e "${CYAN}GL4ES_DIR override $GL4ES_DIR: applying patches (will not reset) ...${NC}"
 	for patch in "${GL4ES_PATCHES[@]}"; do
 		if ( cd "$GL4ES_DIR" && git apply --check "$patch" 2>/dev/null ); then
 			echo -e "${CYAN}Applying $(basename "$patch") ...${NC}"
 			( cd "$GL4ES_DIR" && git apply "$patch" )
 			GL4ES_PATCH_APPLIED=1
+		elif ( cd "$GL4ES_DIR" && git apply --reverse --check "$patch" 2>/dev/null ); then
+			echo -e "${GREEN}$(basename "$patch") already applied (current version).${NC}"
 		else
-			echo -e "${GREEN}$(basename "$patch") already applied (or not needed).${NC}"
+			echo -e "${RED}Error: $(basename "$patch") neither applies nor reverse-applies.${NC}" >&2
+			echo "The checkout likely still has an older version of this patch." >&2
+			echo "Reset it to $GL4ES_SHA, or delete the managed clone and re-run." >&2
+			exit 1
 		fi
 	done
+	printf '%s\n' "$want" > "$GL4ES_PATCH_STAMP"
 }
 
 build_gl4es() {
@@ -175,6 +227,7 @@ build_glu
 
 GL4ES_RESOLVED_SHA="$(git -C "$GL4ES_DIR" rev-parse HEAD 2>/dev/null || echo unknown)"
 GLU_RESOLVED_SHA="$(git -C "$GLU_DIR" rev-parse HEAD 2>/dev/null || echo unknown)"
+GL4ES_PATCHES_STAMP="$(cat "$GL4ES_PATCH_STAMP" 2>/dev/null || gl4es_patches_sha)"
 
 cat > "$WEB_DEPS_ROOT/PINNED.txt" <<EOF
 Web build dependencies, fetched and built by scripts/web-deps.sh into this
@@ -182,7 +235,9 @@ gitignored directory (or reused from GL4ES_DIR / GLU_DIR overrides).
 
 gl4es:
   upstream: $GL4ES_URL
+  pin:      $GL4ES_SHA
   sha:      $GL4ES_RESOLVED_SHA
+  patches:  $GL4ES_PATCHES_STAMP
   dir:      $GL4ES_DIR
 
 GLU:
@@ -190,8 +245,9 @@ GLU:
   sha:      $GLU_RESOLVED_SHA
   dir:      $GLU_DIR
 
-Delete a library's static archive (or its whole directory here) to force
-web-deps.sh to rebuild it on the next run.
+A stamp mismatch (pin SHA or any file in GL4ES_PATCHES) resets the managed
+gl4es clone and rebuilds it. Delete a library's static archive (or its
+whole directory here) to force a rebuild without changing the patches.
 EOF
 
 echo

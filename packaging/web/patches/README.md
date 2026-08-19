@@ -12,7 +12,10 @@ derived from their header comments rather than reconstructed history.
 
 The web build currently pins gl4es commit
 `17f0894e19d1553e4176276c759915dab44c08e2`. Patches are applied in the order
-listed in `GL4ES_PATCHES` in `scripts/web-deps.sh`.
+listed in `GL4ES_PATCHES` in `scripts/web-deps.sh`. That script stamps the pin
+SHA plus a hash of every patch file; a mismatch resets the managed
+`third_party/web/gl4es` clone and rebuilds it. A failed `git apply --check` is
+not treated as “already applied”.
 
 ## Patch inventory
 
@@ -37,9 +40,9 @@ See each older patch's leading prose for the detail that is available.
 
 Two patches, in this order.
 
-`gl4es-polygon-offset-line.patch` is a pre-existing web bug: `GL_POLYGON_OFFSET_LINE` is not a GLES enum, so `glEnable` raised `GL_INVALID_ENUM` and changed nothing. GLES fill-offset does not apply to the `GL_LINES` draw that polygon-mode already lowered to, so wrapping that draw in `GL_POLYGON_OFFSET_FILL` is also a no-op. The fix shadows the LINE enable, mirrors factor/units (including `glPolygonOffsetx`) onto `GL_POLYGON_BIT`, and pokes `P_row2 += d · P_row3` around the line draw — `d = 2 · units · 2^{-depth_bits} / (Far − Near)`, clamped to `[-1, 1]`. Cached object-space `line_arrays` are never written. Independently testable at width 1: a vertex-outline pass over a solid face should stop speckling. Genuine `GL_LINE_LOOP` (the tessellation overlay) is out of scope; native `_LINE` never applied to line primitives.
+`gl4es-polygon-offset-line.patch` is a pre-existing web bug: `GL_POLYGON_OFFSET_LINE` is not a GLES enum, so `glEnable` raised `GL_INVALID_ENUM` and changed nothing. GLES fill-offset does not apply to the `GL_LINES` draw that polygon-mode already lowered to, so wrapping that draw in `GL_POLYGON_OFFSET_FILL` is also a no-op. The fix shadows the LINE enable, mirrors factor/units (including `glPolygonOffsetx`) onto `GL_POLYGON_BIT`, and pokes `P_row2 += d · P_row3` around the line draw — `d = 2 · units · 2^{-depth_bits} / (Far − Near)`, clamped to `[-1, 1]`. Cached object-space `line_arrays` are never written. Independently testable at width 1: a vertex-outline pass over a solid face should stop speckling. Genuine `GL_LINE_LOOP` (the tessellation overlay) is out of scope; native `_LINE` never applied to line primitives. `maxlinewidth` and `depthbits` are probed on the notest path as well as the full test — Emscripten always calls `GetHardwareExtensions` with notest, and a skipped probe left both at 0.
 
-`gl4es-line-width-quads.patch` is the width emulator. ANGLE reports `ALIASED_LINE_WIDTH_RANGE` `[1, 1]`; every `glLineWidth` was a no-op. Each segment is expanded to a clip-space quad and drawn under a temporary identity MVP (the helper from the first patch). The hook sits *before* `line_arrays_to_vbo` so the object-space cache is not uploaded or bound as if it were the quads. Polygon-mode edges with `_LINE` on get GLES `FILL` offset on the generated triangles; genuine `GL_LINES` / `STRIP` / `LOOP` force FILL off. Width 1 stays on the cheap `DrawArrays(GL_LINES)` path. Getters advertise `[1, 64]` when the driver cannot widen a line.
+`gl4es-line-width-quads.patch` is the width emulator. ANGLE reports `ALIASED_LINE_WIDTH_RANGE` `[1, 1]`; every `glLineWidth` was a no-op. Each segment is expanded to a clip-space quad and drawn under a temporary identity MVP (the helper from the first patch). The hook sits *before* `list2VBO` and `line_arrays_to_vbo` so a named display list does not upload an unused object-space VBO, and the object-space cache is not bound as if it were the quads. An unset tracked viewport (`width` or `height` `< 1`) skips the expander rather than clamping those to 1. Polygon-mode edges with `_LINE` on get GLES `FILL` offset on the generated triangles; genuine `GL_LINES` / `STRIP` / `LOOP` force FILL off. Width 1 stays on the cheap `DrawArrays(GL_LINES)` path. Getters advertise `[1, 64]` when the driver cannot widen a line.
 
 Compiled `STAGE_GLCALL` `glLineWidth` already replays before geometry on the same node (`listdraw.c` packed-call walk), so there is no `linewidth_op`. The same-width early-out stays after `PUSH_IF_COMPILING`.
 
