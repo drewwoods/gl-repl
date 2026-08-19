@@ -1,6 +1,65 @@
 # Makefile target conventions
 
-**Status:** proposal. Nothing implemented.
+**Status: partial.** Steps 1-4 of the sequencing in §6 landed 2026-08-19
+(commits `build: one help doc per Make target, guarded`, `build: generate make
+help from the Makefile itself`, `build: derive .PHONY from the target docs`,
+`build: make report shape and check-skipping axes, not targets`). Steps 5-6 --
+the `PLATFORM`/`GL_BACKEND` sugar and the verb renames with their grammar
+guard -- are **deferred on purpose**: the plan itself calls them optional, and
+they carry the ~150-file reference blast radius that steps 1-4 do not. The
+text below §1 is the original proposal, unedited; this section records what
+landed and where the implementation deviated from it.
+
+### What landed
+
+| Step | Delivered |
+|---|---|
+| 1 | `bench-code-panel-stencil` and `bench-vertex-labels` adopt `bench-code-panel-text`'s shape (branch the build rules, hoist one documented run rule, gate the recipe with `ifdef <NAME>_OK`); `all` and `require-emcc` gain a `## `; guards `check-make-target-documented` + `check-make-no-duplicate-help` |
+| 2 | `help` (pointer tier), `help-%` pattern rule, `help-vars`, generated `help-details` (`scripts/make-help.awk`); `#? ` variable annotations + `PUBLIC_MAKE_VARS`; guard `check-make-var-documented`; the printf prose moved to `docs/ADVANCED_USAGE.md` |
+| 3 | `.PHONY` derived from the `## ` docs; the five hand lists deleted; guard `check-make-phony-derived` |
+| 4 | `FORMAT=human\|csv` and `SKIP_CHECKS=1`; the five `-csv`/`no-checks` targets kept as forwarders; guard `check-make-fix-pairs` |
+
+Five of the plan's six guards are in `CHECK_TARGETS`. The sixth,
+`check-make-target-grammar` (§4.1), belongs to step 6 and is not written:
+with no renames, `ROOT_TARGETS` / `FOREVER_ALIASES` / `DEPRECATED_ALIASES`
+would have nothing to allow-list against.
+
+### Deviations from the proposal, and why
+
+- **`#? ` is its own comment line, not a trailing comment.** §3 shows
+  `BUILD ?= release        #? Build mode: ...`. GNU make (3.81 on macOS and
+  4.3 on Linux alike) keeps the whitespace *before* a comment inside the
+  value, so that spelling sets `BUILD` to `"release        "` -- and
+  `SAN ?= address  #? ...` trips its own `ifneq ($(SAN),address)` error arm.
+  Verified before choosing the two-line form. The documentation still lives at
+  the declaration, which was the point.
+- **A `## ` inside a description truncates help.** Every scraper splits on
+  `:.*## ` and awk matches leftmost-longest, so a description mentioning the
+  marker loses everything before its last occurrence. Found by writing one;
+  `check-make-target-documented` now rejects it.
+- **`HASH := \#` for the `.PHONY` scrape.** `#` starts a comment in a variable
+  assignment (recipe lines are exempt, which is why the help recipes can spell
+  the marker literally), so the scrape silently returned empty until the
+  marker was smuggled in through a variable.
+- **`help-details` groups by *family*, not by verb.** A family is any leading
+  dash-segment with 3+ members, computed from the names themselves. With the
+  renames deferred, a verb grouping would have put ~50 targets in "other";
+  the data-driven grouping needs no list and sharpens automatically if step 6
+  ever lands.
+- **The five step-4 names are forwarders, not deletions** -- the alternative
+  §6 step 4 explicitly offers. They print a deprecation note on stderr,
+  where it cannot corrupt a piped CSV. Because they survive, the
+  `MAKECMDGOALS` filter (§5 item 0) needed no edit: both names still
+  resolve, and the recursive lane recomputes `BUILD=debug` from its own goal.
+- **The `fix-`/`check-` pair guard is `check-make-fix-pairs`**, not
+  §4.5's `check-make-fix-pairs-check`.
+- **`.PHONY` gained three names the hand lists had dropped**: `test-no-checks`,
+  `test-only` and (new) `help-vars`. That drift is the concrete argument for
+  §4.4.
+
+Verified on macOS (make 3.81, BWK awk) and on gracemont (Ubuntu 24.04, make
+4.3, gawk 5.2.1): all five guards, `make check`, `make test-stubs`,
+`make test-stubs SKIP_CHECKS=1`, `make run-test-eval`, and the help tiers.
 
 `make help-details` is 182 lines and hides all 92 `check-*` targets. The
 problem is not the count -- it is that `help-details` is hand-maintained prose

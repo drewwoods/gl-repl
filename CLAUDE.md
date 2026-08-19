@@ -82,6 +82,7 @@ make release          # Build macOS+Linux artifacts, confirm, upload - see docs/
 make fetch-music      # Download music pack from GitHub release into ./assets
 make web              # Emscripten build (needs emcc; see below)
 make clean            # Remove binaries
+make help-<verb>      # One target family (help-check, help-bench); help-vars = variables
 ```
 
 Requires gcc (C99), OpenGL, GLUT/freeglut; macOS also needs **cmake** (first

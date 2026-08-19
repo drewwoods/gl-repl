@@ -24,6 +24,12 @@ Current residents:
   per-module doc split and the heavier app/UI + editor/UI edges are
   deferred.
 - `src-repl-simplicity-review.md`
+- `makefile-target-conventions.md` - the generated-help and mechanical-cleanup
+  half landed (one `## ` per target, three-tier generated help + `help-vars`,
+  `.PHONY` derived from the docs, `FORMAT`/`SKIP_CHECKS` as axes instead of
+  five near-duplicate targets, five `check-make-*` guards); the naming grammar
+  and the `PLATFORM`/`GL_BACKEND` sugar are deferred - the plan calls both
+  optional and they carry the ~150-file reference blast radius.
 - `repl-clarity-review.md` - findings 1-4 and 9-11 landed, plus the
   architecture-document gaps (`src/repl/ARCHITECTURE.md` §4.6, §4.7, §5.4,
   §5.5 and the §10 invariants exist because of it). Findings 5-8 are deferred
