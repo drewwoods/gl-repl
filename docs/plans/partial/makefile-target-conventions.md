@@ -18,11 +18,31 @@ landed and where the implementation deviated from it.
 | 2 | `help` (pointer tier), `help-%` pattern rule, `help-vars`, generated `help-details` (`scripts/make-help.awk`); `#? ` variable annotations + `PUBLIC_MAKE_VARS`; guard `check-make-var-documented`; the printf prose moved to `docs/ADVANCED_USAGE.md` |
 | 3 | `.PHONY` derived from the `## ` docs; the five hand lists deleted; guard `check-make-phony-derived` |
 | 4 | `FORMAT=human\|csv` and `SKIP_CHECKS=1`; the five `-csv`/`no-checks` targets kept as forwarders; guard `check-make-fix-pairs` |
+| 4.1 | `check-make-target-grammar` **as a ratchet**, ahead of the renames - see below |
 
-Five of the plan's six guards are in `CHECK_TARGETS`. The sixth,
-`check-make-target-grammar` (§4.1), belongs to step 6 and is not written:
-with no renames, `ROOT_TARGETS` / `FOREVER_ALIASES` / `DEPRECATED_ALIASES`
-would have nothing to allow-list against.
+All six guards of §4 are in `CHECK_TARGETS`.
+
+### The grammar guard without the renames (§4.1, landed 2026-08-19)
+
+§4.1 reads as the last step of the rename pass, because its allow-lists were
+drafted as the *result* of the renames. It does not have to be: the guard's
+value is stopping the *next* badly-named target, and that does not depend on
+fixing the previous ones. Landed as a ratchet instead:
+
+- `MAKE_TARGET_VERBS` lives in the Makefile, not the guard, so the grammar
+  and `make help-<verb>` cannot disagree about what a verb is.
+- `ROOT_TARGETS` (23) is the artifact-named set - permanent, allowed to stay
+  any size, which is exactly why it is a separate list.
+- `LEGACY_TARGETS` (28) freezes the names that predate the grammar. It is
+  checked **both ways**: a non-conforming target missing from it fails, and an
+  entry that no longer names an existing non-conforming target fails - so a
+  rename cannot leave its line rotting, and the count can only fall. Emptying
+  it is step 6, and nothing has to move for the guard to be worth having.
+- `FOREVER_ALIASES` / `DEPRECATED_ALIASES` are not created yet: with no
+  renames there are no old spellings to carry, and the five step-4 forwarders
+  (`bench-csv`, `test-only`, ...) already satisfy the grammar on their own.
+
+134 of the 185 documented targets already conformed before this landed.
 
 ### Deviations from the proposal, and why
 
@@ -53,6 +73,8 @@ would have nothing to allow-list against.
   resolve, and the recursive lane recomputes `BUILD=debug` from its own goal.
 - **The `fix-`/`check-` pair guard is `check-make-fix-pairs`**, not
   §4.5's `check-make-fix-pairs-check`.
+- **`check-make-target-grammar` landed before the renames**, as a
+  shrink-only ratchet rather than the post-rename assertion §4.1 describes.
 - **`.PHONY` gained three names the hand lists had dropped**: `test-no-checks`,
   `test-only` and (new) `help-vars`. That drift is the concrete argument for
   §4.4.

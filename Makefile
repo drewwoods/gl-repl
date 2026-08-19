@@ -2460,6 +2460,10 @@ check-make-phony-derived: ## Hard guard: every documented Make target is .PHONY 
 check-make-fix-pairs: ## Hard guard: every fix-* Make target has the check-* guard it is the mutating twin of.
 	@bash scripts/check/check-make-fix-pairs.sh
 
+check-make-target-grammar: ## Hard guard: a target name is <verb>-<subject>, an artifact root, or a frozen legacy name.
+	@MAKE_TARGET_VERBS='$(MAKE_TARGET_VERBS)' ROOT_TARGETS='$(ROOT_TARGETS)' \
+		LEGACY_TARGETS='$(LEGACY_TARGETS)' bash scripts/check/check-make-target-grammar.sh
+
 CHECK_TARGETS = \
 	check-trailing-whitespace \
 	check-depth-capture-after-finish \
@@ -2483,7 +2487,8 @@ CHECK_TARGETS = \
 	check-make-no-duplicate-help \
 	check-make-var-documented \
 	check-make-phony-derived \
-	check-make-fix-pairs
+	check-make-fix-pairs \
+	check-make-target-grammar
 
 check: ## Run all checks.
 	@set -e; \
@@ -3373,6 +3378,39 @@ PUBLIC_MAKE_VARS := \
 	GLUT_BITMAP_BENCH_ARGS MSAN_CC MUSIC_DEST NOSAN NO_SAN \
 	SAMPLE SAN SKIP_CHECKS TEST_CASE TEST_JOBS TEST_VERBOSE \
 	USE_GL_STUBS V VERBOSE VERTEX_LABEL_BENCH_ARGS WEB ZSHRC
+
+# The target-name grammar: `<verb>-<subject>`, one verb per line of business.
+# The list is here rather than inside the guard so `make help-<verb>` and
+# check-make-target-grammar cannot disagree about what a verb is.
+MAKE_TARGET_VERBS := \
+	bench check clean fix gen help install internal release run show test
+
+# Artifact-named roots: the target IS the thing it builds (or is a name that
+# stays put by decision, not by inertia). Permanent - this list is allowed to
+# sit where it is forever, which is exactly why it is separate from the one
+# below.
+ROOT_TARGETS := \
+	all app demos gl-repl gl-repl-unchained glut render3d-asset-builder \
+	web web-serve \
+	debug-msan freeglut-clean glprobe glprobe-preload \
+	assign-plot-demo color-picker-demo cpuprof-demo editor-demo memprof-demo \
+	render3d-demo render3d-hot repl-demo repl-live-demo variable-panel-demo
+
+# The ratchet. Names that predate the grammar, frozen so a *new* one cannot
+# join them. check-make-target-grammar checks this list in both directions:
+# a non-conforming target missing from it fails, and an entry that no longer
+# names a non-conforming target fails too - so the list can only shrink, and
+# a rename that forgets to delete its line does not sit here rotting.
+#
+# Emptying it is docs/plans/partial/makefile-target-conventions.md step 6,
+# which is deferred; nothing here has to move for the guard to be worth having.
+LEGACY_TARGETS := \
+	analyze audit-editor-ownership capacity-matrix config-list coverage \
+	callgraph-files callgraph-graphviz callgraph-html callgraph-profile \
+	callgraph-static callgraph-static-entry \
+	debug distclean extract fetch-music find-trailing-whitespace gl-tests \
+	icon-cube icon-cube-strong icon-regen keymap-list lines lines-test \
+	palette-list rebuild-golden render3d-hot-lib require-emcc unicode-count
 
 help: ## Show the common targets (run make help-details for the full list).
 	@printf "Immediate-mode REPL - common Make targets\n\n"
