@@ -2,6 +2,7 @@
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
 #include "app/glr_actions.h"
+#include "app/glr_url.h"
 #include "repl/state_owners.h"
 #include "repl/pipeline.h"           /* ReplAutoNormalMode */
 #include "subsystems/replay/replay.h"
@@ -580,6 +581,35 @@ static void test_split_decl_menu_action(void) {
     ASSERT_INT("decl split into two lines", source_document_view().line_count, 2);
     ASSERT_STR("split line 0", editor_buffer_line(0), "  static float grid;");
     ASSERT_STR("split line 1", editor_buffer_line(1), "  static float extent;");
+}
+
+static char g_actions_test_url[512];
+static int  g_actions_test_url_calls = 0;
+
+static int actions_mock_launcher(const char *url) {
+    g_actions_test_url_calls++;
+    if (url)
+        snprintf(g_actions_test_url, sizeof(g_actions_test_url), "%s", url);
+    else
+        g_actions_test_url[0] = '\0';
+    return 1;
+}
+
+static void test_user_guide_menu_action(void) {
+    glr_ctrl_reset_all();
+    g_actions_test_url_calls = 0;
+    g_actions_test_url[0] = '\0';
+
+    glr_url_set_launcher_for_test(actions_mock_launcher);
+
+    int handled = glr_action_menu_item_activate(GLR_MENU_FILE, GLR_FILE_ITEM_USER_GUIDE);
+    ASSERT_INT("File User Guide action handled", handled, 1);
+    ASSERT_INT("User Guide mock launcher called once", g_actions_test_url_calls, 1);
+    ASSERT_STR("User Guide action passed canonical URL", g_actions_test_url, GLR_USER_GUIDE_URL);
+    ASSERT_TRUE("Status bar updated on browser open request",
+                strstr(last_status_text(), "Requested browser open for User Guide") != NULL);
+
+    glr_url_reset_launcher_for_test();
 }
 
 /* Regression: the in-app Open Workspace action must land on a loaded
@@ -2861,6 +2891,12 @@ static void test_help_commands_tab_lists_if_branches(void) {
                                           "Fallback branch"));
 }
 
+static void test_help_overview_about_user_guide_url(void) {
+    ASSERT_TRUE("help Overview tab contains User Guide URL matching GLR_USER_GUIDE_URL",
+                help_tab_contains_binding("Overview", "User Guide", GLR_USER_GUIDE_URL));
+    ASSERT_TRUE("help About tab contains User Guide URL matching GLR_USER_GUIDE_URL",
+                help_tab_contains_binding("About", "https://", GLR_USER_GUIDE_URL));
+}
 
 /* Switching auto-normals off removes what the pass generated, and leaves an
  * undo entry so an accidental toggle is recoverable. Both halves matter: the
@@ -3004,6 +3040,7 @@ int main(void) {
     test_keymap_binding_to_string();
     test_help_key_tabs_use_keymap_labels();
     test_help_commands_tab_lists_if_branches();
+    test_help_overview_about_user_guide_url();
     test_auto_normals_off_strips_generated_rows();
     test_f9_cycles_light_theme();
     test_shift_fkey_steps_backward();
@@ -3018,6 +3055,7 @@ int main(void) {
     test_workspace_save_promotes_visible_example();
     test_workspace_save_adopts_open_file_binding();
     test_split_decl_menu_action();
+    test_user_guide_menu_action();
     test_load_workspace_activates_scene();
     test_shortcuts();
     test_ascii_shortcut_modifiers();

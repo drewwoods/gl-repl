@@ -465,6 +465,8 @@ static const char *menu_item_label(int menu_id, int i) {
         if (i == GLR_FILE_ITEM_SAVE_WORKSPACE) return "Save Workspace";
         if (i == GLR_FILE_ITEM_SAVE_WORKSPACE_AS) return "Save Workspace As...";
         if (i == GLR_FILE_ITEM_OPEN_WORKSPACE) return "Open Workspace";
+        if (i == GLR_FILE_ITEM_DOCS_SEP)      return "---";
+        if (i == GLR_FILE_ITEM_USER_GUIDE)    return "User Guide (GitHub)";
         if (i == GLR_FILE_ITEM_QUIT_SEP)      return "---";
         if (i == GLR_FILE_ITEM_QUIT)          return "Quit";
         return NULL;

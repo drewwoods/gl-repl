@@ -966,6 +966,7 @@ TEST_BINS = \
 	test_glr_tour_snapshot \
 	test_glr_tour_transport \
 	test_glr_frame_pacer \
+	test_glr_url \
 	test_splash
 
 

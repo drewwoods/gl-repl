@@ -89,6 +89,7 @@ static const char *const k_tab_overview[] = {
     "  The Commands tab lists every GL command and the REPL language.",
     "  The Editor and Scene tabs cover keyboard and mouse controls.",
     "  The close shortcut or an outside click dismisses this overlay.",
+    "  User Guide         \thttps://github.com/drewwoods/gl-repl/blob/main/docs/USER_GUIDE.md",
     "",
     NULL
 };
@@ -204,6 +205,9 @@ static const char *const k_tab_about[] = {
     "  An interactive OpenGL command interpreter: type classic GL",
     "  calls, watch the geometry build up live, and export a scene",
     "  as standalone C.",
+    "",
+    "User Guide:",
+    "  https://github.com/drewwoods/gl-repl/blob/main/docs/USER_GUIDE.md",
     "",
     "Powered by:",
     "  freeglut",

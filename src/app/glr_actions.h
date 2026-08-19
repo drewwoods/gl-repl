@@ -55,6 +55,8 @@ enum {
     GLR_FILE_ITEM_OPEN_WORKSPACE,
     GLR_FILE_ITEM_REVEAL_WORKSPACE,
     GLR_FILE_ITEM_DELETE_SCENE,
+    GLR_FILE_ITEM_DOCS_SEP,          /* "---" non-actionable divider row */
+    GLR_FILE_ITEM_USER_GUIDE,        /* User Guide (GitHub) */
     GLR_FILE_ITEM_QUIT_SEP,          /* "---" non-actionable divider row */
     GLR_FILE_ITEM_QUIT,              /* Ctrl+Q */
     GLR_FILE_ITEM_COUNT

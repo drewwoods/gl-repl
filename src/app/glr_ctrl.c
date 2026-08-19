@@ -43,6 +43,7 @@
 #include "app/glr_actions.h"
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
+#include "app/glr_url.h"
 #include "app/glr_camera_export.h"
 #include "app/glr_workspaces.h"      /* glr_workspaces_active_name (window title) */
 #include "repl/workspace_io.h"       /* WORKSPACE_IO_NAME_MAX (snapshot cap assert) */
@@ -4386,6 +4387,7 @@ void glr_ctrl_reset_all(void) {
     console_reset();
     replay_state_reset();
     color_picker_state_reset();
+    glr_url_shutdown();
     /* Hard reset rather than an outro: a wholesale world reset is not a tour
      * the user chose to leave, so there is no exit to animate. */
     glr_tour_presence_reset();
@@ -5048,6 +5050,9 @@ void glr_ctrl_tick(void) {
     /* Advance the audio playlist if the current song reached its end
      * (no-op under loop=Song; see glr_audio_tick). */
     glr_audio_tick();
+
+    /* Asynchronously reap any exited browser launcher child processes. */
+    glr_url_tick();
 
     /* When the playing track changes (either auto-advance from tick
      * or manual next/prev), surface the song name in the status bar.

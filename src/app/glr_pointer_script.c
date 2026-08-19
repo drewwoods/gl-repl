@@ -53,6 +53,7 @@
  * the scripted cursor glides toward the canvas edge while activation is
  * forwarded to the real DOM control below. */
 EM_JS(int, ps_web_shell_target, (const char *name_ptr, int *mx, int *my), {
+    if (typeof document === 'undefined') return 0;
     var name = UTF8ToString(name_ptr);
     if (name !== 'new' && name !== 'new_scene') return 0;
     /* test-web is node: no document. Park the cursor above the canvas
@@ -81,6 +82,7 @@ EM_JS(int, ps_web_shell_target, (const char *name_ptr, int *mx, int *my), {
  * existing listener owns the New-scene bridge and restores canvas focus.
  * Under node, call the same C export that listener would invoke. */
 EM_JS(int, ps_web_shell_click, (const char *name_ptr), {
+    if (typeof document === 'undefined') return 0;
     var name = UTF8ToString(name_ptr);
     if (name !== 'new' && name !== 'new_scene') return 0;
     if (typeof document === 'undefined') {

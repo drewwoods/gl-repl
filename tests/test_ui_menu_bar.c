@@ -287,6 +287,26 @@ static void test_workspace_header_row(void) {
     glr_workspaces_refresh();
 }
 
+static void test_user_guide_menu_item(void) {
+    reset_menu_bar_fixture(1000, 600);
+    ASSERT_STR_EQ("User Guide item label",
+                  ui_menu_bar_menu_item_label_for_test(
+                      GLR_MENU_FILE, GLR_FILE_ITEM_USER_GUIDE),
+                  "User Guide (GitHub)");
+    ASSERT_STR_EQ("User Guide docs separator label",
+                  ui_menu_bar_menu_item_label_for_test(
+                      GLR_MENU_FILE, GLR_FILE_ITEM_DOCS_SEP),
+                  "---");
+    ASSERT_INT_EQ("User Guide item is always enabled",
+                  ui_menu_bar_menu_item_enabled_for_test(
+                      GLR_MENU_FILE, GLR_FILE_ITEM_USER_GUIDE), 1);
+    ASSERT_INT_EQ("User Guide docs separator is non-clickable",
+                  find_dropdown_item_point(GLR_MENU_FILE,
+                                           GLR_FILE_ITEM_DOCS_SEP,
+                                           NULL, NULL), 0);
+    ui_menu_bar_close();
+}
+
 static void test_open_close_state(void) {
     reset_menu_bar_fixture(1000, 600);
 
@@ -1699,6 +1719,7 @@ int main(void) {
     test_reveal_workspace_enabled_state();
     test_scene_file_action_enabled_state();
     test_workspace_header_row();
+    test_user_guide_menu_item();
     test_open_close_state();
     test_top_level_hits();
     test_stepper_pins();

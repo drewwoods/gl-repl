@@ -8,6 +8,7 @@
  */
 #include "app/glr_actions.h"
 #include "app/glr_extedit.h"
+#include "app/glr_url.h"
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
@@ -1770,8 +1771,12 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         case GLR_FILE_ITEM_OPEN_WORKSPACE:
             /* Hover-only flyout parent. */
             return 0;
+        case GLR_FILE_ITEM_USER_GUIDE:
+            glr_url_open_user_guide();
+            return 1;
         case GLR_FILE_ITEM_SCENE_SEP:
         case GLR_FILE_ITEM_WORKSPACE_HDR:
+        case GLR_FILE_ITEM_DOCS_SEP:
         case GLR_FILE_ITEM_QUIT_SEP:
             return 1;
         case GLR_FILE_ITEM_QUIT:
