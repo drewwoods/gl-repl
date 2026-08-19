@@ -6,4 +6,4 @@ or to `../active/` if implementation begins immediately.
 
 | Plan | Topic |
 |---|---|
-| *(none)* | |
+| [`gl4es-line-width-emulation.md`](gl4es-line-width-emulation.md) | Emulate `glLineWidth` on WebGL by expanding wide lines to screen-space quads in gl4es (`packaging/web/patches`) |
