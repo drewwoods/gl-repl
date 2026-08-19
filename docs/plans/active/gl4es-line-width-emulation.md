@@ -1,8 +1,6 @@
 # gl4es `glLineWidth` emulation via screen-space quads
 
-Status: **in-review** (review folded 2026-08-19; projection-row
-bias never mutates caches / PushAttrib factor-units /
-wide-path-before-upload folded same day)
+Status: **active** (implementation started 2026-08-19)
 Date: 2026-08-19
 Scope: Emscripten / WebGL2 build only (two local gl4es patches).
 Native Cocoa / GLX / OSMesa are unchanged — they already rasterize
@@ -350,9 +348,11 @@ on polygon-mode / GLUT solids. That screenshot is the
 whole claim that the split is independently testable
 — do not let the bias work drift into patch 2.
 
-`GL4ES_PATCHES` order: after `gl4es-pushattrib-gaps.patch`
-(it retouches the same `stack.c` polygon block), before
-`gl4es-line-width-quads.patch`.
+`GL4ES_PATCHES` order: after `gl4es-point-size-batch.patch`
+(it wraps the polygon-line `DrawArrays` path and the
+`maxlinewidth` probe), before `gl4es-line-width-quads.patch`.
+Must also sit after `gl4es-pushattrib-gaps.patch` (same
+`stack.c` polygon block).
 
 ## Design
 
@@ -851,8 +851,9 @@ Two new files, in `GL4ES_PATCHES` order:
 
 ### 1. `gl4es-polygon-offset-line.patch`
 
-After `gl4es-pushattrib-gaps.patch` (same `stack.c` polygon
-block). No quad code. Scope has grown (enable shadow +
+After `gl4es-point-size-batch.patch` (and therefore after
+`gl4es-pushattrib-gaps.patch` / the polygon-line DrawArrays
+path). No quad code. Scope has grown (enable shadow +
 PushAttrib + factor/units mirror + projection-row bias +
 the shared helper) but the split is still worth it: the
 independently-testable claim is case 2 at width 1. Do not
@@ -1071,9 +1072,10 @@ the enable, and is why it is not folded into v1.
    pin with the earlier patches on it.
 2. **Oracles on that tree, no width change.** Trailing-reset
    (immediate) against current gl4es — it should already flush.
-   Mixed-width display list: dump / single-step replay order of
-   the `STAGE_GLCALL` `glLineWidth` against the geometry nodes.
-   Only if that order is wrong, add `linewidth_op`. Leave
+   Mixed-width display list: `draw_renderlist` walks
+   `list->calls` (`glPackedCall`) *before* the geometry draw
+   on the same node, so a compiled `STAGE_GLCALL` `glLineWidth`
+   updates the mirror first. No `linewidth_op`. Leave
    `PUSH_IF_COMPILING` first; same-width early-out only on
    the non-compiling path.
 3. `expand_wide_lines` in `line.c` and the `listdraw.c` hook

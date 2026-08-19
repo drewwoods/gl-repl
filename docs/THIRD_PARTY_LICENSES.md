@@ -102,6 +102,13 @@ license text, reproduced verbatim from `third_party/freeglut/COPYING`:
     `GL_RETURN` draws it back. The getter reports `GL_ACCUM_*_BITS`
     (16/8/0), so gl-repl's runtime accum detection re-enables the
     accumulation effects (Accum AA, Blur, Blur Cam) in the browser.
+  - `packaging/web/patches/gl4es-polygon-offset-line.patch` - shadow
+    `GL_POLYGON_OFFSET_LINE` and apply a projection-row depth bias
+    around polygon-mode line draws so vertex outlines are not a
+    silent `GL_INVALID_ENUM` on WebGL.
+  - `packaging/web/patches/gl4es-line-width-quads.patch` - expand
+    `glLineWidth` > 1 into screen-space quads on stacks whose
+    `ALIASED_LINE_WIDTH_RANGE` is `[1, 1]`.
 - **License:** MIT. Reproduced verbatim from gl4es's `LICENSE`:
 
 ```

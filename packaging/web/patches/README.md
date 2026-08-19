@@ -28,8 +28,24 @@ listed in `GL4ES_PATCHES` in `scripts/web-deps.sh`.
 | `gl4es-point-smooth.patch` | Emulate round antialiased points in the GLES2 fixed-pipeline shader. |
 | `gl4es-polygon-line-drawarrays.patch` | Avoid Emscripten's client-index upload and scan for polygon-mode lines. |
 | `gl4es-point-size-batch.patch` | Apply `glPointSize` to the batch it was called on, not to whatever is still pending. |
+| `gl4es-polygon-offset-line.patch` | Shadow `GL_POLYGON_OFFSET_LINE` and apply a projection-row depth bias around polygon-mode line draws. |
+| `gl4es-line-width-quads.patch` | Expand `glLineWidth` > 1 into screen-space quads on `[1, 1]` line-width stacks. |
 
 See each older patch's leading prose for the detail that is available.
+
+## 2026-08-19: `GL_POLYGON_OFFSET_LINE` and `glLineWidth` on WebGL
+
+Two patches, in this order.
+
+`gl4es-polygon-offset-line.patch` is a pre-existing web bug: `GL_POLYGON_OFFSET_LINE` is not a GLES enum, so `glEnable` raised `GL_INVALID_ENUM` and changed nothing. GLES fill-offset does not apply to the `GL_LINES` draw that polygon-mode already lowered to, so wrapping that draw in `GL_POLYGON_OFFSET_FILL` is also a no-op. The fix shadows the LINE enable, mirrors factor/units (including `glPolygonOffsetx`) onto `GL_POLYGON_BIT`, and pokes `P_row2 += d · P_row3` around the line draw — `d = 2 · units · 2^{-depth_bits} / (Far − Near)`, clamped to `[-1, 1]`. Cached object-space `line_arrays` are never written. Independently testable at width 1: a vertex-outline pass over a solid face should stop speckling. Genuine `GL_LINE_LOOP` (the tessellation overlay) is out of scope; native `_LINE` never applied to line primitives.
+
+`gl4es-line-width-quads.patch` is the width emulator. ANGLE reports `ALIASED_LINE_WIDTH_RANGE` `[1, 1]`; every `glLineWidth` was a no-op. Each segment is expanded to a clip-space quad and drawn under a temporary identity MVP (the helper from the first patch). The hook sits *before* `line_arrays_to_vbo` so the object-space cache is not uploaded or bound as if it were the quads. Polygon-mode edges with `_LINE` on get GLES `FILL` offset on the generated triangles; genuine `GL_LINES` / `STRIP` / `LOOP` force FILL off. Width 1 stays on the cheap `DrawArrays(GL_LINES)` path. Getters advertise `[1, 64]` when the driver cannot widen a line.
+
+Compiled `STAGE_GLCALL` `glLineWidth` already replays before geometry on the same node (`listdraw.c` packed-call walk), so there is no `linewidth_op`. The same-width early-out stays after `PUSH_IF_COMPILING`.
+
+Known deviations, by design: fog and lighting are off for the expanded draw; a live clip plane skips emulation; tess `GL_LINE_LOOP` overlays stay unoffset.
+
+Browser coverage oracle: `make bench-web-gl4es` now also builds `gl4es-line-width.html`.
 
 ## 2026-08-02: the point-smooth workarounds come out
 
