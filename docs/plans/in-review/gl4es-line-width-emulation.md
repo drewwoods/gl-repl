@@ -1,10 +1,11 @@
 # gl4es `glLineWidth` emulation via screen-space quads
 
-Status: **in-review** (review folded 2026-08-19)
+Status: **in-review** (review folded 2026-08-19; polygon-offset
+split folded same day)
 Date: 2026-08-19
-Scope: Emscripten / WebGL2 build only (local gl4es patch). Native
-Cocoa / GLX / OSMesa are unchanged — they already rasterize wide
-lines.
+Scope: Emscripten / WebGL2 build only (two local gl4es patches).
+Native Cocoa / GLX / OSMesa are unchanged — they already rasterize
+wide lines and honour `GL_POLYGON_OFFSET_LINE`.
 
 This is the line-width twin of
 [`gl4es-point-smooth.patch`](../../../packaging/web/patches/gl4es-point-smooth.patch):
@@ -12,12 +13,23 @@ fix the translator, keep one C path in gl-repl. Do not add
 `#ifdef __EMSCRIPTEN__` geometry proxies in `grid.c`, overlays, or
 guides.
 
+Two patches, in this order:
+
+1. `gl4es-polygon-offset-line.patch` — pre-existing web bug;
+   independently testable; no quad machinery.
+2. `gl4es-line-width-quads.patch` — the width emulator, last in
+   `GL4ES_PATCHES`.
+
 Reviews are folded into the design below rather than left as a
-changelog. The ones that changed the shape of the work are called
-out where they sit (`PUSH_IF_COMPILING` already flushes, the
-identity-MVP bracket must force `GL_FILL` / disable cull, getter
-tokens collide, transient quads must unbind any active VBO before
-pointing at CPU arrays).
+changelog. Standing items already in this document: getter tokens
+are two not three (`0x0B22` is both range names), the identity-MVP
+bracket forces `GL_FILL` + cull off and translates
+`GL_POLYGON_OFFSET_LINE` → GLES `FILL` on polygon-mode quads,
+`PUSH_IF_COMPILING` stays first (same-width early-out is
+non-compiling only), fog/lighting/clip planes live in Known
+deviations, `drawing.c` intercepts all three line modes,
+verification does not claim `check-c99` /
+`check-trailing-whitespace` cover the patch.
 
 ## Problem
 
@@ -64,8 +76,12 @@ the mirror.
 
 The mirror-equality early-out currently sits **after**
 `PUSH_IF_COMPILING`, so a redundant same-width call still flushes
-a pending batch. Minor cost. Keep the early-out **ahead** of any
-flush the wrapper adds.
+a pending batch. That is the right *place* for the early-out
+relative to compile: do **not** hoist it above
+`PUSH_IF_COMPILING`. A compiled `glLineWidth(4)` must record
+even when the live mirror is already 4 — the list may later be
+called with the mirror at 1. Same-width early-out applies only
+to non-compiling calls (see Compiled-list width).
 
 ## What gl-repl is missing on web
 
@@ -104,8 +120,9 @@ patches applied):
   stipple texcoords (`gen_stipple_tex_coords`). The viewport origin
   cancels in any difference, which is why that function never reads
   `viewport.x` / `viewport.y`. Width expansion is the same
-  projection plus a perpendicular offset, and should stay in NDC
-  for the same reason.
+  projection; the perpendicular is taken in that pixel-scaled
+  space (not raw NDC) so a non-square viewport does not skew the
+  ribbon.
 - `src/gl/listdraw.c` is every immediate-mode and display-list draw,
   including the polygon-line expansion that already emits
   `gles_glDrawArrays(GL_LINES, …)`.
@@ -138,6 +155,107 @@ patches applied):
   nodes is the case that still needs an ordering check.
 
 `line.c` is the natural home. Do not start in `fpe_shader.c`.
+
+## Prerequisite: `GL_POLYGON_OFFSET_LINE` is a silent no-op
+
+This is a **pre-existing** web bug. It is independent of width
+emulation and should land first as
+`packaging/web/patches/gl4es-polygon-offset-line.patch`.
+
+### What the stack does today
+
+`enable.c` proxies only `GL_POLYGON_OFFSET_FILL` (line 168).
+`GL_POLYGON_OFFSET_LINE` (`0x2A02`) falls through to
+`default: … next(cap)` (line 274), which forwards it to GLES.
+It is not a GLES enum, so the driver sets `GL_INVALID_ENUM` and
+changes nothing. `glIsEnabled` likewise has no case.
+
+`stack.c` agrees. Three `//TODO: GL_POLYGON_OFFSET_LINE` markers
+(112, 245, 436) and only `polygon_offset_fill` is shadowed.
+[`gl4es-pushattrib-gaps.patch`](../../../packaging/web/patches/gl4es-pushattrib-gaps.patch)
+filled `GL_POLYGON_BIT` for cull / front-face / polygon-mode /
+`OFFSET_FILL` and left the LINE/POINT enables and factor/units
+as an explicit TODO (line 88 of that patch).
+
+`glPolygonOffset(factor, units)` itself is a generated wrapper
+that already reaches GLES (`wrap/gles.c`). Factor/units live in
+the driver. They are **not** mirrored client-side; a
+`glGet(GL_POLYGON_OFFSET_FACTOR)` is a WebGL sync get.
+
+### Why it is visible in gl-repl
+
+`edit_overlays_render_outlines()` (`edit_overlays.c:1117–1121`)
+is built entirely on the missing enable:
+
+```
+glEnable(GL_POLYGON_OFFSET_LINE);
+glPolygonOffset(REPL_OUTLINE_POLYGON_OFFSET_FACTOR,   /* 0.1 */
+                REPL_OUTLINE_POLYGON_OFFSET_UNITS);   /* -1000 */
+glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+```
+
+Units of −1000 is a deliberate hard pull-forward. On web it is
+doing nothing. The vertex-outline pass should be z-fighting with
+its own faces in the browser **right now**, at width 1.
+
+Confirm that with a headful screenshot **before writing either
+patch** (verification case 2a). If it speckles, this is a
+standalone bug.
+
+`glPushAttrib(GL_POLYGON_BIT)` must save and restore the new
+shadow. gl-repl pushes `GL_ALL_ATTRIB_BITS` around the user
+program (`glr_ctrl.c`, `executor.c`), and
+`edit_overlays.c:1088–1089` explicitly comments that it relies
+on that pop to restore polygon state. A shadow that is not in
+`stack.c`’s polygon block leaks straight through it.
+
+### What the prerequisite patch does
+
+Shadow `GL_POLYGON_OFFSET_LINE` client-side, same shape as
+`proxy_GO(GL_POLYGON_OFFSET_FILL, polyfill_offset)`:
+
+- `enable.c` — `proxy_GO` / `isenabled` for `GL_POLYGON_OFFSET_LINE`
+  (`polyline_offset` next to `polyfill_offset` in `state.h`).
+  Do **not** forward the enum to GLES.
+- `stack.h` / `stack.c` — `polygon_offset_line` on both
+  `GL_ENABLE_BIT` and `GL_POLYGON_BIT` push and pop. Close the
+  three TODOs for LINE. POINT stays a TODO.
+- Mirror `glPolygonOffset` factor/units client-side
+  (`wrap/gles.c` + getter cases, the
+  `gl4es-getter-client-state` pattern). `stack.c:245` already
+  notes they are not shadowed; the outline pass’s −1000 units
+  are otherwise invisible to anything we do on the CPU, and a
+  `glGet` to recover them mid-frame is the sync stall that
+  patch was written to kill.
+
+### How the offset actually reaches pixels at width 1
+
+**`glEnable(GL_POLYGON_OFFSET_FILL)` around the existing
+polygon-mode `GL_LINES` draw does not move a pixel.** GLES
+applies fill offset only to triangles. `listdraw.c` has already
+lowered `glPolygonMode(GL_LINE)` to `gles_glDrawArrays(GL_LINES)`
+(or the line-array equivalent). Wrapping that draw in FILL is
+the right *mapping* once the primitives are quads (the width
+patch); it is a no-op on today’s line draw.
+
+To fix the outline-over-face z-fight **without** quad machinery,
+the prerequisite patch applies a **CPU depth bias** to the
+generated polygon-mode edge vertices when `polyline_offset` is
+on, using the mirrored factor/units. A units-weighted clip-Z
+nudge (`clip.z += units * r * clip.w`, `r` a small resolvable
+delta) is enough for the outline’s −1000; factor × slope can
+wait. Genuine `GL_LINES` primitives are not touched — native
+`GL_POLYGON_OFFSET_LINE` never applied to them.
+
+Independently testable: `glIsEnabled(GL_POLYGON_OFFSET_LINE)`
+round-trips, `glEnable` no longer raises `GL_INVALID_ENUM`,
+`glPushAttrib(GL_POLYGON_BIT)` / `GL_ALL_ATTRIB_BITS` restores
+the enable, and the width-1 outline-over-face screenshot stops
+speckling.
+
+`GL4ES_PATCHES` order: after `gl4es-pushattrib-gaps.patch`
+(it retouches the same `stack.c` polygon block), before
+`gl4es-line-width-quads.patch`.
 
 ## Design
 
@@ -183,21 +301,32 @@ For each pair of object-space endpoints `(p0, p1)`:
    this clip every surviving endpoint has `w > 0` and is in front
    of the near plane. Far / side planes are out of v1 — the GPU
    still clips the expanded triangles.
-3. Perspective-divide to NDC. Do **not** go through window pixels
-   and back: the viewport origin cancels in the perpendicular
+3. Perspective-divide to NDC. The viewport origin still cancels
    (that is why `line.c` only ever uses `w * 0.5f` / `h * 0.5f`).
-4. 2D perpendicular of the NDC direction, then scale to a
-   constant **pixel** half-width:
+   The direction, though, must be measured in **pixels**, not raw
+   NDC — see step 4.
+4. 2D perpendicular in pixel space, then convert the offset
+   back to NDC. Normalizing `perp(ndc1 − ndc0)` is perpendicular
+   in NDC, which is **not** 90° on screen when `vp_width !=
+   vp_height`; a 45° line would get a skewed ribbon.
 
    ```
-   n     = normalize(perp(ndc1.xy − ndc0.xy))
+   dx_px = (ndc1.x − ndc0.x) * vp_width  * 0.5
+   dy_px = (ndc1.y − ndc0.y) * vp_height * 0.5
+   n     = normalize(−dy_px, dx_px)          /* unit, in pixels */
    Δndc  = (n.x * width / vp_width, n.y * width / vp_height)
    ```
 
-   Degenerate / ~0-length segments (`|ndc1 − ndc0| ≈ 0`, including
-   `p0 == p1`) become an axis-aligned NDC square of side
-   `width / vp_*`, or are skipped. No division by a zero-length
-   normal.
+   (`Δndc` is a full-width offset in NDC: a pixel-space
+   `n * (width / 2)` times `2 / vp_*`. Half of it goes to each
+   side of the segment.)
+
+   Degenerate / ~0-length segments (`dx_px² + dy_px² ≈ 0`,
+   including `p0 == p1`) become an axis-aligned NDC square of
+   side `width / vp_*`, or are skipped. No division by a
+   zero-length normal. Test degeneracy in pixel space, not NDC
+   — a line that is only tall in a very wide viewport is still
+   a real segment.
 5. Four NDC corners → clip space, **keeping each endpoint’s
    original `clip.z` and `clip.w`** (post-step-2 values, so a
    clipped endpoint carries interpolated `z`/`w`):
@@ -283,9 +412,9 @@ Raster / enable state the bracket must force, and restore:
 
 | State | Why |
 |---|---|
-| `glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)` | `drawing.c:260` intercepts `polygon_mode == GL_LINE && mode >= GL_TRIANGLES`. Expanded quads drawn as `GL_TRIANGLES` under wireframe/hidden-line would be re-expanded into 1 px outlines of themselves. This is the same path verification case 6 is there to protect. |
+| `glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)` | `drawing.c:260` intercepts `polygon_mode == GL_LINE && mode >= GL_TRIANGLES`. Expanded quads drawn as `GL_TRIANGLES` under wireframe/hidden-line would be re-expanded into 1 px outlines of themselves. This is the same path verification case 8 is there to protect. |
 | `glDisable(GL_CULL_FACE)` | Quad winding follows the window-space segment direction. With culling on, roughly half the segments vanish. |
-| `glDisable(GL_POLYGON_OFFSET_FILL)` (and the line/point offset enables if they can affect the fill draw) | Offset is in primitive-type units; leaving it on shifts the fake quads relative to the geometry they were meant to sit on. |
+| `GL_POLYGON_OFFSET_FILL` — **set, do not inherit** | Parent `clip.z` faithfully reproduces native depth, so it also faithfully reproduces the z-fight. The rule depends on the source; see Offset on the quad draw. |
 | lighting / texgen off | Lighting the clip-space corners is nonsense; chrome is unlit `glColor`. |
 | fog off | Fog would use the same wrong eye position. **Known deviation** — see below. |
 
@@ -295,6 +424,38 @@ deviation.
 
 Do not introduce a new FPE program key. The point of the identity
 MVP is to reuse the shader that is already bound.
+
+### Offset on the quad draw
+
+This is the overlay translation. `edit_overlays_render_outlines()`
+does `glEnable(GL_POLYGON_OFFSET_LINE)` +
+`glPolygonOffset(0.1, -1000)` + `glPolygonMode(GL_LINE)`. The
+prerequisite makes that enable a real client-side bit. The
+quad draw then **approximates** `_LINE` as GLES
+`GL_POLYGON_OFFSET_FILL` for the generated triangles, using
+the factor/units already in the driver (`glPolygonOffset`
+already reached GLES; no extra upload).
+
+Inheriting whatever FILL happens to be live is wrong in both
+directions. Thread a `from_polygon_mode` flag into the
+expander — the intercept site already distinguishes the two
+cases (`polygon_mode == GL_LINE && mode >= GL_TRIANGLES` vs a
+genuine line primitive).
+
+| Source | Native rule | Quad-draw rule |
+|---|---|---|
+| Polygon-mode edges (the overlay) | `_LINE` offsets polygons rasterized as lines | If the `polyline_offset` shadow is on: temporarily `glEnable(GL_POLYGON_OFFSET_FILL)` for this draw. The quads *are* the polygons now. Skip the prerequisite’s CPU bias on this path — the GPU offset replaces it. If the shadow is off: FILL off. |
+| Genuine `GL_LINES` / `LINE_STRIP` / `LINE_LOOP` | No polygon offset. `_LINE` never governed line primitives. | Force `GL_POLYGON_OFFSET_FILL` **off**. A fill offset the scene left enabled for its solids (grid decals, `render.c`) must not silently shift emulated chrome that native leaves alone. |
+
+Restore the previous FILL enable after the draw. Factor/units
+stay whatever `glPolygonOffset` last sent; do not get or set
+them in the bracket.
+
+The outline pass is exactly where both conditions are live.
+That is why the two patches reinforce each other and why the
+Bold outline (7.5 px) is the widest, most offset-sensitive
+thing in the app. Case 2 / 2b is the coplanar overlay
+z-fighting oracle.
 
 ### When to activate
 
@@ -346,9 +507,33 @@ What remains:
   splits on `STAGE_GLCALL` will not either. Do not add the check
   speculatively.
 
-Keep the mirror-equality early-out **ahead** of
-`PUSH_IF_COMPILING` (move it up). A same-width call must not
-flush, must not record a packed call, and must not hit GLES.
+**Do not hoist the same-width early-out above
+`PUSH_IF_COMPILING`.** The existing wrapper calls
+`PUSH_IF_COMPILING` first (`gles.c:1405`) on purpose.
+Compiling `glLineWidth(4); draw;` while the live mirror is
+already 4 must still record the packed call: the list may
+later be `glCallList`’d while the mirror is 1. Skipping it
+makes the list silently draw at 1.
+
+Conditional ordering in `gl4es_glLineWidth`:
+
+```
+if (list.active && !list.pending) {          /* named-list compile */
+    PUSH_IF_COMPILING / NewStage(STAGE_GLCALL);
+    return;                                  /* always record */
+}
+if (gl4es_mirror_line_width == width)
+    return;                                  /* non-compiling only */
+if (list.active && list.pending)
+    gl4es_flush();                           /* already what PUSH does */
+gl4es_mirror_line_width = width;
+gles_glLineWidth(width);
+```
+
+`PUSH_IF_COMPILING` already has that compile-vs-pending split;
+the only change is the same-width return **after** it, not
+before. A same-width immediate call still skips GLES. A
+same-width compile still records.
 
 ### Do not cache the expanded quads
 
@@ -394,7 +579,8 @@ The wide-line path therefore **does not share that draw**. Hook
    genuine client arrays.
 4. Point the enabled attribs at the transient expanded buffers
    (`gles_glVertexPointer` / `ColorPointer` / …).
-5. Identity-MVP + `GL_FILL` + cull/offset off, then
+5. Identity-MVP + `GL_FILL` + cull off + offset per
+   `from_polygon_mode`, then
    `gles_glDrawArrays(GL_TRIANGLES, 0, expanded_count)`.
 6. Restore the previous ARRAY/ELEMENT bindings. No
    `listInactiveVBO` is needed if step 2 skipped the activate.
@@ -460,32 +646,43 @@ without changing the expansion math.
 
 ## Patch shape
 
-New file
-[`packaging/web/patches/gl4es-line-width-quads.patch`](../../../packaging/web/patches/gl4es-line-width-quads.patch),
-**last** in `GL4ES_PATCHES` in `scripts/web-deps.sh`. It will
-retouch `wrap/gles.c` that getter-client-state already patched, so
-it cannot sit earlier.
+Two new files, in `GL4ES_PATCHES` order:
 
-Likely hunks:
+### 1. `gl4es-polygon-offset-line.patch`
+
+After `gl4es-pushattrib-gaps.patch` (same `stack.c` polygon
+block). No quad code.
 
 | File | Change |
 |---|---|
-| `src/gl/line.c` / `line.h` | `expand_wide_lines` + 4D near clip + identity-MVP draw (local matrix save, `GL_FILL`, cull/offset off) |
-| `src/gl/listdraw.c` | call it for line modes when width needs it, **before** `listActiveVBO`; skip VBO activate on the wide path; replay `linewidth_op` only if step 1 showed `STAGE_GLCALL` is not enough |
-| `src/gl/drawing.c` | intercept `glDrawArrays` / `glDrawElements` of `GL_LINES` / `GL_LINE_STRIP` / `GL_LINE_LOOP` when `gl4es_mirror_line_width > (GLfloat)hardext.maxlinewidth` (stipple stays `GL_LINES`-only) |
-| `src/gl/wrap/gles.c` | move the mirror-equality early-out **ahead** of `PUSH_IF_COMPILING`; do not add another flush |
+| `src/gl/state.h` / `enable.c` | `polyline_offset` shadow; `proxy_GO` + `isenabled`; do not forward the enum to GLES |
+| `src/gl/stack.h` / `stack.c` | save/restore on `GL_ENABLE_BIT` and `GL_POLYGON_BIT`; close the LINE TODOs |
+| `src/gl/wrap/gles.c` / `getter.c` | mirror `glPolygonOffset` factor/units |
+| `src/gl/listdraw.c` | when `polyline_offset` and polygon-mode lines: CPU clip-Z bias on the generated edge verts (FILL-around-`GL_LINES` is a GLES no-op) |
+
+### 2. `gl4es-line-width-quads.patch`
+
+**Last** in `GL4ES_PATCHES`. Retouches `wrap/gles.c` that
+getter-client-state already patched.
+
+| File | Change |
+|---|---|
+| `src/gl/line.c` / `line.h` | `expand_wide_lines` + 4D near clip + identity-MVP draw (local matrix save, `GL_FILL`, cull off, offset per `from_polygon_mode`) |
+| `src/gl/listdraw.c` | call it for line modes when width needs it, **before** `listActiveVBO`; pass `from_polygon_mode`; skip VBO activate on the wide path; skip the prerequisite’s CPU bias when the quad path takes over; replay `linewidth_op` only if step 1 showed `STAGE_GLCALL` is not enough |
+| `src/gl/drawing.c` | intercept `glDrawArrays` / `glDrawElements` of `GL_LINES` / `GL_LINE_STRIP` / `GL_LINE_LOOP` when `gl4es_mirror_line_width > (GLfloat)hardext.maxlinewidth` (stipple stays `GL_LINES`-only; `from_polygon_mode = 0` on this path) |
+| `src/gl/wrap/gles.c` | keep `PUSH_IF_COMPILING` first; same-width early-out only on the non-compiling path; do not add another flush |
 | `src/gl/list.h` / `list.c` | `linewidth_op` / `linewidth_val` **only if** the compiled-list oracle needs it |
 | `src/gl/getter.c` | `0x0B22` and `GL_ALIASED_LINE_WIDTH_RANGE` (and `0x0B23` granularity) in `gl4es_commonGet` |
 
-Header comment on the patch follows the existing house style
-(problem, what was tried, what landed). Add an inventory row and a
+Header comments follow the existing house style (problem, what
+was tried, what landed). Add an inventory row per patch and a
 dated section to
 [`packaging/web/patches/README.md`](../../../packaging/web/patches/README.md)
 while the measurements are still available.
 
-No gl-repl C changes in v1. Native and stub builds never see the
-patch. A bench under `packaging/web/bench/` is a new file in that
-tree, not a gl-repl C change, and is not in `$(SRCS)`.
+No gl-repl C changes in v1. Native and stub builds never see
+either patch. A bench under `packaging/web/bench/` is a new file
+in that tree, not a gl-repl C change, and is not in `$(SRCS)`.
 
 ## Verification
 
@@ -503,12 +700,35 @@ module. Fresh navigation, coverage oracle, then timing.
    cannot report a speedup. Also a **zero-length** segment
    (`p0 == p1`, width > 1): no NaN, either an axis-aligned square
    or a clean skip.
-2. **Headful screenshots** of: default grid + axes, orbit gizmo
-   (6 px halo), a live transform guide, Bold vertex outlines, the
-   Points & Lines tutorial. Compare against native, not against
-   “looks thicker.” **Also a fogged scene and a clip-plane scene**
-   so the Known deviations (unfogged wide lines, 1 px under a
-   clip plane) are measured rather than discovered.
+2. **Outline-over-face, before any patch.** A solid face with the
+   vertex-outline pass on, width 1. Native shows a clean outline.
+   If web speckles today, that is the pre-existing
+   `GL_POLYGON_OFFSET_LINE` no-op (Prerequisite). Fix it with
+   `gl4es-polygon-offset-line.patch` and re-shoot **before** the
+   quads land — that is how the split stays independently
+   testable.
+
+   Then the usual headful set: default grid + axes, orbit gizmo
+   (6 px halo), a live transform guide, the Points & Lines
+   tutorial. Compare against native, not against “looks thicker.”
+   **Also a fogged scene and a clip-plane scene** so the Known
+   deviations (unfogged wide lines, 1 px under a clip plane) are
+   measured rather than discovered.
+
+2b. **Bold outline.** Same solid face,
+    `VERTEX_OUTLINE_ACTIVE_WIDTH 3.0 × VERTEX_OUTLINE_BOLD_SCALE
+    2.5 = 7.5 px`. Widest line in the app, and the case where a
+    quad that lost its offset is most visible. After both
+    patches: clean 7.5 px outline, pulled forward, no z-fight
+    and no “halo of the face.”
+
+2c. **Fill-offset must not leak onto chrome.**
+    `glEnable(GL_POLYGON_OFFSET_FILL)` live (grid decal, or a
+    scene that sets it) plus wide genuine `GL_LINES` chrome.
+    The chrome must sit at native depth — the negative half of
+    the `from_polygon_mode` rule. A missing FILL-off in the
+    bracket shows up as chrome that has slid in front of or
+    behind the solids.
 3. **Culling on.** `glEnable(GL_CULL_FACE)` + `glFrontFace` both
    windings, a handful of wide segments whose window-space
    direction flips. Every segment stays visible; the bracket
@@ -554,6 +774,12 @@ module. Fresh navigation, coverage oracle, then timing.
      current mirror is 1, and the reverse (unstamped list
      drawn while the current width is 4). Stamped lists keep
      their recorded width; unstamped lists follow the mirror.
+   - **Compile at the live width, then change it.**
+     `glLineWidth(4); glNewList(); glLineWidth(4); draw;
+     glEndList(); glLineWidth(1); glCallList();` The list
+     must still draw at 4. This is the early-out-vs-compile
+     oracle: hoisting the same-width return above
+     `PUSH_IF_COMPILING` fails it.
    - `glNewList` / `glCallList` of a source list, then
      `glDeleteLists` on the source (the `append_calllist`
      shallow-copy case from the polygon-line patch). The
@@ -616,30 +842,42 @@ the enable, and is why it is not folded into v1.
 
 ## Implementation order
 
-1. **Oracles on the current tree, no visual change.** Run the
-   trailing-reset scene against unpatched-for-width gl4es. It
-   should already flush. Then compile a mixed-width display list
-   and dump / single-step replay order of the `STAGE_GLCALL`
-   `glLineWidth` against the geometry nodes. Only if that order
-   is wrong, add `linewidth_op`. Move the mirror-equality
-   early-out ahead of `PUSH_IF_COMPILING` in the same step
-   (batching; no pixel change).
-2. `expand_wide_lines` in `line.c` and the `listdraw.c` hook
+0. **Outline-over-face screenshot on the current tree.** Width 1,
+   vertex outlines on. If it speckles, that is Prerequisite,
+   not a width-emulator bug.
+1. **`gl4es-polygon-offset-line.patch`.** Shadow the enable,
+   PushAttrib, mirror factor/units, CPU clip-Z bias on
+   polygon-mode line verts. Re-shoot case 2. No quad code.
+   `git apply --check` against the pin with the earlier patches
+   on it.
+2. **Oracles on that tree, no width change.** Trailing-reset
+   (immediate) against current gl4es — it should already flush.
+   Mixed-width display list: dump / single-step replay order of
+   the `STAGE_GLCALL` `glLineWidth` against the geometry nodes.
+   Only if that order is wrong, add `linewidth_op`. Leave
+   `PUSH_IF_COMPILING` first; same-width early-out only on
+   the non-compiling path.
+3. `expand_wide_lines` in `line.c` and the `listdraw.c` hook
    **before** `listActiveVBO`, `width > (GLfloat)hardext.maxlinewidth`
    only. Identity-MVP draw via local matrix save, 4D near clip,
-   `GL_FILL` + cull and offset off, square caps, unbind
-   ARRAY/ELEMENT, expand from CPU arrays only. Emit the
-   `GL_LINE_LOOP` close.
-3. `drawing.c` intercept for `GL_LINES` / `GL_LINE_STRIP` /
-   `GL_LINE_LOOP` so client-array draws cannot sneak past.
-4. Getter range + granularity + clamp.
-5. Bench + the verification cases above, including the cull-on
-   scene, the loop-close coverage oracle, the fogged and
-   clip-plane screenshots, and the named-list suite.
-6. Patch header, `GL4ES_PATCHES` append, README inventory + dated
-   section.
+   `GL_FILL` + cull off, offset per `from_polygon_mode`, square
+   caps, unbind ARRAY/ELEMENT, expand from CPU arrays only.
+   Emit the `GL_LINE_LOOP` close. Skip the prerequisite’s CPU
+   bias on the quad path.
+4. `drawing.c` intercept for `GL_LINES` / `GL_LINE_STRIP` /
+   `GL_LINE_LOOP` so client-array draws cannot sneak past
+   (`from_polygon_mode = 0`).
+5. Getter range + granularity + clamp.
+6. Bench + the verification cases above, including the
+   width-1 then Bold outline-over-face pair, the
+   fill-offset-must-not-leak scene, the cull-on scene, the
+   loop-close coverage oracle, the fogged and clip-plane
+   screenshots, and the named-list suite.
+7. Patch headers, `GL4ES_PATCHES` append (offset-line then
+   width-quads), README inventory + dated section.
 
 Do not start by adding a flush. The flush is already there.
+Do not start the width patch until case 2 at width 1 is clean.
 
 ## Rejected approaches
 
@@ -678,3 +916,16 @@ Recorded so they are not rediscovered during implementation.
 - **Expand after `listActiveVBO` and point at CPU arrays.**
   The bound `GL_ARRAY_BUFFER` makes those pointers VBO
   offsets. Hook before the activate, or unbind first.
+- **`glEnable(GL_POLYGON_OFFSET_FILL)` around today’s
+  polygon-mode `GL_LINES` draw.** GLES does not offset line
+  primitives. That mapping is correct for the quads, and a
+  no-op for the width-1 expansion — hence the CPU bias in
+  the prerequisite.
+- **Inherit live FILL offset onto every expanded draw.**
+  Wrong for genuine `GL_LINES` chrome (grid decals leak)
+  and wrong for polygon-mode outlines if LINE is on and
+  FILL happens to be off.
+- **Hoist the same-width early-out above
+  `PUSH_IF_COMPILING`.** Compiling `glLineWidth(4)` while
+  the mirror is already 4 drops the packed call; the list
+  then draws at whatever the caller’s width is.
