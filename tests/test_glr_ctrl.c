@@ -4359,6 +4359,127 @@ static void test_import_without_camera_block_keeps_global_default(void) {
     ASSERT_TRUE("reset falls back to default dist", fabsf(cam.dist - 5.0f) < 0.05f);
 }
 
+static void test_new_scene_from_2d_pose_does_not_poison_reset(void) {
+    static const char *const k_lines[] = {
+        "// @cfg view_mode = RENDER3D_VIEW_2D",
+        "glBegin(GL_POINTS);",
+        "glVertex3f(0, 0, 0);",
+        "glEnd();",
+        NULL
+    };
+    GlrCameraState cam;
+    int slot;
+
+    printf("--- imrepl_ctrl new scene from 2d does not poison reset ---\n");
+    glr_ctrl_reset_all();
+    glr_camera_set(11.0f, 22.0f, 7.5f, 0.5f, -0.25f, 1.75f, 0.0f);
+    glr_ctrl_display_frame();
+    repl_scenes_capture_pre_example_cfg_if_entering();
+    ASSERT_TRUE("2d example loads", repl_load_example_lines(k_lines) > 0);
+    glr_ctrl_display_frame();
+    for (int i = 0; i < 400; i++) {
+        glr_ctrl_tick();
+        glr_ctrl_display_frame();
+        if (!glr_camera_target_active() &&
+            g_last_scene_config.projection_mix == 0.0f)
+            break;
+    }
+
+    ASSERT_INT("new scene action succeeds",
+               glr_action_menu_item_activate(GLR_MENU_FILE,
+                                              GLR_FILE_ITEM_NEW_SCENE), 1);
+    slot = repl_active_user_scene();
+    ASSERT_TRUE("new scene created from 2d example", slot >= 0);
+
+    for (int i = 0; i < 400; i++) {
+        glr_ctrl_tick();
+        glr_ctrl_display_frame();
+        if (!glr_camera_target_active() &&
+            g_last_scene_config.projection_mix == 1.0f)
+            break;
+    }
+
+    repl_scenes_detach_active_user_scene();
+    ASSERT_TRUE("new scene reloads", repl_load_user_scene_idx(slot));
+    glr_ctrl_display_frame();
+    glr_camera_ease_to_default();
+    for (int i = 0; i < 600 && glr_camera_target_active(); i++)
+        glr_camera_tick();
+    cam = glr_camera();
+    ASSERT_TRUE("reset does not return to flattened 2d rx",
+                fabsf(cam.rx - 20.0f) < 0.05f);
+    ASSERT_TRUE("reset does not return to flattened 2d ry",
+                fabsf(cam.ry - 30.0f) < 0.05f);
+}
+
+static void test_new_scene_real_2d_reset_during_transition(void) {
+    int example = -1;
+    int slot;
+    GlrCameraState cam;
+
+    printf("--- imrepl_ctrl real 2d new scene reset during transition ---\n");
+    for (int i = 0; i < glr_scene_example_count(); i++) {
+        const char *name = glr_scene_example_name(i);
+        if (name && strstr(name, "2D assignment sketch") != NULL) {
+            example = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("real 2d example found", example >= 0);
+    if (example < 0)
+        return;
+
+    glr_ctrl_reset_all();
+    glr_ctrl_display_frame();
+    glr_scene_load_example(example);
+    glr_ctrl_display_frame();
+    for (int i = 0; i < 500; i++) {
+        glr_ctrl_tick();
+        glr_ctrl_display_frame();
+        if (!glr_camera_target_active() &&
+            g_last_scene_config.projection_mix == 0.0f)
+            break;
+    }
+    cam = glr_camera();
+    ASSERT_INT("real 2d example settles in ortho",
+               glr_state_presentation().ortho_mode, 1);
+    ASSERT_FLOAT("real 2d example settles projection",
+                 g_last_scene_config.projection_mix, 0.0f);
+    ASSERT_TRUE("real 2d example looks down z",
+                fabsf(cam.rx) < 0.05f && fabsf(cam.ry) < 0.05f);
+
+    ASSERT_INT("real 2d new scene action succeeds",
+               glr_action_menu_item_activate(GLR_MENU_FILE,
+                                              GLR_FILE_ITEM_NEW_SCENE), 1);
+    slot = repl_active_user_scene();
+    ASSERT_TRUE("real 2d new scene is active", slot >= 0);
+
+    /* The action changes the scene cfg to 3D, but the transition tick has not
+     * run yet. Reset here: this is the race that used to let the old 2D saved
+     * orbit overwrite the reset target at the end of the projection leg. */
+    editor_input_set_modifier_provider_for_test(simulated_mods_provider);
+    g_simulated_mods = GLUT_ACTIVE_SHIFT;
+    glr_ctrl_keyboard(KEY_CTRL_C, 0, 0);
+    ASSERT_TRUE("reset during new-scene transition starts an ease",
+                glr_camera_target_active());
+    for (int i = 0; i < 500; i++) {
+        glr_ctrl_tick();
+        glr_ctrl_display_frame();
+        if (!glr_camera_target_active() &&
+            g_last_scene_config.projection_mix == 1.0f)
+            break;
+    }
+    cam = glr_camera();
+    ASSERT_FLOAT("new scene returns to 3D",
+                 g_last_scene_config.projection_mix, 1.0f);
+    ASSERT_TRUE("reset during new-scene transition keeps default rx",
+                fabsf(cam.rx - 20.0f) < 0.05f);
+    ASSERT_TRUE("reset during new-scene transition keeps default ry",
+                fabsf(cam.ry - 30.0f) < 0.05f);
+    g_simulated_mods = 0;
+    editor_input_set_modifier_provider_for_test(NULL);
+}
+
 /* Cycling 2D-example -> 3D-example-A -> 3D-example-B fast: example A
  * starts a 2D->3D projection blend; example B loads mid-blend. The
  * saved-3D snapshot (consumed by start_camera_to_3d when the blend ends)
@@ -8139,6 +8260,8 @@ int main(void) {
     test_view_mode_restore_honors_pending_camera_reset();
     test_import_camera_block_becomes_scene_default();
     test_import_without_camera_block_keeps_global_default();
+    test_new_scene_from_2d_pose_does_not_poison_reset();
+    test_new_scene_real_2d_reset_during_transition();
     test_view_mode_3d_restore_tracks_example_loaded_midblend();
     test_view_mode_quick_2d_to_3d_waits_for_pending_example_pose();
     test_view_record_external_3d_pose_tracks_in_ortho();

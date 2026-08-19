@@ -505,7 +505,8 @@ typedef double (*GlrCtrlElapsedSecondsFn)(void);
 void glr_ctrl_set_init_log_elapsed_fn(GlrCtrlElapsedSecondsFn fn);
 
 /* Report that an external caller (e.g. an example's `// camera` block
- * applied via the camera bridge) has set the camera to a new 3D pose.
+ * applied via the camera bridge, or an explicit camera reset) has set the
+ * camera to a new 3D pose.
  * While the user is dwelling in 2D, the saved-3D snapshot used to
  * restore the camera on 2D->3D otherwise stays at the pose captured at
  * 2D entry, so a later return to 3D would override the example's

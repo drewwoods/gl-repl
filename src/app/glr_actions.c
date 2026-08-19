@@ -73,6 +73,20 @@ extern char **environ;
 static int glr_action_modal_commit(GlrModalKind kind, const char *text,
                                    int context);
 
+/* A reset can race the tail of a 2D -> 3D view transition.  The camera ease
+ * owns the full destination, but that transition also carries a separate
+ * saved 3D orbit which would otherwise restore the old 2D pose when its
+ * projection leg finishes.  Keep both authorities on the same destination. */
+static void glr_action_reset_camera_to_default(void) {
+    GlrCameraState destination;
+
+    glr_camera_ease_to_default();
+    destination = glr_camera_destination();
+    glr_ctrl_view_record_external_3d_pose(destination.rx,
+                                           destination.ry,
+                                           destination.tz);
+}
+
 #if defined(__APPLE__)
 extern FILE *popen(const char *command, const char *mode);
 extern int pclose(FILE *stream);
@@ -1144,7 +1158,7 @@ void glr_cfg_cycle_row(int row, int delta) {
         return;
     }
     if (item->key == GLR_CONFIG_RESET_CAMERA) {
-        glr_camera_ease_to_default();
+        glr_action_reset_camera_to_default();
         repl_set_status("Camera: reset to default");
         return;
     }
@@ -1662,6 +1676,12 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
             if (repl_scenes_create_empty_user_scene() >= 0) {
                 editor_undo_note_wholesale_replacement();
                 glr_camera_clear_scene_default();
+                glr_action_reset_camera_to_default();
+                /* New Scene may have been created while the source example
+                 * was flattened into 2D. Persist the fresh scene's intended
+                 * 3D reset destination, rather than the transient down-Z
+                 * camera pose captured while allocating the slot. */
+                repl_scenes_save_active_scene_if_any();
             }
             return 1;
         case GLR_FILE_ITEM_SAVE_SCENE: {
