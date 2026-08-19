@@ -298,7 +298,8 @@ python3 scripts/web-serve.py build/release-web
 
 Open `gl4es-render.html` from that server. It exercises triangles, batched
 points, wide/polygon lines, attrib-stack restoration, `glAccum`, perspective
-bitmap raster positions, and front/back color-material state. The page sets
+bitmap raster positions, and front-face isolation after a GL_BACK
+color-material selection. The page sets
 `document.title` to `PASS gl4es render bench` or `FAIL gl4es render bench` and
 publishes per-case timing/coverage/probe data in `window.gl4esRenderBench`.
 The checks use feature invariants rather than exact pixels, since WebGL

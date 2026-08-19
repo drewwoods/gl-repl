@@ -215,7 +215,8 @@ The same target also builds `gl4es-render.html` from the shared
 native-compatible fixed-function workload through gl4es and covers batched
 triangles, point-size capture, wide and polygon-mode lines, attrib-stack
 restoration, accumulation, perspective bitmap raster positions, and
-front/back color-material state. Each case reports draw time plus coverage and
+front-face isolation after a GL_BACK color-material selection. Each case reports
+draw time plus coverage and
 probe metrics; the browser page publishes `window.gl4esRenderBench` and sets
 `document.title` to `PASS gl4es render bench` or `FAIL gl4es render bench`.
 This deliberately uses feature invariants instead of an exact screenshot, so

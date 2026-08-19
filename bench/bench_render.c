@@ -252,6 +252,7 @@ static void draw_material_faces(void)
 
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
+    glFrontFace(GL_CCW);
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambient);
     glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
     glLightfv(GL_LIGHT0, GL_AMBIENT, ambient);
@@ -270,11 +271,15 @@ static void draw_material_faces(void)
 
     glColorMaterial(GL_BACK, GL_AMBIENT_AND_DIFFUSE);
     glColor3f(0.08f, 1.0f, 1.0f);
+    /* This quad is deliberately CCW too. Selecting GL_BACK must not change
+     * a front-facing polygon's red front material; a buggy implementation
+     * that applies the current cyan color to the front face fails the oracle.
+     */
     glBegin(GL_QUADS);
     glVertex2f(0.08f, -0.55f);
-    glVertex2f(0.08f, 0.55f);
-    glVertex2f(0.82f, 0.55f);
     glVertex2f(0.82f, -0.55f);
+    glVertex2f(0.82f, 0.55f);
+    glVertex2f(0.08f, 0.55f);
     glEnd();
 }
 
@@ -350,7 +355,7 @@ static int measure_pixels(RenderMetrics *metrics)
 static int material_oracle(const RenderMetrics *m)
 {
     return m->left[0] <= m->left[1] * 2u ||
-           m->right[1] <= m->right[0] * 2u;
+           m->right[0] <= m->right[1] * 2u;
 }
 
 static int oracle_for_case(int index, const RenderMetrics *m)
@@ -520,7 +525,7 @@ int main(int argc, char **argv)
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
 
     if (g_csv)
-        printf("case,reps,ms_per_frame,coverage,bright,hash,energy,center_r,"
+        printf("kind,case,reps,ms_per_frame,coverage,bright,hash,energy,center_r,"
                "center_g,center_b,left_r,left_g,right_r,right_g,oracle\n");
     else
         printf("render benchmark: cases=%d reps=%d strict=%d\n",
