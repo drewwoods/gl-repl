@@ -1360,7 +1360,7 @@ BENCH_TARGET_NAMES = $(subst _,-,$(BENCH_BINS))
 BENCH_OBJS = $(foreach bin,$(BENCH_BINS),$($(bin)_OBJS))
 
 TEST_JOBS ?=
-TEST_ARGS ?=
+ARGS ?=
 
 COMPILE_REPORT_TEST_SUMMARY := $(COMPILE_REPORT_DIR)/tests-summary
 $(COMPILE_REPORT_TEST_SUMMARY): $(addprefix $(BINDIR)/,$(TEST_BINS))
@@ -2473,9 +2473,9 @@ internal-test-suite: $(addprefix $(BINDIR)/,$(TEST_BINS)) $(COMPILE_REPORT_TEST_
 	TEST_JOBS="$(TEST_JOBS)" \
 	bash scripts/run-tests.sh $(TEST_RUNNER_CASES)
 
-# GNU make treats tokens after its own `--` as more goals. TEST_ARGS is the
-# pass-through for single-test runners, for example:
-# `make run-test-repl-core-examples TEST_ARGS='--dump-index 2'`.
+# GNU make treats tokens after its own `--` as more goals. ARGS is the
+# pass-through for single-test runners and benchmark binaries, for example:
+# `make run-test-repl-core-examples ARGS='--dump-index 2'`.
 $(RUN_TEST_TARGETS): run-%:
 	+$(MAKE) --no-print-directory internal-test-case \
 		USE_GL_STUBS=1 TEST_CASE=$(subst -,_,$*)
@@ -2487,7 +2487,7 @@ $(RUN_TEST_FILE_TARGETS): run-%:
 internal-test-case: $$(BINDIR)/$$(TEST_CASE)
 	@REPL_EXPORT_CC="$(CC)" \
 	REPL_EXPORT_COMPILE_CFLAGS='$(BUILD_CFLAGS) $(CFLAGS)' \
-	$($(TEST_CASE)_RUN) $(TEST_ARGS)
+	$($(TEST_CASE)_RUN) $(ARGS)
 	@bash scripts/compile-report.sh summary "$(COMPILE_REPORT_DIR)"
 
 # The scene corpora under tests/scenes/ are opt-in: every scene costs an
@@ -2623,8 +2623,8 @@ install-completions: ## Add the bundled zsh completions to ~/.zshrc (idempotent;
 # Benchmark targets ------------------------------------------------------
 # Built and invoked separately from `make test` because timing is sensitive
 # to system load and we don't want a stray slow run failing CI. Use
-# BENCH_ARGS to pass through flags, e.g. `make bench BENCH_ARGS="--iters 20"`.
-BENCH_ARGS ?=
+# Use ARGS to pass flags through to benchmark binaries, e.g.
+# `make bench ARGS="--iters 20"`.
 
 # Shared fixed-function rendering benchmark. The native target runs the same
 # source against the platform GL stack; the web target below links it into a
@@ -2633,7 +2633,6 @@ BENCH_ARGS ?=
 RENDER_BENCH_SRC := bench/bench_render.c
 RENDER_BENCH_OBJ := $(OBJDIR)/$(RENDER_BENCH_SRC:.c=.o)
 RENDER_BENCH_BIN := $(BINDIR)/bench_render
-RENDER_BENCH_ARGS ?=
 
 ifneq ($(WEB),1)
 $(RENDER_BENCH_BIN): $(RENDER_BENCH_OBJ) $(GL_STUB_COUNTS_OBJS) | $(COMPILE_REPORT_START)
@@ -2641,10 +2640,10 @@ $(RENDER_BENCH_BIN): $(RENDER_BENCH_OBJ) $(GL_STUB_COUNTS_OBJS) | $(COMPILE_REPO
 	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(RENDER_BENCH_OBJ) $(GL_STUB_COUNTS_OBJS) $(GL_LDFLAGS) -o $@
 
 bench-render: $(RENDER_BENCH_BIN) ## Run the shared native rendering benchmark (use FREEGLUT_OSMESA=1 for headless CI).
-	$(RENDER_BENCH_BIN) $(RENDER_BENCH_ARGS) $(BENCH_ARGS)
+	$(RENDER_BENCH_BIN) $(ARGS)
 
 bench-render-csv: $(RENDER_BENCH_BIN) ## Run the shared native rendering benchmark as CSV.
-	$(RENDER_BENCH_BIN) --csv $(RENDER_BENCH_ARGS) $(BENCH_ARGS)
+	$(RENDER_BENCH_BIN) --csv $(ARGS)
 else
 bench-render bench-render-csv:
 	@echo "ERROR: bench-render is the native target; use bench-web-gl4es for the browser/gl4es build." >&2
@@ -2681,17 +2680,17 @@ $(GLUT_BITMAP_FREEGLUT_BIN): $(GLUT_BITMAP_BENCH_SRC) $(FREEGLUT_STATIC_LIB)
 bench-glut-bitmap-build: $(GLUT_BITMAP_APPLE_BIN) $(GLUT_BITMAP_FREEGLUT_BIN) ## Build the isolated Apple GLUT/freeglut bitmap-font benchmarks.
 
 bench-glut-bitmap-apple: $(GLUT_BITMAP_APPLE_BIN) ## Benchmark successive glutBitmapCharacter calls using Apple GLUT.
-	$(GLUT_BITMAP_APPLE_BIN) $(GLUT_BITMAP_BENCH_ARGS)
+	$(GLUT_BITMAP_APPLE_BIN) $(GLUT_BITMAP_BENCH_ARGS) $(ARGS)
 
 bench-glut-bitmap-freeglut: $(GLUT_BITMAP_FREEGLUT_BIN) ## Benchmark freeglut character-loop and glutBitmapString paths.
-	$(GLUT_BITMAP_FREEGLUT_BIN) $(GLUT_BITMAP_BENCH_ARGS)
+	$(GLUT_BITMAP_FREEGLUT_BIN) $(GLUT_BITMAP_BENCH_ARGS) $(ARGS)
 
 bench-glut-bitmap: bench-glut-bitmap-build ## Compare Apple GLUT with freeglut bitmap rendering (macOS, opens two short-lived windows).
 	@echo "==> Apple GLUT"
-	@$(GLUT_BITMAP_APPLE_BIN) $(GLUT_BITMAP_BENCH_ARGS)
+	@$(GLUT_BITMAP_APPLE_BIN) $(GLUT_BITMAP_BENCH_ARGS) $(ARGS)
 	@echo
 	@echo "==> freeglut"
-	@$(GLUT_BITMAP_FREEGLUT_BIN) $(GLUT_BITMAP_BENCH_ARGS)
+	@$(GLUT_BITMAP_FREEGLUT_BIN) $(GLUT_BITMAP_BENCH_ARGS) $(ARGS)
 else
 bench-glut-bitmap-build bench-glut-bitmap-apple bench-glut-bitmap-freeglut bench-glut-bitmap:
 	@echo "ERROR: the Apple GLUT comparison is available only on macOS." >&2
@@ -2729,7 +2728,7 @@ $(CODE_PANEL_TEXT_BENCH_BIN): $(CODE_PANEL_TEXT_BENCH_OBJS)
 	$(CC) $(OBJ_CFLAGS) $(CODE_PANEL_TEXT_BENCH_OBJS) $(GL_LDFLAGS) -o $@
 
 bench-code-panel-text: $(CODE_PANEL_TEXT_BENCH_BIN) ## Benchmark code-panel text submission vs span fragmentation (Linux/macOS; opens a short-lived window).
-	$(CODE_PANEL_TEXT_BENCH_BIN) $(CODE_PANEL_TEXT_BENCH_ARGS) $(BENCH_ARGS)
+	$(CODE_PANEL_TEXT_BENCH_BIN) $(CODE_PANEL_TEXT_BENCH_ARGS) $(ARGS)
 else
 bench-code-panel-text:
 	@echo "ERROR: bench-code-panel-text targets Linux/macOS (needs freeglut)." >&2
@@ -2757,7 +2756,7 @@ $(CODE_PANEL_STENCIL_BENCH_BIN): $(CODE_PANEL_STENCIL_BENCH_SRC) $(FREEGLUT_STAT
 	  -framework IOKit -framework Cocoa -framework OpenGL -framework CoreVideo -o $@
 
 bench-code-panel-stencil: $(CODE_PANEL_STENCIL_BENCH_BIN) ## Benchmark stencil-routed vs per-span-glColor code-panel text (Linux/macOS; opens a short-lived window).
-	$(CODE_PANEL_STENCIL_BENCH_BIN) $(CODE_PANEL_STENCIL_BENCH_ARGS) $(BENCH_ARGS)
+	$(CODE_PANEL_STENCIL_BENCH_BIN) $(CODE_PANEL_STENCIL_BENCH_ARGS) $(ARGS)
 else ifeq ($(UNAME_S),Linux)
 ifeq ($(FREEGLUT_VENDOR_LINUX),1)
 $(CODE_PANEL_STENCIL_BENCH_BIN): $(CODE_PANEL_STENCIL_BENCH_SRC) $(FREEGLUT_STATIC_LIB)
@@ -2774,7 +2773,7 @@ $(CODE_PANEL_STENCIL_BENCH_BIN): $(CODE_PANEL_STENCIL_BENCH_SRC)
 endif
 
 bench-code-panel-stencil: $(CODE_PANEL_STENCIL_BENCH_BIN) ## Benchmark stencil-routed vs per-span-glColor code-panel text (Linux/macOS; opens a short-lived window).
-	$(CODE_PANEL_STENCIL_BENCH_BIN) $(CODE_PANEL_STENCIL_BENCH_ARGS) $(BENCH_ARGS)
+	$(CODE_PANEL_STENCIL_BENCH_BIN) $(CODE_PANEL_STENCIL_BENCH_ARGS) $(ARGS)
 else
 bench-code-panel-stencil:
 	@echo "ERROR: bench-code-panel-stencil targets Linux/macOS (needs freeglut)." >&2
@@ -2806,7 +2805,7 @@ $(VERTEX_LABEL_BENCH_BIN): $(VERTEX_LABEL_BENCH_SRC) $(FREEGLUT_STATIC_LIB)
 	  -framework IOKit -framework Cocoa -framework OpenGL -framework CoreVideo -o $@
 
 bench-vertex-labels: $(VERTEX_LABEL_BENCH_BIN) ## Benchmark the vertex-number overlay's depth readback, glyph draw, and matrix reads (Linux/macOS; opens a short-lived window).
-	$(VERTEX_LABEL_BENCH_BIN) $(VERTEX_LABEL_BENCH_ARGS) $(BENCH_ARGS)
+	$(VERTEX_LABEL_BENCH_BIN) $(VERTEX_LABEL_BENCH_ARGS) $(ARGS)
 else ifeq ($(UNAME_S),Linux)
 $(VERTEX_LABEL_BENCH_BIN): $(VERTEX_LABEL_BENCH_SRC)
 	@mkdir -p $(dir $@)
@@ -2814,7 +2813,7 @@ $(VERTEX_LABEL_BENCH_BIN): $(VERTEX_LABEL_BENCH_SRC)
 	  $< -lglut -lGL -lGLU -lm -o $@
 
 bench-vertex-labels: $(VERTEX_LABEL_BENCH_BIN) ## Benchmark the vertex-number overlay's depth readback, glyph draw, and matrix reads (Linux/macOS; opens a short-lived window).
-	$(VERTEX_LABEL_BENCH_BIN) $(VERTEX_LABEL_BENCH_ARGS) $(BENCH_ARGS)
+	$(VERTEX_LABEL_BENCH_BIN) $(VERTEX_LABEL_BENCH_ARGS) $(ARGS)
 else
 bench-vertex-labels:
 	@echo "ERROR: bench-vertex-labels targets Linux/macOS (needs freeglut)." >&2
@@ -2827,13 +2826,13 @@ capacity-matrix: ## Print state-scaling matrix: per-tunable bytes-per-unit, curr
 
 bench: $(BENCH_TARGET_NAMES) $(COMPILE_REPORT_BENCH_SUMMARY) ## Build and run the REPL runtime benchmarks.
 	@for b in $(BENCH_BINS); do \
-		echo "==> $$b $(BENCH_ARGS)"; \
-		$(BINDIR)/$$b $(BENCH_ARGS) || exit $$?; \
+		echo "==> $$b $(ARGS)"; \
+		$(BINDIR)/$$b $(ARGS) || exit $$?; \
 	done
 
 bench-csv: $(BENCH_TARGET_NAMES) ## Run benchmarks with --csv output (machine readable).
 	@for b in $(BENCH_BINS); do \
-		$(BINDIR)/$$b --csv $(BENCH_ARGS) || exit $$?; \
+		$(BINDIR)/$$b --csv $(ARGS) || exit $$?; \
 	done
 
 # The same benchmarks compiled to wasm and run under node, because wasm is
@@ -2858,8 +2857,8 @@ bench-web: require-emcc ## Build and run the REPL runtime benchmarks as wasm und
 		$(MAKE) --no-print-directory WEB=1 $(WEB_BINDIR)/$$b || exit $$?; \
 	done
 	@for b in $(BENCH_BINS); do \
-		echo "==> $$b (wasm/node) $(BENCH_ARGS)"; \
-		node $(WEB_BINDIR)/$$b $(BENCH_ARGS) || exit $$?; \
+		echo "==> $$b (wasm/node) $(ARGS)"; \
+		node $(WEB_BINDIR)/$$b $(ARGS) || exit $$?; \
 	done
 
 bench-web-csv: require-emcc ## Run the wasm benchmarks with --csv output (machine readable).
@@ -2872,7 +2871,7 @@ bench-web-csv: require-emcc ## Run the wasm benchmarks with --csv output (machin
 		$(MAKE) --no-print-directory WEB=1 $(WEB_BINDIR)/$$b >/dev/null || exit $$?; \
 	done
 	@for b in $(BENCH_BINS); do \
-		node $(WEB_BINDIR)/$$b --csv $(BENCH_ARGS) || exit $$?; \
+		node $(WEB_BINDIR)/$$b --csv $(ARGS) || exit $$?; \
 	done
 
 # Browser-only companion to bench-web. Unlike the node benchmarks above, this
@@ -3376,8 +3375,8 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "User CFLAGS are appended to the selected build mode.\n\n"
 	@printf "Tests:           make test runs the headless stub suite; set TEST_JOBS=N to limit jobs.\n\n"
 	@printf "Individual tests can be built with make test-eval, or built and run with\n"
-	@printf "                 make run-test-eval. Pass arguments with TEST_ARGS, e.g.\n"
-	@printf "                 make run-test-repl-core-examples TEST_ARGS='--show-mismatch'.\n\n"
+	@printf "                 make run-test-eval. Pass arguments with ARGS, e.g.\n"
+	@printf "                 make run-test-repl-core-examples ARGS='--show-mismatch'.\n\n"
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / && $$1 !~ /^check-/ {printf "  %-24s %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
 # Keep procedural targets phony without maintaining a second copy of every

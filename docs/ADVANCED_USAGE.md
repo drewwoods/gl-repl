@@ -212,7 +212,7 @@ These are make variables or script/test env vars. Pass make variables as
 | `FREEGLUT_VENDOR` | Makefile. | `0` skips the vendored freeglut static library, used by the `make glut` fallback. |
 | `APP_ICON_SVG` | Makefile `make app`. | Source SVG for the generated macOS `.icns`. |
 | `TEST_JOBS` | Makefile, `scripts/run-tests.sh`. | Limits parallel test binaries; empty/`0` means unbounded parallel runner behavior. |
-| `TEST_ARGS` | Makefile `run-test-*` targets. | Extra arguments passed to one test binary, e.g. `make run-test-repl-core-examples TEST_ARGS='--show-mismatch'`. |
+| `ARGS` | Makefile `run-test-*` and bench targets. | Extra arguments passed to the binaries run by the target, e.g. `make run-test-repl-core-examples ARGS='--show-mismatch'` or `make bench ARGS='--iters 20'`. |
 | `TEST_LOG_DIR` | `scripts/run-tests.sh`. | Directory for per-test logs; default `build/test-logs/run-<pid>`. |
 | `NO_COLOR` | Test runners. | Disables ANSI color output. |
 | `FORCE_COLOR`, `CLICOLOR_FORCE` | Test runners. | Forces ANSI color output when `NO_COLOR` is unset. |
@@ -229,8 +229,6 @@ These are make variables or script/test env vars. Pass make variables as
 | `FREEGLUT_REPO` | `scripts/vendor-freeglut.sh`. | Source repo or local clone to re-vendor from. |
 | `BIN` | `scripts/docs-assets.sh`. | `gl-repl` binary for doc media generation; default `build/release-osmesa/gl-repl`. |
 | `OUT` | `scripts/docs-assets.sh`. | Output directory for generated documentation media. |
-| `BENCH_ARGS` | Makefile bench targets. | Extra arguments passed to every benchmark binary. |
-| `RENDER_BENCH_ARGS` | `make bench-render`. | Extra arguments for the shared native rendering benchmark, such as `--reps 20 --strict`. |
 | `SANITIZER_CHECKERS` | Makefile `analyze`. | Clang static-analyzer checker list. |
 | `ANALYZE_EXCLUDE` | Makefile `analyze`. | Space-separated source list excluded from static analysis. |
 | `OUT_DIR`, `SRC_DIR`, `TEST_DIR`, `TOOLS_DIR`, `BENCH_DIR` | `scripts/code-smells.sh`. | Input/output directories for the code-smell audit script. |
@@ -265,7 +263,7 @@ available:
 
 ```bash
 make bench-render
-make bench-render FREEGLUT_OSMESA=1 RENDER_BENCH_ARGS="--csv --reps 20"
+make bench-render FREEGLUT_OSMESA=1 ARGS="--csv --reps 20"
 ```
 
 Native runs report oracle failures as warnings by default because some native

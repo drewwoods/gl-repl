@@ -224,7 +224,7 @@ the result remains meaningful across WebGL drivers and antialiasing modes.
 For a native baseline, run `make bench-render` (or
 `make bench-render FREEGLUT_OSMESA=1` on a headless machine). The native run
 prints the same metrics and timing rows. Native oracle failures are warnings
-unless `--strict` is passed through `RENDER_BENCH_ARGS`; strict mode makes a
+unless `--strict` is passed through `ARGS`; strict mode makes a
 failed coverage/color invariant return non-zero. The browser build enables
 strict mode automatically, and does not compare exact framebuffer hashes.
 

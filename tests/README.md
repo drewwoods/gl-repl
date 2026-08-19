@@ -24,12 +24,12 @@ make test-full                 # all of the above plus demos and benchmarks
 ```
 
 One binary at a time — every test has a `run-` target with dashes for
-underscores, and `TEST_ARGS` passes flags through:
+underscores, and `ARGS` passes flags through:
 
 ```bash
 make run-test-repl-core-parse
-make run-test-repl-core-examples TEST_ARGS='--dump-index 2'
-make run-test-export-trace-parity TEST_ARGS='--full --keep-traces'
+make run-test-repl-core-examples ARGS='--dump-index 2'
+make run-test-export-trace-parity ARGS='--full --keep-traces'
 ```
 
 Other knobs: `TEST_JOBS=N` caps runner parallelism (default: all at once),
@@ -55,10 +55,10 @@ trace lines, and a unified `diff(1)` of the two traces so you can see *when in
 time* the divergence started.
 
 ```bash
-make run-test-export-trace-parity TEST_ARGS='--help'
-make run-test-export-trace-parity TEST_ARGS='--full'            # every built-in example
-make run-test-export-trace-parity TEST_ARGS='--scenes-dir tests/scenes/general'
-make run-test-export-trace-parity TEST_ARGS='--keep-traces'     # keep .repl.tr / .child.tr on FAIL
+make run-test-export-trace-parity ARGS='--help'
+make run-test-export-trace-parity ARGS='--full'            # every built-in example
+make run-test-export-trace-parity ARGS='--scenes-dir tests/scenes/general'
+make run-test-export-trace-parity ARGS='--keep-traces'     # keep .repl.tr / .child.tr on FAIL
 ```
 
 Buckets are `PASS` / `FAIL` / `XFAIL` / `XPASS`; the expected-failure list is
@@ -90,11 +90,11 @@ announced by a `--- … ---` banner:
    built-in one.
 
 ```bash
-make run-test-repl-core-examples TEST_ARGS='--help'
-make run-test-repl-core-examples TEST_ARGS='--show-mismatch'   # context diff around a text mismatch
-make run-test-repl-core-examples TEST_ARGS='--dump-index 7'    # one example's panel text to stdout
-make run-test-repl-core-examples TEST_ARGS='--keep-temp'       # leave the exported .c files behind
-make run-test-repl-core-examples TEST_ARGS='--scenes-dir tests/scenes/general'
+make run-test-repl-core-examples ARGS='--help'
+make run-test-repl-core-examples ARGS='--show-mismatch'   # context diff around a text mismatch
+make run-test-repl-core-examples ARGS='--dump-index 7'    # one example's panel text to stdout
+make run-test-repl-core-examples ARGS='--keep-temp'       # leave the exported .c files behind
+make run-test-repl-core-examples ARGS='--scenes-dir tests/scenes/general'
 REPL_SCENE_CORPUS=1 make run-test-repl-core-examples            # the standard corpora
 make rebuild-golden                                            # = --update-golden, all fixtures
 ```
