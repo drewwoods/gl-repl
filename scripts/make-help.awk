@@ -14,6 +14,7 @@ BEGIN { FS = ":.*## "; MIN_FAMILY = 3 }
 
 /^[a-zA-Z0-9_.-]+:.*## / {
     name = $1
+    if (name ~ /^check-/) next      # check-* guards live under `make help-check`
     if (name in desc) next          # first `## ` wins; a second one is a guard failure
     desc[name] = $2
     names[++n] = name

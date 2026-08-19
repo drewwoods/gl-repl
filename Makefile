@@ -3352,8 +3352,9 @@ test-only: ## Deprecated spelling of: make test-stubs SKIP_CHECKS=1.
 # Help, in three tiers, all generated from this file:
 #
 #   make help          the handful of targets a newcomer runs
-#   make help-<verb>   one family at a time - help-check, help-bench, help-test
-#   make help-details  every documented target, grouped, for grepping
+#   make help-<verb>   one family at a time - help-bench, help-test
+#   make help-details  every documented target, grouped, for grepping (excluding check-*)
+#   make help-check    all check-* guards and ratchets
 #   make help-vars     the public variable interface
 #
 # Nothing below is a hand-maintained inventory. Targets come from their `## `
@@ -3417,7 +3418,8 @@ help: ## Show the common targets (run make help-details for the full list).
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {d[$$1]=$$2} \
 		END {split("gl-repl clean test test-full fetch-music help help-details",o," "); \
 		for (i=1;i<=7;i++) printf "  %-16s %s\n", o[i], d[o[i]]}' $(MAKEFILE_LIST)
-	@printf "\nOne family at a time:  make help-check, make help-bench, make help-test\n"
+	@printf "\nOne family at a time:  make help-bench, make help-test, make help-release\n"
+	@printf "Checks / guards:       make help-check\n"
 	@printf "Variables:             make help-vars\n"
 	@printf "Everything:            make help-details\n"
 
@@ -3426,9 +3428,9 @@ help: ## Show the common targets (run make help-details for the full list).
 # target per family, so a new family costs nothing.
 #
 # NOT .PHONY-able: .PHONY has no effect on pattern rules, so a file named
-# `help-check` in the repo root would make Make report "up to date" and skip
+# `help-bench` in the repo root would make Make report "up to date" and skip
 # the recipe. FORCE is the fix.
-help-%: FORCE ## Show one family of targets, e.g. make help-check, make help-bench.
+help-%: FORCE ## Show one family of targets, e.g. make help-bench, make help-test.
 	@printf "Targets: %s-*\n\n" "$*"
 	@awk -F':.*## ' -v p="$*" '/^[a-zA-Z0-9_.-]+:.*## / && $$1 ~ ("^" p "(-|$$)") \
 		{printf "  %-30s %s\n", $$1, $$2}' \
@@ -3436,6 +3438,17 @@ help-%: FORCE ## Show one family of targets, e.g. make help-check, make help-ben
 	@awk -F':.*## ' -v p="$*" '/^[a-zA-Z0-9_.-]+:.*## / && $$1 ~ ("^" p "(-|$$)") {found=1} \
 		END {if (!found) printf "  (no targets in this family; make help-details lists them all)\n"}' \
 		$(firstword $(MAKEFILE_LIST))
+
+help-check: FORCE ## Show all check-* guards and ratchets.
+	@printf "Check targets (guards, linters, ratchets) - run all with: make check\n\n"
+	@awk -F':.*## ' '/^[a-zA-Z0-9_.-]+:.*## / && $$1 ~ /^check-/ \
+		{printf "  %-30s %s\n", $$1, $$2}' \
+		$(firstword $(MAKEFILE_LIST)) | sort -u
+	@printf "\nRun individual check:  make <check-target-name>\n"
+	@printf "Run all checks:        make check\n"
+	@printf "Skip checks in test:   make test SKIP_CHECKS=1\n"
+
+help-checks: help-check ## Alias for make help-check.
 
 help-vars: ## Show the public Make variables (pass them as make <target> NAME=value).
 	@printf "Public Make variables - pass as: make <target> NAME=value\n\n"
@@ -3445,7 +3458,7 @@ help-vars: ## Show the public Make variables (pass them as make <target> NAME=va
 	@printf "\nRuntime env vars (GLR_*, FREEGLUT_*) and the compile-time defines:\n"
 	@printf "  docs/ADVANCED_USAGE.md > Environment variables\n"
 
-help-details: ## Show every documented target, grouped by family.
+help-details: ## Show every documented target, grouped by family (excludes check-* guards; see make help-check).
 	@printf "Immediate-mode REPL - all Make targets\n\n"
 	@printf "Build modes (BUILD=release | quick | debug | coverage):\n"
 	@printf "  common flags:  %s\n" "$(COMMON_CFLAGS)" | fold -s -w 100 | sed '1!s/^/                 /'
@@ -3459,6 +3472,7 @@ help-details: ## Show every documented target, grouped by family.
 	@printf "                  listed above; make test-<name> for any tests/test_<name>.c.\n"
 	@printf "Arguments:        ARGS is passed to whatever a target runs, e.g.\n"
 	@printf "                  make run-test-repl-core-examples ARGS='--show-mismatch'.\n\n"
+	@printf "Checks / guards:  make help-check\n"
 	@printf "Variables:        make help-vars\n"
 	@printf "Build/runtime env, OSMesa, capture, freeglut vendoring: docs/ADVANCED_USAGE.md\n"
 	@printf "Web build:        packaging/web/README.md\n"
