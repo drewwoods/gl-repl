@@ -5,7 +5,7 @@
 # Points are symbolic targets (grammar: src/app/glr_pointer_script.h).
 
 move scene:0.55,0.30
-echo scene:0.25,0.76 24 3.2 Overlays highlight code geometry and inspect vertices.
+echo bitmap scene:0.25,0.76 24 3.2 Overlays highlight code geometry and inspect vertices.
 pause 2.5
 
 # Load an example with function branching and multiple calls
@@ -25,16 +25,16 @@ cfg polygon_highlight 1
 scroll 0
 
 # Click a vertex line inside the triangle branch
-echo scene:0.25,0.76 24 3.4 The cursor line selects the active geometry.
+echo bitmap scene:0.25,0.76 24 3.4 The cursor line selects the active geometry.
 glide code:20 1.0
 click code:20
 glide scene:0.75,0.5 1.0
 pause 1.8
 
 # Polygon highlight
-echo scene:0.25,0.76 24 3.6 Polygon highlight (Ctrl+P) outlines the shape drawn by the code at the cursor.
+echo bitmap scene:0.25,0.76 24 3.6 Polygon highlight (Ctrl+P) outlines the shape drawn by the code at the cursor.
 pause 3.6
-echo scene:0.25,0.76 24 3.2 Ctrl+P cycles highlight: Clipped -> Off -> On.
+echo bitmap scene:0.25,0.76 24 3.2 Ctrl+P cycles highlight: Clipped -> Off -> On.
 key \cP
 pause 1.6
 key \cP
@@ -43,40 +43,40 @@ key \cP
 pause 1.8
 
 # Vertex labels
-echo scene:0.25,0.76 24 3.6 F7 enables Vertex Labels, numbering each point.
+echo bitmap scene:0.25,0.76 24 3.6 F7 enables Vertex Labels, numbering each point.
 skey f7
 pause 2.5
-echo scene:0.25,0.76 24 3.6 F7 again shows vertex coordinates alongside indices.
+echo bitmap scene:0.25,0.76 24 3.6 F7 again shows vertex coordinates alongside indices.
 skey f7
 pause 2.8
 
 # Overlay scope
-echo scene:0.25,0.76 24 3.8 Scope (F8) controls WHICH instances receive overlays\nDefault scope is Last instance: only the cursor's call.
+echo bitmap scene:0.25,0.76 24 3.8 Scope (F8) controls WHICH instances receive overlays\nDefault scope is Last instance: only the cursor's call.
 pause 3.8
 skey f8
-echo scene:0.25,0.76 24 3.8 F8 switches to All instances across all triangle calls!\nNote both triangles are highlighted
+echo bitmap scene:0.25,0.76 24 3.8 F8 switches to All instances across all triangle calls!\nNote both triangles are highlighted
 ring scene:0.25,0.5 1.0
 pause 3.5
-echo scene:0.25,0.76 24 3.6 Whole scene numbers every vertex across the entire program.
+echo bitmap scene:0.25,0.76 24 3.6 Whole scene numbers every vertex across the entire program.
 skey f8
 pause 3.5
-echo scene:0.25,0.76 24 3.6 Single polygon isolates down to one primitive.
+echo bitmap scene:0.25,0.76 24 3.6 Single polygon isolates down to one primitive.
 skey f8
 pause 3.2
-echo scene:0.25,0.76 24 3.2 F8 cycles back to Last instance.
+echo bitmap scene:0.25,0.76 24 3.2 F8 cycles back to Last instance.
 skey f8
 pause 2.5
 
 # Move to the quad branch to show dynamic selection
-echo scene:0.25,0.76 24 3.4 Moving to the quad branch shifts focus to the center quad.
+echo bitmap scene:0.25,0.76 24 3.4 Moving to the quad branch shifts focus to the center quad.
 glide code:10 0.9
 click code:10
 pause 1.4
 glide scene:0.5,0.5 1.0
 ring  scene:0.5,0.5 1.0
 
-echo scene:0.25,0.76 24 3.6 Status bar chips (OS, VL, PH) show and cycle states too!
+echo bitmap scene:0.25,0.76 24 3.6 Status bar chips (OS, VL, PH) show and cycle states too!
 glide scene:0.5,0 1.0
 ring  scene:0.5,0 1.0
 pause 3.6
-echo scene:0.25,0.76 24 3.6 Tour finished - it's all yours!
+echo bitmap scene:0.25,0.76 24 3.6 Tour finished - it's all yours!

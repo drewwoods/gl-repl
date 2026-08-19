@@ -117,31 +117,38 @@ typedef enum {
     PS_PAUSE
 } PsVerb;
 
+typedef enum {
+    PS_ECHO_BITMAP = 0,
+    PS_ECHO_STROKE,
+    PS_ECHO_STROKE_MONO
+} PsEchoStyle;
+
 typedef struct {
-    int    frame;                  /* fire frame (time * 60, rounded)   */
-    PsVerb verb;
-    int    has_xy;                 /* event carries a point (literal or  */
+    int         frame;             /* fire frame (time * 60, rounded)   */
+    PsVerb      verb;
+    int         has_xy;            /* event carries a point (literal or  */
                                    /* symbolic)                          */
-    int    x, y;                   /* literal point (move/glide/ring...) */
-    char   target[PS_MAX_TARGET];  /* symbolic point token ("" = use     */
+    int         x, y;              /* literal point (move/glide/ring...) */
+    char        target[PS_MAX_TARGET]; /* symbolic point token ("" = use */
                                    /* x/y); resolved at fire time        */
-    int    dur_frames;             /* glide/ring/echo duration           */
-    int    button;                 /* down/up: GLUT_LEFT/RIGHT_BUTTON    */
-    int    wheel_dir;              /* wheel: +1 / -1                     */
-    int    view_mode;              /* view: RENDER3D_VIEW_2D / _3D       */
-    int    scroll_row;             /* scroll: top row (-1 = use target)  */
-    char   slug[32];               /* cfg: stable configuration slug     */
-    char   value_str[64];          /* cfg: symbolic or integer value     */
-    int    special;                /* skey/chord: GLUT_KEY_* code, or    */
+    int         dur_frames;        /* glide/ring/echo duration           */
+    int         button;            /* down/up: GLUT_LEFT/RIGHT_BUTTON    */
+    int         wheel_dir;         /* wheel: +1 / -1                     */
+    int         view_mode;         /* view: RENDER3D_VIEW_2D / _3D       */
+    int         scroll_row;        /* scroll: top row (-1 = use target)  */
+    char        slug[32];          /* cfg: stable configuration slug     */
+    char        value_str[64];     /* cfg: symbolic or integer value     */
+    int         special;           /* skey/chord: GLUT_KEY_* code, or    */
                                    /* -1 for a chord's printable path    */
-    int    mods;                   /* chord: GLUT_ACTIVE_* override mask  */
+    int         mods;              /* chord: GLUT_ACTIVE_* override mask  */
     unsigned char key_byte;        /* chord: control byte (special < 0)  */
-    float  size;                   /* echo: requested cap height (px);   */
-                                   /* picks the nearest GLUT bitmap font */
-    float  cps;                    /* key@N: chars/sec (0 = all at once) */
-    int    source_line;            /* physical script line (1-based) for */
+    float       size;              /* echo: requested cap height (px);   */
+                                   /* picks nearest bitmap font or stroke scale */
+    PsEchoStyle echo_style;        /* echo: font style (bitmap/stroke/mono) */
+    float       cps;               /* key@N: chars/sec (0 = all at once) */
+    int         source_line;       /* physical script line (1-based) for */
                                    /* the tour HUD; 0 when unknown       */
-    char   text[PS_MAX_KEY_TEXT];  /* key: unescaped bytes to feed;      */
+    char        text[PS_MAX_KEY_TEXT]; /* key: unescaped bytes to feed;  */
                                    /* echo: caption text to draw         */
 } PsEvent;
 
@@ -243,9 +250,10 @@ static float g_ripple_x = 0.0f, g_ripple_y = 0.0f;
 static int   g_ring_start = -1, g_ring_dur = 0;
 static float g_ring_x = 0.0f, g_ring_y = 0.0f;
 
-/* Active echo caption: bitmap text shown at a fixed screen spot. */
+/* Active echo caption: text shown at a fixed screen spot. */
 static int   g_echo_start = -1, g_echo_dur = 0;
 static float g_echo_x = 0.0f, g_echo_y = 0.0f, g_echo_size = 0.0f;
+static PsEchoStyle g_echo_style = PS_ECHO_BITMAP;
 static char  g_echo_text[PS_MAX_KEY_TEXT] = "";
 
 static float ps_smoothstep(float t) {
@@ -790,9 +798,30 @@ static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
     if (strcmp(verb, "echo") == 0) {
         float size = 0.0f, dur = 0.0f;
         int nread = 0;
+        char modtok[32];
         ev->verb = PS_ECHO;
-        /* echo <point> <size> <dur> <text...> - position + cap height +
-         * on-screen lifetime, then the rest of the line is the caption. */
+
+        /* Required style modifier preceding point:
+         * `echo <stroke|mono|bitmap> <point> <size> <dur> <text...>` */
+        if (sscanf(args, "%31s%n", modtok, &nread) != 1)
+            return -1;
+        if (strcasecmp(modtok, "stroke") == 0 ||
+            strcasecmp(modtok, "stroke_roman") == 0 ||
+            strcasecmp(modtok, "stroke-roman") == 0) {
+            ev->echo_style = PS_ECHO_STROKE;
+        } else if (strcasecmp(modtok, "stroke_mono") == 0 ||
+                   strcasecmp(modtok, "stroke-mono") == 0 ||
+                   strcasecmp(modtok, "mono") == 0) {
+            ev->echo_style = PS_ECHO_STROKE_MONO;
+        } else if (strcasecmp(modtok, "bitmap") == 0) {
+            ev->echo_style = PS_ECHO_BITMAP;
+        } else {
+            return -1;
+        }
+        args += nread;
+
+        /* echo <style> <point> <size> <dur> <text...> - style + position +
+         * cap height + on-screen lifetime, then the rest of the line is caption. */
         args = ps_scan_point(args, ev);
         if (!args ||
             sscanf(args, "%f %f %n", &size, &dur, &nread) < 2 ||
@@ -945,6 +974,7 @@ static void ps_reset_runtime(void) {
     g_ripple_frame = -1;
     g_ring_start = -1;
     g_echo_start = -1;
+    g_echo_style = PS_ECHO_BITMAP;
     g_echo_text[0] = '\0';
     /* A canceled tour drops unsent paced-typing text - the user took over;
      * more synthetic keystrokes would fight their input. */
@@ -1317,6 +1347,7 @@ static void ps_fire(const PsEvent *ev) {
         g_echo_x = x;
         g_echo_y = y;
         g_echo_size = ev->size;
+        g_echo_style = ev->echo_style;
         snprintf(g_echo_text, sizeof(g_echo_text), "%s", ev->text);
         break;
     case PS_PAUSE:
@@ -1572,6 +1603,7 @@ static void ps_finish_event_immediate(const PsEvent *ev, int allow_overlays) {
         g_echo_x = x;
         g_echo_y = y;
         g_echo_size = ev->size;
+        g_echo_style = ev->echo_style;
         snprintf(g_echo_text, sizeof(g_echo_text), "%s", ev->text);
         break;
     case PS_PAUSE:
@@ -1821,6 +1853,7 @@ static void ps_tour_restore_landing_overlays(int target) {
         g_echo_x = x;
         g_echo_y = y;
         g_echo_size = ev->size;
+        g_echo_style = ev->echo_style;
         snprintf(g_echo_text, sizeof(g_echo_text), "%s", ev->text);
     }
     if (ripple_idx >= 0 && sim - ripple_fire < PS_RIPPLE_FRAMES &&
@@ -2160,6 +2193,33 @@ static float ps_bitmap_width(void *font, const char *s, size_t len) {
     return w;
 }
 
+/* GLUT stroke fonts are ~119.05 units cap height; scaling by
+ * size/PS_STROKE_CAP maps the requested cap height to window pixels. */
+#define PS_STROKE_CAP     119.05f
+#define PS_STROKE_DESCENT  33.33f
+
+static void *ps_stroke_font(PsEchoStyle style) {
+    return (style == PS_ECHO_STROKE_MONO) ? GLUT_STROKE_MONO_ROMAN
+                                          : GLUT_STROKE_ROMAN;
+}
+
+static float ps_stroke_width(void *font, float scale, const char *s, size_t len) {
+    float w = 0.0f;
+    for (size_t i = 0; i < len; i++)
+        w += (float)glutStrokeWidth(font, (int)(unsigned char)s[i]);
+    return w * scale;
+}
+
+static void ps_stroke_text(float x, float y, void *font, float scale,
+                           const char *s, size_t len) {
+    glPushMatrix();
+    glTranslatef(x, y, 0.0f);
+    glScalef(scale, scale, 1.0f);
+    for (size_t i = 0; i < len; i++)
+        glutStrokeCharacter(font, (int)(unsigned char)s[i]);
+    glPopMatrix();
+}
+
 /* Classic pointer arrow at the current position. Local coords are y-down
  * (mouse space); px/py convert to the gl2d y-up ortho at the call site. */
 static void ps_draw_cursor(float px, float py) {
@@ -2262,21 +2322,11 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
                   4.0f + 18.0f * t, 0);
     }
 
-    /* Echo caption: bitmap text (e.g. "Ctrl+K") pinned at a screen spot to
-     * label how the next action was triggered. A translucent dark plate goes
-     * down first so the glyphs read over any scene, then the caption is drawn
-     * once on top; the whole thing eases in/out together.
-     *
-     * The plate replaced an eight-pass 1px glyph outline, and the reason is
-     * performance, not taste. Apple's GL rasterizes tall bitmap glyphs ~30x
-     * slower per glyph than the short fonts the rest of the app uses (measured
-     * 337 glyphs: Times-24 ~12 ms vs Helvetica-12 ~0.4 ms; the cliff is around
-     * 16 glyph rows), and tours request 24 px. Nine passes over a ~35-char
-     * caption was therefore ~10 ms of CPU plus ~4 ms of extra glFinish drain
-     * every frame a caption was up - more than the whole 3D scene, and enough
-     * to miss the 60 Hz deadline on its own. One pass over a plate costs a
-     * ninth of that and gives *better* contrast over busy geometry. Keep it to
-     * one text pass: any per-glyph multiplier here is paid at that rate. */
+    /* Echo caption: text (e.g. "Ctrl+K") pinned at a screen spot to label
+     * how the next action was triggered. Drawn in either fixed GLUT bitmap
+     * font or scalable GLUT stroke font (GLUT_STROKE_ROMAN /
+     * GLUT_STROKE_MONO_ROMAN) on top of a translucent dark plate so glyphs
+     * read clearly over any scene geometry. The whole caption eases in/out. */
     if (g_echo_start >= 0 && g_frame - g_echo_start < g_echo_dur &&
         g_echo_text[0]) {
         /* Plate padding around the glyph box, px. Asymmetric on purpose: the
@@ -2285,15 +2335,32 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
         const float pad_x = 10.0f, pad_y = 5.0f;
         float alpha = glr_pointer_script_echo_alpha(g_frame - g_echo_start,
                                                     g_echo_dur, clock_frozen);
-        PsEchoFont font = ps_echo_font(g_echo_size);
         float cy = (float)win_h - g_echo_y;
         float w = 0.0f;
         int line_count = 1;
+        float font_ascent = 0.0f, font_descent = 0.0f;
+        void *stroke_font = NULL;
+        float stroke_scale = 0.0f;
+        PsEchoFont bitmap_font = { NULL, 0.0f, 0.0f };
+
+        if (g_echo_style == PS_ECHO_STROKE || g_echo_style == PS_ECHO_STROKE_MONO) {
+            stroke_font = ps_stroke_font(g_echo_style);
+            stroke_scale = g_echo_size / PS_STROKE_CAP;
+            font_ascent = g_echo_size;
+            font_descent = PS_STROKE_DESCENT * stroke_scale;
+        } else {
+            bitmap_font = ps_echo_font(g_echo_size);
+            font_ascent = bitmap_font.ascent;
+            font_descent = bitmap_font.descent;
+        }
+
         const char *line = g_echo_text;
         for (const char *p = g_echo_text;; p++) {
             if (*p == '\n' || *p == '\0') {
-                float line_w = ps_bitmap_width(font.font, line,
-                                               (size_t)(p - line));
+                size_t span_len = (size_t)(p - line);
+                float line_w = stroke_font
+                    ? ps_stroke_width(stroke_font, stroke_scale, line, span_len)
+                    : ps_bitmap_width(bitmap_font.font, line, span_len);
                 if (line_w > w) w = line_w;
                 if (*p == '\0') break;
                 line_count++;
@@ -2302,10 +2369,10 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
         }
         /* Center the caption horizontally on its anchor point rather than
          * left-aligning at it, so the label sits symmetrically over the
-         * target it annotates. Keep its raster origin inside the viewport:
-         * legacy GL invalidates a raster position outside the clip volume,
-         * which silently drops the entire bitmap string. If a caption is
-         * wider than the viewport, preserve a valid left edge and let GL clip
+         * target it annotates. Keep its origin inside the viewport: legacy GL
+         * invalidates a raster position outside the clip volume, which
+         * silently drops the entire bitmap string. If a caption is wider
+         * than the viewport, preserve a valid left edge and let GL clip
          * only the tail instead of losing every glyph. */
         float cx = g_echo_x - w * 0.5f;
         float max_cx = (float)win_w - pad_x - w;
@@ -2314,17 +2381,17 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
 
         /* Center a multiline block vertically around the old single-line
          * baseline, then keep every line's raster origin in the viewport too. */
-        float line_step = font.ascent + font.descent + 4.0f;
+        float line_step = font_ascent + font_descent + 4.0f;
         float first_cy = cy + (float)(line_count - 1) * line_step * 0.5f;
         float plate_bottom = first_cy - (float)(line_count - 1) * line_step -
-                             font.descent - pad_y;
-        float plate_top = first_cy + font.ascent + pad_y;
+                             font_descent - pad_y;
+        float plate_top = first_cy + font_ascent + pad_y;
         if (plate_bottom < 0.0f) first_cy -= plate_bottom;
-        plate_top = first_cy + font.ascent + pad_y;
+        plate_top = first_cy + font_ascent + pad_y;
         if (plate_top > (float)win_h) first_cy -= plate_top - (float)win_h;
         plate_bottom = first_cy - (float)(line_count - 1) * line_step -
-                       font.descent - pad_y;
-        plate_top = first_cy + font.ascent + pad_y;
+                       font_descent - pad_y;
+        plate_top = first_cy + font_ascent + pad_y;
 
         ui_clr_a(UI_TOK_SCRIM, alpha * 0.72f);
         glBegin(GL_QUADS);
@@ -2335,17 +2402,30 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
         glEnd();
 
         ui_clr_a(UI_TOK_TEXT_ON_HILITE, alpha);
+        if (stroke_font) {
+            float stroke_lw = fmaxf(1.5f, g_echo_size * 0.08f);
+            glLineWidth(stroke_lw);
+        }
         line = g_echo_text;
         for (int row = 0; row < line_count; row++) {
             const char *end = strchr(line, '\n');
             size_t len = end ? (size_t)(end - line) : strlen(line);
-            float line_w = ps_bitmap_width(font.font, line, len);
-            ps_bitmap_text(cx + (w - line_w) * 0.5f,
-                           first_cy - (float)row * line_step,
-                           font.font, line, len);
+            float line_w = stroke_font
+                ? ps_stroke_width(stroke_font, stroke_scale, line, len)
+                : ps_bitmap_width(bitmap_font.font, line, len);
+            float line_x = cx + (w - line_w) * 0.5f;
+            float line_y = first_cy - (float)row * line_step;
+            if (stroke_font) {
+                ps_stroke_text(line_x, line_y, stroke_font, stroke_scale,
+                               line, len);
+            } else {
+                ps_bitmap_text(line_x, line_y, bitmap_font.font, line, len);
+            }
             if (!end) break;
             line = end + 1;
         }
+        if (stroke_font)
+            glLineWidth(1.0f);
     }
 
     ps_draw_cursor(g_px, (float)win_h - g_py);

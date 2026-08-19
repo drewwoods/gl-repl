@@ -254,7 +254,7 @@ static void test_step_past_ring_clears_overlay(void) {
  * bring the caption back, even though it is not the final replayed event. */
 static void test_backstep_restores_live_caption(void) {
     const char *lines[] = {
-        "echo 300 200 18 5 Live caption",   /* event 0: 5s (300-frame) window */
+        "echo bitmap 300 200 18 5 Live caption",   /* event 0: 5s (300-frame) window */
         "move 100 100",                     /* event 1 */
         "move 150 150",                     /* event 2 */
         "move 200 200",                     /* event 3 */
@@ -275,7 +275,7 @@ static void test_backstep_restores_live_caption(void) {
  * echo's 0.05s (3-frame) window is long gone four events later. */
 static void test_backstep_expired_caption_not_shown(void) {
     const char *lines[] = {
-        "echo 300 200 18 0.05 Gone",        /* event 0: 3-frame window */
+        "echo bitmap 300 200 18 0.05 Gone",        /* event 0: 3-frame window */
         "move 100 100",                     /* event 1 */
         "move 150 150",                     /* event 2 */
         "move 200 200",                     /* event 3 */
@@ -299,7 +299,7 @@ static void test_backstep_expired_caption_not_shown(void) {
  * raster origin and therefore emit bitmap feedback tokens. */
 static void test_long_left_anchored_caption_renders(void) {
     const char *lines[] = {
-        "echo scene:0.25,0.76 24 3.6 Tour finished - it's all yours! Press any escape to exit or watch the replay to the end!"
+        "echo bitmap scene:0.25,0.76 24 3.6 Tour finished - it's all yours! Press any escape to exit or watch the replay to the end!"
     };
     start_tour(lines, 1);
     glr_pointer_script_frame();       /* fire echo; tour enters Done */
@@ -314,7 +314,7 @@ static void test_long_left_anchored_caption_renders(void) {
  * bitmap lines. "Top" + "Bottom" emits nine glyph tokens at two baselines. */
 static void test_caption_newline_renders_two_lines(void) {
     const char *lines[] = {
-        "echo scene:0.25,0.76 24 3.6 Top\\nBottom"
+        "echo bitmap scene:0.25,0.76 24 3.6 Top\\nBottom"
     };
     start_tour(lines, 1);
     glr_pointer_script_frame();
@@ -324,6 +324,18 @@ static void test_caption_newline_renders_two_lines(void) {
                g_bitmap_count, 9);
     ASSERT_TRUE("caption glyphs occupy two baselines",
                 g_bitmap_max_y - g_bitmap_min_y > 10.0f);
+}
+
+/* Stroke captions emit line loop/segment vertices for stroke fonts and quad plate. */
+static void test_stroke_caption_renders(void) {
+    const char *lines[] = {
+        "echo stroke scene:0.25,0.76 24 3.6 Stroke text"
+    };
+    start_tour(lines, 1);
+    glr_pointer_script_frame();
+
+    int verts = capture_overlay();
+    ASSERT_TRUE("stroke caption overlay captured vertices", verts > 0);
 }
 
 /* Validate the HUD render path end-to-end: the drawn panel sits at the scene's
@@ -399,6 +411,7 @@ int main(int argc, char **argv) {
     test_backstep_expired_caption_not_shown();
     test_long_left_anchored_caption_renders();
     test_caption_newline_renders_two_lines();
+    test_stroke_caption_renders();
     test_hud_render_matches_width_helper();
     return test_harness_report(&g_harness, "tour_overlay_feedback");
 }

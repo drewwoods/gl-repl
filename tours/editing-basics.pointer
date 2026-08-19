@@ -5,7 +5,7 @@
 # Points are symbolic targets (grammar: src/app/glr_pointer_script.h).
 
 move scene:0.55,0.30
-echo scene:0.25,0.76 24 3.0 Let's build a scene from scratch.
+echo bitmap scene:0.25,0.76 24 3.0 Let's build a scene from scratch.
 #ifdef __EMSCRIPTEN__
 glide shell:new 0.8             # browser shell's New button
 click shell:new
@@ -16,7 +16,7 @@ click
 glide item:new_scene 0.5     # New Scene row
 click
 #endif
-echo scene:0.25,0.76 24 3.4 A new scene seeds the GL boilerplate.
+echo bitmap scene:0.25,0.76 24 3.4 A new scene seeds the GL boilerplate.
 ring code:1 0.5
 ring code:2 0.5
 ring code:3 0.5
@@ -24,7 +24,7 @@ ring code:4 0.5
 ring code:5 0.5
 ring code:6 0.5
 
-echo scene:0.25,0.76 24 3.4 Type a command; the ; key commits it.
+echo bitmap scene:0.25,0.76 24 3.4 Type a command; the ; key commits it.
 
 # enter
 key \cj
@@ -34,9 +34,9 @@ key@10 glRotatef(
 pause 0.2
 key@5 t * 40, 0, 1, 0)
 pause 1.0
-echo scene:0.25,0.76 24 3.0 Note how we can see the effect for transformation in real time
+echo bitmap scene:0.25,0.76 24 3.0 Note how we can see the effect for transformation in real time
 key ;
-echo scene:0.25,0.76 24 3.0 t is the animation clock (Ctrl+T).
+echo bitmap scene:0.25,0.76 24 3.0 t is the animation clock (Ctrl+T).
 key@10 glBegin(GL_TRIANGLES)
 key ;
 key@10 glColor3f(1, 0.42, 0.3)
@@ -58,11 +58,11 @@ key@20 glVertex3f(0, 1.1, 0)
 key ;
 key@20 glEnd()
 key ;
-echo scene:0.25,0.76 24 3.6 The gray ghost is autocomplete (Tab).
+echo bitmap scene:0.25,0.76 24 3.6 The gray ghost is autocomplete (Tab).
 key@20 glutSolidT
 pause 1.6                       # let the autocomplete ghost linger
 key@20 orus(0.25, 1.4, 16, 32)
 key ;
-echo scene:0.25,0.76 24 4.0 Lines re-run every frame. Undo: Ctrl+Z.
+echo bitmap scene:0.25,0.76 24 4.0 Lines re-run every frame. Undo: Ctrl+Z.
 pause 4.0
-echo scene:0.25,0.76 24 3.6 Tour finished - it's all yours!
+echo bitmap scene:0.25,0.76 24 3.6 Tour finished - it's all yours!

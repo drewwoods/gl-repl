@@ -5,7 +5,7 @@
 
 view 3d
 move scene:0.58,0.30
-echo scene:0.25,0.76 24 3.2 Drag anywhere in the scene to orbit.
+echo bitmap scene:0.25,0.76 24 3.2 Drag anywhere in the scene to orbit.
 down scene:0.58,0.30
 glide scene:0.80,0.35 1.6
 up
@@ -14,7 +14,7 @@ down
 glide scene:0.50,0.42 1.2
 up
 pause 0.5
-echo scene:0.25,0.76 24 3.0 Right-click and drag to pan across the ground plane.
+echo bitmap scene:0.25,0.76 24 3.0 Right-click and drag to pan across the ground plane.
 rightdown scene:0.58,0.30
 glide scene:0.72,0.42 1.4
 rightup
@@ -23,7 +23,7 @@ rightdown
 glide scene:0.50,0.30 1.2
 rightup
 pause 0.5
-echo scene:0.25,0.76 24 3.0 Shift+right-click and drag to pan up and down.
+echo bitmap scene:0.25,0.76 24 3.0 Shift+right-click and drag to pan up and down.
 rightdown shift scene:0.58,0.34
 glide scene:0.58,0.18 1.2
 rightup
@@ -32,15 +32,15 @@ rightdown shift
 glide scene:0.58,0.34 1.0
 rightup
 pause 0.5
-echo scene:0.25,0.76 24 2.8 The mouse wheel zooms.
+echo bitmap scene:0.25,0.76 24 2.8 The mouse wheel zooms.
 wheel 20
 pause 0.9
 wheel -20
 pause 0.7
-echo scene:0.25,0.76 24 3.4 Ctrl+O focuses the origin.
+echo bitmap scene:0.25,0.76 24 3.4 Ctrl+O focuses the origin.
 key \co
 pause 2.8
-echo scene:0.25,0.76 24 3.6 Ctrl+Shift+C resets the camera.
+echo bitmap scene:0.25,0.76 24 3.6 Ctrl+Shift+C resets the camera.
 chord ctrl+shift c
 pause 3.6
-echo scene:0.25,0.76 24 3.6 Tour finished - it's all yours!
+echo bitmap scene:0.25,0.76 24 3.6 Tour finished - it's all yours!

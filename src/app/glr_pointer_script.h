@@ -90,13 +90,14 @@
  *                             # printable char (ctrl folds to its control
  *                             # byte). Reaches Shift shortcuts `key`/`skey`
  *                             # can't (a bare byte carries no Shift bit).
- *   8.0  echo scene:0.25,0.76 18 2 Ctrl+K   # caption text (point, cap
+ *   8.0  echo bitmap scene:0.25,0.76 18 2 Ctrl+K   # caption text
+ *                             # (style <stroke|mono|bitmap>, point, cap
  *                             # height px, on-screen seconds). Echo does not
  *                             # delay the next event; use `pause` when a
  *                             # caption needs an exclusive reading beat.
- *                             # The px size picks the nearest fixed GLUT
- *                             # bitmap font (10/12/18/24); `\n` starts a
- *                             # new centered caption line
+ *                             # Bitmap style selects nearest fixed GLUT font
+ *                             # (10/12/18/24); stroke/mono uses GLUT_STROKE_*;
+ *                             # `\n` starts a new centered caption line
  *
  * The same actions can be completion-driven by omitting timestamps:
  *

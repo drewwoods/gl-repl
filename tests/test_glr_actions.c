@@ -1122,7 +1122,7 @@ static void test_web_shell_new_creates_scene(void) {
  * the next frame. A final caption keeps Done alive for its authored lifetime. */
 static void test_tour_done_auto_closes(void) {
     static const char *const tiny[] = { "move 10 10" };
-    static const char *const caption[] = { "echo 10 10 18 0.1 Finished" };
+    static const char *const caption[] = { "echo bitmap 10 10 18 0.1 Finished" };
     glr_ctrl_reset_all();
 
     ASSERT_INT("tiny tour script loads",
@@ -1226,9 +1226,13 @@ static void test_tour_sequential_steps_and_pause(void) {
         "key y"
     };
     static const char *const caption_then_key[] = {
-        "echo 10 10 18 1 Caption remains visible",
+        "echo bitmap 10 10 18 1 Caption remains visible",
         "key z"
     };
+    static const char *const echo_stroke[] = { "echo stroke 10 10 18 1 Stroke caption" };
+    static const char *const echo_mono[] = { "echo mono 10 10 18 1 Mono caption" };
+    static const char *const echo_no_style[] = { "echo 10 10 18 1 Missing style" };
+    static const char *const echo_bad_style[] = { "echo bogus 10 10 18 1 Bad style" };
     static const char *const bad_zero[] = { "pause 0" };
     static const char *const bad_tail[] = { "pause 1 later" };
     static const char *const timed[] = { "0.0 key x" };
@@ -1293,6 +1297,17 @@ static void test_tour_sequential_steps_and_pause(void) {
     ASSERT_INT("echo overlay retained through Done",
                glr_pointer_script_active(), 1);
     glr_pointer_script_stop();
+
+    ASSERT_INT("echo stroke script loads",
+               glr_pointer_script_start_tour("T", "t.pointer", echo_stroke, 1), 1);
+    glr_pointer_script_stop();
+    ASSERT_INT("echo mono script loads",
+               glr_pointer_script_start_tour("T", "t.pointer", echo_mono, 1), 1);
+    glr_pointer_script_stop();
+    ASSERT_INT("echo without style is rejected",
+               glr_pointer_script_start_tour("T", "t.pointer", echo_no_style, 1), 0);
+    ASSERT_INT("echo with bad style is rejected",
+               glr_pointer_script_start_tour("T", "t.pointer", echo_bad_style, 1), 0);
 
     ASSERT_INT("zero-duration pause rejected",
                glr_pointer_script_start_tour("T", "t.pointer", bad_zero, 1), 0);
