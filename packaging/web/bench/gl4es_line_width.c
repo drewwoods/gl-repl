@@ -121,15 +121,14 @@ static void display(void)
             fail = 1;
         if (g_cov_zero < 0)
             fail = 1;
-        if (fail) {
+        EM_ASM({
+            document.title = (UTF8ToString($0)) +
+                             " w1 " + $1 + " w1.5 " + $2 + " w3 " + $3 +
+                             " w6 " + $4 + " loop " + $5 + " zero " + $6;
+        }, fail ? "FAIL coverage" : "line-width",
+           g_cov_w1, g_cov_w15, g_cov_w3, g_cov_w6, g_cov_loop, g_cov_zero);
+        if (fail)
             fprintf(stderr, "line-width benchmark: coverage guard failed\n");
-            EM_ASM({ document.title = "FAIL coverage"; });
-        } else {
-            EM_ASM({
-                document.title = "line-width w1 " + $0 + " w6 " + $1 +
-                                 " loop " + $2;
-            }, g_cov_w1, g_cov_w6, g_cov_loop);
-        }
     } else {
         scene(6.f, N_SEGS, 0, 0);
     }
@@ -149,7 +148,6 @@ int main(int argc, char **argv)
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     glutDisplayFunc(display);
-    glutIdleFunc(glutPostRedisplay);
     glutMainLoop();
     return 0;
 }

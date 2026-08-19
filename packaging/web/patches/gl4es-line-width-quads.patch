@@ -15,7 +15,8 @@ perspective-correct.
   never written.
 - listdraw.c hooks *before* line_arrays_to_vbo (and therefore before
   listActiveVBO). The object-space VBO is not uploaded or bound for
-  the wide frame.
+  the wide frame. Stipple generation bumps list->maxtex so the
+  expander sees the generated s coordinate.
 - drawing.c intercepts GL_LINES / LINE_STRIP / LINE_LOOP so
   client-array draws cannot sneak past (from_polygon_mode = 0).
 - Polygon-mode edges with GL_POLYGON_OFFSET_LINE get GLES FILL offset
@@ -23,9 +24,15 @@ perspective-correct.
   prerequisite's projection-row bias is skipped on this path.
 - Getter range lives in each glGet* switch (not commonGet): [1, 64]
   when maxlinewidth==1. Granularity 1.0 lives in commonGet.
-- Same-width early-out stays after PUSH_IF_COMPILING. Compiled
+- Same-width early-out stays after PUSH_IF_COMPILING on both
+  glLineWidth and glLineWidthx (16.16 -> float). Compiled
   STAGE_GLCALL glLineWidth already replays before geometry on the
   same node; no linewidth_op.
+- wide_ensure allocates newly required attribute buffers even when
+  the vertex capacity is already large enough (global scratch is
+  shared across draws).
+- Degenerate segments use the same half-extent as the ribbon
+  (width/2 pixels each side) and emit a real square.
 
 Width 1 stays on the cheap DrawArrays(GL_LINES) path. Fog, lighting,
 and clip-plane scenes skip or disable those on the expanded draw
@@ -133,7 +140,7 @@ index f4a57fed..1a93221d 100644
              matrix_transpose(TOP(projection_matrix), tmp);
              for(int i=0; i<16; i++) params[i] = tmp[i];
 diff --git a/src/gl/line.c b/src/gl/line.c
-index 603f329f..f822c0fe 100644
+index 603f329f..00cef532 100644
 --- a/src/gl/line.c
 +++ b/src/gl/line.c
 @@ -1,12 +1,23 @@
@@ -160,7 +167,7 @@ index 603f329f..f822c0fe 100644
  
  //#define DEBUG
  #ifdef DEBUG
-@@ -164,3 +175,548 @@ GLfloat *gen_stipple_tex_coords(GLfloat *vert, GLushort *sindices, modeinit_t *m
+@@ -164,3 +175,553 @@ GLfloat *gen_stipple_tex_coords(GLfloat *vert, GLushort *sindices, modeinit_t *m
      DBG(printf("\n");)
      return tex;
  }
@@ -196,60 +203,64 @@ index 603f329f..f822c0fe 100644
 +
 +static wide_bufs_t g_wide;
 +
++static int wide_realloc(GLfloat **slot, size_t nfloats)
++{
++    GLfloat *p = (GLfloat *)realloc(*slot, nfloats * sizeof(GLfloat));
++    if (!p)
++        return 0;
++    *slot = p;
++    return 1;
++}
++
 +static int wide_ensure(int nverts, int have_color, int have_secondary,
 +                       int have_fog, int have_normal, int have_tex_mask)
 +{
-+    if (nverts <= g_wide.cap) {
-+        (void)have_color;
-+        (void)have_secondary;
-+        (void)have_fog;
-+        (void)have_normal;
-+        (void)have_tex_mask;
-+        return 1;
-+    }
-+    int ncap = g_wide.cap ? g_wide.cap : 64;
-+    while (ncap < nverts) {
-+        if (ncap > (1 << 28) / 2)
-+            return 0;
-+        ncap *= 2;
-+    }
-+    GLfloat *vert = (GLfloat *)realloc(g_wide.vert, (size_t)ncap * 4 * sizeof(GLfloat));
-+    if (!vert)
-+        return 0;
-+    g_wide.vert = vert;
-+    if (have_color || g_wide.color) {
-+        GLfloat *p = (GLfloat *)realloc(g_wide.color, (size_t)ncap * 4 * sizeof(GLfloat));
-+        if (!p)
-+            return 0;
-+        g_wide.color = p;
-+    }
-+    if (have_secondary || g_wide.secondary) {
-+        GLfloat *p = (GLfloat *)realloc(g_wide.secondary, (size_t)ncap * 4 * sizeof(GLfloat));
-+        if (!p)
-+            return 0;
-+        g_wide.secondary = p;
-+    }
-+    if (have_fog || g_wide.fogcoord) {
-+        GLfloat *p = (GLfloat *)realloc(g_wide.fogcoord, (size_t)ncap * sizeof(GLfloat));
-+        if (!p)
-+            return 0;
-+        g_wide.fogcoord = p;
-+    }
-+    if (have_normal || g_wide.normal) {
-+        GLfloat *p = (GLfloat *)realloc(g_wide.normal, (size_t)ncap * 3 * sizeof(GLfloat));
-+        if (!p)
-+            return 0;
-+        g_wide.normal = p;
-+    }
-+    for (int a = 0; a < MAX_TEX; a++) {
-+        if ((have_tex_mask & (1 << a)) || g_wide.tex[a]) {
-+            GLfloat *p = (GLfloat *)realloc(g_wide.tex[a], (size_t)ncap * 4 * sizeof(GLfloat));
-+            if (!p)
++    int ncap = g_wide.cap;
++    if (ncap < nverts) {
++        ncap = ncap ? ncap : 64;
++        while (ncap < nverts) {
++            if (ncap > (1 << 28) / 2)
 +                return 0;
-+            g_wide.tex[a] = p;
++            ncap *= 2;
 +        }
 +    }
-+    g_wide.cap = ncap;
++    if (ncap != g_wide.cap) {
++        if (!wide_realloc(&g_wide.vert, (size_t)ncap * 4))
++            return 0;
++        if (g_wide.color && !wide_realloc(&g_wide.color, (size_t)ncap * 4))
++            return 0;
++        if (g_wide.secondary && !wide_realloc(&g_wide.secondary, (size_t)ncap * 4))
++            return 0;
++        if (g_wide.fogcoord && !wide_realloc(&g_wide.fogcoord, (size_t)ncap))
++            return 0;
++        if (g_wide.normal && !wide_realloc(&g_wide.normal, (size_t)ncap * 3))
++            return 0;
++        for (int a = 0; a < MAX_TEX; a++) {
++            if (g_wide.tex[a] &&
++                    !wide_realloc(&g_wide.tex[a], (size_t)ncap * 4))
++                return 0;
++        }
++        g_wide.cap = ncap;
++    }
++    if (g_wide.cap < 1)
++        return 0;
++    if (have_color && !g_wide.color &&
++            !wide_realloc(&g_wide.color, (size_t)g_wide.cap * 4))
++        return 0;
++    if (have_secondary && !g_wide.secondary &&
++            !wide_realloc(&g_wide.secondary, (size_t)g_wide.cap * 4))
++        return 0;
++    if (have_fog && !g_wide.fogcoord &&
++            !wide_realloc(&g_wide.fogcoord, (size_t)g_wide.cap))
++        return 0;
++    if (have_normal && !g_wide.normal &&
++            !wide_realloc(&g_wide.normal, (size_t)g_wide.cap * 3))
++        return 0;
++    for (int a = 0; a < MAX_TEX; a++) {
++        if ((have_tex_mask & (1 << a)) && !g_wide.tex[a] &&
++                !wide_realloc(&g_wide.tex[a], (size_t)g_wide.cap * 4))
++            return 0;
++    }
 +    return 1;
 +}
 +
@@ -385,8 +396,9 @@ index 603f329f..f822c0fe 100644
 +    GLfloat hx, hy;
 +    GLfloat x00, y00, x01, y01, x10, y10, x11, y11;
 +    if (len2 < 1e-8f) {
-+        hx = width / vp_w;
-+        hy = width / vp_h;
++        /* Same half-extent as the ribbon path: width/2 pixels each side. */
++        hx = width / vp_w * 0.5f;
++        hy = width / vp_h * 0.5f;
 +        x00 = ndc0x - hx; y00 = ndc0y - hy;
 +        x01 = ndc0x + hx; y01 = ndc0y - hy;
 +        x10 = ndc0x + hx; y10 = ndc0y + hy;
@@ -397,11 +409,11 @@ index 603f329f..f822c0fe 100644
 +                         have_fog, have_normal, maxtex, tex);
 +        wide_emit_corner(dst + 2, &e0, x10, y10, have_color, have_secondary,
 +                         have_fog, have_normal, maxtex, tex);
-+        wide_emit_corner(dst + 3, &e0, x01, y01, have_color, have_secondary,
++        wide_emit_corner(dst + 3, &e0, x00, y00, have_color, have_secondary,
 +                         have_fog, have_normal, maxtex, tex);
-+        wide_emit_corner(dst + 4, &e0, x11, y11, have_color, have_secondary,
++        wide_emit_corner(dst + 4, &e0, x10, y10, have_color, have_secondary,
 +                         have_fog, have_normal, maxtex, tex);
-+        wide_emit_corner(dst + 5, &e0, x00, y00, have_color, have_secondary,
++        wide_emit_corner(dst + 5, &e0, x11, y11, have_color, have_secondary,
 +                         have_fog, have_normal, maxtex, tex);
 +        return dst + 6;
 +    }
@@ -739,10 +751,19 @@ index b5413cab..3dad34ec 100644
 +
  #endif // _GL4ES_LINE_H
 diff --git a/src/gl/listdraw.c b/src/gl/listdraw.c
-index 15ffc58e..9862b2ba 100644
+index 15ffc58e..af198a00 100644
 --- a/src/gl/listdraw.c
 +++ b/src/gl/listdraw.c
-@@ -906,6 +906,79 @@ void draw_renderlist(renderlist_t *list) {
+@@ -817,6 +817,8 @@ void draw_renderlist(renderlist_t *list) {
+             bind_stipple_tex();
+             modeinit_t tmp; tmp.mode_init = list->mode_init; tmp.ilen=list->ilen?list->ilen:list->len;
+             list->tex[stipple_tmu] = gen_stipple_tex_coords(list->vert, list->indices, list->mode_inits?list->mode_inits:&tmp, list->vert_stride, list->mode_inits?list->mode_init_len:1, (list->use_glstate)?(list->vert+8+stipple_tmu*4):NULL);
++            if (list->tex[stipple_tmu] && list->maxtex < stipple_tmu + 1)
++                list->maxtex = stipple_tmu + 1;
+         }
+         #define RS(A, len) if(glstate->texgenedsz[A]<len) {free(glstate->texgened[A]); glstate->texgened[A]=malloc(4*sizeof(GLfloat)*len); glstate->texgenedsz[A]=len; } use_texgen[A]=1
+         // cannot use list->maxtex because some TMU can be using TexGen or point sprites...
+@@ -906,6 +908,79 @@ void draw_renderlist(renderlist_t *list) {
                  // evaluated, seems good to go !
                  use_vbo_array = list2VBO(list);
          }
@@ -822,7 +843,7 @@ index 15ffc58e..9862b2ba 100644
          if (use_line_arrays && list->line_arrays == line_arrays &&
                  !line_arrays->vbo_array)
              line_arrays_to_vbo(line_arrays, list);
-@@ -1036,6 +1109,7 @@ void draw_renderlist(renderlist_t *list) {
+@@ -1036,6 +1111,7 @@ void draw_renderlist(renderlist_t *list) {
              listInactiveVBO(list, saved);
          if(use_line_vbo)
              listInactiveVBO(&line_vbo_view, line_saved);
@@ -831,7 +852,7 @@ index 15ffc58e..9862b2ba 100644
  
          #define TEXTURE(A) if (cur_tex!=A) {gl4es_glClientActiveTexture(A+GL_TEXTURE0); cur_tex=A;}
 diff --git a/src/gl/wrap/gles.c b/src/gl/wrap/gles.c
-index 01586bc9..ea9ccfb6 100644
+index 01586bc9..5036fe72 100644
 --- a/src/gl/wrap/gles.c
 +++ b/src/gl/wrap/gles.c
 @@ -1406,6 +1406,10 @@ void APIENTRY_GL4ES gl4es_glLineWidth(GLfloat width) {
@@ -845,3 +866,17 @@ index 01586bc9..ea9ccfb6 100644
          gl4es_mirror_line_width = width;
      }
      gles_glLineWidth(width);
+@@ -1418,6 +1422,13 @@ void APIENTRY_GL4ES gl4es_glLineWidthx(GLfixed width) {
+ #ifndef direct_glLineWidthx
+     PUSH_IF_COMPILING(glLineWidthx)
+ #endif
++    {
++        extern GLfloat gl4es_mirror_line_width;
++        GLfloat fwidth = (GLfloat)width / 65536.0f;
++        if (gl4es_mirror_line_width == fwidth)
++            return;
++        gl4es_mirror_line_width = fwidth;
++    }
+     gles_glLineWidthx(width);
+ }
+ AliasExport(void,glLineWidthx,,(GLfixed width));

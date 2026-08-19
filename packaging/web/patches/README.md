@@ -45,7 +45,7 @@ Compiled `STAGE_GLCALL` `glLineWidth` already replays before geometry on the sam
 
 Known deviations, by design: fog and lighting are off for the expanded draw; a live clip plane skips emulation; tess `GL_LINE_LOOP` overlays stay unoffset.
 
-Browser coverage oracle: `make bench-web-gl4es` now also builds `gl4es-line-width.html`.
+Browser coverage oracle: `make bench-web-gl4es` now also builds `gl4es-line-width.html`. First headless Chrome/SwiftShader run (640×480, 2026-08-19) set the title to `FAIL coverage` with every width reporting 245760 covered pixels and the zero-length width-4 frame a canvas-filling triangle. That is the expander treating an unset `raster.viewport` as 1 px (NDC offset = width) — not a valid thickening measurement. A later review also folded four expander/state fixes into this patch (stipple `maxtex`, `wide_ensure` late attribs, degenerate half-extent + square, `glLineWidthx` mirror). Details: `docs/plans/active/gl4es-line-width-emulation.md` (Implementation findings).
 
 ## 2026-08-02: the point-smooth workarounds come out
 

@@ -1,6 +1,8 @@
 # gl4es `glLineWidth` emulation via screen-space quads
 
-Status: **active** (implementation started 2026-08-19)
+Status: **active** (patches landed in `233d34d4`; four post-land
+review items folded into `gl4es-line-width-quads.patch`. Headful
+verification and the unset-viewport expander skip still open.)
 Date: 2026-08-19
 Scope: Emscripten / WebGL2 build only (two local gl4es patches).
 Native Cocoa / GLX / OSMesa are unchanged — they already rasterize
@@ -38,6 +40,111 @@ of the offset scope, fog/lighting/clip planes live in Known
 deviations, `drawing.c` intercepts all three line modes,
 verification does not claim `check-c99` /
 `check-trailing-whitespace` cover the patch.
+
+## Implementation findings (2026-08-19)
+
+Landed as `233d34d4` (`web: emulate glLineWidth and
+GL_POLYGON_OFFSET_LINE in gl4es`). The two patches apply cleanly
+on the pin plus the earlier `GL4ES_PATCHES`, the wasm `libGL.a`
+rebuilds, and `build/release-web/gl4es-line-width.html` links.
+`make test-web` was not run — it links the GL stubs, not gl4es.
+
+### Deviations from this document
+
+| Plan said | What landed | Why |
+|---|---|---|
+| `GL4ES_PATCHES` slot immediately after `gl4es-pushattrib-gaps.patch` | After `gl4es-point-size-batch.patch` (still after pushattrib-gaps) | Patch 1 wraps the polygon-line `DrawArrays` path. A mid-list slot fails `git apply` because that path and the `maxlinewidth` field do not exist yet. |
+| `hardext.maxlinewidth` already probed; only add `depthbits` next to it | Patch 1 adds **both** `maxlinewidth` and `depthbits` | The probe lived only as uncommitted WIP in the local gl4es tree. None of the official earlier patches introduce it. Regenerating against the pin made that obvious. |
+| `enable.c`: “same shape as `proxy_GO`” | `GO(GL_POLYGON_OFFSET_LINE, polyline_offset)` | `proxy_GO` forwards the enum to GLES. LINE is not a GLES enum; `GO` shadows and does not forward. The “do not forward” sentence was the load-bearing one. |
+| Establish compiled-list order; add `linewidth_op` only if needed | No `linewidth_op` | `draw_renderlist` walks `list->calls` (`glPackedCall`) before the geometry draw on the same node. A compiled `STAGE_GLCALL` `glLineWidth` already updates the mirror first. |
+| Same-width early-out after `PUSH_IF_COMPILING`; keep the existing wrapper | Early-out after `PUSH`; dropped the dead `if (hardext.maxlinewidth > 1) FLUSH_BEGINEND` | `PUSH_IF_COMPILING` already flushes a pending batch. The maxlinewidth-gated flush was leftover WIP, not in getter-client-state. |
+| Screenshot case 2a on the current tree **before** writing either patch; do not start the width patch until width-1 case 2 is clean | Both patches written in one pass | Implementation was requested after the reviews folded. The split is still independently testable (width-1 uses only patch 1) but that screenshot was not taken first. |
+| Degenerate `p0 == p1` → axis-aligned NDC square **or** skip | First cut emitted a triangle at **full** width as the half-extent | Post-land: half-extent matches the ribbon (`width / vp * 0.5`) and the six verts are `BL, BR, TR` + `BL, TR, TL`. |
+| `vp_* < 1` → treat as 1 to avoid div0 | Same clamp | That is the wrong fence. `glstate->raster.viewport` is 0 until the first `glViewport`. `Δndc = n * width / vp` then becomes `width` in NDC and the ribbon fills the clip volume. Skip emulation (or driver-get, same fallback as `GL_VIEWPORT` in getter.c) when the tracked viewport is unset. |
+
+Makefile: the three `bench-web-gl4es` recipes gained `-Isrc` so
+`packaging/web/gl4es_bootstrap.c` can see `app/glr_log_prefix.h`.
+That include landed after the original polygon-line bench rules
+and had been silently broken.
+
+### Benchmark (headless Chrome / SwiftShader)
+
+`make WEB=1 build/release-web/gl4es-line-width.html`, served from
+`build/release-web`, fresh query string. Chrome
+`--headless=new --use-angle=swiftshader --dump-dom` (killed after
+25 s — emscripten keeps the event loop alive). The bench was
+changed to put every coverage count in `document.title` even on
+FAIL, and to drop `glutIdleFunc(glutPostRedisplay)` so a
+coverage-only run is one display.
+
+640×480 canvas, 40 horizontal segments plus a 4-vertex loop and a
+zero-length segment. Floors in the harness: w1 ≥ 800, w6 ≥ 4000
+and ≥ 3× w1, loop ≥ 400.
+
+| Shot | Covered px | Note |
+|---|---:|---|
+| width 1 (native `GL_LINES`) | 245760 | 640×384 — 80 % of the canvas |
+| width 1.5 | 245760 | same |
+| width 3 | 245760 | same |
+| width 6 | 245760 | fails the “~6× a 1 px line” ratio |
+| `GL_LINE_LOOP` width 4 | 156672 | 640×244.8 |
+| zero-length width 4 | 230400 | 640×360 |
+
+Title: `FAIL coverage w1 245760 w1.5 245760 w3 245760 w6 245760 loop 156672 zero 230400`.
+
+The last swapped frame (zero-length, width 4) is a **canvas-filling
+black triangle on white**, not a 4 px blob. That is the viewport-0
+clamp and the broken degenerate triangulation, not a valid
+thickening measurement. Width 1 matching the wide shots means this
+headless run is not an oracle for “width 1 stays native” either —
+the tracked viewport was unset for the whole process (the bench
+never calls `glViewport`; GLUT’s reshape may not have reached
+gl4es’s tracker before frame 0).
+
+So: the harness works as a trip-wire (empty vs full, title FAIL),
+and it already caught two expander bugs. It is **not** yet a
+pixel-scale proof. Next bench cut should `glViewport(0,0,W,H)`
+(or a reshape callback) before the first shot, and skip the
+expander when `raster.viewport.width == 0`. The degenerate quad
+is fixed (see Post-land review).
+
+### Post-land review (four items, folded into patch 2)
+
+1. **Stipple `s` dropped.** `gen_stipple_tex_coords` wrote
+   `list->tex[stipple_tmu]` but left `list->maxtex` at 0, so the
+   wide path passed `maxtex == 0` and never copied those coords.
+   Native ES2 iterates `hardext.maxtex` and still saw the pointer;
+   the expander does not. Fix: bump `list->maxtex` when the
+   stipple array is installed (same shape as `drawing.c:179`).
+2. **`wide_ensure` skipped new attribute buffers** once vertex
+   capacity was enough. A first uncolored draw left `g_wide.color
+   == NULL`; a later colored draw reused that cap and wrote
+   nowhere. Fix: grow existing slots if needed, then allocate any
+   newly required color / secondary / fog / normal / tex slot at
+   the current cap.
+3. **Zero-length segments twice as wide.** Degenerate path used
+   `hx = width / vp` (full width as the half-extent) while the
+   ribbon uses `* 0.5`. Width 8 → ~16×16 square. Now both paths
+   share the half-extent. The complementary-half triangulation
+   (was three corners, not a square) is fixed in the same edit.
+4. **`glLineWidthx` ignored the mirror.** 16.16 → float, then the
+   same post-`PUSH_IF_COMPILING` early-out as `glLineWidth`.
+   Otherwise `glGet(GL_LINE_WIDTH)` and the expander could see a
+   stale float width.
+
+Polygon-offset factor/units, PushAttrib restore, projection-row
+bias, and “wide path before `line_arrays_to_vbo`” were already
+correct in `233d34d4` and were not retouched.
+
+### Still open (plan verification, not done)
+
+- Case 2 / 2a / 2b headful outline-over-face (width 1, then Bold
+  7.5 px) on polygon-mode / GLUT solids.
+- Case 2c fill-offset must not leak onto genuine wide chrome.
+- Cases 3–9 (cull-on, trailing-reset, near-plane, stipple+width,
+  loop-close vs strip, wireframe 60 FPS / 1 px, named-list suite).
+- Fogged and clip-plane screenshots of the Known deviations.
+- Re-run the coverage bench after the viewport / degenerate fixes.
 
 ## Problem
 
@@ -861,10 +968,10 @@ let the bias work drift into patch 2.
 
 | File | Change |
 |---|---|
-| `src/gl/state.h` / `enable.c` | `polyline_offset` shadow; `proxy_GO` + `isenabled`; do not forward the enum to GLES |
+| `src/gl/state.h` / `enable.c` | `polyline_offset` shadow; `GO` + `isenabled`; do not forward the enum to GLES (`proxy_GO` would) |
 | `src/gl/stack.h` / `stack.c` | `polygon_offset_line` on `GL_ENABLE_BIT` and `GL_POLYGON_BIT`; **factor/units on `GL_POLYGON_BIT` only**; pop via `gl4es_glPolygonOffset`; close the LINE + factor/units TODOs |
 | `src/gl/wrap/gles.c` / `getter.c` | mirror factor/units from **both** `glPolygonOffset` and `glPolygonOffsetx` (16.16 → float) |
-| `src/glx/hardext.h` / `hardext.c` | cache `GL_DEPTH_BITS` once at init (`hardext.depthbits`) next to the `maxlinewidth` probe |
+| `src/glx/hardext.h` / `hardext.c` | cache `GL_ALIASED_LINE_WIDTH_RANGE` (`hardext.maxlinewidth`) and `GL_DEPTH_BITS` (`hardext.depthbits`, default 16, clamp `[8, 32]`) once at init. The width probe was not in any earlier official patch. |
 | `src/gl/matrix.h` / `matrix.c` | shared save/poke/restore helper; dirties `mvp` / `inv_mv` / `normal` on both poke and restore |
 | `src/gl/listdraw.c` | when `polyline_offset` and polygon-mode lines: **projection-row depth bias** around the line draw (`P_row2 += d · P_row3`, scaled and clamped as above). Never write `line_arrays->vert`. FILL-around-`GL_LINES` is a GLES no-op |
 
@@ -1060,7 +1167,9 @@ the enable, and is why it is not folded into v1.
 
 0. **Outline-over-face screenshot on the current tree.** Width 1,
    vertex outlines on. If it speckles, that is Prerequisite,
-   not a width-emulator bug.
+   not a width-emulator bug. **Not done before the patches**
+   (see Implementation findings). Still the right first
+   headful shot.
 1. **`gl4es-polygon-offset-line.patch`.** Shadow the enable,
    PushAttrib (LINE enable **and** factor/units), both
    `glPolygonOffset` / `glPolygonOffsetx` mirrors, cache
