@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the compiled-in built-in example catalog from examples/catalog.ini."""
+"""Generate a compiled-in example catalog from a catalog.ini file."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from pathlib import Path
 # string, so a tag known only here would resolve to no index and stay invisible.
 # Ordered (not a set) so the rejection message lists the tags the same way twice.
 BUILTIN_TAGS = ("2D", "3D", "Polygons", "Lines")
+MAX_TAG_NAME_LENGTH = 64  # ReplTagNode.name, including its terminator.
 
 FORMAT_MACROS = {
     ".glr": "REPL_EXAMPLE_SOURCE_GLR",
@@ -65,14 +66,19 @@ def symbol_for_section(section: str) -> str:
     return f"g_example_{body}"
 
 
-def parse_tags(section: str, value: str) -> list[str]:
+def parse_tags(section: str, value: str, allow_custom_tags: bool = False) -> list[str]:
     tags = [part.strip() for part in value.split(",") if part.strip()]
     if not tags:
         raise ExampleError(f"[{section}] tags must not be empty")
     for tag in tags:
         if tag == "All":
             raise ExampleError(f"[{section}] must not list synthetic tag All")
-        if tag not in BUILTIN_TAGS:
+        if len(tag) >= MAX_TAG_NAME_LENGTH:
+            raise ExampleError(
+                f"[{section}] tag {tag!r} too long "
+                f"(max {MAX_TAG_NAME_LENGTH - 1} chars)"
+            )
+        if not allow_custom_tags and tag not in BUILTIN_TAGS:
             known = ", ".join(BUILTIN_TAGS)
             raise ExampleError(
                 f"[{section}] unknown tag {tag!r}; expected one of: {known}"
@@ -80,9 +86,11 @@ def parse_tags(section: str, value: str) -> list[str]:
     return tags
 
 
-def read_catalog(catalog_path: Path) -> list[dict[str, object]]:
+def read_catalog(
+    catalog_path: Path, allow_external_catalog: bool = False
+) -> list[dict[str, object]]:
     base_dir = catalog_path.parent.resolve()
-    scenes_dir = (base_dir / "scenes").resolve()
+    source_dir = base_dir if allow_external_catalog else (base_dir / "scenes").resolve()
 
     parser = configparser.ConfigParser(interpolation=None, strict=True)
     parser.optionxform = str
@@ -125,6 +133,8 @@ def read_catalog(catalog_path: Path) -> list[dict[str, object]]:
             raise ExampleError(f"[{section}] group must not be empty")
         if not rel_file:
             raise ExampleError(f"[{section}] file must not be empty")
+        if Path(rel_file).is_absolute():
+            raise ExampleError(f"[{section}] file must be relative to the catalog directory")
 
         name_key = name.lower()
         if name_key in seen_names:
@@ -135,9 +145,13 @@ def read_catalog(catalog_path: Path) -> list[dict[str, object]]:
 
         file_path = (base_dir / rel_file).resolve()
         try:
-            file_path.relative_to(scenes_dir)
+            file_path.relative_to(source_dir)
         except ValueError as exc:
-            raise ExampleError(f"[{section}] file must live under examples/scenes") from exc
+            if allow_external_catalog:
+                message = f"[{section}] file must live under the catalog directory"
+            else:
+                message = f"[{section}] file must live under examples/scenes"
+            raise ExampleError(message) from exc
         format_macro = FORMAT_MACROS.get(file_path.suffix)
         if not format_macro:
             raise ExampleError(f"[{section}] file must have a .glr or .c extension")
@@ -156,7 +170,11 @@ def read_catalog(catalog_path: Path) -> list[dict[str, object]]:
             )
         seen_symbols[symbol] = section
 
-        tags = parse_tags(section, parser[section]["tags"])
+        tags = parse_tags(
+            section,
+            parser[section]["tags"],
+            allow_custom_tags=allow_external_catalog,
+        )
         lines = file_path.read_text(encoding="utf-8").splitlines()
 
         entries.append(
@@ -217,10 +235,20 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--catalog", default=str(root / "examples/catalog.ini"))
     parser.add_argument("--out", default=str(root / "build/generated/repl_examples_data.inc"))
     parser.add_argument("--check", action="store_true")
+    parser.add_argument(
+        "--allow-external-catalog",
+        action="store_true",
+        help=(
+            "accept runtime-style catalogs: source files anywhere under the "
+            "catalog directory and free-form tags"
+        ),
+    )
     args = parser.parse_args(argv)
 
     try:
-        entries = read_catalog(Path(args.catalog))
+        entries = read_catalog(
+            Path(args.catalog), allow_external_catalog=args.allow_external_catalog
+        )
         if not args.check:
             write_if_changed(Path(args.out), render(entries))
     except ExampleError as exc:

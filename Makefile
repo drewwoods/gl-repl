@@ -645,7 +645,17 @@ EXAMPLES_CATALOG ?= examples/catalog-emscripten.ini
 else
 EXAMPLES_CATALOG ?= examples/catalog.ini
 endif
+# An explicit catalog override is also allowed to use the runtime catalog
+# shape, including flat scene files and free-form tags. Keep the default
+# catalog's narrower source-root dependency list, while FORCE below still
+# makes the generated include re-read every source on every build invocation.
+ifneq ($(filter command% environment override,$(origin EXAMPLES_CATALOG)),)
+EXAMPLES_CATALOG_GENERATOR_FLAGS = --allow-external-catalog
+EXAMPLE_SCENE_SRCS = $(wildcard $(dir $(EXAMPLES_CATALOG))*.glr) $(wildcard $(dir $(EXAMPLES_CATALOG))*.c)
+else
+EXAMPLES_CATALOG_GENERATOR_FLAGS =
 EXAMPLE_SCENE_SRCS = $(wildcard $(dir $(EXAMPLES_CATALOG))scenes/*.glr) $(wildcard $(dir $(EXAMPLES_CATALOG))scenes/*.c)
+endif
 GENERATED_EXAMPLES_INC = build/generated/repl_examples_data.inc
 BENCH_DATA_CATALOG = $(BENCH_DATA_DIR)/catalog.ini
 BENCH_DATA_SCENE_SRCS = $(wildcard $(BENCH_DATA_DIR)/scenes/*.glr)
@@ -1374,7 +1384,7 @@ DEPS = $(ALL_OBJS:.o=.d)
 
 $(GENERATED_EXAMPLES_INC): FORCE scripts/gen_examples.py $(EXAMPLES_CATALOG) $(EXAMPLE_SCENE_SRCS)
 	@mkdir -p $(dir $@)
-	python3 scripts/gen_examples.py --catalog $(EXAMPLES_CATALOG) --out $@
+	python3 scripts/gen_examples.py --catalog $(EXAMPLES_CATALOG) --out $@ $(EXAMPLES_CATALOG_GENERATOR_FLAGS)
 
 $(OBJDIR)/src/repl/examples.o: $(GENERATED_EXAMPLES_INC)
 
@@ -2367,7 +2377,7 @@ palette-list: ## Print the active accent palette anchors (floats + hex) and the 
 	@python3 scripts/check/check-palette.py --list
 
 check-examples-catalog: ## Validate the file-backed built-in example catalog.
-	@python3 scripts/gen_examples.py --check --catalog $(EXAMPLES_CATALOG)
+	@python3 scripts/gen_examples.py --check --catalog $(EXAMPLES_CATALOG) $(EXAMPLES_CATALOG_GENERATOR_FLAGS)
 
 check-tours-catalog: ## Validate the file-backed guided-tour catalog.
 	@python3 scripts/gen_tours.py --check --catalog $(TOURS_CATALOG)
@@ -3247,6 +3257,8 @@ help-details: ## Show available targets and build-mode notes.
 	@printf "GL stubs:        make test (or test-stubs); ordinary individual tests use stubs automatically.\n"
 	@printf "Web build:       make web (or scripts/build-web.sh for a cold start with no\n"
 	@printf "                 emsdk sourced yet), then make web-serve. See packaging/web/README.md.\n"
+	@printf "Web catalog:     make web EXAMPLES_CATALOG=tests/scenes/general/catalog.ini\n"
+	@printf "                 compiles an alternate example catalog into the web build.\n"
 	@printf "Runtime env:\n"
 	@printf "  - GLR_NO_POINT_PARAMETER=1 ./gl-repl forces the no-glPointParameterfv\n"
 	@printf "    path (camera-distance glPointSize fallback). Support is otherwise\n"

@@ -99,20 +99,6 @@ static int init_default_tag_registry(ReplTagNode **head, int *count) {
     return 1;
 }
 
-/* Lazily seed the live registry with the built-in tag names so the
- * REPL_EXAMPLE_TAG_* enum values app-layer code passes (glr_defaults.h's
- * tag-default table) keep matching ids 0..4. A non-empty head means the
- * registry is seeded; init_default_tag_registry() unwinds to empty on
- * allocation failure, so a failed attempt is simply retried on the next
- * query rather than leaving a half-built list. No callee reaches back
- * into this function, so it needs no reentrancy guard. */
-static void ensure_default_tags_initialized(void) {
-    if (g_example_tags_head != NULL)
-        return;
-    (void)init_default_tag_registry(&g_example_tags_head,
-                                    &g_example_tag_count);
-}
-
 static void clear_dynamic_tags_list(void) {
     free_tag_list(g_example_tags_head);
     g_example_tags_head = NULL;
@@ -155,6 +141,43 @@ void repl_example_free_item_tags(ReplItemTagNode *head) {
 }
 
 #include "../../build/generated/repl_examples_data.inc"
+
+/* Lazily seed the live registry with the built-in tag names so the
+ * REPL_EXAMPLE_TAG_* enum values app-layer code passes (glr_defaults.h's
+ * tag-default table) keep matching ids 0..4. Explicit catalog overrides may
+ * add runtime-style free-form tags; register those generated names after the
+ * stable built-in prefix so the same tag query API serves both forms. */
+static int init_builtin_tag_registry(void) {
+    if (!init_default_tag_registry(&g_example_tags_head,
+                                   &g_example_tag_count))
+        return 0;
+
+    int entry_count = (int)(sizeof(g_example_entries) /
+                            sizeof(g_example_entries[0]));
+    for (int entry_idx = 0; entry_idx < entry_count; entry_idx++) {
+        const char *const *tag_names = g_example_entries[entry_idx].tag_names;
+        if (!tag_names)
+            continue;
+        for (int tag_idx = 0; tag_names[tag_idx]; tag_idx++) {
+            if (!find_or_register_tag_in_registry(
+                    &g_example_tags_head, &g_example_tag_count,
+                    tag_names[tag_idx])) {
+                clear_dynamic_tags_list();
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
+
+/* A non-empty head means the registry is seeded. The initializer unwinds to
+ * empty on allocation failure, so a failed attempt is retried on the next
+ * query rather than leaving a half-built list. */
+static void ensure_default_tags_initialized(void) {
+    if (g_example_tags_head != NULL)
+        return;
+    (void)init_builtin_tag_registry();
+}
 
 static ReplExampleEntry *g_runtime_example_entries = NULL;
 static int g_runtime_example_count = 0;

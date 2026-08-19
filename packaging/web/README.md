@@ -144,6 +144,15 @@ there: 5.4 MB vs 1.8 MB of `index.wasm` for no measurable runtime difference,
 so it is purely a fetch-and-compile cost. Pass
 `make web DEBUG_INFO_CFLAGS=-g2` when a browser profile needs named frames.
 
+The shipping build uses `examples/catalog-emscripten.ini`. To compile a
+different catalog into the web app, pass `EXAMPLES_CATALOG` to `make web`; an
+explicit override accepts the same flat-file and free-form-tag catalog shape
+as `--examples-dir`:
+
+```bash
+make web EXAMPLES_CATALOG=tests/scenes/general/catalog.ini
+```
+
 ## Benchmarking the web build
 
 `make bench-web` compiles `bench/bench_repl.c` to wasm and runs it headless
