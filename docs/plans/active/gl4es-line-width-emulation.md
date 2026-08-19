@@ -1,8 +1,7 @@
 # gl4es `glLineWidth` emulation via screen-space quads
 
-Status: **active** (patches landed in `233d34d4`; four post-land
-review items folded into `gl4es-line-width-quads.patch`. Headful
-verification and the unset-viewport expander skip still open.)
+Status: **active** (patches landed; coverage bench now passes
+headless. Headful outline / named-list cases still open.)
 Date: 2026-08-19
 Scope: Emscripten / WebGL2 build only (two local gl4es patches).
 Native Cocoa / GLX / OSMesa are unchanged — they already rasterize
@@ -59,8 +58,8 @@ rebuilds, and `build/release-web/gl4es-line-width.html` links.
 | Establish compiled-list order; add `linewidth_op` only if needed | No `linewidth_op` | `draw_renderlist` walks `list->calls` (`glPackedCall`) before the geometry draw on the same node. A compiled `STAGE_GLCALL` `glLineWidth` already updates the mirror first. |
 | Same-width early-out after `PUSH_IF_COMPILING`; keep the existing wrapper | Early-out after `PUSH`; dropped the dead `if (hardext.maxlinewidth > 1) FLUSH_BEGINEND` | `PUSH_IF_COMPILING` already flushes a pending batch. The maxlinewidth-gated flush was leftover WIP, not in getter-client-state. |
 | Screenshot case 2a on the current tree **before** writing either patch; do not start the width patch until width-1 case 2 is clean | Both patches written in one pass | Implementation was requested after the reviews folded. The split is still independently testable (width-1 uses only patch 1) but that screenshot was not taken first. |
-| Degenerate `p0 == p1` → axis-aligned NDC square **or** skip | First cut emitted a triangle at **full** width as the half-extent | Post-land: half-extent matches the ribbon (`width / vp * 0.5`) and the six verts are `BL, BR, TR` + `BL, TR, TL`. |
-| `vp_* < 1` → treat as 1 to avoid div0 | Same clamp | That is the wrong fence. `glstate->raster.viewport` is 0 until the first `glViewport`. `Δndc = n * width / vp` then becomes `width` in NDC and the ribbon fills the clip volume. Skip emulation (or driver-get, same fallback as `GL_VIEWPORT` in getter.c) when the tracked viewport is unset. |
+| Degenerate `p0 == p1` → axis-aligned NDC square **or** skip | Square triangulation is `BL, BR, TR` + `BL, TR, TL` | Both ribbon and square now use `hx = n * width / vp` (half-extent). An extra `* 0.5` had halved every emulated line. |
+| `vp_* < 1` → treat as 1 to avoid div0 | First cut used that clamp; now **skip** the expander | `raster.viewport` is 0 until the first `glViewport`. Clamping to 1 made `Δndc = width` and filled the clip volume. `gl4es_wide_lines_needed` / `gl4es_draw_wide_lines` now return 0 when width or height is `< 1`, so the native 1 px path is used. The bench also calls `glViewport(0,0,640,480)` so the expander actually runs. |
 
 Makefile: the three `bench-web-gl4es` recipes gained `-Isrc` so
 `packaging/web/gl4es_bootstrap.c` can see `app/glr_log_prefix.h`.
@@ -72,41 +71,48 @@ and had been silently broken.
 `make WEB=1 build/release-web/gl4es-line-width.html`, served from
 `build/release-web`, fresh query string. Chrome
 `--headless=new --use-angle=swiftshader --dump-dom` (killed after
-25 s — emscripten keeps the event loop alive). The bench was
-changed to put every coverage count in `document.title` even on
-FAIL, and to drop `glutIdleFunc(glutPostRedisplay)` so a
-coverage-only run is one display.
+25 s — emscripten keeps the event loop alive). The bench puts
+every coverage count in `document.title` even on FAIL, runs one
+display (no idle redraw), calls `glViewport(0,0,640,480)` plus a
+reshape callback, and clears to black.
 
 640×480 canvas, 40 horizontal segments plus a 4-vertex loop and a
-zero-length segment. Floors in the harness: w1 ≥ 800, w6 ≥ 4000
-and ≥ 3× w1, loop ≥ 400.
+zero-length segment. Floors: w1 ≥ 800, w6 ≥ 4000 and ≥ 3× w1,
+loop ≥ 400, zero ≤ 200 (a canvas-filling “square” fails).
 
-| Shot | Covered px | Note |
-|---|---:|---|
-| width 1 (native `GL_LINES`) | 245760 | 640×384 — 80 % of the canvas |
-| width 1.5 | 245760 | same |
-| width 3 | 245760 | same |
-| width 6 | 245760 | fails the “~6× a 1 px line” ratio |
-| `GL_LINE_LOOP` width 4 | 156672 | 640×244.8 |
-| zero-length width 4 | 230400 | 640×360 |
+**First run (before viewport skip / bench `glViewport`):** every
+width reported 245760 and the zero-length frame was a
+canvas-filling triangle. Title `FAIL coverage`. That is the
+unset-viewport clamp, not a thickening measurement.
 
-Title: `FAIL coverage w1 245760 w1.5 245760 w3 245760 w6 245760 loop 156672 zero 230400`.
+**Second run (skip unset viewport + bench `glViewport`):**
 
-The last swapped frame (zero-length, width 4) is a **canvas-filling
-black triangle on white**, not a 4 px blob. That is the viewport-0
-clamp and the broken degenerate triangulation, not a valid
-thickening measurement. Width 1 matching the wide shots means this
-headless run is not an oracle for “width 1 stays native” either —
-the tracked viewport was unset for the whole process (the bench
-never calls `glViewport`; GLUT’s reshape may not have reached
-gl4es’s tracker before frame 0).
+| Shot | Covered px | vs w1 |
+|---|---:|---:|
+| width 1 (native `GL_LINES`) | 8192 | 1.00× |
+| width 1.5 | 16384 | 2.00× |
+| width 3 | 32768 | 4.00× |
+| width 6 | 61440 | 7.50× |
+| `GL_LINE_LOOP` width 4 | 1340 | — |
+| zero-length width 4 | 4 | — |
 
-So: the harness works as a trip-wire (empty vs full, title FAIL),
-and it already caught two expander bugs. It is **not** yet a
-pixel-scale proof. Next bench cut should `glViewport(0,0,W,H)`
-(or a reshape callback) before the first shot, and skip the
-expander when `raster.viewport.width == 0`. The degenerate quad
-is fixed (see Post-land review).
+Title (half-width still in): `line-width w1 8192 … w6 61440 … zero 4`.
+Floors of that cut passed. w6 was exactly half of `40×512×6`.
+
+**Third run (drop extra `* 0.5`, geometry w6 floor, loop−strip):**
+
+| Shot | Covered px | vs w1 |
+|---|---:|---:|
+| width 1 (native) | 20480 | 1.00× |
+| width 1.5 | 32768 | 1.60× |
+| width 3 | 61440 | 3.00× |
+| width 6 | 122880 | 6.00× |
+| `GL_LINE_LOOP` width 4 | 2672 | — |
+| same verts as `GL_LINE_STRIP` | 2104 | — |
+| zero-length width 4 | 16 | — |
+
+Title: `line-width w1 20480 w1.5 32768 w3 61440 w6 122880 loop 2672 strip 2104 zero 16`.
+w6 = `N_SEGS × 512 × 6` exactly and clears the 98304 floor (the old 61440 would not). Loop − strip = 568 ≥ 384 (half of one 192 px × 4 edge). Zero = 16 is a 4×4 square. The last frame is a small white square on black.
 
 ### Post-land review (four items, folded into patch 2)
 
@@ -122,15 +128,20 @@ is fixed (see Post-land review).
    nowhere. Fix: grow existing slots if needed, then allocate any
    newly required color / secondary / fog / normal / tex slot at
    the current cap.
-3. **Zero-length segments twice as wide.** Degenerate path used
-   `hx = width / vp` (full width as the half-extent) while the
-   ribbon uses `* 0.5`. Width 8 → ~16×16 square. Now both paths
-   share the half-extent. The complementary-half triangulation
-   (was three corners, not a square) is fixed in the same edit.
+3. **Zero-length segments twice as wide (vs the then-ribbon).**
+   Degenerate used `hx = width / vp` while the ribbon had an
+   extra `* 0.5`. Both now use `width / vp` (true half-extent)
+   and a real square (`BL, BR, TR` + `BL, TR, TL`). See (5).
 4. **`glLineWidthx` ignored the mirror.** 16.16 → float, then the
    same post-`PUSH_IF_COMPILING` early-out as `glLineWidth`.
    Otherwise `glGet(GL_LINE_WIDTH)` and the expander could see a
    stale float width.
+5. **Half-width ribbons.** Both paths multiplied `width / vp` by
+   0.5. Window mapping is `(ndc+1)*vp/2`, so the half-extent is
+   already `width / vp`. Dropped the extra 0.5. The coverage
+   oracle now uses `N_SEGS * 512 * 6 * 0.8` as the w6 floor
+   (98304) so a 3 px “6 px” line fails, and loop−strip must
+   exceed half of one edge.
 
 Polygon-offset factor/units, PushAttrib restore, projection-row
 bias, and “wide path before `line_arrays_to_vbo`” were already
@@ -144,7 +155,9 @@ correct in `233d34d4` and were not retouched.
 - Cases 3–9 (cull-on, trailing-reset, near-plane, stipple+width,
   loop-close vs strip, wireframe 60 FPS / 1 px, named-list suite).
 - Fogged and clip-plane screenshots of the Known deviations.
-- Re-run the coverage bench after the viewport / degenerate fixes.
+  The coverage bench (case 1 + loop-close vs a missing edge) is
+  done headless; a strip-vs-loop visual oracle is still useful
+  headful.
 
 ## Problem
 
@@ -521,13 +534,16 @@ For each pair of object-space endpoints `(p0, p1)`:
    Δndc  = (n.x * width / vp_width, n.y * width / vp_height)
    ```
 
-   (`Δndc` is a full-width offset in NDC: a pixel-space
-   `n * (width / 2)` times `2 / vp_*`. Half of it goes to each
-   side of the segment.)
+   `Δndc` **is** the half-extent: window mapping is
+   `window = (ndc + 1) * vp / 2`, so one pixel is `2 / vp` in
+   NDC and `width/2` pixels is `width / vp`. Corners are
+   `ndc ± Δndc`. Do **not** multiply by 0.5 again — that was
+   the half-width bug (a 6 px line rendered 3 px).
 
    Degenerate / ~0-length segments (`dx_px² + dy_px² ≈ 0`,
-   including `p0 == p1`) become an axis-aligned NDC square of
-   side `width / vp_*`, or are skipped. No division by a
+   including `p0 == p1`) become an axis-aligned NDC square
+   whose **half-side** is `width / vp_*` (full side = `width`
+   pixels), or are skipped. No division by a
    zero-length normal. Test degeneracy in pixel space, not NDC
    — a line that is only tall in a very wide viewport is still
    a real segment.
