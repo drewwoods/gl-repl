@@ -229,7 +229,7 @@ an unintended interaction.
 | Special key | `skey <name>` | Sends a special GLUT key. See the names below. |
 | Modified key | `chord <mods> <key>` | Sends one key press with a declared modifier mask, reaching shortcuts `key`/`skey` cannot (Shift is not carried in a plain key byte). See the rules below. |
 | Spotlight | `ring <point> <seconds>` | Shows a pulsing highlight ring for a positive duration. |
-| Caption | `echo <stroke|mono|bitmap> <point> <height-px> <seconds> <text>` | Shows text in the tour accent color with a dark halo for the positive on-screen duration, without delaying the next event. A later caption replaces it. `bitmap` chooses the nearest fixed bitmap font; `stroke` and `mono` use GLUT roman stroke fonts; `\n` starts a new centered line. |
+| Caption | `echo <stroke|mono|bitmap> <point> <height-px> <seconds> <text>` | Shows text in the tour accent color for the positive on-screen duration, without delaying the next event. A later caption replaces it. `bitmap` chooses the nearest fixed bitmap font over a dark plate; `stroke` and `mono` use GLUT roman stroke fonts rendered with a dark halo; `\n` starts a new centered line. |
 | Wait | `pause <seconds>` | Delays later events for a positive duration. |
 
 To show a caption without concurrent actions, follow it with a matching (or

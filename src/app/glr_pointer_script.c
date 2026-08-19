@@ -2479,8 +2479,10 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
 
     /* Echo caption: text (e.g. "Ctrl+K") pinned at a screen spot to label
      * how the next action was triggered. Eased in/out.
-     * Rendered in the tour accent color (UI_TOK_ACCENT_ALT) with a dark halo
-     * (UI_TOK_SCRIM) for both scalable stroke fonts and fixed bitmap fonts. */
+     * Rendered in the tour accent color (UI_TOK_ACCENT_ALT):
+     * - Scalable GLUT stroke fonts render over a two-pass dark halo (UI_TOK_SCRIM).
+     * - Fixed-size GLUT bitmap fonts render on top of a translucent dark
+     *   scrim plate (UI_TOK_SCRIM). */
     if (g_echo_start >= 0 && g_frame - g_echo_start < g_echo_dur &&
         g_echo_text[0]) {
         /* Plate padding around the glyph box, px. Asymmetric on purpose: the
@@ -2585,28 +2587,16 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
             }
             glLineWidth(1.0f);
         } else {
-            /* Bitmap text: two-pass diagonal dark halo at (-1,-1) and (1,1)
-             * (UI_TOK_SCRIM) to keep Apple GL bitmap rasterization costs low
-             * (~3 passes total instead of 9), followed by the tour accent color
-             * (UI_TOK_ACCENT_ALT) for glyph bodies. */
-            static const float k_halo[][2] = {
-                { -1.0f, -1.0f },
-                {  1.0f,  1.0f },
-            };
-            ui_clr_a(UI_TOK_SCRIM, alpha * 0.85f);
-            for (size_t i = 0; i < sizeof(k_halo) / sizeof(k_halo[0]); i++) {
-                const char *line_p = g_echo_text;
-                for (int row = 0; row < line_count; row++) {
-                    const char *end = strchr(line_p, '\n');
-                    size_t len = end ? (size_t)(end - line_p) : strlen(line_p);
-                    float line_w = ps_bitmap_width(bitmap_font.font, line_p, len);
-                    float line_x = cx + (w - line_w) * 0.5f + k_halo[i][0];
-                    float line_y = first_cy - (float)row * line_step + k_halo[i][1];
-                    ps_bitmap_text(line_x, line_y, bitmap_font.font, line_p, len);
-                    if (!end) break;
-                    line_p = end + 1;
-                }
-            }
+            /* Bitmap text: draw translucent dark scrim plate, then single-pass
+             * glyphs on top in the tour accent color (UI_TOK_ACCENT_ALT) with
+             * breathing alpha. */
+            ui_clr_a(UI_TOK_SCRIM, alpha * 0.72f);
+            glBegin(GL_QUADS);
+            glVertex2f(cx - pad_x,     plate_bottom);
+            glVertex2f(cx + w + pad_x, plate_bottom);
+            glVertex2f(cx + w + pad_x, plate_top);
+            glVertex2f(cx - pad_x,     plate_top);
+            glEnd();
 
             ui_clr_a(UI_TOK_ACCENT_ALT, text_alpha);
             const char *line_p = g_echo_text;
