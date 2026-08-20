@@ -2068,6 +2068,48 @@ gl-tests: $(addprefix $(BINDIR)/,$(GL_TEST_BINS)) ## Run real-GL UI state tests 
 	  printf '$(CYAN)==> %s$(NC)\n' "$$b"; "$$b" || exit $$?; \
 	done
 
+# --- Single-file tools (tools/<stem>.c) -------------------------------------
+#
+# Adding one is: drop the .c in tools/, add its stem to TOOLS_PLAIN or TOOLS_GL,
+# and write the two-line target down in the tools section. The build rules are
+# shared; only the target is per-tool, because its `## ` doc has to be literal
+# source text - that is what help and check-make-target-documented read, and an
+# $(eval)-generated target would be invisible to both.
+#
+# The *verb* names the tool, not the directory it lives in: show-<subject>
+# prints a report, run-<subject> builds and executes (and so honours ARGS).
+# There is no `tools-` family - a directory is where the source sits, not what
+# the target does, and these two tools answer to different verbs.
+#
+# The variables live up here, above the freeglut prerequisite block below,
+# because that block's target list expands at parse time.
+# Under $(BINDIR), not a flat build/tools: the suffix machinery is what keeps a
+# stub, OSMesa, glut or external-freeglut build from handing back the binary a
+# different configuration compiled to the same path.
+TOOLS_DIR       := tools
+TOOLS_BINDIR    := $(BINDIR)/tools
+TOOLS_GL_BINDIR := $(BINDIR)/tools-gl
+TOOLS_PLAIN     := capacity_matrix
+TOOLS_GL        := compare_stroke_fonts
+TOOLS_PLAIN_BINS := $(addprefix $(TOOLS_BINDIR)/,$(TOOLS_PLAIN))
+TOOLS_GL_BINS    := $(addprefix $(TOOLS_GL_BINDIR)/,$(TOOLS_GL))
+
+# The GL tools use the fork's *_HI stroke fonts and GLUT_STROKE_FONT_DRAW_JOIN_DOTS,
+# which exist only in the vendored freeglut - so the gate is "is the vendored
+# archive on the link line", not a platform test. $(FREEGLUT_LIB) is exactly
+# that: empty under `make glut` (Apple GLUT framework), on the default Linux
+# path (system -lglut). WEB=1 and USE_GL_STUBS=1 vendor or stub their way to a
+# link line that would build something, but an interactive viewer under node,
+# or against no-op GL, is not a thing to run.
+TOOLS_GL_OK :=
+ifneq ($(WEB),1)
+ifneq ($(USE_GL_STUBS),1)
+ifneq ($(FREEGLUT_LIB),)
+TOOLS_GL_OK := 1
+endif
+endif
+endif
+
 # The vendored static freeglut (macOS) is a build-time artifact, so every binary
 # whose link line embeds its archive path through $(GL_LDFLAGS) must order-only
 # depend on it - otherwise those links run before the archive exists and fail.
@@ -2095,6 +2137,7 @@ ifneq ($(USE_GL_STUBS),1)
 $(SAMPLE_BIN) $(RENDER3D_DEMO_BIN) $(REPL_DEMO_BIN) $(REPL_LIVE_DEMO_BIN) $(EDITOR_DEMO_BIN) \
 $(MEMPROF_DEMO_BIN) $(CPUPROF_DEMO_BIN) $(VARIABLE_PANEL_DEMO_BIN) \
 $(COLOR_PICKER_DEMO_BIN) $(ASSIGN_PLOT_DEMO_BIN) $(CODE_PANEL_TEXT_BENCH_BIN) \
+$(TOOLS_GL_BINS) \
 $(addprefix $(BINDIR)/,$(TEST_BINS) $(BENCH_BINS) $(GL_TEST_BINS)): $(FREEGLUT_STATIC_LIB)
 endif
 endif
@@ -2887,33 +2930,33 @@ else
 	@exit 1
 endif
 
-# --- Single-file tools (tools/<stem>.c) -------------------------------------
+# --- Single-file tool rules (TOOLS_* are declared above the freeglut block).
 #
-# Adding one is: drop the .c in tools/, add its stem to TOOLS_PLAIN, and write
-# the two-line target below. The build rule is shared; only the target is
-# per-tool, because its `## ` doc has to be literal source text - that is what
-# help and check-make-target-documented read, and an $(eval)-generated target
-# would be invisible to both.
-#
-# The *verb* names the tool, not the directory it lives in:
-#   show-<subject>   prints a report to stdout and writes nothing
-#   run-<subject>    builds and executes something (and therefore honours ARGS)
-# A `tools-` family would be a noun, and two tools in one directory can answer
-# to different verbs - the directory is where the source lives, not what the
-# target does.
-TOOLS_DIR    := tools
-TOOLS_BINDIR := build/tools
-TOOLS_PLAIN  := capacity_matrix
-TOOLS_PLAIN_BINS := $(addprefix $(TOOLS_BINDIR)/,$(TOOLS_PLAIN))
-
-# Incremental, unlike the old inline `$(CC) ... -o build/capacity_matrix` that
-# recompiled on every invocation.
+# Two pattern rules, two output directories: the difference between a tool that
+# links GL and one that does not is the link line, and two pattern rules cannot
+# share one target pattern. Both are incremental, unlike the old inline
+# `$(CC) ... -o build/capacity_matrix` that recompiled on every invocation.
 $(TOOLS_BINDIR)/%: $(TOOLS_DIR)/%.c
 	@mkdir -p $(dir $@)
 	@$(CC) $(COMMON_CFLAGS) $(CFLAGS) $< -o $@ -lm
 
+$(TOOLS_GL_BINDIR)/%: $(TOOLS_DIR)/%.c
+	@mkdir -p $(dir $@)
+	@$(CC) $(COMMON_CFLAGS) $(CFLAGS) $< $(GL_LDFLAGS) -o $@
+
 show-capacity: $(TOOLS_BINDIR)/capacity_matrix ## Print state-scaling matrix: per-tunable bytes-per-unit, current totals, and undo/redo ring footprint.
 	@$< $(ARGS)
+
+run-stroke-fonts: $(if $(TOOLS_GL_OK),$(TOOLS_GL_BINDIR)/compare_stroke_fonts) ## Compare the four vendored stroke fonts side by side (opens a window; Tab cycles modes, 1-4 pick a font).
+ifdef TOOLS_GL_OK
+	$< $(ARGS)
+else
+	@echo "ERROR: run-stroke-fonts needs the vendored freeglut - the *_HI stroke" >&2
+	@echo "       fonts and join-dot option exist only in the fork." >&2
+	@echo "       macOS: the default build vendors it." >&2
+	@echo "       Linux: make run-stroke-fonts FREEGLUT_VENDOR_LINUX=1" >&2
+	@exit 1
+endif
 
 capacity-matrix: ## Deprecated spelling of: make show-capacity.
 	@printf 'note: capacity-matrix is deprecated - use `make show-capacity`.\n' >&2

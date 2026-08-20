@@ -120,6 +120,15 @@ neutral `src/support` helper where the peer has one), and is guarded by
 - [`capacity_matrix.c`](capacity_matrix.c) - `make show-capacity`; prints the
   per-unit memory cost of every tunable `MAX_*` constant. Hand-curated table:
   add a row when you add a `MAX_*`.
+- [`compare_stroke_fonts.c`](compare_stroke_fonts.c) - `make run-stroke-fonts`;
+  a windowed side-by-side of the four stroke fonts the vendored freeglut ships
+  (`GLUT_STROKE_ROMAN`/`MONO_ROMAN` and their Catmull-Rom `_HI` twins) across
+  six view modes, down to per-glyph vertex joins. Needs the **vendored**
+  freeglut - the `_HI` fonts and `GLUT_STROKE_FONT_DRAW_JOIN_DOTS` do not exist
+  upstream - so it is the default build on macOS and
+  `FREEGLUT_VENDOR_LINUX=1` on Linux; the target refuses rather than
+  mis-compiling anywhere else. The reproduction guard for the same fonts is
+  `make check-stroke-fonts`.
 - [`keymap.sh`](keymap.sh) - `make check-keymap-no-dup` / `make keymap-list`
   over [`keymap.h`](../keymap.h).
 - [`glprobe/`](glprobe/README.md) — `make glprobe SAMPLE=<file.c>`; a
@@ -135,7 +144,8 @@ neutral `src/support` helper where the peer has one), and is guarded by
 ## Adding a single-file tool
 
 A tool that is one `.c` file needs no rule of its own. Drop it in `tools/`, add
-its stem to `TOOLS_PLAIN` in the Makefile, and write the target:
+its stem to `TOOLS_PLAIN` (no GL) or `TOOLS_GL` (links GL/freeglut, opens a
+window) in the Makefile, and write the target:
 
 ```make
 TOOLS_PLAIN := capacity_matrix my_tool
@@ -143,6 +153,11 @@ TOOLS_PLAIN := capacity_matrix my_tool
 show-my-thing: $(TOOLS_BINDIR)/my_tool ## Print <what it reports>.
 	@$< $(ARGS)
 ```
+
+The two flavours have separate output directories because two pattern rules
+cannot share one target pattern - the difference is the link line. Both build
+under `$(BINDIR)`, so a stub, OSMesa or `make glut` build never hands back a
+binary another configuration compiled.
 
 Two lines, because the build rule (`$(TOOLS_BINDIR)/%: tools/%.c`) is shared
 while the *target* must be literal source text - `make help` and
