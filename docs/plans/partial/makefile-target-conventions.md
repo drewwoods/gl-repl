@@ -38,11 +38,18 @@ fixing the previous ones. Landed as a ratchet instead:
   entry that no longer names an existing non-conforming target fails - so a
   rename cannot leave its line rotting, and the count can only fall. Emptying
   it is step 6, and nothing has to move for the guard to be worth having.
-- `FOREVER_ALIASES` / `DEPRECATED_ALIASES` are not created yet: with no
-  renames there are no old spellings to carry, and the five step-4 forwarders
-  (`bench-csv`, `test-only`, ...) already satisfy the grammar on their own.
+- `FOREVER_ALIASES` is not created yet: it is for a rename whose old spelling
+  is load-bearing in hooks or CI (§2 names `gl-tests`), and nothing renamed so
+  far is. `DEPRECATED_ALIASES` (bucket (c)) appeared with the first rename,
+  `capacity-matrix` -> `show-capacity`, and holds only old spellings that do
+  **not** already conform - the five step-4 forwarders (`bench-csv`,
+  `test-only`, ...) need no entry, since `bench-` and `test-` are verbs. The
+  guard rejects an entry that no longer names a target, so retiring a
+  forwarder is what empties the list.
 
-134 of the 185 documented targets already conformed before this landed.
+134 of the 185 documented targets already conformed before this landed. The
+first rename out of the ratchet was `capacity-matrix` -> `show-capacity`
+(§2's row), landed with the single-file tool plumbing: 27 left.
 
 ### Deviations from the proposal, and why
 

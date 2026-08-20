@@ -656,7 +656,7 @@ and it is not a supported configuration.**
 Two of those are not capacity increases, and both are load-bearing:
 
 - **`REPL_UNDO_DEPTH` goes *down*.** `MAX_EDITOR_COMMANDS` costs ~33 KB per
-  unit (`make capacity-matrix`) because every source command is duplicated
+  unit (`make show-capacity`) because every source command is duplicated
   across the 32×2 undo/redo rings and 8 user-scene slots — and that memory is
   resident, not lazily-faulted. Shortening the history is what keeps a 32×
   document cap from costing over a gigabyte; measured resident set is ~630 MB.

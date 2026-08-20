@@ -7,6 +7,8 @@
 #                      so the aggregates need no allow-listing.
 #   ROOT_TARGETS       artifact-named: the target IS the thing it builds.
 #                      Permanent, and allowed to stay any size.
+#   DEPRECATED_ALIASES an old spelling kept as a forwarder after a rename.
+#                      Only needed for one that does not already conform.
 #   LEGACY_TARGETS     the ratchet: names that predate the grammar. Frozen.
 #
 # The ratchet is checked BOTH ways, which is the whole mechanism:
@@ -31,6 +33,7 @@ cd "$(git rev-parse --show-toplevel)"
 : "${MAKE_TARGET_VERBS:?run this through 'make check-make-target-grammar'}"
 : "${ROOT_TARGETS:?run this through 'make check-make-target-grammar'}"
 : "${LEGACY_TARGETS:?run this through 'make check-make-target-grammar'}"
+DEPRECATED_ALIASES=${DEPRECATED_ALIASES-}
 
 documented=$(awk -F: '/^[a-zA-Z0-9_.-]+:.*## / {print $1}' Makefile | sort -u)
 
@@ -56,6 +59,7 @@ ungrammatical=""
 for t in $documented; do
     conforms "$t" && continue
     in_list "$t" "$ROOT_TARGETS" && continue
+    in_list "$t" "$DEPRECATED_ALIASES" && continue
     in_list "$t" "$LEGACY_TARGETS" && continue
     ungrammatical="${ungrammatical}  ${t}"$'\n'
 done
@@ -71,6 +75,10 @@ fi
 stale=""
 for t in $ROOT_TARGETS; do
     in_list "$t" "$documented" || stale="${stale}  ROOT_TARGETS: ${t} (no such documented target)"$'\n'
+done
+for t in $DEPRECATED_ALIASES; do
+    in_list "$t" "$documented" || \
+        stale="${stale}  DEPRECATED_ALIASES: ${t} (no such documented target - the forwarder is gone, so drop the line)"$'\n'
 done
 for t in $LEGACY_TARGETS; do
     if ! in_list "$t" "$documented"; then
@@ -90,10 +98,14 @@ fi
 #    would be hiding a debt entry).
 both=""
 for t in $ROOT_TARGETS; do
-    in_list "$t" "$LEGACY_TARGETS" && both="${both}  ${t}"$'\n'
+    in_list "$t" "$LEGACY_TARGETS" && both="${both}  ROOT_TARGETS + LEGACY_TARGETS: ${t}"$'\n'
+done
+for t in $DEPRECATED_ALIASES; do
+    in_list "$t" "$LEGACY_TARGETS" && \
+        both="${both}  DEPRECATED_ALIASES + LEGACY_TARGETS: ${t} (a renamed name is not grandfathered)"$'\n'
 done
 if [ -n "$both" ]; then
-    printf 'In both ROOT_TARGETS and LEGACY_TARGETS (pick one):\n%s' "$both" >&2
+    printf 'Name in two grammar lists (pick one):\n%s' "$both" >&2
     fail=1
 fi
 
@@ -102,5 +114,6 @@ fi
 n_doc=$(printf '%s\n' $documented | wc -l | tr -d ' ')
 n_legacy=$(printf '%s\n' $LEGACY_TARGETS | wc -l | tr -d ' ')
 n_root=$(printf '%s\n' $ROOT_TARGETS | wc -l | tr -d ' ')
-printf 'OK: %s Make targets follow the grammar (%s artifact roots, %s legacy names left to rename).\n' \
-    "$n_doc" "$n_root" "$n_legacy"
+n_dep=$(printf '%s\n' $DEPRECATED_ALIASES | grep -c . || true)
+printf 'OK: %s Make targets follow the grammar (%s artifact roots, %s deprecated aliases, %s legacy names left to rename).\n' \
+    "$n_doc" "$n_root" "$n_dep" "$n_legacy"

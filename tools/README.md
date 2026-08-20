@@ -117,7 +117,7 @@ neutral `src/support` helper where the peer has one), and is guarded by
 - [`render3d_asset_builder/`](render3d_asset_builder/README.md) - REPL-language
   recreations of render3d elements (grids, backdrops) with their own example
   catalog; needs a raised flat-command budget.
-- [`capacity_matrix.c`](capacity_matrix.c) - `make capacity-matrix`; prints the
+- [`capacity_matrix.c`](capacity_matrix.c) - `make show-capacity`; prints the
   per-unit memory cost of every tunable `MAX_*` constant. Hand-curated table:
   add a row when you add a `MAX_*`.
 - [`keymap.sh`](keymap.sh) - `make check-keymap-no-dup` / `make keymap-list`
@@ -131,6 +131,43 @@ neutral `src/support` helper where the peer has one), and is guarded by
   same probe as an `LD_PRELOAD`/`DYLD_INSERT_LIBRARIES` library that hooks
   `glutDisplayFunc` and needs no source change at all. Not linked into any
   demo.
+
+## Adding a single-file tool
+
+A tool that is one `.c` file needs no rule of its own. Drop it in `tools/`, add
+its stem to `TOOLS_PLAIN` in the Makefile, and write the target:
+
+```make
+TOOLS_PLAIN := capacity_matrix my_tool
+
+show-my-thing: $(TOOLS_BINDIR)/my_tool ## Print <what it reports>.
+	@$< $(ARGS)
+```
+
+Two lines, because the build rule (`$(TOOLS_BINDIR)/%: tools/%.c`) is shared
+while the *target* must be literal source text - `make help` and
+`check-make-target-documented` read the `## ` comment out of the Makefile, so
+a generated target would be invisible to both.
+
+**The verb names the tool** ([target-name grammar](../docs/plans/partial/makefile-target-conventions.md)):
+
+| Verb | Means | Example |
+|---|---|---|
+| `show-` | prints a report to stdout, writes no files | `show-capacity` |
+| `run-` | builds **and executes** something; honours `ARGS` | a windowed viewer |
+| `gen-` | regenerates a checked-in artifact | |
+| `check-` | a guard - findings **are** violations, non-zero exit | `check-stroke-fonts` |
+
+There is deliberately no `tools-` family: that would name the directory the
+source happens to sit in, not what the target does, and two tools in this
+directory can answer to different verbs. `check-make-target-grammar` rejects
+a noun-prefixed target name.
+
+The demos are the other case: they are **artifact-named** (`repl-demo` builds
+`./repl_demo`), so they take no verb at all - see `ROOT_TARGETS`. A `demo-`
+verb would have to mean build-and-run for `ARGS` to mean anything, and
+`make test-full` builds every demo as a compile proof, which would then open
+ten windows.
 
 ## Build
 

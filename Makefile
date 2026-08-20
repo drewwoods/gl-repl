@@ -2474,8 +2474,9 @@ check-make-phony-derived: ## Hard guard: every documented Make target is .PHONY 
 check-make-fix-pairs: ## Hard guard: every fix-* Make target has the check-* guard it is the mutating twin of.
 	@bash scripts/check/check-make-fix-pairs.sh
 
-check-make-target-grammar: ## Hard guard: a target name is <verb>-<subject>, an artifact root, or a frozen legacy name.
+check-make-target-grammar: ## Hard guard: a target name is <verb>-<subject>, an artifact root, a deprecated alias, or a frozen legacy name.
 	@MAKE_TARGET_VERBS='$(MAKE_TARGET_VERBS)' ROOT_TARGETS='$(ROOT_TARGETS)' \
+		DEPRECATED_ALIASES='$(DEPRECATED_ALIASES)' \
 		LEGACY_TARGETS='$(LEGACY_TARGETS)' bash scripts/check/check-make-target-grammar.sh
 
 CHECK_TARGETS = \
@@ -2886,9 +2887,37 @@ else
 	@exit 1
 endif
 
-capacity-matrix: ## Print state-scaling matrix: per-tunable bytes-per-unit, current totals, and undo/redo ring footprint.
-	@$(CC) $(COMMON_CFLAGS) tools/capacity_matrix.c -o build/capacity_matrix
-	@./build/capacity_matrix
+# --- Single-file tools (tools/<stem>.c) -------------------------------------
+#
+# Adding one is: drop the .c in tools/, add its stem to TOOLS_PLAIN, and write
+# the two-line target below. The build rule is shared; only the target is
+# per-tool, because its `## ` doc has to be literal source text - that is what
+# help and check-make-target-documented read, and an $(eval)-generated target
+# would be invisible to both.
+#
+# The *verb* names the tool, not the directory it lives in:
+#   show-<subject>   prints a report to stdout and writes nothing
+#   run-<subject>    builds and executes something (and therefore honours ARGS)
+# A `tools-` family would be a noun, and two tools in one directory can answer
+# to different verbs - the directory is where the source lives, not what the
+# target does.
+TOOLS_DIR    := tools
+TOOLS_BINDIR := build/tools
+TOOLS_PLAIN  := capacity_matrix
+TOOLS_PLAIN_BINS := $(addprefix $(TOOLS_BINDIR)/,$(TOOLS_PLAIN))
+
+# Incremental, unlike the old inline `$(CC) ... -o build/capacity_matrix` that
+# recompiled on every invocation.
+$(TOOLS_BINDIR)/%: $(TOOLS_DIR)/%.c
+	@mkdir -p $(dir $@)
+	@$(CC) $(COMMON_CFLAGS) $(CFLAGS) $< -o $@ -lm
+
+show-capacity: $(TOOLS_BINDIR)/capacity_matrix ## Print state-scaling matrix: per-tunable bytes-per-unit, current totals, and undo/redo ring footprint.
+	@$< $(ARGS)
+
+capacity-matrix: ## Deprecated spelling of: make show-capacity.
+	@printf 'note: capacity-matrix is deprecated - use `make show-capacity`.\n' >&2
+	+$(MAKE) --no-print-directory show-capacity
 
 bench: $(BENCH_TARGET_NAMES) $(if $(BENCH_QUIET),,$(COMPILE_REPORT_BENCH_SUMMARY)) ## Build and run the REPL runtime benchmarks (FORMAT=csv for machine-readable rows).
 	@for b in $(BENCH_BINS); do \
@@ -3417,6 +3446,17 @@ ROOT_TARGETS := \
 	assign-plot-demo color-picker-demo cpuprof-demo editor-demo memprof-demo \
 	render3d-demo render3d-hot repl-demo repl-live-demo variable-panel-demo
 
+# Old spellings kept as forwarders after a rename (plan bucket (c)). Temporary
+# by construction: the guard rejects an entry that no longer names a target, so
+# retiring the forwarder is what empties the list. Only names that do NOT
+# already satisfy the grammar need to be here - `bench-csv` and `test-only` are
+# forwarders too, but `bench-` and `test-` are verbs, so they need no entry.
+#
+# Bucket (b), FOREVER_ALIASES, does not exist yet: it is for a rename whose old
+# spelling is load-bearing in hooks or CI (the plan names `gl-tests`), and the
+# one rename so far is not.
+DEPRECATED_ALIASES := capacity-matrix
+
 # The ratchet. Names that predate the grammar, frozen so a *new* one cannot
 # join them. check-make-target-grammar checks this list in both directions:
 # a non-conforming target missing from it fails, and an entry that no longer
@@ -3426,7 +3466,7 @@ ROOT_TARGETS := \
 # Emptying it is docs/plans/partial/makefile-target-conventions.md step 6,
 # which is deferred; nothing here has to move for the guard to be worth having.
 LEGACY_TARGETS := \
-	analyze audit-editor-ownership capacity-matrix config-list coverage \
+	analyze audit-editor-ownership config-list coverage \
 	callgraph-files callgraph-graphviz callgraph-html callgraph-profile \
 	callgraph-static callgraph-static-entry \
 	debug distclean extract fetch-music find-trailing-whitespace gl-tests \
