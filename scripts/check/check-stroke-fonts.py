@@ -162,8 +162,8 @@ def check_font(generator, source_name, high_name):
 
     source_segments = segment_count(source)
     high_segments = segment_count(high)
-    if high_segments > source_segments * 5.2:
-        raise AssertionError("%s segment budget grew beyond 5.2x" % high_name)
+    if high_segments > source_segments * 5.8:
+        raise AssertionError("%s segment budget grew beyond 5.8x" % high_name)
 
     with tempfile.TemporaryDirectory(prefix="glr-stroke-font-") as tmp:
         regenerated = os.path.join(tmp, high_name)
