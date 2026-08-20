@@ -2354,14 +2354,19 @@ static float ps_bitmap_width(void *font, const char *s, size_t len) {
 #define PS_STROKE_DESCENT  33.33f
 
 static void *ps_stroke_font(PsEchoStyle style) {
-    return (style == PS_ECHO_STROKE_MONO) ? GLUT_STROKE_MONO_ROMAN
-                                          : GLUT_STROKE_ROMAN;
+    return (style == PS_ECHO_STROKE_MONO) ? GLUT_STROKE_MONO_ROMAN_HI
+                                          : GLUT_STROKE_ROMAN_HI;
 }
+
+#define PS_STROKE_CHAR_SPACING 6.0f
 
 static float ps_stroke_width(void *font, float scale, const char *s, size_t len) {
     float w = 0.0f;
-    for (size_t i = 0; i < len; i++)
+    for (size_t i = 0; i < len; i++) {
         w += (float)glutStrokeWidth(font, (int)(unsigned char)s[i]);
+        if (i + 1 < len)
+            w += PS_STROKE_CHAR_SPACING;
+    }
     return w * scale;
 }
 
@@ -2370,8 +2375,11 @@ static void ps_stroke_text(float x, float y, void *font, float scale,
     glPushMatrix();
     glTranslatef(x, y, 0.0f);
     glScalef(scale, scale, 1.0f);
-    for (size_t i = 0; i < len; i++)
+    for (size_t i = 0; i < len; i++) {
         glutStrokeCharacter(font, (int)(unsigned char)s[i]);
+        if (i + 1 < len)
+            glTranslatef(PS_STROKE_CHAR_SPACING, 0.0f, 0.0f);
+    }
     glPopMatrix();
 }
 

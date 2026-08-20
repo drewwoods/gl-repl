@@ -109,9 +109,13 @@ static const char glut_bitmap_times_roman_24_stub = 0;
 #define GLUT_BITMAP_TIMES_ROMAN_24 ((void *)(uintptr_t)&glut_bitmap_times_roman_24_stub)
 
 static const char glut_stroke_roman_stub = 0;
+static const char glut_stroke_roman_hi_stub = 0;
 static const char glut_stroke_mono_roman_stub = 0;
+static const char glut_stroke_mono_roman_hi_stub = 0;
 #define GLUT_STROKE_ROMAN ((void *)(uintptr_t)&glut_stroke_roman_stub)
+#define GLUT_STROKE_ROMAN_HI ((void *)(uintptr_t)&glut_stroke_roman_hi_stub)
 #define GLUT_STROKE_MONO_ROMAN ((void *)(uintptr_t)&glut_stroke_mono_roman_stub)
+#define GLUT_STROKE_MONO_ROMAN_HI ((void *)(uintptr_t)&glut_stroke_mono_roman_hi_stub)
 
 typedef void (*GLUTdisplayCB)(void);
 typedef void (*GLUTreshapeCB)(int width, int height);
