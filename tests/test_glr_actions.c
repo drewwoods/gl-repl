@@ -1279,6 +1279,8 @@ static void test_tour_sequential_steps_and_pause(void) {
     };
     static const char *const echo_stroke[] = { "echo stroke 10 10 18 1 Stroke caption" };
     static const char *const echo_mono[] = { "echo mono 10 10 18 1 Mono caption" };
+    static const char *const echo_stroke_hi[] = { "echo strokehi 10 10 18 1 High-res stroke caption" };
+    static const char *const echo_mono_hi[] = { "echo monohi 10 10 18 1 High-res mono caption" };
     static const char *const echo_no_style[] = { "echo 10 10 18 1 Missing style" };
     static const char *const echo_bad_style[] = { "echo bogus 10 10 18 1 Bad style" };
     static const char *const bad_zero[] = { "pause 0" };
@@ -1351,6 +1353,12 @@ static void test_tour_sequential_steps_and_pause(void) {
     glr_pointer_script_stop();
     ASSERT_INT("echo mono script loads",
                glr_pointer_script_start_tour("T", "t.pointer", echo_mono, 1), 1);
+    glr_pointer_script_stop();
+    ASSERT_INT("echo strokehi script loads",
+               glr_pointer_script_start_tour("T", "t.pointer", echo_stroke_hi, 1), 1);
+    glr_pointer_script_stop();
+    ASSERT_INT("echo monohi script loads",
+               glr_pointer_script_start_tour("T", "t.pointer", echo_mono_hi, 1), 1);
     glr_pointer_script_stop();
     ASSERT_INT("echo without style is rejected",
                glr_pointer_script_start_tour("T", "t.pointer", echo_no_style, 1), 0);

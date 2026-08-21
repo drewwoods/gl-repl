@@ -123,7 +123,9 @@ typedef enum {
 typedef enum {
     PS_ECHO_BITMAP = 0,
     PS_ECHO_STROKE,
-    PS_ECHO_STROKE_MONO
+    PS_ECHO_STROKE_MONO,
+    PS_ECHO_STROKE_HI,
+    PS_ECHO_STROKE_MONO_HI
 } PsEchoStyle;
 
 typedef struct {
@@ -863,7 +865,7 @@ static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
         ev->verb = PS_ECHO;
 
         /* Required style modifier preceding point:
-         * `echo <stroke|mono|bitmap> <point> <size> <dur> <text...>` */
+         * `echo <stroke|mono|strokehi|monohi|bitmap> <point> <size> <dur> <text...>` */
         if (sscanf(args, "%31s%n", modtok, &nread) != 1)
             return -1;
         if (strcasecmp(modtok, "stroke") == 0 ||
@@ -874,6 +876,18 @@ static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
                    strcasecmp(modtok, "stroke-mono") == 0 ||
                    strcasecmp(modtok, "mono") == 0) {
             ev->echo_style = PS_ECHO_STROKE_MONO;
+        } else if (strcasecmp(modtok, "strokehi") == 0 ||
+                   strcasecmp(modtok, "stroke_hi") == 0 ||
+                   strcasecmp(modtok, "stroke-hi") == 0 ||
+                   strcasecmp(modtok, "stroke_roman_hi") == 0 ||
+                   strcasecmp(modtok, "stroke-roman-hi") == 0) {
+            ev->echo_style = PS_ECHO_STROKE_HI;
+        } else if (strcasecmp(modtok, "monohi") == 0 ||
+                   strcasecmp(modtok, "mono_hi") == 0 ||
+                   strcasecmp(modtok, "mono-hi") == 0 ||
+                   strcasecmp(modtok, "stroke_mono_hi") == 0 ||
+                   strcasecmp(modtok, "stroke-mono-hi") == 0) {
+            ev->echo_style = PS_ECHO_STROKE_MONO_HI;
         } else if (strcasecmp(modtok, "bitmap") == 0) {
             ev->echo_style = PS_ECHO_BITMAP;
         } else {
@@ -2353,9 +2367,25 @@ static float ps_bitmap_width(void *font, const char *s, size_t len) {
 #define PS_STROKE_CAP     119.05f
 #define PS_STROKE_DESCENT  33.33f
 
+static inline int ps_is_stroke_style(PsEchoStyle style) {
+    return style == PS_ECHO_STROKE ||
+           style == PS_ECHO_STROKE_MONO ||
+           style == PS_ECHO_STROKE_HI ||
+           style == PS_ECHO_STROKE_MONO_HI;
+}
+
 static void *ps_stroke_font(PsEchoStyle style) {
-    return (style == PS_ECHO_STROKE_MONO) ? GLUT_STROKE_MONO_ROMAN_HI
-                                          : GLUT_STROKE_ROMAN_HI;
+    switch (style) {
+        case PS_ECHO_STROKE_MONO:
+            return GLUT_STROKE_MONO_ROMAN;
+        case PS_ECHO_STROKE_HI:
+            return GLUT_STROKE_ROMAN_HI;
+        case PS_ECHO_STROKE_MONO_HI:
+            return GLUT_STROKE_MONO_ROMAN_HI;
+        case PS_ECHO_STROKE:
+        default:
+            return GLUT_STROKE_ROMAN;
+    }
 }
 
 #define PS_STROKE_CHAR_SPACING 6.0f
@@ -2507,7 +2537,7 @@ void glr_pointer_script_render_overlay(int win_w, int win_h) {
         float stroke_scale = 0.0f;
         PsEchoFont bitmap_font = { NULL, 0.0f, 0.0f };
 
-        if (g_echo_style == PS_ECHO_STROKE || g_echo_style == PS_ECHO_STROKE_MONO) {
+        if (ps_is_stroke_style(g_echo_style)) {
             stroke_font = ps_stroke_font(g_echo_style);
             stroke_scale = g_echo_size / PS_STROKE_CAP;
             font_ascent = g_echo_size;

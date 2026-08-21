@@ -21,7 +21,6 @@ click
 chord ctrl+shift c
 
 echo bitmap scene:0.20,0.20 24 3.4 A new scene seeds the GL boilerplate.
-# @checkpoint after-new-scene
 glide code:3 0.2
 ring  code:1 0.3
 ring  code:2 0.3
@@ -30,7 +29,10 @@ ring  code:4 0.3
 ring  code:5 0.3
 ring  code:6 0.3
 
+# @checkpoint after-new-scene
 echo bitmap scene:0.15,0.20 24 3.4 Type a command; the ; key commits it.
+echo stroke scene:0.15,0.20 18 3.4 Type a command; the ; key commits it.
+echo mono scene:0.15,0.20 18 3.4 Type a command; the ; key commits it.
 
 # ctrl+j - enter
 key \cj
@@ -40,7 +42,7 @@ key ;
 key@10 glRotatef(
 pause 0.2
 key@5 t * 40, 0, 1, 0);
-echo stroke scene:0.20,0.20 16 7.0 The cursor position also triggers overlays, with the cursor on the glRotatef\nline the effect on the geomtry is revealed in the scene
+echo mono scene:0.20,0.20 12 7.0 The cursor position also triggers overlays, with the cursor on the\n glRotatef line the effect on the geomtry is revealed in the scene
 # @checkpoint before-geometry
 skey up
 glide code:9 0.5

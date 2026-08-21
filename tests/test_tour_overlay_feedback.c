@@ -338,6 +338,17 @@ static void test_stroke_caption_renders(void) {
     ASSERT_TRUE("stroke caption overlay captured vertices", verts > 0);
 }
 
+static void test_stroke_hi_caption_renders(void) {
+    const char *lines[] = {
+        "echo strokehi scene:0.25,0.76 24 3.6 High-res stroke text"
+    };
+    start_tour(lines, 1);
+    glr_pointer_script_frame();
+
+    int verts = capture_overlay();
+    ASSERT_TRUE("strokehi caption overlay captured vertices", verts > 0);
+}
+
 /* Validate the HUD render path end-to-end: the drawn panel sits at the scene's
  * top-left inset and its captured width matches tour_hud_panel_width(scene_w)
  * exactly - tying the real GL output to the pure width function whose clamp is
@@ -412,6 +423,7 @@ int main(int argc, char **argv) {
     test_long_left_anchored_caption_renders();
     test_caption_newline_renders_two_lines();
     test_stroke_caption_renders();
+    test_stroke_hi_caption_renders();
     test_hud_render_matches_width_helper();
     return test_harness_report(&g_harness, "tour_overlay_feedback");
 }
