@@ -961,7 +961,14 @@ Mutations route through `repl_actions`, `repl_command_store`,
 `variable_panel_drag`, or another REPL-owned mutation path. UI input
 hit-tests (`*_hit_test`, `*_rect`) compute neutral [`UiHit`](../src/ui/core/hit.h#L60) values and
 return - `glr_ctrl_router_handle_code_panel_hit` dispatches by
-`UiHit.kind` to the owning subsystem. Render-side
+`UiHit.kind` to the owning subsystem. Several floating surfaces have their
+own pass (front overlays, the OpenGL-state inspector, the assignment plot,
+the console), and a press must consult them in paint order or it hands a
+pixel to a panel another one is drawn over; that order is stated once, in
+`ui_panels_hit_test_layered` ([`src/ui/app/panels.h`](../src/ui/app/panels.h)),
+beside the paint order it has to match. Routing a press and *predicting* one
+(the tour-HUD intercept, the divider hover cursor) both go through it.
+Render-side
 discoveries (e.g. the editor cursor pixel computed during the generic
 text-panel pass) flow back through per-frame `Ui*Output` structs that
 the controller actualizes after the render call. [`UiCodePanelOutput`](../src/ui/app/panels.h#L37) is

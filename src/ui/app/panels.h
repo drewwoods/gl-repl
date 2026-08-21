@@ -89,4 +89,45 @@ UiHit ui_panels_hit_test_assign_plot(const UiRenderSnapshot *snap,
 UiHit ui_panels_hit_test_console(const UiRenderSnapshot *snap,
                                  int mx, int my);
 
+/* --- Layered hit-test ---
+ *
+ * Which pass owns a point. The passes above are separate entry points
+ * because each has its own place in paint order, and a left press has to
+ * consult them in exactly that order or it hands pixels to a panel another
+ * one is drawn over. That order lives here, next to the paint order it must
+ * agree with, so nothing downstream has to restate it. */
+typedef enum {
+    /* Panels painted after the floating OpenGL-state inspector. */
+    UI_PANELS_LAYER_FRONT = 0,
+    /* The inspector's own surface. */
+    UI_PANELS_LAYER_GL_STATE_POPUP,
+    /* Painted under the inspector, so consulted only after it declines. */
+    UI_PANELS_LAYER_ASSIGN_PLOT,
+    UI_PANELS_LAYER_CONSOLE,
+    /* ui_panels_hit_test - everything else, UI_HIT_NONE included. */
+    UI_PANELS_LAYER_CANONICAL
+} UiPanelsHitLayer;
+
+/* `layer` names the pass that answered; `hit` is what it answered.
+ * UI_PANELS_LAYER_GL_STATE_POPUP carries no UiHit - the inspector is
+ * controller-owned chrome, not a hit-test surface - so `hit` is
+ * UI_HIT_NONE there. */
+typedef struct UiPanelsLayeredHit {
+    UiHit            hit;
+    UiPanelsHitLayer layer;
+} UiPanelsLayeredHit;
+
+/* Run the passes in paint order and report the first that claims (mx, my).
+ *
+ * `gl_state_popup_owns_point` is supplied by the caller because the
+ * inspector's geometry is folded per call out of live REPL state, which the
+ * UI band cannot reach; pass 0 when it is closed or does not own the point.
+ * Callers that route the press consume `layer` for its per-layer side
+ * effects; callers that only need to predict where a press would land
+ * compare `layer` against UI_PANELS_LAYER_CANONICAL. */
+UiPanelsLayeredHit ui_panels_hit_test_layered(const UiRenderSnapshot *snap,
+                                              int mx, int my,
+                                              int variable_count,
+                                              int gl_state_popup_owns_point);
+
 #endif /* UI_PANELS_H */

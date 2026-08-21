@@ -1115,3 +1115,43 @@ UiHit ui_panels_hit_test(const UiRenderSnapshot *snap,
     hit.local_y = (float)gl_y;
     return hit;
 }
+
+/* The one statement of hit order. mouse_dispatch routes a left press by it;
+ * anything that has to *predict* where a press will land - the GLUT host's
+ * tour-HUD intercept, the divider's hover cursor - asks the same question
+ * here rather than re-walking the passes and speaking for pixels another
+ * panel already owns. */
+UiPanelsLayeredHit ui_panels_hit_test_layered(const UiRenderSnapshot *snap,
+                                              int mx, int my,
+                                              int variable_count,
+                                              int gl_state_popup_owns_point) {
+    UiPanelsLayeredHit out;
+
+    out.hit = ui_panels_hit_test_above_gl_state(snap, mx, my, variable_count);
+    if (out.hit.kind != UI_HIT_NONE) {
+        out.layer = UI_PANELS_LAYER_FRONT;
+        return out;
+    }
+
+    if (gl_state_popup_owns_point) {
+        out.hit = ui_hit_none();
+        out.layer = UI_PANELS_LAYER_GL_STATE_POPUP;
+        return out;
+    }
+
+    out.hit = ui_panels_hit_test_assign_plot(snap, mx, my);
+    if (out.hit.kind != UI_HIT_NONE) {
+        out.layer = UI_PANELS_LAYER_ASSIGN_PLOT;
+        return out;
+    }
+
+    out.hit = ui_panels_hit_test_console(snap, mx, my);
+    if (out.hit.kind != UI_HIT_NONE) {
+        out.layer = UI_PANELS_LAYER_CONSOLE;
+        return out;
+    }
+
+    out.hit = ui_panels_hit_test(snap, mx, my, variable_count);
+    out.layer = UI_PANELS_LAYER_CANONICAL;
+    return out;
+}

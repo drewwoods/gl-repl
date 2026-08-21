@@ -1209,6 +1209,18 @@ static int glr_ctrl_router_point_in_gl_state_popup(int x, int y) {
     return view.visible && ui_gl_state_panel_hit_test(&view, x, y);
 }
 
+/* Would a left press at (x, y) be *owned* by the popup? A menu dropdown is
+ * painted above it and wins its own clicks, which is the one case where the
+ * popup covers a pixel it does not get. This is the popup's entry in the
+ * layered hit order (ui_panels_hit_test_layered); the bare rect test above
+ * is the geometry question, and right-press wants that one because it
+ * deliberately lets some clicks reach the rows underneath. */
+static int glr_ctrl_router_gl_state_popup_owns_point(int x, int y) {
+    if (ui_menu_bar_menu_dropdown_is_open())
+        return 0;
+    return glr_ctrl_router_point_in_gl_state_popup(x, y);
+}
+
 /* The inspector describes state at a fixed source boundary. Once an event is
  * actually handed to the editor that boundary is no longer the user's active
  * context, so remove the overlay before the editor processes the event. Keep
@@ -2097,31 +2109,22 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
     return consumed;
 }
 
-/* Would a left press at (x, y) route to `kind`? Two layers answer ahead of
- * the canonical hit-test in mouse_dispatch, and neither is reachable through
- * it: the above-gl-state overlay pass (telemetry panels, status surfaces,
- * variable panel, an open dropdown) and the floating OpenGL-state popup's own
- * surface. Anything that has to promise what a click will do - the GLUT host's
- * tour-HUD intercept, the divider's hover cursor - must consult that same
- * order, or it speaks for pixels another panel already owns.
+/* Would a left press at (x, y) route to `kind`? Only if no floating layer
+ * answers ahead of the canonical hit-test - which is what the layered pass
+ * decides, and it is the same walk mouse_dispatch routes by.
  *
  * `kind` is an int because UiHit.kind is: the core kinds and the app-band
  * extensions in ui/app/hit.h live in separate enums. */
 static int router_press_routes_to(int x, int y, int kind) {
     UiRenderSnapshot snap;
-    int variable_count = repl_eval_predef_view().count;
+    UiPanelsLayeredHit layered;
 
     glr_ctrl_build_ui_snapshot(&snap);
-    if (ui_panels_hit_test_above_gl_state(&snap, x, y, variable_count).kind
-            != UI_HIT_NONE)
-        return 0;
-    if (glr_ctrl_router_point_in_gl_state_popup(x, y))
-        return 0;
-    if (ui_panels_hit_test_assign_plot(&snap, x, y).kind != UI_HIT_NONE)
-        return 0;
-    if (ui_panels_hit_test_console(&snap, x, y).kind != UI_HIT_NONE)
-        return 0;
-    return ui_panels_hit_test(&snap, x, y, variable_count).kind == kind;
+    layered = ui_panels_hit_test_layered(
+        &snap, x, y, repl_eval_predef_view().count,
+        glr_ctrl_router_gl_state_popup_owns_point(x, y));
+    return layered.layer == UI_PANELS_LAYER_CANONICAL &&
+           layered.hit.kind == kind;
 }
 
 /* The GLUT host asks before its generic "real click cancels the tour"
@@ -2552,51 +2555,52 @@ static void mouse_dispatch(int button, int state, int x, int y) {
          * select / click-away dismiss / swallow body. */
         if (glr_ctrl_router_handle_help_click(button, state, x, y))
             return;
-        /* Later-rendered panels own overlapping pixels. Their actionable
-         * controls still route normally; inert panel bodies explicitly
-         * consume the click. A front panel outside the popup keeps the
-         * popup's established click-away behavior (except while a menu is
-         * open, matching the popup handler below). */
+
+        /* Everything below is one walk of the paint order, and the order
+         * itself belongs to ui_panels_hit_test_layered. What is left here is
+         * only what each layer *does* with the click. */
         UiRenderSnapshot ui_snap;
         glr_ctrl_build_ui_snapshot(&ui_snap);
-        UiHit front_hit = ui_panels_hit_test_above_gl_state(
-            &ui_snap, x, y, repl_eval_predef_view().count);
-        if (front_hit.kind != UI_HIT_NONE) {
+        UiPanelsLayeredHit layered = ui_panels_hit_test_layered(
+            &ui_snap, x, y, repl_eval_predef_view().count,
+            glr_ctrl_router_gl_state_popup_owns_point(x, y));
+
+        /* A front panel's actionable controls still route normally; inert
+         * panel bodies explicitly consume the click. A front panel outside
+         * the popup keeps the popup's established click-away behavior
+         * (except while a menu is open, matching the popup handler below). */
+        if (layered.layer == UI_PANELS_LAYER_FRONT) {
             if (ui_state_gl_state_inspector().visible &&
                 !ui_menu_bar_menu_dropdown_is_open() &&
                 !glr_ctrl_router_point_in_gl_state_popup(x, y)) {
                 ui_state_gl_state_inspector_close();
                 editor_request_redraw();
             }
-            (void)glr_ctrl_router_handle_code_panel_hit(front_hit, x, y);
+            (void)glr_ctrl_router_handle_code_panel_hit(layered.hit, x, y);
             return;
         }
+
         /* Floating OpenGL-state popup: swallow clicks on its surface,
-         * dismiss on click-away (the handler returns 0 for the latter so
-         * the click still routes below). */
+         * dismiss on click-away. Called for every layer below the front one,
+         * because the dismiss is what a press anywhere else means; the
+         * handler returns 0 for that so the click still routes below. */
         if (glr_ctrl_router_handle_gl_state_popup_left_press(x, y))
             return;
-        /* The assignment-value plot paints under that popup, so its chips
-         * are claimed here rather than in the front pass above. */
-        UiHit plot_hit = ui_panels_hit_test_assign_plot(&ui_snap, x, y);
-        if (plot_hit.kind != UI_HIT_NONE) {
-            (void)glr_ctrl_router_handle_code_panel_hit(plot_hit, x, y);
+
+        /* The assignment-value plot and the console paint under that popup,
+         * so their chips are claimed here rather than in the front pass. */
+        if (layered.layer == UI_PANELS_LAYER_ASSIGN_PLOT ||
+            layered.layer == UI_PANELS_LAYER_CONSOLE) {
+            (void)glr_ctrl_router_handle_code_panel_hit(layered.hit, x, y);
             return;
         }
-        UiHit console_hit = ui_panels_hit_test_console(&ui_snap, x, y);
-        if (console_hit.kind != UI_HIT_NONE) {
-            (void)glr_ctrl_router_handle_code_panel_hit(console_hit, x, y);
-            return;
-        }
-        /* Classify the click via the canonical hit-test, then route by
-         * UiHit.kind to the owning subsystem. The hit-test covers
-         * variable panel, color picker, menu bar, code panel (including
-         * divider + inline swatch + insert line) and pin buttons. Only
-         * kinds that don't apply (UI_HIT_SCENE, UI_HIT_NONE,
+
+        /* Canonical: route by UiHit.kind to the owning subsystem. The
+         * hit-test covers variable panel, color picker, menu bar, code panel
+         * (including divider + inline swatch + insert line) and pin buttons.
+         * Only kinds that don't apply (UI_HIT_SCENE, UI_HIT_NONE,
          * UI_HIT_HELP_PANEL) fall through to scene press / camera. */
-        UiHit hit = ui_panels_hit_test(&ui_snap, x, y,
-                           repl_eval_predef_view().count);
-        if (glr_ctrl_router_handle_code_panel_hit(hit, x, y))
+        if (glr_ctrl_router_handle_code_panel_hit(layered.hit, x, y))
             return;
         if (glr_ctrl_router_handle_scene_press(button, state, x, y))
             return;
