@@ -3493,7 +3493,7 @@ static void test_a_local_edit_is_written_back(void) {
 /* The motivating case, and the reason the trigger is the document text: a
  * variable-panel drag applies its value live on every pointer event but
  * rewrites the declaration row exactly once, on release. This is that release
- * (glr_ctrl_persist_variable_panel_drag_value's two calls), so one gesture is
+ * (glr_variable_panel_persist_drag_value's two calls), so one gesture is
  * one write. */
 static void test_a_dragged_value_reaches_the_file(void) {
     static const char *const scene[] = {

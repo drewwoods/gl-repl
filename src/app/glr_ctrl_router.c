@@ -7,11 +7,13 @@
  * help-overlay routing. Feature policy whose only claim on this file was
  * that a key or a click triggers it lives with its domain instead -
  * scene/tutorial cycling in glr_ctrl_cycle.c, the quit-time recovery save
- * in glr_ctrl_recovery.c. Pure routing - it
- * calls back into glr_ctrl.c only through the seams in glr_ctrl_internal.h
- * (drag snapshot, input-effect apply) and the public glr_ctrl.h surface, and
- * has no direct render3d/ includes. It includes ui/ headers, so it is on the
- * check-controller-boundaries ui allowlist.
+ * in glr_ctrl_recovery.c, the variable-panel drag's document writes in
+ * glr_variable_panel_bridge.c.
+ *
+ * Pure routing - it calls back into glr_ctrl.c only through the seams in
+ * glr_ctrl_internal.h (drag snapshot, input-effect apply) and the public
+ * glr_ctrl.h surface, and has no direct render3d/ includes. It includes ui/
+ * headers, so it is on the check-controller-boundaries ui allowlist.
  */
 #include "app/glr_ctrl.h"
 
@@ -94,7 +96,7 @@
 #include "ui/app/variable_panel_view.h"
 #include "app/glr_color_picker_bridge.h"
 #include "app/glr_ctrl_internal.h"
-#include "subsystems/variable_panel/variable_panel_drag.h"
+#include "app/glr_variable_panel_bridge.h"
 
 /* glr_camera_wheel_zoom_step() lives with the camera owner in glr_camera.h. */
 
@@ -519,55 +521,13 @@ int glr_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int 
     return 1;
 }
 
-/* Mouse-up: write the value the drag settled on back into the variable's
- * declaration, once. Motion applied the live value only (see
- * glr_ctrl_apply_variable_panel_value_change), so this is the drag's single
- * source mutation - one dirty mark, one re-flatten from cold state, and the
- * saved source matches what the scene renders.
- *
- * No undo snapshot: the first motion already captured one at the drag-start
- * value. No tutorial notify: the change carries no predef op, and the live
- * value it persists was notified when it was applied. A drag with no motion,
- * or a variable with no declaration row, does no work at all. */
-static void glr_ctrl_persist_variable_panel_drag_value(
-        const VariablePanelDragState *drag) {
-    ReplCompiledChange compiled;
-    ReplCompileContext ctx;
-    char err[REPL_STATUS_TEXT_MAX] = "";
-
-    if (!drag->value_changed || !drag->name[0])
-        return;
-
-    ctx = repl_compile_context_from_live(editor_state_edit_line());
-    ctx.insert_mode = editor_insert_mode();
-    if (repl_compile_persist_predef_value(drag->name, drag->final_value,
-                                          &ctx, &compiled,
-                                          err, sizeof(err)) != REPL_COMPILE_OK) {
-        repl_set_status_error(err[0] ? err : "Variable update failed");
-        return;
-    }
-    if (compiled.kind == REPL_COMPILED_NO_CHANGE)
-        return;   /* no declaration row to rewrite */
-
-    /* On failure the already-applied live value stands; Undo still restores
-     * the drag-start snapshot. */
-    if (!editor_commit_apply_external_change(&compiled, /*capture_undo=*/0,
-                                             /*publish_status=*/0)) {
-        repl_set_status_error("Command buffer full!");
-        return;
-    }
-
-    if (compiled.pos == editor_state_edit_line())
-        editor_load_line_to_input(compiled.pos);
-}
-
 int glr_ctrl_router_handle_variable_panel_drag_release(int state) {
     VariablePanelDragState drag;
 
     if (state != GLUT_UP) return 0;
     if (!variable_panel_drag_active()) return 0;
     drag = variable_panel_drag();
-    glr_ctrl_persist_variable_panel_drag_value(&drag);
+    glr_variable_panel_persist_drag_value(&drag);
     variable_panel_handle_drag_reset();
     editor_request_redraw();
     return 1;
@@ -601,58 +561,6 @@ int glr_ctrl_router_handle_camera_mouse(int button, int state, int x, int y) {
     return 1;
 }
 
-static void glr_ctrl_apply_variable_panel_value_change(
-        const VariablePanelValueChange *value_change) {
-    ReplCompiledChange compiled;
-    ReplCompileContext ctx;
-    VariablePanelDragState drag;
-    char err[REPL_STATUS_TEXT_MAX] = "";
-    int var_idx;
-    int capture_undo;
-
-    if (!value_change || !value_change->name[0])
-        return;
-
-    drag = variable_panel_drag();
-    var_idx = drag.var_idx;
-    ReplPredefView predef = repl_eval_predef_view();
-    if (var_idx < 0 || var_idx >= predef.count)
-        return;
-    if (strcmp(predef.vars[var_idx].name, value_change->name) != 0) {
-        var_idx = repl_eval_find_predef_var_idx(value_change->name);
-        if (var_idx < 0)
-            return;
-    }
-    if (predef.vars[var_idx].value == value_change->value)
-        return;
-
-    ctx = repl_compile_context_from_live(editor_state_edit_line());
-    /* repl_compile_context_from_live(editor_state_edit_line()) defaults insert_mode to 0
-     * (non-editor convention); the editor-side caller knows the live
-     * value and overrides. */
-    ctx.insert_mode = editor_insert_mode();
-    /* Live-only: motion updates the variable's value, never its declaration
-     * text. Rewriting the source on every pointer event would mark the source
-     * dirty hundreds of times per drag; the release handler persists the
-     * settled value once instead. */
-    if (repl_compile_set_predef_value_live(value_change->name,
-                                           value_change->value,
-                                           &ctx, &compiled,
-                                           err, sizeof(err)) != REPL_COMPILE_OK) {
-        repl_set_status_error(err[0] ? err : "Variable update failed");
-        return;
-    }
-
-    capture_undo = !variable_panel_drag_undo_snapshot_pushed();
-    if (!editor_commit_apply_external_change(&compiled, capture_undo, 0)) {
-        repl_set_status_error("Command buffer full!");
-        return;
-    }
-    if (capture_undo)
-        variable_panel_drag_mark_undo_snapshot_pushed();
-    variable_panel_drag_note_applied_value(value_change->value);
-}
-
 int glr_ctrl_router_handle_variable_panel_motion(int x, int y) {
     VariablePanelValueChange value_change;
 
@@ -669,7 +577,7 @@ int glr_ctrl_router_handle_variable_panel_motion(int x, int y) {
             value_change.value = drag.start_value +
                 (value_change.value - drag.start_value) * scale;
         }
-        glr_ctrl_apply_variable_panel_value_change(&value_change);
+        glr_variable_panel_apply_value_change(&value_change);
     }
     editor_request_redraw();
     return 1;

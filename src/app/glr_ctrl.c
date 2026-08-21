@@ -113,11 +113,11 @@
 #include "app/glr_clipboard.h"        /* glr_clipboard_install (OS clipboard) */
 #include "app/glr_assign_plot_bridge.h"
 #include "app/glr_color_picker_bridge.h"
+#include "app/glr_variable_panel_bridge.h"
 #include "app/glr_ctrl_internal.h"
 #include "app/glr_modal.h"
 #include "subsystems/assign_plot/assign_plot.h"
 #include "subsystems/console/console.h"
-#include "subsystems/variable_panel/variable_panel_drag.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 
 /* The REPL pipeline tracks light-enable state for REPL_LIGHT_SLOT_COUNT
@@ -4312,28 +4312,13 @@ static const ReplHelpFkeyProvider g_glr_help_fkey_provider = {
     .fkey_label = glr_ctrl_help_fkey_label,
 };
 
-/* REPL-backed value source for the variable-panel drag handlers. The peer
- * reads the declared variable's name + value through this bridge instead of
- * touching the eval table directly, which keeps src/subsystems/variable_panel
- * linkable from the standalone variable_panel_demo (it installs its own). */
-static int glr_ctrl_var_read_row(int row, char *name_out, int name_cap, float *value_out) {
-    ReplPredefView predef = repl_eval_predef_view();
-    if (row < 0 || row >= predef.count) return 0;
-    snprintf(name_out, (size_t)name_cap, "%s", predef.vars[row].name);
-    *value_out = predef.vars[row].value;
-    return 1;
-}
-static const VariablePanelValueSource g_glr_var_value_source = {
-    glr_ctrl_var_read_row,
-};
-
 /* Idempotent app-service installer required for any REPL loading/export path
  * (including CLI). */
 static void glr_ctrl_install_app_services(void) {
     /* Install the host-effect bridge (status sink, example presentation, editor effects, tutorial). */
     repl_install_host_effects(&g_glr_host_effects);
     /* Variable-panel drag value source: name + value reads from the REPL eval table. */
-    variable_panel_install_value_source(&g_glr_var_value_source);
+    glr_variable_panel_install_value_source();
     /* Color-picker host: document read/write + screen geometry. */
     glr_color_picker_install_host();
     /* Assignment-plot host: flat-program execution trace + document row kind. */

@@ -2078,7 +2078,7 @@ static void scene_file_poll(void) {
  * The trigger is synced_state_fingerprint() - the document text plus the scene
  * `@cfg` subset the writer emits - not the live variable table, and that is
  * enough on purpose: a drag applies its value live but rewrites the source
- * exactly once, on release (glr_ctrl_persist_variable_panel_drag_value), so
+ * exactly once, on release (glr_variable_panel_persist_drag_value), so
  * one gesture is one write rather than sixty. Anything that only moves live
  * state and never reaches a row or a scene setting - the camera, a scratch
  * cell with no declaration, `t` - is deliberately not a reason to rewrite the
