@@ -2323,24 +2323,42 @@ static int glr_ctrl_cancel_tour_for_physical_input(void) {
     return 1;
 }
 
-static void keyboard_dispatch(unsigned char key, int x, int y) {
-    /* The command help card is intentionally ephemeral: the next key event
-     * resumes editing and dismisses it without swallowing that key. */
+/* What happens to every key event before any routing decision, ascii and
+ * special alike. Two facts, and this is the only place either is stated:
+ *
+ *  - The command help card is ephemeral - the next key event resumes editing
+ *    and dismisses it without swallowing that key.
+ *  - The three hard modals come first, in this order, and a key any of them
+ *    captures also dismisses the OpenGL-state popup: the inspector describes
+ *    state at a fixed source boundary, and a captured key means the user's
+ *    context has moved off it.
+ *
+ * `is_special` picks the capture entry points for the key shape; `key` is an
+ * int so one helper serves both (the ascii path narrows it back). Returns 1
+ * when a modal consumed the event. */
+static int router_modal_capture(int key, int is_special) {
+    int captured;
+
     ui_state_command_description_close();
 
-    if (glr_modal_handle_key(key)) {
-        glr_ctrl_router_dismiss_gl_state_for_editor_input();
-        return;
+    if (is_special) {
+        captured = glr_modal_handle_special(key) ||
+                   editor_input_rename_capture_special(key) ||
+                   editor_input_file_prompt_capture_special(key);
+    } else {
+        unsigned char ascii = (unsigned char)key;
+        captured = glr_modal_handle_key(ascii) ||
+                   editor_input_rename_capture_key(ascii) ||
+                   editor_input_file_prompt_capture_key(ascii);
     }
-    /* Rename / file-prompt capture: hard modal. */
-    if (editor_input_rename_capture_key(key)) {
+    if (captured)
         glr_ctrl_router_dismiss_gl_state_for_editor_input();
+    return captured;
+}
+
+static void keyboard_dispatch(unsigned char key, int x, int y) {
+    if (router_modal_capture(key, /*is_special=*/0))
         return;
-    }
-    if (editor_input_file_prompt_capture_key(key)) {
-        glr_ctrl_router_dismiss_gl_state_for_editor_input();
-        return;
-    }
 
     if (glr_ctrl_router_handle_escape_key(key))
         return;
@@ -2404,21 +2422,8 @@ void glr_ctrl_scripted_keyboard(unsigned char key, int x, int y) {
 }
 
 static void special_dispatch(int key, int x, int y) {
-    ui_state_command_description_close();
-
-    if (glr_modal_handle_special(key)) {
-        glr_ctrl_router_dismiss_gl_state_for_editor_input();
+    if (router_modal_capture(key, /*is_special=*/1))
         return;
-    }
-
-    if (editor_input_rename_capture_special(key)) {
-        glr_ctrl_router_dismiss_gl_state_for_editor_input();
-        return;
-    }
-    if (editor_input_file_prompt_capture_special(key)) {
-        glr_ctrl_router_dismiss_gl_state_for_editor_input();
-        return;
-    }
 
     /* Function nav is an exact Ctrl+Up/Down binding. Claim it before
      * replay speed and help scroll, which both consume bare Up/Down. */
