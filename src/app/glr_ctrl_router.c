@@ -1955,6 +1955,46 @@ static int route_tour_hud_hit(void) {
     return 1;
 }
 
+/* Which hit kinds do NOT dismiss an open menu dropdown before their handler
+ * runs. Everything else does - that is the "click outside a dropdown closes
+ * it" rule, inherited from ui_panels_handle_code_panel_press.
+ *
+ * Stated as a positive list rather than a chain of `!=` on the dismiss
+ * itself, because the exemptions are the part that grows: a new
+ * menu-opening control that forgets to appear here reads as doing nothing
+ * on its second click, and the reason it is exempt has to be recorded next
+ * to it or the next reader cannot tell an intentional entry from an
+ * inherited one.
+ *
+ * `kind` is an int for the same reason it is on UiHit: the core kinds and
+ * the app-band extensions live in separate enums, so this cannot be a
+ * default-less switch that -Werror=switch would police. */
+static int hit_keeps_dropdown_open(int kind) {
+    switch (kind) {
+    /* Menu-owned controls. Dismissing first would close the very menu the
+     * handler is about to open, switch to, or act inside - and the second
+     * click would read as doing nothing. The rows decide for themselves
+     * whether the menu closes (a Config flyout row deliberately stays
+     * open); the workspace chip is a menu-opening control like a menu
+     * button, so it owns its own open/close toggle. */
+    case UI_HIT_MENU_BUTTON:
+    case UI_HIT_MENU_ITEM:
+    case UI_HIT_SUBMENU_ITEM:
+    case UI_HIT_CODE_PANEL_WORKSPACE_CHIP:
+        return 1;
+    /* Floating surfaces painted over the bar. The pin buttons close the
+     * menu themselves as their first act, so a dismiss here would only
+     * double it. The color picker may decline a press (r.consumed == 0)
+     * and has to keep falling through to scene press / camera - a dismiss
+     * would report the click as consumed and swallow it. */
+    case UI_HIT_PIN_BUTTON:
+    case UI_HIT_COLOR_SWATCH:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
     /* HUD expansion is presentation-only. Route before generic click
      * side-effects so inspecting transport details cannot cancel an inline
@@ -1977,22 +2017,10 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
     if (editor_inline_file_prompt_active())
         editor_inline_file_prompt_cancel();
 
-    /* A click outside the menu bar (anywhere that isn't UI_HIT_MENU_BUTTON,
-     * UI_HIT_MENU_ITEM, or UI_HIT_SUBMENU_ITEM) dismisses an open
-     * dropdown - matches the legacy
-     * "click outside dropdown closes it" behaviour from
-     * ui_panels_handle_code_panel_press. The workspace chip is exempt for the
-     * same reason a menu button is: it is a menu-opening control, so it must
-     * own its own open/close toggle. Dismissing here first would close the
-     * flyout its handler is about to reopen, and the second click would read
-     * as doing nothing. */
+    /* A click anywhere that does not own the menu dismisses an open
+     * dropdown; see hit_keeps_dropdown_open for who does and why. */
     int dismissed_dropdown = 0;
-    if (hit.kind != UI_HIT_MENU_BUTTON &&
-        hit.kind != UI_HIT_MENU_ITEM &&
-        hit.kind != UI_HIT_SUBMENU_ITEM &&
-        hit.kind != UI_HIT_PIN_BUTTON &&
-        hit.kind != UI_HIT_COLOR_SWATCH &&
-        hit.kind != UI_HIT_CODE_PANEL_WORKSPACE_CHIP &&
+    if (!hit_keeps_dropdown_open(hit.kind) &&
         ui_menu_bar_menu_dropdown_is_open()) {
         ui_menu_bar_close();
         dismissed_dropdown = 1;
