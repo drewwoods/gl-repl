@@ -1,6 +1,99 @@
 # Router Complexity Reduction - glr_ctrl_router.c
 
-## Status - drafted, awaiting design read
+## Status - LANDED (2026-08-21); STAGE 5 REJECTED
+
+[`src/app/glr_ctrl_router.c`](../../../src/app/glr_ctrl_router.c) went
+**3,313 -> 2,822 lines**. Six commits, no behavior change, no golden or
+scene-corpus churn; `make test`, `make test-stubs` and
+`make check-state-ownership` green after each.
+
+| Stage | Outcome | Commit |
+|---|---|---|
+| 1a | Scene/tutorial cycling -> new `src/app/glr_ctrl_cycle.c` (355 lines) | `refactor(app): move scene/tutorial cycling out of the input router` |
+| 1b | Quit recovery -> new `src/app/glr_ctrl_recovery.c` (134 lines) | `refactor(app): move quit-time recovery out of the input router` |
+| 1c | Variable-panel value math -> new `src/app/glr_variable_panel_bridge.{c,h}` | `refactor(app): give the variable panel one bridge, out of the router` |
+| 2 | `ui_panels_hit_test_layered()` in `src/ui/app/panels.c`; both walks collapse to one call | `refactor(ui): state the press hit-test order once, in the ui band` |
+| 3 | Exemption chain -> `hit_keeps_dropdown_open()`; the dispatch table **rejected** - see below | `refactor(app): name the dropdown-dismiss exemption rule` |
+| 4 | `router_modal_capture()` shared by both dispatchers | `refactor(app): one statement of the key-dispatch prologue` |
+| 5 | **Rejected** - see below | - |
+
+Corrections the implementation found, kept here so a future reader does not
+re-derive them:
+
+- **Stage 1 evicted ~530 lines, not ~700.** 1a was accurate at ~350; 1b was
+  ~110; 1c was ~95, not the ~240 the plan estimated - that band's line range
+  interleaved the scene-press and camera-mouse handlers, which are routing and
+  stayed. Stages 2-4 then added back ~40 net lines of structure and comment.
+- **1c landed in `src/app/`, as the plan's own Watch note anticipated.** The
+  two value functions call `repl_compile_*` and
+  `editor_commit_apply_external_change`, so moving them into
+  `src/subsystems/variable_panel/` would have broken that peer's standalone
+  link in `variable_panel_demo`. The new bridge also absorbed the read half
+  (the `VariablePanelValueSource` installer, previously inlined in
+  `glr_ctrl.c`), so the app's whole contract with the peer is one module -
+  the shape `glr_color_picker_bridge` and `glr_assign_plot_bridge` already
+  have.
+- **1a and 1b needed no new headers.** `glr_ctrl_view_transition.c` is the
+  precedent: a carved-out controller sibling keeps its public declarations in
+  `glr_ctrl.h` and its internal seams in `glr_ctrl_internal.h`. Callers and
+  tests were untouched, which is why the "include/link-list churn" the plan
+  budgeted for never materialized.
+- **1a needed one promotion.** `tutorial_cycle_selected()` is shared by the
+  stepper *click routing* (router) and the stepper *tooltip prediction*
+  (`glr_ctrl_cycle_peek`, moved) - its own comment says to keep it shared -
+  so it became the public `glr_ctrl_cycle_selects_tutorials()` rather than
+  being duplicated across the cut.
+- **Stage 2 settled a live disagreement between the two walks.**
+  `mouse_dispatch` hands the OpenGL-state popup's pixels back while a menu
+  dropdown is open above it; `router_press_routes_to` did not. Unifying them
+  had to pick one, and the prediction now matches what a press actually does.
+  This is the only observable change in the whole series, in that corner.
+- **Stage 2 left `route_wheel` and `route_right_press` alone, on purpose.**
+  Both walk a related order but not the same one: the wheel interposes an
+  autocomplete-popup layer the press order has no member for and terminates
+  in scroll/zoom rather than a `UiHit`; right-press needs the canonical hit
+  *even where the popup claims the point*, so it can let a shift basis-pin
+  through to the row underneath. Folding either in would have widened
+  `ui_panels_hit_test_layered` past the fact it exists to state.
+- **Stage 3's dispatch table was rejected, and the plan's own non-goals say why.**
+  33 of the 45 switch arms take neither `x`/`y` nor the hit, so the uniform
+  `int (*)(const UiHit *, int, int)` buys the table at the price of ~33
+  handlers gaining `(void)` casts that hide what each actually needs - "a
+  readable ladder for indirection plus a parallel ordering constraint", which
+  is exactly the trade the plan refuses for the keyboard handlers. The
+  exemption column was the part carrying the value, and it landed on its own.
+  Its two inherited members (`UI_HIT_PIN_BUTTON`, `UI_HIT_COLOR_SWATCH`) had
+  no recorded reason since `c9513314`; both now have one written down.
+
+### Stage 5 - rejected
+
+The by-surface split into `glr_ctrl_router_key.c` / `_mouse.c` / `_drag.c` is
+**not going to happen**; this is a decision, not a deferral.
+
+Its own premise did not survive Stages 1-4. The stage assumed a ~2,000-line
+residue "still mixing three surfaces". The residue is 2,822 lines and it is
+no longer mixed: what is left **is** keyboard/special routing, then mouse/hit
+routing, then the drag machinery, in that order, because the feature policy
+that used to interleave them is what Stage 1 removed. The stage's gate -
+*"worth doing only if [...] the residue still reads as three interleaved
+files"* - answers itself.
+
+What a split would cost is not speculative, and the stage lists it: a
+`glr_ctrl_router_internal.h` for state that is file-private today (the drag
+snapshot, the double-click clock, the anchor triple), three new entries on
+the `check-controller-boundaries` ui allowlist, and a `test_glr_ctrl.c`
+include-as-unit that names the router TU by hand with a matching Makefile
+`filter-out`. That is three new cross-file seams and two by-name build
+couplings bought with a line count - the file is large but it is not
+confusing, and splitting a coherent file into three that must now agree
+makes it harder to read, not easier.
+
+Reopen only if new *routing* growth makes one surface dominate the file on
+its own. Line count alone is not the trigger.
+
+---
+
+## Original plan (as drafted)
 
 [`src/app/glr_ctrl_router.c`](../../../src/app/glr_ctrl_router.c) is 3,313
 lines / 134 KB. It was carved out of `glr_ctrl.c` as "the input half", and
