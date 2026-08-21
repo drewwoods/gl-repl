@@ -6,4 +6,4 @@ or to `../active/` if implementation begins immediately.
 
 | Plan | Topic |
 |---|---|
-| — | (empty) |
+| [router-complexity-reduction.md](router-complexity-reduction.md) | Shrink glr_ctrl_router.c to pure routing: evict feature bands, unify hit-test layering |
