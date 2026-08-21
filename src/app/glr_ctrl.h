@@ -384,11 +384,23 @@ void glr_ctrl_help_scroll_by(int delta);                            /* clamped h
 int glr_ctrl_help_tab_point(const char *label, int *mx, int *my);
 int glr_ctrl_code_line_point(const char *spec, int *mx, int *my);
 int glr_ctrl_router_handle_scene_cycle_special(int key);            /* F12 */
+int glr_ctrl_router_handle_tutorial_cycle_special(int key);         /* F11 */
+
+/* ---- Scene / tutorial cycling (src/app/glr_ctrl_cycle.c) ----
+ *
+ * The catalog walks themselves: the F11/F12 key handlers above, the Scene /
+ * Tutorials menu rows and the menu bar's Prev/Next steppers all funnel
+ * through these. */
 void glr_ctrl_scene_cycle_next(void);                               /* F12 / Scene-menu "Next" */
 void glr_ctrl_scene_cycle_prev(void);                               /* Shift+F12 / Scene-menu "Previous" */
-int glr_ctrl_router_handle_tutorial_cycle_special(int key);         /* F11 */
 void glr_ctrl_tutorial_cycle_next(void);                            /* F11 / Tutorials-menu "Next" */
 void glr_ctrl_tutorial_cycle_prev(void);                            /* Shift+F11 / Tutorials-menu "Previous" */
+
+/* Which catalog a step walks. A completed tutorial is inactive but retains
+ * its index so the steppers continue from it; an explicit exit clears the
+ * index and falls back to the scene cycle. Shared by the stepper click
+ * routing and the tooltip prediction below so the two cannot disagree. */
+int glr_ctrl_cycle_selects_tutorials(void);
 
 /* Where a step would land, for the menu bar's Prev/Next stepper tooltip.
  * `kind` says which catalog answered (an active tutorial steps lessons, the
