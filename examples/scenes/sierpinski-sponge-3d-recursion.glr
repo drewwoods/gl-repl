@@ -1,11 +1,14 @@
-// @cfg axes = AXES_THEME_OFF
-// @cfg light_theme = LIGHT_THEME_NEON
 // @cfg grid_brightness = GRID_BRIGHTNESS_DIM
-// @cfg vertex_outlines = 0
+// @cfg light_theme = LIGHT_THEME_SOLAR
 // @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
 // Sierpinski sponge: the carpet's rule lifted to 3D. Split the cube
 // into 3x3x3 cells, drop the 6 face centers and the core, and recurse
 // into the 20 cells that remain. Two levels deep -> 400 cubes.
+
+static float depth = 2; // @tune
+static float size = 3; // @tune
+
 sponge(depth, size) {
   // Base case: one solid cube -- the neon lights do the coloring.
   if(depth <= 0) {
@@ -28,11 +31,11 @@ sponge(depth, size) {
     }
   }
 }
+glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
+glRotatef(18.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
-glRotatef(18.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 glClearColor(0.05, 0.06, 0.08, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -48,4 +51,4 @@ glEnable(GL_LIGHT1);
 glEnable(GL_LIGHT2);
 glEnable(GL_LIGHT3);
 glRotatef(16*t, 0, 1, 0);
-sponge(2, 3);
+sponge(depth, size);
