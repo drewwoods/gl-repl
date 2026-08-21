@@ -15,7 +15,7 @@
 /* @cfg grid_brightness = GRID_BRIGHTNESS_DIM */
 /* @cfg axes = AXES_THEME_OFF */
 /* @cfg backdrop = RENDER3D_BACKDROP_OFF */
-/* @cfg light_theme = LIGHT_THEME_NEON */
+/* @cfg light_theme = LIGHT_THEME_SOLAR */
 /* @cfg light_indicators = 0 */
 /* @cfg view_mode = RENDER3D_VIEW_3D */
 /* @cfg projection = PROJ_PERSPECTIVE */
@@ -103,6 +103,10 @@ void display(void) {
   // Sierpinski sponge: the carpet's rule lifted to 3D. Split the cube
   // into 3x3x3 cells, drop the 6 face centers and the core, and recurse
   // into the 20 cells that remain. Two levels deep -> 400 cubes.
+
+  static float depth = 2; // @tune
+  static float size = 3; // @tune
+
   sponge(depth, size) {
     // Base case: one solid cube -- the neon lights do the coloring.
     if(depth <= 0) {
@@ -141,7 +145,7 @@ void display(void) {
   glEnable(GL_LIGHT2);
   glEnable(GL_LIGHT3);
   glRotatef(16*t, 0, 1, 0);
-  sponge(2, 3);
+  sponge(depth, size);
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
