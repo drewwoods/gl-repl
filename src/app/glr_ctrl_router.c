@@ -3,17 +3,17 @@
  *
  * Carved out of glr_ctrl.c (the ~1450-line input half): keyboard / special /
  * mouse / motion / wheel entry points, the glr_ctrl_router_* handlers, the
- * UiHit code-panel route_* dispatch + drag/double-click tracking, help-overlay
- * routing, and the SIGINT-quit lifecycle. Feature policy whose only claim on
- * this file was that a key or a click triggers it lives with its domain
- * instead - scene/tutorial cycling in glr_ctrl_cycle.c. Pure routing - it
+ * UiHit code-panel route_* dispatch + drag/double-click tracking, and
+ * help-overlay routing. Feature policy whose only claim on this file was
+ * that a key or a click triggers it lives with its domain instead -
+ * scene/tutorial cycling in glr_ctrl_cycle.c, the quit-time recovery save
+ * in glr_ctrl_recovery.c. Pure routing - it
  * calls back into glr_ctrl.c only through the seams in glr_ctrl_internal.h
  * (drag snapshot, input-effect apply) and the public glr_ctrl.h surface, and
  * has no direct render3d/ includes. It includes ui/ headers, so it is on the
  * check-controller-boundaries ui allowlist.
  */
 #include "app/glr_ctrl.h"
-#include "app/glr_ctrl_export.h"
 
 #include "app/glr_ctrl_replay_annotations.h"
 #include "app/glr_pointer_script.h"
@@ -22,8 +22,6 @@
 #include "c_compat.h"  /* STATIC_ASSERT (C99/C11 portable) */
 #include <ctype.h>
 #include <math.h>
-#include <errno.h>
-#include <signal.h>
 #include "gl_includes.h"
 #include "config.h"
 #include <stdio.h>
@@ -48,7 +46,6 @@
 #include "app/glr_actions.h"
 #include "app/glr_modal.h"
 #include "app/glr_workspaces.h"
-#include "app/glr_paths.h"
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
 #include "app/glr_camera_export.h"
@@ -64,7 +61,6 @@
 #include "repl/eval.h"
 #include "repl/parser.h"
 #include "repl/executor.h"
-#include "repl/export.h"
 #include "repl/help_text.h"
 #include "repl/pipeline.h"
 #include "subsystems/replay/replay_annotations.h"
@@ -129,105 +125,9 @@ int glr_ctrl_router_handle_time_reset_key(unsigned char key) {
     return 1;
 }
 
-/* Recovery safeguard: Ctrl+Q, File > Quit, and SIGINT (Ctrl+C), plus
- * Open Workspace (which replaces every in-memory slot), write a recovery
- * copy to a DISTINCT, findable file - never the active scene/workspace. The point
- * is to rescue an unintended exit / forgotten save / discarded scene
- * without silently clobbering the user's real scene; reload it with
- * `./gl-repl recovery.c`. (Not /tmp - the user would never find it; not
- * the scene file - that would defeat the safeguard.) The filename lives
- * in config.h as QUIT_RECOVERY_FILE. */
-
-static volatile sig_atomic_t g_quit_requested = 0;
-
-/* Async-signal-safe: only sets a sig_atomic_t flag. The actual save +
- * exit runs on the normal path in glr_ctrl_tick(). */
-void glr_ctrl_request_quit(void) {
-    g_quit_requested = 1;
-}
-
-/* An unpromoted built-in example is not user work: the live document is
- * byte-for-byte the shipped example, and writing it out would clobber a
- * real rescue copy (or a user scene the user happens to have named
- * recovery.c) with something they can reload from the Examples menu any
- * time. Any edit auto-promotes an example into a user-scene slot
- * (repl_promote_transient_if_needed), so "an example is active and no
- * slot is active" is exactly the untouched case. */
-int glr_ctrl_recovery_has_user_work(void) {
-    return !(repl_active_user_scene() < 0 &&
-             repl_state_active_example_idx() >= 0);
-}
-
-/* Write the live scene to the recovery file. Shared by the quit
- * safeguard and Open Workspace. Returns 1 on success, 0 on failure.
- * Callers must check glr_ctrl_recovery_has_user_work() first - this
- * writes unconditionally. */
-int glr_ctrl_save_recovery_file(void) {
-    ReplExportLayout layout;
-    char path[GLR_PATH_MAX];
-    if (!glr_paths_app_state_path(QUIT_RECOVERY_FILE, path, sizeof(path)))
-        return 0;
-    if (!glr_paths_cwd_supports_relative_saves()) {
-        char state_dir[GLR_PATH_MAX];
-        snprintf(state_dir, sizeof(state_dir), "%s", path);
-        char *slash = strrchr(state_dir, '/');
-        if (!slash)
-            return 0;
-        *slash = '\0';
-        if (!glr_paths_ensure_dir(state_dir, NULL))
-            return 0;
-    }
-    glr_ctrl_fill_export_layout(&layout);
-    return repl_export_save_output(path, source_document_view(),
-                                   &layout) ? 1 : 0;
-}
-
-/* The live document is not worth rescuing, but the in-memory scene slots
- * die with the process just the same. Mirror what Open Workspace does
- * when it discards the collection (glr_action_open_workspace_path): dump
- * every occupied slot into a findable recovery workspace. Deliberately
- * NOT the user's bound workspace directory even when one is bound -
- * quitting must not write over files they never asked to save - and no
- * promotion, so the example being *looked at* stays out of it. The
- * workspace binding is restored because repl_save_workspace rebinds on
- * success and callers keep running until exit(). Returns 1 if a
- * workspace was written. */
-static int glr_ctrl_save_recovery_workspace(char *out_dir, size_t out_sz) {
-    ReplExportLayout layout;
-    char bound[REPL_WORKSPACE_DIR_MAX];
-    const char *current;
-    int written;
-
-    if (repl_user_scene_count() <= 0)
-        return 0;
-    if (!glr_paths_app_state_path("recovery-workspace", out_dir, out_sz))
-        return 0;
-
-    current = repl_workspace_dir();
-    snprintf(bound, sizeof(bound), "%s", current ? current : "");
-    glr_ctrl_fill_export_layout(&layout);
-    written = repl_save_workspace(out_dir, &layout);
-    repl_set_workspace_dir(bound);
-    return written > 0;
-}
-
-int glr_ctrl_save_quit_recovery(void) {
-    char path[GLR_PATH_MAX];
-    if (!glr_ctrl_recovery_has_user_work()) {
-        if (!glr_ctrl_save_recovery_workspace(path, sizeof(path)))
-            return 0;
-        printf("Saved %d unsaved scene(s) to %s (reload: %s %s)\n",
-               repl_user_scene_count(), path, glr_ctrl_program_name(), path);
-        return 1;
-    }
-    if (!glr_ctrl_save_recovery_file())
-        return 0;
-    glr_paths_app_state_path(QUIT_RECOVERY_FILE, path, sizeof(path));
-    printf("Saved recovery copy to %s (reload: %s %s)\n",
-           path, glr_ctrl_program_name(), path);
-    return 1;
-}
-
+/* Ctrl+Q. The recovery safeguard the exit runs through lives in
+ * glr_ctrl_recovery.c - it is shared with File > Quit, SIGINT, window close
+ * and Open Workspace, none of which are input events. */
 int glr_ctrl_router_handle_quit_key(unsigned char key) {
     if (keymap_event_is(key, GLR_QUIT)) {
         glr_ctrl_save_quit_recovery();
@@ -2974,14 +2874,4 @@ void glr_ctrl_mousewheel(int wheel, int direction, int x, int y) {
 
 void glr_ctrl_scripted_mousewheel(int wheel, int direction, int x, int y) {
     mousewheel_input(wheel, direction, x, y);
-}
-
-/* Deferred quit, consumed on the normal frame-tick path. SIGINT only sets
- * the flag, so no stdio/file I/O runs in handler context. Called from
- * glr_ctrl_tick in glr_ctrl.c via glr_ctrl_internal.h. */
-void glr_ctrl_router_run_pending_quit(void) {
-    if (g_quit_requested) {
-        glr_ctrl_save_quit_recovery();
-        exit(0);
-    }
 }

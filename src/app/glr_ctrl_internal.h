@@ -25,11 +25,16 @@ struct UiRenderSnapshot;    /* opaque here - only a pointer crosses the seam */
 /* ---- Input router seams (src/app/glr_ctrl_router.c <-> glr_ctrl.c) ----
  *
  * The router lives in glr_ctrl_router.c and calls back into glr_ctrl.c for the
- * cached drag snapshot and the post-routing effect apply; glr_ctrl.c's frame
- * tick calls back into the router to run a pending SIGINT-requested quit. */
+ * cached drag snapshot and the post-routing effect apply. */
 const struct UiRenderSnapshot *glr_ctrl_drag_hit_test_snapshot(void);
 void glr_ctrl_apply_input_effects(EditorInputDispatchEffects effects);
-void glr_ctrl_router_run_pending_quit(void);
+
+/* ---- Quit recovery (src/app/glr_ctrl_recovery.c) ----
+ *
+ * Consume a quit requested by glr_ctrl_request_quit(): save the recovery
+ * copy and exit. Driven from glr_ctrl_tick, because SIGINT sets only a
+ * sig_atomic_t flag and the save must not run in handler context. */
+void glr_ctrl_recovery_run_pending_quit(void);
 
 /* True when source_line_idx names the currently rendered editor input row
  * and that live, not-yet-committed input contains only whitespace. The GL

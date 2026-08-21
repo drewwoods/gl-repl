@@ -5045,10 +5045,11 @@ void glr_ctrl_tick(void) {
     int tour_reconstructing =
         glr_pointer_script_tour_suppresses_app_tick();
 
-    /* SIGINT (Ctrl+C) requested quit: the handler only set a flag; the
-     * router owns the flag + the recovery save + exit (so no stdio/file
-     * I/O runs inside the signal handler). Runs it here on the normal path. */
-    glr_ctrl_router_run_pending_quit();
+    /* SIGINT (Ctrl+C) requested quit: the handler only set a flag;
+     * glr_ctrl_recovery.c owns the flag + the recovery save + exit (so no
+     * stdio/file I/O runs inside the signal handler). Runs it here on the
+     * normal path. */
+    glr_ctrl_recovery_run_pending_quit();
 
     /* Advance the audio playlist if the current song reached its end
      * (no-op under loop=Song; see glr_audio_tick). */
