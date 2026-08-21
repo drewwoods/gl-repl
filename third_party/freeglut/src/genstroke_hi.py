@@ -145,17 +145,23 @@ def catmull_rom(p0, p1, p2, p3, tsteps):
     return out
 
 
-def round_mark(pts):
-    """Return an analytic high-resolution circle for a coarse 4-point mark.
+def round_mark(pts, has_tail=False):
+    """Return an analytic high-resolution round mark for a coarse 4-point mark.
 
     The source font draws dots as four equal-radius cardinal anchors plus the
-    repeated first point. Catmull-Rom through those anchors pinches each
-    quadrant inward, so it produces a rounded diamond rather than a circle.
-    Recognize only a near-square, near-circular four-anchor loop; this excludes
-    rectangular outlines such as underscore while preserving every source
-    anchor at a SUBDIV boundary.
+    repeated first point. A simple single outline leaves the interior hollow,
+    causing vector line rasterizers at normal font sizes to render an aliased
+    hollow diamond with a dark center.
+
+    This generates:
+    1. A smooth outer circular perimeter passing through all four source anchors
+       in their original order (preserving exact anchors, metrics, and bounds).
+    2. An inward concentric spiral down to the center (cx, cy) that solidly fills
+       the interior of the circular disc without center voids.
+    3. If `has_tail` is True (comma/semicolon), the path spirals back to the junction
+       point to seamlessly join the tail polyline.
     """
-    core = pts[:-1]
+    core = pts[:-1] if not has_tail else pts[:4]
     if len(core) != 4:
         return None
     cx = sum(p[0] for p in core) / 4.0
@@ -174,6 +180,8 @@ def round_mark(pts):
     angles = [math.atan2(p[1] - cy, p[0] - cx) for p in core]
     direction = 1.0 if signed_turn(core[-1], core[0], core[1]) > 0 else -1.0
     out = []
+
+    # 1. Smooth outer perimeter passing through all 4 anchors in exact order
     for i, p in enumerate(core):
         a0 = angles[i]
         a1 = angles[(i + 1) % 4]
@@ -183,7 +191,26 @@ def round_mark(pts):
         for step in range(1, SUBDIV):
             a = a0 + (a1 - a0) * (step / SUBDIV)
             out.append((cx + radius * math.cos(a), cy + radius * math.sin(a)))
-    out.append(out[0])
+    out.append(out[0])  # index 24 is equal to out[0]
+
+    # 2. Inward concentric spiral filling the interior disc
+    inward_turns = 2.0
+    spiral_steps = int(inward_turns * 4 * SUBDIV)
+    start_angle = angles[0]
+    for step in range(1, spiral_steps + 1):
+        t = step / spiral_steps
+        r = radius * (1.0 - t)
+        a = start_angle + direction * (t * inward_turns * 2.0 * math.pi)
+        out.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+
+    if has_tail:
+        # Spiral back out to junction point to connect seamlessly to tail
+        for step in range(1, spiral_steps + 1):
+            t = step / spiral_steps
+            r = radius * t
+            a = start_angle + direction * ((1.0 - t) * inward_turns * 2.0 * math.pi)
+            out.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+
     return out
 
 
@@ -235,7 +262,7 @@ def smooth_strip(pts):
         m = len(core)
         if m < 3:
             return pts
-        rounded = round_mark(pts)
+        rounded = round_mark(pts, has_tail=False)
         if rounded is not None:
             return rounded
         turns = [signed_turn(core[(i - 1) % m], core[i], core[(i + 1) % m])
@@ -258,7 +285,7 @@ def smooth_strip(pts):
     # Round that leading mark independently so the tail cannot distort it.
     for end in range(3, n - 1):
         if math.hypot(pts[0][0] - pts[end][0], pts[0][1] - pts[end][1]) < CLOSE_EPS:
-            rounded = round_mark(pts[:end + 1])
+            rounded = round_mark(pts[:end + 1], has_tail=True)
             if rounded is not None:
                 tail = smooth_strip(pts[end:])
                 return rounded + tail[1:]
