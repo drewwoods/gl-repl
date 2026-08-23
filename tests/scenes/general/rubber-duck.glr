@@ -3,7 +3,10 @@
 // @cfg vertex_points = 0
 // @cfg vertex_outlines = 0
 
-static float u, cu, su;
+static float pop_growth = 3.5; // @tune
+static float pop_trigger = 0.9; // @tune
+static float pop_rate = 0.1; // @tune
+static float u, cu, su, prop;
 static float bubbleT, bubbleLife, bProg, bAlpha;
 static float bx, by, bz, bSize, popP;
 
@@ -204,7 +207,7 @@ drawDuck(posX, posY, posZ, duckScale, duckRot, animPhase) {
       hby = 2.02 + headBubbleLife * 0.65;
       hbSize = 0.055 + 0.02 * sin(hb * 2.3);
 
-      if(headProg < 0.91) {
+      if(headProg < pop_trigger) {
         hbAlpha = 0.45 * smoothstep(0.0, 0.10, headProg);
         hbSize = hbSize * (0.82 + 0.18 * headProg);
 
@@ -214,8 +217,8 @@ drawDuck(posX, posY, posZ, duckScale, duckRot, animPhase) {
           glutSolidSphere(hbSize, 10, 10);
         glPopMatrix();
       } else {
-        headPop = (headProg - 0.91) / 0.09;
-        hbSize = hbSize * (1.0 + 3.2 * sqrt(headPop));
+        headPop = (headProg - pop_trigger) / pop_rate;
+        hbSize = hbSize * (1.0 + pop_growth * sqrt(headPop));
         hbAlpha = 0.45 * (1.0 - headPop) * (1.0 - headPop);
 
         if(hbAlpha > 0.01) {
@@ -395,7 +398,8 @@ for(b, 0, 14) {
   // Base bubble radius
   bSize = 0.075 + 0.04 * sin(b * 2.7);
 
-  if(bProg < 0.91) {
+  prop = bProg;
+  if(bProg < pop_trigger) {
     // Floating & rising phase: gentle ease-in from waterline, steady float
     bAlpha = 0.35 * smoothstep(0.0, 0.08, bProg);
     bSize = bSize * (0.85 + 0.15 * bProg);
@@ -406,9 +410,10 @@ for(b, 0, 14) {
       glutSolidSphere(bSize, 12, 12);
     glPopMatrix();
   } else {
-    // Explosive pop burst: sudden 4x balloon expansion & rapid fade over ~0.2s
-    popP = (bProg - 0.91) / 0.09;
-    bSize = bSize * (1.0 + 3.4 * sqrt(popP));
+    // Explosive pop burst: sudden balloon expansion & rapid fade
+    popP = (bProg - pop_trigger) / pop_rate;
+    prop = popP;
+    bSize = bSize * (1.0 + pop_growth * sqrt(popP));
     bAlpha = 0.35 * (1.0 - popP) * (1.0 - popP);
 
     if(bAlpha > 0.005) {
