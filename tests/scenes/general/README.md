@@ -84,6 +84,7 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 | `fresnel-concentric-ripple-pool.glr` | 3D, Waves, Lighting, Math | Dynamic multi-source wave interference in a circular water pool with surface normals computed from wave gradients. |
 | `tesseract-4d-hypercube-rotation.glr` | 3D, Math, Transforms, Geometry | 4D Hypercube (tesseract) rotating simultaneously across XW and YZ planes, projected into 3D perspective. |
 | `stellar-plasma-solar-prominence.glr` | 3D, Particles, Blending, Lighting | Magnetic solar prominence plasma arches erupting from a stellar sphere with traveling flux knots and additive blending. |
+| `rubber-duck.glr` | 3D, Hierarchical, Lighting, Animation | Iconic yellow rubber duck and duckling floating in a rippling water pool with bubbles. |
 
 ## How to Run & Validate
 
@@ -171,4 +172,5 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 ./gl-repl tests/scenes/general/fresnel-concentric-ripple-pool.glr
 ./gl-repl tests/scenes/general/tesseract-4d-hypercube-rotation.glr
 ./gl-repl tests/scenes/general/stellar-plasma-solar-prominence.glr
+./gl-repl tests/scenes/general/rubber-duck.glr
 ```

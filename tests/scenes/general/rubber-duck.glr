@@ -1,0 +1,328 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg light_theme = LIGHT_THEME_STUDIO
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+
+static float u, cu, su;
+static float bubbleT, bx, by, bz, bSize;
+
+drawDuck(posX, posY, posZ, duckScale, duckRot, animPhase) {
+  float bobY, rockZ, pitchX, wingAng;
+
+  bobY = sin(t * 2.4 + animPhase) * 0.08;
+  rockZ = sin(t * 1.8 + animPhase) * 3.5;
+  pitchX = cos(t * 2.4 + animPhase) * 2.2;
+  wingAng = sin(t * 3.2 + animPhase) * 5.0;
+
+  glPushMatrix();
+    glTranslatef(posX, posY + bobY, posZ);
+    glRotatef(duckRot, 0, 1, 0);
+    glRotatef(rockZ, 0, 0, 1);
+    glRotatef(pitchX, 1, 0, 0);
+    glScalef(duckScale, duckScale, duckScale);
+
+    // --- Body (Vibrant Yellow / AMBER) ---
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.25, 0.2, 0.05, 1});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){1, 0.85, 0.15, 1});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.5, 0.45, 0.2, 1});
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 48);
+    glColor3f(1, 0.85, 0.15);
+
+    // Main torso
+    glPushMatrix();
+      glScalef(1.25, 0.88, 1);
+      glutSolidSphere(1, 24, 24);
+    glPopMatrix();
+
+    // Puffed chest
+    glPushMatrix();
+      glTranslatef(0.45, 0.15, 0);
+      glScalef(0.85, 0.75, 0.85);
+      glutSolidSphere(1, 20, 20);
+    glPopMatrix();
+
+    // Upturned tail
+    glPushMatrix();
+      glTranslatef(-1.05, 0.25, 0);
+      glRotatef(38, 0, 0, 1);
+      glScalef(0.55, 0.25, 0.45);
+      glutSolidSphere(1, 16, 16);
+    glPopMatrix();
+
+    // Tail feather tip
+    glPushMatrix();
+      glTranslatef(-1.42, 0.52, 0);
+      glRotatef(55, 0, 0, 1);
+      glScalef(0.35, 0.14, 0.25);
+      glutSolidSphere(1, 12, 12);
+    glPopMatrix();
+
+    // Left wing (+Z)
+    glPushMatrix();
+      glTranslatef(-0.05, 0.12, 0.92);
+      glRotatef(12.0 + wingAng, 1, 0, 0);
+      glRotatef(-8, 0, 1, 0);
+      glScalef(0.72, 0.38, 0.18);
+      glutSolidSphere(1, 16, 16);
+    glPopMatrix();
+
+    // Right wing (-Z)
+    glPushMatrix();
+      glTranslatef(-0.05, 0.12, -0.92);
+      glRotatef(-12.0 - wingAng, 1, 0, 0);
+      glRotatef(8, 0, 1, 0);
+      glScalef(0.72, 0.38, 0.18);
+      glutSolidSphere(1, 16, 16);
+    glPopMatrix();
+
+    // Neck
+    glPushMatrix();
+      glTranslatef(0.62, 0.7, 0);
+      glRotatef(-18, 0, 0, 1);
+      glScalef(0.42, 0.6, 0.42);
+      glutSolidSphere(1, 18, 18);
+    glPopMatrix();
+
+    // Head
+    glPushMatrix();
+      glTranslatef(0.82, 1.3, 0);
+      glutSolidSphere(0.62, 24, 24);
+    glPopMatrix();
+
+    // Crest feather tufts on head
+    glPushMatrix();
+      glTranslatef(0.7, 1.86, 0);
+      glRotatef(25, 0, 0, 1);
+      glScalef(0.18, 0.18, 0.14);
+      glutSolidSphere(1, 12, 12);
+    glPopMatrix();
+
+    glPushMatrix();
+      glTranslatef(0.55, 1.95, 0);
+      glRotatef(45, 0, 0, 1);
+      glScalef(0.12, 0.14, 0.1);
+      glutSolidSphere(1, 10, 10);
+    glPopMatrix();
+
+    // --- Soap suds / bubble crown on head ---
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.1, 0.2, 0.3, 1});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.92, 0.95, 0.98, 1});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.95, 0.95, 1, 1});
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 96);
+    glColor4f(0.92, 0.95, 0.98, 0.65);
+
+    // Central top bubble
+    glPushMatrix();
+      glTranslatef(0.8, 1.92, 0);
+      glutSolidSphere(0.16, 14, 14);
+    glPopMatrix();
+
+    // Front-left bubble
+    glPushMatrix();
+      glTranslatef(0.92, 1.88, 0.12);
+      glutSolidSphere(0.12, 12, 12);
+    glPopMatrix();
+
+    // Front-right bubble
+    glPushMatrix();
+      glTranslatef(0.92, 1.88, -0.12);
+      glutSolidSphere(0.12, 12, 12);
+    glPopMatrix();
+
+    // Back-left bubble
+    glPushMatrix();
+      glTranslatef(0.68, 1.86, 0.14);
+      glutSolidSphere(0.13, 12, 12);
+    glPopMatrix();
+
+    // Back-right bubble
+    glPushMatrix();
+      glTranslatef(0.68, 1.86, -0.14);
+      glutSolidSphere(0.13, 12, 12);
+    glPopMatrix();
+
+    // Top crest peak bubble
+    glPushMatrix();
+      glTranslatef(0.78, 2.06, 0.02);
+      glutSolidSphere(0.1, 12, 12);
+    glPopMatrix();
+
+    // Tiny accent bubbles on crown
+    glPushMatrix();
+      glTranslatef(0.86, 2, 0.1);
+      glutSolidSphere(0.06, 10, 10);
+    glPopMatrix();
+
+    glPushMatrix();
+      glTranslatef(0.72, 1.98, -0.1);
+      glutSolidSphere(0.07, 10, 10);
+    glPopMatrix();
+
+    glDisable(GL_BLEND);
+
+    // --- Beak / Bill (Orange / CORAL) ---
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.25, 0.08, 0.05, 1});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){1, 0.35, 0.2, 1});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.5, 0.25, 0.15, 1});
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 28);
+    glColor3f(1, 0.35, 0.2);
+
+    // Upper bill
+    glPushMatrix();
+      glTranslatef(1.36, 1.18, 0);
+      glRotatef(-4, 0, 0, 1);
+      glScalef(0.44, 0.12, 0.32);
+      glutSolidSphere(1, 16, 16);
+    glPopMatrix();
+
+    // Lower bill lip
+    glPushMatrix();
+      glTranslatef(1.3, 1.1, 0);
+      glRotatef(-8, 0, 0, 1);
+      glScalef(0.36, 0.08, 0.26);
+      glutSolidSphere(1, 14, 14);
+    glPopMatrix();
+
+    // Nostrils
+    glDisable(GL_LIGHTING);
+    glColor3f(0.05, 0.06, 0.08);
+    glPushMatrix();
+      glTranslatef(1.26, 1.28, 0.07);
+      glutSolidSphere(0.025, 8, 8);
+    glPopMatrix();
+    glPushMatrix();
+      glTranslatef(1.26, 1.28, -0.07);
+      glutSolidSphere(0.025, 8, 8);
+    glPopMatrix();
+
+    // --- Eyes ---
+    // White eye sclera (MIST)
+    glColor3f(0.92, 0.95, 0.98);
+    glPushMatrix();
+      glTranslatef(1.1, 1.45, 0.4);
+      glutSolidSphere(0.14, 12, 12);
+    glPopMatrix();
+    glPushMatrix();
+      glTranslatef(1.1, 1.45, -0.4);
+      glutSolidSphere(0.14, 12, 12);
+    glPopMatrix();
+
+    // Dark pupils (CANVAS)
+    glColor3f(0.05, 0.06, 0.08);
+    glPushMatrix();
+      glTranslatef(1.18, 1.46, 0.43);
+      glutSolidSphere(0.08, 10, 10);
+    glPopMatrix();
+    glPushMatrix();
+      glTranslatef(1.18, 1.46, -0.43);
+      glutSolidSphere(0.08, 10, 10);
+    glPopMatrix();
+
+    // Specular eye catchlights (MIST)
+    glColor3f(0.92, 0.95, 0.98);
+    glPushMatrix();
+      glTranslatef(1.22, 1.5, 0.45);
+      glutSolidSphere(0.03, 6, 6);
+    glPopMatrix();
+    glPushMatrix();
+      glTranslatef(1.22, 1.5, -0.45);
+      glutSolidSphere(0.03, 6, 6);
+    glPopMatrix();
+
+    glPushMatrix();
+      glTranslatef(1.2, 1.43, 0.46);
+      glutSolidSphere(0.015, 6, 6);
+    glPopMatrix();
+    glPushMatrix();
+      glTranslatef(1.2, 1.43, -0.46);
+      glutSolidSphere(0.015, 6, 6);
+    glPopMatrix();
+
+    glEnable(GL_LIGHTING);
+  glPopMatrix();
+}
+
+drawRipples(origX, origZ, maxRadius, count, phase) {
+  float r, alpha;
+  for(k, 0, count) {
+    r = fmod(t * 1.2 + phase + k * (maxRadius / count), maxRadius);
+    if(r > 0.2) {
+      alpha = (1.0 - r / maxRadius) * 0.7;
+      glPushMatrix();
+        glTranslatef(origX, 0.01, origZ);
+        glRotatef(90, 1, 0, 0);
+        glColor4f(0.10, 0.95, 0.85, alpha);
+        glutSolidTorus(0.025, r, 8, 36);
+      glPopMatrix();
+    }
+  }
+}
+
+glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
+glRotatef(22.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(-35.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, -0.4000f, 0.0000f);   // @camera pan
+
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_NORMALIZE);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_LIGHT1);
+
+// --- 1. Water Pool Surface ---
+glEnable(GL_BLEND);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+glDisable(GL_LIGHTING);
+
+glPushMatrix();
+  glTranslatef(0, 0, 0);
+  glBegin(GL_QUAD_STRIP);
+    for(i, 0, 37) {
+      u = i * (TAU / 36.0);
+      cu = cos(u);
+      su = sin(u);
+      glNormal3f(0, 1, 0);
+      glColor4f(0.15, 0.55, 1, 0.4);
+      glVertex3f(cu * 4.8, 0.0, su * 4.8);
+      glColor4f(0.1, 0.95, 0.85, 0.7);
+      glVertex3f(0, 0, 0);
+    }
+  glEnd();
+glPopMatrix();
+
+// --- 2. Expanding Water Ripples ---
+drawRipples(0.2, 0.0, 3.8, 4, 0.0);
+drawRipples(-2.2, -1.4, 2.0, 3, 0.7);
+
+// --- 3. Floating Soap Bubbles ---
+glEnable(GL_LIGHTING);
+glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.1, 0.2, 0.3, 1});
+glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.92, 0.95, 0.98, 1});
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.95, 0.95, 1, 1});
+glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 96);
+
+for(b, 0, 10) {
+  bubbleT = t * 0.5 + b * 1.4;
+  bx = cos(b * 1.9) * (2.4 + 0.6 * sin(bubbleT * 0.6));
+  bz = sin(b * 1.9) * (2.4 + 0.6 * cos(bubbleT * 0.4));
+  by = fmod(bubbleT * 0.6, 2.2) + 0.05;
+  bSize = 0.08 + 0.04 * sin(b * 2.7);
+  glPushMatrix();
+    glTranslatef(bx, by, bz);
+    glColor4f(0.92, 0.95, 0.98, 0.45);
+    glutSolidSphere(bSize, 12, 12);
+  glPopMatrix();
+}
+
+glDisable(GL_BLEND);
+
+// --- 4. Ducks ---
+// Mother duck
+drawDuck(0.2, 0.0, 0.0, 1.0, 15.0 + 8.0 * sin(t * 0.8), 0.0);
+
+// Baby duckling following behind
+drawDuck(-2.2, 0.0, -1.4, 0.48, 25.0 + 12.0 * sin(t * 0.8 + 1.2), 1.2);
