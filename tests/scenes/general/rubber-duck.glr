@@ -8,6 +8,7 @@ static float bubbleT, bx, by, bz, bSize;
 
 drawDuck(posX, posY, posZ, duckScale, duckRot, animPhase) {
   float bobY, rockZ, pitchX, wingAng;
+  float tailWag, fanAng, featherLen, featherLift;
 
   bobY = sin(t * 2.4 + animPhase) * 0.08;
   rockZ = sin(t * 1.8 + animPhase) * 3.5;
@@ -44,20 +45,45 @@ drawDuck(posX, posY, posZ, duckScale, duckRot, animPhase) {
       glutSolidSphere(1, 20, 20);
     glPopMatrix();
 
-    // Upturned tail
-    glPushMatrix();
-      glTranslatef(-1.05, 0.25, 0);
-      glRotatef(38, 0, 0, 1);
-      glScalef(0.55, 0.25, 0.45);
-      glutSolidSphere(1, 16, 16);
-    glPopMatrix();
+    // --- Upturned tail: fanned feathers on a wagging base ---
+    tailWag = sin(t * 2.6 + animPhase) * 7.0;
 
-    // Tail feather tip
     glPushMatrix();
-      glTranslatef(-1.42, 0.52, 0);
-      glRotatef(55, 0, 0, 1);
-      glScalef(0.35, 0.14, 0.25);
-      glutSolidSphere(1, 12, 12);
+      glTranslatef(-0.95, 0.16, 0);
+      glRotatef(tailWag, 0, 1, 0);
+
+      // Rump wedge blending the fan back into the torso
+      glPushMatrix();
+        glTranslatef(-0.12, 0.12, 0);
+        glRotatef(-30, 0, 0, 1);
+        glScalef(0.5, 0.3, 0.44);
+        glutSolidSphere(1, 16, 16);
+      glPopMatrix();
+
+      // Five splayed feathers - longest and highest in the middle
+      for(f, 0, 5) {
+        fanAng = (f - 2) * 16.0;
+        featherLen = 0.68 - abs(f - 2) * 0.09;
+        featherLift = 40.0 - abs(f - 2) * 6.0 + sin(t * 2.6 + animPhase + f * 0.55) * 4.0;
+        glColor3f(1, 0.85 - abs(f - 2) * 0.05, 0.15 - abs(f - 2) * 0.02);
+        glPushMatrix();
+          glRotatef(fanAng, 0, 1, 0);
+          glRotatef(-featherLift, 0, 0, 1);
+          glTranslatef(-featherLen * 0.9, 0, 0);
+          glScalef(featherLen, 0.11, 0.17);
+          glutSolidSphere(1, 14, 10);
+        glPopMatrix();
+
+        // Curled quill tip
+        glPushMatrix();
+          glRotatef(fanAng * 1.15, 0, 1, 0);
+          glRotatef(-featherLift - 16.0, 0, 0, 1);
+          glTranslatef(-featherLen * 1.75, 0, 0);
+          glScalef(featherLen * 0.4, 0.07, 0.1);
+          glutSolidSphere(1, 12, 10);
+        glPopMatrix();
+      }
+      glColor3f(1, 0.85, 0.15);
     glPopMatrix();
 
     // Left wing (+Z)
@@ -332,4 +358,3 @@ for(b, 0, 10) {
 }
 
 glDisable(GL_BLEND);
-
