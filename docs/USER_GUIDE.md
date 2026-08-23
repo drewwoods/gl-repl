@@ -1163,8 +1163,9 @@ the guide dims and the readout appends `(off)`.
 `glPushAttrib` / `glPopAttrib` protect a group of GL state
 ([tutorial](TUTORIAL.md#scoping-state-with-glpushattrib)). Park the cursor on
 a `glPushAttrib` line and each mask token lights up, while every earlier line
-whose value the push *saves* gets a matching gutter marker. Park it on the
-`glPopAttrib` and the lines whose changes the pop *reverts* light up instead.
+whose value the push *saves* and every scoped line whose change the matching
+pop *reverts* gets a matching gutter marker. Park it on the `glPopAttrib` to
+focus on just the lines whose changes it reverts.
 A push or pop with no partner gets the same red gutter warning as an unmatched
 `glPushMatrix`.
 

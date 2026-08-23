@@ -5011,8 +5011,8 @@ static void test_display_frame_follows_replay_line_after_tick(void) {
 
 /* Cursor on a glPushAttrib line colours exactly the parsed mask's GL_*_BIT
  * tokens, confined to the (...) argument range - a bit token mentioned in a
- * trailing comment is never coloured - and the saved-setter line and matching
- * pop bracket get their highlights. */
+ * trailing comment is never coloured - and the saved setter, reverted scoped
+ * setter, and matching pop bracket get their highlights. */
 static void test_push_attrib_bit_token_highlights(void) {
     printf("--- imrepl_ctrl glPushAttrib bit-token highlights ---\n");
 
@@ -5048,6 +5048,8 @@ static void test_push_attrib_bit_token_highlights(void) {
                tokens_in_comment, 0);
     ASSERT_INT("saved setter line gets the attrib-state marker",
                count_highlight_kind_on_line(HIGHLIGHT_ATTRIB_STATE, 0), 1);
+    ASSERT_INT("scoped setter reverted by the matching pop gets the marker",
+               count_highlight_kind_on_line(HIGHLIGHT_ATTRIB_STATE, 2), 1);
     ASSERT_INT("matching pop is bracket-highlighted",
                count_highlight_kind_on_line(HIGHLIGHT_MATCHING_PUSH_MATRIX, 3), 1);
 

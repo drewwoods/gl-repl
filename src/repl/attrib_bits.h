@@ -125,15 +125,15 @@ void repl_attrib_flow_init(ReplAttribFlowState *flow);
 int repl_attrib_cmd_writes(const GLCmd *cmd, ReplAttribFlowState *flow,
                            ReplAttribCellWrite out[REPL_ATTRIB_MAX_ITEMS_PER_CMD]);
 
-/* Cursor-on-push: the prior setter lines whose values glPushAttrib(push_line)
- * saves ("what's saved"). Cursor-on-pop: the scoped setter lines between the
- * matching push and glPopAttrib(pop_line) whose effects the pop reverts
- * ("what's reverted"). Both fold the live source document with real nested
+/* For a target push: the prior setter lines whose values
+ * glPushAttrib(push_line) saves ("what's saved"). For a target pop: the scoped
+ * setter lines between the matching push and glPopAttrib(pop_line) whose
+ * effects the pop reverts ("what's reverted"). Both fold the live source
+ * document with real nested
  * LIFO attribute-stack semantics over the same block-unaware source-order
  * policy as repl_source_scope_collect_unbalanced; an orphan pop reports
  * nothing. Coalesced by line (bit indices unioned). Return the number of lines
- * written, capped at `max`. Return 0 when the cursor is not on the right
- * bracket. */
+ * written, capped at `max`. Return 0 when the target is not the right bracket. */
 int repl_attrib_collect_push_saved(int push_line,
                                    ReplAttribHighlightLine *out, int max);
 int repl_attrib_collect_pop_reverted(int pop_line,

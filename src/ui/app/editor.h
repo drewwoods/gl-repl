@@ -79,8 +79,9 @@ typedef enum {
      * but export auto-balances them, so they are flagged in the gutter. */
     HIGHLIGHT_UNBALANCED,
     /* glPushAttrib/glPopAttrib per-bit highlighting (cursor-gated).
-     * ATTRIB_STATE marks a whole setter line the cursor's push saves / pop
-     * reverts; `aux` carries the mask of canonical bit *indices* (0..9)
+     * ATTRIB_STATE marks a whole setter line the cursor's push saves or its
+     * matching pop reverts; on a pop it marks only reverted lines. `aux`
+     * carries the mask of canonical bit *indices* (0..9)
      * whose colors mark it (so the gutter marker can band multiple bits).
      * ATTRIB_BIT_TOKEN records one GL_*_BIT token's source char range on the
      * push line; `aux` is a single bit index. Renderers use the line/index

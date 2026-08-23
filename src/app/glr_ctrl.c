@@ -784,21 +784,30 @@ static void glr_ctrl_push_highlights(void) {
                     editor_state_highlights_append(end_idx, -1, -1,
                                                         HIGHLIGHT_MATCHING_PUSH_MATRIX);
             } else if (cmd->type == CMD_PUSH_ATTRIB) {
-                /* Cursor on the push: bracket the matching pop, mark the prior
-                 * setter lines this push saves, and colour each mask token on
-                 * the push line itself. */
+                /* Cursor on the push: bracket the matching pop, mark both the
+                 * prior setter lines this push saves and the scoped setter
+                 * lines that pop reverts, and colour each mask token on the
+                 * push line itself. */
                 ReplAttribHighlightLine saved[REPL_ATTRIB_HL_MAX];
+                ReplAttribHighlightLine rev[REPL_ATTRIB_HL_MAX];
                 int pop_idx = repl_find_matching_pop_attrib(edit_line);
-                int ns;
-                if (pop_idx >= 0)
+                int ns, nr = 0;
+                if (pop_idx >= 0) {
                     editor_state_highlights_append(pop_idx, -1, -1,
                                                         HIGHLIGHT_MATCHING_PUSH_MATRIX);
+                    nr = repl_attrib_collect_pop_reverted(pop_idx, rev,
+                                                          REPL_ATTRIB_HL_MAX);
+                }
                 ns = repl_attrib_collect_push_saved(edit_line, saved,
                                                     REPL_ATTRIB_HL_MAX);
                 for (int i = 0; i < ns; i++)
                     editor_state_highlights_append_aux(saved[i].line_idx, -1, -1,
                                                         HIGHLIGHT_ATTRIB_STATE,
                                                         (int)saved[i].bit_idx_mask);
+                for (int i = 0; i < nr; i++)
+                    editor_state_highlights_append_aux(rev[i].line_idx, -1, -1,
+                                                        HIGHLIGHT_ATTRIB_STATE,
+                                                        (int)rev[i].bit_idx_mask);
                 glr_ctrl_push_attrib_bit_tokens(edit_line);
             } else if (cmd->type == CMD_POP_ATTRIB) {
                 /* Cursor on the pop: bracket the matching push (colouring its
