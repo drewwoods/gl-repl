@@ -53,16 +53,20 @@ static GLCmd *test_ui_document_cmds(void) {
 
 /* Build the variable-panel view from live app state (mirrors the
  * pre-narrowing NULL-snapshot path) so these tests drive rect/hit by count. */
+/* -1 = no clock row, so the frame stepper is absent and these helpers see the
+ * plain row geometry. Tests that want the stepper build the view themselves. */
+#define VP_NO_CLOCK_ROW (-1)
+
 static void vp_rect(int count, int *px, int *py, int *pw, int *ph) {
-    UiVariablePanelView v = ui_app_variable_panel_view_live(count);
+    UiVariablePanelView v = ui_app_variable_panel_view_live(count, VP_NO_CLOCK_ROW, 0);
     ui_variable_panel_rect(&v, px, py, pw, ph);
 }
 static int vp_hit_row(int count, int gx, int gy, int *row) {
-    UiVariablePanelView v = ui_app_variable_panel_view_live(count);
+    UiVariablePanelView v = ui_app_variable_panel_view_live(count, VP_NO_CLOCK_ROW, 0);
     return ui_variable_panel_hit_row(&v, gx, gy, row);
 }
 static UiHit vp_hit_test(int count, int mx, int my) {
-    UiVariablePanelView v = ui_app_variable_panel_view_live(count);
+    UiVariablePanelView v = ui_app_variable_panel_view_live(count, VP_NO_CLOCK_ROW, 0);
     return ui_variable_panel_hit_test(&v, mx, my);
 }
 
@@ -1121,6 +1125,15 @@ static void test_ui_color_picker_hit_test(void) {
     color_picker_stop();
 }
 
+/* Build a view with a clock row so the frame stepper is present. The panel
+ * helpers above deliberately pass VP_NO_CLOCK_ROW; this one is the stepper's. */
+static UiHit vp_hit_test_clock(int count, int time_row, int time_playing,
+                               int mx, int my) {
+    UiVariablePanelView v =
+        ui_app_variable_panel_view_live(count, time_row, time_playing);
+    return ui_variable_panel_hit_test(&v, mx, my);
+}
+
 static void test_ui_variable_panel_hit_test(void) {
     glr_ctrl_reset_all();
     ui_state_viewport_set_size(800, 600);
@@ -1168,6 +1181,71 @@ static void test_ui_variable_panel_hit_test(void) {
     UiHit h_title = vp_hit_test(1, px + 10, glyph_my);
     ASSERT_TRUE("title text is not the toggle",
                 h_title.kind != UI_HIT_VARIABLE_COLLAPSE_TOGGLE);
+}
+
+/* The clock row's frame stepper: it lives inside a slider row's rect, so the
+ * only thing keeping it clickable is that the panel tests it before the row.
+ * These assertions pin that ordering, the +1/-1 direction, and the two states
+ * that make it inert. */
+static void test_ui_variable_panel_time_stepper(void) {
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(800, 600);
+
+    variable_panel_state_mut()->visible = 1;
+    g_num_predef_vars_mut = 2;
+    strcpy(g_predef_vars_mut[0].name, "t");
+    g_predef_vars_mut[0].value = 0.0f;
+    strcpy(g_predef_vars_mut[1].name, "x");
+    g_predef_vars_mut[1].value = 1.0f;
+
+    int px, py, pw, ph;
+    vp_rect(2, &px, &py, &pw, &ph);
+    int win_h = ui_state_viewport().window_h;
+
+    /* Row 0's vertical centre, and the gutter the stepper is drawn in: the
+     * pair is centred on the row, so up is above centre and down below. */
+    int inner_top = py + ph - 6 /* VAR_PANEL_PAD */ - 20 /* VAR_TITLE_H */;
+    int row0_center = inner_top - 20 /* VAR_ROW_H */ + 10;
+    int step_mx = px + pw - 8 /* VAR_TRACK_PAD_RIGHT */ - 7; /* mid-button */
+    int up_my   = win_h - (row0_center + 5);
+    int down_my = win_h - (row0_center - 5);
+
+    UiHit h_up = vp_hit_test_clock(2, 0, 0, step_mx, up_my);
+    ASSERT_TRUE("stepper up hit kind",
+                h_up.kind == UI_HIT_VARIABLE_TIME_STEP);
+    ASSERT_INT("stepper up is +1", h_up.item_idx, 1);
+
+    UiHit h_dn = vp_hit_test_clock(2, 0, 0, step_mx, down_my);
+    ASSERT_TRUE("stepper down hit kind",
+                h_dn.kind == UI_HIT_VARIABLE_TIME_STEP);
+    ASSERT_INT("stepper down is -1", h_dn.item_idx, -1);
+
+    /* Same pixels are inside row 0, so a row-first dispatch would have
+     * classified them as a slider drag. */
+    UiHit h_row = vp_hit_test(2, step_mx, up_my);
+    ASSERT_TRUE("without a clock row the same pixels are the slider",
+                h_row.kind == UI_HIT_VARIABLE_SLIDER);
+
+    /* Inert while the clock runs: drawn, but not clickable. */
+    UiHit h_playing = vp_hit_test_clock(2, 0, 1, step_mx, up_my);
+    ASSERT_TRUE("running clock -> stepper inert",
+                h_playing.kind == UI_HIT_VARIABLE_SLIDER);
+
+    /* The stepper belongs to the clock row alone: row 1's gutter is slider. */
+    {
+        int row1_center = inner_top - 2 * 20 + 10;
+        UiHit h_other = vp_hit_test_clock(2, 0, 0, step_mx,
+                                          win_h - (row1_center + 5));
+        ASSERT_TRUE("non-clock row gutter is still the slider",
+                    h_other.kind == UI_HIT_VARIABLE_SLIDER);
+    }
+
+    /* Collapsed: no rows, so no stepper. */
+    variable_panel_state_mut()->collapsed = 1;
+    UiHit h_collapsed = vp_hit_test_clock(2, 0, 0, step_mx, up_my);
+    ASSERT_TRUE("collapsed panel has no stepper",
+                h_collapsed.kind != UI_HIT_VARIABLE_TIME_STEP);
+    variable_panel_state_mut()->collapsed = 0;
 }
 
 /* Verify ui_panels_hit_test routes to the floating-overlay
@@ -2403,6 +2481,7 @@ int main(void) {
     test_tour_hud_compact_expand_hit_routing();
     test_ui_color_picker_hit_test();
     test_ui_variable_panel_hit_test();
+    test_ui_variable_panel_time_stepper();
     test_ui_panels_hit_test_dispatch();
     test_ui_panels_hit_test_panel_divider();
     test_ui_panels_hit_test_code_text_cursor();

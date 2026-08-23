@@ -9,6 +9,12 @@
  * is on. */
 void repl_advance_time(float dt);
 
+/* Step `t` by `dt` seconds whether or not the animation toggle is on. The
+ * variable panel's frame stepper calls this with GLR_FRAME_DT_SECS to advance
+ * the paused sim exactly one frame. Not a document edit: no undo snapshot, no
+ * source rewrite - the clock is not a declared variable. */
+void repl_step_time(float dt);
+
 /* Reset `t` to 0. Called from controller/test paths that need a
  * deterministic time origin. */
 void repl_reset_time_to_zero(void);

@@ -61,6 +61,13 @@ ReplVariableState       *repl_state_variables_mut(void);
  * that skip the full repl_state_reset_program() reset. */
 void                     repl_state_variables_reset_predefs(void);
 void                     repl_state_time_advance(float dt);
+/* Advance the visible clock by one step *regardless* of time_playing - the
+ * frame stepper's owner-side entry. It sits between the other two on purpose:
+ * unlike repl_state_time_advance it ignores the play gate (stepping is only
+ * useful while paused), and unlike repl_state_time_set it leaves anim_time
+ * alone, since that clock free-runs while the sim is paused and must not be
+ * dragged backwards to meet a stepped `t`. */
+void                     repl_state_time_step(float dt);
 void                     repl_state_time_reset_to_zero(void);
 void                     repl_state_time_set(float value);
 void                     repl_state_time_set_playing(int playing);

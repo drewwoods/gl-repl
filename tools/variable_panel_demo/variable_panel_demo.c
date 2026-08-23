@@ -35,11 +35,18 @@ static float g_auto_spin = 0.0f;   /* gentle view rotation, not a variable */
 /* --- The demo's "variables" --------------------------------------------- */
 typedef struct { char name[UI_VARIABLE_NAME_MAX]; float value; } DemoVar;
 static DemoVar g_vars[] = {
+    /* Row 0 stands in for the app's animation clock, so the demo exercises the
+     * frame stepper the panel draws on that row. */
+    { "t",     0.00f },
     { "inner", 0.20f },
     { "outer", 0.60f },
     { "tilt",  25.0f },
 };
 enum { DEMO_VAR_COUNT = (int)(sizeof(g_vars) / sizeof(g_vars[0])) };
+enum { DEMO_TIME_ROW = 0 };
+/* One step of the demo's clock - the app steps by GLR_FRAME_DT_SECS. */
+#define DEMO_TIME_STEP (1.0f / 60.0f)
+static int g_time_playing = 0;   /* 'p' toggles; the stepper draws inert while set */
 
 static float demo_var(const char *name) {
     for (int i = 0; i < DEMO_VAR_COUNT; i++)
@@ -86,6 +93,8 @@ static UiVariablePanelView demo_build_view(void) {
     v.var_count       = DEMO_VAR_COUNT;
     v.drag_active_var = variable_panel_drag_active_var();
     v.drag_coarse     = variable_panel_drag_coarse();
+    v.time_row        = DEMO_TIME_ROW;
+    v.time_playing    = g_time_playing;
     return v;
 }
 
@@ -137,6 +146,7 @@ static void reshape_func(int w, int h) {
 }
 
 static void idle_func(void) {
+    if (g_time_playing) g_vars[DEMO_TIME_ROW].value += DEMO_TIME_STEP;
     g_auto_spin += 0.3f;
     if (g_auto_spin >= 360.0f) g_auto_spin -= 360.0f;
     glutPostRedisplay();
@@ -155,6 +165,11 @@ static void mouse_func(int button, int state, int x, int y) {
         if (hit.kind == UI_HIT_VARIABLE_SLIDER) {
             int coarse = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
             variable_panel_handle_drag_begin(hit.item_idx, coarse, x);
+        } else if (hit.kind == UI_HIT_VARIABLE_TIME_STEP) {
+            /* item_idx is +1 up / -1 down; the app maps this onto its
+             * simulation tick, the demo onto its own clock row. */
+            g_vars[DEMO_TIME_ROW].value +=
+                (float)hit.item_idx * DEMO_TIME_STEP;
         } else if (hit.kind == UI_HIT_VARIABLE_COLLAPSE_TOGGLE &&
                   button == GLUT_LEFT_BUTTON) {
             variable_panel_toggle_collapsed();
@@ -178,6 +193,9 @@ static void keyboard_func(unsigned char key, int x, int y) {
     switch (key) {
     case 'v': case 'V':
         variable_panel_set_visible(!variable_panel_visible());
+        break;
+    case 'p': case 'P':
+        g_time_playing = !g_time_playing;
         break;
     case 27: case 'q': case 'Q': exit(0);
     default: break;
@@ -203,7 +221,8 @@ int main(int argc, char **argv) {
     glutIdleFunc(idle_func);
 
     printf("variable_panel_demo: drag a slider row (left=linear, right=coarse) to\n");
-    printf("  reshape the torus. v=toggle panel  q=quit\n");
+    printf("  reshape the torus. Arrows on the t row step its clock.\n");
+    printf("  v=toggle panel  p=toggle clock running (stepper greys)  q=quit\n");
     glutMainLoop();
     return 0;
 }

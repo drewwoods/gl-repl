@@ -132,6 +132,21 @@ static float val_to_slider_t(float val, float scale) {
 /* Clickable slop around the chip's glyph box. */
 #define VAR_COLLAPSE_CHIP_SLOP 3
 
+/* Frame stepper on the clock row - the shared two-arrow control from
+ * ui/core/gl_2d.h, the same widget the code panel's inline numeric swatch and
+ * the find bar's match navigator use. 14x8 (span 17px) is the size that fits
+ * *inside* a VAR_ROW_H row; the swatch's own 16x12 spans 25px, which would
+ * overhang into the title bar and the row below and whose hit cell would
+ * poach clicks that belong to the next row's slider. */
+#define VAR_STEPPER_BTN_W 14
+#define VAR_STEPPER_BTN_H 8
+#define VAR_STEPPER_GAP   4   /* px between the track's right edge and it */
+#define VAR_STEPPER_COL_W (VAR_STEPPER_BTN_W + VAR_STEPPER_GAP)
+/* Alpha multiplier for the inert (clock running) stepper. Drawn greyed rather
+ * than hidden: a control that vanishes reads as a bug, and the panel chips
+ * elsewhere follow the same rule. */
+#define VAR_STEPPER_INERT_DIM 0.35f
+
 /* Panel size for a row count (clamped) and collapse state. Pure; no view
  * needed. Collapsed drops the row area entirely, leaving just the title. */
 void ui_variable_panel_size(int var_count, int collapsed, int *pw, int *ph) {
@@ -189,6 +204,48 @@ static void var_panel_collapse_chip_rect(const UiVariablePanelView *view,
     if (*y1 > py + ph) *y1 = py + ph;
 }
 
+/* Left edge of the stepper gutter (window coords, y-up). The gutter is
+ * reserved on *every* row even though only the clock row draws into it: the
+ * panel's shared log scale is only readable across rows if every track has the
+ * same x-extent, and a per-row track width would break that comparison. It
+ * also means generalizing the stepper to other rows later shifts no layout. */
+static int var_panel_stepper_x(int px, int pw) {
+    return px + pw - VAR_TRACK_PAD_RIGHT - VAR_STEPPER_BTN_W;
+}
+
+/* Vertical centre of row `row` (window coords, y-up) - the stepper's anchor.
+ * Mirrors the row_y walk in the renderer. */
+static float var_panel_row_center_y(int py, int ph, int row) {
+    int inner_top = py + ph - VAR_PANEL_PAD - VAR_TITLE_H;
+    int row_y = inner_top - (row + 1) * VAR_ROW_H;
+    return (float)row_y + (float)VAR_ROW_H * 0.5f;
+}
+
+/* Is the clock row present, expanded, and within the drawn rows? */
+static int var_panel_time_row_visible(const UiVariablePanelView *view) {
+    return view->visible && view->window_h > 0 && !view->collapsed &&
+           view->time_row >= 0 &&
+           view->time_row < clamp_var_count(view->var_count);
+}
+
+int ui_variable_panel_hit_test_time_step(const UiVariablePanelView *view,
+                                         int mx, int my) {
+    int px, py, pw, ph;
+
+    if (!var_panel_time_row_visible(view))
+        return 0;
+    /* Inert while the clock runs: the arrows are drawn, but stepping a
+     * running clock by one frame is a no-op the next tick overwrites. */
+    if (view->time_playing)
+        return 0;
+
+    ui_variable_panel_rect(view, &px, &py, &pw, &ph);
+    return gl2d_stepper_hit((float)var_panel_stepper_x(px, pw),
+                            var_panel_row_center_y(py, ph, view->time_row),
+                            (float)VAR_STEPPER_BTN_W, (float)VAR_STEPPER_BTN_H,
+                            mx, (float)(view->window_h - my));
+}
+
 int ui_variable_panel_hit_test_collapse_toggle(const UiVariablePanelView *view,
                                                int mx, int my) {
     int x0, x1, y0, y1, y_up;
@@ -212,6 +269,19 @@ UiHit ui_variable_panel_hit_test(const UiVariablePanelView *view, int mx, int my
         h.local_x = (float)(mx - px);
         h.local_y = (float)(gl_y - py);
         return h;
+    }
+
+    /* Before the row test, not after: the stepper sits inside the clock row's
+     * rect, so a row-first dispatch would swallow it into a slider drag. */
+    {
+        int dir = ui_variable_panel_hit_test_time_step(view, mx, my);
+        if (dir != 0) {
+            h.kind = UI_HIT_VARIABLE_TIME_STEP;
+            h.item_idx = dir;
+            h.local_x = (float)(mx - px);
+            h.local_y = (float)(gl_y - py);
+            return h;
+        }
     }
 
     int row = -1;
@@ -280,7 +350,7 @@ void ui_variable_panel_render(const UiVariablePanelView *view) {
     int label_x  = px + VAR_PANEL_PAD;
     int val_x    = px + VAR_PANEL_PAD + label_w;
     int track_x  = val_x + VAR_VALUE_COL_PIXELS;
-    int track_w  = pw - (track_x - px) - VAR_TRACK_PAD_RIGHT;
+    int track_w  = pw - (track_x - px) - VAR_TRACK_PAD_RIGHT - VAR_STEPPER_COL_W;
     int handle_w = VAR_HANDLE_W;
     if (track_w < handle_w + VAR_TRACK_MIN_SLACK) track_w = handle_w + VAR_TRACK_MIN_SLACK;
 
@@ -342,6 +412,18 @@ void ui_variable_panel_render(const UiVariablePanelView *view) {
         }
         glRectf(hx, (float)(row_y + VAR_HANDLE_PAD_TOP), hx + (float)handle_w,
                 (float)(row_y + VAR_ROW_H - VAR_HANDLE_PAD_BOTTOM));
+    }
+
+    /* Frame stepper on the clock row, drawn after the loop rather than inside
+     * it: gl2d_stepper_render_dim brackets itself with glEnable/glDisable
+     * (GL_BLEND), so drawing it mid-loop would leave the remaining rows
+     * unblended. Inert while the clock runs - see VAR_STEPPER_INERT_DIM. */
+    if (var_panel_time_row_visible(view)) {
+        gl2d_stepper_render_dim(
+            (float)var_panel_stepper_x(px, pw),
+            var_panel_row_center_y(py, ph, view->time_row),
+            (float)VAR_STEPPER_BTN_W, (float)VAR_STEPPER_BTN_H,
+            view->time_playing ? VAR_STEPPER_INERT_DIM : 1.0f);
     }
 
     glDisable(GL_BLEND);

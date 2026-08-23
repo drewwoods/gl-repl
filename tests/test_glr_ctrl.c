@@ -317,12 +317,16 @@ static ReplExecutorPointParameterProc test_missing_point_parameter_loader(
 /* Build the variable-panel view from live app state (mirrors the
  * pre-narrowing NULL-snapshot path) so these tests can drive rect/hit by
  * count without assembling a full UiRenderSnapshot. */
+/* -1 = no clock row, so the frame stepper is absent and these helpers see the
+ * plain row geometry. Tests that want the stepper build the view themselves. */
+#define VP_NO_CLOCK_ROW (-1)
+
 static void vp_rect(int count, int *px, int *py, int *pw, int *ph) {
-    UiVariablePanelView v = ui_app_variable_panel_view_live(count);
+    UiVariablePanelView v = ui_app_variable_panel_view_live(count, VP_NO_CLOCK_ROW, 0);
     ui_variable_panel_rect(&v, px, py, pw, ph);
 }
 static int vp_hit_row(int count, int gx, int gy, int *row) {
-    UiVariablePanelView v = ui_app_variable_panel_view_live(count);
+    UiVariablePanelView v = ui_app_variable_panel_view_live(count, VP_NO_CLOCK_ROW, 0);
     return ui_variable_panel_hit_row(&v, gx, gy, row);
 }
 

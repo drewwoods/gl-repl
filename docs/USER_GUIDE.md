@@ -1000,6 +1000,24 @@ Because `t` is just a variable, dragging that row is a timeline scrubber.
 Pause with **Ctrl+T**, drag `t`, then **Ctrl+T** again to resume from wherever
 you left it.
 
+#### Stepping One Frame At A Time
+
+A drag scrubs, it does not step: at 0.1 units/px even the slow scrub moves
+`t` more than a frame per pixel. So the `t` row carries a small **frame
+stepper** at its right edge - the same two-arrow control the code panel puts
+on a number and the find bar puts on the match count.
+
+- **Up** advances `t` by exactly one simulation tick (1/60 s), **down** goes
+  back one. Hold **right-click** on an arrow to jump ten frames instead.
+- It is live only while time is paused. With *Auto time* on, the arrows are
+  drawn greyed - a frame you step forward would be overwritten by the next
+  tick anyway.
+- Stepping backwards runs `t` below zero, exactly as dragging the slider
+  does. Reset to a clean origin with **Ctrl+Shift+T**.
+
+Stepping is a transport control, not an edit: it moves the clock, leaves your
+source untouched, and does not enter the undo history.
+
 ---
 
 ## Camera & Views

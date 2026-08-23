@@ -2062,6 +2062,15 @@ static void glr_ctrl_fill_ui_variable_panel_vars(UiRenderSnapshot *snap,
 
     snap->variable_panel_vars.vars = snap->variable_panel_var_storage;
     snap->variable_panel_vars.count = count;
+    /* Clock row + play state for the panel's frame stepper. time_var_idx is
+     * the REPL's own binding for `t`, not a hardcoded slot 0. */
+    {
+        ReplVariableView vars = repl_state_variables();
+        int time_row = vars.time_var_idx;
+        snap->variable_panel_time_row =
+            (time_row >= 0 && time_row < count) ? time_row : -1;
+        snap->variable_panel_time_playing = vars.time_playing ? 1 : 0;
+    }
     for (int i = 0; i < count; i++) {
         snprintf(snap->variable_panel_var_storage[i].name,
                  sizeof(snap->variable_panel_var_storage[i].name),

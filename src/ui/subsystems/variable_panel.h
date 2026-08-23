@@ -25,6 +25,15 @@
  * depending on ui/app. UiHit.kind is an int, so the ranges coexist. */
 enum { UI_HIT_VARIABLE_SLIDER = UI_HIT_CORE_COUNT + 64 };
 enum { UI_HIT_VARIABLE_COLLAPSE_TOGGLE = UI_HIT_CORE_COUNT + 67 };
+/* Frame stepper on the clock row. UiHit.item_idx carries +1 (up = forward one
+ * step) or -1 (down = back one step); the controller owns what a step is.
+ *
+ * +68 because the reserved range is shared by every ui/subsystems renderer,
+ * not carved per file: the gaps between this file's offsets are the color
+ * picker's (+65) and the tour HUD's (+66). Take the next free offset, never
+ * the next gap - a collision is a duplicate case value in the router's
+ * dispatch switch, which is how this one was caught. */
+enum { UI_HIT_VARIABLE_TIME_STEP = UI_HIT_CORE_COUNT + 68 };
 
 /* Max slider rows the panel will draw. Mirrors the predefined-variable
  * table size from the global REPL variable-table contract. */
@@ -64,6 +73,10 @@ typedef struct {
                                 * when dragging) */
     int   collapsed;           /* 1 = only the title bar is shown; slider rows
                                 * and the value/track columns are hidden */
+    int   time_row;            /* row carrying the animation clock `t`, which
+                                * gets the frame stepper; -1 = no clock row */
+    int   time_playing;        /* 1 = the clock is running, so the stepper
+                                * draws inert (see the renderer) */
 } UiVariablePanelView;
 
 /* Render the variable panel with all declared variables and current values.
@@ -93,6 +106,13 @@ int  ui_variable_panel_hit_row(const UiVariablePanelView *view,
  * UI_HIT_VARIABLE_SLIDER (item_idx = row) on a slider row; UI_HIT_NONE if the
  * panel is hidden or the pointer is outside it. Reads only; never mutates. */
 UiHit ui_variable_panel_hit_test(const UiVariablePanelView *view, int mx, int my);
+
+/* Pure hit-test for the clock row's frame stepper. Returns +1 (up), -1
+ * (down), or 0 (miss / no clock row / clock running). Exposed separately for
+ * the same reason as the collapse chip below: a caller holding a view can
+ * probe just this control. */
+int  ui_variable_panel_hit_test_time_step(const UiVariablePanelView *view,
+                                          int mx, int my);
 
 /* Pure hit-test for the title bar's collapse/expand chip. Returns 1 (and
  * classifies the click as UI_HIT_VARIABLE_COLLAPSE_TOGGLE through

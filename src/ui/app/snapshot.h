@@ -145,6 +145,12 @@ typedef struct UiRenderSnapshot {
      * point at the live source values for this frame. */
     UiVariable                  variable_panel_var_storage[MAX_PREDEF_VARS];
     UiVariableList              variable_panel_vars;
+    /* The animation clock's row in the list above (-1 if unbound) and whether
+     * it is running. REPL-owned, not variable-panel-peer state, which is why
+     * they sit here beside the rows rather than in VariablePanelViewState:
+     * the panel draws a frame stepper on that row, live only while paused. */
+    int                         variable_panel_time_row;
+    int                         variable_panel_time_playing;
 
     /* Document */
     const GLCmd                *document_cmds;

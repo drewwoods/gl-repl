@@ -1055,6 +1055,59 @@ static void test_time_dirty_gate_routes_by_dep_masks(void) {
     }
 }
 
+/* The frame stepper's owner-side entry. Three properties distinguish it from
+ * the two neighbouring clock writers, and all three are load-bearing:
+ * it moves `t` while paused (advance does not), it leaves anim_time alone
+ * (set does not), and it still routes the dependency notification so the flat
+ * program rebakes at the new t. */
+static void test_time_step_moves_paused_clock_only(void) {
+    glr_ctrl_reset_all();
+
+    int t_idx = repl_eval_find_predef_var_idx("t");
+    ASSERT_TRUE("time step has t predef", t_idx >= 0);
+
+    repl_state_time_set(0.0f);
+    repl_state_time_set_playing(0);
+    repl_state_variables_mut()->anim_time = 5.0f;
+
+    repl_state_time_advance(0.25f);
+    ASSERT_TRUE("paused clock ignores advance",
+                fabsf(g_predef_vars[t_idx].value) < 1e-6f);
+
+    repl_state_time_step(0.25f);
+    ASSERT_TRUE("step moves the paused clock",
+                fabsf(g_predef_vars[t_idx].value - 0.25f) < 1e-6f);
+    /* advance() above still accumulated its dt into the free-running clock;
+     * what matters is that step() added nothing and rewound nothing. */
+    ASSERT_TRUE("step leaves the free-running clock alone",
+                fabsf(repl_state_variables().anim_time - 5.25f) < 1e-6f);
+
+    /* Negative dt is the down arrow, and it is not clamped at zero: the
+     * slider scrubs t negative too, and a scene is free to use t < 0. */
+    repl_state_time_step(-0.5f);
+    ASSERT_TRUE("step runs backwards past zero",
+                fabsf(g_predef_vars[t_idx].value + 0.25f) < 1e-6f);
+
+    /* Same dependency routing as advance: a structural t marks flat dirty. */
+    {
+        ReplExprDepMask t_bit = (ReplExprDepMask)1u << t_idx;
+        repl_state_flat_program_set_dep_state(t_bit, t_bit, 1);
+        repl_state_flat_program_clear_dirty();
+        repl_state_time_step(0.25f);
+        ASSERT_INT("step with structural t marks flat dirty",
+                   repl_state_flat_program_dirty(), 1);
+    }
+
+    /* Stepping a running clock is allowed at this layer - the UI is what
+     * refuses it (the stepper draws inert while playing). */
+    repl_state_time_set(1.0f);
+    repl_state_time_set_playing(1);
+    repl_state_time_step(0.5f);
+    ASSERT_TRUE("step is not gated on the play flag at the owner",
+                fabsf(g_predef_vars[t_idx].value - 1.5f) < 1e-6f);
+    repl_state_time_set_playing(0);
+}
+
 static void test_gl_state_report_tracks_explicit_writes_before_checkpoint(void) {
     GLCmd cmds[5];
     FlatProgramView program;
@@ -2360,6 +2413,7 @@ int main(void) {
     test_camera_target_decay_override_applies();
     test_camera_target_decay_override_resets_on_new_ease();
     test_time_dirty_gate_routes_by_dep_masks();
+    test_time_step_moves_paused_clock_only();
     test_gl_state_report_tracks_explicit_writes_before_checkpoint();
     test_gl_state_report_rebase_against_second_probe();
     test_gl_state_report_tracks_fog();

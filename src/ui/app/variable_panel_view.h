@@ -22,6 +22,8 @@ UiVariablePanelView ui_app_variable_panel_view(const UiRenderSnapshot *snap);
  * that runs outside a frame snapshot. vars is left NULL (no value rows), so
  * the result serves rect / hit-row queries only. The caller supplies the
  * current declared-variable count (e.g. repl_eval_predef_view().count). */
-UiVariablePanelView ui_app_variable_panel_view_live(int var_count);
+UiVariablePanelView ui_app_variable_panel_view_live(int var_count,
+                                                    int time_row,
+                                                    int time_playing);
 
 #endif /* UI_APP_VARIABLE_PANEL_VIEW_H */

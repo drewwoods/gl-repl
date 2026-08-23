@@ -41,10 +41,14 @@ UiVariablePanelView ui_app_variable_panel_view(const UiRenderSnapshot *snap) {
     v.var_count       = snap->variable_panel_vars.count;
     v.drag_active_var = snap->variable_drag.active_var;
     v.drag_coarse     = snap->variable_drag.coarse;
+    v.time_row        = snap->variable_panel_time_row;
+    v.time_playing    = snap->variable_panel_time_playing;
     return v;
 }
 
-UiVariablePanelView ui_app_variable_panel_view_live(int var_count) {
+UiVariablePanelView ui_app_variable_panel_view_live(int var_count,
+                                                    int time_row,
+                                                    int time_playing) {
     UiVariablePanelView v;
     UiViewportState vp = ui_state_viewport();
     v.visible        = variable_panel_visible();
@@ -68,5 +72,11 @@ UiVariablePanelView ui_app_variable_panel_view_live(int var_count) {
     v.var_count       = var_count;
     v.drag_active_var = -1;
     v.drag_coarse     = 0;
+    /* Passed in rather than read here: the clock belongs to the REPL, and this
+     * file is UI. Kept faithful even though the drag path that uses this view
+     * is only reached for an already-classified slider hit - a view that
+     * misplaced the stepper would silently turn its pixels into a drag. */
+    v.time_row        = time_row;
+    v.time_playing    = time_playing;
     return v;
 }

@@ -69,6 +69,7 @@
 #include "repl/source_scope.h"
 #include "repl/state_views.h"
 #include "repl/text_helpers.h"
+#include "repl/time.h"
 #include "subsystems/assign_plot/assign_plot.h"
 #include "subsystems/console/console.h"
 #include "subsystems/replay/replay.h"
@@ -510,7 +511,9 @@ int glr_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int 
         return 0;
     int row_idx;
     UiVariablePanelView var_view =
-        ui_app_variable_panel_view_live(repl_eval_predef_view().count);
+        ui_app_variable_panel_view_live(repl_eval_predef_view().count,
+                                        repl_state_variables().time_var_idx,
+                                        repl_state_variables().time_playing);
     if (!ui_variable_panel_hit_row(&var_view, x, y, &row_idx))
         return 0;
     if (replay_active())
@@ -529,6 +532,29 @@ int glr_ctrl_router_handle_variable_panel_drag_release(int state) {
     drag = variable_panel_drag();
     glr_variable_panel_persist_drag_value(&drag);
     variable_panel_handle_drag_reset();
+    editor_request_redraw();
+    return 1;
+}
+
+/* UI_HIT_VARIABLE_TIME_STEP: frame stepper on the variable panel's clock row.
+ * item_idx is +1 (up) / -1 (down); one step is one simulation tick, so the
+ * paused scene advances exactly the frame the timer would have run.
+ *
+ * Not routed through glr_variable_panel_bridge like a slider drag, and that is
+ * the point: `t` has no declaration row to rewrite, and a stepper is a
+ * transport control, not a document edit - it must not push an undo snapshot
+ * per click. It goes straight to the clock owner instead.
+ *
+ * The coarse modifier (right-press) jumps ten frames. Shift-fine is
+ * deliberately not honored: there is nothing finer than a frame to step to,
+ * and a sub-frame `t` is a sampling concept (accum blur), not a transport one. */
+static int route_variable_time_step_hit(const UiHit *hit, int coarse) {
+    float frames = coarse ? GLR_ADJUST_COARSE_SCALE : 1.0f;
+
+    if (replay_active())
+        replay_stop();
+    repl_step_time((hit->item_idx > 0 ? 1.0f : -1.0f) *
+                   frames * GLR_FRAME_DT_SECS);
     editor_request_redraw();
     return 1;
 }
@@ -1577,6 +1603,11 @@ static void route_right_press(int x, int y) {
                 GLUT_RIGHT_BUTTON, GLUT_DOWN, x, y))
             return;
         break;                    /* row rect disagreement: inert */
+    case UI_HIT_VARIABLE_TIME_STEP:
+        /* Right-press is the coarse scrub everywhere else in the panel; on
+         * the stepper it is a ten-frame jump in the arrow's direction. */
+        route_variable_time_step_hit(&hit, /*coarse=*/1);
+        return;
     case UI_HIT_ASSIGN_PLOT_RATE:
         /* Backward through the rate cycle, matching the Config flyout. */
         route_assign_plot_rate_hit(-1);
@@ -2059,6 +2090,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_submenu_item_hit(&hit); break;
     case UI_HIT_VARIABLE_SLIDER:
         consumed = route_variable_slider_hit(x, y); break;
+    case UI_HIT_VARIABLE_TIME_STEP:
+        consumed = route_variable_time_step_hit(&hit, /*coarse=*/0); break;
     case UI_HIT_VARIABLE_COLLAPSE_TOGGLE:
         consumed = route_variable_panel_collapse_toggle_hit(); break;
     case UI_HIT_PROFILE_SECTION_TOGGLE:

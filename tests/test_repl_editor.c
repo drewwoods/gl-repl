@@ -73,8 +73,12 @@ static int g_mock_modifiers = 0;
 
 /* Live-state variable-panel rect (mirrors the pre-narrowing NULL-snapshot
  * path) so these tests can query the panel rect by declared-var count. */
+/* -1 = no clock row, so the frame stepper is absent and these helpers see the
+ * plain row geometry. Tests that want the stepper build the view themselves. */
+#define VP_NO_CLOCK_ROW (-1)
+
 static void vp_rect(int count, int *px, int *py, int *pw, int *ph) {
-    UiVariablePanelView v = ui_app_variable_panel_view_live(count);
+    UiVariablePanelView v = ui_app_variable_panel_view_live(count, VP_NO_CLOCK_ROW, 0);
     ui_variable_panel_rect(&v, px, py, pw, ph);
 }
 

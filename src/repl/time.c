@@ -10,6 +10,10 @@ void repl_advance_time(float dt) {
     repl_state_time_advance(dt);
 }
 
+void repl_step_time(float dt) {
+    repl_state_time_step(dt);
+}
+
 void repl_reset_time_to_zero(void) {
     repl_state_time_reset_to_zero();
 }

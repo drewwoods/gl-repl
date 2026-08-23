@@ -371,6 +371,19 @@ void repl_state_time_advance(float dt) {
     }
 }
 
+void repl_state_time_step(float dt) {
+    ensure_t_var_idx();
+    if (g_repl_state.variables.time_var_idx < 0)
+        return;
+
+    /* anim_time is deliberately untouched: repl_state_time_advance keeps
+     * accumulating it every tick even while paused (it is the free-running
+     * clock), so syncing it to a stepped `t` the way repl_state_time_set does
+     * would rewind it. Only the visible `t` binding moves. */
+    g_predef_vars_mut[g_repl_state.variables.time_var_idx].value += dt;
+    repl_state_notify_predef_value_changed(g_repl_state.variables.time_var_idx);
+}
+
 void repl_state_time_reset_to_zero(void) {
     repl_state_time_set(0.0f);
 }

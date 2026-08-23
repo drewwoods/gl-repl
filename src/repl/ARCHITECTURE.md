@@ -1005,7 +1005,7 @@ State access is intentionally two-tiered:
   owner accessors, setters, and reset helpers. For owner modules and the
   controller only; broad command-array mutators are intentionally absent.
 
-[`repl_state_ensure_sentinels()`](state_owners.h#L139) patches the non-zero defaults (most
+[`repl_state_ensure_sentinels()`](state_owners.h#L146) patches the non-zero defaults (most
 importantly the array capacities - under raw BSS zero-fill they'd be 0
 and reject every insert). It's idempotent and matters for CLI paths like
 `--dump-code` that skip `glr_ctrl_init_gl`.
