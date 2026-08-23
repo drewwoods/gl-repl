@@ -155,7 +155,7 @@
 #define CFG_DEFAULT_ACCUM_EFFECT      RENDER3D_ACCUM_EFFECT_AA
 #define CFG_DEFAULT_ACCUM_PASSES      1
 
-/* Scissor the accumulation-AA loop (per-pass glClear + glAccum read/return)
+/* Scissor the accumulation-AA loop (per-pass glClear + glAccum load/add/return)
  * to the scene viewport instead of the whole window. On paper this is a
  * strict win: glClear/glAccum are bounded by the scissor box, not the
  * viewport, so without it the up-to-16x accum work scans the dead region

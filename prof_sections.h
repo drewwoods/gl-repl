@@ -31,7 +31,7 @@
 typedef enum {
     PROF_RENDER3D = 0,  /* render3d_draw_scene() + the host chrome-strip clear */
     PROF_RENDER3D_SETUP,     /* projection/camera/lights/material setup */
-    PROF_RENDER3D_ACCUM_EFFECT, /* accumulation clears/resolve + blur subframe prep */
+    PROF_RENDER3D_ACCUM_EFFECT, /* accumulation load/add/resolve + blur subframe prep */
     PROF_RENDER3D_FILL,      /* execute_commands() main fill pass */
     PROF_RENDER3D_FADE,      /* replay fade batches pass */
     PROF_RENDER3D_FADE_BATCH_PREP,  /* per-batch find-open + color */
@@ -154,14 +154,16 @@ typedef enum {
      * outlives the tour by the length of its exit collapse) and a different
      * cost profile (no bitmap text at all once the card is gone). */
     PROF_TOUR_PRESENCE,
-    /* The summary rows, in display order. The application owns the frame
-     * boundary (glr_frame_begin / glr_frame_ended in gl_repl.c's display
-     * callback), and the whole span between them is the frame:
+    /* The summary rows, in display order. The application owns the display
+     * callback boundary (glr_frame_begin / glr_frame_ended in gl_repl.c), and
+     * the span between them is the callback body:
      *
      *   Frame Time     = everything the callback does, present included
      *   Frame Work     = up to the present (closed by glr_frame_work_end)
      *   Depth Snapshot = the post-work capture below, when it ran
      *   Present        = Frame Time - Frame Work - Depth Snapshot, derived
+     *   Browser/Frame Wait = frame-start interval - previous Frame Time,
+     *                        derived at the next glr_frame_begin
      *
      * Present is a *subtraction* rather than a bracket around the swap on
      * purpose: bracketing glFinish + glutSwapBuffers leaves anything else
@@ -184,7 +186,11 @@ typedef enum {
      * see the is_slack flag). The caveat that follows: glFinish absorbs GPU work
      * the driver deferred, so a GPU-bound frame shows up as Present's slack
      * draining away rather than as CPU cost in any row above it; the GPU column
-     * is the cross-check. */
+     * is the cross-check where timer queries exist. WebGL commonly lacks those
+     * queries and may apply its GPU back-pressure between rAF callbacks instead;
+     * the final wait row makes that formerly invisible part of the cadence
+     * explicit. It is informational rather than a work budget: a healthy host
+     * also waits when a callback finishes before its next delivery slot. */
     PROF_FRAME_TOTAL,   /* whole callback, end to end (the "Frame Time" row) */
     PROF_FRAME_WORK,    /* the same minus the present */
     /* glr_ctrl_capture_depth_snapshot(): the vertex-label occlusion cull's
@@ -199,6 +205,7 @@ typedef enum {
      * See docs/plans. */
     PROF_DEPTH_SNAPSHOT,
     PROF_PRESENT,       /* derived: TOTAL - WORK - DEPTH_SNAPSHOT */
+    PROF_FRAME_WAIT,    /* derived: frame-start interval - prior TOTAL */
     PROF_SECTION_COUNT
 } ProfSection;
 

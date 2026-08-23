@@ -28,10 +28,11 @@ static const char *g_export_ply_path = NULL;
 static int g_export_ply_srgb = 0;
 
 static void display_func(void) {
-    /* Open the frame - first statement in the callback, because the callback
-     * *is* the frame: this file owns the boundary, not the controller, which is
-     * only one of the stages below. Everything from here to glr_frame_ended()
-     * at the bottom is Frame Time. */
+    /* Open the profiled frame - first statement in the callback, because this
+     * file owns that callback boundary, not the controller, which is only one
+     * of the stages below. Everything from here to glr_frame_ended() at the
+     * bottom is Frame Time. FPS uses callback-start cadence instead; begin()
+     * attributes the prior callback-to-callback gap to Browser/Frame Wait. */
     glr_frame_begin();
 
     /* Every per-frame stage below is inside the frame's work span, so a stage
@@ -132,10 +133,11 @@ static void display_func(void) {
     prof_end(PROF_HOST_OVERLAYS);
 
     /* Close the frame's *work* span: everything the callback does to produce
-     * this frame is now behind us, and the present that follows is mostly the
-     * wait for vsync - slack the frame is handed, not work it does. The frame
-     * itself stays open across it, and Present is the difference (nothing in
-     * between can go unattributed that way - see prof_sections.h). */
+     * this frame is now behind us. The callback stays open across finish,
+     * snapshot, and swap, and Present is the derived remainder (nothing in
+     * between can go unattributed that way). A native backend may wait here;
+     * a browser may return quickly and delay its next rAF callback instead,
+     * which the following frame records as Browser Wait. See prof_sections.h. */
     glr_frame_work_end();
 
     glFinish(); /* ensure all GL commands are done before we timestamp the swap */

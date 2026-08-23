@@ -132,7 +132,7 @@ belongs to the controller:
 
 ```mermaid
 flowchart TD
-    cb["gl_repl.c GLUT display callback"] --> fb["glr_frame_begin<br/><i>opens PROF_FRAME_TOTAL + PROF_FRAME_WORK</i>"]
+    cb["gl_repl.c GLUT display callback"] --> fb["glr_frame_begin<br/><i>records prior callback gap,<br/>opens PROF_FRAME_TOTAL + PROF_FRAME_WORK</i>"]
     fb --> si["capture hook + glr_ctrl scripted-input stage<br/><i>PROF_SCRIPTED_INPUT</i>"]
     si --> we["glr_extedit_poll - the --watch gate<br/><i>PROF_EXTERNAL_EDIT</i>"]
     we --> frame["glr_ctrl_display_frame<br/>(called directly; no shim)"]
@@ -161,10 +161,12 @@ visible: `PROF_SNAPSHOT` is the aggregate, with sub-sections for
 transformers, highlights, virtual lines, scene config, and ui snapshot
 (see [`src/support/cpuprof.h`](../src/support/cpuprof.h)).
 
-**The frame is the display callback, and the application owns it.** The three
-[`glr_frame_begin()`](../src/app/glr_ctrl.h#L279) /
-[`glr_frame_work_end()`](../src/app/glr_ctrl.h#L280) /
-[`glr_frame_ended()`](../src/app/glr_ctrl.h#L281) calls bracket `gl_repl.c`'s
+**The profiled frame is the display callback, and the application owns it.**
+The FPS cadence is wider: it is the interval from one callback start to the
+next. The three
+[`glr_frame_begin()`](../src/app/glr_ctrl.h#L282) /
+[`glr_frame_work_end()`](../src/app/glr_ctrl.h#L283) /
+[`glr_frame_ended()`](../src/app/glr_ctrl.h#L284) calls bracket `gl_repl.c`'s
 callback and also own the staleness/FPS tick, the GPU query-slot rotation and
 the capture-mode simulation tick. They carry the plain `glr_` prefix rather
 than `glr_ctrl_` because the controller is one stage inside a frame, not the
@@ -194,27 +196,35 @@ budgeted against. In steady state it is a single `stat()` and reads ~0, which
 is itself the useful signal: it says the watcher costs nothing until the file
 moves.
 
-**Three summary rows out of two spans.** `PROF_FRAME_TOTAL` runs the whole
+**Callback summary plus the cadence gap.** `PROF_FRAME_TOTAL` runs the whole
 callback and is the **Frame Time** row; `PROF_FRAME_WORK` is the same span
-stopped before the present and is **Frame Work**; **Present** is neither
-measured nor bracketed but *derived*, `TOTAL - WORK`, recorded through
+stopped before the present and is **Frame Work**. An optional **Depth
+Snapshot** is timed separately after work. **Present** is neither measured nor
+bracketed but *derived*, `TOTAL - WORK - DEPTH_SNAPSHOT`, recorded through
 [`prof_section_record_us()`](../src/support/cpuprof.h). Subtracting rather
-than bracketing `glFinish` + `glutSwapBuffers` is what makes the two parts
-exhaustive: anything else the callback does after `glr_frame_work_end()` lands
-in Present instead of nowhere.
+than bracketing `glFinish` + `glutSwapBuffers` is what makes the callback parts
+exhaustive: anything else after `glr_frame_work_end()` lands in Present instead
+of nowhere.
 
-The split exists because with vsync on the present is dominated by the wait for
-the next scan-out - time the frame is handed, not time it spends. Counted as
-work it pinned the number at the refresh interval and left the over-budget
-coloring permanently red no matter what the frame actually cost. So Frame Work
-is the row to watch for cost, and Present is colored on an inverted scale
-(`is_slack` in [`ProfSectionInfo`](../src/support/cpuprof.h): long is green,
-vanishing is red) because a shrinking present is the real warning - it is the
-frame's remaining headroom. The corollary is that `glFinish` absorbs GPU work
-the driver deferred, so a GPU-bound frame shows as slack draining out of
-Present rather than as CPU cost in any row above it; the GPU column (carried by
-Frame Work, the only one of the three whose span ends where the GPU work does)
-is the cross-check. `test_frame_spans_host_stages` and
+The cadence row is recorded at the *next* `glr_frame_begin()`. **Frame Wait** on
+native builds, or **Browser Wait** on WebAssembly, is the start-to-start frame
+interval minus the completed callback's Frame Time. Therefore the previous
+Frame Time plus the following wait is the wall-clock interval whose reciprocal
+the FPS plot reports. The row includes refresh/event-loop pacing and, in a
+browser, delayed `requestAnimationFrame` delivery and WebGL/GPU back-pressure.
+It deliberately does not claim those causes can be separated by a CPU clock.
+This is the number that accounts for a real 45 FPS cadence beside a 4 ms WebGL
+callback.
+
+Frame Work remains the callback-cost row. Present and Browser/Frame Wait are
+informational rather than green/yellow/red work budgets (`is_slack` in
+[`ProfSectionInfo`](../src/support/cpuprof.h)): a wait may be healthy refresh
+pacing, so its magnitude only becomes meaningful beside Frame Time and FPS.
+On a synchronous native path `glFinish` or swap can absorb deferred GPU work in
+Present; on WebGL the browser can still apply rAF/compositor pacing before the
+next callback, moving the visible gap to Browser Wait. The asynchronous GPU
+column is still the better attribution when timer queries are available.
+`test_frame_spans_host_stages` and
 `test_summary_row_metadata` in
 [`tests/test_glr_ctrl.c`](../tests/test_glr_ctrl.c) pin all of it on the
 profiler's test clock.
@@ -249,6 +259,15 @@ The exact ordering may preserve current visuals. The ownership rule still
 holds: the controller prepares the data, the render3d module decides where stage and
 overlay passes occur, and the REPL owns the command/replay semantics behind the
 data.
+
+The first accumulated sample uses `glAccum(GL_LOAD, 1/N)`, later samples use
+`GL_ACCUM`, and the loop resolves once with `GL_RETURN`. `GL_LOAD` replaces the
+accumulation target, so there is no separate accumulation-buffer clear. No
+per-sample CPU fence is issued; command ordering supplies the GPU data
+dependencies. On the gl4es/WebGL path each load/add still performs a full
+drawing-buffer snapshot (including an implicit canvas-MSAA resolve) and an FBO
+blend, so the GPU and memory-bandwidth cost grows with N even when C-side call
+submission is short.
 
 ### The frame background is observed, not predicted
 
@@ -1930,7 +1949,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L139) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L300) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L303) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame - here a 2D/3D switch would let row-count see one

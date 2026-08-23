@@ -263,8 +263,11 @@ int glr_ctrl_save_recovery_file(void);
  * memory-profile tick, the GPU capture-mode resolve and query-slot rotation,
  * and both frame spans - PROF_FRAME_TOTAL across the whole callback and
  * PROF_FRAME_WORK across everything up to the present, with PROF_PRESENT
- * derived from the difference (see prof_sections.h). The brackets belong out
- * here rather than inside glr_ctrl_display_frame() because the callback runs
+ * derived from the difference. At the next begin, PROF_FRAME_WAIT records the
+ * frame-start interval minus the preceding callback's PROF_FRAME_TOTAL, making
+ * browser rAF delivery / host event-loop pacing visible too (see
+ * prof_sections.h). The brackets belong out here rather than inside
+ * glr_ctrl_display_frame() because the callback runs
  * host-band work on both sides of it (scripted input, splash + tour overlays)
  * - work that a bracket around the controller alone silently omits, which is
  * exactly how a guided tour's ~10 ms caption overlay stayed invisible in the

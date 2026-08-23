@@ -33,6 +33,17 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   which maps `gl*` calls to `gl4es_gl*` over WebGL2. `glGetString` etc. resolve
   through gl4es, so `glutExtensionSupported` above reads the real live
   extension string.
+- **Accumulation cost**: gl4es emulates each `GL_LOAD` / `GL_ACCUM` by
+  snapshotting the antialiased canvas with `glCopyTexSubImage2D` (an implicit
+  MSAA resolve), then drawing that texture into an RGBA16F accumulation FBO.
+  A 10-pass AA frame is therefore ten scene renders, ten full-buffer
+  resolve/copies, ten full-buffer blends, and one return draw. There is no
+  per-pass `glFinish` or CPU fence; the passes are ordered on the GPU because
+  each snapshot consumes the preceding render and each blend updates the same
+  accumulation target. The first app sample uses `GL_LOAD`, so it replaces the
+  target without a separate accumulation clear. On WebGL, queued cost can
+  surface primarily as delayed delivery of the next animation frame; the
+  compute profile accounts for that outside-callback gap as `Browser Wait`.
 - **Console output**: `shell.html` overrides **both** `Module.print` (fd 1)
   and `Module.printErr` (fd 2), and feeds both to the in-page console drawer.
   Leaving `printErr` unset does not mean "same as print" - it means
@@ -230,6 +241,28 @@ prints the same metrics and timing rows. Native oracle failures are warnings
 unless `--strict` is passed through `ARGS`; strict mode makes a
 failed coverage/color invariant return non-zero. The browser build enables
 strict mode automatically, and does not compare exact framebuffer hashes.
+
+For in-app WebGL measurements, compare the FPS interval with the compute
+profile's callback summary: the previous `Frame Time` plus the following
+`Browser Wait` is one callback-start interval. The wait row includes browser
+animation-frame scheduling and queued GPU back-pressure that cannot be charged
+to a C section; it is especially important when the WebGL driver exposes no
+timer-query extension and the GPU column reads `--`.
+
+On fanless Apple Silicon, log the GPU operating point with the run so thermal
+drift does not masquerade as a code change:
+
+```bash
+sudo powermetrics --samplers gpu_power,thermal \
+  --sample-rate 1000 --sample-count 30 --show-plimits
+```
+
+Keep the reported GPU active-frequency/power samples and thermal-pressure
+state beside the benchmark, and interleave before/after runs after the same
+cool-down. The available fields vary by macOS and SoC; actual die temperature
+is not guaranteed. `pmset -g therm` can confirm recorded pressure warnings
+without a sampling trace, but neither it nor the AGX `ioreg` utilization
+counter substitutes for average GPU frequency. `powermetrics` requires root.
 
 ### Web-aware tests, and the exclusion list
 

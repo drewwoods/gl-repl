@@ -361,7 +361,7 @@ follows is the trip-wire list.
 
 ### Frame & rendering
 
-[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L300) drives each frame: rebuild autonormals + flat
+[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L303) drives each frame: rebuild autonormals + flat
 program if dirty → build [`Render3dRenderConfig`](src/render3d/render_types.h#L139) → clear chrome + load camera
 + scissor (all **controller** policy - render3d owns no camera type, sets no
 scissor, clears no color/depth) → [`render3d_draw_scene()`](src/render3d/render.h#L139) (projection → user
@@ -379,9 +379,13 @@ and the capture-mode sim tick) and runs scripted-tour input before
 after it. The tour **presence** layer (title card + breathing border + exit
 collapse, `glr_tour_presence` → `ui/subsystems/tour_presence`) is last of all,
 after the compositor, and is called every frame even with no tour - its exit
-animation outlives the tour that triggered it. Three summary rows come out of two spans: **Frame Time** (whole
-callback), **Frame Work** (the same up to the present), and **Present**, which
-is *derived* as the difference rather than bracketed. **Per-frame work added to
+animation outlives the tour that triggered it. Three callback rows come out of
+two spans: **Frame Time** (whole callback), **Frame Work** (the same up to the
+present), and **Present**, which is *derived* as the difference rather than
+bracketed. **Browser Wait** on web (**Frame Wait** natively) is derived at the
+next callback as its start-to-start interval minus the completed Frame Time;
+Frame Time + that following wait is the cadence represented by FPS.
+**Per-frame work added to
 the host callback needs its own `ProfSection`** - inside the work span but
 rowless, it shows up only as unattributed remainder (that is how a tour's
 ~10 ms caption overlay hid).

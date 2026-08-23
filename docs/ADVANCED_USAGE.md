@@ -1256,6 +1256,13 @@ backend audio-device issues:
   a mouse and a screenshot. `GLR_PROF_DUMP_MIN_MS` sets the row cutoff
   (default `0.02`; `0` prints the whole catalog).
 
+  The summary distinguishes callback time from cadence. `Frame Time` is the
+  completed display callback; `Browser Wait` on WebAssembly (`Frame Wait`
+  natively) is recorded on the next callback as start-to-start interval minus
+  that Frame Time. Add those two rows to compare with the FPS interval. A large
+  Browser Wait can include rAF/event-loop pacing or queued GPU back-pressure
+  even when every CPU section and `Present` are small.
+
   **Read a dump as attribution, not as work.** A section containing a
   synchronous GL readback absorbs whatever pipeline drain the driver owes at
   that point, and on a render-ahead driver with vsync on that drain is most of

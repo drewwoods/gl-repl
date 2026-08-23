@@ -95,6 +95,8 @@ typedef struct {
 
 static ProfFpsWindow g_fps_win[PROF_FPS_WIN_COUNT];
 static double g_fps_last_tick_us = 0.0;
+static int g_fps_have_tick = 0;
+static double g_frame_interval_last_us = 0.0;
 static double g_fps_interval_ema_us = 0.0;
 static Histogram g_frame_time_hist;
 
@@ -315,9 +317,11 @@ void prof_frame_tick(void) {
 
     /* FPS bookkeeping: one tick = one frame. */
     double now = prof_now_us();
-    if (g_fps_last_tick_us > 0.0) {
+    g_frame_interval_last_us = 0.0;
+    if (g_fps_have_tick) {
         double dt = now - g_fps_last_tick_us;
         if (dt > 0.0) {
+            g_frame_interval_last_us = dt;
             histogram_record(&g_frame_time_hist, dt);
             /* Smooth elapsed time, then invert it. Averaging per-frame
              * reciprocals (EMA(1 / dt)) biases FPS upward whenever callback
@@ -348,6 +352,11 @@ void prof_frame_tick(void) {
         }
     }
     g_fps_last_tick_us = now;
+    g_fps_have_tick = 1;
+}
+
+double prof_frame_interval_last_us(void) {
+    return g_frame_interval_last_us;
 }
 
 double prof_fps_current(void) {
@@ -457,6 +466,8 @@ void prof_test_reset(void) {
     }
     histogram_clear(&g_frame_time_hist);
     g_fps_last_tick_us = 0.0;
+    g_fps_have_tick = 0;
+    g_frame_interval_last_us = 0.0;
     g_fps_interval_ema_us = 0.0;
     g_prof_initialized = 0;
     g_prof_begin_hook = 0;

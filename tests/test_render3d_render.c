@@ -294,15 +294,29 @@ static void test_scene_accum_effect_profile_section(void) {
     cfg.accum_effect = RENDER3D_ACCUM_EFFECT_AA;
     cfg.accum_passes = 4;
 
+    TraceLog trace;
+    int first_accum, second_accum, return_accum;
     prof_accum_reset(PROF_RENDER3D_ACCUM_EFFECT);
-    gl_stub_counts_reset();
+    trace_begin();
     ASSERT_INT("AA render ok", render3d_draw_scene(&state, &cfg), 0);
+    trace_end(&trace);
     prof_accum_commit(PROF_RENDER3D_ACCUM_EFFECT);
 
     ASSERT_TRUE("AA effect section sampled",
                 !prof_section_is_stale(PROF_RENDER3D_ACCUM_EFFECT));
     ASSERT_INT("AA path accumulates each sample plus return",
                (int)gl_stub_counts[GL_STUB_glAccum], 5);
+    first_accum = trace_find_after(&trace, 0, "glAccum 257 0.25");
+    second_accum = trace_find_after(&trace, first_accum + 1,
+                                    "glAccum 256 0.25");
+    return_accum = trace_find_after(&trace, second_accum + 1,
+                                    "glAccum 258 1");
+    ASSERT_TRUE("first sample loads instead of blending stale accum contents",
+                first_accum >= 0);
+    ASSERT_TRUE("later samples add after the first load", second_accum > first_accum);
+    ASSERT_TRUE("return follows the accumulated samples", return_accum > second_accum);
+    ASSERT_INT("GL_LOAD removes the standalone accum-buffer clear",
+               trace_count_line(&trace, "glClear 512"), 0);
 
     SubframeCountCtx subframes;
     memset(&subframes, 0, sizeof(subframes));

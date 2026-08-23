@@ -146,12 +146,11 @@ static inline int prof_section_set_equal(const ProfSectionSet *a,
  *             mode - so restyling the indent never re-classifies a row.
  *  is_total - nonzero for a total row (drawn with a divider above it and the
  *             full-budget warn/crit thresholds).
- *  is_slack - nonzero for a row where a *bigger* number is the healthy one:
- *             it measures time the frame is handed rather than time it spends
- *             (gl-repl's Present row - the vsync wait). The panel inverts the
- *             warn/crit coloring for these, so a long wait reads green and a
- *             vanishing one red. Such a row is outside the frame total by
- *             construction; the flag only decides how it is colored.
+ *  is_slack - nonzero for an informational wait/headroom row rather than a
+ *             work budget (gl-repl's Present and Browser/Frame Wait rows).
+ *             The panel keeps these off the green/yellow/red work scale: a
+ *             wait may be healthy pacing, and its size alone does not say
+ *             whether the callback or the host missed a frame boundary.
  *  is_frame_total - nonzero only for the whole-frame total. It keeps the
  *             refresh-boundary tolerance specific to that row: another total
  *             uses the ordinary hard full-budget threshold.
@@ -193,11 +192,10 @@ void prof_install_section_hooks(ProfSectionHookFn begin_hook,
  * updates last/EMA/histogram/staleness exactly as prof_end() would, with no
  * clock read and no hooks (there is no span to bracket a GPU query around).
  *
- * For a section that is a *difference* between two measured spans and would be
- * wrong to bracket directly - gl-repl's Present, which is the frame total minus
- * the frame's work. Bracketing the swap itself would leave everything between
- * the two spans unattributed; subtracting sweeps it into the row that is meant
- * to absorb it. Prefer prof_begin/prof_end wherever there is a real span. */
+ * For a section that is a *difference* between measured values and would be
+ * wrong to bracket directly - gl-repl's Present (callback total minus work)
+ * and Browser/Frame Wait (frame-start interval minus the prior callback).
+ * Prefer prof_begin/prof_end wherever there is a real span. */
 void prof_section_record_us(ProfSection s, double us);
 
 /* Accumulation-aware timing helpers for sections called inside a multi-pass
@@ -219,6 +217,12 @@ void prof_accum_commit(ProfSection s);
 /* Mark the start of a new frame so per-frame sections can detect staleness.
  * Also feeds the FPS history below (one tick = one frame). */
 void prof_frame_tick(void);
+
+/* Wall time between the two most recent frame ticks, or 0 until two ticks
+ * have landed. This is the cadence the FPS calculation sees, including time
+ * spent outside a host display callback (browser rAF delivery, native event
+ * loop pacing, and any GPU back-pressure applied there). */
+double prof_frame_interval_last_us(void);
 
 /* Read-only API for HUD rendering. */
 double prof_section_last_us(ProfSection s);

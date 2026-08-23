@@ -112,13 +112,14 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_HOST_SPLASH]                       = { "splash",          1, 0 },
     [PROF_TOUR_OVERLAY]                      = { "tour overlay",    1, 0 },
     [PROF_TOUR_PRESENCE]                     = { "tour presence",   1, 0 },
-    /* The summary rows under the divider: the whole frame, then the parts it
-     * splits into. "Frame Time" carries is_total (the divider above it and the
-     * full-budget thresholds) plus is_frame_total (refresh-boundary tolerance);
-     * "Present" is the vsync wait, colored inversely because a long one is
-     * headroom rather than cost (is_slack).
+    /* The summary rows under the divider: the display callback, the parts it
+     * splits into, then the time from its end to the next callback. "Frame
+     * Time" carries is_total (the divider above it and the full-budget
+     * thresholds) plus is_frame_total (refresh-boundary tolerance); "Present"
+     * and the outside-callback wait are informational rather than work budgets
+     * (is_slack).
      *
-     * All four are depth 0. "Depth Snapshot" is a *sibling* here, not a child of
+     * All five are depth 0. "Depth Snapshot" is a *sibling* here, not a child of
      * anything: its capture runs after both Host Overlays and Frame Work have
      * closed, so indenting it under either would read as a 2 ms child of a 9 us
      * row, and Present is derived by subtracting it out. */
@@ -127,6 +128,11 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_FRAME_WORK]                        = { .label = "Frame Work" },
     [PROF_DEPTH_SNAPSHOT]                    = { .label = "Depth Snapshot" },
     [PROF_PRESENT]                           = { .label = "Present", .is_slack = 1 },
+#if defined(__EMSCRIPTEN__)
+    [PROF_FRAME_WAIT]                        = { .label = "Browser Wait", .is_slack = 1 },
+#else
+    [PROF_FRAME_WAIT]                        = { .label = "Frame Wait", .is_slack = 1 },
+#endif
 };
 
 ProfSectionInfo prof_section_info(ProfSection s) {
@@ -190,11 +196,11 @@ static const unsigned char k_gpu_sections[PROF_SECTION_COUNT] = {
      * diagnostic subdivisions like every other leaf under a drawing parent.
      * Scripted input issues no GL of its own.
      *
-     * Of the three summary rows only Frame Work carries a query. Frame Time
-     * runs to the end of the callback, past a glFinish that has already
-     * drained the queue, so its query would report the vsync wait as GPU time;
-     * Present is derived arithmetic with no span to bracket at all. Frame Work
-     * ends exactly where the GPU work does, which is the number worth having. */
+     * Of the summary rows only Frame Work carries a query. Frame Time runs to
+     * the end of the callback, past glFinish and host present machinery;
+     * Present and Browser/Frame Wait are derived arithmetic with no span to
+     * bracket at all. Frame Work ends exactly where the GPU work does, which
+     * is the number worth having. */
     [PROF_HOST_OVERLAYS]                     = 1,
     [PROF_FRAME_WORK]                        = 1,
 };

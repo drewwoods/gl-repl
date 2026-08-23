@@ -901,8 +901,10 @@ int render3d_draw_scene(Render3dState *state,
     if (do_accum) {
         int blur = (RENDER3D_ACCUM_EFFECT_IS_BLUR(config->accum_effect) &&
                     config->setup_subframe_fn != NULL);
-        /* The accum buffer is this module's own scratch surface, so it
-         * clears here. The color/depth clear is not ours: whatever the caller
+        /* The accum buffer is this module's own scratch surface. The first
+         * sample uses GL_LOAD, which replaces that surface at weight and makes
+         * a separate full-buffer clear unnecessary; later samples use
+         * GL_ACCUM. The color/depth clear is not ours: whatever the caller
          * owns outside the scene rect is the caller's to clear (before or
          * after this call - the REPL controller does it after, on the
          * background these passes are observed to establish), and the scene
@@ -911,7 +913,6 @@ int render3d_draw_scene(Render3dState *state,
          * pass accumulates whatever those pixels already hold at `weight`,
          * summing back to that color. */
         prof_begin(PROF_RENDER3D_ACCUM_EFFECT);
-        glClear(GL_ACCUM_BUFFER_BIT);
         /* Optionally confine the repeated per-pass clears and the glAccum
          * read/return to the scene viewport: glClear/glAccum are bounded by
          * the scissor box (not the viewport), so this lets the up-to-16x
@@ -950,7 +951,7 @@ int render3d_draw_scene(Render3dState *state,
                                      pass_idx == accum_passes - 1);
             }
             prof_begin(PROF_RENDER3D_ACCUM_EFFECT);
-            glAccum(GL_ACCUM, weight);
+            glAccum(pass_idx == 0 ? GL_LOAD : GL_ACCUM, weight);
             prof_accum_end(PROF_RENDER3D_ACCUM_EFFECT);
         }
         prof_begin(PROF_RENDER3D_ACCUM_EFFECT);

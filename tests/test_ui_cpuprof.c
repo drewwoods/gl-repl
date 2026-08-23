@@ -293,6 +293,9 @@ static void test_cpuprof_current_fps_averages_intervals(void) {
 
     ASSERT_TRUE("current FPS is not inflated by uneven frame spacing",
                 prof_fps_current() > 115.0 && prof_fps_current() < 125.0);
+    ASSERT_TRUE("last frame interval is exposed to host attribution",
+                prof_frame_interval_last_us() > 12666.0 &&
+                prof_frame_interval_last_us() < 12667.0);
 }
 
 static void test_cpuprof_histogram_32_bit_bins(void) {

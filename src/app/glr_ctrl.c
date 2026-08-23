@@ -2946,9 +2946,28 @@ static void glr_ctrl_resolve_blur_subframe(Render3dRenderConfig *config) {
  * flag rather than sharing the frame's. */
 static int g_frame_open = 0;
 static int g_frame_work_open = 0;
+static int g_frame_completed = 0;
 
 void glr_frame_begin(void) {
+    int previous_frame_completed = g_frame_completed;
+    g_frame_completed = 0;
     prof_frame_tick();
+    /* Frame Time ends with the display callback, while FPS is based on the
+     * interval between callback starts. Attribute that gap on the next frame:
+     * it is where browser rAF delivery and GPU back-pressure live, and where a
+     * native event loop may pace an early-finishing callback. Without this row
+     * WebGL can report a 4 ms callback beside a legitimate 45 FPS cadence with
+     * no number accounting for the other ~18 ms. */
+    if (previous_frame_completed) {
+        double interval_us = prof_frame_interval_last_us();
+        if (interval_us > 0.0) {
+            double wait_us = interval_us
+                           - prof_section_last_us(PROF_FRAME_TOTAL);
+            if (wait_us < 0.0)
+                wait_us = 0.0;
+            prof_section_record_us(PROF_FRAME_WAIT, wait_us);
+        }
+    }
     memprof_frame_tick();
     /* Dial GPU timer-query capture to what the profile panel can show this
      * frame (Off/FPS -> none, Sections/Histogram -> the full tree):
@@ -3012,6 +3031,7 @@ void glr_frame_ended(void) {
                 present_us -= prof_section_last_us(PROF_DEPTH_SNAPSHOT);
         }
         prof_section_record_us(PROF_PRESENT, present_us);
+        g_frame_completed = 1;
     }
     /* In GLR_TICK_PER_FRAME mode this is where the simulation advances, so a
      * captured sequence is t0, t0+dt, ... . Deliberately after the total is

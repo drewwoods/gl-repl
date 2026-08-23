@@ -1422,6 +1422,10 @@ both blocks. The exported program carries the same lines.
     render. `--no-accum` disables the accumulation buffer entirely;
     `--accum` forces it on where it would otherwise auto-disable (Mesa
     emulates the accumulation buffer on the CPU).
+  - The web build also resolves and copies the antialiased canvas into its
+    accumulation FBO once per pass. That is genuine GPU bandwidth work even
+    when the CPU-side Render 3D row stays small; it can appear as Browser Wait
+    because the browser delays the next animation callback while draining it.
 
   ![Motion blur on a spinning cube (Blur 16x)](images/motion-blur.png)
 
@@ -1809,13 +1813,19 @@ graph.
 
 Three floating panels work together:
 
-- **The section listing** (right) breaks the frame into named sections.
-  *Frame Time* is the whole frame; it splits into *Frame Work* (producing the
-  image) and *Present* (the buffer swap and vsync wait). **Frame Work is the
-  number to watch when something feels slow.** The **CPU** column is a running
-  average of wall-clock time; the **GPU** column comes from asynchronous GL
-  timer queries and reads `--` where the driver lacks them. **Max** shows the
-  worse of the two averages.
+- **The section listing** (right) breaks the display callback into named
+  sections. *Frame Time* is the whole callback; it splits into *Frame Work*
+  (producing the image) and *Present* (the callback tail containing finish and
+  swap). *Frame Wait* on native builds, or *Browser Wait* on the web build,
+  accounts for the gap from that callback's end to the next callback's start.
+  Previous Frame Time + following Wait is therefore the interval represented
+  by the FPS graph. Browser Wait includes animation-frame scheduling and any
+  queued WebGL/GPU back-pressure the browser resolves between callbacks; it is
+  not evidence of a CPU stall inside a particular GL call. **Frame Work is the
+  number to watch for callback cost; use Wait plus the FPS graph for pacing.**
+  The **CPU** column is a running average of wall-clock time; the **GPU** column
+  comes from asynchronous GL timer queries and reads `--` where the driver
+  lacks them. **Max** shows the worse of the two averages.
 - **The section histograms** (center) overlay every top-level section's
   timing distribution on one log-log graph. Click a legend entry to hide that
   series; rest the pointer on one to see its sample count, fastest, mean,
@@ -1830,6 +1840,8 @@ switch examples, or on the panel's `[reset]` control).
 
 GPU timing needs timer-query support (GL 3.3 / `ARB_timer_query`, or the
 `EXT_timer_query` fallback); `GLR_NO_GPU_PROF=1` disables it explicitly.
+Many WebGL drivers expose no compatible timer query, so Browser Wait is the
+cadence cross-check when that column reads `--`.
 
 ### Memory, messages, and startup
 

@@ -1071,10 +1071,11 @@ static void test_display_frame_profile_coverage(void) {
     }
 }
 
-/* The frame boundary is the application's, and it produces four numbers from
- * three spans: Frame Time (the whole display callback), Frame Work (up to the
- * present), Depth Snapshot (the post-work occlusion capture, when it ran), and
- * Present as what is left of the total.
+/* The frame boundary is the application's, and it produces the callback's four
+ * numbers from three spans: Frame Time (the whole display callback), Frame Work
+ * (up to the present), Depth Snapshot (the post-work occlusion capture, when it
+ * ran), and Present as what is left of the total. The next begin also derives
+ * Frame Wait from the start-to-start interval minus that completed callback.
  *
  * Each piece is a regression that happened. The stages gl_repl.c runs on
  * either side of glr_ctrl_display_frame() - scripted input, the post-composite
@@ -1093,7 +1094,7 @@ static void test_display_frame_profile_coverage(void) {
  * production but is stood in the same way, since it needs a live GL context
  * and a window to do anything. */
 static void test_frame_spans_host_stages(void) {
-    double frame_us, work_us, overlay_us, tour_us, present_us;
+    double frame_us, work_us, overlay_us, tour_us, present_us, wait_us;
 
     printf("--- imrepl_ctrl frame spans host stages ---\n");
 
@@ -1151,6 +1152,8 @@ static void test_frame_spans_host_stages(void) {
     glr_frame_begin();
     prof_test_set_now_us(25000.0);
     glr_frame_ended();
+    wait_us = prof_section_last_us(PROF_FRAME_WAIT);
+    ASSERT_TRUE("time between callbacks is attributed (3ms)", wait_us == 3000.0);
     ASSERT_TRUE("frame without work_end still records its total",
                 prof_section_last_us(PROF_FRAME_TOTAL) == 5000.0);
     ASSERT_TRUE("frame without work_end attributes the full frame to present",
@@ -1319,11 +1322,10 @@ static void test_prof_nesting_guard(void) {
     prof_test_reset();
 }
 
-/* The summary rows the panel draws under its divider: the frame total first,
- * then the parts it decomposes into. Row order is catalog order, so the run
- * PROF_FRAME_TOTAL, PROF_FRAME_WORK, PROF_DEPTH_SNAPSHOT, PROF_PRESENT is what
- * puts them under the rule and in that order - and the flags are what make the
- * total read "over budget when long" and Present the reverse. */
+/* The summary rows the panel draws under its divider: the callback total first,
+ * then the parts it decomposes into, then the wait outside it. Row order is
+ * catalog order, so the run PROF_FRAME_TOTAL through PROF_FRAME_WAIT is what
+ * puts them under the rule and in that order. */
 static void test_summary_row_metadata(void) {
     int section_idx;
     int total_rows = 0, slack_rows = 0;
@@ -1339,6 +1341,8 @@ static void test_summary_row_metadata(void) {
                 (int)PROF_DEPTH_SNAPSHOT == (int)PROF_FRAME_WORK + 1);
     ASSERT_TRUE("present is the row after the depth snapshot",
                 (int)PROF_PRESENT == (int)PROF_DEPTH_SNAPSHOT + 1);
+    ASSERT_TRUE("frame wait is the row after present",
+                (int)PROF_FRAME_WAIT == (int)PROF_PRESENT + 1);
     ASSERT_INT("depth snapshot is not a total row",
                prof_section_info(PROF_DEPTH_SNAPSHOT).is_total, 0);
     ASSERT_INT("depth snapshot is not slack",
@@ -1359,12 +1363,23 @@ static void test_summary_row_metadata(void) {
                prof_section_info(PROF_PRESENT).is_total, 0);
     ASSERT_INT("present row has no refresh tolerance",
                prof_section_info(PROF_PRESENT).is_frame_total, 0);
+    ASSERT_INT("frame wait is informational",
+               prof_section_info(PROF_FRAME_WAIT).is_slack, 1);
+    ASSERT_INT("frame wait is not a second total",
+               prof_section_info(PROF_FRAME_WAIT).is_total, 0);
     ASSERT_STR("frame total row is labeled Frame Time",
                prof_section_info(PROF_FRAME_TOTAL).label, "Frame Time");
     ASSERT_STR("frame work row is labeled Frame Work",
                prof_section_info(PROF_FRAME_WORK).label, "Frame Work");
     ASSERT_STR("present row is labeled Present",
                prof_section_info(PROF_PRESENT).label, "Present");
+#if defined(__EMSCRIPTEN__)
+    ASSERT_STR("web wait row names the browser",
+               prof_section_info(PROF_FRAME_WAIT).label, "Browser Wait");
+#else
+    ASSERT_STR("native wait row names the frame gap",
+               prof_section_info(PROF_FRAME_WAIT).label, "Frame Wait");
+#endif
 
     /* Frame Work carries the GPU query, not the two rows either side of it:
      * Frame Time's span runs past a glFinish and Present has no span at all. */
@@ -1374,6 +1389,8 @@ static void test_summary_row_metadata(void) {
                glr_prof_section_is_gpu(PROF_FRAME_TOTAL), 0);
     ASSERT_INT("present is not gpu-bracketed",
                glr_prof_section_is_gpu(PROF_PRESENT), 0);
+    ASSERT_INT("frame wait is not gpu-bracketed",
+               glr_prof_section_is_gpu(PROF_FRAME_WAIT), 0);
 
     /* Exactly one of each across the catalog: the divider and the inverted
      * scale are both single-row affordances. */
@@ -1384,7 +1401,8 @@ static void test_summary_row_metadata(void) {
         if (info.is_slack) slack_rows++;
     }
     ASSERT_INT("exactly one total row", total_rows, 1);
-    ASSERT_INT("exactly one slack row", slack_rows, 1);
+    ASSERT_INT("present and frame wait are the two informational rows",
+               slack_rows, 2);
 }
 
 static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo(void) {
