@@ -28,6 +28,8 @@ not treated as “already applied”.
 | `gl4es-pushattrib-gaps.patch` | Fill polygon, line, point, and transform state gaps in `glPushAttrib`/`glPopAttrib`. |
 | `gl4es-pushattrib-texenv.patch` | Preserve texture environment mode and color per texture unit. |
 | `gl4es-accum-fbo.patch` | Implement the accumulation buffer with an internal FBO. |
+| `gl4es-accum-deferred-return.patch` | Cache LOAD/ACCUM snapshots and reduce their weights once at RETURN. |
+| `gl4es-accum-deferred-scissor.patch` | Size and copy deferred samples to the WebGL scene scissor. |
 | `gl4es-point-smooth.patch` | Emulate round antialiased points in the GLES2 fixed-pipeline shader. |
 | `gl4es-polygon-line-drawarrays.patch` | Avoid Emscripten's client-index upload and scan for polygon-mode lines. |
 | `gl4es-point-size-batch.patch` | Apply `glPointSize` to the batch it was called on, not to whatever is still pending. |
@@ -35,6 +37,31 @@ not treated as “already applied”.
 | `gl4es-line-width-quads.patch` | Expand `glLineWidth` > 1 into screen-space quads on `[1, 1]` line-width stacks. |
 
 See each older patch's leading prose for the detail that is available.
+
+## 2026-08-24: deferred accumulation performance
+
+The two deferred-accumulation patches were measured separately rather than
+assigning their combined result to both. Three browser builds used the same
+full patch stack and differed only at the accumulation stage: the original
+`gl4es-accum-fbo.patch`, that baseline plus deferred RETURN, and both deferred
+patches. The workload was the default gl-repl logo at 1280x676, 16x
+accumulation AA, and the browser-selected 4x canvas MSAA in the in-app
+Chromium/WebGL2 browser. Each number combines two interleaved 300-frame
+windows after a 120-frame warm-up (600 measured frames per variant).
+
+| Accumulation stage | FPS | Mean callback | Incremental result |
+|---|---:|---:|---:|
+| Original float-FBO accumulation | 33.962 | 29.444 ms | baseline |
+| + deferred RETURN reduction | 37.035 | 27.002 ms | **+9.05%**, -2.443 ms |
+| + scissored snapshot textures/copies | 38.545 | 25.944 ms | **+4.08%**, -1.058 ms |
+
+Together the two patches gained **13.49%** and saved **3.500 ms per frame**
+against the original float-FBO path in this workload. These are attribution
+numbers for one browser, viewport, and scene, not universal multipliers:
+scene complexity, canvas layout, pass count, GPU, and thermal state change the
+absolute result. The important boundary is that the second percentage is
+incremental over deferred RETURN, not another comparison against the original
+baseline.
 
 ## 2026-08-19: `GL_POLYGON_OFFSET_LINE` and `glLineWidth` on WebGL
 

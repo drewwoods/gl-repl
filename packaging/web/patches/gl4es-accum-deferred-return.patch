@@ -1,0 +1,553 @@
+Defer glAccum LOAD/ACCUM blending until GL_RETURN.
+
+gl-repl's accumulation loop now starts with GL_LOAD, followed by up to
+15 GL_ACCUM operations under one stable scissor.  Snapshot each completed
+read framebuffer and cache its weight, then evaluate the weighted sum in
+one fullscreen shader at GL_RETURN.  This removes the per-sample RGBA16F
+read/modify/write chain while retaining the existing framebuffer snapshots
+and their implicit WebGL canvas MSAA resolves.
+
+The reduction shader is sized from the live fragment-sampler limit (rather
+than gl4es's conservative Emscripten notest cache), capped at the app's
+16 accumulation samples.  Sample textures are allocated lazily.  A changed
+scissor, sampler-capacity overflow, GL_ACCUM without a leading GL_LOAD, or
+an accumulation clear materializes the deferred batch through the original
+RGBA16F/RGBA8 FBO path before continuing, preserving the generic emulation.
+
+Performance measured 2026-08-24 in the in-app Chromium/WebGL2 browser at
+1280x676, using the default gl-repl logo, 16x accumulation AA, and the
+browser-selected 4x canvas MSAA: two interleaved 300-frame windows after a
+120-frame warm-up improved the original accum-FBO path from 33.962 to
+37.035 FPS (+9.05%).  Mean callback interval fell from 29.444 to 27.002 ms,
+saving 2.443 ms per frame.  See packaging/web/patches/README.md for the
+three-stage A/B and measurement caveats.
+
+Applied by scripts/web-deps.sh immediately after gl4es-accum-fbo.patch.
+diff --git a/src/gl/accum.c b/src/gl/accum.c
+--- a/src/gl/accum.c
++++ b/src/gl/accum.c
+@@ -1,35 +1,42 @@
+-/* Accumulation buffer emulated with an internal FBO.
++/* Accumulation buffer emulated with framebuffer snapshots and an internal FBO.
+  *
+  * Desktop GL's accumulation buffer does not exist on GLES/WebGL, so
+  * glAccum was a stub. This implements the classic accumulate-in-a-texture
+  * translation for the GLES2 backend:
+  *
+  *   glClear(GL_ACCUM_BUFFER_BIT)  -> clear the internal accum FBO
+- *   glAccum(GL_ACCUM, w)          -> copy the read framebuffer into a
+- *                                    scratch texture, then add it into the
+- *                                    accum FBO as a fullscreen quad scaled
+- *                                    by w (additive blending)
+- *   glAccum(GL_LOAD, w)           -> same, blending off (replace)
+- *   glAccum(GL_RETURN, s)         -> draw the accum texture into the
+- *                                    current draw framebuffer scaled by s
++ *   glAccum(GL_LOAD, w)           -> start a deferred batch with a snapshot
++ *                                    of the read framebuffer and weight w
++ *   glAccum(GL_ACCUM, w)          -> append another snapshot and weight
++ *   glAccum(GL_RETURN, s)         -> reduce the deferred snapshots in one
++ *                                    fullscreen shader and return the result
++ *                                    scaled by s
+  *   GL_ADD / GL_MULT              -> TODO (unused by fixed-function apps
+  *                                    hosted so far)
+  *
+- * The accum target is RGBA16F when float renderbuffers are available
++ * GL_ACCUM without a preceding GL_LOAD, batches beyond the available sampler
++ * count, and state patterns that invalidate a deferred batch fall back to the
++ * original immediate scratch-copy + blend path. This keeps the general
++ * emulation usable while removing the per-sample RGBA16F read/modify/write
++ * chain from gl-repl's LOAD, ACCUM..., RETURN sequence.
++ *
++ * The materialized accum target is RGBA16F when float renderbuffers are available
+  * (probed once with a tiny FBO-completeness test), else RGBA8 — fine at
+  * low pass counts, visibly banding at 8-16-pass accumulation. The getter
+  * reports GL_ACCUM_*_BITS accordingly (16 / 8 / 0), so apps that probe
+  * for a real accumulation buffer pick the emulation up automatically.
+  *
+- * Scissor semantics come for free: real glAccum operations are bounded by
+- * the scissor box, and the emulation's quad draws inherit the live
+- * scissor state. The quad draws follow gl4es_blitTexture's state-hygiene
++ * A batch records the LOAD scissor and accepts ACCUM/RETURN operations only
++ * while that region is unchanged. A change materializes the queued samples
++ * under their recorded scissor before continuing, preserving desktop GL's
++ * per-operation bounds. The quad draws follow gl4es_blitTexture's state-hygiene
+  * pattern (blit.c): raw GLES draws under glPushAttrib, with the tracked
+  * gleshard program/vertexattrib state updated so the next user draw
+  * re-realizes cleanly.
+  */
+ #include "accum.h"
+ 
++#include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+ 
+@@ -273,7 +280,134 @@
+     gles_glUseProgram(a->program);
+     gles_glUniform1i(gles_glGetUniformLocation(a->program, "uTex"), 0);
+     a->uscale = gles_glGetUniformLocation(a->program, "uScale");
++    gles_glUseProgram(oldprog);
++    return 1;
++}
++
++/* Build one reduction shader sized to the real fragment-sampler limit.  The
++ * Emscripten bootstrap initializes gl4es through its conservative "notest"
++ * path, whose cached limit can be lower than WebGL2's real value, so query the
++ * live context here just as the accumulation-format probe does. */
++static int accum_create_reduce_program(glesaccum_t *a) {
++    if(a->reduce_program) return 1;
++
++    LOAD_GLES(glGetIntegerv);
++    LOAD_GLES2(glCreateShader);
++    LOAD_GLES2(glShaderSource);
++    LOAD_GLES2(glCompileShader);
++    LOAD_GLES2(glGetShaderiv);
++    LOAD_GLES2(glBindAttribLocation);
++    LOAD_GLES2(glAttachShader);
++    LOAD_GLES2(glCreateProgram);
++    LOAD_GLES2(glLinkProgram);
++    LOAD_GLES2(glGetProgramiv);
++    LOAD_GLES(glGetUniformLocation);
++    LOAD_GLES2(glUniform1i);
++    LOAD_GLES2(glUseProgram);
++
++    GLint capacity = 0;
++    gles_glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &capacity);
++    if(capacity > GL4ES_ACCUM_MAX_DEFERRED_SAMPLES)
++        capacity = GL4ES_ACCUM_MAX_DEFERRED_SAMPLES;
++    if(capacity < 1) return 0;
++
++    const size_t source_cap = 16384;
++    char *source = (char*)calloc(source_cap, 1);
++    if(!source) return 0;
++    size_t used = 0;
++    int wrote = snprintf(source, source_cap,
++        "#version 100\n"
++        "#ifdef GL_FRAGMENT_PRECISION_HIGH\n"
++        "precision highp float;\n"
++        "#else\n"
++        "precision mediump float;\n"
++        "#endif\n"
++        "varying mediump vec2 vTexCoord;\n"
++        "uniform float uScale;\n");
++    if(wrote < 0 || (size_t)wrote >= source_cap) {
++        free(source);
++        return 0;
++    }
++    used = (size_t)wrote;
++    for(int i=0; i<capacity; i++) {
++        wrote = snprintf(source + used, source_cap - used,
++                         "uniform sampler2D uTex%d;\n"
++                         "uniform float uWeight%d;\n", i, i);
++        if(wrote < 0 || (size_t)wrote >= source_cap - used) {
++            free(source);
++            return 0;
++        }
++        used += (size_t)wrote;
++    }
++    wrote = snprintf(source + used, source_cap - used,
++                     "void main(){\n"
++                     "vec4 total = vec4(0.0);\n");
++    if(wrote < 0 || (size_t)wrote >= source_cap - used) {
++        free(source);
++        return 0;
++    }
++    used += (size_t)wrote;
++    for(int i=0; i<capacity; i++) {
++        wrote = snprintf(source + used, source_cap - used,
++                         "if(uWeight%d != 0.0) "
++                         "total += texture2D(uTex%d, vTexCoord) * uWeight%d;\n",
++                         i,
++                         i, i);
++        if(wrote < 0 || (size_t)wrote >= source_cap - used) {
++            free(source);
++            return 0;
++        }
++        used += (size_t)wrote;
++    }
++    wrote = snprintf(source + used, source_cap - used,
++                     "gl_FragColor = total * uScale;\n"
++                     "}\n");
++    if(wrote < 0 || (size_t)wrote >= source_cap - used) {
++        free(source);
++        return 0;
++    }
++
++    const char *src[1] = { source };
++    GLint success = 0;
++    a->reduce_pixelshader = gles_glCreateShader(GL_FRAGMENT_SHADER);
++    gles_glShaderSource(a->reduce_pixelshader, 1, (const char**)src, NULL);
++    gles_glCompileShader(a->reduce_pixelshader);
++    gles_glGetShaderiv(a->reduce_pixelshader, GL_COMPILE_STATUS, &success);
++    free(source);
++    if(!success) {
++        LOAD_GLES(glGetShaderInfoLog);
++        char log[400];
++        gles_glGetShaderInfoLog(a->reduce_pixelshader, 399, NULL, log);
++        SHUT_LOGE("Failed to produce deferred accum fragment shader.\n%s", log);
++        return 0;
++    }
++
++    a->reduce_program = gles_glCreateProgram();
++    gles_glBindAttribLocation(a->reduce_program, 0, "aPosition");
++    gles_glBindAttribLocation(a->reduce_program, 1, "aTexCoord");
++    gles_glAttachShader(a->reduce_program, a->reduce_pixelshader);
++    gles_glAttachShader(a->reduce_program, a->vertexshader);
++    gles_glLinkProgram(a->reduce_program);
++    gles_glGetProgramiv(a->reduce_program, GL_LINK_STATUS, &success);
++    if(!success) {
++        SHUT_LOGE("Failed to link deferred accum program.\n");
++        a->reduce_program = 0;
++        return 0;
++    }
++
++    GLuint oldprog = glstate->gleshard->program;
++    gles_glUseProgram(a->reduce_program);
++    a->reduce_uscale = gles_glGetUniformLocation(a->reduce_program, "uScale");
++    for(int i=0; i<capacity; i++) {
++        char name[32];
++        snprintf(name, sizeof(name), "uTex%d", i);
++        a->reduce_tex[i] = gles_glGetUniformLocation(a->reduce_program, name);
++        gles_glUniform1i(a->reduce_tex[i], i);
++        snprintf(name, sizeof(name), "uWeight%d", i);
++        a->reduce_weight[i] = gles_glGetUniformLocation(a->reduce_program, name);
++    }
+     gles_glUseProgram(oldprog);
++    a->sample_capacity = capacity;
+     return 1;
+ }
+ 
+@@ -316,6 +450,14 @@
+         gles_glDeleteTextures(1, &a->scratch_tex);
+         a->scratch_tex = 0;
+     }
++    for(int i=0; i<GL4ES_ACCUM_MAX_DEFERRED_SAMPLES; i++) {
++        if(a->sample_tex[i]) {
++            gles_glDeleteTextures(1, &a->sample_tex[i]);
++            a->sample_tex[i] = 0;
++        }
++    }
++    a->sample_count = 0;
++    a->deferred = GL_FALSE;
+ 
+     accum_force_tmu0();
+     while(gles_glGetError()!=GL_NO_ERROR);
+@@ -373,16 +515,51 @@
+     return ok;
+ }
+ 
+-// realize_blitenv's twin for the private scaled-copy program: update the
++/* Deferred samples are allocated only when reached.  The common 2-pass case
++ * therefore owns two RGB8 snapshots, while the 16-pass case grows to sixteen;
++ * merely probing accumulation support does not reserve all of them. */
++static int accum_ensure_sample(glesaccum_t *a, int index) {
++    if(index < 0 || index >= a->sample_capacity) return 0;
++    if(a->sample_tex[index]) return 1;
++
++    LOAD_GLES(glGetError);
++    LOAD_GLES(glGenTextures);
++    LOAD_GLES(glDeleteTextures);
++    LOAD_GLES(glBindTexture);
++    LOAD_GLES(glTexImage2D);
++    LOAD_GLES(glTexParameteri);
++
++    accum_force_tmu0();
++    while(gles_glGetError()!=GL_NO_ERROR);
++    gles_glGenTextures(1, &a->sample_tex[index]);
++    gles_glBindTexture(GL_TEXTURE_2D, a->sample_tex[index]);
++    gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++    gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++    gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++    gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++    gles_glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, a->width, a->height,
++                      0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
++    int ok = (gles_glGetError()==GL_NO_ERROR);
++    if(!ok) {
++        gles_glDeleteTextures(1, &a->sample_tex[index]);
++        a->sample_tex[index] = 0;
++        while(gles_glGetError()!=GL_NO_ERROR);
++    }
++    gles_glBindTexture(GL_TEXTURE_2D, glstate->actual_tex2d[0]);
++    return ok;
++}
++
++// realize_blitenv's twin for the private accumulation programs: update the
+ // tracked gleshard program/attrib state so user draws re-realize after us
+-static void realize_accumenv(glesaccum_t *a, GLfloat scale) {
++static void realize_accumenv(glesaccum_t *a, GLuint program,
++                             GLint uscale, GLfloat scale) {
+     LOAD_GLES2(glUseProgram);
+     LOAD_GLES2(glUniform1f);
+-    if(glstate->gleshard->program != a->program) {
+-        glstate->gleshard->program = a->program;
+-        gles_glUseProgram(a->program);
++    if(glstate->gleshard->program != program) {
++        glstate->gleshard->program = program;
++        gles_glUseProgram(program);
+     }
+-    gles_glUniform1f(a->uscale, scale);
++    gles_glUniform1f(uscale, scale);
+     unboundBuffers();
+     for(int i=0; i<hardext.maxvattrib; i++) {
+         vertexattrib_t *v = &glstate->gleshard->vertexattrib[i];
+@@ -420,11 +597,126 @@
+     LOAD_GLES(glDrawArrays);
+     accum_force_tmu0();
+     gles_glBindTexture(GL_TEXTURE_2D, texture);
+-    realize_accumenv(a, scale);
++    realize_accumenv(a, a->program, a->uscale, scale);
+     gles_glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+     gles_glBindTexture(GL_TEXTURE_2D, glstate->actual_tex2d[0]);
+ }
+ 
++static void accum_capture_scissor(glesaccum_t *a) {
++    a->deferred_scissor = gl4es_glIsEnabled(GL_SCISSOR_TEST);
++    a->deferred_scissor_box[0] = glstate->raster.scissor.x;
++    a->deferred_scissor_box[1] = glstate->raster.scissor.y;
++    a->deferred_scissor_box[2] = glstate->raster.scissor.width;
++    a->deferred_scissor_box[3] = glstate->raster.scissor.height;
++}
++
++static int accum_scissor_matches(const glesaccum_t *a) {
++    GLboolean enabled = gl4es_glIsEnabled(GL_SCISSOR_TEST);
++    if(enabled != a->deferred_scissor) return 0;
++    if(!enabled) return 1;
++    return a->deferred_scissor_box[0] == glstate->raster.scissor.x
++        && a->deferred_scissor_box[1] == glstate->raster.scissor.y
++        && a->deferred_scissor_box[2] == glstate->raster.scissor.width
++        && a->deferred_scissor_box[3] == glstate->raster.scissor.height;
++}
++
++static void accum_snapshot(glesaccum_t *a, GLuint texture) {
++    LOAD_GLES(glBindTexture);
++    LOAD_GLES(glCopyTexSubImage2D);
++    readfboBegin();
++    accum_force_tmu0();
++    gles_glBindTexture(GL_TEXTURE_2D, texture);
++    gles_glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
++                             0, 0, a->width, a->height);
++    gles_glBindTexture(GL_TEXTURE_2D, glstate->actual_tex2d[0]);
++    readfboEnd();
++}
++
++/* Draw all queued samples in one fragment invocation.  Bindings are made
++ * through raw GLES because these are private textures, then every unit is
++ * restored to gl4es's tracked binding before returning. */
++static void accum_draw_reduction(glesaccum_t *a, GLfloat scale) {
++    LOAD_GLES(glActiveTexture);
++    LOAD_GLES(glBindTexture);
++    LOAD_GLES(glDrawArrays);
++    LOAD_GLES2(glUniform1f);
++
++    GLuint old_active = glstate->gleshard->active;
++    GLuint fallback = a->sample_tex[0];
++    for(int i=0; i<a->sample_capacity; i++) {
++        gles_glActiveTexture(GL_TEXTURE0 + i);
++        gles_glBindTexture(GL_TEXTURE_2D,
++                           i<a->sample_count ? a->sample_tex[i] : fallback);
++    }
++    gles_glActiveTexture(GL_TEXTURE0);
++    realize_accumenv(a, a->reduce_program, a->reduce_uscale, scale);
++    for(int i=0; i<a->sample_capacity; i++)
++        gles_glUniform1f(a->reduce_weight[i],
++                         i<a->sample_count ? a->sample_weight[i] : 0.0f);
++    gles_glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
++
++    for(int i=0; i<a->sample_capacity; i++) {
++        gles_glActiveTexture(GL_TEXTURE0 + i);
++        gles_glBindTexture(GL_TEXTURE_2D,
++                           i<hardext.maxtex ? glstate->actual_tex2d[i] : 0);
++    }
++    gles_glActiveTexture(GL_TEXTURE0 + old_active);
++}
++
++/* Commit a deferred LOAD/ACCUM batch into the traditional accumulation FBO.
++ * This is only needed when a later operation cannot consume the batch
++ * directly (sampler-capacity overflow or a changed scissor). */
++static void accum_materialize_deferred(glesaccum_t *a) {
++    if(!a->deferred || a->sample_count<1) return;
++
++    LOAD_GLES(glEnable);
++    LOAD_GLES(glDisable);
++    LOAD_GLES(glScissor);
++    LOAD_GLES2_OR_OES(glBindFramebuffer);
++
++    GLboolean live_scissor = gl4es_glIsEnabled(GL_SCISSOR_TEST);
++    GLint live_box[4] = {
++        glstate->raster.scissor.x, glstate->raster.scissor.y,
++        glstate->raster.scissor.width, glstate->raster.scissor.height
++    };
++    if(a->deferred_scissor) {
++        gles_glEnable(GL_SCISSOR_TEST);
++        gles_glScissor(a->deferred_scissor_box[0], a->deferred_scissor_box[1],
++                       a->deferred_scissor_box[2], a->deferred_scissor_box[3]);
++    } else {
++        gles_glDisable(GL_SCISSOR_TEST);
++    }
++
++    gles_glBindFramebuffer(GL_FRAMEBUFFER, a->fbo);
++    gl4es_glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
++    gl4es_glDisable(GL_BLEND);
++    pushViewport(0, 0, a->width, a->height);
++    accum_draw_reduction(a, 1.0f);
++    popViewport();
++    gl4es_setCurrentFBO();
++
++    if(live_scissor) {
++        gles_glEnable(GL_SCISSOR_TEST);
++        gles_glScissor(live_box[0], live_box[1], live_box[2], live_box[3]);
++    } else {
++        gles_glDisable(GL_SCISSOR_TEST);
++    }
++    a->sample_count = 0;
++    a->deferred = GL_FALSE;
++}
++
++static int accum_defer_snapshot(glesaccum_t *a, GLfloat weight) {
++    if(!a->reduce_program && !accum_create_reduce_program(a)) return 0;
++    if(a->sample_count >= a->sample_capacity) return 0;
++    if(!accum_ensure_sample(a, a->sample_count)) return 0;
++    if(a->sample_count==0) accum_capture_scissor(a);
++    accum_snapshot(a, a->sample_tex[a->sample_count]);
++    a->sample_weight[a->sample_count] = weight;
++    a->sample_count++;
++    a->deferred = GL_TRUE;
++    return 1;
++}
++
+ int gl4es_accum_get_bits() {
+     glesaccum_t *a = accum_state();
+     accum_probe(a);
+@@ -436,6 +728,18 @@
+     accum_probe(a);
+     if(!a->bits) return;
+     if(!accum_ensure(a)) return;
++    if(a->deferred) {
++        realize_textures(1);
++        gl4es_glPushAttrib(GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT);
++        GLint depthwrite = glstate->depth.mask;
++        if(depthwrite) gl4es_glDepthMask(GL_FALSE);
++        gl4es_glDisable(GL_DEPTH_TEST);
++        gl4es_glDisable(GL_CULL_FACE);
++        gl4es_glDisable(GL_STENCIL_TEST);
++        accum_materialize_deferred(a);
++        if(depthwrite) gl4es_glDepthMask(GL_TRUE);
++        gl4es_glPopAttrib();
++    }
+     LOAD_GLES(glClearColor);
+     LOAD_GLES(glClear);
+     LOAD_GLES2_OR_OES(glBindFramebuffer);
+@@ -504,37 +808,62 @@
+     gl4es_glDisable(GL_STENCIL_TEST);
+     // scissor left untouched: real glAccum is bounded by the scissor box
+ 
++    if(op==GL_LOAD) {
++        /* LOAD replaces the affected accumulation region, so a batch under
++         * the same scissor can simply be discarded.  A differently-scissored
++         * batch first materializes to preserve pixels outside this LOAD. */
++        if(a->deferred) {
++            if(accum_scissor_matches(a)) {
++                a->sample_count = 0;
++                a->deferred = GL_FALSE;
++            } else {
++                accum_materialize_deferred(a);
++            }
++        }
++        if(accum_defer_snapshot(a, value))
++            goto accum_done;
++    } else if(op==GL_ACCUM && a->deferred) {
++        if(accum_scissor_matches(a) && accum_defer_snapshot(a, value))
++            goto accum_done;
++        /* Changed scissor or full sampler batch: establish the accumulated
++         * value once, then handle this sample through the immediate path. */
++        accum_materialize_deferred(a);
++    }
++
+     if(op==GL_RETURN) {
+-        // accum texture -> current draw framebuffer, modulated by value
+         gl4es_glDisable(GL_BLEND);
+         pushViewport(0, 0, a->width, a->height);
+-        accum_draw_quad(a, a->accum_tex, value);
++        if(a->deferred && accum_scissor_matches(a)) {
++            /* Common gl-repl path: all weights are applied here, with no
++             * per-sample blend into the float accumulation target. */
++            accum_draw_reduction(a, value);
++        } else {
++            if(a->deferred) accum_materialize_deferred(a);
++            // materialized accum texture -> draw framebuffer, scaled by value
++            accum_draw_quad(a, a->accum_tex, value);
++        }
+         popViewport();
+     } else {
+-        // GL_ACCUM / GL_LOAD: snapshot the read framebuffer...
+-        LOAD_GLES(glBindTexture);
+-        LOAD_GLES(glCopyTexSubImage2D);
++        /* Immediate fallback for ACCUM without LOAD, a failed deferred shader,
++         * or the operation that overflowed a deferred sampler batch. */
++        accum_snapshot(a, a->scratch_tex);
++
+         LOAD_GLES2_OR_OES(glBindFramebuffer);
+-        readfboBegin();
+-        accum_force_tmu0();
+-        gles_glBindTexture(GL_TEXTURE_2D, a->scratch_tex);
+-        gles_glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, a->width, a->height);
+-        gles_glBindTexture(GL_TEXTURE_2D, glstate->actual_tex2d[0]);
+-        readfboEnd();
+-        // ...then add (or load) it into the accum FBO, scaled by value
+         gles_glBindFramebuffer(GL_FRAMEBUFFER, a->fbo);
+         gl4es_glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+         if(op==GL_ACCUM) {
+             gl4es_glEnable(GL_BLEND);
+             gl4es_glBlendFunc(GL_ONE, GL_ONE);
+-        } else
++        } else {
+             gl4es_glDisable(GL_BLEND);
++        }
+         pushViewport(0, 0, a->width, a->height);
+         accum_draw_quad(a, a->scratch_tex, value);
+         popViewport();
+         gl4es_setCurrentFBO();
+     }
+ 
++accum_done:
+     if(depthwrite)
+         gl4es_glDepthMask(GL_TRUE);
+     gl4es_glPopAttrib();
+diff --git a/src/gl/state.h b/src/gl/state.h
+--- a/src/gl/state.h
++++ b/src/gl/state.h
+@@ -248,6 +248,8 @@
+     GLfloat         vert[8], tex[8];
+ } glesblit_t;
+ 
++#define GL4ES_ACCUM_MAX_DEFERRED_SAMPLES 16
++
+ // accumulation-buffer emulation state (accum.c)
+ typedef struct {
+     // one-time renderability probe
+@@ -260,6 +262,13 @@
+     GLuint          fbo;
+     GLuint          accum_tex;
+     GLuint          scratch_tex;    // framebuffer snapshot for GL_ACCUM/GL_LOAD
++    GLuint          sample_tex[GL4ES_ACCUM_MAX_DEFERRED_SAMPLES];
++    GLfloat         sample_weight[GL4ES_ACCUM_MAX_DEFERRED_SAMPLES];
++    int             sample_count;
++    int             sample_capacity;
++    GLboolean       deferred;
++    GLboolean       deferred_scissor;
++    GLint           deferred_scissor_box[4];
+     int             width, height;
+     GLfloat         clear[4];       // glClearAccum value
+     // private scaled-copy program
+@@ -267,6 +276,12 @@
+     GLuint          pixelshader;
+     GLuint          program;
+     GLint           uscale;
++    // deferred weighted-reduction program
++    GLuint          reduce_pixelshader;
++    GLuint          reduce_program;
++    GLint           reduce_uscale;
++    GLint           reduce_tex[GL4ES_ACCUM_MAX_DEFERRED_SAMPLES];
++    GLint           reduce_weight[GL4ES_ACCUM_MAX_DEFERRED_SAMPLES];
+     GLfloat         vert[8], tex[8];
+ } glesaccum_t;
+ 

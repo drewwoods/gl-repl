@@ -41,6 +41,8 @@ GL4ES_PATCHES=(
 	"$ROOT/packaging/web/patches/gl4es-pushattrib-gaps.patch"
 	"$ROOT/packaging/web/patches/gl4es-pushattrib-texenv.patch"
 	"$ROOT/packaging/web/patches/gl4es-accum-fbo.patch"
+	"$ROOT/packaging/web/patches/gl4es-accum-deferred-return.patch"
+	"$ROOT/packaging/web/patches/gl4es-accum-deferred-scissor.patch"
 	"$ROOT/packaging/web/patches/gl4es-point-smooth.patch"
 	"$ROOT/packaging/web/patches/gl4es-polygon-line-drawarrays.patch"
 	"$ROOT/packaging/web/patches/gl4es-point-size-batch.patch"

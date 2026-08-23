@@ -163,9 +163,14 @@
  * it measured *slower* in practice - enabling GL_SCISSOR_TEST around the
  * accum path appears to push the driver off a fast clear/accumulate path
  * (e.g. a tile/fast-clear or whole-surface DMA optimization) that more than
- * pays for the extra pixels covered. So it ships OFF; flip to 1 only on a
- * platform where the scissored path actually benchmarks faster. */
+ * pays for the extra pixels covered. Native therefore ships OFF. The WebGL
+ * emulator uses the same box to allocate and copy only the scene rectangle,
+ * avoiding repeated canvas resolves under the code panel, so web ships ON. */
+#if defined(__EMSCRIPTEN__)
+#define CFG_DEFAULT_USE_ACCUM_AA_SCISSORS  1
+#else
 #define CFG_DEFAULT_USE_ACCUM_AA_SCISSORS  0
+#endif
 
 /* Tag-keyed presentation defaults applied during example loading,
  * layered between the global reset and the example's own leading

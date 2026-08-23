@@ -33,15 +33,19 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   which maps `gl*` calls to `gl4es_gl*` over WebGL2. `glGetString` etc. resolve
   through gl4es, so `glutExtensionSupported` above reads the real live
   extension string.
-- **Accumulation cost**: gl4es emulates each `GL_LOAD` / `GL_ACCUM` by
-  snapshotting the antialiased canvas with `glCopyTexSubImage2D` (an implicit
-  MSAA resolve), then drawing that texture into an RGBA16F accumulation FBO.
-  A 10-pass AA frame is therefore ten scene renders, ten full-buffer
-  resolve/copies, ten full-buffer blends, and one return draw. There is no
-  per-pass `glFinish` or CPU fence; the passes are ordered on the GPU because
-  each snapshot consumes the preceding render and each blend updates the same
-  accumulation target. The first app sample uses `GL_LOAD`, so it replaces the
-  target without a separate accumulation clear. On WebGL, queued cost can
+- **Accumulation cost**: gl4es snapshots each `GL_LOAD` / `GL_ACCUM` result
+  from the antialiased canvas into its own RGB8 texture with
+  `glCopyTexSubImage2D` (an implicit MSAA resolve) and caches the operation's
+  weight. `GL_RETURN` reduces those textures in one fullscreen shader instead
+  of blending every sample through a shared RGBA16F target. A 10-pass AA frame
+  is therefore ten scene renders, ten scene-rectangle resolve/copies, and one
+  weighted return draw. There is no per-pass `glFinish` or CPU fence; each
+  snapshot still consumes the preceding render before that framebuffer is
+  overwritten, but the former serial RGBA16F read/modify/write chain is gone.
+  The web build scissors this path to the scene rectangle, so the RGB8 sample
+  textures and copy/resolve regions exclude the code-panel area. A changed
+  scissor or an unusual operation sequence materializes through the original
+  float-FBO path for compatibility. On WebGL, queued cost can
   surface primarily as delayed delivery of the next animation frame; the
   compute profile accounts for that outside-callback gap as `Browser Wait`.
 - **Console output**: `shell.html` overrides **both** `Module.print` (fd 1)
