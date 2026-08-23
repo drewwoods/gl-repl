@@ -23,7 +23,7 @@
 #include <stdio.h>
 #include <string.h>
 
-/* 17 live items today. Room to grow; STATIC_ASSERT guards the table. */
+/* 18 live items today. Room to grow; STATIC_ASSERT guards the table. */
 #define STATUSBAR_ITEM_MAX 24
 #define STATUSBAR_SEP_W    16
 /* Shared by Overlay scope / Vertex labels / Polygon highlight. Only the
@@ -357,6 +357,11 @@ static void prepare_help(const StatusbarSlot *slot, StatusbarPrepared *p) {
     p->active = slot->snap->help.visible;
 }
 
+static void prepare_select_all(const StatusbarSlot *slot, StatusbarPrepared *p) {
+    prepare_always(slot, p);
+    p->active = slot->snap->document_count > 0;
+}
+
 static void draw_text_at(const StatusbarSlot *slot, const char *text,
                          int x, UiThemeToken tok) {
     ui_clr(tok);
@@ -648,6 +653,45 @@ static void repl_code_panel_draw_paste_icon(int kx, int ky, int kw, int kh) {
                                      ACTION_ICON_W, ACTION_ICON_H, paste_bits);
 }
 
+static void repl_code_panel_draw_select_all_icon(int kx, int ky, int kw, int kh) {
+    /* 13x12 1bpp marquee: a dashed selection rectangle (the drag-box the
+     * gutter draws) around three solid content lines, so it reads as
+     * "everything inside the box is taken" next to the copy/cut/paste
+     * sheets. Dashes run 2-on/1-off on all four sides; the content lines
+     * are inset a pixel from the side rails. Rows bottom-to-top; bit
+     * 0x80 of byte 0 = leftmost pixel (col 0).
+     *
+     *  row 11:  .............   pad
+     *  row 10:  .##.##.##.##.   top rail (dashed)
+     *  row 9:   .............   rail dash gap
+     *  row 8:   .#.........#.   side rails
+     *  row 7:   .#.#######.#.   rails + content line
+     *  row 6:   .............   rail dash gap
+     *  row 5:   .#.#######.#.   rails + content line
+     *  row 4:   .#.........#.   side rails
+     *  row 3:   ...#######...   content line (rail dash gap)
+     *  row 2:   .#.........#.   side rails
+     *  row 1:   .##.##.##.##.   bottom rail (dashed)
+     *  row 0:   .............   pad                                     */
+    static const GLubyte select_all_bits[ACTION_ICON_H * 2] = {
+        0x00, 0x00,  /* row 0  pad          */
+        0x6D, 0xB0,  /* row 1  bottom rail  */
+        0x40, 0x10,  /* row 2  side rails   */
+        0x1F, 0xC0,  /* row 3  content      */
+        0x40, 0x10,  /* row 4  side rails   */
+        0x5F, 0xD0,  /* row 5  rails+content*/
+        0x00, 0x00,  /* row 6  dash gap     */
+        0x5F, 0xD0,  /* row 7  rails+content*/
+        0x40, 0x10,  /* row 8  side rails   */
+        0x00, 0x00,  /* row 9  dash gap     */
+        0x6D, 0xB0,  /* row 10 top rail     */
+        0x00, 0x00   /* row 11 pad          */
+    };
+    repl_code_panel_draw_bitmap_icon(kx, ky, kw, kh,
+                                     ACTION_ICON_W, ACTION_ICON_H,
+                                     select_all_bits);
+}
+
 static void repl_code_panel_draw_focus_icon(int kx, int ky, int kw, int kh) {
     /* 13x12 1bpp "focus frame" reticle: four L-shaped corner brackets
      * framing an empty centre, the camera/crop "reframe" glyph. It reads
@@ -729,6 +773,14 @@ static void draw_redo_icon(const StatusbarSlot *slot, const StatusbarPrepared *p
     (void)slot;
     ui_clr(p->active ? UI_TOK_TEXT_PRIMARY : UI_TOK_TEXT_MUTED);
     repl_code_panel_draw_redo_icon(x, y, w, h);
+}
+
+static void draw_select_all_icon(const StatusbarSlot *slot,
+                                const StatusbarPrepared *p,
+                                int x, int y, int w, int h) {
+    (void)slot;
+    ui_clr(p->active ? UI_TOK_TEXT_PRIMARY : UI_TOK_TEXT_MUTED);
+    repl_code_panel_draw_select_all_icon(x, y, w, h);
 }
 
 static void draw_copy_icon(const StatusbarSlot *slot, const StatusbarPrepared *p,
@@ -900,6 +952,17 @@ static const StatusbarItem k_statusbar_items[] = {
     {
         .align = STATUSBAR_ALIGN_RIGHT,
         .gap_before = STATUSBAR_GAP_GROUP,
+        .hit = UI_HIT_CODE_SELECT_ALL,
+        /* No keymap slot free (Ctrl+A is Line start, Ctrl+Shift+A is
+         * Audio), so this is the label-only tooltip form. */
+        .tooltip = "Select all",
+        .has_keycap = 1,
+        .prepare = prepare_select_all,
+        .draw = draw_select_all_icon,
+    },
+    {
+        .align = STATUSBAR_ALIGN_RIGHT,
+        .gap_before = STATUSBAR_GAP_PAIR,
         .hit = UI_HIT_CODE_COPY,
         .tooltip = "Copy",
         .key_code = KM_KEY(GLR_COPY),

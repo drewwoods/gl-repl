@@ -1662,7 +1662,7 @@ values through these seams:
 | Camera-distance source | Supplies executor point-size fallback data without linking [`glr_camera.c`](../src/app/glr_camera.c). |
 | [`ReplExportLayout`](../src/repl/export.h#L267) | Passes viewport and code-panel geometry explicitly instead of calling `ui_layout_*`. |
 
-#### 4. OS-Clipboard Bridge ([`EditorClipboardHostBridge`](../src/editor/clipboard.h#L82))
+#### 4. OS-Clipboard Bridge ([`EditorClipboardHostBridge`](../src/editor/clipboard.h#L88))
 
 [`glr_clipboard_install()`](../src/app/glr_clipboard.h#L26) gives the editor a
 way to reach the system clipboard without the editor band making a platform

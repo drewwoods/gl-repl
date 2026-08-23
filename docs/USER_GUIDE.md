@@ -305,7 +305,9 @@ Ctrl+V pastes from anywhere else - multi-line text arrives as source lines, a
 single line lands in the input row when you are editing one. Right-click a GL
 command for a short description, or right-click an assignment for [a plot of
 its values](#plotting-an-assignments-values). **Ctrl+D** deletes the current
-line or selection. The status-bar trash button resets the whole scene to the
+line or selection. The status-bar **select-all** button (the dashed marquee,
+left of copy) highlights every line at once, ready to copy or cut; the trash
+button resets the whole scene to the
 [six editable display defaults](#display-default-commands).
 
 **Ctrl+F** opens case-insensitive search over the buffer; **Up / Down** move

@@ -183,6 +183,42 @@ void editor_selection_set_end(int line_idx) {
     editor_state_selection_set(editor_state_selection_anchor(), line_idx);
 }
 
+/* Whole-document line range. Insert mode is refused for the same reason
+ * copy/cut refuse a line range there: the input row is the unit being
+ * edited, so a document-wide highlight would be one copy could not act
+ * on. The caret follows the selection end, matching shift+Down.
+ *
+ * Pending input is committed *before* the count is read: typing at the
+ * append row and clicking Select all must take that row too, and the
+ * commit is what turns it into a document line. Reading the count first
+ * would leave the new last line outside the highlight and report the
+ * stale total - the navigation below would then commit it anyway. */
+int editor_selection_select_all(void) {
+    int count;
+    char msg[64];
+
+    if (editor_insert_mode()) {
+        editor_selection_clear_line_range();
+        return 0;
+    }
+    /* Rejected commits (a parse error on the pending row) leave the text
+     * in the input row and the count unchanged - select what is there. */
+    (void)editor_input_commit_before_navigation();
+
+    count = repl_state_document_count();
+    if (count <= 0) {
+        editor_selection_clear_line_range();
+        return 0;
+    }
+    editor_selection_start(0);
+    editor_selection_set_end(count - 1);
+    editor_navigate_to_line(count - 1);
+    snprintf(msg, sizeof(msg), "Selected %d line%s",
+             count, count > 1 ? "s" : "");
+    repl_set_status(msg);
+    return 1;
+}
+
 int editor_selection_normalize_cmd_range(int start, int count,
                                        int *out_start, int *out_count) {
     ReplCommandStore store = repl_command_store_live();

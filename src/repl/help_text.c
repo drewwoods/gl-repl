@@ -532,7 +532,7 @@ const ReplHelpContent *repl_help_text_build(void) {
                           "Cycle transform guides");
     nk = key_emit(nk, "");
     nk = key_emit(nk, "INTERFACE:");
-    nk = key_emit(nk, "  Statusbar buttons    \tUndo/redo, copy/cut, trash, focus/help");
+    nk = key_emit(nk, "  Statusbar buttons    \tUndo/redo, select all, copy/cut, trash, focus/help");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_CONFIG_MENU), KM_MODS(GLR_CONFIG_MENU), 0, "", "Open Config menu");
     nk = key_emit(nk, "  Left / right-click item\tCycle config entry forward / backward");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_VARIABLE_PANEL), KM_MODS(GLR_VARIABLE_PANEL), 0, "",

@@ -1,9 +1,11 @@
+#include "c_compat.h"
 #include "editor/state.h"
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
 #include "ui/core/gl_2d.h"
 #include "ui/core/text_panel.h"
 #include "editor/input.h"
+#include "editor/clipboard.h"
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -644,17 +646,93 @@ static void test_statusbar_hover_band_host(TestHarness *h) {
     glr_ctrl_sync_ui_chrome();
 }
 
+/* Select all: a mouse-only chip (no keymap slot is free), so the click
+ * path through glr_ctrl_mouse is the only way in and a missing router
+ * arm has to fail here. */
+static void test_statusbar_select_all_chip(TestHarness *h) {
+    UiRenderSnapshot snap;
+    UiReplCodePanelLayout layout;
+    int cp_y, status_my, sel_x;
+    int doc_count;
+
+    printf("Testing statusbar select-all chip...\n");
+    reset_doc_fixture();
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    ui_state_viewport_set_size(1600, 300);
+    glr_ctrl_sync_ui_chrome();
+    editor_feed_line("glClearColor(0, 0, 0, 1);");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glEnd();");
+    doc_count = repl_state_document_count();
+    TEST_ASSERT_TRUE(h, "select-all fixture has lines", doc_count > 1);
+
+    ui_layout_code_panel_rect(NULL, &cp_y, NULL, NULL);
+    status_my = ui_state_viewport().window_h - (cp_y + STATUSBAR_H / 2);
+    editor_navigate_to_line(0);
+    build_doc(&snap, &layout);
+    sel_x = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_SELECT_ALL);
+    TEST_ASSERT_TRUE(h, "select-all chip is hit-testable", sel_x >= 0);
+    TEST_ASSERT_TRUE(h, "no line selection before the click",
+                     !editor_clipboard_sel_active());
+
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, sel_x, status_my);
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, sel_x, status_my);
+    TEST_ASSERT_TRUE(h, "click selects a line range",
+                     editor_clipboard_sel_active());
+    TEST_ASSERT_TRUE(h, "selection starts at the first line",
+                     editor_clipboard_sel_lo() == 0);
+    TEST_ASSERT_TRUE(h, "selection ends at the last line",
+                     editor_clipboard_sel_hi() == doc_count - 1);
+    TEST_ASSERT_TRUE(h, "caret follows the selection end",
+                     editor_state_edit_line() == doc_count - 1);
+
+    /* Pending input at the append row: navigating is what commits it, so
+     * a range measured before the click would omit the row the same
+     * click creates. */
+    editor_navigate_to_line(repl_state_document_count());
+    editor_handle_key('g', 0, 0);
+    editor_handle_key('l', 0, 0);
+    editor_handle_key('P', 0, 0);
+    editor_handle_key('o', 0, 0);
+    editor_handle_key('p', 0, 0);
+    editor_handle_key('M', 0, 0);
+    editor_handle_key('a', 0, 0);
+    editor_handle_key('t', 0, 0);
+    editor_handle_key('r', 0, 0);
+    editor_handle_key('i', 0, 0);
+    editor_handle_key('x', 0, 0);
+    editor_handle_key('(', 0, 0);
+    editor_handle_key(')', 0, 0);
+    TEST_ASSERT_TRUE(h, "pending row is not committed yet",
+                     repl_state_document_count() == doc_count);
+
+    build_doc(&snap, &layout);
+    sel_x = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_SELECT_ALL);
+    TEST_ASSERT_TRUE(h, "select-all chip is hit-testable with pending input",
+                     sel_x >= 0);
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, sel_x, status_my);
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, sel_x, status_my);
+    TEST_ASSERT_TRUE(h, "clicking commits the pending append row",
+                     repl_state_document_count() == doc_count + 1);
+    TEST_ASSERT_TRUE(h, "selection covers the just-committed last line",
+                     editor_clipboard_sel_active() &&
+                     editor_clipboard_sel_lo() == 0 &&
+                     editor_clipboard_sel_hi() == doc_count);
+}
+
 static void test_statusbar_right_chips_do_not_repack(TestHarness *h) {
     UiRenderSnapshot snap;
     UiReplCodePanelLayout layout;
     int cp_y, status_my;
     int help_plain, help_cost, focus_plain, focus_cost;
     static const int k_interior[] = {
-        UI_HIT_CODE_UNDO, UI_HIT_CODE_REDO, UI_HIT_CODE_COPY,
-        UI_HIT_CODE_CUT, UI_HIT_CODE_PASTE, UI_HIT_CODE_CLEAR_ALL
+        UI_HIT_CODE_UNDO, UI_HIT_CODE_REDO, UI_HIT_CODE_SELECT_ALL,
+        UI_HIT_CODE_COPY, UI_HIT_CODE_CUT, UI_HIT_CODE_PASTE,
+        UI_HIT_CODE_CLEAR_ALL
     };
-    int interior_plain[6];
-    int interior_cost[6];
+    int interior_plain[7];
+    int interior_cost[7];
     int hid = 0;
 
     printf("Testing statusbar right chips keep x when inner chips hide...\n");
@@ -675,7 +753,7 @@ static void test_statusbar_right_chips_do_not_repack(TestHarness *h) {
     build_doc(&snap, &layout);
     help_plain = statusbar_hit_x(&snap, status_my, UI_HIT_HELP_TOGGLE);
     focus_plain = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_FOCUS_TOGGLE);
-    for (int i = 0; i < 6; i++)
+    for (int i = 0; i < (int)ARRAY_LEN(k_interior); i++)
         interior_plain[i] = statusbar_hit_x(&snap, status_my, k_interior[i]);
     TEST_ASSERT_TRUE(h, "help visible without cost readout", help_plain >= 0);
     TEST_ASSERT_TRUE(h, "focus visible without cost readout", focus_plain >= 0);
@@ -686,7 +764,7 @@ static void test_statusbar_right_chips_do_not_repack(TestHarness *h) {
                      snap.cursor_cost_label[0] != '\0');
     help_cost = statusbar_hit_x(&snap, status_my, UI_HIT_HELP_TOGGLE);
     focus_cost = statusbar_hit_x(&snap, status_my, UI_HIT_CODE_FOCUS_TOGGLE);
-    for (int i = 0; i < 6; i++)
+    for (int i = 0; i < (int)ARRAY_LEN(k_interior); i++)
         interior_cost[i] = statusbar_hit_x(&snap, status_my, k_interior[i]);
     TEST_ASSERT_TRUE(h, "help x unchanged when the left cluster grows",
                      help_cost == help_plain);
@@ -695,7 +773,7 @@ static void test_statusbar_right_chips_do_not_repack(TestHarness *h) {
     /* Interior chips: still-visible ones keep their x. At least one that
      * was visible on the short left cluster must hide, so this is not
      * just "the rightmost items never move". */
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < (int)ARRAY_LEN(k_interior); i++) {
         if (interior_plain[i] >= 0 && interior_cost[i] >= 0)
             TEST_ASSERT_TRUE(h, "interior chip x unchanged when still visible",
                              interior_cost[i] == interior_plain[i]);
@@ -1025,6 +1103,7 @@ int main(void) {
     test_statusbar_readouts(&g_harness);
     test_statusbar_cull_rank_independent_of_order(&g_harness);
     test_statusbar_hover_band_host(&g_harness);
+    test_statusbar_select_all_chip(&g_harness);
     test_statusbar_right_chips_do_not_repack(&g_harness);
 
     return test_harness_report(&g_harness, "repl_code_panel_document");

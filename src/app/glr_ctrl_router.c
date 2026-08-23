@@ -1100,6 +1100,13 @@ static int route_code_clear_all_hit(void) {
 /* Statusbar edit-action chips. These call the same editor primitives as
  * the keyboard routes, so line selections, input selections, guards, undo
  * capture, and status text stay centralized in editor/. */
+static int route_code_select_all_hit(void) {
+    editor_selection_select_all();
+    glr_ctrl_router_reset_code_panel_drag();
+    editor_request_redraw();
+    return 1;
+}
+
 static int route_code_copy_hit(void) {
     editor_clipboard_copy_current();
     glr_ctrl_router_reset_code_panel_drag();
@@ -2090,6 +2097,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_code_panel_chrome_hit(); break;
     case UI_HIT_CODE_CLEAR_ALL:
         consumed = route_code_clear_all_hit(); break;
+    case UI_HIT_CODE_SELECT_ALL:
+        consumed = route_code_select_all_hit(); break;
     case UI_HIT_CODE_COPY:
         consumed = route_code_copy_hit(); break;
     case UI_HIT_CODE_CUT:

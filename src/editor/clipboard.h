@@ -36,6 +36,12 @@ void editor_selection_start(int line_idx);   /* set anchor, clear end */
 int  editor_selection_end(void);             /* current end index, -1 if not set */
 void editor_selection_set_end(int line_idx); /* extend/contract selection */
 
+/* Select every document line (anchor 0, end last). Caret follows the
+ * selection end. Returns 1 if a selection was made, 0 when the document
+ * is empty or the editor is in insert mode (where line ranges are
+ * disabled, exactly as for copy/cut). */
+int  editor_selection_select_all(void);
+
 /* --- Range validation -------------------------------------------------- */
 
 /* Normalize a (start, count) range into valid bounds and return adjusted
