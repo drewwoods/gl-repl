@@ -2146,7 +2146,7 @@ static void draw_search_icon(float cx, float cy, float r) {
 /* Find-bar match navigator: a small vertical stepper (up = previous
  * match, down = next, matching the Up/Down keys) shown at the right edge
  * of the search box whenever the query has matches. Reuses the generic
- * ui_stepper from numeric_swatch.h so render and hit-test share geometry. */
+ * gl2d_stepper from ui/core/gl_2d.h so render and hit-test share geometry. */
 #define SEARCH_PAD_X       8
 #define SEARCH_NAV_BTN_W   14.0f
 #define SEARCH_NAV_BTN_H   8.0f
@@ -2552,7 +2552,7 @@ void ui_menu_bar_render_search_overlay(const UiRenderSnapshot *snap) {
 
     /* Match stepper last: it brackets its own blend state. */
     if (has_nav)
-        ui_stepper_render(g.nav_x, g.nav_cy, SEARCH_NAV_BTN_W, SEARCH_NAV_BTN_H);
+        gl2d_stepper_render(g.nav_x, g.nav_cy, SEARCH_NAV_BTN_W, SEARCH_NAV_BTN_H);
 
     draw_replace_row(snap, alpha);
 }
@@ -2601,8 +2601,8 @@ UiHit ui_menu_bar_search_hit_test(const UiRenderSnapshot *snap,
 
     if (search_nav_geometry(snap->search, pin_x[PIN_SEARCH], by,
                             pin_w[PIN_SEARCH], bh, &nav_x, &nav_cy)) {
-        dir = ui_stepper_hit(nav_x, nav_cy, SEARCH_NAV_BTN_W, SEARCH_NAV_BTN_H,
-                             mx, (float)gl_y);
+        dir = gl2d_stepper_hit(nav_x, nav_cy, SEARCH_NAV_BTN_W, SEARCH_NAV_BTN_H,
+                               mx, (float)gl_y);
         if (dir != 0) {
             /* Up arrow (dir +1) = previous match -> navigate(-1). */
             h.kind = UI_HIT_SEARCH_NAV;

@@ -100,6 +100,121 @@ static inline void gl2d_panel_frame(float x, float y, float w, float h,
     glEnd();
 }
 
+/* --- Stepper -----------------------------------------------------------
+ *
+ * A vertical two-arrow nudge control (up over down), the pair centered on
+ * center_y (GL bottom-up) with its left edge at x and each button
+ * btn_w x btn_h. This is the app's single "adjust this number by one step"
+ * affordance: the inline numeric swatch on a code literal, the find bar's
+ * match navigator, and the variable panel's frame stepper all draw this one
+ * widget, so the gesture reads the same wherever a number can be nudged.
+ *
+ * Pure geometry and pixels. The caller maps the up/down result onto its own
+ * UiHit kind and owns what one step means - there is no step size here.
+ *
+ * Callers pick the size. 16x12 (span 25px) floats *over* an 18px code-panel
+ * row; 14x8 (span 17px) fits *inside* a 20px panel row. The arrow glyph is a
+ * fixed 6x5px triangle at either size, so the small one gives up chrome, not
+ * legibility.
+ *
+ * Lives here rather than beside the numeric swatch in ui/app because
+ * ui/subsystems panels draw it too, and those link from {ui/core, config}
+ * alone (the standalone subsystem demos are the proof).
+ *
+ * Colors are deliberate literals, not theme tokens: the arrows are a control
+ * surface that must stay readable at 8px against every panel background. */
+#define GL2D_STEPPER_GAP 1   /* px between the two buttons */
+
+/* Bottom edge of each button for a pair centered on center_y. Shared by the
+ * renderer and the hit-test so they cannot disagree. */
+static inline void gl2d_stepper_span(float center_y, float btn_h,
+                                     float *out_dn, float *out_up) {
+    float total_h = btn_h * 2.0f + (float)GL2D_STEPPER_GAP;
+    *out_dn = center_y - total_h * 0.5f;
+    *out_up = *out_dn + btn_h + (float)GL2D_STEPPER_GAP;
+}
+
+/* Total height a stepper pair occupies, for callers sizing a row around it. */
+static inline float gl2d_stepper_h(float btn_h) {
+    return btn_h * 2.0f + (float)GL2D_STEPPER_GAP;
+}
+
+static inline void gl2d_stepper_button(float bx, float by, float bw, float bh,
+                                       int is_up, float dim) {
+    const float bg[4]     = { 0.18f, 0.20f, 0.25f, 0.92f };
+    const float border[4] = { 0.35f, 0.38f, 0.45f, 0.85f };
+    const float arrow[4]  = { 0.80f, 0.82f, 0.85f, 0.90f };
+    float cx, cy, half_w, half_h;
+
+    glColor4f(bg[0], bg[1], bg[2], bg[3] * dim);
+    glRectf(bx, by, bx + bw, by + bh);
+
+    glColor4f(border[0], border[1], border[2], border[3] * dim);
+    glBegin(GL_LINE_LOOP);
+    glVertex2f(bx,      by);
+    glVertex2f(bx + bw, by);
+    glVertex2f(bx + bw, by + bh);
+    glVertex2f(bx,      by + bh);
+    glEnd();
+
+    cx = bx + bw * 0.5f;
+    cy = by + bh * 0.5f;
+    half_w = 3.0f;
+    half_h = 2.5f;
+
+    glColor4f(arrow[0], arrow[1], arrow[2], arrow[3] * dim);
+    glBegin(GL_TRIANGLES);
+    if (is_up) {
+        glVertex2f(cx,            cy + half_h);
+        glVertex2f(cx - half_w,   cy - half_h);
+        glVertex2f(cx + half_w,   cy - half_h);
+    } else {
+        glVertex2f(cx,            cy - half_h);
+        glVertex2f(cx - half_w,   cy + half_h);
+        glVertex2f(cx + half_w,   cy + half_h);
+    }
+    glEnd();
+}
+
+/* Draw a stepper pair. `dim` scales every alpha: 1.0 is the live control,
+ * a fraction draws it inert (present, visibly not clickable) - the same
+ * "draw it greyed rather than hide it" rule the panel chips follow. */
+static inline void gl2d_stepper_render_dim(float x, float center_y,
+                                           float btn_w, float btn_h,
+                                           float dim) {
+    float by_dn, by_up;
+    gl2d_stepper_span(center_y, btn_h, &by_dn, &by_up);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    gl2d_stepper_button(x, by_up, btn_w, btn_h, 1, dim);
+    gl2d_stepper_button(x, by_dn, btn_w, btn_h, 0, dim);
+
+    glDisable(GL_BLEND);
+}
+
+static inline void gl2d_stepper_render(float x, float center_y,
+                                       float btn_w, float btn_h) {
+    gl2d_stepper_render_dim(x, center_y, btn_w, btn_h, 1.0f);
+}
+
+/* +1 = up button, -1 = down button, 0 = miss. `gl_y` is bottom-up. */
+static inline int gl2d_stepper_hit(float x, float center_y,
+                                   float btn_w, float btn_h,
+                                   int mx, float gl_y) {
+    float by_dn, by_up;
+    gl2d_stepper_span(center_y, btn_h, &by_dn, &by_up);
+
+    if ((float)mx < x || (float)mx >= x + btn_w)
+        return 0;
+    if (gl_y >= by_up && gl_y < by_up + btn_h)
+        return 1;
+    if (gl_y >= by_dn && gl_y < by_dn + btn_h)
+        return -1;
+    return 0;
+}
+
 /* --- Mouse chips -------------------------------------------------------
  *
  * The panels carry two kinds of clickable text, and they are not the same
