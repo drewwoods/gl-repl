@@ -107,6 +107,17 @@ int repl_config_extract_slug(const char *line, char *out, size_t out_sz, const c
         p += 3;
         if (!isspace((unsigned char)*p)) return 0;
         while (*p && isspace((unsigned char)*p)) p++;
+    } else {
+        /* Import's parse_cfg path hands the args after `@cfg`, so
+         * `grid = GRID_THEME_CLASSIC` is a real slug. `display() {` is
+         * not: it is an identifier followed by `(`, not `=`. */
+        const char *scan = p;
+        while (*scan && (isalnum((unsigned char)*scan) || *scan == '_'))
+            scan++;
+        while (*scan && isspace((unsigned char)*scan))
+            scan++;
+        if (*scan != '=')
+            return 0;
     }
     size_t out_i = 0;
     while (*p && (isalnum((unsigned char)*p) || *p == '_') && out_i + 1 < out_sz)

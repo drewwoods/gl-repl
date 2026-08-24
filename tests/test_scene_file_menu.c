@@ -271,8 +271,8 @@ static void test_save_glr_writes_scene_source(void) {
         if (!marker)
             marker = strstr(text, "camera");
         ASSERT_TRUE("Save .glr emits a camera marker comment", marker != NULL);
-        ASSERT_TRUE("Save .glr emits camera transforms at column 0 under it",
-                    marker && strstr(marker, "\nglTranslatef(") != NULL);
+        ASSERT_TRUE("Save .glr emits indented camera transforms under it",
+                    marker && strstr(marker, "\n  glTranslatef(") != NULL);
     }
     ASSERT_TRUE("Save .glr emits no C scaffold",
                 strstr(text, "#include") == NULL &&
@@ -313,10 +313,12 @@ static void test_save_glr_splits_camera_boundary_spacing(void) {
     ASSERT_TRUE("spacing .glr can be read", text != NULL);
     ASSERT_TRUE("blank line follows declarations before camera",
                 text && strstr(text,
-                               "static float spacing;\n\nglTranslatef(") != NULL);
+                               "static float spacing;\n"
+                               "display() {\n\n"
+                               "  glTranslatef(") != NULL);
     ASSERT_TRUE("blank line follows camera before body",
                 text && strstr(text,
-                               "// @camera pan\n\nglClear(") != NULL);
+                               "// @camera pan\n\n  glClear(") != NULL);
 
     free(text);
     unlink(path);

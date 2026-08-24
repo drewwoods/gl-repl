@@ -128,12 +128,66 @@ static int file_contains(const char *path, const char *needle) {
     return found;
 }
 
+static int path_is_glr(const char *path) {
+    const char *p;
+
+    if (!path)
+        return 0;
+    p = path;
+    while ((p = strstr(p, ".glr")) != NULL) {
+        if (p[4] == '\0' || p[4] == '.')
+            return 1;
+        p += 4;
+    }
+    return 0;
+}
+
+static int line_is_glr_prelude(const char *line) {
+    const char *p = line;
+
+    if (!line)
+        return 1;
+    while (*p == ' ' || *p == '\t')
+        p++;
+    return *p == '\0' || strncmp(p, "//", 2) == 0 ||
+           strncmp(p, "/*", 2) == 0 || strncmp(p, "float ", 6) == 0 ||
+           strncmp(p, "static float ", 13) == 0;
+}
+
+static int glr_prelude_count(const char *const *lines) {
+    int count = 0;
+
+    while (lines && lines[count] && line_is_glr_prelude(lines[count]))
+        count++;
+    return count;
+}
+
+static int lines_have_display(const char *const *lines) {
+    for (int i = 0; lines && lines[i]; i++) {
+        const char *p = lines[i];
+        while (*p == ' ' || *p == '\t')
+            p++;
+        if (strcmp(p, "display() {") == 0)
+            return 1;
+    }
+    return 0;
+}
+
 static void write_lines(const char *path, const char *const *lines) {
     FILE *f = fopen(path, "w");
+    int wrap = path_is_glr(path) && !lines_have_display(lines);
+    int prefix = wrap ? glr_prelude_count(lines) : 0;
+
     if (!f)
         return;
-    for (int i = 0; lines && lines[i]; i++)
+    for (int i = 0; i < prefix; i++)
         fprintf(f, "%s\n", lines[i]);
+    if (wrap)
+        fputs("display() {\n", f);
+    for (int i = prefix; lines && lines[i]; i++)
+        fprintf(f, "%s\n", lines[i]);
+    if (wrap)
+        fputs("}\n", f);
     fclose(f);
 }
 
@@ -1646,12 +1700,24 @@ static void test_disabled_watcher_does_nothing(void) {
 static void publish_wip_at(const char *path, const char *const *lines,
                            int row, int col) {
     FILE *f = fopen(path, "w");
+    int wrap = path_is_glr(path) && !lines_have_display(lines);
+    int prefix = wrap ? glr_prelude_count(lines) : 0;
+    int published_row = row;
+
     if (!f)
         return;
-    for (int i = 0; lines && lines[i]; i++)
+    for (int i = 0; i < prefix; i++)
         fprintf(f, "%s\n", lines[i]);
+    if (wrap)
+        fputs("display() {\n", f);
+    for (int i = prefix; lines && lines[i]; i++)
+        fprintf(f, "%s\n", lines[i]);
+    if (wrap && row > prefix)
+        published_row++;
+    if (wrap)
+        fputs("}\n", f);
     if (row > 0)
-        fprintf(f, "// @cursor %d %d\n", row, col);
+        fprintf(f, "// @cursor %d %d\n", published_row, col);
     fclose(f);
 }
 

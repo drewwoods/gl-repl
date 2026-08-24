@@ -795,6 +795,35 @@ typedef struct {
     unsigned long long  content;  /* hash of the bytes as they were read */
 } GlrExtEditFileLines;
 
+static int line_is_display_open(const char *line) {
+    const char *start = line;
+    const char *end;
+
+    if (!line)
+        return 0;
+    while (*start == ' ' || *start == '\t')
+        start++;
+    end = start + strlen(start);
+    while (end > start && (end[-1] == ' ' || end[-1] == '\t'))
+        end--;
+    return (size_t)(end - start) == sizeof("display() {") - 1 &&
+           strncmp(start, "display() {", sizeof("display() {") - 1) == 0;
+}
+
+static int line_is_only_display_close(const char *line) {
+    const char *start = line;
+    const char *end;
+
+    if (!line)
+        return 0;
+    while (*start == ' ' || *start == '\t')
+        start++;
+    end = start + strlen(start);
+    while (end > start && (end[-1] == ' ' || end[-1] == '\t'))
+        end--;
+    return (size_t)(end - start) == 1 && *start == '}';
+}
+
 /* A refusal, not a budget: past this the watcher hands the path to the loader
  * rather than buffering it. Any scene file near this is generated, and the
  * loader has its own capacity limits well below it. */
@@ -918,6 +947,7 @@ static int file_lines_read(const char *path, GlrExtEditFileLines *fl) {
  * matches this stage's scope exactly. */
 static int find_incomplete_final_row(const char *const *lines, int count) {
     int depth = 0, started = 0, stmt_start = -1, last_code = -1;
+    int display_open = 0, brace_depth = 0, brace_comment = 0;
     /* Persists across every line, not just the lines of one statement: a
      * `/ * ... * /` span need not close on the line it opened, and these are
      * RAW physical lines - unlike the importer, nothing stripped comments for
@@ -928,8 +958,21 @@ static int find_incomplete_final_row(const char *const *lines, int count) {
     for (int i = 0; i < count; i++) {
         int code_len = 0;
         int d = started ? depth : 0;
+        int wrapper_close = display_open && brace_depth == 1 &&
+                            line_is_only_display_close(lines[i]);
         char last = repl_scan_code_line(lines[i], &d, &in_block_comment,
                                         &code_len);
+
+        /* A valid .glr file closes its display frame after the last body row.
+         * When that row is still being typed, the closing brace is the last
+         * code line even though the incomplete command is the row we need to
+         * park. Do not mistake a nested user block's brace for the wrapper:
+         * brace_depth is 2 or more until that block has closed. */
+        if (wrapper_close && code_len > 0 &&
+            line_is_only_display_close(lines[i])) {
+            if (started && stmt_start == last_code)
+                return last_code;
+        }
 
         if (code_len == 0)
             continue;                 /* blank / comment / directive */
@@ -941,6 +984,12 @@ static int find_incomplete_final_row(const char *const *lines, int count) {
         last_code = i;
         if (depth <= 0 && repl_is_stmt_terminator(last))
             started = 0;
+
+        if (line_is_display_open(lines[i]))
+            display_open = 1;
+        brace_depth += repl_code_brace_delta(lines[i], &brace_comment);
+        if (wrapper_close)
+            display_open = 0;
     }
 
     if (!started || stmt_start != last_code)

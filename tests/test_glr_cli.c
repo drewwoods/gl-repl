@@ -562,8 +562,10 @@ static void test_dump_path_applies_time(void) {
     ASSERT_TRUE("write dump-time fixture", f != NULL);
     if (!f)
         return;
-    fputs("glClear(GL_COLOR_BUFFER_BIT);\n"
-          "glTranslatef(t, 0, 0);\n", f);
+    fputs("display() {\n"
+          "  glClear(GL_COLOR_BUFFER_BIT);\n"
+          "  glTranslatef(t, 0, 0);\n"
+          "}\n", f);
     fclose(f);
 
     memset(&o, 0, sizeof(o));
