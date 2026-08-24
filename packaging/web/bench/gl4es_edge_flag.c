@@ -529,6 +529,58 @@ static void test_getter(void)
     report(" getter=%d/%d", ok_true, ok_false);
 }
 
+/* A list's inherited compile-time edge flag is data for its vertices, not a
+ * state-changing command.  Calling a list that contains no glEdgeFlag must
+ * therefore leave the caller's current flag alone; the nested case exercises
+ * the append_calllist path used while compiling another list. */
+static void test_display_list_inherited_flag(void)
+{
+    GLuint source = glGenLists(1);
+    GLuint outer = glGenLists(1);
+    GLboolean flag;
+    int direct;
+    int nested;
+
+    clear_scene();
+    while (glGetError() != GL_NO_ERROR)
+        ;
+
+    glEdgeFlag(GL_FALSE);
+    glNewList(source, GL_COMPILE);
+    glBegin(GL_TRIANGLES);
+    glVertex3f(-0.4f, -0.4f, 0.f);
+    glVertex3f( 0.4f, -0.4f, 0.f);
+    glVertex3f( 0.0f,  0.4f, 0.f);
+    glEnd();
+    glEndList();
+
+    glEdgeFlag(GL_TRUE);
+    glCallList(source);
+    flag = GL_FALSE;
+    glGetBooleanv(GL_EDGE_FLAG, &flag);
+    direct = (flag == GL_TRUE && glGetError() == GL_NO_ERROR);
+
+    glEdgeFlag(GL_TRUE);
+    glNewList(outer, GL_COMPILE);
+    glCallList(source);
+    glEndList();
+
+    glEdgeFlag(GL_TRUE);
+    glCallList(outer);
+    flag = GL_FALSE;
+    glGetBooleanv(GL_EDGE_FLAG, &flag);
+    nested = (flag == GL_TRUE && glGetError() == GL_NO_ERROR);
+
+    if (!direct)
+        fail("display list changed inherited edge flag", direct, 1);
+    if (!nested)
+        fail("nested display list changed inherited edge flag", nested, 1);
+    report(" displaylist=%d/%d", direct, nested);
+
+    glDeleteLists(source, 1);
+    glDeleteLists(outer, 1);
+}
+
 /* gl4es merges consecutive compatible renderlists (extend_renderlist ->
  * append_renderlist). A merged batch must carry the flags of both halves,
  * including the half that never allocated an array, and each triangle's edges
@@ -600,6 +652,7 @@ static void display(void)
         test_fill_prebegin_capacity();
         test_push_attrib_round_trip();
         test_getter();
+        test_display_list_inherited_flag();
         test_merged_batches();
         printf("edge-flag cases:%s failures=%d\n", g_report, g_failures);
         EM_ASM({

@@ -125,7 +125,7 @@ q0=799/800 q1=880/880 q2=800/800 q3=879/880
 t0=576/576 t1=672/672 t2=672/672
 default=1119/1119 lone=1119/1120 nodiag=1468/1468/1472
 qstrip=1620/1624 qstripflag=1500/1504 pervertex=1280/1024
-fill=76800/76800 pushattrib=1/1 getter=1/1 merged=2170/2176
+fill=76800/76800 pushattrib=1/1 getter=1/1 displaylist=1/1 merged=2170/2176
 ```
 
 The `fill-capacity` case also emits a 96-vertex `GL_TRIANGLES` FILL block
@@ -152,8 +152,11 @@ and the full mesh star differs by 4 px in ~1394 (rasterizer, not topology).
 
 `glEdgeFlag` needs no packed-call entry for display lists: a compiling list
 picks the flag up through its own `lastEdgeFlag`, and a freshly extended one
-copies the previous list's `lastEdgeFlag`.  The per-vertex array is materialized
-only when a vertex is emitted, after the list's merger capacity is known.
+copies the previous list's `lastEdgeFlag`. A separate explicit-state bit
+ensures that executing a list only changes the caller's flag when the list
+actually contains `glEdgeFlag`; inherited compile-time state is not a command.
+The per-vertex array is materialized only when a vertex is emitted, after the
+list's merger capacity is known.
 `glEdgeFlagv` is promoted out of the stub table alongside it. `GL_CURRENT_BIT`
 now saves and restores the flag.
 

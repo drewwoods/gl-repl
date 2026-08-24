@@ -66,11 +66,11 @@ Odds and ends
 
 glEdgeFlag needs no packed-call entry for display lists: a compiling list
 picks the flag up through its own lastEdgeFlag, and a freshly extended one
-through the copied lastEdgeFlag state. Executing or
-appending a list propagates its tail lastEdgeFlag back into the current state,
-so subsequent immediate vertices and glGetBooleanv(GL_EDGE_FLAG) see the same
-value as native GL. glEdgeFlagv is promoted out of the stub table alongside
-it. GL_CURRENT_BIT now saves and restores the flag.
+through the copied lastEdgeFlag state. Each list also records whether that
+value came from an explicit glEdgeFlag command; executing or appending a list
+only propagates the value when it did, so inherited compile-time state cannot
+overwrite the caller's current flag. glEdgeFlagv is promoted out of the stub
+table alongside it. GL_CURRENT_BIT now saves and restores the flag.
 
 The query side needs both halves.  GL_EDGE_FLAG joins gl4es_commonGet(),
 which serves glGetIntegerv/glGetFloatv/glGetDoublev; glGetBooleanv had no
@@ -136,7 +136,7 @@ diff --git a/src/gl/gl4es.c b/src/gl/gl4es.c
 index b20bcff5..7a068848 100644
 --- a/src/gl/gl4es.c
 +++ b/src/gl/gl4es.c
-@@ -376,6 +376,33 @@ void APIENTRY_GL4ES gl4es_glVertex4fv(GLfloat* v) {
+@@ -376,6 +376,36 @@ void APIENTRY_GL4ES gl4es_glVertex4fv(GLfloat* v) {
  }
  AliasExport(void,glVertex4fv,,(GLfloat* v));
  
@@ -144,11 +144,14 @@ index b20bcff5..7a068848 100644
 + * CPU, when polygon-mode lines are generated in fill_lineIndices(), so this
 + * never reaches a gles_* entry point.  It needs no packed-call entry for
 + * display lists either - a compiling list picks the flag up through its own
-+ * lastEdgeFlag, and a freshly extended one through the copied list state. */
++ * lastEdgeFlag, and a freshly extended one through the copied list state. The
++ * explicit-state bit keeps inherited compilation state from leaking through
++ * glCallList. */
 +void APIENTRY_GL4ES gl4es_glEdgeFlag(GLboolean flag) {
 +    flag = flag ? GL_TRUE : GL_FALSE;
 +    if (glstate->list.active) {
 +        glstate->list.active->lastEdgeFlag = (GLubyte)flag;
++        glstate->list.active->lastEdgeFlagSet = 1;
 +        noerrorShimNoPurge();
 +    } else {
 +        noerrorShim();
@@ -170,7 +173,7 @@ index b20bcff5..7a068848 100644
  void APIENTRY_GL4ES gl4es_glColor4f(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) {
      if (glstate->list.active) {
          if (glstate->list.active->stage != STAGE_DRAW) {
-@@ -877,9 +905,23 @@
+@@ -877,9 +905,27 @@
      if (glstate->list.active) {
 -        glstate->list.active = append_calllist(glstate->list.active, gl4es_glGetList(list));
 -		return;
@@ -179,10 +182,13 @@ index b20bcff5..7a068848 100644
 +        if (called) {
 +            renderlist_t *tail = called;
 +            while (tail->next) tail = tail->next;
-+            glstate->list.active->lastEdgeFlag = tail->lastEdgeFlag;
-+            if (!glstate->list.compiling ||
-+                glstate->list.mode == GL_COMPILE_AND_EXECUTE)
-+                glstate->edgeflag = tail->lastEdgeFlag;
++            if (tail->lastEdgeFlagSet) {
++                glstate->list.active->lastEdgeFlag = tail->lastEdgeFlag;
++                glstate->list.active->lastEdgeFlagSet = 1;
++                if (!glstate->list.compiling ||
++                    glstate->list.mode == GL_COMPILE_AND_EXECUTE)
++                    glstate->edgeflag = tail->lastEdgeFlag;
++            }
 +        }
 +		return;
 -	}
@@ -194,7 +200,8 @@ index b20bcff5..7a068848 100644
 +    if (l) {
 +        renderlist_t *tail = l;
 +        while (tail->next) tail = tail->next;
-+        glstate->edgeflag = tail->lastEdgeFlag;
++        if (tail->lastEdgeFlagSet)
++            glstate->edgeflag = tail->lastEdgeFlag;
 +    }
  }
 
@@ -300,7 +307,7 @@ index 585629ab..16b9ce59 100644
          for (int i=0; i<a->maxtex; i++)
              realloc_sublist(a->tex[i], 4, cap);
      }
-@@ -557,6 +567,21 @@ void append_renderlist(renderlist_t *a, renderlist_t *b) {
+@@ -557,6 +567,25 @@ void append_renderlist(renderlist_t *a, renderlist_t *b) {
      if (a->color) memcpy(a->color+a->len*4, b->color, b->len*4*sizeof(GLfloat));
      if (a->secondary) memcpy(a->secondary+a->len*4, b->secondary, b->len*4*sizeof(GLfloat));
      if (a->fogcoord) memcpy(a->fogcoord+a->len*1, b->fogcoord, b->len*1*sizeof(GLfloat));
@@ -319,23 +326,29 @@ index 585629ab..16b9ce59 100644
 +                memset(a->edgeflag+a->len, GL_TRUE, b->len * sizeof(GLubyte));
 +        }
 +    }
++    if (b->lastEdgeFlagSet) {
++        a->lastEdgeFlag = b->lastEdgeFlag;
++        a->lastEdgeFlagSet = 1;
++    }
      for (int i=0; i<a->maxtex; i++)
          if (a->tex[i]) memcpy(a->tex[i]+a->len*4, b->tex[i], b->len*4*sizeof(GLfloat));
      // indices
-@@ -628,6 +628,7 @@ renderlist_t *extend_renderlist(renderlist_t *list) {
+@@ -628,6 +628,8 @@ renderlist_t *extend_renderlist(renderlist_t *list) {
          memcpy(new->lastNormal, list->lastNormal, 3*sizeof(GLfloat));
          memcpy(new->lastSecondaryColors, list->lastSecondaryColors, 3*sizeof(GLfloat));
          memcpy(new->lastColors, list->lastColors, 4*sizeof(GLfloat));
          new->lastColorsSet = list->lastColorsSet;
 +        new->lastEdgeFlag = list->lastEdgeFlag;
++        new->lastEdgeFlagSet = list->lastEdgeFlagSet;
          // detach
          list->prev = NULL;
-@@ -643,7 +645,8 @@ renderlist_t *extend_renderlist(renderlist_t *list) {
+@@ -643,7 +645,9 @@ renderlist_t *extend_renderlist(renderlist_t *list) {
          memcpy(new->lastNormal, list->lastNormal, 3*sizeof(GLfloat));
          memcpy(new->lastSecondaryColors, list->lastSecondaryColors, 3*sizeof(GLfloat));
          memcpy(new->lastColors, (list->post_color)?list->post_colors:list->lastColors, 4*sizeof(GLfloat));
          new->lastColorsSet = (list->post_color || list->lastColorsSet)?1:0;
 +        new->lastEdgeFlag = list->lastEdgeFlag;
++        new->lastEdgeFlagSet = list->lastEdgeFlagSet;
          return new;
      }
  }
@@ -400,11 +413,12 @@ index 554de899..89d64a86 100644
  } modeinit_t;
  
  typedef struct line_arrays_s {
-@@ -169,6 +175,7 @@ typedef struct _renderlist_t {
+@@ -169,6 +175,8 @@ typedef struct _renderlist_t {
      GLfloat lastColors[4];
      GLfloat lastSecondaryColors[4];
      GLfloat lastFogCoord;
 +    GLubyte lastEdgeFlag;
++    GLubyte lastEdgeFlagSet;
      int use_glstate;
  
      int lastColorsSet;
