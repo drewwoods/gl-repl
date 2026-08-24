@@ -61,6 +61,8 @@ compareAndSwap(j) {
   }
 }
 
+display() {
+
 glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
 glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -152,4 +154,5 @@ if(steps < totalSteps) {
   glColor3f(0.92, 0.95, 0.98);
   glRasterPos3f(-3.4, 1.7, 0);
   label("sorted");
+}
 }

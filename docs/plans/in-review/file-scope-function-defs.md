@@ -37,13 +37,17 @@ The new relocation test also exposed that the attached comment text retained
 its former body base even though the header and closer were rebased; the
 commit plan now shifts the carried run by the same base delta.
 
+**Corpus follow-up implemented** - the two remaining function-bearing opt-in
+fixtures now use the required explicit frame, with globals/functions outside
+and camera/body rows inside. The clear-pair decision text was also corrected:
+the scanner's existing behavior is intentional because executable clear calls
+belong inside `display()`; moving a tutorial function above the locked prelude
+remains deferred to Project 2.
+
 **Verification green** - `make test-stubs` (86 binaries, 32,411 assertions),
-`make test-scenes` (3 binaries, 8,278 assertions),
-`make check-state-ownership`, `make check-formatted`, both catalog/doc example
-guards, and `git diff --check`. A standalone `make check-c99` remains blocked
-by the pre-existing high-resolution GLUT font declarations in untouched
-`glr_pointer_script.c` / `compare_stroke_fonts.c`; the stubbed C99 build and
-all task-touched translation units compile cleanly.
+`make test-scenes` (3 binaries, 8,302 assertions),
+`make check-state-ownership`, `make check-c99`, `make check-formatted`, both
+catalog/doc example guards, and `git diff --check`.
 
 ### Corrections found while implementing
 
@@ -554,7 +558,7 @@ would be flattened, so it lands in the same patch.
 | Insert ghost at the splice | First display-body row (1h). |
 | Indent at the boundary | Existing row `pos < at`; new decl/func `insert_pos <= at`, compared in pre-change coordinates (1e). |
 | Block-closer indent | Unchanged; keep reformat's minus-2 (1d). |
-| Clear-pair exception | Survives Project 1. Tutorials keep showing their clear pair above `display()`. |
+| Clear-pair exception | Survives Project 1. The executable clear pair renders inside `display()`; a function deliberately parked after it remains inside too. Moving tutorial functions above the locked prelude is a Project 2 placement change. |
 | Load-time hoist | Not in Project 1. |
 
 ## Project 2 - Making The Order Total (not approved)

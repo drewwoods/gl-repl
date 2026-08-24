@@ -9,11 +9,6 @@
 // part of the cycle where the frame ends early.
 static float span, grow;
 
-glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
-glRotatef(14.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-
 // Every column draws, then every other one returns before it does.
 func0(k) {
   if(fmod(k, 2) > 0.5) {
@@ -43,6 +38,13 @@ func1(n) {
   glutSolidCube(0.24);
   glPopMatrix();
 }
+
+display() {
+
+glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
+glRotatef(14.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
 glClearColor(0.05, 0.06, 0.09, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -74,3 +76,4 @@ glTranslatef(0, 1.75, 0);
 glRotatef(90, 1, 0, 0);
 glutSolidTorus(0.05, 0.45, 8, 20);
 glPopMatrix();
+}
