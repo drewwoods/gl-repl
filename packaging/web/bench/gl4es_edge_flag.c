@@ -113,6 +113,18 @@ static void quad(int off_vertex)
     glEnd();
 }
 
+/* The i'th quad of a row of small ones: 0.2 x 0.5 NDC, spaced so they do not
+ * touch. Vertices only - the caller opens and closes the glBegin, so the same
+ * geometry can be emitted as one block or as several. */
+static void quad_strip_at(int i)
+{
+    float x = -0.9f + (float)i * 0.22f;
+    glVertex3f(x,        0.1f, 0.f);
+    glVertex3f(x + 0.2f, 0.1f, 0.f);
+    glVertex3f(x + 0.2f, 0.6f, 0.f);
+    glVertex3f(x,        0.6f, 0.f);
+}
+
 static int quad_perimeter_px(void)
 {
     return g_edge_px[0] + g_edge_px[1] + g_edge_px[2] + g_edge_px[3];
@@ -120,8 +132,8 @@ static int quad_perimeter_px(void)
 
 /* Clearing vertex v's flag must suppress exactly the edge that *begins* at v -
  * every other boundary edge stays. Checked against the calibrated segments, so
- * this pins the absolute result rather than a delta against a baseline, which
- * still carries gl4es's triangulation diagonal for an unflagged quad.
+ * this pins the absolute result rather than a delta against a baseline that
+ * carries a triangulation diagonal (see test_quad_has_no_diagonal).
  *
  * The tolerance absorbs shared corner pixels between adjoining edges. */
 static void test_quad_suppresses_one_edge(void)
@@ -196,6 +208,142 @@ static void test_default_is_unchanged(void)
         fail("explicit GL_TRUE differs from the default", untouched,
              explicit_true);
     report(" default=%d/%d", untouched, explicit_true);
+}
+
+/* A quad under polygon-mode lines draws its four boundary edges and nothing
+ * else, however it is batched - no triangulation diagonal, whether or not any
+ * flag was cleared.
+ *
+ * gl4es used to fail this for a *lone* quad: end_renderlist() relabels a
+ * single GL_QUADS block to GL_TRIANGLE_FAN, and the polygon-mode line
+ * reconstruction had no GL_QUADS arm there, so it emitted the fan spokes.
+ * Two or more quads in one glBegin took a different path and were correct, so
+ * the same geometry rendered differently depending only on batching. Both
+ * cases are checked here for that reason.
+ *
+ * Reference values from Mesa 4.6 compat/llvmpipe at this size: 367 px for one
+ * quad against a 368 px perimeter, and 1468 px for four. */
+static void test_quad_has_no_diagonal(void)
+{
+    int perimeter = quad_perimeter_px();
+    int slack = 8 + perimeter / 64;
+
+    clear_scene();
+    quad(-1);
+    int lone = finish_coverage();
+    if (lone > perimeter + slack)
+        fail("lone quad draws a triangulation diagonal", lone, perimeter);
+    if (lone < perimeter - slack)
+        fail("lone quad is missing boundary edges", lone, perimeter);
+    report(" lone=%d/%d", lone, perimeter);
+
+    /* four quads sharing one glBegin, and four in their own blocks: the same
+     * total either way */
+    int want = 0;
+    int seg[4];
+    {
+        float x = -0.9f;
+        float vx[4] = {x, x + 0.2f, x + 0.2f, x};
+        float vy[4] = {0.1f, 0.1f, 0.6f, 0.6f};
+        for (int e = 0; e < 4; ++e) {
+            clear_scene();
+            glBegin(GL_LINES);
+            glVertex3f(vx[e], vy[e], 0.f);
+            glVertex3f(vx[(e + 1) % 4], vy[(e + 1) % 4], 0.f);
+            glEnd();
+            seg[e] = finish_coverage();
+        }
+        want = 4 * (seg[0] + seg[1] + seg[2] + seg[3]);
+    }
+
+    clear_scene();
+    glBegin(GL_QUADS);
+    for (int i = 0; i < 4; ++i)
+        quad_strip_at(i);
+    glEnd();
+    int batched = finish_coverage();
+
+    clear_scene();
+    for (int i = 0; i < 4; ++i) {
+        glBegin(GL_QUADS);
+        quad_strip_at(i);
+        glEnd();
+    }
+    int separate = finish_coverage();
+
+    int slack4 = 16 + want / 32;
+    if (batched < want - slack4 || batched > want + slack4)
+        fail("batched quads: wrong edge set", batched, want);
+    if (separate < want - slack4 || separate > want + slack4)
+        fail("per-block quads: wrong edge set", separate, want);
+    report3(" nodiag=%d/%d/%d", batched, separate, want);
+}
+
+/* A GL_QUAD_STRIP under polygon-mode lines draws each quad's four boundary
+ * edges - the ladder's rails and rungs - and no strip diagonals.
+ *
+ * end_renderlist() relabels GL_QUAD_STRIP to GL_TRIANGLE_STRIP (the vertex
+ * order is already a valid triangle strip, so nothing is reordered), and that
+ * arm of fill_lineIndices() had no mode_init check at all, so a quad strip
+ * came out with one diagonal per quad.
+ *
+ * Reference: Mesa 4.6 compat/llvmpipe draws 1620 px for this 4-quad ladder
+ * against a 1624 px calibrated outline; the diagonals would add ~700.
+ *
+ * The second half clears one vertex's flag, which must remove exactly the
+ * first rung - covering the GL_QUAD_STRIP arm of the edge-flag generator. */
+#define STRIP_QUADS 4
+
+static void quad_strip_ladder(int off_vertex)
+{
+    glBegin(GL_QUAD_STRIP);
+    for (int i = 0; i <= STRIP_QUADS; ++i) {
+        float x = -0.8f + (float)i * 0.4f;
+        glEdgeFlag((2 * i)     == off_vertex ? GL_FALSE : GL_TRUE);
+        glVertex3f(x, -0.25f, 0.f);
+        glEdgeFlag((2 * i + 1) == off_vertex ? GL_FALSE : GL_TRUE);
+        glVertex3f(x,  0.25f, 0.f);
+    }
+    glEnd();
+}
+
+static void test_quad_strip_boundary_edges(void)
+{
+    int rung, rail;
+
+    /* one rung and one rail segment, calibrated alone */
+    clear_scene();
+    glBegin(GL_LINES);
+    glVertex3f(-0.8f, -0.25f, 0.f); glVertex3f(-0.8f, 0.25f, 0.f);
+    glEnd();
+    rung = finish_coverage();
+
+    clear_scene();
+    glBegin(GL_LINES);
+    glVertex3f(-0.8f, -0.25f, 0.f); glVertex3f(-0.4f, -0.25f, 0.f);
+    glEnd();
+    rail = finish_coverage();
+
+    int outline = (STRIP_QUADS + 1) * rung + 2 * STRIP_QUADS * rail;
+    int slack = 16 + outline / 64;
+
+    clear_scene();
+    quad_strip_ladder(-1);
+    int got = finish_coverage();
+    if (got > outline + slack)
+        fail("quad strip draws strip diagonals", got, outline);
+    if (got < outline - slack)
+        fail("quad strip is missing boundary edges", got, outline);
+    report(" qstrip=%d/%d", got, outline);
+
+    /* clearing v0 suppresses the edge v0 -> v1, the first rung */
+    clear_scene();
+    quad_strip_ladder(0);
+    int flagged = finish_coverage();
+    int want = outline - rung;
+    if (flagged < want - slack || flagged > want + slack)
+        fail("quad strip: wrong edge suppressed", flagged, want);
+    report(" qstripflag=%d/%d", flagged, want);
 }
 
 /* Edge flags are per-vertex state: a flag cleared for one primitive must not
@@ -299,9 +447,9 @@ static void test_getter(void)
  *
  * Triangles, not quads: a quad's edges come from two different arms of
  * fill_lineIndices() depending on how many share a glBegin, so a mixed batch
- * of them would fold that variable into this case. A triangle's edge set is
- * the same on every path, which makes the expected total exact however the
- * merging falls out. */
+ * of them would fold that variable into this case. test_quad_has_no_diagonal
+ * covers it directly instead. A triangle's edge set is the same on every path,
+ * which makes the expected total exact however the merging falls out. */
 static void test_merged_batches(void)
 {
     const int tris = 8;
@@ -355,6 +503,8 @@ static void display(void)
         test_quad_suppresses_one_edge();
         test_triangle_suppresses_one_edge();
         test_default_is_unchanged();
+        test_quad_has_no_diagonal();
+        test_quad_strip_boundary_edges();
         test_flag_is_per_vertex();
         test_fill_mode_ignores_flags();
         test_push_attrib_round_trip();

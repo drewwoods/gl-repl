@@ -1,0 +1,130 @@
+Draw a quad's four boundary edges under polygon-mode lines, not the fan spokes.
+
+Under glPolygonMode(..., GL_LINE), gl4es drew a different edge set for the
+same quad depending only on how many quads shared a glBegin/glEnd:
+
+  - two or more quads per block go through renderlist_quads2triangles() to
+    GL_TRIANGLES, and fill_lineIndices() recovers the original topology from
+    mode_init == GL_QUADS, emitting the four boundary edges.  Correct.
+
+  - a lone quad is relabelled GL_TRIANGLE_FAN by end_renderlist() - a
+    4-vertex fan *is* the quad, so no indices are expanded and the conversion
+    is free - but `case GL_TRIANGLE_FAN` in fill_lineIndices() only
+    special-cases mode_init GL_QUAD_STRIP and GL_POLYGON.  With no GL_QUADS
+    arm it fell through to the generic fan reconstruction, which emits the
+    spokes:
+
+        (0,1) (0,2) (1,2) (0,3) (2,3)
+
+    Five edges, the extra (0,2) being the diagonal that splits the quad.
+
+The `len==4` sub-branch under `case GL_TRIANGLES` / `case GL_QUADS`, which
+looks like it handles the single-quad case, is unreachable for the same
+reason: a 4-vertex quad list never has mode == GL_TRIANGLES.
+
+The ring that the GL_POLYGON arm already walks over [z, len) is exactly the
+four boundary edges of a 4-vertex block, so GL_QUADS simply joins that arm.
+
+Native GL draws four edges for a quad however it is batched.  Measured on
+Mesa 4.6 (Compatibility Profile) / llvmpipe through surfaceless EGL, on the
+same geometry the browser oracle uses:
+
+    one quad          367 px   (perimeter 368, +diagonal would be 504)
+    4 in one glBegin  1468 px  (perimeter 1472)
+    4 in four blocks  1468 px
+
+gl4es before this patch: 485 / 1468 / 1939 - the batched case already
+matched, the other two did not.  After: 1119 / 1468 / 1468 against a 1120 px
+perimeter for the oracle's larger lone quad, and 1468 for both four-quad
+spellings, which is native to the pixel.
+
+GL_QUAD_STRIP had the same shape of bug, and is fixed here too.
+end_renderlist() relabels it to GL_TRIANGLE_STRIP - the vertex order is
+already a valid triangle strip, so nothing is reordered - and `case
+GL_TRIANGLE_STRIP` in fill_lineIndices() had no mode_init check at all, so a
+quad strip came out with the strip's diagonal across every quad.  Quad q is
+bounded by v(2q) -> v(2q+1) -> v(2q+3) -> v(2q+2), so those four edges are
+emitted instead; adjacent quads share a rung and emit it twice, coincident,
+which is also what native does when it draws each polygon's boundary.
+
+Measured on a 4-quad ladder, 640x480, against a 1624 px calibrated outline
+(rails plus rungs):
+
+    native (Mesa/llvmpipe)   1620 px
+    gl4es before             2124 px   (one diagonal per quad)
+    gl4es after              1620 px
+
+Note the pre-existing `mode_init==GL_QUAD_STRIP` arms under GL_TRIANGLE_FAN
+and GL_TRIANGLES are NOT reused, because they are wrong: for a 10-vertex strip
+they emit the rungs plus *both* diagonals of each quad and no rails at all.
+They are unreachable, which is why that was never visible; this patch leaves
+them alone rather than widening its scope.
+
+Guarded by test_quad_has_no_diagonal() and test_quad_strip_boundary_edges()
+in packaging/web/bench/gl4es_edge_flag.c, which check the lone quad, both
+four-quad spellings, and the quad strip (with and without a cleared edge
+flag) against their calibrated outlines.
+
+diff --git a/src/gl/listdraw.c b/src/gl/listdraw.c
+index a3c965fd..5a54e872 100644
+--- a/src/gl/listdraw.c
++++ b/src/gl/listdraw.c
+@@ -370,6 +370,33 @@ int fill_lineIndices(modeinit_t *modes, int length, GLenum mode, GLushort* indic
+         int len = modes[k].ilen;
+         switch (mode) {
+             case GL_TRIANGLE_STRIP:
++                if (mode_init==GL_QUAD_STRIP) {
++                    /* end_renderlist() relabels GL_QUAD_STRIP to
++                     * GL_TRIANGLE_STRIP - the vertex order is already a valid
++                     * triangle strip, so nothing is reordered - and this arm
++                     * had no mode_init check, so a quad strip came out with
++                     * the strip's diagonals across every quad.
++                     *
++                     * A quad strip's quad q is bounded by v(2q) -> v(2q+1) ->
++                     * v(2q+3) -> v(2q+2), so emit those four edges.  Adjacent
++                     * quads share a rung and emit it twice; the two are
++                     * coincident, and native GL draws each polygon's boundary
++                     * the same way.
++                     *
++                     * NOT the pre-existing `mode_init==GL_QUAD_STRIP` arms
++                     * under GL_TRIANGLE_FAN / GL_TRIANGLES: those emit the
++                     * rungs plus both diagonals of each quad and no rails at
++                     * all.  They are unreachable, which is why that was never
++                     * visible. */
++                    for (; i+3<len; i+=2) {
++                        ind_line[k++] = ind(i+0); ind_line[k++] = ind(i+1);
++                        ind_line[k++] = ind(i+1); ind_line[k++] = ind(i+3);
++                        ind_line[k++] = ind(i+3); ind_line[k++] = ind(i+2);
++                        ind_line[k++] = ind(i+2); ind_line[k++] = ind(i+0);
++                    }
++                    i = len;
++                    break;
++                }
+                 // first 3 points a triangle, then a 2 lines per new point
+                 if (len>2) {
+                     ind_line[k++] = ind(i+0); ind_line[k++] = ind(i+1);
+@@ -392,7 +419,23 @@ int fill_lineIndices(modeinit_t *modes, int length, GLenum mode, GLushort* indic
+                             ind_line[k++] = ind(i+0); ind_line[k++] = ind(i+1);
+                         }
+                     }
+-                } else if(mode_init==GL_POLYGON) {
++                } else if(mode_init==GL_POLYGON || mode_init==GL_QUADS) {
++                    /* end_renderlist() relabels a lone GL_QUADS block to
++                     * GL_TRIANGLE_FAN - a 4-vertex fan is the quad, so the
++                     * conversion is free - but that left polygon-mode lines
++                     * with no way back to the quad: the generic fan
++                     * reconstruction below emits the spokes, which draws the
++                     * diagonal that splits it.  Two or more quads take
++                     * renderlist_quads2triangles() to GL_TRIANGLES instead and
++                     * were always recovered correctly under `case
++                     * GL_TRIANGLES`, so the same geometry drew differently
++                     * depending only on how many quads shared a glBegin.
++                     *
++                     * The ring this arm already walks over [z, len) is exactly
++                     * the quad's four boundary edges, so GL_QUADS just joins
++                     * it.  Native GL draws 4 edges for a quad however it is
++                     * batched (verified against Mesa 4.6 compat/llvmpipe:
++                     * 367 px for one quad, perimeter 368, no diagonal). */
+                     if (len) {
+                         int z = i;
+                         ind_line[k++] = ind(i+0); ind_line[k++] = ind(i+1);

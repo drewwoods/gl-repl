@@ -123,8 +123,9 @@ Headless Chrome/SwiftShader (640x480):
 ```
 q0=799/800 q1=880/880 q2=800/800 q3=879/880
 t0=576/576 t1=672/672 t2=672/672
-default=1438/1438 pervertex=1280/1024 fill=76800/76800
-pushattrib=1/1 getter=1/1 merged=2170/2176
+default=1119/1119 lone=1119/1120 nodiag=1468/1468/1472
+qstrip=1620/1624 qstripflag=1500/1504 pervertex=1280/1024
+fill=76800/76800 pushattrib=1/1 getter=1/1 merged=2170/2176
 ```
 
 Each of the quad's four and the triangle's three suppressions lands within a
@@ -166,6 +167,74 @@ indexes `modes[]` by the number of indices written so far.
 `build_lineIndices_edgeflag()` uses `modes[m]` correctly, but fixing the
 original changes behavior on merged lists well beyond this work, so it is
 noted rather than touched.
+
+## 2026-08-24: quad and quad-strip boundary edges under polygon-mode lines
+
+Patch: [`gl4es-polygon-line-quad-edges.patch`](gl4es-polygon-line-quad-edges.patch)
+
+Found while reviewing the edge-flag patch above, and independent of it: this
+one changes *unflagged* rendering, so it is kept separate to stay revertable
+on its own.
+
+### Premise
+
+Under `glPolygonMode(..., GL_LINE)`, gl4es drew a different edge set for the
+same quad depending only on how many quads shared a `glBegin`/`glEnd`:
+
+| geometry | gl4es | native | perimeter |
+|---|---:|---:|---:|
+| one quad | 485 | 367 | 368 |
+| four quads, one `glBegin` | 1468 | 1468 | 1472 |
+| four quads, four `glBegin` | 1939 | 1468 | 1472 |
+
+Two or more quads per block go through `renderlist_quads2triangles()` to
+`GL_TRIANGLES`, where `fill_lineIndices()` recovers the topology from
+`mode_init == GL_QUADS`. That path was always right.
+
+A lone quad is relabelled `GL_TRIANGLE_FAN` by `end_renderlist()` - a
+4-vertex fan *is* the quad, so nothing is expanded - but `case
+GL_TRIANGLE_FAN` only special-cased `GL_QUAD_STRIP` and `GL_POLYGON`. With no
+`GL_QUADS` arm it fell through to the generic fan reconstruction, which emits
+the spokes: `(0,1) (0,2) (1,2) (0,3) (2,3)` - five edges, the extra `(0,2)`
+being the diagonal that splits the quad.
+
+`GL_QUAD_STRIP` had the same shape of bug and is fixed here too.
+`end_renderlist()` relabels it to `GL_TRIANGLE_STRIP`, and that arm had **no
+`mode_init` check at all**, so a quad strip came out with the strip's diagonal
+across every quad - 2124 px on a 4-quad ladder against a 1624 px outline,
+where native draws 1620.
+
+### Fix
+
+For the lone quad, the ring the `GL_POLYGON` arm already walks over `[z, len)`
+is exactly the four boundary edges of a 4-vertex block, so `GL_QUADS` joins
+that arm. For the strip, quad q is bounded by
+`v(2q) -> v(2q+1) -> v(2q+3) -> v(2q+2)`, so those four edges are emitted;
+adjacent quads share a rung and emit it twice, coincident, which is what
+native does when it draws each polygon's boundary.
+
+The pre-existing `mode_init == GL_QUAD_STRIP` arms under `GL_TRIANGLE_FAN` and
+`GL_TRIANGLES` are **not** reused, because they are wrong: for a 10-vertex
+strip they emit the rungs plus *both* diagonals of each quad and no rails at
+all. They are unreachable, which is why that was never visible; this patch
+leaves them alone rather than widening its scope. The `len==4` sub-branch
+under `case GL_TRIANGLES` / `case GL_QUADS` is unreachable for the same
+reason - a 4-vertex quad list never has `mode == GL_TRIANGLES`.
+
+### Native reference
+
+Mesa 4.6 (Compatibility Profile) / llvmpipe through surfaceless EGL, same
+geometry and pixel counting as the browser oracle. Native is insensitive to
+batching. After this patch gl4es reports 1119 / 1468 / 1468 for the quad cases
+(the oracle's lone quad is the larger one, 1120 px perimeter) and 1620 for the
+quad strip - native to the pixel in every case.
+
+### Scope
+
+This changes *unflagged* rendering wherever single quads or quad strips are
+drawn in wireframe, hidden-line, vertex-outline or polygon-highlight views -
+the diagonals go away. That is the fix working: they were never in native GL's
+output.
 
 ## 2026-08-24: deferred accumulation performance
 
