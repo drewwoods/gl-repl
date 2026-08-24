@@ -87,8 +87,13 @@ typedef struct {
 /* Visual indentation per nesting level. Labels arrive un-indented; the panel
  * offsets each row by depth * this, so prof_section_info()'s explicit depth is
  * the single source of truth (restyling the indent never re-classifies a row).
- * FONT_SMALL is fixed-width, so 2 cell widths reads as the prior 2-space step. */
-#define PROF_INDENT_W       (FONT_SMALL_W * 2)
+ * FONT_SMALL is fixed-width, so one cell width is a one-space step. One and
+ * not two because the tree is four levels deep in places (UI (2D) > code panel
+ * > overlays > menu > labels): at a two-space step the deepest labels lost
+ * eight columns of a PROF_COL_LABEL_W-wide column to indentation alone and
+ * fit_label() truncated them. The disclosure marker cell still separates a
+ * branch from its children, so one space per level stays readable. */
+#define PROF_INDENT_W       (FONT_SMALL_W * 1)
 
 /* ========================================================================= */
 /* Helpers                                                                    */

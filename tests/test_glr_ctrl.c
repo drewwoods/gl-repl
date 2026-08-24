@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include "ui/app/repl_code_panel.h"
 #include "subsystems/assign_plot/assign_plot.h"
+#include "subsystems/console/console.h"
 #include "editor/undo.h"
 #include "repl/example_loader.h"
 #include "repl/examples.h"
@@ -1303,27 +1304,98 @@ static void test_prof_nesting_guard(void) {
                prof_nesting_violations(), 0);
 
     /* An accumulated parent needs no exemption: it brackets each of its legs,
-     * so a child inside one sees it open. */
-    prof_accum_reset(PROF_ASSIGN_PLOT);
-    prof_begin(PROF_ASSIGN_PLOT);
-    prof_begin(PROF_ASSIGN_PLOT_CAPTURE);
-    prof_end(PROF_ASSIGN_PLOT_CAPTURE);
-    prof_accum_end(PROF_ASSIGN_PLOT);
-    prof_begin(PROF_ASSIGN_PLOT);
-    prof_begin(PROF_ASSIGN_PLOT_PANEL);
-    prof_end(PROF_ASSIGN_PLOT_PANEL);
-    prof_accum_end(PROF_ASSIGN_PLOT);
-    prof_accum_commit(PROF_ASSIGN_PLOT);
+     * so a child inside one sees it open. The fade pass is the live example -
+     * one leg per accumulation sample, each with its own per-batch children. */
+    prof_begin(PROF_RENDER3D);          /* the fade pass's own parent */
+    prof_accum_reset(PROF_RENDER3D_FADE);
+    prof_begin(PROF_RENDER3D_FADE);
+    prof_begin(PROF_RENDER3D_FADE_BATCH_PREP);
+    prof_end(PROF_RENDER3D_FADE_BATCH_PREP);
+    prof_accum_end(PROF_RENDER3D_FADE);
+    prof_begin(PROF_RENDER3D_FADE);
+    prof_begin(PROF_RENDER3D_FADE_BATCH_EXEC);
+    prof_end(PROF_RENDER3D_FADE_BATCH_EXEC);
+    prof_accum_end(PROF_RENDER3D_FADE);
+    prof_accum_commit(PROF_RENDER3D_FADE);
     ASSERT_INT("an accumulated parent's legs nest cleanly",
                prof_nesting_violations(), 0);
 
     /* ... and the gap between its legs is still guarded. */
-    prof_begin(PROF_ASSIGN_PLOT_PANEL);
-    prof_end(PROF_ASSIGN_PLOT_PANEL);
+    prof_begin(PROF_RENDER3D_FADE_BATCH_EXEC);
+    prof_end(PROF_RENDER3D_FADE_BATCH_EXEC);
     ASSERT_INT("a child in the gap between accum legs is a violation",
                prof_nesting_violations(), 1);
+    prof_end(PROF_RENDER3D);
 
     prof_test_reset();
+}
+
+/* The guard over a real frame, which is what the synthetic cases above cannot
+ * check: every catalog parent claimed by the depth column has to be open across
+ * its children in the frame the controller actually runs. The 2D UI band is the
+ * reason this exists - it is an accumulated parent whose bracket steps out
+ * around the assignment-plot and console panel draws, so both of those and the
+ * whole run of panels between them have to land on the right side of it. Opened
+ * plot and console, because the step-out legs only run when they draw. */
+static void test_prof_nesting_guard_over_a_display_frame(void) {
+    printf("--- imrepl_ctrl profile nesting over a frame ---\n");
+
+    prepare_display_fixture();
+    /* One frame first: glr_assign_plot_sync_tags() closes a plot whose
+     * document was replaced wholesale without a `// @plot` row, and building
+     * the fixture is such a replacement. Opening after it has run is what
+     * makes the plot's scan and panel actually execute in the frame below. */
+    glr_ctrl_display_frame();
+    assign_plot_open(1);
+    console_set_open(1);
+
+    prof_test_reset();
+    glr_prof_install_nesting_guard();
+
+    glr_ctrl_display_frame();
+    ASSERT_INT("a real display frame nests cleanly",
+               prof_nesting_violations(), 0);
+    ASSERT_INT("the 2D UI band sampled this frame",
+               prof_section_sampled_this_frame(PROF_UI_2D), 1);
+
+    /* Every row names a place, so the plot's and the console's phases are
+     * scattered across three parents rather than gathered under a row named
+     * for the feature: the scans sit where they run, the panels in the band. */
+    ASSERT_INT("the UI band is a root row",
+               prof_section_info(PROF_UI_2D).depth, 0);
+    ASSERT_INT("the code panel hangs off it",
+               prof_section_info(PROF_CODE_PANEL).depth, 1);
+    ASSERT_INT("so does the profile panel",
+               prof_section_info(PROF_PROFILE_PANEL).depth, 1);
+    ASSERT_INT("the plot panel joined the band",
+               prof_section_info(PROF_ASSIGN_PLOT_PANEL).depth, 1);
+    ASSERT_INT("and so did the console panel",
+               prof_section_info(PROF_CONSOLE_PANEL).depth, 1);
+    /* Depth 2: both scans run inside the snapshot's prep bracket, which is
+     * where they used to be double-counted from. */
+    ASSERT_INT("the replay-marker scan hangs off snapshot prep",
+               prof_section_info(PROF_ASSIGN_PLOT_MARKERS).depth, 2);
+    ASSERT_INT("so does the console scan",
+               prof_section_info(PROF_CONSOLE_CAPTURE).depth, 2);
+    ASSERT_INT("the plot's own scan predates every bracket, so it is a root",
+               prof_section_info(PROF_ASSIGN_PLOT_CAPTURE).depth, 0);
+    ASSERT_INT("the plot scan sampled this frame",
+               prof_section_sampled_this_frame(PROF_ASSIGN_PLOT_CAPTURE), 1);
+    ASSERT_INT("and so did the console scan",
+               prof_section_sampled_this_frame(PROF_CONSOLE_CAPTURE), 1);
+    /* A panel that draws inside the band, so the band is checked with a child
+     * in it and not just around empty space. (The plot's panel needs a real
+     * assignment row to stay open through a capture, which this fixture's
+     * two-command document has not got; its scan row above is what pins the
+     * plot's side of the split.) */
+    ASSERT_INT("the console panel drew inside the band",
+               prof_section_sampled_this_frame(PROF_CONSOLE_PANEL), 1);
+    ASSERT_INT("as did the code panel",
+               prof_section_sampled_this_frame(PROF_CODE_PANEL), 1);
+
+    prof_test_reset();
+    assign_plot_reset_all();
+    console_set_open(0);
 }
 
 /* The summary rows the panel draws under its divider: the callback total first,
@@ -8244,6 +8316,7 @@ int main(void) {
     test_display_frame_profile_coverage();
     test_frame_spans_host_stages();
     test_prof_nesting_guard();
+    test_prof_nesting_guard_over_a_display_frame();
     test_summary_row_metadata();
     test_variable_panel_motion_routes_through_compile_and_coalesces_undo();
     test_variable_panel_shift_left_drag_uses_fine_scale();

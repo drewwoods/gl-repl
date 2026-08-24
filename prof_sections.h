@@ -58,6 +58,54 @@ typedef enum {
     PROF_BUFFER_VIZ_DEPTH,      /* depth-viz readback + convert + quad */
     PROF_BUFFER_VIZ_STENCIL,    /* stencil-viz readback + convert + quad */
     PROF_RENDER3D_LAST = PROF_BUFFER_VIZ_STENCIL,
+    PROF_SNAPSHOT,                 /* aggregate snapshot production by controller */
+    PROF_SNAPSHOT_TRANSFORMERS,    /* push_color_transformers (per-line scan) */
+    PROF_SNAPSHOT_HIGHLIGHTS,      /* push_highlights (feeding cmd + replay PC) */
+    PROF_SNAPSHOT_VIRTUAL_LINES,   /* annotations_prepare + virtual-line refresh */
+    PROF_SNAPSHOT_PREP,            /* replay_prepare_frame + render-state /
+                                    * camera string refresh that sits between
+                                    * virtual-line refresh and scene-config */
+    /* Two flat-program scans that run inside the prep span above. They are
+     * rows because per-frame work inside someone else's bracket shows up only
+     * as unattributed remainder, and they are *here* because this is where
+     * they run - each belongs to a feature whose panel draws much later, but a
+     * section is a place in the frame, not a feature. (They were children of
+     * feature-shaped roots that overlapped this very span, which is the double
+     * count this placement removes.) */
+    PROF_ASSIGN_PLOT_MARKERS,      /* assign_plot_exec_progress() replay PC scan */
+    PROF_CONSOLE_CAPTURE,          /* console_capture() flat-program scan */
+    PROF_SNAPSHOT_SCENE_CONFIG,    /* build_scene_config */
+    PROF_SNAPSHOT_UI,              /* build_ui_snapshot */
+    PROF_FLATTEN,       /* flatten_commands() (only when dirty) */
+    PROF_FLATTEN_REPARSE,       /* re-parse + arg-expression eval of GL command lines */
+    PROF_FLATTEN_VAR_ASSIGN,    /* scalar `name = expr` RHS eval */
+    PROF_FLATTEN_SCRATCH_ASSIGN,/* `A[i] = expr` index + RHS eval */
+    PROF_REBAKE,        /* repl_flatten_rebake_commands() (value-only dirt) */
+    PROF_REBAKE_EVAL,   /* existing flat-stream expression eval + arg writes */
+    PROF_REFORMAT,      /* repl_reformat_program() (on demand) */
+    PROF_AUTONORMAL,    /* recompute_autonormals() (only when dirty) */
+    /* The assignment plot's own flat-program scan, which runs after the flatten
+     * refresh and before the snapshot opens - so it is nobody's child. Its two
+     * siblings live where they run: the replay-marker scan under the snapshot's
+     * prep, the panel under the UI band. Every one of the three stays stale
+     * while no assignment row is plotted, which is the honest reading: the
+     * feature costs nothing when it is closed. */
+    PROF_ASSIGN_PLOT_CAPTURE,   /* assign_plot_capture() flat-program scan */
+    /* The 2D UI band - everything drawn over the scene between
+     * render3d_draw_scene() and the compositor pass, bracketed as one span in
+     * glr_ctrl_display_frame(). It exists for the same reason PROF_RENDER3D
+     * does: the individual panels were a flat run of a dozen top-level rows
+     * with no row answering "what does the interface cost this frame", and no
+     * row absorbing the uninstrumented draws between them (the buffer-viz
+     * legend, the status-history popup) - those showed up only as
+     * unattributed Frame Work.
+     *
+     * One span, not an accumulated one: every panel drawn in the stretch is a
+     * child of it, including the assignment plot's and the console's, whose
+     * scan phases have rows of their own where those scans actually run. */
+    PROF_UI_2D,
+    PROF_REPLAY_HUD,    /* replay_ui_hud_render() (only when replaying) */
+    PROF_TOUR_HUD,      /* tour_ui_hud_render() (only during a guided tour) */
     PROF_CODE_PANEL,    /* ui_repl_code_panel_render_with_chrome() */
     PROF_CODE_PANEL_ROWS,     /* adapter row/segment build from REPL state */
     PROF_CODE_PANEL_TEXT,     /* generic ui_text_panel_render() */
@@ -75,43 +123,14 @@ typedef enum {
     PROF_CODE_PANEL_OVERLAY_STATUS_ACTIONS,
     PROF_CODE_PANEL_OVERLAY_PICKER,
     PROF_CODE_PANEL_OVERLAY_SWATCH,
+    PROF_ASSIGN_PLOT_PANEL,   /* ui_assign_plot_panel_render() */
+    PROF_CONSOLE_PANEL,       /* ui_console_panel_render() */
     PROF_UI_PANELS,     /* autocomplete + dropdown + var + config + help */
-    PROF_SNAPSHOT,                 /* aggregate snapshot production by controller */
-    PROF_SNAPSHOT_TRANSFORMERS,    /* push_color_transformers (per-line scan) */
-    PROF_SNAPSHOT_HIGHLIGHTS,      /* push_highlights (feeding cmd + replay PC) */
-    PROF_SNAPSHOT_VIRTUAL_LINES,   /* annotations_prepare + virtual-line refresh */
-    PROF_SNAPSHOT_PREP,            /* replay_prepare_frame + render-state /
-                                    * camera string refresh that sits between
-                                    * virtual-line refresh and scene-config */
-    PROF_SNAPSHOT_SCENE_CONFIG,    /* build_scene_config */
-    PROF_SNAPSHOT_UI,              /* build_ui_snapshot */
-    PROF_FLATTEN,       /* flatten_commands() (only when dirty) */
-    PROF_FLATTEN_REPARSE,       /* re-parse + arg-expression eval of GL command lines */
-    PROF_FLATTEN_VAR_ASSIGN,    /* scalar `name = expr` RHS eval */
-    PROF_FLATTEN_SCRATCH_ASSIGN,/* `A[i] = expr` index + RHS eval */
-    PROF_REBAKE,        /* repl_flatten_rebake_commands() (value-only dirt) */
-    PROF_REBAKE_EVAL,   /* existing flat-stream expression eval + arg writes */
-    PROF_REFORMAT,      /* repl_reformat_program() (on demand) */
-    PROF_AUTONORMAL,    /* recompute_autonormals() (only when dirty) */
-    PROF_REPLAY_HUD,    /* replay_ui_hud_render() (only when replaying) */
-    PROF_TOUR_HUD,      /* tour_ui_hud_render() (only during a guided tour) */
     PROF_PROFILE_PANEL,           /* all compute-profile surfaces */
     PROF_PROFILE_PANEL_FPS,       /* ui_fps_panel_render() */
     PROF_PROFILE_PANEL_SECTIONS,  /* ui_profile_panel_render() */
     PROF_PROFILE_PANEL_HISTOGRAM, /* ui_histogram_panel_render() */
     PROF_MEMORY_PANEL,  /* ui_memory_panel_render() (the panel itself) */
-    /* Assignment-value plot. Its two phases sit at opposite ends of the frame
-     * - the flat-program scan right after the flatten refresh, the panel draw
-     * with the other overlays - so the parent is accumulated across both via
-     * prof_accum_* rather than bracketed by a single begin/end. All three rows
-     * stay stale while no assignment row is plotted, which is the honest
-     * reading: the feature costs nothing when it is closed. */
-    PROF_ASSIGN_PLOT,           /* capture + panel, accumulated */
-    PROF_ASSIGN_PLOT_CAPTURE,   /* assign_plot_capture() flat-program scan */
-    PROF_ASSIGN_PLOT_PANEL,     /* ui_assign_plot_panel_render() */
-    PROF_CONSOLE,               /* Console trace line capture + panel, accumulated */
-    PROF_CONSOLE_CAPTURE,       /* console_capture() flat-program scan */
-    PROF_CONSOLE_PANEL,         /* ui_console_panel_render() */
     PROF_COMPOSITOR,    /* glr_compositor_postprocess_frame() - whole-frame
                          * (full-screen) post-process; distinct from the
                          * scene-viewport pass PROF_RENDER3D_POST_PROCESS */

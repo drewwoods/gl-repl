@@ -58,29 +58,16 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
      * the two rows are not comparable at accum > 1. */
     [PROF_BUFFER_VIZ_DEPTH]                  = { "depth viz",       1, 0 },
     [PROF_BUFFER_VIZ_STENCIL]                = { "stencil viz",     1, 0 },
-    [PROF_CODE_PANEL]                        = { "Code Panel",      0, 0 },
-    [PROF_CODE_PANEL_ROWS]                   = { "build rows",      1, 0 },
-    [PROF_CODE_PANEL_TEXT]                   = { "draw text",       1, 0 },
-    [PROF_CODE_PANEL_TEXT_LAYOUT]            = { "layout",          2, 0 },
-    [PROF_CODE_PANEL_TEXT_CHROME]            = { "chrome",          2, 0 },
-    [PROF_CODE_PANEL_TEXT_LINES]             = { "lines",           2, 0 },
-    [PROF_CODE_PANEL_OVERLAYS]               = { "overlays",        1, 0 },
-    [PROF_CODE_PANEL_OVERLAY_TABS]            = { "tabs",            2, 0 },
-    [PROF_CODE_PANEL_OVERLAY_MENU]            = { "menu",            2, 0 },
-    [PROF_CODE_PANEL_OVERLAY_MENU_LABELS]     = { "labels",          3, 0 },
-    [PROF_CODE_PANEL_OVERLAY_MENU_PINS]       = { "pins",            3, 0 },
-    [PROF_CODE_PANEL_OVERLAY_SEARCH]          = { "search",          2, 0 },
-    [PROF_CODE_PANEL_OVERLAY_STATUS]          = { "status",          2, 0 },
-    [PROF_CODE_PANEL_OVERLAY_STATUS_TEXT]     = { "text",            3, 0 },
-    [PROF_CODE_PANEL_OVERLAY_STATUS_ACTIONS]  = { "actions",         3, 0 },
-    [PROF_CODE_PANEL_OVERLAY_PICKER]          = { "picker",          2, 0 },
-    [PROF_CODE_PANEL_OVERLAY_SWATCH]          = { "num swatch",      2, 0 },
-    [PROF_UI_PANELS]                         = { "UI Panels",       0, 0 },
     [PROF_SNAPSHOT]                          = { "Snapshot",        0, 0 },
     [PROF_SNAPSHOT_TRANSFORMERS]             = { "transformers",    1, 0 },
     [PROF_SNAPSHOT_HIGHLIGHTS]               = { "highlights",      1, 0 },
     [PROF_SNAPSHOT_VIRTUAL_LINES]            = { "virtual lines",   1, 0 },
     [PROF_SNAPSHOT_PREP]                     = { "prep",            1, 0 },
+    /* Depth 2: both scans run inside the prep bracket. They belong to the
+     * assignment plot and the console, whose panels are rows down in the UI
+     * band - a row is a place in the frame, not a feature. */
+    [PROF_ASSIGN_PLOT_MARKERS]               = { "plot markers",    2, 0 },
+    [PROF_CONSOLE_CAPTURE]                   = { "console scan",    2, 0 },
     [PROF_SNAPSHOT_SCENE_CONFIG]             = { "scene config",    1, 0 },
     [PROF_SNAPSHOT_UI]                       = { "ui snapshot",     1, 0 },
     [PROF_FLATTEN]                           = { "Flatten",         0, 0 },
@@ -88,22 +75,46 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_FLATTEN_VAR_ASSIGN]                = { "var assign",      1, 0 },
     [PROF_FLATTEN_SCRATCH_ASSIGN]            = { "scratch assign",  1, 0 },
     [PROF_REBAKE]                            = { "Rebake",          0, 0 },
-    [PROF_REBAKE_EVAL]                       = { "eval walk",        1, 0 },
+    [PROF_REBAKE_EVAL]                       = { "eval walk",       1, 0 },
     [PROF_REFORMAT]                          = { "Reformat",        0, 0 },
     [PROF_AUTONORMAL]                        = { "Autonormal",      0, 0 },
-    [PROF_REPLAY_HUD]                        = { "Replay HUD",      0, 0 },
-    [PROF_TOUR_HUD]                          = { "Tour HUD",        0, 0 },
-    [PROF_PROFILE_PANEL]                     = { "Profile Panel",   0, 0 },
-    [PROF_PROFILE_PANEL_FPS]                 = { "fps plot",        1, 0 },
-    [PROF_PROFILE_PANEL_SECTIONS]            = { "section list",    1, 0 },
-    [PROF_PROFILE_PANEL_HISTOGRAM]           = { "histograms",      1, 0 },
-    [PROF_MEMORY_PANEL]                      = { "Memory Panel",    0, 0 },
-    [PROF_ASSIGN_PLOT]                       = { "Assign Plot",     0, 0 },
-    [PROF_ASSIGN_PLOT_CAPTURE]               = { "capture",         1, 0 },
-    [PROF_ASSIGN_PLOT_PANEL]                 = { "panel",           1, 0 },
-    [PROF_CONSOLE]                           = { "Console",         0, 0 },
-    [PROF_CONSOLE_CAPTURE]                   = { "capture",         1, 0 },
-    [PROF_CONSOLE_PANEL]                     = { "panel",           1, 0 },
+    /* A root because of where it runs: after the flatten refresh, before the
+     * snapshot opens, so no bracket encloses it. The plot's other two rows sit
+     * where they run too - "plot markers" under the snapshot's prep, "assign
+     * plot" under the UI band. */
+    [PROF_ASSIGN_PLOT_CAPTURE]               = { "Assign Plot Scan", 0, 0 },
+    /* The 2D UI band and its panels. Everything here is a child of the single
+     * bracket in glr_ctrl_display_frame(), so the parent row carries the whole
+     * interface cost including the draws between the children that have no
+     * section of their own. */
+    [PROF_UI_2D]                             = { "UI (2D)",         0, 0 },
+    [PROF_REPLAY_HUD]                        = { "replay HUD",      1, 0 },
+    [PROF_TOUR_HUD]                          = { "tour HUD",        1, 0 },
+    [PROF_CODE_PANEL]                        = { "code panel",      1, 0 },
+    [PROF_CODE_PANEL_ROWS]                   = { "build rows",      2, 0 },
+    [PROF_CODE_PANEL_TEXT]                   = { "draw text",       2, 0 },
+    [PROF_CODE_PANEL_TEXT_LAYOUT]            = { "layout",          3, 0 },
+    [PROF_CODE_PANEL_TEXT_CHROME]            = { "chrome",          3, 0 },
+    [PROF_CODE_PANEL_TEXT_LINES]             = { "lines",           3, 0 },
+    [PROF_CODE_PANEL_OVERLAYS]               = { "overlays",        2, 0 },
+    [PROF_CODE_PANEL_OVERLAY_TABS]           = { "tabs",            3, 0 },
+    [PROF_CODE_PANEL_OVERLAY_MENU]           = { "menu",            3, 0 },
+    [PROF_CODE_PANEL_OVERLAY_MENU_LABELS]    = { "labels",          4, 0 },
+    [PROF_CODE_PANEL_OVERLAY_MENU_PINS]      = { "pins",            4, 0 },
+    [PROF_CODE_PANEL_OVERLAY_SEARCH]         = { "search",          3, 0 },
+    [PROF_CODE_PANEL_OVERLAY_STATUS]         = { "status",          3, 0 },
+    [PROF_CODE_PANEL_OVERLAY_STATUS_TEXT]    = { "text",            4, 0 },
+    [PROF_CODE_PANEL_OVERLAY_STATUS_ACTIONS] = { "actions",         4, 0 },
+    [PROF_CODE_PANEL_OVERLAY_PICKER]         = { "picker",          3, 0 },
+    [PROF_CODE_PANEL_OVERLAY_SWATCH]         = { "num swatch",      3, 0 },
+    [PROF_ASSIGN_PLOT_PANEL]                 = { "assign plot",     1, 0 },
+    [PROF_CONSOLE_PANEL]                     = { "console",         1, 0 },
+    [PROF_UI_PANELS]                         = { "popups",          1, 0 },
+    [PROF_PROFILE_PANEL]                     = { "profile panel",   1, 0 },
+    [PROF_PROFILE_PANEL_FPS]                 = { "fps plot",        2, 0 },
+    [PROF_PROFILE_PANEL_SECTIONS]            = { "section list",    2, 0 },
+    [PROF_PROFILE_PANEL_HISTOGRAM]           = { "histograms",      2, 0 },
+    [PROF_MEMORY_PANEL]                      = { "memory panel",    1, 0 },
     [PROF_COMPOSITOR]                        = { "Compositor FX",   0, 0 },
     [PROF_FRAME_RESTORE]                     = { "Frame Restore",   0, 0 },
     [PROF_SCRIPTED_INPUT]                    = { "Scripted Input",  0, 0 },
@@ -167,7 +178,14 @@ static const unsigned char k_gpu_sections[PROF_SECTION_COUNT] = {
     [PROF_RENDER3D_OVERLAY_NORMALS]          = 1,
     [PROF_RENDER3D_OVERLAY_VERTEX_NUMBERS]   = 1,
     [PROF_RENDER3D_POST_PROCESS]             = 1,
-    /* build rows / layout are pure-CPU phases (no GL emitted) - excluded. */
+    /* The 2D band's own bracket owns a query: it spans the uninstrumented
+     * draws between the panels (buffer-viz legend, status history) that no
+     * child accounts for. Its children keep theirs - gpuprof segments nested
+     * spans rather than nesting queries, so the extra level costs segments,
+     * not correctness.
+     *
+     * build rows / layout are pure-CPU phases (no GL emitted) - excluded. */
+    [PROF_UI_2D]                             = 1,
     [PROF_CODE_PANEL]                        = 1,
     [PROF_CODE_PANEL_TEXT]                   = 1,
     [PROF_CODE_PANEL_TEXT_CHROME]            = 1,
@@ -184,10 +202,9 @@ static const unsigned char k_gpu_sections[PROF_SECTION_COUNT] = {
      * owns the GPU query so the overlay does not nest timer queries while it
      * is rendering the profiler's own measurements. */
     [PROF_MEMORY_PANEL]                      = 1,
-    /* Only the assignment plot's panel leaf draws. Its parent spans the
-     * flat-program scan as well - pure CPU, and accumulated across two
-     * separate points in the frame - so a query there would bracket work
-     * that issues no GL at all. */
+    /* Of the plot's and console's rows only the panels draw; their scan rows
+     * (up under the snapshot's prep, and the plot's own root) are pure-CPU
+     * flat-program walks that issue no GL at all. */
     [PROF_ASSIGN_PLOT_PANEL]                 = 1,
     [PROF_CONSOLE_PANEL]                     = 1,
     [PROF_COMPOSITOR]                        = 1,

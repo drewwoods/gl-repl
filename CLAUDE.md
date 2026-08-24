@@ -599,10 +599,14 @@ Right-click a `CMD_VAR_ASSIGN` / `CMD_SCRATCH_ASSIGN` row → floating plot of
 that row's values (`src/subsystems/assign_plot/` capture,
 `src/ui/support/assign_plot.c` panel). **No executor hook**: flatten already
 bakes each execution's value into `args[0]` (`args[2]` for scratch), so capture
-is a flat-program scan that early-outs when closed. `PROF_ASSIGN_PLOT` spans
-both phases via `prof_accum_*` (the scan and the draw sit at opposite ends of
-the frame); the reset and the commit are both gated on the panel being open, so
-never reset one without the other. Controls are mouse-only (no keymap slot, no
+is a flat-program scan that early-outs when closed. Its cost is **three rows,
+not one**: profile sections name a place in the frame, and the plot's phases run
+in three of them - `PROF_ASSIGN_PLOT_CAPTURE` (a root; the scan runs after the
+flatten refresh, before the snapshot opens), `PROF_ASSIGN_PLOT_MARKERS` (under
+`PROF_SNAPSHOT_PREP`, where the replay-PC scan runs) and
+`PROF_ASSIGN_PLOT_PANEL` (under `PROF_UI_2D`, with the other overlays). All
+three are gated on the panel being open, so a closed plot leaves all three
+stale. Controls are mouse-only (no keymap slot, no
 `GlrConfigKey`, so no `@cfg`/golden churn) - the rate, `lin`/`log` and
 `1x`/`2x` chips plus the legend all live in the panel.
 

@@ -146,9 +146,9 @@ flowchart TD
     s7 --> s8["build Render3dRenderConfig from REPL state<br/><i>PROF_SNAPSHOT_SCENE_CONFIG</i>"]
     s8 --> s9["build UiRenderSnapshot from REPL state<br/><i>PROF_SNAPSHOT_UI</i>"]
     s9 --> s10["render3d_draw_scene(&render3d_cfg)<br/><i>PROF_RENDER3D</i>"]
-    s10 --> s11["ui_panels_render_code_panel(&ui_snap)<br/><i>PROF_CODE_PANEL</i>"]
-    s11 --> s12["ui_*_render(&ui_snap) overlays<br/><i>PROF_UI_PANELS</i>"]
-    s12 --> s13["ui_profile_panel_render(&ui_snap)"]
+    s10 --> s11["ui_panels_render_code_panel(&ui_snap)<br/><i>PROF_UI_2D &gt; PROF_CODE_PANEL</i>"]
+    s11 --> s12["ui_*_render(&ui_snap) overlays<br/><i>PROF_UI_2D &gt; PROF_UI_PANELS</i>"]
+    s12 --> s13["ui_profile_panel_render(&ui_snap)<br/><i>PROF_UI_2D &gt; PROF_PROFILE_PANEL</i>"]
     s13 --> s14["restore flat count & predefined variable values"]
     s14 --> h1["splash + glr_ctrl scripted-overlay stage<br/><i>PROF_HOST_OVERLAYS</i>"]
     h1 --> fe["glr_frame_work_end<br/><i>closes PROF_FRAME_WORK</i>"]
@@ -160,6 +160,19 @@ Profile sections wrap each producer so snapshot construction time is
 visible: `PROF_SNAPSHOT` is the aggregate, with sub-sections for
 transformers, highlights, virtual lines, scene config, and ui snapshot
 (see [`src/support/cpuprof.h`](../src/support/cpuprof.h)).
+
+The 2D overlays are grouped the same way: `PROF_UI_2D` brackets the whole band
+drawn over the finished scene - replay/tour HUDs, code panel, popups, profile
+and memory panels - so the panel has one row for what the interface costs, and
+the draws between those children that carry no section of their own land in the
+parent rather than in unattributed Frame Work. It is *accumulated*
+(`prof_accum_*`) rather than one span: the assignment-plot and console panels
+draw inside the stretch but belong to their own accumulated roots, whose capture
+phases run earlier in the frame, so the band's bracket steps out around each of
+those draws and the three rows stay disjoint. Nesting is only ever claimed where
+it is real - the depth column in [`src/app/glr_prof.c`](../src/app/glr_prof.c)
+is checked every frame by the guard described in
+[`src/support/cpuprof.h`](../src/support/cpuprof.h).
 
 **The profiled frame is the display callback, and the application owns it.**
 The FPS cadence is wider: it is the interval from one callback start to the
@@ -1229,15 +1242,25 @@ command-description lookup: neither assignment type has an authored description
 record, so without that branch the row falls into the inert `else` and
 right-click does nothing at all.
 
-**Profiling it needs the accumulator, not a bracket.** The two phases sit at
-opposite ends of the frame, so no single `prof_begin`/`prof_end` pair could
-cover both: `PROF_ASSIGN_PLOT` is `prof_accum_reset` at the capture site,
-`prof_accum_end` after each phase, and `prof_accum_commit` after the draw, with
-`PROF_ASSIGN_PLOT_CAPTURE` / `_PANEL` as ordinary nested leaves. Both the reset
-and the commit are gated on the panel being open, and **that pair has to stay in
-sync** - committing an accumulator that was not reset this frame would report
-the previous plot's time forever. A closed plot leaves all three rows stale
-(`--`), which is the honest reading of a feature that is not running.
+**Profiling it takes three rows, not one.** Its phases run at three different
+points in the frame, and a profile section names a *place* in the frame rather
+than a feature - so each phase is a row where it runs, and each nests under
+whatever bracket is actually open there:
+
+| phase | section | parent |
+|---|---|---|
+| flat-program scan, after the flatten refresh | `PROF_ASSIGN_PLOT_CAPTURE` | none - it runs before `PROF_SNAPSHOT` opens |
+| replay-PC marker scan | `PROF_ASSIGN_PLOT_MARKERS` | `PROF_SNAPSHOT_PREP` |
+| panel draw | `PROF_ASSIGN_PLOT_PANEL` | `PROF_UI_2D` |
+
+The console's two phases (`PROF_CONSOLE_CAPTURE` under the same prep bracket,
+`PROF_CONSOLE_PANEL` in the UI band) are split the same way. Reading what the
+whole feature costs means adding its rows - the deliberate trade for rows that
+never overlap: the single accumulated row each of these used to have spanned
+several parents' spans at once, so its time was counted twice, once under itself
+and once under whichever bracket it ran inside. All the rows are gated on the
+panel being open, so a closed plot leaves every one of them stale (`--`), which
+is the honest reading of a feature that is not running.
 
 (This is also why the catalog could not simply grow before: `prof_sections.h`
 used to sit at exactly the 64 sections a `uint64_t` section mask allowed. The

@@ -3224,14 +3224,13 @@ void glr_ctrl_display_frame(void) {
      * and before anything narrows it (replay clamps the executed count, but
      * the plot wants the whole frame).
      *
-     * PROF_ASSIGN_PLOT accumulates across this scan and the panel draw far
-     * below, because the two phases sit at opposite ends of the frame and no
-     * single begin/end could bracket both. Gated on the panel being open so a
-     * closed plot leaves all three rows stale ("--") rather than reporting a
-     * truthful-but-noisy zero every frame. */
+     * The scan gets its own root row: it runs after the flatten refresh and
+     * before the snapshot opens, so no bracket encloses it, and the plot's
+     * other two phases (the replay-marker scan under the snapshot's prep, the
+     * panel draw down in the UI band) are rows where *they* run. Gated on the
+     * panel being open so a closed plot leaves all three stale ("--") rather
+     * than reporting a truthful-but-noisy zero every frame. */
     if (assign_plot_is_open()) {
-        prof_accum_reset(PROF_ASSIGN_PLOT);
-        prof_begin(PROF_ASSIGN_PLOT);
         prof_begin(PROF_ASSIGN_PLOT_CAPTURE);
         /* While replay is scrubbing, the plot's PC marker is only truthful over
          * a trace from the frame the PC is walking - so capture every frame
@@ -3243,7 +3242,6 @@ void glr_ctrl_display_frame(void) {
          * which is all the 1 Hz gate needs - no second clock to keep. */
         assign_plot_capture((double)glutGet(GLUT_ELAPSED_TIME) * 1000.0);
         prof_end(PROF_ASSIGN_PLOT_CAPTURE);
-        prof_accum_end(PROF_ASSIGN_PLOT);
     }
 
     /* Stencil is deliberately not host-cleared: the program's own
@@ -3326,12 +3324,12 @@ void glr_ctrl_display_frame(void) {
      * span shows up only as unattributed remainder. */
     g_assign_plot_replay_marker = 0;
     if (replay_active() && assign_plot_is_open()) {
-        prof_begin(PROF_ASSIGN_PLOT);
+        prof_begin(PROF_ASSIGN_PLOT_MARKERS);
         g_assign_plot_replay_marker =
             assign_plot_exec_progress(g_frame_replay_exec_limit,
                                       g_assign_plot_replay_frac,
                                       g_assign_plot_replay_value);
-        prof_accum_end(PROF_ASSIGN_PLOT);
+        prof_end(PROF_ASSIGN_PLOT_MARKERS);
     }
 
     /* Auto-open console panel if the document uses console(...) and scene changed
@@ -3361,12 +3359,9 @@ void glr_ctrl_display_frame(void) {
     }
 
     if (console_is_open()) {
-        prof_accum_reset(PROF_CONSOLE);
-        prof_begin(PROF_CONSOLE);
         prof_begin(PROF_CONSOLE_CAPTURE);
         console_capture(flat_program.cmds, flat_program.cmd_count, g_frame_replay_exec_limit);
         prof_end(PROF_CONSOLE_CAPTURE);
-        prof_accum_end(PROF_CONSOLE);
     }
 
     repl_refresh_render_state_strings();
@@ -3464,6 +3459,16 @@ void glr_ctrl_display_frame(void) {
      * profile panel reads them below. */
     repl_flat_refresh_profile_frame_end();
 
+    /* --- 2D UI band (PROF_UI_2D) -------------------------------------------
+     * Every overlay drawn over the finished scene, from the replay HUD down to
+     * the status-history popup, is one profiled band: the panels below are its
+     * children, and the parent absorbs the draws between them that have no
+     * section of their own. One begin/end: every panel in the stretch is a
+     * child of it, the assignment plot's and the console's included - their
+     * scan phases are rows up where the scans run, not legs of a row down
+     * here. Closed just before the compositor pass. */
+    prof_begin(PROF_UI_2D);
+
     int frame_replaying = replay_active();
     if (frame_replaying) {
         prof_begin(PROF_REPLAY_HUD);
@@ -3509,31 +3514,23 @@ void glr_ctrl_display_frame(void) {
     /* Assignment-value plot. Drawn before the panel block because the
      * OpenGL-state popup in it is anchored to a click anywhere in the code
      * panel and routinely lands on top of this parked panel: a popup the
-     * reader just summoned must not be buried under it. Closes the accum
-     * bracket opened around the capture earlier in the frame, so
-     * PROF_ASSIGN_PLOT reports what the whole feature costs rather than just
-     * its draw. The `open` guard has to match the one at the capture site:
-     * committing an accumulator that was never reset this frame would report
-     * the previous plot's time forever. */
+     * reader just summoned must not be buried under it. Its row is an ordinary
+     * child of the UI band around it; what the whole feature costs is this row
+     * plus the two scan rows earlier in the frame, which is the price of every
+     * row naming one place instead of one feature. */
     if (ui_snap.assign_plot.open) {
         UiAssignPlotPanelView plot_view = glr_ctrl_build_assign_plot_view(&ui_snap);
-        prof_begin(PROF_ASSIGN_PLOT);
         prof_begin(PROF_ASSIGN_PLOT_PANEL);
         ui_assign_plot_panel_render(&plot_view);
         prof_end(PROF_ASSIGN_PLOT_PANEL);
-        prof_accum_end(PROF_ASSIGN_PLOT);
-        prof_accum_commit(PROF_ASSIGN_PLOT);
     }
 
     /* Console panel. Drawn adjacent to assignment plot panel. */
     if (ui_snap.console.open) {
         UiConsolePanelView console_view = glr_ctrl_build_console_view(&ui_snap);
-        prof_begin(PROF_CONSOLE);
         prof_begin(PROF_CONSOLE_PANEL);
         ui_console_panel_render(&console_view);
         prof_end(PROF_CONSOLE_PANEL);
-        prof_accum_end(PROF_CONSOLE);
-        prof_accum_commit(PROF_CONSOLE);
     }
 
     prof_begin(PROF_UI_PANELS);
@@ -3616,6 +3613,8 @@ void glr_ctrl_display_frame(void) {
      * CPU/memory panels (the assignment-value plot draws earlier still, under
      * the OpenGL-state popup). */
     ui_panels_render_scene_status(&ui_snap);
+
+    prof_end(PROF_UI_2D);   /* end of the 2D UI band */
 
     /* Compositor post-process: the whole-frame filter runs over all
      * controller-owned drawing (3D scene + controller-owned 2D UI) now that
