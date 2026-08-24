@@ -259,99 +259,124 @@ Restores the state most recently saved by glPushAttrib, discarding the changes m
 [capability GL_BLEND]
 title = GL_BLEND
 Controls color blending between new fragments and the existing color buffer. glBlendFunc selects the source and destination factors used while this capability is enabled.
+pushAttrib: GL_COLOR_BUFFER_BIT | GL_ENABLE_BIT
 
 [capability GL_CLIP_PLANE0]
 title = GL_CLIP_PLANE0
 Controls user clip plane 0. glClipPlane defines its equation; enabling this slot clips primitives against that plane.
+pushAttrib: GL_TRANSFORM_BIT | GL_ENABLE_BIT
 
 [capability GL_CLIP_PLANE1]
 title = GL_CLIP_PLANE1
 Controls user clip plane 1. glClipPlane defines its equation; enabling this slot clips primitives against that plane.
+pushAttrib: GL_TRANSFORM_BIT | GL_ENABLE_BIT
 
 [capability GL_CLIP_PLANE2]
 title = GL_CLIP_PLANE2
 Controls user clip plane 2. glClipPlane defines its equation; enabling this slot clips primitives against that plane.
+pushAttrib: GL_TRANSFORM_BIT | GL_ENABLE_BIT
 
 [capability GL_CLIP_PLANE3]
 title = GL_CLIP_PLANE3
 Controls user clip plane 3. glClipPlane defines its equation; enabling this slot clips primitives against that plane.
+pushAttrib: GL_TRANSFORM_BIT | GL_ENABLE_BIT
 
 [capability GL_CLIP_PLANE4]
 title = GL_CLIP_PLANE4
 Controls user clip plane 4. glClipPlane defines its equation; enabling this slot clips primitives against that plane.
+pushAttrib: GL_TRANSFORM_BIT | GL_ENABLE_BIT
 
 [capability GL_CLIP_PLANE5]
 title = GL_CLIP_PLANE5
 Controls user clip plane 5. glClipPlane defines its equation; enabling this slot clips primitives against that plane.
+pushAttrib: GL_TRANSFORM_BIT | GL_ENABLE_BIT
 
 [capability GL_COLOR_MATERIAL]
 title = GL_COLOR_MATERIAL
 Makes selected material properties track the current color. glColorMaterial chooses the face and property, allowing glColor calls to drive fixed-function lighting materials.
+pushAttrib: GL_LIGHTING_BIT | GL_ENABLE_BIT
 
 [capability GL_CULL_FACE]
 title = GL_CULL_FACE
 Removes selected front-facing or back-facing polygons before rasterization. glCullFace selects which faces are removed and glFrontFace defines their winding.
+pushAttrib: GL_POLYGON_BIT | GL_ENABLE_BIT
 
 [capability GL_DEPTH_TEST]
 title = GL_DEPTH_TEST
 Compares each fragment's depth with the depth buffer before it can update the framebuffer. glDepthFunc chooses the comparison and glDepthMask controls depth writes.
+pushAttrib: GL_DEPTH_BUFFER_BIT | GL_ENABLE_BIT
 
 [capability GL_FOG]
 title = GL_FOG
 Blends each fragment toward the fog color with eye-space distance. glFogi selects the GL_LINEAR / GL_EXP / GL_EXP2 equation, glFogf sets its density or start/end range, and glFogfv sets the fog color.
+pushAttrib: GL_FOG_BIT | GL_ENABLE_BIT
 
 [capability GL_LIGHT0]
 title = GL_LIGHT0
 Controls fixed-function light slot 0. When global GL_LIGHTING is also enabled, this slot contributes its configured ambient, diffuse, and specular illumination.
+pushAttrib: GL_LIGHTING_BIT | GL_ENABLE_BIT
 
 [capability GL_LIGHT1]
 title = GL_LIGHT1
 Controls fixed-function light slot 1. When global GL_LIGHTING is also enabled, this slot contributes its configured ambient, diffuse, and specular illumination.
+pushAttrib: GL_LIGHTING_BIT | GL_ENABLE_BIT
 
 [capability GL_LIGHT2]
 title = GL_LIGHT2
 Controls fixed-function light slot 2. When global GL_LIGHTING is also enabled, this slot contributes its configured ambient, diffuse, and specular illumination.
+pushAttrib: GL_LIGHTING_BIT | GL_ENABLE_BIT
 
 [capability GL_LIGHT3]
 title = GL_LIGHT3
 Controls fixed-function light slot 3. When global GL_LIGHTING is also enabled, this slot contributes its configured ambient, diffuse, and specular illumination.
+pushAttrib: GL_LIGHTING_BIT | GL_ENABLE_BIT
 
 [capability GL_LIGHTING]
 title = GL_LIGHTING
 Switches fixed-function lighting evaluation on or off. Enabled light slots, current normals, material values, and the lighting model then determine vertex colors.
+pushAttrib: GL_LIGHTING_BIT | GL_ENABLE_BIT
 
 [capability GL_LINE_SMOOTH]
 title = GL_LINE_SMOOTH
 Requests antialiased line coverage. It is commonly combined with blending, and the exact quality depends on the OpenGL implementation.
+pushAttrib: GL_LINE_BIT | GL_ENABLE_BIT
 
 [capability GL_LINE_STIPPLE]
 title = GL_LINE_STIPPLE
 Applies the repeating pattern configured by glLineStipple to rasterized lines. Disabling it returns lines to a continuous pattern.
+pushAttrib: GL_LINE_BIT | GL_ENABLE_BIT
 
 [capability GL_MULTISAMPLE]
 title = GL_MULTISAMPLE
 Uses multisample coverage when the framebuffer has multisample buffers. It reduces jagged edges without changing the submitted geometry.
+pushAttrib: GL_ENABLE_BIT
 
 [capability GL_NORMALIZE]
 title = GL_NORMALIZE
 Renormalizes transformed normals before lighting. It keeps lighting correct after scaling transforms, at the cost of extra per-vertex work.
+pushAttrib: GL_TRANSFORM_BIT | GL_ENABLE_BIT
 
 [capability GL_POLYGON_OFFSET_FILL]
 title = GL_POLYGON_OFFSET_FILL
 Applies the glPolygonOffset depth shift to filled polygons. Enable it around the pass that would otherwise z-fight with a coplanar surface, such as a decal drawn onto a wall.
+pushAttrib: GL_POLYGON_BIT | GL_ENABLE_BIT
 
 [capability GL_POLYGON_OFFSET_LINE]
 title = GL_POLYGON_OFFSET_LINE
 Applies the glPolygonOffset depth shift to polygons rasterized in GL_LINE mode. This is the switch a wireframe-over-solid pass needs, since the lines come from polygons in line mode rather than filled ones.
+pushAttrib: GL_POLYGON_BIT | GL_ENABLE_BIT
 
 [capability GL_POLYGON_OFFSET_POINT]
 title = GL_POLYGON_OFFSET_POINT
 Applies the glPolygonOffset depth shift to polygons rasterized in GL_POINT mode, the point-mode counterpart of the fill and line variants.
+pushAttrib: GL_POLYGON_BIT | GL_ENABLE_BIT
 
 [capability GL_POINT_SMOOTH]
 title = GL_POINT_SMOOTH
 Requests antialiased point coverage instead of square aliased points. The exact shape and quality depend on the OpenGL implementation.
+pushAttrib: GL_POINT_BIT | GL_ENABLE_BIT
 
 [capability GL_STENCIL_TEST]
 title = GL_STENCIL_TEST
 Compares each fragment against the stencil buffer before it can update color or depth. glStencilFunc chooses the comparison, glStencilOp chooses how the stored value changes, and glStencilMask limits its writable bits.
+pushAttrib: GL_STENCIL_BUFFER_BIT | GL_ENABLE_BIT
