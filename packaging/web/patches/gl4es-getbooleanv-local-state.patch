@@ -1,0 +1,56 @@
+Answer glGetBooleanv from gl4es's tracked state instead of the driver.
+
+gl4es-getter-client-state.patch already routes glGetIntegerv / glGetFloatv /
+glGetDoublev through gl4es_commonGet(), because a glGet* that reaches WebGL
+is a synchronous getParameter and drains the command queue.  glGetBooleanv
+was left out: it had no gl4es-side implementation at all, so every boolean
+query went straight to the driver.
+
+gl4es-edge-flag.patch gave it one, but deliberately narrow - GL_EDGE_FLAG
+only, everything else passed through - because widening it is a separate
+decision.  This is that decision: consult gl4es_commonGet() first, and fall
+through to the driver only for pnames gl4es does not track.
+
+Measured with the same benchmark linked against gl4es built with and without
+this patch, headless Chrome / SwiftShader, 20000 iterations of
+glGetBooleanv(GL_DEPTH_WRITEMASK) + glGetIntegerv(GL_SHADE_MODEL), five runs
+per build:
+
+    without   37.2 us per pair   (range 34.8 - 57.1)
+    with       0.14 us per pair  (range 0.135 - 0.185)
+
+The ranges do not overlap.  glGetIntegerv was already local in both builds,
+so the whole difference is the glGetBooleanv round trip.
+
+The tradeoff is the one the existing getter patch already accepted: a pname
+whose tracked value is stale now returns the stale value rather than the
+driver's.  Correctness was checked against native GL (Mesa 4.6 compat /
+llvmpipe through surfaceless EGL) on GL_DEPTH_WRITEMASK, GL_DEPTH_TEST,
+GL_BLEND, GL_CULL_FACE and GL_EDGE_FLAG, each set and cleared - all ten
+agree with native.  That is ten pnames, not the whole enum space; this patch
+is the one to drop first if a boolean query is ever seen returning stale
+state.
+
+diff --git a/src/gl/getter.c b/src/gl/getter.c
+index bc123b87..595dc64a 100644
+--- a/src/gl/getter.c
++++ b/src/gl/getter.c
+@@ -839,13 +839,12 @@ void APIENTRY_GL4ES gl4es_glGetBooleanv(GLenum pname, GLboolean *params) {
+         errorShim(GL_INVALID_OPERATION);
+         return;
+     }
+-    if (pname == GL_EDGE_FLAG) {
+-        /* CPU-only state (see gl4es_glEdgeFlag): GLES has no edge flag, so
+-         * without this the query falls through to the driver and raises
+-         * GL_INVALID_ENUM without writing params.  Everything else keeps
+-         * going straight through, exactly as before. */
++    /* Only the state gl4es tracks itself has to be intercepted here; anything
++     * GLES knows about keeps going straight to the driver, as before. */
++    GLfloat fparam;
++    if (gl4es_commonGet(pname, &fparam)) {
+         noerrorShim();
+-        *params = glstate->edgeflag ? GL_TRUE : GL_FALSE;
++        *params = (fparam != 0.0f) ? GL_TRUE : GL_FALSE;
+         return;
+     }
+     LOAD_GLES(glGetBooleanv);

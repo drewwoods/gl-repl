@@ -236,6 +236,55 @@ drawn in wireframe, hidden-line, vertex-outline or polygon-highlight views -
 the diagonals go away. That is the fix working: they were never in native GL's
 output.
 
+## 2026-08-24: `glGetBooleanv` from tracked state
+
+Patch: [`gl4es-getbooleanv-local-state.patch`](gl4es-getbooleanv-local-state.patch)
+
+Split out of the edge-flag patch, which needed only `GL_EDGE_FLAG` answered
+locally. Widening that to every tracked pname is a separate decision with a
+separate risk - and this is the patch to drop first if a boolean query is ever
+seen returning stale state.
+
+### Premise
+
+`gl4es-getter-client-state.patch` already routes `glGetIntegerv` /
+`glGetFloatv` / `glGetDoublev` through `gl4es_commonGet()`, because a `glGet*`
+that reaches WebGL is a synchronous `getParameter` and drains the command
+queue. `glGetBooleanv` was left out - it had no gl4es-side implementation at
+all, so every boolean query went to the driver.
+
+### Measurement
+
+The same benchmark linked against gl4es built with and without this patch,
+headless Chrome / SwiftShader, 20000 iterations of
+`glGetBooleanv(GL_DEPTH_WRITEMASK)` + `glGetIntegerv(GL_SHADE_MODEL)`, five
+runs per build:
+
+| build | median | range |
+|---|---:|---|
+| without | 37.2 us/pair | 34.8 - 57.1 |
+| with | 0.14 us/pair | 0.135 - 0.185 |
+
+The ranges do not overlap. `glGetIntegerv` was already local in both builds,
+so the whole difference is the `glGetBooleanv` round trip.
+
+For contrast, the same A/B over the **draw** path - immediate-mode vertex
+submission, polygon-mode lines, quads and quad strips - produced no resolvable
+difference: medians within a few percent with run-to-run ranges overlapping
+almost entirely (`fill` varied 8.7-17.0 ms on *both* builds). Note also that
+`--virtual-time-budget` fast-forwards timers, so in-page `performance.now()`
+is not wall-clock; one run reported all zeros and was discarded. Treat the
+draw-path numbers as "below the noise floor", not as evidence either way.
+
+### Tradeoff
+
+The one the existing getter patch already accepted: a pname whose tracked value
+is stale now returns the stale value rather than the driver's. Checked against
+native GL (Mesa 4.6 compat / llvmpipe through surfaceless EGL) on
+`GL_DEPTH_WRITEMASK`, `GL_DEPTH_TEST`, `GL_BLEND`, `GL_CULL_FACE` and
+`GL_EDGE_FLAG`, each set and cleared - all ten agree with native. That is ten
+pnames, not the whole enum space.
+
 ## 2026-08-24: deferred accumulation performance
 
 The two deferred-accumulation patches were measured separately rather than
