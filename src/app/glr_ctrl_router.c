@@ -253,7 +253,7 @@ int glr_ctrl_router_handle_horizontal_audio_special(int key) {
     return 1;
 }
 
-/* Ctrl+Up / Ctrl+Down are editor function-landmark chords. special_dispatch
+/* Ctrl+Up / Ctrl+Down are editor function navigation chords. special_dispatch
  * claims them before replay (plain Up/Down = speed) and help (plain Up/Down
  * = scroll) so the exact keymap binding always reaches the editor. */
 int glr_ctrl_router_handle_func_nav_special(int key) {

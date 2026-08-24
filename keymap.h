@@ -86,8 +86,8 @@
 #define GLR_NEXT_TUTORIAL    GLUT_KEY_F11, 0   /* next tutorial */
 #define GLR_AUDIO_PREV       GLUT_KEY_LEFT,  GLUT_ACTIVE_CTRL  /* prev track */
 #define GLR_AUDIO_NEXT       GLUT_KEY_RIGHT, GLUT_ACTIVE_CTRL  /* next track */
-#define GLR_PREV_FUNC        GLUT_KEY_UP,    GLUT_ACTIVE_CTRL  /* prev function / current func decl */
-#define GLR_NEXT_FUNC        GLUT_KEY_DOWN,  GLUT_ACTIVE_CTRL  /* next function / current func close */
+#define GLR_PREV_FUNC        GLUT_KEY_UP,    GLUT_ACTIVE_CTRL  /* prev function */
+#define GLR_NEXT_FUNC        GLUT_KEY_DOWN,  GLUT_ACTIVE_CTRL  /* next function */
 
 /* ---- App action bindings (normal keyboard callback) ------------------ */
 #define GLR_SAVE             KEY_CTRL_S, 0     /* save to output.c */

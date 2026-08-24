@@ -396,9 +396,9 @@ const ReplHelpContent *repl_help_text_build(void) {
     nk = key_emit(nk, "  Tab / Enter          \tAccept autocomplete suggestion");
     nk = key_emit(nk, "  Up / Down            \tNavigate lines");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_PREV_FUNC), KM_MODS(GLR_PREV_FUNC), 1, "",
-                          "Previous function / current function declaration");
+                          "Previous function");
     nk = key_emit_binding(nk, "", KM_KEY(GLR_NEXT_FUNC), KM_MODS(GLR_NEXT_FUNC), 1, "",
-                          "Next function / current function closing brace");
+                          "Next function");
     nk = key_emit(nk, "  Left / Right         \tMove cursor within line");
     nk = key_emit_binding(nk, "Home / ", KM_KEY(GLR_LINE_START), KM_MODS(GLR_LINE_START), 0, "",
                           "Jump to start of line");

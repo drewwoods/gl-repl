@@ -3143,9 +3143,9 @@ int main() {
         ASSERT_INT("page down cancels scroll_follow_cursor", g_scroll_follow_cursor, 0);
     }
 
-    /* Ctrl+Up / Ctrl+Down jump function landmarks: declaration, closing
-     * brace, then the neighbouring function. A press with nowhere to go
-     * is a no-op. Cursor lands at end-of-line (the loaded declaration). */
+    /* Ctrl+Up / Ctrl+Down jump function definitions directly (FUNC_DEF).
+     * A press with nowhere to go is a no-op. Cursor lands at end-of-line
+     * (the loaded declaration). */
     {
         int saved_mods = g_mock_modifiers;
 
@@ -3163,27 +3163,19 @@ int main() {
 
         editor_navigate_to_line(0);
         editor_handle_special(GLUT_KEY_DOWN, 0, 0);
-        ASSERT_INT("ctrl-down from header: func0 closer",
-                   editor_state_edit_line(), 2);
+        ASSERT_INT("ctrl-down from header: func1 header",
+                   editor_state_edit_line(), 3);
         ASSERT_INT("ctrl-down lands at end of line",
                    editor_cursor_pos(), editor_input_len());
 
         editor_handle_special(GLUT_KEY_DOWN, 0, 0);
-        ASSERT_INT("ctrl-down from closer: func1 header",
+        ASSERT_INT("ctrl-down at last func: stay",
                    editor_state_edit_line(), 3);
-
-        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
-        ASSERT_INT("ctrl-down from func1 header: closer",
-                   editor_state_edit_line(), 5);
-
-        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
-        ASSERT_INT("ctrl-down at last closer: stay",
-                   editor_state_edit_line(), 5);
 
         editor_navigate_to_line(1);
         editor_handle_special(GLUT_KEY_DOWN, 0, 0);
-        ASSERT_INT("ctrl-down from body: closer",
-                   editor_state_edit_line(), 2);
+        ASSERT_INT("ctrl-down from body: func1 header",
+                   editor_state_edit_line(), 3);
 
         editor_navigate_to_line(1);
         editor_handle_special(GLUT_KEY_UP, 0, 0);
@@ -3228,6 +3220,11 @@ int main() {
         ASSERT_INT("ctrl-up from closer: current header",
                    editor_state_edit_line(), 3);
 
+        editor_navigate_to_line(2);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl-down from func0 closer: func1 header",
+                   editor_state_edit_line(), 3);
+
         editor_navigate_to_line(6);
         editor_handle_special(GLUT_KEY_UP, 0, 0);
         ASSERT_INT("ctrl-up from outside: prev header",
@@ -3267,8 +3264,8 @@ int main() {
         ac->selected_idx = 0;
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
         editor_handle_special(GLUT_KEY_DOWN, 0, 0);
-        ASSERT_INT("ctrl+down with active autocomplete jumps to func closer",
-                   editor_state_edit_line(), 2);
+        ASSERT_INT("ctrl+down with active autocomplete jumps to next func",
+                   editor_state_edit_line(), 3);
         ac->match_count = 0;
 
         /* Pending input auto-commit before func nav target calculation */
@@ -3282,33 +3279,33 @@ int main() {
         g_mock_modifiers = saved_mods;
     }
 
-    /* Nested if/else inside a function: Ctrl+Down from either arm lands
-     * on the function closer, not the if-end. */
+    /* Nested if/else inside a function: Ctrl+Down from either arm jumps
+     * to next function declaration. */
     {
         int saved_mods = g_mock_modifiers;
 
         glr_ctrl_reset_all();
-        editor_feed_line("func0() {");
-        editor_feed_line("  if(1) {");
-        editor_feed_line("    glColor3f(1,0,0);");
-        editor_feed_line("  } else {");
-        editor_feed_line("    glColor3f(0,1,0);");
-        editor_feed_line("  }");
-        editor_feed_line("}");
-        ASSERT_INT("nested-if nav setup: last row is func closer",
-                   repl_state_document_cmds()[repl_state_document_count() - 1].type,
-                   CMD_FUNC_END);
+        editor_feed_line("func0() {");            /* 0 */
+        editor_feed_line("  if(1) {");            /* 1 */
+        editor_feed_line("    glColor3f(1,0,0);");/* 2 */
+        editor_feed_line("  } else {");           /* 3 */
+        editor_feed_line("    glColor3f(0,1,0);");/* 4 */
+        editor_feed_line("  }");                  /* 5 */
+        editor_feed_line("}");                    /* 6 */
+        editor_feed_line("func1() {");            /* 7 */
+        editor_feed_line("  glColor3f(0,0,1);");  /* 8 */
+        editor_feed_line("}");                    /* 9 */
 
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
         editor_navigate_to_line(2);
         editor_handle_special(GLUT_KEY_DOWN, 0, 0);
-        ASSERT_INT("ctrl-down from if-arm: func closer",
-                   editor_state_edit_line(), repl_state_document_count() - 1);
+        ASSERT_INT("ctrl-down from if-arm: next func header",
+                   editor_state_edit_line(), 7);
 
         editor_navigate_to_line(4);
         editor_handle_special(GLUT_KEY_DOWN, 0, 0);
-        ASSERT_INT("ctrl-down from else-arm: func closer",
-                   editor_state_edit_line(), repl_state_document_count() - 1);
+        ASSERT_INT("ctrl-down from else-arm: next func header",
+                   editor_state_edit_line(), 7);
 
         editor_navigate_to_line(4);
         editor_handle_special(GLUT_KEY_UP, 0, 0);
@@ -3318,8 +3315,7 @@ int main() {
         g_mock_modifiers = saved_mods;
     }
 
-    /* Unmatched closer: Ctrl+Down stays in the broken function instead of
-     * jumping to a later FUNC_DEF. */
+    /* Unmatched function: Ctrl+Down still jumps to the next FUNC_DEF. */
     {
         int saved_mods = g_mock_modifiers;
 
@@ -3339,8 +3335,8 @@ int main() {
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
         editor_navigate_to_line(1);
         editor_handle_special(GLUT_KEY_DOWN, 0, 0);
-        ASSERT_INT("ctrl-down inside unmatched func: stay",
-                   editor_state_edit_line(), 1);
+        ASSERT_INT("ctrl-down inside unmatched func: next func header",
+                   editor_state_edit_line(), 2);
 
         editor_handle_special(GLUT_KEY_UP, 0, 0);
         ASSERT_INT("ctrl-up inside unmatched func: header",

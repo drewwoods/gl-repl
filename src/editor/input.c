@@ -2017,23 +2017,14 @@ static void ac_reveal_selected(EditorAutocompleteState *ac) {
     if (ac->scroll_top < 0) ac->scroll_top = 0;
 }
 
-/* Ctrl+Up/Down: function landmarks. Inside a function (including the
- * declaration and the closing `}`), Up lands on the current FUNC_DEF and
- * Down on the matching `}`; a second press in the same direction then
- * jumps to the previous / next function declaration. Outside any function
- * the same chords jump straight to prev / next FUNC_DEF. Nowhere to go
- * is a no-op (the chord is still consumed so it cannot fall through to
- * line motion or autocomplete). An unmatched closer is also a no-op on
- * Down: the cursor stays in the broken function instead of skipping to
- * a later FUNC_DEF. Like plain Up/Down, a no-op still clears a line
- * selection. */
+/* Ctrl+Up/Down: function navigation. Jump directly to the previous or next
+ * function declaration (FUNC_DEF). Nowhere to go is a no-op (the chord is
+ * still consumed so it cannot fall through to line motion or autocomplete).
+ * Like plain Up/Down, a no-op still clears a line selection. */
 static int handle_func_nav_special_key_route(int key) {
     int dir;
     int pos;
-    int def = -1;
-    int end = -1;
     int target = -1;
-    int stay = 0;
 
     if (keymap_event_is(key, GLR_PREV_FUNC))
         dir = -1;
@@ -2050,20 +2041,9 @@ static int handle_func_nav_special_key_route(int key) {
     }
 
     pos = editor_state_edit_line();
-    if (repl_source_scope_enclosing_func_at(pos, &def, &end)) {
-        if (dir > 0) {
-            if (end < 0)
-                stay = 1;
-            else if (pos != end)
-                target = end;
-        } else if (pos != def) {
-            target = def;
-        }
-    }
-    if (!stay && target < 0)
-        target = dir > 0
-            ? repl_source_scope_next_func_def(pos)
-            : repl_source_scope_prev_func_def(pos);
+    target = dir > 0
+        ? repl_source_scope_next_func_def(pos)
+        : repl_source_scope_prev_func_def(pos);
     editor_selection_clear_line_range();
     if (target >= 0 && target != pos)
         editor_navigate_to_line(target);

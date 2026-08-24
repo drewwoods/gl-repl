@@ -7030,8 +7030,8 @@ static void test_func_nav_special_beats_replay_and_help(void) {
     replay_state_mut()->speed = 1.0f;
     speed_before = replay_state_mut()->speed;
     glr_ctrl_special(GLUT_KEY_DOWN, 0, 0);
-    ASSERT_INT("ctrl-down during replay jumps to func closer",
-               editor_state_edit_line(), 2);
+    ASSERT_INT("ctrl-down during replay jumps to next func",
+               editor_state_edit_line(), 3);
     ASSERT_TRUE("ctrl-down during replay leaves speed unchanged",
                 replay_state_mut()->speed == speed_before);
     replay_state_mut()->active = 0;
@@ -7042,8 +7042,8 @@ static void test_func_nav_special_beats_replay_and_help(void) {
     editor_help_session_set_scroll(10);
     scroll_before = editor_help_session_scroll();
     glr_ctrl_special(GLUT_KEY_DOWN, 0, 0);
-    ASSERT_INT("ctrl-down with help open jumps to func closer",
-               editor_state_edit_line(), 2);
+    ASSERT_INT("ctrl-down with help open jumps to next func",
+               editor_state_edit_line(), 3);
     ASSERT_INT("ctrl-down with help open leaves help scroll",
                editor_help_session_scroll(), scroll_before);
 

@@ -79,12 +79,11 @@
 # replace leaves every assignment to that name resolving against nothing.
 # 2026-08-19: input_c bumped +3 for repl_source_scope_enclosing_func_at,
 # repl_source_scope_next_func_def, and repl_source_scope_prev_func_def.
-# Function landmark navigation (Ctrl+Up / Ctrl+Down) needs to query
-# enclosing function boundaries and adjacent function declarations
-# directly from the document scope model.
+# 2026-08-24: input_c dropped -1 (repl_source_scope_enclosing_func_at removed
+# as Ctrl+Up/Down always jumps directly to next/prev function definition).
 #
 # Ratchet down as migrations land. The plan target
 # (docs/plans/done/editor-demo.md) is ~5 per file.
 
-input_c: 30
+input_c: 29
 commit_c: 29
