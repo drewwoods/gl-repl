@@ -728,7 +728,7 @@ diff --git a/src/gl/const.h b/src/gl/const.h
 index 3d9563c3..1b575af1 100644
 --- a/src/gl/const.h
 +++ b/src/gl/const.h
-@@ -119,6 +119,19 @@
+@@ -119,6 +119,20 @@
  #define GL_ALL_ATTRIB_BITS      0xFFFFF
  #define GL_MULTISAMPLE_BIT      0x20000000
  
@@ -744,6 +744,7 @@ index 3d9563c3..1b575af1 100644
 +#define GL_ACCUM_GREEN_BITS     0x0D59
 +#define GL_ACCUM_BLUE_BITS      0x0D5A
 +#define GL_ACCUM_ALPHA_BITS     0x0D5B
++#define GL_ACCUM_CLEAR_VALUE    0x0B80
 +
  #define GL_CLIENT_PIXEL_STORE_BIT  0x00000001
  #define GL_CLIENT_VERTEX_ARRAY_BIT 0x00000002

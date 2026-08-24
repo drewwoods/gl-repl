@@ -87,7 +87,25 @@ index 6f493cb5..1978d479 100644
  #include <stdlib.h>
  #include <string.h>
  
-@@ -315,6 +322,145 @@ static int accum_create_program(glesaccum_t *a) {
+@@ -104,6 +111,7 @@ static glesaccum_t* accum_state() {
+ // force the GLES-side active texture unit to 0; tracked, so the next user
+ // draw re-realizes (same dance as gl4es_blitTexture)
+-static void realize_accumenv(glesaccum_t *a, GLfloat scale);
++static void realize_accumenv(glesaccum_t *a, GLuint program,
++                             GLint uscale, GLfloat scale);
+ static int accum_create_program(glesaccum_t *a);
+ 
+ static void accum_force_tmu0() {
+@@ -157,7 +165,7 @@ static int accum_try_format(glesaccum_t *a, GLenum intformat, GLenum format,
+             gles_glBlendFunc(GL_ONE, GL_ONE);
+             if(gles_glBlendEquation)
+                 gles_glBlendEquation(GL_FUNC_ADD);
+-            realize_accumenv(a, 0.f);
++            realize_accumenv(a, a->program, a->uscale, 0.f);
+             gles_glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+             ok = (gles_glGetError()==GL_NO_ERROR);
+             gles_glDisable(GL_BLEND);
+@@ -315,6 +323,145 @@ static int accum_create_program(glesaccum_t *a) {
      return 1;
  }
  
