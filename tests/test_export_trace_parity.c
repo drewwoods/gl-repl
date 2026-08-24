@@ -8,7 +8,8 @@
  * need the gl_stub_counts[] counters to be live.
  *
  * For each program in the curated table the test:
- *   1. feeds each line through editor_feed_line();
+ *   1. feeds curated snippets through editor_feed_line(), or loads catalog
+ *      `.glr` scenes through repl_load_example_lines();
  *   2. writes the program to a temp file via repl_export_save_output();
  *   3. shells out to cc, compiling that file + the stubs + the trace
  *      driver into a child binary (with -Dmain=app_main so the exported
@@ -40,6 +41,7 @@
 #include "app/glr_state.h"
 
 #include "repl/eval.h"
+#include "repl/example_loader.h"
 #include "repl/examples.h"
 #include "repl/executor.h"
 #include "repl/export.h"
@@ -71,6 +73,7 @@ typedef struct {
     const char *const *lines;   /* NULL-terminated */
     const char *expected_fail;  /* NULL => no annotation; non-NULL => XFAIL
                                  * if traces mismatch, XPASS if they match. */
+    int load_as_glr_scene;      /* consume camera/frame syntax via loader */
 } TraceProgram;
 
 /* Four-bucket parity result. PASS / FAIL behave the obvious way. XFAIL
@@ -629,7 +632,10 @@ static const float g_time_samples[] = { 0.0f, 0.75f, 2.5f };
 static const int g_time_sample_count =
     (int)(sizeof(g_time_samples)/sizeof(g_time_samples[0]));
 
-/* Feed the program into a freshly-reset REPL.
+/* Feed the program into a freshly-reset REPL. Catalog `.glr` text goes
+ * through the real loader so camera rows and the explicit display frame are
+ * consumed as format syntax. Curated snippets remain direct editor input:
+ * they intentionally omit file-level metadata and framing.
  *
  * Nothing is pre-declared here: a predef the harness injects is a global
  * the program never asked for, and the scene that then declares the same
@@ -639,12 +645,16 @@ static const int g_time_sample_count =
  * with - a corrupted case reported as an export bug. `z` and `i` used to
  * be declared for the curated programs; both are bound as a parameter or a
  * loop variable there and need no global. */
-static void feed_program(const TraceProgram *prog) {
+static int feed_program(const TraceProgram *prog) {
     glr_ctrl_reset_all();
     g_status[0] = '\0';
 
+    if (prog->load_as_glr_scene)
+        return repl_load_example_lines(prog->lines) > 0;
+
     for (int li = 0; prog->lines[li]; li++)
         editor_feed_line(prog->lines[li]);
+    return 1;
 }
 
 /* The REPL leg: one session, one frame per time sample, into a single
@@ -658,10 +668,11 @@ static void feed_program(const TraceProgram *prog) {
  * fails to update some baked value diverges from the exported C on frame 2
  * while frame 1 looks perfect. Calling flatten directly would rebuild the
  * program every frame and never exercise that path at all. */
-static void run_repl_frames(const TraceProgram *prog,
-                            const char *trace_path,
-                            unsigned long long *counts_out) {
-    feed_program(prog);
+static int run_repl_frames(const TraceProgram *prog,
+                           const char *trace_path,
+                           unsigned long long *counts_out) {
+    if (!feed_program(prog))
+        return 0;
 
     /* Init+destroy bracket the executor's gluNewTess / gluTessCallback /
      * gluDeleteTess setup - these are REPL-internal, not user-emitted GL,
@@ -681,6 +692,7 @@ static void run_repl_frames(const TraceProgram *prog,
     memcpy(counts_out, gl_stub_counts,
            sizeof(unsigned long long) * GL_STUB_COUNT_MAX);
     repl_executor_destroy_resources();
+    return 1;
 }
 
 /* Run one program through both legs and compare. Returns the four-
@@ -720,7 +732,11 @@ static ParityResult run_one_case(const TraceProgram *prog) {
 
     /* Feed once so there is a document to export. Each t sample re-feeds
      * from scratch below; this call only has to leave the document live. */
-    feed_program(prog);
+    if (!feed_program(prog)) {
+        fprintf(stderr, "  [%s] scene load failed: %s\n",
+                prog->name, g_status[0] ? g_status : "unknown error");
+        return PARITY_FAIL;
+    }
 
     /* Export leg. */
     repl_export_save_output(temp_c, source_document_view(), NULL);
@@ -774,7 +790,11 @@ static ParityResult run_one_case(const TraceProgram *prog) {
     unsigned long long repl_counts[GL_STUB_COUNT_MAX];
     unsigned long long child_counts[GL_STUB_COUNT_MAX];
 
-    run_repl_frames(prog, temp_repl_tr, repl_counts);
+    if (!run_repl_frames(prog, temp_repl_tr, repl_counts)) {
+        fprintf(stderr, "  [%s] scene reload failed: %s\n",
+                prog->name, g_status[0] ? g_status : "unknown error");
+        return PARITY_FAIL;
+    }
 
     {
         int used = snprintf(cmd, sizeof cmd, "'%s' '%s' '%s'",
@@ -919,7 +939,7 @@ static void run_examples(ParityTotals *totals) {
     for (int i = 0; i < n; i++) {
         const char *name = repl_example_name(i);
         const char *const *lines = repl_example_lines(i);
-        TraceProgram p = { name, lines, expected_fail_for_example(name) };
+        TraceProgram p = { name, lines, expected_fail_for_example(name), 1 };
         run_and_report(totals, &p, "example");
     }
 }
@@ -951,7 +971,7 @@ static void run_scene_dir(ParityTotals *totals, const char *dir) {
     for (int i = 0; i < n; i++) {
         const char *name = repl_example_name(i);
         TraceProgram p = { name, repl_example_lines(i),
-                           expected_fail_for_example(name) };
+                           expected_fail_for_example(name), 1 };
 
         if (repl_example_source_format(i) != REPL_EXAMPLE_SOURCE_GLR) {
             printf("  SKIP  %-9s %s (exported-C entry; needs the import "
@@ -972,7 +992,9 @@ static void print_help(const char *argv0) {
 "argument values of every call.\n"
 "\n"
 "For each program the test:\n"
-"  1. feeds source lines through editor_feed_line();\n"
+"  1. feeds curated snippets through editor_feed_line(), while catalog\n"
+"     .glr scenes go through repl_load_example_lines() so camera and\n"
+"     display-frame syntax are consumed by the real loader;\n"
 "  2. calls repl_export_save_output() to a temp file, shells out to cc\n"
 "     to compile that file together with tests/export_trace_driver.c\n"
 "     (which #includes the exported file so its static helpers\n"
@@ -1008,9 +1030,9 @@ static void print_help(const char *argv0) {
 "          Fails the test (loud) so the list doesn't accumulate cruft.\n"
 "\n"
 "Every case prints one PASS/FAIL/XFAIL/XPASS line naming its corpus, and\n"
-"the run opens with what it covers and closes with what it does not: the\n"
-".glr corpora under tests/scenes are a separate lane (`make test-scenes`)\n"
-"and are never walked here, --full or not.\n"
+"the run opens with what it covers. --full adds the built-in catalog; the\n"
+".glr corpora under tests/scenes are added separately by --scenes-dir or\n"
+"REPL_SCENE_CORPUS=1.\n"
 "\n"
 "Options:\n"
 "  --full          After the curated table, also run every built-in\n"
