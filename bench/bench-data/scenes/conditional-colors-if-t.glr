@@ -1,3 +1,4 @@
+display() {
 glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
 glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(35.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -30,3 +31,4 @@ glBegin(GL_QUADS);
   glVertex3f(1, 1, -1);
   glVertex3f(1, -1, -1);
 glEnd();
+}

@@ -13,6 +13,7 @@ static float half;
 static float x0, x1, z, y0, y1;
 static float color0, color1;
 
+display() {
 glTranslatef(0.0000f, 0.0000f, -5.0000f);   // @camera dist
 glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -47,4 +48,5 @@ for(i, 0, steps) {
       glVertex3f(x0, y0, z);
     }
   glEnd();
+}
 }

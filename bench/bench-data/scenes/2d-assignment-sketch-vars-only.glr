@@ -8,6 +8,7 @@
 // function of x and t -- no goto, no scratch arrays, just var = expr.
 
 static float x, y, s; // s = palette mix in [0,1]
+display() {
 glTranslatef(0.0000f, 0.0000f, -2.5000f);   // @camera dist
 glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -28,3 +29,4 @@ glBegin(GL_LINE_STRIP);
     glVertex3f(x, y, 0);
   }
 glEnd();
+}

@@ -1,6 +1,7 @@
 // @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
 // @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX
 static float s; // color mix factor, 0..1
+display() {
 glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
 glRotatef(24.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(43.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -28,3 +29,4 @@ glBegin(GL_TRIANGLE_FAN);
     glVertex3f(cos(i*TAU/24)*1.5, sin(i*TAU/24)*1.5, 0);
   }
 glEnd();
+}

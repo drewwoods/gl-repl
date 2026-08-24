@@ -10,6 +10,7 @@
 
 static float phase, width, delta, amp, ang, bump, x, y;
 static float n = 400; // ring segment count
+display() {
 glTranslatef(0.0000f, 0.0000f, -3.5000f);   // @camera dist
 glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -39,3 +40,4 @@ glBegin(GL_LINE_LOOP);
     glVertex3f(x, y, 0);
   }
 glEnd();
+}

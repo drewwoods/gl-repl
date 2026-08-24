@@ -4,6 +4,7 @@ static float r = 1; // minor radius (tube thickness)
 static float n = 20; // @config segment count around both u and v
 static float u, v, s; // current major/minor angles, color mix factor
 static float tr; // tube-offset radius R + r*cos(v), read twice per vertex line
+display() {
 glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
 glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(35.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -34,4 +35,5 @@ for(i, 0, n) {
       glVertex3f(tr*cos(u), tr*sin(u), r*sin(v));
     }
   glEnd();
+}
 }

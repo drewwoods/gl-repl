@@ -1,6 +1,7 @@
 // @cfg grid = GRID_THEME_TRON
 // @cfg grid_brightness = GRID_BRIGHTNESS_DIM
 // @cfg light_theme = LIGHT_THEME_HEADLIGHT
+display() {
 glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
 glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(15.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -57,3 +58,4 @@ gluBegin(GLU_POLYGON);
     gluVertex(0.2, -0.225, 0);
   gluEnd();
 gluEnd();
+}

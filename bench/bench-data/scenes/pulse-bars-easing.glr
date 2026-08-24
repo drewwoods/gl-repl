@@ -1,6 +1,7 @@
 // @cfg grid = GRID_THEME_SKETCH
 // @cfg grid_extent = GRID_EXTENT_CLOSE
 static float p, d, s, h;
+display() {
 glTranslatef(0.0000f, 0.0000f, -7.6741f);   // @camera dist
 glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.5000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -36,4 +37,5 @@ for(i, -3, 4) {
     glScalef(0.55, h, 0.55);
     glutSolidCube(1);
   glPopMatrix();
+}
 }

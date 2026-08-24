@@ -2,6 +2,7 @@
 // @cfg grid_brightness = GRID_BRIGHTNESS_DIM
 // @cfg light_theme = LIGHT_THEME_HEADLIGHT
 static float z;
+display() {
 glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
 glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(15.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -141,3 +142,4 @@ gluBegin(GLU_POLYGON);
     glEnd();
   gluEnd();
 gluEnd();
+}

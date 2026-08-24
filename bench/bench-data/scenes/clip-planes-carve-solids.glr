@@ -11,6 +11,7 @@
 // position the plane. glEnable(GL_CLIP_PLANEi) switches each one on.
 // Tip: park the cursor on a glClipPlane line to see its plane guide.
 static float d; // sliding cut offset for the animated cutaway
+display() {
 glTranslatef(0.0000f, 0.0000f, -9.5000f);   // @camera dist
 glRotatef(14.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -89,3 +90,4 @@ glRasterPos3f(-0.85, -0.85, 0);
 label("2 planes: wedge");
 glRasterPos3f(2, -0.85, 0);
 label("3 animated: cutaway");
+}

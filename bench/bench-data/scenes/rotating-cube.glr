@@ -2,6 +2,7 @@
 // @cfg grid_brightness = GRID_BRIGHTNESS_DIM
 // @cfg light_theme = LIGHT_THEME_NEON
 // @cfg light_indicators = 1
+display() {
 glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
 glRotatef(12.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(92.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -24,3 +25,4 @@ glEnable(GL_LIGHT0);
 // --- Scene Geometry -----------------
 glRotatef(40*t, 0, 1, 0);
 glutSolidCube(2);
+}

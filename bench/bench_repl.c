@@ -385,6 +385,7 @@ static const char *const k_flatten_bench_scene[] = {
     "static float amp = 0.4;    // wave amplitude (peak |y|)",
     "static float freq = 2.5;   // spatial frequency along x and z",
     "static float zPhase = 0.7; // z-axis time phase: z evolves slower than x (<1)",
+    "display() {",
     "glTranslatef(0.0f, 0.0f, -5.0f);   // @camera dist",
     "glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
     "glRotatef(30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry",
@@ -425,6 +426,7 @@ static const char *const k_flatten_bench_scene[] = {
             "glVertex3f(x, y, z);",
         "}",
         "glEnd();",
+    "}",
     "}",
     NULL
 };
@@ -1361,6 +1363,7 @@ static BenchResult bench_replay_examples(int iters) {
 static const char *const k_long_replay_scene[] = {
     "float a;",
     "float b;",
+    "display() {",
     "glClearColor(0.05, 0.05, 0.05, 1);",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
@@ -1377,6 +1380,7 @@ static const char *const k_long_replay_scene[] = {
         "glVertex3f(0, 1, 0);",
         "glEnd();",
         "glPopMatrix();",
+    "}",
     "}",
     NULL,
 };
@@ -1548,6 +1552,7 @@ static BenchResult bench_replay_anchor(int iters) {
 static const char *const k_fade_bench_scene[] = {
     "float a;",
     "float b;",
+    "display() {",
     "glEnable(GL_DEPTH_TEST);",
     "glEnable(GL_LIGHTING);",
     "for(i, 0, 370) {",
@@ -1562,6 +1567,7 @@ static const char *const k_fade_bench_scene[] = {
         "glVertex3f(0, 1, 0);",
         "glEnd();",
         "glPopMatrix();",
+    "}",
     "}",
     NULL,
 };

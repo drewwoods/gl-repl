@@ -7,6 +7,7 @@
 static float dist = 0.5; // @tune
 static float n = 400; // @tune
 static float x, y, ang, s; // s = palette mix in [0,1]
+display() {
 glTranslatef(0.0000f, 0.0000f, -4.5000f);   // @camera dist
 glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -27,3 +28,4 @@ glBegin(GL_LINE_LOOP);
     glVertex3f(x, y, 0);
   }
 glEnd();
+}

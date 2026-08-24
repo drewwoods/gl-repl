@@ -4,6 +4,7 @@
 // @cfg polygon_highlight = 0
 static float n, p, q, ang, rr, x, y, z; // samples, winds, angle, ring radius, coords
 static float s; // palette mix in [0,1]
+display() {
 glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
 glRotatef(23.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(52.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -30,3 +31,4 @@ glBegin(GL_LINE_LOOP);
     glVertex3f(x, y, z);
   }
 glEnd();
+}

@@ -5,6 +5,7 @@
 // @cfg vertex_points = 0
 // @cfg vertex_outlines = 0
 static float n, r, x, y, phase, sample;
+display() {
 glTranslatef(0.0000f, 0.0000f, -7.0000f);   // @camera dist
 glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -65,3 +66,4 @@ glRasterPos3f(x + 0.12, y + 0.12, 0);
 label("r=%f", r);
 glRasterPos3f(-2.35, -2.35, 0);
 label("label text follows glRasterPos3f");
+}

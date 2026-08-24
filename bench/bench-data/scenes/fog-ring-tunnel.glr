@@ -19,6 +19,7 @@ static float rings = 12; // @tune
 static float ringZ; // eye-space distance of the current ring
 static float bendX; // tunnel centerline x at this depth
 static float bendY; // tunnel centerline y at this depth
+display() {
 glTranslatef(0.0000f, 0.0000f, -1.0000f);   // @camera dist
 glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -58,4 +59,5 @@ for(i, 0, rings) {
     }
     glutSolidTorus(0.09, 1.7, 10, 28);
   glPopMatrix();
+}
 }
