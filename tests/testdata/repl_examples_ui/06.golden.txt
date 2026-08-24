@@ -87,12 +87,12 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
-  float A[16], B[16], C[16];
+float A[16], B[16], C[16];
 --- source_prologue ---
 static float s; // palette mix in [0,1]
 
 // --- Functions ----------------------
-polygon(radius, sides, phase) {
+void polygon(radius, sides, phase) {
   glBegin(GL_TRIANGLE_FAN);
     glNormal3f(0, 0, 1);
     glColor3f(0.92, 0.95, 0.98);

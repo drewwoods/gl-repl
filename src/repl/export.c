@@ -562,7 +562,10 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
             fprintf(dst, "--- source_prologue ---\n");
             for (int cmd_idx = 0; cmd_idx < body_start; cmd_idx++) {
                 if (!repl_state_document_cmds()[cmd_idx].valid) continue;
-                fprintf(dst, "%s\n", export_document_text(cmd_idx));
+                if (repl_state_document_cmds()[cmd_idx].type == CMD_FUNC_DEF)
+                    fprintf(dst, "void %s\n", export_document_text(cmd_idx));
+                else
+                    fprintf(dst, "%s\n", export_document_text(cmd_idx));
             }
         }
     }

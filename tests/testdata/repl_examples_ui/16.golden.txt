@@ -87,7 +87,7 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
-  float A[16], B[16], C[16];
+float A[16], B[16], C[16];
 --- source_prologue ---
 // A 3D recursive tree. One call draws one limb as a tapered pentagonal
 // tube, caps the joint with a knuckle sphere, walks to the tip, and
@@ -98,7 +98,7 @@ static float len = 2.1; // @tune
 static float rad = 0.26; // @tune
 static float randSeed = 0.31; // @tune
 
-limb(depth, len, rad, seed) {
+void limb(depth, len, rad, seed) {
   float u, rtop, s, side, w;
   // Top radius matches the children's base radius, so the joints meet.
   rtop = rad*0.7;

@@ -87,7 +87,7 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
-  float A[16], B[16], C[16];
+float A[16], B[16], C[16];
 --- source_prologue ---
 static float launchVelX, launchVelY, launchVelZ;
 static float currentVelY;
@@ -104,7 +104,7 @@ static float detail = 30;
 static float blowHoleX = 0.95, blowHoleY = 0.71, blowHoleZ;
 static float waterDroplets = 250; // @tune
 
-computeVerticalMotion(ageSeconds, launchY) {
+void computeVerticalMotion(ageSeconds, launchY) {
   // Velocity is linear in age: currentVelY = gravityY*ageSeconds + launchVelY.
   // Position is its integral:
   //   (gravityY/2)*ageSeconds^2 + launchVelY*ageSeconds + launchY
@@ -114,7 +114,7 @@ computeVerticalMotion(ageSeconds, launchY) {
   particleY = launchY + gravityY/2 * ageSeconds * ageSeconds + launchVelY * ageSeconds;
 }
 
-computeLifespan(launchY) {
+void computeLifespan(launchY) {
   // Solve particleY(age) = floorY for age: how long the particle takes to fall
   // from launchY to the floor. particleY is the projectile
   //   (gravityY/2)*age^2 + launchVelY*age + (launchY - floorY) = 0
@@ -124,13 +124,13 @@ computeLifespan(launchY) {
   particleLife = (-launchVelY - sqrt(launchVelY*launchVelY - 2 * gravityY*(launchY - floorY))) / gravityY;
 }
 
-computeDriftX(ageSeconds, launchX) {
+void computeDriftX(ageSeconds, launchX) {
   // Integral over [0, age] of the decaying horizontal velocity
   //   velX(s) = launchVelX * dragDecay^(dragRate*s)
   particleX = launchX + (launchVelX * pow(dragDecay, ageSeconds*dragRate) - launchVelX) / (dragRate*ln(dragDecay));
 }
 
-computeDriftZ(ageSeconds, launchZ) {
+void computeDriftZ(ageSeconds, launchZ) {
   // Integral over [0, age] of the decaying horizontal velocity
   //   velZ(s) = launchVelZ * dragDecay^(dragRate*s)
   particleZ = launchZ + (launchVelZ * pow(dragDecay, ageSeconds*dragRate) - launchVelZ) / (dragRate*ln(dragDecay));
@@ -142,7 +142,7 @@ computeDriftZ(ageSeconds, launchZ) {
 // body, rebuilt every call, invisible to the rest of the scene. `detail`
 // stays a global on purpose -- it is a scrubbable knob whose value has to
 // survive between frames for the clamp below to hold it, not a temporary.
-drawWhale(bhX, bhY, bhZ) {
+void drawWhale(bhX, bhY, bhZ) {
   float flukeAng, finAng;
   flukeAng = sin(speed*t*TAU)* 30;
   finAng = cos(speed*t*TAU)* 5;

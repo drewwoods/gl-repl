@@ -87,7 +87,7 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
-  float A[16], B[16], C[16];
+float A[16], B[16], C[16];
 --- source_prologue ---
 static float bladeCount = 135; // @tune
 static float field = 3.65; // half-width @tune
@@ -100,7 +100,7 @@ static float x, z, h, w, angle, phase, flex;
 // is just 2*rand-1, so a shared slot would correlate flex with jitter.)
 // Every value blade() derives is a function-scoped local: plain `float`
 // inside the body, one fresh set per call, no variable-panel slot.
-blade(seed, x0, z0, height, width, ang, ph, stiffness) {
+void blade(seed, x0, z0, height, width, ang, ph, stiffness) {
   float wind, wave, bend, u, cx, cz, halfW, shade;
   wind = 0.55 + 0.25*sin(t*0.23);
   wave = sin(t*2.2 + ph + x0*0.35 + z0*0.20) + 0.35*sin(t*4.9 + ph*1.7);

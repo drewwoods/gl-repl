@@ -96,14 +96,14 @@ static GLdouble *repl_gldouble4(GLdouble a, GLdouble b, GLdouble c, GLdouble d) 
   repl_gldouble4_buf[3] = d;
   return repl_gldouble4_buf;
 }
-  float A[16], B[16], C[16];
+float A[16], B[16], C[16];
 --- source_prologue ---
 static float dd, blink, ink, ph, slit; // expanding-pulse distance; beacon blink; brightness multiplier on the base ink color; shutter-cycle phase; slit half-angle
 static float dishAz; // dish azimuth, degrees -- see the note below
 static float cycleLength = 30; // seconds per dome shutter cycle (open ~2/3 of it)
 
 // concrete pad a building stands on
-pad(rad) {
+void pad(rad) {
   glBegin(GL_TRIANGLE_FAN);
     glNormal3f(0, 1, 0);
     glVertex3f(0, 0.02, 0);
@@ -114,7 +114,7 @@ pad(rad) {
 }
 
 // cylinder wall between y0 and y1
-drum(rad, y0, y1, segs) {
+void drum(rad, y0, y1, segs) {
   // ct/st are the wall direction at this segment: the normal IS the unit
   // xz direction, and both rim vertices sit on it, so one cos/sin pair
   // feeds all three lines instead of being retaken six times.
@@ -132,7 +132,7 @@ drum(rad, y0, y1, segs) {
 }
 
 // snow drift: a squashed mound
-drift(x, z, s) {
+void drift(x, z, s) {
   glPushMatrix();
     glTranslatef(x, 0, z);
     glScalef(s*1.5, s*0.4, s);

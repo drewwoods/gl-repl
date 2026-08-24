@@ -921,6 +921,116 @@ int main(void) {
                     layout.footer_rows == base_footer);
     }
 
+    /* The frame stays visible in both modes, while full mode alone projects
+     * C chrome: scratch arrays and `void` on editable user definitions. The
+     * prefix must not leak into editor coordinates when the row is clicked. */
+    {
+        char row_text[MAX_LINE_LEN * 2];
+        float rgb[3];
+        int segments;
+        int prefix;
+        int mx, my;
+        UiHit hit;
+
+        reset_doc_fixture();
+        editor_feed_line("float radius;");
+        editor_feed_line("func0() {");
+        editor_feed_line("glVertex3f(radius, 0, 0);");
+        editor_feed_line("}");
+        editor_feed_line("glClear(GL_COLOR_BUFFER_BIT);");
+
+        glr_state_presentation_mut()->code_focus = 0;
+        build_doc(&snap, &layout);
+        ASSERT_TRUE("full mode shows void display frame",
+                    ui_repl_code_panel_generated_row_style_for_test(
+                        &snap, REPL_EXPORT_DISPLAY_OPEN_LINE, rgb, &segments));
+        ASSERT_TRUE("full mode shows scratch arrays",
+                    ui_repl_code_panel_generated_row_style_for_test(
+                        &snap, REPL_CODE_PANEL_SCRATCH_DECL_LINE,
+                        rgb, &segments));
+        ASSERT_TRUE("scratch arrays start at file scope",
+                    REPL_CODE_PANEL_SCRATCH_DECL_LINE[0] == 'f');
+        ASSERT_TRUE("committed function row is available",
+                    ui_repl_code_panel_row_text_for_test(
+                        &snap, 1, row_text, (int)sizeof(row_text), &prefix));
+        TEST_ASSERT_STR(&g_harness, "full mode decorates user function",
+                        row_text, "void func0() {");
+        ASSERT_TRUE("function decoration records its synthetic width",
+                    prefix == 5);
+
+        editor_scroll_set(ui_repl_code_panel_rows_before_cmd(&layout, 1));
+        build_doc(&snap, &layout);
+        ASSERT_TRUE("decorated function row has a visible hit point",
+                    ui_repl_code_panel_source_line_point(&snap, 1, &mx, &my));
+        hit = ui_repl_code_panel_hit_test(&snap, mx, my);
+        ASSERT_TRUE("clicking synthetic void targets the function row",
+                    hit.kind == UI_HIT_CODE_TEXT && hit.line_idx == 1);
+        ASSERT_TRUE("synthetic void maps to editor column zero",
+                    hit.char_idx == 0);
+
+        editor_navigate_to_line(1);
+        build_doc(&snap, &layout);
+        ASSERT_TRUE("active function row is available",
+                    ui_repl_code_panel_row_text_for_test(
+                        &snap, 1, row_text, (int)sizeof(row_text), &prefix));
+        TEST_ASSERT_STR(&g_harness, "active edit keeps void decoration",
+                        row_text, "void func0() {");
+        ASSERT_TRUE("active edit decoration records its synthetic width",
+                    prefix == 5);
+
+        glr_state_presentation_mut()->code_focus = 1;
+        editor_scroll_set(0);
+        build_doc(&snap, &layout);
+        ASSERT_TRUE("focus mode shows compact display frame",
+                    ui_repl_code_panel_generated_row_style_for_test(
+                        &snap, REPL_EXPORT_DISPLAY_OPEN_FOCUS_LINE,
+                        rgb, &segments));
+        ASSERT_TRUE("focus mode keeps exactly the closing frame row",
+                    layout.display_close_rows == 1);
+        ASSERT_TRUE("focus mode hides scratch arrays",
+                    !ui_repl_code_panel_generated_row_style_for_test(
+                        &snap, REPL_CODE_PANEL_SCRATCH_DECL_LINE,
+                        rgb, &segments));
+        ASSERT_TRUE("focused function row is available",
+                    ui_repl_code_panel_row_text_for_test(
+                        &snap, 1, row_text, (int)sizeof(row_text), &prefix));
+        TEST_ASSERT_STR(&g_harness, "focus keeps editable function spelling",
+                        row_text, "func0() {");
+        ASSERT_TRUE("focus function row has no synthetic prefix", prefix == 0);
+    }
+
+    /* An insert ghost exactly at the file-scope/body splice belongs below
+     * display(), not between the final function and the frame. */
+    {
+        int boundary;
+        int ghost_line;
+
+        reset_doc_fixture();
+        editor_feed_line("float radius;");
+        editor_feed_line("func0() {");
+        editor_feed_line("}");
+        editor_feed_line("glClear(GL_COLOR_BUFFER_BIT);");
+        build_doc(&snap, &layout);
+        boundary = snap.display_body_start;
+        ASSERT_TRUE("function fixture has a non-empty prologue",
+                    boundary > 0 && boundary < snap.document_count);
+
+        editor_state_edit_line_set(boundary);
+        editor_insert_mode_set(1);
+        editor_input_clear();
+        build_doc(&snap, &layout);
+        ghost_line = ui_repl_code_panel_rows_before_cmd(&layout, boundary);
+        ASSERT_TRUE("splice ghost follows the display opener",
+                    ghost_line >= ui_repl_code_panel_display_open_row(&layout) +
+                                      layout.display_open_rows);
+        ASSERT_TRUE("splice ghost lookup succeeds",
+                    ui_repl_code_panel_target_for_doc_line(
+                        &snap, ghost_line, &layout, &target, &on_insert,
+                        &row_offset));
+        ASSERT_TRUE("splice ghost is the virtual insert row",
+                    target == -1 && on_insert == 1 && row_offset == 0);
+    }
+
     /* P1: glr_ctrl_toggle_code_focus() (shared by Ctrl+Shift+F and the
      * status-bar keycap click) flips code_focus, syncs chrome, and
      * requests follow-scroll. After the toggle the header rows collapse

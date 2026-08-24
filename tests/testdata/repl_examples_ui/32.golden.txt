@@ -87,7 +87,7 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
-  float A[16], B[16], C[16];
+float A[16], B[16], C[16];
 --- source_prologue ---
 static float bright = 1; // @tune @config overall lantern intensity
 static float spread = 12; // @tune horizontal scatter of the flock and its glints
@@ -97,7 +97,7 @@ static float lanterns = 20; // @tune @config number of lanterns in the flock
 // Dusk gradient backdrop: warm afterglow at the horizon, ink at zenith.
 // Three stops down the palette: CORAL at a third strength, VIOLET at a
 // quarter, then the canvas ink itself.
-sky() {
+void sky() {
   float low, mid;
   low = 0.36;
   mid = 0.24;
@@ -118,7 +118,7 @@ sky() {
 }
 
 // Stars twinkle out of phase; they dissolve into the bright horizon.
-stars() {
+void stars() {
   float sy, tw;
   glPointSize(5);
   glBegin(GL_POINTS);
@@ -133,7 +133,7 @@ stars() {
 
 // Translucent water: near edge stays clear so reflections read through,
 // the far edge goes opaque and mirrors the sunset to hide the seam.
-water() {
+void water() {
   float far;
   far = 0.3;
   glBegin(GL_QUADS);
@@ -150,7 +150,7 @@ water() {
 // most of its cycle dark, then flashes. The glint field tracks `spread`
 // a third wider than the flock, so the sparks always fringe the water
 // under the lanterns instead of clumping when the flock scatters.
-glints() {
+void glints() {
   float gx, gz, gp, ga;
   glPointSize(6);
   glBegin(GL_POINTS);
@@ -169,7 +169,7 @@ glints() {
 // crown, AMBER flame-lit base - plus a flame point and a soft halo. All
 // five tints are one anchor scaled by `glow`, so a lantern fades as a
 // unit instead of drifting off-hue.
-lantern(px, py, pz, s, glow) {
+void lantern(px, py, pz, s, glow) {
   float ax;
   glPushMatrix();
     glTranslatef(px, py, pz);
@@ -210,7 +210,7 @@ lantern(px, py, pz, s, glow) {
 // wraps, and a cycle counter that reshuffles x/z each lap (the wrap
 // lands while fade = 0, so respawns are invisible). mirror > 0.5 draws
 // the reflection copy instead, dimmed and wobbled by the water.
-launch(i, mirror) {
+void launch(i, mirror) {
   float ph, spd, riseT, ypos, cyc, xpos, zpos;
   float fade, flick, dim, sz, g;
   ph = TAU * rand(11, i);

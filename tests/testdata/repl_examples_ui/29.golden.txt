@@ -87,7 +87,7 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
-  float A[16], B[16], C[16];
+float A[16], B[16], C[16];
 --- source_prologue ---
 // Stencil masking, minimum viable. Three passes over one shape:
 //   1. stamp it into the stencil buffer only - no color, no depth
@@ -100,7 +100,7 @@ static float spin; // @tune  mask rotation, degrees
 
 // The window. Drawn twice - once as a stamp, once as an outline - so it
 // lives in a func and both passes are guaranteed to agree.
-maskWindow() {
+void maskWindow() {
   glPushMatrix();
     glRotatef(spin, 0, 0, 1);
     glBegin(GL_QUADS);

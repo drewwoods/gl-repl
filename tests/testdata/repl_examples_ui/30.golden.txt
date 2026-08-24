@@ -103,13 +103,13 @@ static GLfloat *repl_glfloat16(GLfloat m0, GLfloat m1, GLfloat m2, GLfloat m3,
   repl_glfloat16_buf[14] = m14; repl_glfloat16_buf[15] = m15;
   return repl_glfloat16_buf;
 }
-  float A[16], B[16], C[16];
+float A[16], B[16], C[16];
 --- source_prologue ---
 static float lx, ly, lz; // orbiting lamp position, read by the matrix and the marker
 
 // The caster, drawn twice: once squashed by the shadow matrix, once for
 // real. One definition means the two can never drift apart.
-caster() {
+void caster() {
   glPushMatrix();
     glTranslatef(0, 1.05, 0);
     glRotatef(26*t, 0, 1, 0);
@@ -131,6 +131,7 @@ void display(void) {
 --- header_post ---
 --- source ---
 
+
   // Translate, rotate and scale cannot flatten a solid onto a plane -- that
   // takes a matrix of their own. glMultMatrixf posts one onto the modelview
   // stack: 16 column-major cells, either inline as below or read from a
@@ -142,7 +143,6 @@ void display(void) {
   // the SAME geometry under it draws the object's shadow. Cells are
   // ordinary expressions, re-evaluated every frame, so moving the lamp
   // moves the shadow -- no rebuild of the caster.
-
   glClearColor(0.05, 0.06, 0.08, 1);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_LIGHTING);

@@ -87,10 +87,10 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
-  float A[16], B[16], C[16];
+float A[16], B[16], C[16];
 --- source_prologue ---
 // --- Functions ----------------------
-shape(scale, phase) {
+void shape(scale, phase) {
   // Two mutually-exclusive guards on the same arg -- an if/else written as
   // a complementary pair (else/else-if exist too; kept explicit here so each
   // branch reads as its own self-contained block): big -> quad, small -> tri.

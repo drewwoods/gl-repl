@@ -87,7 +87,7 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
-  float A[16], B[16], C[16];
+float A[16], B[16], C[16];
 --- source_prologue ---
 static float c, a; // color/brightness mix in [0,1] (planet + ring bands); comet orbit angle
 
@@ -96,7 +96,7 @@ static float c, a; // color/brightness mix in [0,1] (planet + ring bands); comet
 // the sphere loop costs stacks*(slices + 1)*10 flat commands.
 
 // banded gas giant: quad strips over latitude, bands swirled by t
-planet(rad, stacks, slices) {
+void planet(rad, stacks, slices) {
   // latA/latB = latitude angle at row i and i+1; cA/cB = cos(lat), shared by
   // the normal and the vertex so each cosine is taken once, not three times.
   // lon/cLon/sLon do the same for the per-column longitude angle.
@@ -128,7 +128,7 @@ planet(rad, stacks, slices) {
 }
 
 // moon on a tilted circular orbit; caller sets the color
-moon(orbit, rad, speed, tilt) {
+void moon(orbit, rad, speed, tilt) {
   glPushMatrix();
     glRotatef(tilt, 0, 0, 1);
     glRotatef(speed*t, 0, 1, 0);
@@ -138,7 +138,7 @@ moon(orbit, rad, speed, tilt) {
 }
 
 // translucent ring band: bright inner lip fading outward
-ring(inner, outer, fade) {
+void ring(inner, outer, fade) {
   glBegin(GL_QUAD_STRIP);
     for(j, 0, 41) {
       c = 0.75 + 0.25*sin(j*0.9);

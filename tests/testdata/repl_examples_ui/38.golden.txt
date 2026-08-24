@@ -96,7 +96,7 @@ static GLdouble *repl_gldouble4(GLdouble a, GLdouble b, GLdouble c, GLdouble d) 
   repl_gldouble4_buf[3] = d;
   return repl_gldouble4_buf;
 }
-  float A[16], B[16], C[16];
+float A[16], B[16], C[16];
 --- source_prologue ---
 // --- Description -----------------
 // Dusk lighthouse atoll - a coherent feature tour:
@@ -119,7 +119,7 @@ static float c = 3; // color scaling factor for sea sheet
 // --- Functions -----------------
 // --- sea(): animated water sheet (nested for + analytic normals) ---
 // Colored by wave height: deep azure troughs lift to bright azure crests.
-sea(half, cells, amp) {
+void sea(half, cells, amp) {
   // Every temporary here is a function-scoped local -- nothing sea() computes
   // is of any interest outside it. The strip spans two rows, and z depends
   // only on i, so BOTH rows' cos/sin terms (czA/szA, czB/szB) hoist clear of
@@ -159,7 +159,7 @@ sea(half, cells, amp) {
 }
 
 // --- island(): tessellated landmass with a lagoon cutout and 3D cliff skirts ---
-island(r, lagoon) {
+void island(r, lagoon) {
   float a, k, x, z, ct, st;
   // 1. Top plateau surface (GLU polygon with carved lagoon cutout)
   glFrontFace(GL_CW);
@@ -220,7 +220,7 @@ island(r, lagoon) {
 }
 
 // --- lighthouse(): classic tapered tower with gallery and lantern ---
-lighthouse() {
+void lighthouse() {
   float a, c, s;
   glPushMatrix();
     // 1. Base foundation plinth (dark slate cylinder)
@@ -330,7 +330,7 @@ lighthouse() {
 }
 
 // --- tree(): recursion with if / else if / else tiered coloring ---
-tree(depth, len, twist) {
+void tree(depth, len, twist) {
   if(depth >= 3) {
     glColor3f(0.4, 0.36, 0.5);
   } else if(depth >= 1) {
@@ -374,7 +374,7 @@ tree(depth, len, twist) {
 }
 
 // --- fire_flies() - additive point sprites drifting over the atoll
-fire_flies(num) {
+void fire_flies(num) {
   glPushAttrib(GL_POINT_BIT | GL_LIGHTING_BIT | GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
   glDisable(GL_LIGHTING);
   glDepthMask(GL_FALSE);

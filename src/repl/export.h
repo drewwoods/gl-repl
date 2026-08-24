@@ -237,7 +237,7 @@ int      repl_export_gl_vector_helper_line(unsigned mask, int line_idx,
 #define REPL_EXPORT_STRINGIFY(x)  REPL_EXPORT_STRINGIFY2(x)
 #endif
 #define REPL_CODE_PANEL_SCRATCH_DECL_LINE \
-    "  float " \
+    "float " \
     "A[" REPL_EXPORT_STRINGIFY(REPL_SCRATCH_ARRAY_LEN) "], " \
     "B[" REPL_EXPORT_STRINGIFY(REPL_SCRATCH_ARRAY_LEN) "], " \
     "C[" REPL_EXPORT_STRINGIFY(REPL_SCRATCH_ARRAY_LEN) "];"
@@ -287,7 +287,9 @@ int repl_save_default_output(const ReplExportLayout *layout);
  * examples ship in (see src/repl/export_glr.c), not a compilable C program.
  * Content is the non-default `@cfg` rows, the tagged `@camera` transform
  * rows, and the document text in canonical order - declarations, then
- * function definitions, then camera and body; nothing else. Symmetric with the example loader, so the
+ * function definitions, then camera and body. Function-bearing scenes wrap
+ * camera and body in explicit `display() { ... }` format syntax; scenes with
+ * no functions keep the implicit body. Symmetric with the example loader, so the
  * output can be dropped into examples/scenes/ and referenced from
  * examples/catalog.ini as-is. Returns 1 on success, 0 on write failure
  * (status message set either way). No ReplExportLayout: the format carries

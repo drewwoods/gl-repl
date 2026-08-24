@@ -235,4 +235,12 @@ int ui_repl_code_panel_row_color_segments_for_test(
         const UiRenderSnapshot *snap, int source_line_idx,
         UiTextPanelColorSegment *out, int max_out);
 
+/* Test-only: return the exact displayed text and synthetic prefix length for
+ * a committed or active edit row. The prefix is display decoration and is
+ * absent from editor coordinates. */
+int ui_repl_code_panel_row_text_for_test(const UiRenderSnapshot *snap,
+                                         int source_line_idx,
+                                         char *out, int out_sz,
+                                         int *out_display_prefix_chars);
+
 #endif /* UI_REPL_CODE_PANEL_H */

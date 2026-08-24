@@ -168,6 +168,11 @@ typedef struct {
  *                      UiTextPanelSearch.hit_row for match highlighting.
  *   indent_chars     - Leading indentation in character widths; the renderer
  *                      adds this as additional first_x offset.
+ *   display_prefix_chars - Leading characters present only in the displayed
+ *                      text, not in the adapter's editable/searchable source
+ *                      coordinates. Search ignores this prefix and adapters
+ *                      subtract it when translating a text hit back to their
+ *                      source model. 0 for ordinary rows.
  *   background_color - Optional full-row background fill, drawn behind text
  *                      and search highlights (used by adapters such as the
  *                      REPL code panel for replay/selection bands).
@@ -197,6 +202,7 @@ typedef struct {
     int                   hit_target_line_idx;
     int                   search_row_idx;
     int                   indent_chars;
+    int                   display_prefix_chars;
     UiTextPanelColor      background_color;
     int                   background_active;
     UiTextPanelColor      left_marker_color;

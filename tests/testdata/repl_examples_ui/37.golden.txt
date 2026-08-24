@@ -93,7 +93,7 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
-  float A[16], B[16], C[16];
+float A[16], B[16], C[16];
 --- source_prologue ---
 static float px, py, pz; // planet position - the caller hangs the body and its label off it
 static float orbitR; // log-compressed orbit radius, shared by the draw funcs
@@ -110,7 +110,7 @@ static float ORB_BASE = 0; // @tune
 static float ORB_SCALE = 10; // @tune
 static float decYr, yr, leap, doy, mon, day; // calendar readout scratch
 
-orbitRings(Drel, node, incl) {
+void orbitRings(Drel, node, incl) {
   // cNode/sNode/cIncl/sIncl are constant for the whole ring (node and incl
   // are call-time constants), so they are hoisted out of the 96-point loop
   // instead of being retaken every iteration; cu/su cache cos(u)/sin(u),
@@ -134,7 +134,7 @@ orbitRings(Drel, node, incl) {
 // One lit sphere at the last position computed. Rrel is the body's true
 // radius relative to Earth; the cube root squashes the 0.38..11x span into
 // something legible.
-drawBody(Rrel, cr, cg, cb) {
+void drawBody(Rrel, cr, cg, cb) {
   glEnable(GL_LIGHTING);
   glColor3f(cr, cg, cb);
   glPushMatrix();
@@ -148,7 +148,7 @@ drawBody(Rrel, cr, cg, cb) {
 // J2000 heliocentric longitude phase, and J2000 node/inclination. The
 // display applies documented compression for orbit distance only.
 // t=0 is year 2000.0 (J2000 alignment).
-planet(Drel, Yrel, phase, node, incl) {
+void planet(Drel, Yrel, phase, node, incl) {
   // cNode/sNode/cIncl/sIncl are constant for one call and each feeds two of
   // the position terms; xo/yo are the coordinates in the orbit plane, before
   // the node/inclination rotation (the same names planetKepler() uses).
@@ -166,7 +166,7 @@ planet(Drel, Yrel, phase, node, incl) {
   py = yo*sIncl;
   pz = xo*sNode + yo*cNode*cIncl;
 }
-planetKepler(a0, adot, e0, edot, I0, Idot, L0, Ldot, peri0, peridot, node0, nodedot) {
+void planetKepler(a0, adot, e0, edot, I0, Idot, L0, Ldot, peri0, peridot, node0, nodedot) {
   // 12 params + 18 locals + 1 loop iterator = 31 of the 32-slot function
   // scope. That is what pays for the naming below: every step keeps its own
   // variable, so nothing has to be recycled once it is no longer needed.
@@ -219,7 +219,7 @@ planetKepler(a0, adot, e0, edot, I0, Idot, L0, Ldot, peri0, peridot, node0, node
 // and rOut, shading from (r0,g0,b0,a0) on the inner edge to (r1,g1,b1,a1) on
 // the outer one. Saturn stacks two of these with the Cassini gap between
 // them; Uranus draws a single thin one.
-ringBand(rIn, rOut, r0, g0, b0, a0, r1, g1, b1, a1) {
+void ringBand(rIn, rOut, r0, g0, b0, a0, r1, g1, b1, a1) {
   float ca, sa; // both edges sit on the same angle, so take its cos/sin once
   glBegin(GL_TRIANGLE_STRIP);
     for(s, 0, 33) {
@@ -238,7 +238,7 @@ ringBand(rIn, rOut, r0, g0, b0, a0, r1, g1, b1, a1) {
 // (EARTH_RATE/a^1.5, so inner specks lap the outer ones) and riding the same
 // log-distance scale as the planets. Drawn as small unlit points, depth-tested
 // so the planets pass in front of and behind the band.
-asteroidBelt(count) {
+void asteroidBelt(count) {
   // aRel is the speck's true distance in AU, ang its current orbit angle, r
   // the log-compressed display radius and shade its dust tint. Naming them
   // costs four assignments per speck and saves re-rolling the same rand()

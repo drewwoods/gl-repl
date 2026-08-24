@@ -32,6 +32,7 @@
 #define UI_REPL_CODE_PANEL_MAX_ROWS \
     (MAX_EDITOR_COMMANDS + MAX_VIRTUAL_LINES + UI_REPL_CODE_PANEL_MAX_STATIC_ROWS + 2)
 #define UI_REPL_CODE_PANEL_MAX_GENERATED_TEXT_ROWS 256
+#define REPL_CODE_PANEL_FUNC_RETURN_PREFIX "void "
 
 /* repl_code_panel_apply_fade_segments emits at most:
  *   - 1 settled-prefix segment
@@ -199,13 +200,40 @@ static int repl_code_panel_cursor_row(const UiRenderSnapshot *snap,
                                            out_start, out_len, out_x);
 }
 
-/* "Code focus" hides the derived C boilerplate stanzas (workspace
- * header, includes, display() framing, render-state/camera/lights setup,
- * init()/reshape() footer). Gating both the row-count and the emit paths
- * with this single predicate keeps layout->header_rows/footer_rows
+/* "Code focus" hides the derived C boilerplate stanzas (workspace header,
+ * includes, render-state/camera/lights setup, init()/reshape() footer). The
+ * display() framing is emitted separately in both modes. Gating the remaining
+ * row-count and emit paths with this predicate keeps header_rows/footer_rows
  * consistent with what build_rows actually emits. */
 static int repl_code_panel_chrome_visible(const UiRenderSnapshot *snap) {
     return !(snap && snap->code_panel.code_focus);
+}
+
+/* Function headers are stored in the editable REPL spelling (`func0() {`)
+ * but full-chrome mode projects the C return type the same way it projects
+ * `void display(void) {`. Keep the prefix as row metadata so every path that
+ * crosses back into editor coordinates can remove it explicitly. */
+static int repl_code_panel_func_return_prefix_chars(
+        const UiRenderSnapshot *snap, int line_idx) {
+    if (!repl_code_panel_chrome_visible(snap) || !snap ||
+        line_idx < 0 || line_idx >= snap->document_count)
+        return 0;
+    return snap->document_cmds[line_idx].valid &&
+           snap->document_cmds[line_idx].type == CMD_FUNC_DEF
+               ? (int)(sizeof(REPL_CODE_PANEL_FUNC_RETURN_PREFIX) - 1)
+               : 0;
+}
+
+static const char *repl_code_panel_add_func_return_prefix(
+        const UiRenderSnapshot *snap, int line_idx, const char *source,
+        char *out, size_t out_sz) {
+    if (!source)
+        source = "";
+    if (repl_code_panel_func_return_prefix_chars(snap, line_idx) == 0 ||
+        !out || out_sz == 0)
+        return source;
+    snprintf(out, out_sz, "%s%s", REPL_CODE_PANEL_FUNC_RETURN_PREFIX, source);
+    return out;
 }
 
 /* FILE-SCOPE chrome: everything that precedes the first document row -
@@ -359,8 +387,13 @@ static int repl_code_panel_input_first_x(const UiRenderSnapshot *snap,
 
 static int repl_code_panel_current_input_rows(const UiRenderSnapshot *snap,
                                               int panel_w, int text_x) {
+    char decorated[MAX_LINE_LEN * 2];
+    const char *text = repl_code_panel_add_func_return_prefix(
+        snap,
+        (!snap->editor_input.insert_mode ? snap->edit_line : -1),
+        snap->editor_input.input, decorated, sizeof(decorated));
     return repl_code_panel_row_count(snap,
-                                     snap->editor_input.input,
+                                     text,
                                      repl_code_panel_input_first_x(snap, text_x),
                                      panel_w);
 }
@@ -430,7 +463,10 @@ static int repl_code_panel_command_main_rows(const UiRenderSnapshot *snap,
     }
 
     {
+        char decorated[MAX_LINE_LEN * 2];
         const char *display_text = repl_code_panel_display_text(snap, cmd_idx);
+        display_text = repl_code_panel_add_func_return_prefix(
+            snap, cmd_idx, display_text, decorated, sizeof(decorated));
         return repl_code_panel_row_count(snap, display_text, text_x, panel_w);
     }
 }
@@ -486,13 +522,19 @@ static int repl_code_panel_cursor_doc_line_from_layout(
      * min. So the dispatch was redundant. */
     int prefix = (snap->edit_line < snap->document_count)
                      ? snap->edit_line : snap->document_count;
+    int display_prefix = repl_code_panel_func_return_prefix_chars(
+        snap, !snap->editor_input.insert_mode ? snap->edit_line : -1);
+    char decorated[MAX_LINE_LEN * 2];
+    const char *input = repl_code_panel_add_func_return_prefix(
+        snap, !snap->editor_input.insert_mode ? snap->edit_line : -1,
+        snap->editor_input.input, decorated, sizeof(decorated));
 
     return repl_code_panel_rows_before_cmd_in_layout(layout, prefix) +
            repl_code_panel_cursor_row(snap,
-                                      snap->editor_input.input,
+                                      input,
                                       repl_code_panel_input_first_x(snap, text_x),
                                       panel_w,
-                                      snap->editor_input.cursor_pos,
+                                      snap->editor_input.cursor_pos + display_prefix,
                                       NULL, NULL, NULL);
 }
 
@@ -803,6 +845,8 @@ static int repl_code_panel_init_builder(ReplCodePanelBuilder *builder,
     int cp_y;
     int cp_w;
     int cp_h;
+    const char *input_text;
+    int input_prefix;
 
     if (!builder || !snap)
         return 0;
@@ -821,6 +865,18 @@ static int repl_code_panel_init_builder(ReplCodePanelBuilder *builder,
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     if (cp_w <= 0 || cp_h <= 0)
         return 0;
+
+    input_text = snap->editor_input.input ? snap->editor_input.input : "";
+    input_prefix = repl_code_panel_func_return_prefix_chars(
+        snap, !snap->editor_input.insert_mode ? snap->edit_line : -1);
+    if (input_prefix > 0 &&
+        builder->generated_count < UI_REPL_CODE_PANEL_MAX_GENERATED_TEXT_ROWS) {
+        char *decorated =
+            g_repl_code_panel_generated_text[builder->generated_count++];
+        snprintf(decorated, MAX_LINE_LEN * 2, "%s%s",
+                 REPL_CODE_PANEL_FUNC_RETURN_PREFIX, input_text);
+        input_text = decorated;
+    }
 
     builder->text_snap = (UiTextPanelSnapshot){
         .vp_w = snap->viewport.window_w,
@@ -845,10 +901,14 @@ static int repl_code_panel_init_builder(ReplCodePanelBuilder *builder,
                         UI_TEXT_PANEL_CHROME_LINE_NUMS |
                         UI_TEXT_PANEL_CHROME_AUX_COL,
         .input = {
-            .input = snap->editor_input.input ? snap->editor_input.input : "",
-            .input_len = snap->editor_input.input_len,
-            .cursor = snap->editor_input.cursor_pos,
-            .anchor = snap->editor_input.anchor_pos,
+            .input = input_text,
+            .input_len = snap->editor_input.input_len >= 0
+                             ? snap->editor_input.input_len + input_prefix
+                             : (int)strlen(input_text),
+            .cursor = snap->editor_input.cursor_pos + input_prefix,
+            .anchor = snap->editor_input.anchor_pos >= 0
+                          ? snap->editor_input.anchor_pos + input_prefix
+                          : -1,
             .ghost = snap->autocomplete.ghost,
             .hint = snap->autocomplete.hint,
             .cursor_visible = snap->cursor_blink.cursor_visible,
@@ -1957,6 +2017,9 @@ static void repl_code_panel_add_input_row(ReplCodePanelBuilder *builder,
     row->hit_target_line_idx = hit_target_line_idx;
     row->search_row_idx = search_row_idx;
     row->indent_chars = indent_chars;
+    row->display_prefix_chars =
+        repl_code_panel_func_return_prefix_chars(builder->snap,
+                                                 source_line_idx);
     row->hit_eligible = 1;
     if (aux_label && aux_label[0])
         snprintf(row->left_aux_label, sizeof(row->left_aux_label), "%s", aux_label);
@@ -2001,17 +2064,27 @@ static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,
                                             int primitive_vnums_exact) {
     UiTextPanelRow *row = repl_code_panel_push_row(builder);
     const char *display_text;
+    char *decorated;
 
     if (!row)
         return;
 
     display_text = repl_code_panel_display_text(builder->snap, line_idx);
+    if (repl_code_panel_func_return_prefix_chars(builder->snap, line_idx) > 0) {
+        decorated = repl_code_panel_next_generated_text(builder);
+        if (decorated)
+            display_text = repl_code_panel_add_func_return_prefix(
+                builder->snap, line_idx, display_text, decorated,
+                MAX_LINE_LEN * 2);
+    }
     row->text = display_text;
     row->kind = UI_TEXT_PANEL_ROW_TEXT;
     row->left_gutter_label = builder->file_line++;
     row->source_line_idx = line_idx;
     row->search_row_idx = repl_code_panel_search_row_for_cmd(builder->snap,
                                                              line_idx);
+    row->display_prefix_chars =
+        repl_code_panel_func_return_prefix_chars(builder->snap, line_idx);
     row->color = repl_code_panel_category_color(
         builder->snap->document_cmds[line_idx].type);
     row->hit_eligible = 1;
@@ -2874,10 +2947,13 @@ static UiHit repl_code_panel_rewrite_hit(const ReplCodePanelBuilder *builder,
         if (hit.line_idx < 0 && row->hit_target_line_idx >= 0)
             hit.line_idx = row->hit_target_line_idx;
         hit.char_idx = -1;
-    } else if (row->kind == UI_TEXT_PANEL_ROW_TEXT &&
+    } else if ((row->kind == UI_TEXT_PANEL_ROW_TEXT ||
+                row->kind == UI_TEXT_PANEL_ROW_INPUT) &&
                hit.kind == UI_HIT_CODE_TEXT &&
                hit.char_idx >= 0) {
-        hit.char_idx -= repl_code_panel_leading_ws_chars(row->text);
+        if (row->kind == UI_TEXT_PANEL_ROW_TEXT)
+            hit.char_idx -= repl_code_panel_leading_ws_chars(row->text);
+        hit.char_idx -= row->display_prefix_chars;
         if (hit.char_idx < 0)
             hit.char_idx = 0;
     }
@@ -3324,4 +3400,36 @@ int ui_repl_code_panel_row_color_segments_for_test(
         return n;
     }
     return -1;
+}
+
+int ui_repl_code_panel_row_text_for_test(const UiRenderSnapshot *snap,
+                                         int source_line_idx,
+                                         char *out, int out_sz,
+                                         int *out_display_prefix_chars) {
+    ReplCodePanelBuilder builder;
+
+    if (out && out_sz > 0)
+        out[0] = '\0';
+    if (out_display_prefix_chars)
+        *out_display_prefix_chars = 0;
+    if (!snap || !repl_code_panel_init_builder(&builder, snap))
+        return 0;
+    repl_code_panel_build_rows(&builder);
+    for (int i = 0; i < builder.text_snap.row_count; i++) {
+        const UiTextPanelRow *row = &builder.text_snap.rows[i];
+        const char *text;
+
+        if (row->source_line_idx != source_line_idx ||
+            (row->kind != UI_TEXT_PANEL_ROW_TEXT &&
+             row->kind != UI_TEXT_PANEL_ROW_INPUT))
+            continue;
+        text = row->kind == UI_TEXT_PANEL_ROW_INPUT
+                   ? builder.text_snap.input.input : row->text;
+        if (out && out_sz > 0)
+            snprintf(out, (size_t)out_sz, "%s", text ? text : "");
+        if (out_display_prefix_chars)
+            *out_display_prefix_chars = row->display_prefix_chars;
+        return 1;
+    }
+    return 0;
 }

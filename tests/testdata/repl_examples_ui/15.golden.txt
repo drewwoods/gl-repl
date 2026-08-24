@@ -87,7 +87,7 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
-  float A[16], B[16], C[16];
+float A[16], B[16], C[16];
 --- source_prologue ---
 // Sierpinski sponge: the carpet's rule lifted to 3D. Split the cube
 // into 3x3x3 cells, drop the 6 face centers and the core, and recurse
@@ -96,7 +96,7 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
 static float depth = 2; // @tune
 static float size = 3; // @tune
 
-sponge(depth, size) {
+void sponge(depth, size) {
   // Base case: one solid cube -- the neon lights do the coloring.
   if(depth <= 0) {
     glutSolidCube(size);

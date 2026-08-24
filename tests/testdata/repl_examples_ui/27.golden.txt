@@ -96,7 +96,7 @@ static GLdouble *repl_gldouble4(GLdouble a, GLdouble b, GLdouble c, GLdouble d) 
   repl_gldouble4_buf[3] = d;
   return repl_gldouble4_buf;
 }
-  float A[16], B[16], C[16];
+float A[16], B[16], C[16];
 --- source_prologue ---
 // Clip planes carve new shapes out of stock solids. glClipPlane sets a
 // plane equation a*x + b*y + c*z + d >= 0; GL keeps that half-space and

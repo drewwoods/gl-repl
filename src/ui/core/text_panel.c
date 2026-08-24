@@ -529,7 +529,8 @@ static void text_panel_draw_search_highlights(const UiTextPanelSnapshot *snap,
         row->search_row_idx < 0 || !text || seg_len <= 0)
         return;
 
-    for (int pos = ui_text_find_next_in_text_opts(text, snap->search.query, 0,
+    for (int pos = ui_text_find_next_in_text_opts(
+             text, snap->search.query, row->display_prefix_chars,
                                                   snap->search.whole_word);
          pos >= 0;
          pos = ui_text_find_next_in_text_opts(text, snap->search.query, pos + 1,
@@ -549,7 +550,7 @@ static void text_panel_draw_search_highlights(const UiTextPanelSnapshot *snap,
         }
 
         if (row->search_row_idx == snap->search.hit_row &&
-            pos == snap->search.hit_char)
+            pos - row->display_prefix_chars == snap->search.hit_char)
             glColor4fv(k_clr_search_hit);
         else
             glColor4fv(k_clr_search_match);

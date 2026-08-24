@@ -87,14 +87,14 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
-  float A[16], B[16], C[16];
+float A[16], B[16], C[16];
 --- source_prologue ---
 static float spinRate = 0.06; // revolutions per second
 static float seats = 8;
 static float bulbs = 28;
 static float glow; // bulb-chase brightness, shared by the deck rim and both bulb rings
 
-drawSeat(ang) {
+void drawSeat(ang) {
   float bob, sel; // this seat's bob height and color index -- private to one call
   glPushMatrix();
     glRotatef(ang, 0, 1, 0);

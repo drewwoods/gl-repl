@@ -87,7 +87,7 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
-  float A[16], B[16], C[16];
+float A[16], B[16], C[16];
 --- source_prologue ---
 static float pulse, bellR, bellH; // breath phase; bell radius/height pulse in opposition
 static float ang, rad, topY; // frill scratch: segment angle, rim radius, rim height (tentacle() hangs off topY)
@@ -104,7 +104,7 @@ static float marineSnow = 110; // @tune
 // segment loop into function-scoped locals. u0/u1 are the two rows'
 // normalized latitudes, computed once instead of six times per vertex pair,
 // and ca/sa are the segment direction shared by both rows.
-bellStrips(segs, rings, r, h) {
+void bellStrips(segs, rings, r, h) {
   float phi0, phi1, radT, radB, yT, yB;
   float u0, u1, a, ca, sa;
   float rT, gT, aT, rB, gB, aB;
@@ -139,7 +139,7 @@ bellStrips(segs, rings, r, h) {
 
 // one tentacle: a swaying line strip; alpha fades toward the tip and the
 // pulse tugs the strand upward (the drop*drop term makes tips lag the bell)
-tentacle(angAt, attach, len, phase, amp, cr, cg, cb) {
+void tentacle(angAt, attach, len, phase, amp, cr, cg, cb) {
   float ax, az, drop;
   ax = cos(angAt)*attach;
   az = sin(angAt)*attach;
