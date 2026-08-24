@@ -3004,6 +3004,7 @@ bench-web: require-emcc ## Build and run the REPL runtime benchmarks as wasm und
 GL4ES_POLYGON_LINE_BENCH_SRC = packaging/web/bench/gl4es_polygon_line.c
 GL4ES_LINE_WIDTH_BENCH_SRC = packaging/web/bench/gl4es_line_width.c
 GL4ES_LINE_WIDTH_CASES_BENCH_SRC = packaging/web/bench/gl4es_line_width_cases.c
+GL4ES_EDGE_FLAG_BENCH_SRC = packaging/web/bench/gl4es_edge_flag.c
 GL4ES_RENDER_BENCH_SRC = bench/bench_render.c
 GL4ES_POLYGON_LINE_BENCH_BINS = \
 	$(WEB_BINDIR)/gl4es-polygon-line-immediate.html \
@@ -3012,17 +3013,20 @@ GL4ES_LINE_WIDTH_BENCH_BINS = \
 	$(WEB_BINDIR)/gl4es-line-width.html
 GL4ES_LINE_WIDTH_CASES_BENCH_BINS = \
 	$(WEB_BINDIR)/gl4es-line-width-cases.html
+GL4ES_EDGE_FLAG_BENCH_BINS = \
+	$(WEB_BINDIR)/gl4es-edge-flag.html
 GL4ES_RENDER_BENCH_BINS = \
 	$(WEB_BINDIR)/gl4es-render.html
 
 bench-web-gl4es: require-emcc ## Build browser gl4es rendering benchmarks and coverage oracles.
 	scripts/web-deps.sh
-	$(MAKE) WEB=1 $(GL4ES_POLYGON_LINE_BENCH_BINS) $(GL4ES_LINE_WIDTH_BENCH_BINS) $(GL4ES_LINE_WIDTH_CASES_BENCH_BINS) $(GL4ES_RENDER_BENCH_BINS)
+	$(MAKE) WEB=1 $(GL4ES_POLYGON_LINE_BENCH_BINS) $(GL4ES_LINE_WIDTH_BENCH_BINS) $(GL4ES_LINE_WIDTH_CASES_BENCH_BINS) $(GL4ES_EDGE_FLAG_BENCH_BINS) $(GL4ES_RENDER_BENCH_BINS)
 	@echo "Serve with: python3 scripts/web-serve.py $(WEB_BINDIR)"
 	@echo "Immediate:   http://localhost:8000/gl4es-polygon-line-immediate.html"
 	@echo "Display list: http://localhost:8000/gl4es-polygon-line-display-list.html"
 	@echo "Line width:   http://localhost:8000/gl4es-line-width.html"
 	@echo "Cases:        http://localhost:8000/gl4es-line-width-cases.html"
+	@echo "Edge flags:   http://localhost:8000/gl4es-edge-flag.html (PASS/FAIL in document.title)"
 	@echo "Render suite: http://localhost:8000/gl4es-render.html (PASS/FAIL in document.title and window.gl4esRenderBench)"
 
 ifeq ($(WEB),1)
@@ -3038,6 +3042,13 @@ $(WEB_BINDIR)/gl4es-polygon-line-display-list.html: $(GL4ES_POLYGON_LINE_BENCH_S
 	@mkdir -p $(dir $@)
 	$(CC) $(GL_HEADER_CFLAGS) -Isrc -DGL4ES_BENCH_DISPLAY_LIST=1 \
 		$(GL4ES_POLYGON_LINE_BENCH_SRC) packaging/web/gl4es_bootstrap.c \
+		$(WEB_GL_ARCHIVES) $(WEB_RUNTIME_LDFLAGS) -o $@
+
+$(WEB_BINDIR)/gl4es-edge-flag.html: $(GL4ES_EDGE_FLAG_BENCH_SRC) \
+		packaging/web/gl4es_bootstrap.c $(WEB_GL_ARCHIVES)
+	@mkdir -p $(dir $@)
+	$(CC) $(GL_HEADER_CFLAGS) -Isrc \
+		$(GL4ES_EDGE_FLAG_BENCH_SRC) packaging/web/gl4es_bootstrap.c \
 		$(WEB_GL_ARCHIVES) $(WEB_RUNTIME_LDFLAGS) -o $@
 
 $(WEB_BINDIR)/gl4es-line-width.html: $(GL4ES_LINE_WIDTH_BENCH_SRC) \

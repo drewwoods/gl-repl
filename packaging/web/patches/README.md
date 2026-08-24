@@ -35,8 +35,137 @@ not treated as “already applied”.
 | `gl4es-point-size-batch.patch` | Apply `glPointSize` to the batch it was called on, not to whatever is still pending. |
 | `gl4es-polygon-offset-line.patch` | Shadow `GL_POLYGON_OFFSET_LINE` and apply a projection-row depth bias around polygon-mode line draws. |
 | `gl4es-line-width-quads.patch` | Expand `glLineWidth` > 1 into screen-space quads on `[1, 1]` line-width stacks. |
+| `gl4es-edge-flag.patch` | Implement `glEdgeFlag`: build polygon-mode line edges from the original primitive topology and drop the suppressed ones. |
+| `gl4es-polygon-line-quad-edges.patch` | Draw quad and quad-strip boundary edges under polygon-mode lines instead of the triangulation's spokes and diagonals. |
+| `gl4es-getbooleanv-local-state.patch` | Answer `glGetBooleanv` from tracked state instead of a synchronous WebGL `getParameter`. |
 
 See each older patch's leading prose for the detail that is available.
+
+## 2026-08-24: `glEdgeFlag` under polygon-mode lines
+
+Patch: [`gl4es-edge-flag.patch`](gl4es-edge-flag.patch)
+
+### Premise
+
+gl4es lists `glEdgeFlag` in `src/gl/wrap/glstub.c`, so it did nothing, and
+`globals4es.silentstub` defaults to 1 - the call was discarded without a word.
+Under `glPolygonMode(..., GL_LINE)` that means every edge is drawn, including
+the boundary edges edge flags exist to hide.
+
+`glGetBooleanv(GL_EDGE_FLAG)` was unhandled as well. It is not part of the
+shared `gl4es_commonGet()` switch that answers `glGetIntegerv`/`glGetFloatv`,
+and `glGetBooleanv` had no gl4es-side implementation at all, so the query fell
+straight through to GLES and raised `GL_INVALID_ENUM` without writing the
+parameter.
+
+The reach is the wireframe, hidden-line, vertex-outline and polygon-highlight
+views, and the GLU tessellator: `executor.c` and `hidden_lines.c` both wire
+`GLU_TESS_EDGE_FLAG` directly to `glEdgeFlag`, which is what keeps a
+tessellated concave polygon's outline clean instead of showing every interior
+diagonal. `tests/scenes/general/polygon-edge-flags.glr` is the scene that
+demonstrates it; before this patch its middle panel rendered identically to
+its left one on the web.
+
+### The filter that did not work
+
+The first implementation was a compaction over `fill_lineIndices()`'s output:
+that function emits every edge as an index pair, so dropping the pairs whose
+first index carried a cleared flag looked like the whole job, and it left the
+intricate per-mode generation untouched.
+
+The coverage oracle rejected it. Suppressing a quad's vertex 0 removed 879
+pixels where one edge is worth 320, and suppressing vertex 3 removed nothing.
+Dumping the generated pairs explained both numbers at once - a four-vertex
+`GL_QUADS` block comes out of `fill_lineIndices()` as:
+
+```
+(0,1) (0,2) (1,2) (0,3) (2,3)
+```
+
+That is the *triangulated* quad: five edges including the interior diagonal
+`(0,2)`, with the pairs unoriented, so the boundary edge `3->0` appears as
+`(0,3)`. Filtering on the first index therefore drops three edges for vertex 0
+and none for vertex 3. Neither "which vertex starts this edge" nor "is this
+edge a boundary at all" survives triangulation, so no filter over those pairs
+can be correct.
+
+### What works
+
+The vertex array is still in specification order - triangulation reorders the
+*indices*, not the vertices - so flagged geometry gets its edges built from the
+original primitive topology instead, in `build_lineIndices_edgeflag()`.
+`modeinit_t` gains a `vlen` field recording each block's cumulative vertex
+span, because `ilen` is in index space once a list carries indices and no
+longer marks the primitive grouping.
+
+`GL_TRIANGLES`, `GL_QUADS`, `GL_QUAD_STRIP` and `GL_POLYGON` are
+reconstructed - each emits at most 2 indices per vertex, inside the caller's
+4-per-vertex allocation. Triangle strips and fans return -1 and fall back to
+`fill_lineIndices()` with the flags ignored, as before: their edge count is not
+bounded by that allocation, and they are not where edge flags are used.
+
+Storage is a `GLubyte *edgeflag` on `renderlist_t`, one byte per vertex. NULL
+means "every vertex is `GL_TRUE`", so geometry that never clears a flag
+allocates nothing and pays one predictable null check per vertex in
+`rlVertexCommon()`. It stays out of the interleaved `merger_master` layout,
+which is exactly full at 20 floats per vertex and would otherwise grow for
+every vertex in the process.
+
+### Oracle
+
+`make bench-web-gl4es` builds `gl4es-edge-flag.html`. Each case calibrates
+itself - every edge under test is first drawn alone as a `GL_LINES` segment -
+so the expectations come from the rasterizer rather than a hard-coded count,
+and the assertions are absolute rather than deltas.
+
+Headless Chrome/SwiftShader (640x480):
+
+```
+q0=799/800 q1=880/880 q2=800/800 q3=879/880
+t0=576/576 t1=672/672 t2=672/672
+default=1438/1438 pervertex=1280/1024 fill=76800/76800
+pushattrib=1/1 getter=1/1 merged=2170/2176
+```
+
+Each of the quad's four and the triangle's three suppressions lands within a
+pixel of the calibrated edge it should remove. `gl4es-line-width` reproduces
+its documented pre-patch numbers exactly (`w1 20480 w1.5 32768 w3 61440
+w6 122880 loop 2672 strip 2104 zero 16`) and `gl4es-render` still reports
+PASS, which is the evidence that the unflagged path is untouched - as it must
+be, since `list->edgeflag` stays NULL there and the generator is never called.
+
+The scene itself was checked end to end by rendering its geometry on native GL
+(Mesa 4.6 compat / llvmpipe through surfaceless EGL) and on gl4es, counting
+covered pixels the same way: the boundary star matches at **498 px on both**,
+and the full mesh star differs by 4 px in ~1394 (rasterizer, not topology).
+
+### Odds and ends
+
+`glEdgeFlag` needs no packed-call entry for display lists: a compiling list
+picks the flag up through its own `lastEdgeFlag`, and a freshly extended one
+through `glstate->edgeflag`, which `alloc_renderlist()` seeds from.
+`glEdgeFlagv` is promoted out of the stub table alongside it. `GL_CURRENT_BIT`
+now saves and restores the flag.
+
+The query side needs both halves. `GL_EDGE_FLAG` joins `gl4es_commonGet()`,
+which serves `glGetIntegerv`/`glGetFloatv`/`glGetDoublev`; `glGetBooleanv` had
+no gl4es-side implementation at all, so it gets one (`skip_glGetBooleanv`)
+that answers `GL_EDGE_FLAG` and passes every other pname straight through,
+exactly as before. Answering the *rest* of gl4es's tracked state locally is
+worth doing but is a separate decision, and a separate patch.
+
+The client-array path (`glEdgeFlagPointer`) stays stubbed - gl-repl draws in
+immediate mode, so renderlists cover it.
+
+### A pre-existing bug left alone
+
+`fill_lineIndices()` reads `modes[k].mode_init` and `modes[k].ilen`, where `k`
+is the *output write cursor*, not `m`, the block loop counter. For a single
+block `m == k == 0` so it works by accident; for a multi-block merged list it
+indexes `modes[]` by the number of indices written so far.
+`build_lineIndices_edgeflag()` uses `modes[m]` correctly, but fixing the
+original changes behavior on merged lists well beyond this work, so it is
+noted rather than touched.
 
 ## 2026-08-24: deferred accumulation performance
 
