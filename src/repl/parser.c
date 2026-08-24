@@ -2142,6 +2142,40 @@ static int parse_keyword_statement(const char *p, GLCmd *cmd,
     return -1;
 }
 
+/* Diagnose a reserved name that reached the unknown-command fallback.
+ * Returns 1 when it emitted a diagnostic (caller fails the parse), 0 when
+ * the name is not reserved and the generic "unknown cmd" applies.
+ *
+ * Recognising these before the generic message matters because otherwise
+ * `rand();` or `sin(t);` get the same diagnostic as a misspelled GL call,
+ * which is actively misleading. The three arms are three different
+ * mistakes: a builtin call used as a statement (it produces a value -
+ * assign it), a C keyword (the REPL has no such statement *and* it is not
+ * an operand either), and a REPL constant or scratch array (an operand
+ * typed where a command goes).
+ *
+ * `has_args` distinguishes `sin(t)` from a bare `sin`. */
+static int parser_report_reserved_not_command(const char *func, int has_args,
+                                              const ReplParseContext *ctx) {
+    if (!func || !func[0] || !repl_eval_is_reserved_ident(func))
+        return 0;
+
+    if (has_args) {
+        parser_emit_error(ctx,
+            "'%s(...)' is an expression, not a command - assign it "
+            "(e.g. 'x = %s(...);') or use it inside another expression",
+            func, func);
+    } else if (repl_eval_is_c_keyword(func)) {
+        parser_emit_error(ctx,
+            "'%s' is a C keyword - the REPL has no such statement", func);
+    } else {
+        parser_emit_error(ctx,
+            "'%s' is a reserved name (constant or scratch array), "
+            "not a command - use it inside an expression", func);
+    }
+    return 1;
+}
+
 /* Full-line comments are source rows, not statements. Keep their prose
  * outside the terminator stripping and expression parsing in parse_command,
  * while retaining the parser's canonical scope indentation. */
@@ -2430,24 +2464,8 @@ static int parse_command(const char *line, GLCmd *cmd,
     }
 
 unknown_command:
-    /* Recognise "I typed a math expression as a top-level command"
-     * before the generic "unknown cmd" - otherwise `rand();` or
-     * `sin(t);` get the same diagnostic as a misspelled GL call,
-     * which is actively misleading. */
-    if (func[0] && repl_eval_is_reserved_ident(func)) {
-        if (open_p) {
-            parser_emit_error(ctx,
-                "'%s(...)' is an expression, not a command - assign it "
-                "(e.g. 'x = %s(...);') or use it inside another expression",
-                func, func);
-        } else {
-            parser_emit_error(ctx,
-                "'%s' is a reserved name (constant or scratch array), "
-                "not a command - use it inside an expression",
-                func);
-        }
+    if (parser_report_reserved_not_command(func, open_p != NULL, ctx))
         return 0;
-    }
     parser_emit_error_static(ctx, "Unknown cmd. Try glVertex3f, glBegin, glEnable, glShadeModel, ...");
     return 0;
 

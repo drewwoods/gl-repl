@@ -338,7 +338,7 @@ Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/gl
   subset predicate). That's the *control-flow* taxonomy;
   [`CmdSyntaxCategory`](src/repl/command_spec.h#L152) is the separate *visual* one - don't fold one through
   the other. A drift test in [`tests/test_replay_walk.c`](tests/test_replay_walk.c) asserts agreement.
-- Splitting comma-separated call args: [`repl_scan_next_arg_delim()`](src/repl/eval.h#L438) from
+- Splitting comma-separated call args: [`repl_scan_next_arg_delim()`](src/repl/eval.h#L443) from
   [`src/repl/eval.h`](src/repl/eval.h), never bare `strchr(s, ',')` - those
   are paren-naive and truncate `cos(i + phase)`.
 - **Keyboard bindings**: one [`keymap.h`](keymap.h) pair per action; call
@@ -554,7 +554,7 @@ only (`check-repl-export-via-bridge`).
 **The exported expression must evaluate in float, like the evaluator.** C
 promotes on any `double` it sees, and the evaluator (`eval_term` /
 `eval_additive`, all `float`) rounds after every operation instead - so
-[`repl_eval_expr_to_c()`](src/repl/eval.h#L506) lowers `PI`/`TAU`/`e` through
+[`repl_eval_expr_to_c()`](src/repl/eval.h#L511) lowers `PI`/`TAU`/`e` through
 `(float)` casts and suffixes fractional literals (`1.2` → `1.2f`). Integers
 stay bare: C converts an int operand without promoting the expression, which
 is also what keeps `A[2]` and `0xFF` intact. Canonical REPL text carries no

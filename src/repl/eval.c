@@ -444,10 +444,45 @@ static const ExprBuiltin k_expr_builtins[] = {
     { "rand2",        "repl_rand2f",               1,         2, builtin_rand2,      { NULL, "0" }  },
 };
 
+/* REPL-level reserved names: predefined variables, the named constants
+ * eval resolves, the declaration keywords, and the fixed scratch arrays.
+ * These mean something to the *interpreter*. */
 static const char *const k_reserved_identifiers[] = {
     "t", "PI", "TAU", "e", "NAN", "INFINITY",
     "nan", "inf", "infinity",
-    "float", "var", "return", "break", "continue", "A", "B", "C", NULL
+    "var", "A", "B", "C", NULL
+};
+
+/* C keywords, rejected as user identifiers because export writes every
+ * program-wide variable as `static float <name> = <value>;` and every
+ * function as `static void <name>(...)`. A variable called `int` or
+ * `while` produces a file that no C compiler accepts, so the REPL would
+ * be the only place such a program ran.
+ *
+ * Unlike a collision with a *library* name, this cannot be papered over
+ * at export time: a keyword cannot be renamed around with a #define.
+ * Rejecting the declaration is the only fix, which is why this list lives
+ * next to the interpreter's own reserved set rather than in export.
+ *
+ * C99 is the project's standard and the floor for what export must
+ * produce, so that keyword set is the required part. The C11/C23 spellings
+ * cost nothing to add and keep an exported file compiling for someone
+ * whose compiler defaults past C99. */
+static const char *const k_c_keywords[] = {
+    /* C89/C90 */
+    "auto", "break", "case", "char", "const", "continue", "default", "do",
+    "double", "else", "enum", "extern", "float", "for", "goto", "if",
+    "int", "long", "register", "return", "short", "signed", "sizeof",
+    "static", "struct", "switch", "typedef", "union", "unsigned", "void",
+    "volatile", "while",
+    /* C99 */
+    "inline", "restrict", "_Bool", "_Complex", "_Imaginary",
+    /* C11 / C23 spellings */
+    "_Alignas", "_Alignof", "_Atomic", "_Generic", "_Noreturn",
+    "_Static_assert", "_Thread_local", "bool", "true", "false",
+    "alignas", "alignof", "constexpr", "nullptr", "static_assert",
+    "thread_local", "typeof",
+    NULL
 };
 
 static const ExprBuiltin *find_expr_builtin(const char *name) {
@@ -990,16 +1025,37 @@ static int validate_expression_idents_range(
                                              cfg->predef.count, name) >= 0)
             continue;
 
-        if (err)
-            snprintf(err, (size_t)errsz, "undeclared variable '%s'", name);
+        if (err) {
+            /* Same reason as compile.c: pointing at `float <keyword>;`
+             * would just send the user into a second rejection. */
+            if (repl_eval_is_c_keyword(name))
+                snprintf(err, (size_t)errsz,
+                         "'%s' is a C keyword - it cannot name a variable",
+                         name);
+            else
+                snprintf(err, (size_t)errsz, "undeclared variable '%s'",
+                         name);
+        }
         return 0;
     }
 
     return 1;
 }
 
+int repl_eval_is_c_keyword(const char *name) {
+    if (!name)
+        return 0;
+    for (const char *const *kw = k_c_keywords; *kw; kw++) {
+        if (strcmp(name, *kw) == 0)
+            return 1;
+    }
+    return 0;
+}
+
 int repl_eval_is_reserved_ident(const char *name) {
     if (repl_eval_is_builtin_function(name))
+        return 1;
+    if (repl_eval_is_c_keyword(name))
         return 1;
     for (const char *const *reserved = k_reserved_identifiers;
          *reserved;

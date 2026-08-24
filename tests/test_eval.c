@@ -1039,11 +1039,14 @@ static void run_tests(void) {
         ASSERT_TRUE("name gain removed",
                 repl_eval_find_predef_var_idx("gain") < 0);
 
-        /* Jump keywords. Nothing rejected these before: a scene could
-         * declare `float break;`, assign to it and read it back, and then
-         * export `static float break = 0.0f;` - which is not C. The
-         * keyword statements parse ahead of any expression, so the name
-         * was only ever reachable as an operand, never as a statement. */
+        /* C keywords. Nothing rejected these before: a scene could declare
+         * `float break;`, assign to it and read it back, and then export
+         * `static float break = 0.0f;` - which is not C. Unlike a clash
+         * with a library name, this cannot be renamed around at export
+         * time, so the declaration has to be refused.
+         *
+         * Spot-checks across the reasons a name is on the list rather than
+         * the whole set; the exhaustive walk is below. */
         ok = repl_eval_declare_predef_var("break", err, sizeof(err));
         ASSERT_TRUE("reserved name break should fail", !ok);
 
@@ -1052,6 +1055,49 @@ static void run_tests(void) {
 
         ok = repl_eval_declare_predef_var("return", err, sizeof(err));
         ASSERT_TRUE("reserved name return should fail", !ok);
+
+        ok = repl_eval_declare_predef_var("while", err, sizeof(err));
+        ASSERT_TRUE("reserved name while should fail", !ok);
+
+        ok = repl_eval_declare_predef_var("int", err, sizeof(err));
+        ASSERT_TRUE("reserved name int should fail", !ok);
+
+        ok = repl_eval_declare_predef_var("_Bool", err, sizeof(err));
+        ASSERT_TRUE("reserved name _Bool should fail", !ok);
+
+        /* Every C keyword is refused, and each is reported *as* a keyword -
+         * that classification is what picks the diagnostic wording, so a
+         * name that is reserved but not recognised as a keyword would send
+         * the user to `float <keyword>;` and a second rejection.
+         *
+         * Names that merely start with a keyword must stay declarable:
+         * the check is whole-name, not a prefix match. */
+        {
+            static const char *const kw[] = {
+                "auto", "break", "case", "char", "const", "continue",
+                "default", "do", "double", "else", "enum", "extern",
+                "float", "for", "goto", "if", "int", "long", "register",
+                "return", "short", "signed", "sizeof", "static", "struct",
+                "switch", "typedef", "union", "unsigned", "void",
+                "volatile", "while", "inline", "restrict", "_Bool",
+                NULL
+            };
+            for (int k = 0; kw[k]; k++) {
+                ASSERT_TRUE("C keyword classified as a keyword",
+                            repl_eval_is_c_keyword(kw[k]));
+                ASSERT_TRUE("C keyword is reserved",
+                            repl_eval_is_reserved_ident(kw[k]));
+                ASSERT_TRUE("C keyword refused as a variable",
+                            !repl_eval_declare_predef_var(kw[k], err,
+                                                          sizeof(err)));
+            }
+            ASSERT_TRUE("'intensity' is not a keyword",
+                        !repl_eval_is_c_keyword("intensity"));
+            ASSERT_TRUE("'ifx' is not a keyword",
+                        !repl_eval_is_c_keyword("ifx"));
+            ASSERT_TRUE("'elsewhere' is not a keyword",
+                        !repl_eval_is_c_keyword("elsewhere"));
+        }
 
         ok = repl_eval_declare_predef_var("t", err, sizeof(err));
         ASSERT_TRUE("reserved name t should fail (already declared)", !ok);

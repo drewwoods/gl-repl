@@ -18,6 +18,7 @@
 #include "editor/input.h"
 #include "repl/command.h"
 #include "repl/eval.h"
+#include "ui/app/state.h"      /* ui_state_status_mut - diagnostic assertions */
 #include "repl/scenes.h"       /* repl_scenes_* / repl_promote_transient_if_needed */
 #include "repl/workspace_io.h"
 #include "app/glr_debug.h"
@@ -2110,18 +2111,24 @@ void test_loop_jump_commands(void) {
     ASSERT_TRUE("continue commits without a trailing semicolon",
                 editor_feed_line("continue") == 1);
 
-    /* 9. Neither keyword can be declared as a variable. This used to be
+    /* 9. No C keyword can be declared as a variable. This used to be
      * accepted all the way through: the row committed, `break = 3;` was a
      * normal assignment, and `glVertex3f(break, 0, 0)` read it back - and
      * then export wrote `static float break = 0.0f;`, which no C compiler
      * takes. The keyword statements parse ahead of any expression, so the
      * name was only ever usable as an operand and never as a statement.
      *
+     * The sample spans the reasons a name reaches the list: the jump
+     * statements the REPL itself implements, keywords with no REPL meaning
+     * at all, a type name, and a C99 underscore spelling.
+     *
      * The decl handler consumes the line either way (success or error), so
      * the claim is that no row commits and no slot appears - not the
      * feed's return value. */
     {
-        static const char *const jump_kw[] = { "break", "continue", NULL };
+        static const char *const jump_kw[] = {
+            "break", "continue", "while", "int", "static", "_Bool", NULL
+        };
         for (int kw = 0; jump_kw[kw]; kw++) {
             char line[64];
             char msg[96];
@@ -2162,15 +2169,29 @@ void test_loop_jump_commands(void) {
         }
     }
 
-    /* 10. With the name unavailable, the statement is all that parses -
-     * an assignment to it is not an assignment to anything. */
+    /* 10. With the name unavailable, an assignment to it is not an
+     * assignment to anything. The diagnostic has to say why rather than
+     * fall back on "undeclared variable 'break' - use 'float break;'
+     * first", which prescribes a line that is itself rejected. */
     glr_ctrl_reset_all(); declare_test_vars();
     {
         int before = repl_state_document_count();
         editor_feed_line("break = 3;");
         ASSERT_INT("'break = 3;' commits no row",
                    repl_state_document_count(), before);
+        ASSERT_TRUE("assigning to a keyword names the reason",
+                    strstr(ui_state_status_mut()->text,
+                           "'break' is a C keyword") != NULL);
+        ASSERT_TRUE("assigning to a keyword suggests no declaration",
+                    strstr(ui_state_status_mut()->text, "use 'float") == NULL);
     }
+
+    /* 11. The ordinary undeclared-variable prompt is untouched - it is
+     * good advice for a name that merely has not been declared yet. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("notdeclared = 3;");
+    ASSERT_TRUE("a plain undeclared name still gets the declare prompt",
+                strstr(ui_state_status_mut()->text, "use 'float") != NULL);
 }
 
 /* `return` is the third jump statement and, like break/continue, is

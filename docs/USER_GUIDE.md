@@ -712,8 +712,13 @@ glVertex3f(x, y, z);    // use anywhere a number is expected
 - Program-wide values persist across commits and are saved/loaded with the
   scene. Initializers are allowed: `float n = 1;`.
 - A name is at most 15 characters, and one declaration line may introduce at
-  most 8 of them. `t`, `PI`, `TAU`, `e`, `float`, `var`, and the scratch-array
-  names `A`, `B`, `C` are reserved.
+  most 8 of them. `t`, `PI`, `TAU`, `e`, `var`, the scratch-array names `A`,
+  `B`, `C`, and every built-in function name are reserved.
+- **C keywords are reserved too** - `int`, `while`, `static`, `break`,
+  `return` and the rest. A scene exports as C, where each program-wide
+  variable becomes `static float <name>;`, so a variable named `int` would
+  produce a file that does not compile. Names that merely start with a
+  keyword (`intensity`, `elsewhere`) are fine.
 
 A committed line holds at most **255 characters**. The line you are typing is
 not held to that (the input buffer is 1024 bytes). A Replace All that would

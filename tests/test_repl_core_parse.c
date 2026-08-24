@@ -2426,6 +2426,35 @@ int main(void) {
         assert_status_contains("glDepthMask(undef_var) undeclared status",
                                "undeclared variable 'undef_var'");
     }
+    /* A C keyword used as an operand is refused with a reason, not with
+     * the generic undeclared-variable prompt: that prompt names `float
+     * <name>;` as the fix, and for a keyword that is a second rejection. */
+    {
+        glr_ctrl_reset_all();
+        declare_test_vars();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("glDepthMask(while)", &cmd);
+        ASSERT_TRUE("glDepthMask(while) rejected", ok == 0);
+        assert_status_contains("keyword operand names the reason",
+                               "'while' is a C keyword");
+        ASSERT_TRUE("keyword operand does not suggest declaring it",
+                    strstr(g_status, "use 'float") == NULL);
+    }
+    /* And typed as a bare statement it is not advised to "use it inside an
+     * expression" either - it is not an operand anywhere. */
+    {
+        glr_ctrl_reset_all();
+        declare_test_vars();
+        GLCmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        int ok = parse_for_test("while;", &cmd);
+        ASSERT_TRUE("bare 'while;' rejected", ok == 0);
+        assert_status_contains("bare keyword statement names the reason",
+                               "'while' is a C keyword");
+        ASSERT_TRUE("bare keyword is not called an expression",
+                    strstr(g_status, "inside an expression") == NULL);
+    }
     {
         glr_ctrl_reset_all();
         GLCmd cmd;

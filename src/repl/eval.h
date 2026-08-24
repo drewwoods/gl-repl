@@ -323,8 +323,13 @@ int  repl_eval_declare_predef_var(const char *name, char *err, int errsz);
 int  repl_eval_declare_predef_var_with_value(const char *name, float value, char *err, int errsz);
 /* Unregister a predefined variable by name (safe no-op if not found). */
 void repl_eval_undeclare_predef_var(const char *name);
-/* Check whether a name is reserved (e.g. a function name or keyword). */
+/* Check whether a name is reserved (e.g. a function name or keyword).
+ * True for builtins, the interpreter's own names, and C keywords. */
 int  repl_eval_is_reserved_ident(const char *name);
+/* True only for the C-keyword subset of the above. Callers use it to say
+ * *why* a name was refused - "would not compile when exported" is a very
+ * different explanation from "that is a builtin". */
+int  repl_eval_is_c_keyword(const char *name);
 /* Scan source for references to a specific identifier. */
 int  repl_eval_source_uses_ident(const char *src, const char *name);
 typedef struct {

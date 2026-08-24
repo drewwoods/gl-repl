@@ -875,7 +875,7 @@ flat command - its first expansion, or its last when the snapshot's
 `normal_args` from the already-substituted flat command. For normal guides it
 also walks forward to find the live anchor point, because source-line parsing
 alone cannot know the world-space vertex the normal belongs to. Argument-slot
-parsing uses [`repl_scan_next_arg_delim()`](../src/repl/eval.h#L438) so nested expressions such as
+parsing uses [`repl_scan_next_arg_delim()`](../src/repl/eval.h#L443) so nested expressions such as
 `cos(i + phase)` do not truncate at an inner comma/paren.
 
 ##### Live transform guides (render-while-typing)

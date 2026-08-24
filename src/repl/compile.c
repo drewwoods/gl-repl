@@ -283,6 +283,28 @@ static int compile_set_err(char *err, int err_size, const char *fmt, ...) {
     return REPL_COMPILE_ERROR;
 }
 
+/* Explain a name the language will never accept as a variable.
+ *
+ * Exists because the generic "undeclared variable 'x' - use 'float x;'
+ * first" prompt is actively wrong for these: following it just produces a
+ * second rejection. Returns 1 (and fills err) when it took the name,
+ * 0 when the name is merely undeclared and the caller's own message
+ * applies. */
+static int compile_name_unavailable_err(char *err, int err_size,
+                                        const char *name) {
+    if (repl_eval_is_c_keyword(name)) {
+        compile_set_err(err, err_size,
+            "'%s' is a C keyword - it cannot name a variable", name);
+        return 1;
+    }
+    if (repl_eval_is_reserved_ident(name)) {
+        compile_set_err(err, err_size,
+            "'%s' is a reserved name - it cannot name a variable", name);
+        return 1;
+    }
+    return 0;
+}
+
 /* Source index of the innermost open CMD_FUNC_DEF at `pos`, or -1 at
  * document top level. Resolves *through* a nested for/if - a declaration
  * typed one level down still belongs to the owning function, which is what
@@ -1059,6 +1081,9 @@ static ReplCompileResult validate_decl_names(const FloatDeclParse *parsed,
                 return compile_set_err(err, err_size,
                     "'%s' is already declared", nm);
         }
+        if (repl_eval_is_c_keyword(nm))
+            return compile_set_err(err, err_size,
+                "'%s' is a C keyword - it cannot name a variable", nm);
         if (repl_eval_is_reserved_ident(nm))
             return compile_set_err(err, err_size, "'%s' is reserved", nm);
         if (!(isalpha((unsigned char)nm[0]) || nm[0] == '_'))
@@ -1100,6 +1125,9 @@ static ReplCompileResult validate_local_decl_names(const FloatDeclParse *parsed,
                 return compile_set_err(err, err_size,
                     "duplicate name '%s' in declaration", nm);
         }
+        if (repl_eval_is_c_keyword(nm))
+            return compile_set_err(err, err_size,
+                "'%s' is a C keyword - it cannot name a variable", nm);
         if (repl_eval_is_reserved_ident(nm))
             return compile_set_err(err, err_size, "'%s' is reserved", nm);
         if (!(isalpha((unsigned char)nm[0]) || nm[0] == '_'))
@@ -2057,9 +2085,12 @@ static ReplCompileResult compile_var_assign_scalar(
     } else {
         var_idx = repl_eval_find_predef_var_idx_in(ctx->predef.vars,
                                                    ctx->predef.count, name);
-        if (var_idx < 0)
+        if (var_idx < 0) {
+            if (compile_name_unavailable_err(err, err_size, name))
+                return REPL_COMPILE_ERROR;
             return compile_set_err(err, err_size,
                 "undeclared variable '%s' - use 'float %s;' first", name, name);
+        }
     }
 
     if (!repl_eval_validate_expression_idents(
@@ -2307,9 +2338,12 @@ static ReplCompileResult compile_predef_value_change(const char *name,
 
     var_idx = repl_eval_find_predef_var_idx_in(ctx->predef.vars,
                                                ctx->predef.count, name);
-    if (var_idx < 0)
+    if (var_idx < 0) {
+        if (compile_name_unavailable_err(err, err_size, name))
+            return REPL_COMPILE_ERROR;
         return compile_set_err(err, err_size,
                                "undeclared variable '%s'", name);
+    }
 
     snprintf(out->commit_message, sizeof(out->commit_message),
              "%s = %g", name, (double)value);
