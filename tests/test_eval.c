@@ -1039,6 +1039,20 @@ static void run_tests(void) {
         ASSERT_TRUE("name gain removed",
                 repl_eval_find_predef_var_idx("gain") < 0);
 
+        /* Jump keywords. Nothing rejected these before: a scene could
+         * declare `float break;`, assign to it and read it back, and then
+         * export `static float break = 0.0f;` - which is not C. The
+         * keyword statements parse ahead of any expression, so the name
+         * was only ever reachable as an operand, never as a statement. */
+        ok = repl_eval_declare_predef_var("break", err, sizeof(err));
+        ASSERT_TRUE("reserved name break should fail", !ok);
+
+        ok = repl_eval_declare_predef_var("continue", err, sizeof(err));
+        ASSERT_TRUE("reserved name continue should fail", !ok);
+
+        ok = repl_eval_declare_predef_var("return", err, sizeof(err));
+        ASSERT_TRUE("reserved name return should fail", !ok);
+
         ok = repl_eval_declare_predef_var("t", err, sizeof(err));
         ASSERT_TRUE("reserved name t should fail (already declared)", !ok);
 

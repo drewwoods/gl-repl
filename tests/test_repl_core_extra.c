@@ -2109,6 +2109,68 @@ void test_loop_jump_commands(void) {
                 editor_feed_line("break") == 1);
     ASSERT_TRUE("continue commits without a trailing semicolon",
                 editor_feed_line("continue") == 1);
+
+    /* 9. Neither keyword can be declared as a variable. This used to be
+     * accepted all the way through: the row committed, `break = 3;` was a
+     * normal assignment, and `glVertex3f(break, 0, 0)` read it back - and
+     * then export wrote `static float break = 0.0f;`, which no C compiler
+     * takes. The keyword statements parse ahead of any expression, so the
+     * name was only ever usable as an operand and never as a statement.
+     *
+     * The decl handler consumes the line either way (success or error), so
+     * the claim is that no row commits and no slot appears - not the
+     * feed's return value. */
+    {
+        static const char *const jump_kw[] = { "break", "continue", NULL };
+        for (int kw = 0; jump_kw[kw]; kw++) {
+            char line[64];
+            char msg[96];
+            int before;
+
+            glr_ctrl_reset_all(); declare_test_vars();
+            before = repl_state_document_count();
+            snprintf(line, sizeof(line), "float %s;", jump_kw[kw]);
+            editor_feed_line(line);
+            snprintf(msg, sizeof(msg), "'float %s;' commits no row",
+                     jump_kw[kw]);
+            ASSERT_INT(msg, repl_state_document_count(), before);
+            snprintf(msg, sizeof(msg), "'%s' has no predef slot",
+                     jump_kw[kw]);
+            ASSERT_TRUE(msg, repl_eval_find_predef_var_idx(jump_kw[kw]) < 0);
+
+            /* `static float` is the same declaration by another spelling,
+             * and it is the one export actually writes - so it has to be
+             * refused too. */
+            glr_ctrl_reset_all(); declare_test_vars();
+            before = repl_state_document_count();
+            snprintf(line, sizeof(line), "static float %s;", jump_kw[kw]);
+            editor_feed_line(line);
+            snprintf(msg, sizeof(msg), "'static float %s;' commits no row",
+                     jump_kw[kw]);
+            ASSERT_INT(msg, repl_state_document_count(), before);
+
+            /* A local inside a function body is a third declaration path
+             * (no predef slot at all), so it needs its own check. */
+            glr_ctrl_reset_all(); declare_test_vars();
+            editor_feed_line("func0() {");
+            before = repl_state_document_count();
+            snprintf(line, sizeof(line), "float %s;", jump_kw[kw]);
+            editor_feed_line(line);
+            snprintf(msg, sizeof(msg),
+                     "'float %s;' commits no row as a local", jump_kw[kw]);
+            ASSERT_INT(msg, repl_state_document_count(), before);
+        }
+    }
+
+    /* 10. With the name unavailable, the statement is all that parses -
+     * an assignment to it is not an assignment to anything. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    {
+        int before = repl_state_document_count();
+        editor_feed_line("break = 3;");
+        ASSERT_INT("'break = 3;' commits no row",
+                   repl_state_document_count(), before);
+    }
 }
 
 /* `return` is the third jump statement and, like break/continue, is
