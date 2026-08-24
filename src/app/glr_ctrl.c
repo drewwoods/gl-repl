@@ -3539,8 +3539,10 @@ void glr_ctrl_display_frame(void) {
      * it. Drawing here - after render3d_draw_scene returned - is also why
      * the panel is never clipped by the stencil test it reports on. */
     {
+        prof_begin(PROF_UI_PANELS_VIZ_LEGEND);
         UiBufferVizLegendView legend_view = glr_ctrl_build_buffer_viz_legend_view();
         ui_buffer_viz_legend_render(&legend_view);
+        prof_end(PROF_UI_PANELS_VIZ_LEGEND);
     }
     /* Autocomplete popup anchors under the editor cursor. When the
      * active input row didn't render this frame (code panel hidden,
@@ -3548,23 +3550,35 @@ void glr_ctrl_display_frame(void) {
      * the popup - there's no visible cursor to anchor to. Same
      * semantic as the legacy mid-render publish, which simply didn't
      * fire on those frames. */
-    if (cp_out.cursor_valid)
+    if (cp_out.cursor_valid) {
+        prof_begin(PROF_UI_PANELS_AUTOCOMPLETE);
         ui_autocomplete_panel_render(&ui_snap, cp_out.cursor_px, cp_out.cursor_py);
+        prof_end(PROF_UI_PANELS_AUTOCOMPLETE);
+    }
     {
+        prof_begin(PROF_UI_PANELS_CMD_DESC);
         UiCommandDescriptionPanelView command_description_view =
             glr_ctrl_build_command_description_panel_view();
         ui_command_description_panel_render(&command_description_view);
+        prof_end(PROF_UI_PANELS_CMD_DESC);
     }
     {
+        prof_begin(PROF_UI_PANELS_GL_STATE);
         UiGlStatePanelView gl_state_view = glr_ctrl_build_gl_state_panel_view(&ui_snap);
         ui_gl_state_panel_render(&gl_state_view);
+        prof_end(PROF_UI_PANELS_GL_STATE);
     }
+    prof_begin(PROF_UI_PANELS_EXAMPLE_MENU);
     ui_menu_bar_render_example_dropdown(&ui_snap);
+    prof_end(PROF_UI_PANELS_EXAMPLE_MENU);
     {
+        prof_begin(PROF_UI_PANELS_VARIABLES);
         UiVariablePanelView var_view = ui_app_variable_panel_view(&ui_snap);
         ui_variable_panel_render(&var_view);
+        prof_end(PROF_UI_PANELS_VARIABLES);
     }
     {
+        prof_begin(PROF_UI_PANELS_HELP);
         UiOverlayState help_overlay = {
             .visible    = ui_snap.help.visible,
             .tab_idx    = ui_snap.help_session.tab_idx,
@@ -3574,6 +3588,7 @@ void glr_ctrl_display_frame(void) {
             .content    = ui_snap.help_content,
         };
         ui_tabbed_overlay_render(&help_overlay);
+        prof_end(PROF_UI_PANELS_HELP);
     }
     prof_end(PROF_UI_PANELS);
 
@@ -3612,7 +3627,9 @@ void glr_ctrl_display_frame(void) {
      * already below this layer; this extends that established ordering to the
      * CPU/memory panels (the assignment-value plot draws earlier still, under
      * the OpenGL-state popup). */
+    prof_begin(PROF_UI_STATUS_HISTORY);
     ui_panels_render_scene_status(&ui_snap);
+    prof_end(PROF_UI_STATUS_HISTORY);
 
     prof_end(PROF_UI_2D);   /* end of the 2D UI band */
 

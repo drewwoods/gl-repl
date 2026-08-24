@@ -125,12 +125,25 @@ typedef enum {
     PROF_CODE_PANEL_OVERLAY_SWATCH,
     PROF_ASSIGN_PLOT_PANEL,   /* ui_assign_plot_panel_render() */
     PROF_CONSOLE_PANEL,       /* ui_console_panel_render() */
-    PROF_UI_PANELS,     /* autocomplete + dropdown + var + config + help */
+    PROF_UI_PANELS,     /* the floating popups, in paint order below */
+    PROF_UI_PANELS_VIZ_LEGEND,   /* ui_buffer_viz_legend_render() */
+    PROF_UI_PANELS_AUTOCOMPLETE, /* ui_autocomplete_panel_render() */
+    PROF_UI_PANELS_CMD_DESC,     /* ui_command_description_panel_render() */
+    PROF_UI_PANELS_GL_STATE,     /* ui_gl_state_panel_render() */
+    PROF_UI_PANELS_EXAMPLE_MENU, /* ui_menu_bar_render_example_dropdown() */
+    PROF_UI_PANELS_VARIABLES,    /* ui_variable_panel_render() */
+    PROF_UI_PANELS_HELP,         /* ui_tabbed_overlay_render() - the help overlay */
     PROF_PROFILE_PANEL,           /* all compute-profile surfaces */
     PROF_PROFILE_PANEL_FPS,       /* ui_fps_panel_render() */
     PROF_PROFILE_PANEL_SECTIONS,  /* ui_profile_panel_render() */
     PROF_PROFILE_PANEL_HISTOGRAM, /* ui_histogram_panel_render() */
     PROF_MEMORY_PANEL,  /* ui_memory_panel_render() (the panel itself) */
+    /* ui_panels_render_scene_status(): the status bell's history popup, drawn
+     * after every floating telemetry surface. A sibling of the panels above
+     * rather than one of PROF_UI_PANELS' children because it is bracketed
+     * outside that span - it paints last of all so its rows own their
+     * overlapping pixels. */
+    PROF_UI_STATUS_HISTORY,
     PROF_COMPOSITOR,    /* glr_compositor_postprocess_frame() - whole-frame
                          * (full-screen) post-process; distinct from the
                          * scene-viewport pass PROF_RENDER3D_POST_PROCESS */

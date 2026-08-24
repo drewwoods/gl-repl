@@ -1392,6 +1392,21 @@ static void test_prof_nesting_guard_over_a_display_frame(void) {
                prof_section_sampled_this_frame(PROF_CONSOLE_PANEL), 1);
     ASSERT_INT("as did the code panel",
                prof_section_sampled_this_frame(PROF_CODE_PANEL), 1);
+    /* The popup leaves: seven brackets inside PROF_UI_PANELS, so the guard has
+     * a depth-2 run to check under the band as well as a depth-1 one. Two of
+     * them are unconditional draws that no-op when their surface is hidden. */
+    ASSERT_INT("the popup leaves are nested under popups",
+               prof_section_info(PROF_UI_PANELS_HELP).depth, 2);
+    ASSERT_INT("the variable panel leaf ran",
+               prof_section_sampled_this_frame(PROF_UI_PANELS_VARIABLES), 1);
+    ASSERT_INT("and the help overlay leaf ran",
+               prof_section_sampled_this_frame(PROF_UI_PANELS_HELP), 1);
+    /* The status-history popup is bracketed outside PROF_UI_PANELS, so it is a
+     * sibling of it rather than an eighth leaf. */
+    ASSERT_INT("status history is a band child, not a popup leaf",
+               prof_section_info(PROF_UI_STATUS_HISTORY).depth, 1);
+    ASSERT_INT("and it drew this frame",
+               prof_section_sampled_this_frame(PROF_UI_STATUS_HISTORY), 1);
 
     prof_test_reset();
     assign_plot_reset_all();

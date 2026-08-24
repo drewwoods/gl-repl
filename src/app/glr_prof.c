@@ -109,12 +109,23 @@ static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_CODE_PANEL_OVERLAY_SWATCH]         = { "num swatch",      3, 0 },
     [PROF_ASSIGN_PLOT_PANEL]                 = { "assign plot",     1, 0 },
     [PROF_CONSOLE_PANEL]                     = { "console",         1, 0 },
+    /* The popups, split one row per surface: this was a single number over
+     * seven unrelated draws, and a full-screen help overlay reads nothing like
+     * a corner legend. Paint order, which is also bracket order. */
     [PROF_UI_PANELS]                         = { "popups",          1, 0 },
+    [PROF_UI_PANELS_VIZ_LEGEND]              = { "viz legend",      2, 0 },
+    [PROF_UI_PANELS_AUTOCOMPLETE]            = { "autocomplete",    2, 0 },
+    [PROF_UI_PANELS_CMD_DESC]                = { "cmd desc",        2, 0 },
+    [PROF_UI_PANELS_GL_STATE]                = { "gl state",        2, 0 },
+    [PROF_UI_PANELS_EXAMPLE_MENU]            = { "example menu",    2, 0 },
+    [PROF_UI_PANELS_VARIABLES]               = { "variables",       2, 0 },
+    [PROF_UI_PANELS_HELP]                    = { "help overlay",    2, 0 },
     [PROF_PROFILE_PANEL]                     = { "profile panel",   1, 0 },
     [PROF_PROFILE_PANEL_FPS]                 = { "fps plot",        2, 0 },
     [PROF_PROFILE_PANEL_SECTIONS]            = { "section list",    2, 0 },
     [PROF_PROFILE_PANEL_HISTOGRAM]           = { "histograms",      2, 0 },
     [PROF_MEMORY_PANEL]                      = { "memory panel",    1, 0 },
+    [PROF_UI_STATUS_HISTORY]                 = { "status history",  1, 0 },
     [PROF_COMPOSITOR]                        = { "Compositor FX",   0, 0 },
     [PROF_FRAME_RESTORE]                     = { "Frame Restore",   0, 0 },
     [PROF_SCRIPTED_INPUT]                    = { "Scripted Input",  0, 0 },
@@ -195,6 +206,9 @@ static const unsigned char k_gpu_sections[PROF_SECTION_COUNT] = {
      * owns the GPU query; nesting ten more queries would perturb the work
      * these rows are intended to explain, especially in browser builds. */
     [PROF_UI_PANELS]                         = 1,
+    /* Its seven children are diagnostic CPU subdivisions under a parent that
+     * already owns the query, like the code panel's overlay leaves. */
+    [PROF_UI_STATUS_HISTORY]                 = 1,
     [PROF_REPLAY_HUD]                        = 1,
     [PROF_TOUR_HUD]                          = 1,
     [PROF_PROFILE_PANEL]                     = 1,
