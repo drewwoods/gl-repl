@@ -74,7 +74,12 @@ typedef struct {
     int   collapsed;           /* 1 = only the title bar is shown; slider rows
                                 * and the value/track columns are hidden */
     int   time_row;            /* row carrying the animation clock `t`, which
-                                * gets the frame stepper; -1 = no clock row */
+                                * gets the frame stepper; -1 = no clock row.
+                                * NOTE: 0 is a valid row, so a zeroed view
+                                * claims row 0 is the clock and draws a stepper
+                                * its owner may not route. Every builder must
+                                * set this explicitly - memset(0) is not a
+                                * safe default here. */
     int   time_playing;        /* 1 = the clock is running, so the stepper
                                 * draws inert (see the renderer) */
 } UiVariablePanelView;

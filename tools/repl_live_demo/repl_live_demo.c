@@ -114,6 +114,11 @@ static int g_slider_drag   = 0;
 /* --- Variable-panel rows (rebuilt after each import) --------------------- */
 
 static UiVariable g_rows[UI_VARIABLE_PANEL_MAX_ROWS];
+/* Display row showing `t`, for the panel's frame stepper. Not the predef slot:
+ * rebuild_variable_rows compacts the table, so the two can disagree. -1 when
+ * there is no clock row, which build_panel_view must set explicitly - a
+ * zeroed view would claim row 0 is the clock. */
+static int g_time_row = -1;
 static int        g_row_count;
 
 /* --- Host effects: edit-line int + stderr diagnostics ------------------- */
@@ -207,6 +212,7 @@ static void rebuild_variable_rows(void) {
     ReplVariableView v = repl_state_variables();
     int i;
     g_row_count = 0;
+    g_time_row = -1;
     for (i = 0; i < v.var_count && g_row_count < UI_VARIABLE_PANEL_MAX_ROWS; i++) {
         const char *name = v.vars[i].name;
         int idx;
@@ -214,6 +220,8 @@ static void rebuild_variable_rows(void) {
         idx = repl_eval_find_predef_var_idx(name);
         if (idx < 0) continue;
         snprintf(g_rows[g_row_count].name, sizeof(g_rows[g_row_count].name), "%s", name);
+        if (strcmp(name, "t") == 0)
+            g_time_row = g_row_count;
         g_rows[g_row_count].value = &g_predef_vars_mut[idx].value;
         g_rows[g_row_count].tuned = 0;
         g_rows[g_row_count].written = 0;
@@ -255,6 +263,8 @@ static UiVariablePanelView build_panel_view(void) {
     v.var_count       = g_row_count;
     v.drag_active_var = variable_panel_drag_active_var();
     v.drag_coarse     = variable_panel_drag_coarse();
+    v.time_row        = g_time_row;
+    v.time_playing    = g_playing;
     return v;
 }
 
@@ -683,12 +693,19 @@ static double demo_timer_now_ms(void) {
     return (double)ts.tv_sec * 1e3 + (double)ts.tv_nsec / 1e6;
 }
 
+/* Move the clock by `dt`. The timer's per-frame advance and the panel's frame
+ * stepper both go through here so a stepped frame is the same size as a played
+ * one. This demo drives `t` directly rather than through repl_state_time_*:
+ * it owns its own play flag and re-flattens every frame regardless. */
+static void nudge_animation_clock(float dt) {
+    int t_idx = repl_eval_find_predef_var_idx("t");
+    if (t_idx >= 0)
+        g_predef_vars_mut[t_idx].value += dt;
+}
+
 static void advance_animation_clock(void) {
-    if (g_playing) {
-        int t_idx = repl_eval_find_predef_var_idx("t");
-        if (t_idx >= 0)
-            g_predef_vars_mut[t_idx].value += DEMO_FRAME_DT;
-    }
+    if (g_playing)
+        nudge_animation_clock(DEMO_FRAME_DT);
 }
 
 static void frame_timer(int value) {
@@ -728,6 +745,15 @@ static void mouse_func(int button, int state, int x, int y) {
                 int coarse = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
                 variable_panel_handle_drag_begin(hit.item_idx, coarse, x);
                 g_slider_drag = 1;
+                return;
+            } else if (hit.kind == UI_HIT_VARIABLE_TIME_STEP) {
+                /* One frame per click, ten on a right-press - the same coarse
+                 * modifier the slider drag uses, and what the app does. */
+                float frames = (button == GLUT_RIGHT_BUTTON)
+                             ? GLR_ADJUST_COARSE_SCALE : 1.0f;
+                nudge_animation_clock((hit.item_idx > 0 ? 1.0f : -1.0f) *
+                                      frames * DEMO_FRAME_DT);
+                glutPostRedisplay();
                 return;
             } else if (hit.kind == UI_HIT_VARIABLE_COLLAPSE_TOGGLE &&
                        button == GLUT_LEFT_BUTTON) {

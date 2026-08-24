@@ -167,9 +167,13 @@ static void mouse_func(int button, int state, int x, int y) {
             variable_panel_handle_drag_begin(hit.item_idx, coarse, x);
         } else if (hit.kind == UI_HIT_VARIABLE_TIME_STEP) {
             /* item_idx is +1 up / -1 down; the app maps this onto its
-             * simulation tick, the demo onto its own clock row. */
+             * simulation tick, the demo onto its own clock row. Right-press is
+             * the coarse step (ten frames), matching both the slider drag's
+             * modifier and what the app's stepper does. */
+            float frames = (button == GLUT_RIGHT_BUTTON)
+                         ? GLR_ADJUST_COARSE_SCALE : 1.0f;
             g_vars[DEMO_TIME_ROW].value +=
-                (float)hit.item_idx * DEMO_TIME_STEP;
+                (float)hit.item_idx * frames * DEMO_TIME_STEP;
         } else if (hit.kind == UI_HIT_VARIABLE_COLLAPSE_TOGGLE &&
                   button == GLUT_LEFT_BUTTON) {
             variable_panel_toggle_collapsed();
