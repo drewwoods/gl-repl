@@ -119,9 +119,11 @@ Point the implementation at `glr_scene_write_phase` for the attachment
 rule, but **do not import `GlrRowPhase` into the UI or into
 source_scope** - the helper answers one question with one index.
 
-Not frame-hot: reformat walks each row once per edit. A step function
-over `at` is enough; do not add a fifth prefix array to
-`ReplSourceScopeView`.
+**Compute `at` once, at view-build time**, and cache it as a scalar on
+`ReplSourceScopeView` (`src/repl/source_scope.h:41-50`) beside the
+`built` flag, next to where the four prefix arrays are filled. Still not
+a fifth prefix array - one `int`. Recomputing the walk inside each
+per-row indent helper would make a reformat pass O(n^2).
 
 ### 1b. Panel chrome split (`src/ui/app/repl_code_panel.c`)
 
@@ -183,9 +185,15 @@ position are load-bearing - settle them here before regenerating.
 
 ### 1d. Indent base
 
-Six helpers in `src/repl/source_scope.c` start at `2 +` (`:261`, `:271`,
-`:284`, `:301`, `:322`, `:339`). Base becomes `pos < at ? 0 : 2`, via
-one shared `source_scope_base_indent(view, pos)`.
+Six helpers in `src/repl/source_scope.c` open their sum with a literal
+`2 +` (`:257`, `:276`, `:292`, `:313`, `:329`, `:344`). That leading 2
+becomes `source_scope_base_indent(view, pos)` = `pos < at ? 0 : 2`.
+
+A seventh literal is the early-out in
+`repl_source_scope_view_cmd_indent_chars()` (`:325`), which returns a
+bare `2` when the view is not built. Either keep it as the conservative
+fallback or route it through the base helper once a view is bound - but
+do not miss it while changing the other six.
 
 **Use the boundary, not an "inside a depth-0 `CMD_FUNC_DEF`"
 predicate.** The boundary form covers three cases the narrow predicate
@@ -196,13 +204,18 @@ function definition, which export deliberately emits *with* the function
 own position; and a mid-document function the panel still draws inside
 `display()`, which the narrow predicate would wrongly dedent.
 
-**Do not touch the block-closer special case.** `source_scope_base_indent`
-returns `base + 2` at a `CMD_FUNC_END`, because the prefix depth on the
-closer row is still 1; `reformat.c:250-264` subtracts 2, and
-`commit.c:671` copies the header's indent onto the `fe` text. A top-level
-`}` lands at column 0 through that subtraction, not through the base. A
-post-change "simplification" that drops the minus-2 will park `}` at
-indent 2.
+**Do not touch the block-closer special case, and do not fold it into
+the base.** `source_scope_base_indent` returns 0 or 2 and nothing else.
+The closer's extra level comes from the existing formula: `cmd_indent`
+is `base + 2*kd + ...`, and `kd` is still 1 on a `CMD_FUNC_END` row, so a
+top-level closer computes `base + 2`. `reformat.c:250-264` subtracts 2
+from that, and `commit.c:671` copies the header's indent onto the `fe`
+text; a prefix `}` reaches column 0 through the subtraction.
+
+Two ways to break this, both of which produce a `}` one level too deep:
+baking the closer's `+2` into `source_scope_base_indent` (the closer then
+computes 4, minus 2 is 2), or "simplifying away" reformat's minus-2 after
+the base change.
 
 ### 1e. Direct formatting paths that bypass the helper
 
@@ -226,12 +239,42 @@ Project 2):
   position 0 would emit a column-0 header inside `display()`. Query the
   computed insert position instead.
 
-Querying the insert position is sufficient; no insertion-destination
-kind is needed. A new declaration hoists to `compile_decl_prologue_end`,
-which is always `<= at`; a new function lands wherever the hoist puts
-it, and the panel's boundary agrees with that position by construction.
-The one genuinely ambiguous index, `pos == at`, is settled once by the
-insert-ghost rule in 1h.
+**The comparison at the boundary differs for an existing row and a
+not-yet-inserted one**, and reformat is not a follow-up that would paper
+over getting it wrong: `repl_reformat_program()` runs on Ctrl+\
+(`src/editor/input.c:1317-1328`), so whatever indent commit writes is
+canonical until the user asks for a reformat.
+
+- **Existing row**: `pos < at ? 0 : 2`. At `pos == at` the row *is* the
+  first body row.
+- **New global declaration or `CMD_FUNC_DEF`**: `insert_pos <= at ? 0 : 2`.
+  Equality means the insert *extends* the prefix. A functions-only
+  document has `at == count` and the hoist returns `count`; so does a
+  `[decls][funcs][glBegin...]` document where the hoist stops on the
+  first body row. In both cases the new closed function becomes prologue
+  once inserted, and a `<` test would leave its header at indent 2 above
+  `display()`.
+- `insert_pos > at` stays 2 - that is the clear-pair case described
+  above.
+
+The insert-ghost tie-break in 1h is about where the live cursor's ghost
+row draws, not about formatting a row that does not exist yet. They are
+different questions and can disagree at the same index.
+
+**Coordinate contract.** `at` comes from a scope view bound to the
+*pre-change* document, while `compile_function_decl_insert_pos_after_delete()`
+returns `insert_pos` in *post-delete* coordinates (the relocation deletes
+the cursor's leading comment run first, `src/editor/commit.c:673-676`).
+Compare in the view's coordinates: translate `insert_pos` back up by
+`delete_count` when the helper translated it down, which is the same
+arithmetic that helper already documents, inverted. Do **not** build a
+virtual post-change view to format one row.
+
+Tests must cover the exact-boundary commit both ways: a second function
+committed at end-of-document in a functions-only scene (assert the new
+header is column 0 *without* pressing Ctrl+\), and the same with a
+leading comment run above the cursor, which is what makes the delete
+translation non-trivial.
 
 ### 1f. `REPL_GLR_BASE_INDENT`
 
@@ -260,13 +303,20 @@ would be flattened, so it lands in the same patch.
   `src/repl/export_setup.c:132`). The loop never matches and the
   function lands at the end of the includes - accidentally near
   `display()` today, and at the *start of the declarations* after the
-  split. It has to target the splice.
+  split. **Swapping the needle is not the fix**: the splice is
+  `header_rows` (workspace + includes + helpers + scratch) plus the
+  *wrapped* row count of the prologue rows `[0, at)`, and bootstrap has
+  no layout snapshot to ask. It has to count that prefix, which means
+  either taking a layout or asking the panel for the splice row.
 - **`tests/test_repl_editor.c:260,332`** reimplements the header counter
   (`code_panel_header_row_count` / `code_panel_mouse_y_for_cmd`) for
   mouse-Y math and assumes all chrome precedes command 0. It aims at the
   wrong row once display chrome moves.
 - **`tests/test_repl_core_extra.c:130`** hard-asserts
   `repl_source_scope_cmd_indent_chars(0) == 2`.
+- **`tests/test_repl_code_panel_syntax.c:214`** asserts the scratch line
+  string `"  float A[16], B[16], C[16];"` verbatim; 1h drops its two
+  leading spaces.
 
 ### 1h. The two placement calls, decided
 
@@ -297,6 +347,7 @@ would be flattened, so it lands in the same patch.
 | Unclosed trailing function | Boundary stops *at* it, so it renders inside the body; chrome shifts down when `}` lands. Reachable only from `--watch` / partial paste / header-only load, all of which already reflow the panel wholesale. |
 | Scratch decoration line | File-scope chrome, two spaces dropped (1h). |
 | Insert ghost at the splice | First display-body row (1h). |
+| Indent at the boundary | Existing row `pos < at`; new decl/func `insert_pos <= at`, compared in pre-change coordinates (1e). |
 | Block-closer indent | Unchanged; keep reformat's minus-2 (1d). |
 | Clear-pair exception | Survives Project 1. Tutorials keep showing their clear pair above `display()`. |
 | Load-time hoist | Not in Project 1. |
@@ -383,7 +434,12 @@ New coverage:
   row between a function's `}` and the first `glClearColor`** - the case
   the naive walk gets wrong.
 - A functions-only document (`at == document_count`), for the trailing
-  input row.
+  input row. **End it on `}`, not on a trailing blank** - a trailing
+  comment/blank run belongs to the body (1a), so `at` would be the blank
+  and the `at == document_count` path never runs.
+- A second function committed at end-of-document in that scene, asserting
+  a column-0 header with no Ctrl+\ reformat; and the same with a leading
+  comment run, for the delete-coordinate translation (1e).
 - An unclosed trailing function.
 - The insert ghost at the splice.
 - `code_focus`.
