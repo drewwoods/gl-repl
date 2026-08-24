@@ -66,9 +66,11 @@ Odds and ends
 
 glEdgeFlag needs no packed-call entry for display lists: a compiling list
 picks the flag up through its own lastEdgeFlag, and a freshly extended one
-through glstate->edgeflag, which alloc_renderlist() seeds from. glEdgeFlagv
-is promoted out of the stub table alongside it. GL_CURRENT_BIT now saves and
-restores the flag.
+through glstate->edgeflag, which alloc_renderlist() seeds from. Executing or
+appending a list propagates its tail lastEdgeFlag back into the current state,
+so subsequent immediate vertices and glGetBooleanv(GL_EDGE_FLAG) see the same
+value as native GL. glEdgeFlagv is promoted out of the stub table alongside
+it. GL_CURRENT_BIT now saves and restores the flag.
 
 The query side needs both halves.  GL_EDGE_FLAG joins gl4es_commonGet(),
 which serves glGetIntegerv/glGetFloatv/glGetDoublev; glGetBooleanv had no
@@ -134,7 +136,7 @@ diff --git a/src/gl/gl4es.c b/src/gl/gl4es.c
 index b20bcff5..7a068848 100644
 --- a/src/gl/gl4es.c
 +++ b/src/gl/gl4es.c
-@@ -376,6 +376,33 @@ void APIENTRY_GL4ES gl4es_glVertex4fv(GLfloat* v) {
+@@ -376,6 +376,34 @@ void APIENTRY_GL4ES gl4es_glVertex4fv(GLfloat* v) {
  }
  AliasExport(void,glVertex4fv,,(GLfloat* v));
  
@@ -152,7 +154,8 @@ index b20bcff5..7a068848 100644
 +    } else {
 +        noerrorShim();
 +    }
-+    glstate->edgeflag = flag;
++    if (!glstate->list.compiling || glstate->list.mode == GL_COMPILE_AND_EXECUTE)
++        glstate->edgeflag = flag;
 +}
 +AliasExport(void,glEdgeFlag,,(GLboolean flag));
 +
@@ -168,6 +171,34 @@ index b20bcff5..7a068848 100644
  void APIENTRY_GL4ES gl4es_glColor4f(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) {
      if (glstate->list.active) {
          if (glstate->list.active->stage != STAGE_DRAW) {
+@@ -877,9 +905,23 @@
+     if (glstate->list.active) {
+-        glstate->list.active = append_calllist(glstate->list.active, gl4es_glGetList(list));
+-		return;
++        renderlist_t *called = gl4es_glGetList(list);
++        glstate->list.active = append_calllist(glstate->list.active, called);
++        if (called) {
++            renderlist_t *tail = called;
++            while (tail->next) tail = tail->next;
++            glstate->list.active->lastEdgeFlag = tail->lastEdgeFlag;
++            if (!glstate->list.compiling ||
++                glstate->list.mode == GL_COMPILE_AND_EXECUTE)
++                glstate->edgeflag = tail->lastEdgeFlag;
++        }
++		return;
+-	}
++	}
+     // TODO: the output of this call can be compiled into another display list
+     renderlist_t *l = gl4es_glGetList(list);
+     if (l)
+         draw_renderlist(l);
++    if (l) {
++        renderlist_t *tail = l;
++        while (tail->next) tail = tail->next;
++        glstate->edgeflag = tail->lastEdgeFlag;
++    }
+ }
+
 diff --git a/src/gl/gl4es.h b/src/gl/gl4es.h
 index 0d748e3d..0e20d345 100644
 --- a/src/gl/gl4es.h

@@ -103,7 +103,7 @@ index a3c965fd..5a54e872 100644
                  // first 3 points a triangle, then a 2 lines per new point
                  if (len>2) {
                      ind_line[k++] = ind(i+0); ind_line[k++] = ind(i+1);
-@@ -392,7 +419,23 @@ int fill_lineIndices(modeinit_t *modes, int length, GLenum mode, GLushort* indic
+@@ -392,6 +419,22 @@ int fill_lineIndices(modeinit_t *modes, int length, GLenum mode, GLushort* indic
                              ind_line[k++] = ind(i+0); ind_line[k++] = ind(i+1);
                          }
                      }
@@ -127,4 +127,3 @@ index a3c965fd..5a54e872 100644
 +                     * 367 px for one quad, perimeter 368, no diagonal). */
                      if (len) {
                          int z = i;
-                         ind_line[k++] = ind(i+0); ind_line[k++] = ind(i+1);
