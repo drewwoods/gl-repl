@@ -1,4 +1,6 @@
+// @cfg grid = GRID_THEME_PLANES
 // @cfg view_mode = RENDER3D_VIEW_2D
+// --- Functions ----------------------
 shape(scale, phase) {
   // Two mutually-exclusive guards on the same arg -- an if/else written as
   // a complementary pair (else/else-if exist too; kept explicit here so each
@@ -14,7 +16,7 @@ shape(scale, phase) {
     glEnd();
   }
   if(scale <= 1) {
-    glColor3f(0.15, 0.55, 1);
+    glColor3f(0.55, 0.3, 1);
     glBegin(GL_TRIANGLES);
       glNormal3f(0, 0, 1);
       glVertex3f(cos(phase)*0.9*scale, sin(phase)*0.9*scale, 0);
@@ -23,16 +25,20 @@ shape(scale, phase) {
     glEnd();
   }
 }
+display() {
+glTranslatef(0.0000f, 0.0000f, -4.0000f);   // @camera dist
+glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glTranslatef(0.0f, 0.0f, -4.00f);   // @camera dist
-glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-glClearColor(0.05, 0.06, 0.08, 1.0);
+// --- Render State -------------------
+glClearColor(0.05, 0.06, 0.08, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_NORMALIZE);
+
+// --- Scene Geometry -----------------
 glPushMatrix();
   glTranslatef(-2.2, 0, 0);
   shape(0.9, t);
@@ -44,3 +50,4 @@ glPushMatrix();
   glTranslatef(2.2, 0, 0);
   shape(0.65, -t*0.8);
 glPopMatrix();
+}

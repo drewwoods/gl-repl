@@ -1,19 +1,22 @@
+// @cfg grid = GRID_THEME_PLANES
 // @cfg view_mode = RENDER3D_VIEW_2D
-// @cfg vertex_outlines = 0
-// @cfg vertex_points = 0
-// @cfg polygon_highlight = 0
 // @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// @cfg polygon_highlight = 0
 static float dist = 0.5; // @tune
 static float n = 400; // @tune
 static float x, y, ang, s; // s = palette mix in [0,1]
+glTranslatef(0.0000f, 0.0000f, -4.5000f);   // @camera dist
+glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glTranslatef(0.0f, 0.0f, -4.50f);   // @camera dist
-glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-glClearColor(0.05, 0.06, 0.08, 1.0);
+// --- Render State -------------------
+glClearColor(0.05, 0.06, 0.08, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+// --- Scene Geometry -----------------
 glBegin(GL_LINE_LOOP);
   for(i, 0, n) {
     ang = TAU * i/n;

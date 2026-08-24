@@ -1,17 +1,14 @@
-// @cfg vertex_outlines = 0
-// @cfg vertex_points = 0
-// @cfg light_indicators = 0
-// @cfg polygon_highlight = 0
-// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX
 // @cfg grid = GRID_THEME_SOIL
 // @cfg grid_extent = GRID_EXTENT_CLOSE
-// @cfg axes = AXES_THEME_OFF
-// @cfg msaa = 1
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// @cfg polygon_highlight = 0
 // @cfg variable_panel = 0
 static float bladeCount = 135; // @tune
 static float field = 3.65; // half-width @tune
 static float x, z, h, w, angle, phase, flex;
 
+// --- Functions ----------------------
 // Seed-slot convention: the caller (below) owns rand slots 0-6 for a
 // blade's placement/size/angle/phase/flex; blade() uses slots 11+ for
 // its own jitter/tint so the two RNG streams stay independent. (rand2
@@ -36,23 +33,18 @@ blade(seed, x0, z0, height, width, ang, ph, stiffness) {
     }
   glEnd();
 }
+display() {
+glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
+glRotatef(5.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(32.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.0000f, -0.9000f, -0.5000f);   // @camera pan
 
-glTranslatef(0.0f, 0.0f, -6.00f);   // @camera dist
-glRotatef(5.00f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(32.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, -0.900f, -0.5f);   // @camera pan
+// --- Render State -------------------
 glClearColor(0.025, 0.055, 0.035, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_COLOR_MATERIAL);
-glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 glEnable(GL_DEPTH_TEST);
-glDisable(GL_LIGHTING);
-glDisable(GL_CULL_FACE);
-glEnable(GL_BLEND);
-glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+// --- Scene Geometry -----------------
 for(p, 0, bladeCount) {
   x = (rand(p, 0)*2 - 1)*field;
   z = (rand(p, 1)*2 - 1)*field;
@@ -63,4 +55,4 @@ for(p, 0, bladeCount) {
   flex = 0.55 + rand(p, 6)*1.1;
   blade(p, x, z, h, w, angle, phase, flex);
 }
-glDisable(GL_BLEND);
+}

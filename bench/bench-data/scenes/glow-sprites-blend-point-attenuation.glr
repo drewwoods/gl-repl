@@ -1,38 +1,41 @@
-// @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
-// @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX
-// @cfg vertex_outlines = 0
-// @cfg vertex_points = 0
 // @cfg grid = GRID_THEME_EMBER
 // @cfg grid_extent = GRID_EXTENT_MID
+// @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
+// @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
 static float radius, angle, x, y, z; // per-particle: orbit radius, base angle, world pos
-static float count = 160;       // number of glow points
-static float radMin = 0.4;      // nearest orbital radius (xz plane)
-static float radSpan = 1.8;     // additional radius range; radius in [radMin, radMin+radSpan]
-static float orbitRate = 0.4;   // angular speed of the xz orbit (animates with t)
+static float count = 160; // number of glow points
+static float radMin = 0.4; // nearest orbital radius (xz plane)
+static float radSpan = 1.8; // additional radius range; radius in [radMin, radMin+radSpan]
+static float orbitRate = 0.4; // angular speed of the xz orbit (animates with t)
 static float yWobbleFreq = 1.3; // y wobble frequency relative to the base angle
 static float yWobbleRate = 0.6; // y wobble time-rate (animates with t)
-static float yAmp = 0.9;        // y wobble amplitude
+static float yAmp = 0.9; // y wobble amplitude
 
-glTranslatef(0.0f, 0.0f, -5.00f);   // @camera dist
-glRotatef(15.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(10.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+glTranslatef(0.0000f, 0.0000f, -5.0000f);   // @camera dist
+glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(10.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+
 // Glow sprites: additive blend + distance-attenuated point size.
 // Each particle orbits in xz at (radius, angle) while y wobbles independently.
-glClearColor(0.05, 0.06, 0.08, 1.0);
+// --- Render State -------------------
+glClearColor(0.05, 0.06, 0.08, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 glDisable(GL_LIGHTING);
-glDisable(GL_DEPTH_TEST);
 glEnable(GL_BLEND);
-glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+glBlendFunc(GL_SRC_ALPHA, GL_ONE); // additive blending
 glEnable(GL_POINT_SMOOTH);
 glPointSize(24);
 glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){0.2, 0, 0.15});
+
+// --- Scene Geometry -----------------
 glBegin(GL_POINTS);
   for(i, 0, count) {
-    angle = rand(i, 0)*TAU;                  // random base angle in [0, TAU)
-    radius = radMin + rand(i, 1)*radSpan;    // random radius in the configured range
+    angle = rand(i, 0)*TAU; // random base angle in [0, TAU)
+    radius = radMin + rand(i, 1)*radSpan; // random radius in the configured range
     x = cos(angle + t*orbitRate)*radius;
     y = sin(angle*yWobbleFreq + t*yWobbleRate)*yAmp;
     z = sin(angle + t*orbitRate)*radius;

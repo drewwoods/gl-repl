@@ -15,11 +15,13 @@ caster() {
     glutSolidTeapot(0.62);
   glPopMatrix();
 }
+display() {
 
-glTranslatef(0.0f, 0.0f, -7.90f);   // @camera dist
-glRotatef(24.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(-28.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, -1.15f, 0.0f);   // @camera pan
+glTranslatef(0.0000f, 0.0000f, -7.9000f);   // @camera dist
+glRotatef(24.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(-28.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, -1.1500f, 0.0000f);   // @camera pan
+
 // Translate, rotate and scale cannot flatten a solid onto a plane -- that
 // takes a matrix of their own. glMultMatrixf posts one onto the modelview
 // stack: 16 column-major cells, either inline as below or read from a
@@ -31,7 +33,6 @@ glTranslatef(0.0f, -1.15f, 0.0f);   // @camera pan
 // the SAME geometry under it draws the object's shadow. Cells are
 // ordinary expressions, re-evaluated every frame, so moving the lamp
 // moves the shadow -- no rebuild of the caster.
-
 glClearColor(0.05, 0.06, 0.08, 1);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
@@ -85,3 +86,4 @@ glPushMatrix();
   glutSolidSphere(0.13, 12, 10);
 glPopMatrix();
 glEnable(GL_LIGHTING);
+}

@@ -1,8 +1,8 @@
 // @cfg grid = GRID_THEME_CLASSIC
 // @cfg grid_brightness = GRID_BRIGHTNESS_DIM
 // @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
-// @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
 static float size = 3; // surface width and depth @tune
 static float steps = 15; // strips across the surface @tune
 static float amplitude = 0.4; // wave height @tune
@@ -13,10 +13,10 @@ static float half;
 static float x0, x1, z, y0, y1;
 static float color0, color1;
 
-glTranslatef(0.0f, 0.0f, -5.0f);   // @camera dist
-glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+glTranslatef(0.0000f, 0.0000f, -5.0000f);   // @camera dist
+glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
 
 // Animated surface built from one triangle strip per x step.
 glClearColor(0.05, 0.06, 0.08, 1);

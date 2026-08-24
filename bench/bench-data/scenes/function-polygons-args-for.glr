@@ -1,6 +1,8 @@
+// @cfg grid = GRID_THEME_PLANES
 // @cfg view_mode = RENDER3D_VIEW_2D
 static float s; // palette mix in [0,1]
 
+// --- Functions ----------------------
 polygon(radius, sides, phase) {
   glBegin(GL_TRIANGLE_FAN);
     glNormal3f(0, 0, 1);
@@ -13,16 +15,19 @@ polygon(radius, sides, phase) {
     }
   glEnd();
 }
+display() {
+glTranslatef(0.0000f, 0.0000f, -4.0000f);   // @camera dist
+glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glTranslatef(0.0f, 0.0f, -4.00f);   // @camera dist
-glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-glClearColor(0.05, 0.06, 0.08, 1.0);
+// --- Render State -------------------
+glClearColor(0.05, 0.06, 0.08, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_NORMALIZE);
+
+// --- Scene Geometry -----------------
 glPushMatrix();
   glTranslatef(-2.4, 0, 0);
   polygon(0.9, 3, t*0.4);
@@ -34,3 +39,4 @@ glPushMatrix();
   glTranslatef(2.4, 0, 0);
   polygon(0.9, 10, t*0.15);
 glPopMatrix();
+}

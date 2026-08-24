@@ -1,33 +1,40 @@
+// @cfg grid = GRID_THEME_PLANES
 // @cfg view_mode = RENDER3D_VIEW_2D
 // @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
-// @cfg vertex_outlines = 0
 // @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
 // @cfg polygon_highlight = 0
-static float rate = 45; // compare steps per second @tune
-static float hold = 1.5; // seconds to rest on the sorted bars @tune
-static float period, cycle, steps; // seconds per cycle; shuffle index; compares done so far
-static float tmp; // swap scratch
-static float x, h, s; // bar center x, bar height, palette mix
-static float cur; // bar index under the compare marker
-
-glTranslatef(0.0f, 0.0f, -8.5f);   // @camera dist
-glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+// --- Description --------------------
 // Bubble sort, scrubbed by t. A[0..15] holds 16 bar heights; the nested
 // loops below are the classic compare-and-swap, but each compare only
 // runs once enough time has passed (its overall index p*15 + j must stay
 // under steps). Every frame re-seeds and re-sorts from scratch, so the
 // bars freeze mid-algorithm at exactly floor(steps) compares -- drag the
 // time slider or replay to scrub the sort.
-glClearColor(0.05, 0.06, 0.08, 1.0);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_POINT_SMOOTH);
+static float rate = 45; // compare steps per second @tune
+static float hold = 1.5; // seconds to rest on the sorted bars @tune
+static float period, cycle, steps; // seconds per cycle; shuffle index; compares done so far
+static float tmp; // swap scratch
+static float x, h, s; // bar center x, bar height, palette mix
+static float cur; // bar index under the compare marker
+glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
+glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+
 period = 225/rate + hold;
 cycle = floor(t/period);
 steps = fmod(t, period)*rate;
+
+// --- Render State -------------------
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_POINT_SMOOTH);
+
+// --- Scene Geometry -----------------
+
 // A fresh deterministic shuffle each cycle
 for(i, 0, 16) {
   A[i] = rand(i, cycle);
