@@ -44,10 +44,18 @@ the scanner's existing behavior is intentional because executable clear calls
 belong inside `display()`; moving a tutorial function above the locked prelude
 remains deferred to Project 2.
 
-**Verification green** - `make test-stubs` (86 binaries, 32,411 assertions),
+**Full trace-parity follow-up implemented** - catalog cases now use the real
+`.glr` loader so camera and explicit-display rows are consumed as format syntax.
+The run also exposed a pre-existing formatter conflation: bitmap `label(%f)`
+is compact again, while only `console(%f)` keeps stable six-character fields;
+the generated C helpers preserve the same split.
+
+**Verification green** - `make test-stubs` (86 binaries, 32,416 assertions),
 `make test-scenes` (3 binaries, 8,302 assertions),
 `make check-state-ownership`, `make check-c99`, `make check-formatted`, both
-catalog/doc example guards, and `git diff --check`.
+catalog/doc example guards, `git diff --check`, and
+`REPL_SCENE_CORPUS=1 make run-test-export-trace-parity ARGS='--full'`
+(159/159, including two documented XFAILs).
 
 ### Corrections found while implementing
 

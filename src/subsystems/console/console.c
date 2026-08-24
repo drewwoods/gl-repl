@@ -93,9 +93,9 @@ void console_capture(const GLCmd *flat_cmds, int flat_count, int exec_limit) {
             line->text[off] = '\0';
 
             char formatted[CONSOLE_LINE_TEXT_MAX];
-            repl_format_label_string(formatted, (int)sizeof(formatted),
-                                     cmd->payload.label.fmt,
-                                     cmd->args, cmd->num_args);
+            repl_format_console_string(formatted, (int)sizeof(formatted),
+                                       cmd->payload.label.fmt,
+                                       cmd->args, cmd->num_args);
 
             snprintf(line->text + off, sizeof(line->text) - (size_t)off,
                      "%s", formatted);

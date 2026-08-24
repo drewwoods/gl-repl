@@ -609,9 +609,8 @@ label("Earth phase = %f", t);
 ```
 
 - `label("fmt", a, b, c, d)` draws bitmap text at the current raster
-  position. Up to 4 substitution args; `%f` substitutes a 6-character field
-  (` 1.250`, `-0.017`) with a leading minus when negative, `%%` is a literal
-  percent. The string literal
+  position. Up to 4 substitution args; `%f` substitutes compact numeric text
+  (`1.25`, `-0.017`) and `%%` is a literal percent. The string literal
   is limited to 64 characters and may not contain `//`, `(`, `)`, `,`, or
   backslashes.
 - This is a REPL convenience, not a real GL call - exported C files include
@@ -643,7 +642,7 @@ With lighting on, the text colour is the *lit* result latched at the
 - In the REPL: When frame replay is active, console output scrubs with the
   replay position.
 - In standalone C export: Emits a `console()` helper that prints unindented
-  lines directly to `stdout`, still using `%g` for each `%f`.
+  lines directly to `stdout` with the same fixed-width numeric fields.
 
 ### Math expressions
 

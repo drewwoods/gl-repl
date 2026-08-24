@@ -2832,11 +2832,10 @@ exporter emits a helper function (`write_label_helper`, `write_rand_helper`,
 etc.), the helper's behavior **must match the REPL executor case** to the
 nearest visible bit. Divergence examples to guard against:
 
-- `label("%f", x)` / `console("%f", x)` render a fixed 6-character field
-  in the REPL (` 1.250`, `-0.017`) so a live line does not shift. Exported
-  `label()` / `console()` helpers keep `%g` on purpose: standalone C
-  writing to stdout has no HUD to keep still. That width is a REPL
-  presentation choice, not a language-value change.
+- `label("%f", x)` renders compact `%g` text because bitmap labels should not
+  spend screen space on padding and trailing zeroes. `console("%f", x)` uses
+  a fixed 6-character field (` 1.250`, `-0.017`) so a live console row does
+  not shift. The two exported helpers preserve that distinction.
 - A REPL primitive whose live executor relies on the per-frame state
   reset in [`src/render3d/render.c`](../src/render3d/render.c) (e.g. `glDisable(GL_LIGHTING)` baseline,
   default specular `{0.4,0.4,0.4,1}` and shininess `30`) but whose

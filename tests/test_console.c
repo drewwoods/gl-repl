@@ -136,7 +136,7 @@ static void test_exec_limit_clamping(void) {
     ASSERT_INT("exec limit 0 gives 0 lines", view.count, 0);
 }
 
-static void test_label_float_is_fixed_signed_width(void) {
+static void test_console_float_is_fixed_signed_width(void) {
     static const struct {
         float       v;
         const char *want;
@@ -157,13 +157,23 @@ static void test_label_float_is_fixed_signed_width(void) {
     int i;
 
     for (i = 0; i < (int)(sizeof(cases) / sizeof(cases[0])); i++) {
-        int n = repl_format_label_string(buf, (int)sizeof(buf),
-                                         "%f", &cases[i].v, 1);
-        ASSERT_INT("label float field width", n, REPL_LABEL_FLOAT_WIDTH);
-        ASSERT_STR("label float field text", buf, cases[i].want);
-        ASSERT_TRUE("label float field starts with space or minus",
+        int n = repl_format_console_string(buf, (int)sizeof(buf),
+                                           "%f", &cases[i].v, 1);
+        ASSERT_INT("console float field width", n, REPL_CONSOLE_FLOAT_WIDTH);
+        ASSERT_STR("console float field text", buf, cases[i].want);
+        ASSERT_TRUE("console float field starts with space or minus",
                     buf[0] == ' ' || buf[0] == '-');
     }
+}
+
+static void test_label_float_is_compact(void) {
+    const float value = 1.25f;
+    char buf[32];
+    int n = repl_format_label_string(buf, (int)sizeof(buf),
+                                     "v=%f", &value, 1);
+
+    ASSERT_INT("label compact length", n, 6);
+    ASSERT_STR("label compact text", buf, "v=1.25");
 }
 
 static void test_overflow_handling(void) {
@@ -194,7 +204,8 @@ int main(void) {
     test_capture_when_closed();
     test_capture_formatting_and_indentation();
     test_exec_limit_clamping();
-    test_label_float_is_fixed_signed_width();
+    test_console_float_is_fixed_signed_width();
+    test_label_float_is_compact();
     test_overflow_handling();
 
     return test_harness_report(&g_harness, "test_console");

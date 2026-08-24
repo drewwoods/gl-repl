@@ -284,11 +284,9 @@ void write_glfloat_vector_helpers(FILE *f, const ExportNeeds *needs) {
     }
 }
 /* Wrapper for the REPL `label("fmt", ...)` primitive. Walks the format
- * string and substitutes each `%f` with `%g`-formatted output (matching
- * the REPL's CMD_LABEL executor case in src/repl/executor.c) so the live
- * REPL and exported binary render identical text. Using vsnprintf with
- * the raw format would print `1.000000` for `%f` while the REPL prints
- * `1` - that divergence breaks visual round-trips.
+ * string and substitutes each `%f` with compact `%g` output, matching the
+ * live bitmap-label path. Console formatting is deliberately separate: its
+ * numeric fields stay fixed width so live rows do not shift.
  *
  * Float args promote to double through the variadic call, so user
  * expressions don't need explicit casts at the call site.
@@ -297,9 +295,6 @@ void write_glfloat_vector_helpers(FILE *f, const ExportNeeds *needs) {
  * group by emit_export_header_pre (gated on needs_label || tune_count),
  * not mid-file here. */
 void write_label_helper(FILE *f) {
-    /* fprintf format escaping: every literal `%` in the emitted C source
-     * must be doubled (`%%`) so fprintf doesn't treat it as a conversion
-     * specifier. The `%%g` below emits literal `%g` into the C output. */
     fprintf(f,
         "\n/* Draw bitmap text at the current raster position. */\n"
         "\nstatic void label(const char *fmt, ...) {\n"
@@ -332,8 +327,87 @@ void write_label_helper(FILE *f) {
         "}\n");
 }
 
+/* The exported console keeps the live console's six-character numeric fields.
+ * This is separate from label(): stable columns matter for a scrolling trace,
+ * while compact bitmap text is more readable in the scene. */
 void write_console_helper(FILE *f) {
-    fprintf(f,
+    fputs(
+        "\n#define REPL_CONSOLE_FLOAT_WIDTH 6\n"
+        "\nstatic void repl_console_float_sci(char *field, float v) {\n"
+        "  int neg = signbit(v);\n"
+        "  float a = fabsf(v);\n"
+        "  int exp = (int)floorf(log10f(a));\n"
+        "  float m = a / powf(10.0f, (float)exp);\n"
+        "  int md;\n"
+        "\n"
+        "  if (m < 1.0f) { m *= 10.0f; exp--; }\n"
+        "  else if (m >= 10.0f) { m /= 10.0f; exp++; }\n"
+        "  if (exp > 9 || exp < -9) {\n"
+        "    int d = (int)(m + 0.5f);\n"
+        "    if (d >= 10) { d = 1; exp++; }\n"
+        "    snprintf(field, REPL_CONSOLE_FLOAT_WIDTH + 1, \"%c%de%+03d\",\n"
+        "             neg ? '-' : ' ', d, exp);\n"
+        "    return;\n"
+        "  }\n"
+        "  md = (int)(m * 10.0f + 0.5f);\n"
+        "  if (md >= 100) {\n"
+        "    md = 10; exp++;\n"
+        "    if (exp > 9) {\n"
+        "      snprintf(field, REPL_CONSOLE_FLOAT_WIDTH + 1, \"%c1e%+03d\",\n"
+        "               neg ? '-' : ' ', exp);\n"
+        "      return;\n"
+        "    }\n"
+        "  }\n"
+        "  if (exp >= 0)\n"
+        "    snprintf(field, REPL_CONSOLE_FLOAT_WIDTH + 1, \"%c%d.%de%d\",\n"
+        "             neg ? '-' : ' ', md / 10, md % 10, exp);\n"
+        "  else\n"
+        "    snprintf(field, REPL_CONSOLE_FLOAT_WIDTH + 1, \"%c%d.%d-%d\",\n"
+        "             neg ? '-' : ' ', md / 10, md % 10, -exp);\n"
+        "}\n"
+        "\nstatic void repl_console_float(char *field, float v) {\n"
+        "  static const char *const fixed[] = {\n"
+        "    \"% .3f\", \"% .2f\", \"% .1f\", \"% .0f\"\n"
+        "  };\n"
+        "  int accepted = 0;\n"
+        "  int i;\n"
+        "\n"
+        "  if (isnan(v)) {\n"
+        "    memcpy(field, signbit(v) ? \"-  nan\" : \"   nan\",\n"
+        "           REPL_CONSOLE_FLOAT_WIDTH);\n"
+        "    field[REPL_CONSOLE_FLOAT_WIDTH] = '\\0';\n"
+        "    return;\n"
+        "  }\n"
+        "  if (isinf(v)) {\n"
+        "    memcpy(field, v < 0.0f ? \"-  inf\" : \"   inf\",\n"
+        "           REPL_CONSOLE_FLOAT_WIDTH);\n"
+        "    field[REPL_CONSOLE_FLOAT_WIDTH] = '\\0';\n"
+        "    return;\n"
+        "  }\n"
+        "  for (i = 0; i < (int)(sizeof(fixed) / sizeof(fixed[0])); i++) {\n"
+        "    char scratch[32];\n"
+        "    int wrote = snprintf(scratch, sizeof(scratch), fixed[i],\n"
+        "                         (double)v);\n"
+        "    if (wrote == REPL_CONSOLE_FLOAT_WIDTH) {\n"
+        "      if (i == 0 && v != 0.0f &&\n"
+        "          (strcmp(scratch, \" 0.000\") == 0 ||\n"
+        "           strcmp(scratch, \"-0.000\") == 0))\n"
+        "        break;\n"
+        "      memcpy(field, scratch, REPL_CONSOLE_FLOAT_WIDTH + 1);\n"
+        "      accepted = 1;\n"
+        "      break;\n"
+        "    }\n"
+        "    if (wrote == REPL_CONSOLE_FLOAT_WIDTH - 1 &&\n"
+        "        i == (int)(sizeof(fixed) / sizeof(fixed[0])) - 1) {\n"
+        "      scratch[REPL_CONSOLE_FLOAT_WIDTH - 1] = '.';\n"
+        "      scratch[REPL_CONSOLE_FLOAT_WIDTH] = '\\0';\n"
+        "      memcpy(field, scratch, REPL_CONSOLE_FLOAT_WIDTH + 1);\n"
+        "      accepted = 1;\n"
+        "      break;\n"
+        "    }\n"
+        "  }\n"
+        "  if (!accepted) repl_console_float_sci(field, v);\n"
+        "}\n"
         "\n/* Print formatted trace line to stdout. */\n"
         "\nstatic void console(const char *fmt, ...) {\n"
         "  char text[256];\n"
@@ -342,15 +416,17 @@ void write_console_helper(FILE *f) {
         "\n"
         "  va_start(args, fmt);\n"
         "  while (*fmt && offset < (int)sizeof(text) - 1) {\n"
-        "    if (fmt[0] == '%%' && fmt[1] == 'f') {\n"
+        "    if (fmt[0] == '%' && fmt[1] == 'f') {\n"
         "      double value = va_arg(args, double);\n"
-        "      offset += snprintf(text + offset, sizeof(text) - (size_t)offset,\n"
-        "                         \"%%g\", value);\n"
-        "      if (offset >= (int)sizeof(text))\n"
-        "        offset = (int)sizeof(text) - 1;\n"
+        "      char field[REPL_CONSOLE_FLOAT_WIDTH + 1];\n"
+        "      int field_idx;\n"
+        "      repl_console_float(field, (float)value);\n"
+        "      for (field_idx = 0; field_idx < REPL_CONSOLE_FLOAT_WIDTH &&\n"
+        "                          offset < (int)sizeof(text) - 1; field_idx++)\n"
+        "        text[offset++] = field[field_idx];\n"
         "      fmt += 2;\n"
-        "    } else if (fmt[0] == '%%' && fmt[1] == '%%') {\n"
-        "      text[offset++] = '%%';\n"
+        "    } else if (fmt[0] == '%' && fmt[1] == '%') {\n"
+        "      text[offset++] = '%';\n"
         "      fmt += 2;\n"
         "    } else {\n"
         "      text[offset++] = *fmt++;\n"
@@ -359,8 +435,8 @@ void write_console_helper(FILE *f) {
         "  text[offset] = '\\0';\n"
         "  va_end(args);\n"
         "\n"
-        "  printf(\"%%s\\n\", text);\n"
-        "}\n");
+        "  printf(\"%s\\n\", text);\n"
+        "}\n", f);
 }
 
 void write_render_helper_as_c(FILE *f, const char *name) {

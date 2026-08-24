@@ -833,9 +833,9 @@ static void test_glut_bitmap_string(void) {
     ASSERT_TRUE("label after raster-pos still emits 2 chars",
                 gl_stub_counts[GL_STUB_glutBitmapCharacter] == 2);
 
-    /* Format with %f: substitution is applied at execute time. The
-     * expanded text "v= 1.250" is 8 chars (2 literal + a 6-char field).
-     * args[0..3] hold the substitution values. */
+    /* Format with %f: substitution is applied at execute time using compact
+     * label text. The expanded text "v=1.25" is 6 chars; fixed-width fields
+     * belong to console(), not bitmap labels. */
     gl_stub_counts_reset();
     memset(cmds, 0, sizeof(cmds));
     cmds[0].type = CMD_LABEL;
@@ -847,8 +847,8 @@ static void test_glut_bitmap_string(void) {
     opts.program.cmd_count = 1;
     repl_execute_program(&opts);
 
-    ASSERT_TRUE("label %f substitution emits expanded length",
-                gl_stub_counts[GL_STUB_glutBitmapCharacter] == 8);
+    ASSERT_TRUE("label %f substitution emits compact text",
+                gl_stub_counts[GL_STUB_glutBitmapCharacter] == 6);
 
     /* %% renders as a single literal '%'. */
     gl_stub_counts_reset();

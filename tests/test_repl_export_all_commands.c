@@ -665,35 +665,52 @@ static void test_export_prologue_direct(void) {
         write_label_helper(f5);
         char *str = slurp_stream(f5);
         ASSERT_TRUE("label helper written", str && strstr(str, "void label(const char *fmt, ...)") != NULL);
+        ASSERT_TRUE("label helper keeps compact formatting",
+                    str && strstr(str, "\"%g\", value") != NULL);
         free(str);
         fclose(f5);
     }
 
-    /* 7. write_tess_preamble */
+    /* 7. write_console_helper */
     FILE *f6 = tmpfile();
     if (f6) {
-        write_tess_preamble(f6);
+        write_console_helper(f6);
         char *str = slurp_stream(f6);
-        ASSERT_TRUE("tess preamble written", str && strstr(str, "GLUtesselator") != NULL);
+        ASSERT_TRUE("console helper written",
+                    str && strstr(str,
+                                  "void console(const char *fmt, ...)") != NULL);
+        ASSERT_TRUE("console helper preserves fixed-width formatting",
+                    str && strstr(str,
+                                  "repl_console_float(field, (float)value)") != NULL);
         free(str);
         fclose(f6);
     }
 
-    /* 8. write_render_helper_as_c */
+    /* 8. write_tess_preamble */
+    FILE *f7 = tmpfile();
+    if (f7) {
+        write_tess_preamble(f7);
+        char *str = slurp_stream(f7);
+        ASSERT_TRUE("tess preamble written", str && strstr(str, "GLUtesselator") != NULL);
+        free(str);
+        fclose(f7);
+    }
+
+    /* 9. write_render_helper_as_c */
     glr_ctrl_reset_all();
     declare_test_vars();
     editor_feed_line("glBegin(GL_POINTS);");
     editor_feed_line("glVertex3f(0, 0, 0);");
     editor_feed_line("glEnd();");
     export_set_source_text_view(source_document_view());
-    FILE *f7 = tmpfile();
-    if (f7) {
-        write_render_helper_as_c(f7, "my_draw_scene");
-        char *str = slurp_stream(f7);
+    FILE *render_stream = tmpfile();
+    if (render_stream) {
+        write_render_helper_as_c(render_stream, "my_draw_scene");
+        char *str = slurp_stream(render_stream);
         ASSERT_TRUE("render helper name", str && strstr(str, "static void my_draw_scene(void)") != NULL);
         ASSERT_TRUE("render helper body", str && strstr(str, "glVertex3f(0, 0, 0);") != NULL);
         free(str);
-        fclose(f7);
+        fclose(render_stream);
     }
 
     /* Unbalanced Begin/End rendering */
@@ -711,20 +728,20 @@ static void test_export_prologue_direct(void) {
         fclose(f7b);
     }
 
-    /* 9. write_func_defs_as_c */
+    /* 10. write_func_defs_as_c */
     glr_ctrl_reset_all();
     declare_test_vars();
     editor_feed_line("func0() {");
     editor_feed_line("glVertex3f(0, 0, 0);");
     editor_feed_line("}");
     export_set_source_text_view(source_document_view());
-    FILE *f8 = tmpfile();
-    if (f8) {
-        write_func_defs_as_c(f8);
-        char *str = slurp_stream(f8);
+    FILE *func0_stream = tmpfile();
+    if (func0_stream) {
+        write_func_defs_as_c(func0_stream);
+        char *str = slurp_stream(func0_stream);
         ASSERT_TRUE("func def written", str && strstr(str, "static void func0(void) {") != NULL);
         free(str);
-        fclose(f8);
+        fclose(func0_stream);
     }
 
     glr_ctrl_reset_all();
@@ -733,13 +750,13 @@ static void test_export_prologue_direct(void) {
     editor_feed_line("glVertex3f(x, i, 0);");
     editor_feed_line("}");
     export_set_source_text_view(source_document_view());
-    FILE *f9 = tmpfile();
-    if (f9) {
-        write_func_defs_as_c(f9);
-        char *str = slurp_stream(f9);
+    FILE *func1_stream = tmpfile();
+    if (func1_stream) {
+        write_func_defs_as_c(func1_stream);
+        char *str = slurp_stream(func1_stream);
         ASSERT_TRUE("func def with params written", str && strstr(str, "static void func1(float x, float i) {") != NULL);
         free(str);
-        fclose(f9);
+        fclose(func1_stream);
     }
 }
 

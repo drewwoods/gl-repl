@@ -758,6 +758,8 @@ void emit_export_header_pre(FILE *f, const ExportNeeds *needs) {
             strcmp(g_header_pre[line_idx], "#include <stdlib.h>") == 0) {
             export_write_c89_line(f, "#include <stdarg.h>");
             export_write_c89_line(f, "#include <stdio.h>");
+            if (needs->needs_console)
+                export_write_c89_line(f, "#include <string.h>");
         }
     }
 }
