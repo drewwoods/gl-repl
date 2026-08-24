@@ -68,10 +68,10 @@ FILES="$(printf '%s\n' ${SAMPLE_FILES}; \
 # machines; running the guard against them still catches the genuine
 # C99 breakers (implicit decls, unknown symbols, C11-isms) it exists
 # for, which is strictly better than not running the guard at all.
-SYS_GL="-isystem /usr/include \
+SYS_GL="-isystem $ROOT/third_party/freeglut/include \
+        -isystem /usr/include \
         -isystem /usr/local/include \
-        -isystem /opt/homebrew/include \
-        -isystem $ROOT/third_party/freeglut/include"
+        -isystem /opt/homebrew/include"
 GL_DEFS=""
 have_real_gl=0
 for d in /usr/include /usr/local/include /opt/homebrew/include \

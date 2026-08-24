@@ -31,6 +31,13 @@
     #include <GL/freeglut.h>
 #endif
 
+#ifndef GLUT_STROKE_ROMAN_HI
+#define GLUT_STROKE_ROMAN_HI GLUT_STROKE_ROMAN
+#endif
+#ifndef GLUT_STROKE_MONO_ROMAN_HI
+#define GLUT_STROKE_MONO_ROMAN_HI GLUT_STROKE_MONO_ROMAN
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

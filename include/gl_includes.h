@@ -43,6 +43,19 @@
 #define GLUT_ACTIVE_SUPER 0x0008
 #endif
 
+/* High-resolution stroke font constants. Vendored freeglut defines
+ * GLUT_STROKE_ROMAN_HI and GLUT_STROKE_MONO_ROMAN_HI in <GL/freeglut_std.h>
+ * for Catmull-Rom spline stroke rendering. When building against Apple GLUT
+ * (`make glut`) or a system freeglut lacking these extensions, fall back to the
+ * standard stroke font pointers so code paths referencing the hi-res variants
+ * compile and run without modification. */
+#ifndef GLUT_STROKE_ROMAN_HI
+#define GLUT_STROKE_ROMAN_HI GLUT_STROKE_ROMAN
+#endif
+#ifndef GLUT_STROKE_MONO_ROMAN_HI
+#define GLUT_STROKE_MONO_ROMAN_HI GLUT_STROKE_MONO_ROMAN
+#endif
+
 /* M_PI is part of POSIX <math.h> but optional in ISO C. Define the
  * fallback here (the canonical home shared by gl_repl.h) so every TU
  * that pulls in this aggregator can use M_PI without each file
