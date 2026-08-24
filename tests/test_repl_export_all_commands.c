@@ -876,11 +876,11 @@ static void test_auto_normal_marker_roundtrip(void) {
     remove(path);
 }
 
-/* break / continue are the two commands that produce no flat command at
- * all - flatten consumes them while unrolling - so the mega-roundtrip's
- * command inventory cannot cover them. They still have to survive export
- * (where they are plain C keywords inside the generated `for`) and import
- * (where the loader's parser must accept them at their loop depth). */
+/* break, continue, and return are the commands that produce no flat command
+ * at all - flatten consumes them while unrolling - so the mega-roundtrip's
+ * command inventory cannot cover them. The loop jumps still have to survive
+ * export (where they are plain C keywords inside the generated `for`) and
+ * import (where the loader's parser must accept them at their loop depth). */
 static void test_loop_jump_roundtrip(void) {
     const char *path = "/tmp/repl_export_loop_jumps.c";
     char *export_text;

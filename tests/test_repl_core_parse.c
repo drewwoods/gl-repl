@@ -1716,6 +1716,23 @@ int main(void) {
         assert_status_contains("sin(t) status names function", "sin");
         assert_status_contains("sin(t) status hints assign", "x = sin");
     }
+    {
+        static const char *const bare_builtins[] = { "sin", "rand", "cos" };
+        for (size_t bi = 0;
+             bi < sizeof(bare_builtins) / sizeof(bare_builtins[0]); bi++) {
+            glr_ctrl_reset_all();
+            GLCmd cmd;
+            memset(&cmd, 0, sizeof(cmd));
+            int ok = parse_for_test(bare_builtins[bi], &cmd);
+            ASSERT_TRUE("bare builtin returns 0", ok == 0);
+            assert_status_contains("bare builtin status names function",
+                                   bare_builtins[bi]);
+            assert_status_contains("bare builtin status identifies function",
+                                   "builtin function");
+            ASSERT_TRUE("bare builtin status not generic",
+                        strstr(g_status, "Unknown cmd") == NULL);
+        }
+    }
 
     /* `return;` is the only return spelling: it has no value in the REPL.
      * Give C-style attempts a useful diagnostic instead of treating them as

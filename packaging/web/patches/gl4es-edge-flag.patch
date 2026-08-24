@@ -438,41 +438,14 @@ diff --git a/src/gl/listdraw.c b/src/gl/listdraw.c
 index d890b9bd..a3c965fd 100644
 --- a/src/gl/listdraw.c
 +++ b/src/gl/listdraw.c
-@@ -257,6 +257,109 @@ void listInactiveVBO(renderlist_t* list, save_vbo_t* saved) {
+@@ -257,6 +257,82 @@ void listInactiveVBO(renderlist_t* list, save_vbo_t* saved) {
      }
  }
  
-+/* Edge flags (glEdgeFlag) select which polygon boundary edges are drawn when
-+ * the polygon mode is GL_LINE: GL draws the edge that *begins* at a vertex
-+ * only if that vertex's flag was GL_TRUE.
-+ *
-+ * This cannot be done by filtering fill_lineIndices()'s output.  That
-+ * function works from the already-triangulated index array, so by the time it
-+ * runs a quad has become two triangles: it emits the interior diagonal as a
-+ * real edge, and it emits the pairs unoriented (a GL_QUADS block comes out as
-+ * (0,1) (0,2) (1,2) (0,3) (2,3), where the boundary edge 3->0 appears as
-+ * (0,3)).  Neither "which vertex starts this edge" nor "is this edge a
-+ * boundary at all" survives that, so a filter over those pairs suppresses the
-+ * wrong edges.
-+ *
-+ * The vertices themselves, though, are still in specification order -
-+ * triangulation reorders the *indices*, not the array - and modeinit_t.vlen
-+ * records each block's vertex span.  So flagged geometry gets its edges built
-+ * here instead, straight from the original primitive topology.
-+ *
-+ * Returns the number of indices written, or -1 for a topology this does not
-+ * reconstruct (triangle strips and fans, whose edge count is not bounded by
-+ * the caller's 4-per-vertex allocation); the caller then falls back to
-+ * fill_lineIndices() and the flags are ignored, as they were before.
-+ * GL_QUAD_STRIP is reconstructed - a quad strip emits 4 edges per quad, or
-+ * 4V-8 indices for V vertices, which fits.
-+ *
-+ * Note this also drops the triangulation diagonal that fill_lineIndices()
-+ * would have drawn inside a quad or polygon.  That is what GL does - the
-+ * diagonal is an internal edge, not a boundary - so flagged geometry gets the
-+ * more correct outline.  Unflagged geometry keeps gl4es's existing behavior;
-+ * fixing that for everything is a separate change.
-+ */
++/* Build boundary indices from vertex-order flags and modeinit_t.vlen.  The
++ * caller allocates four indices per vertex; return -1 for a topology that
++ * cannot be reconstructed within that bound so it can fall back to
++ * fill_lineIndices().  GL_QUAD_STRIP fits the allocation. */
 +#define EDGE_EMIT(a, b)                                   \
 +    do {                                                  \
 +        if (edgeflag[(a)]) {                              \

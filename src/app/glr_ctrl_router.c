@@ -536,6 +536,17 @@ int glr_ctrl_router_handle_variable_panel_drag_release(int state) {
     return 1;
 }
 
+/* Value-only rebakes keep flat-stream indices stable; structural `t` changes do
+ * not, so those changes must stop replay before the clock moves. */
+static int time_step_keeps_replay_pc_honest(void) {
+    int t_idx = repl_state_variables().time_var_idx;
+
+    if (t_idx < 0 || !repl_state_flat_program_rebake_ok())
+        return 0;
+    return (repl_state_flat_program_structural_dep_mask() &
+            ((ReplExprDepMask)1u << t_idx)) == 0;
+}
+
 /* UI_HIT_VARIABLE_TIME_STEP: frame stepper on the variable panel's clock row.
  * item_idx is +1 (up) / -1 (down); one step is one simulation tick, so the
  * paused scene advances exactly the frame the timer would have run.
@@ -548,20 +559,6 @@ int glr_ctrl_router_handle_variable_panel_drag_release(int state) {
  * The coarse modifier (right-press) jumps ten frames. Shift-fine is
  * deliberately not honored: there is nothing finer than a frame to step to,
  * and a sub-frame `t` is a sampling concept (accum blur), not a transport one. */
-/* A replay PC is an index into the flat stream. A value-only rebake preserves
- * the stream's count and order, while a structural reflatten can put a
- * different command at the same index. Keep stepping inside replay only when
- * the scene has no structural `t` dependency and every affected command can
- * rebake; otherwise stop replay before changing `t`. */
-static int time_step_keeps_replay_pc_honest(void) {
-    int t_idx = repl_state_variables().time_var_idx;
-
-    if (t_idx < 0 || !repl_state_flat_program_rebake_ok())
-        return 0;
-    return (repl_state_flat_program_structural_dep_mask() &
-            ((ReplExprDepMask)1u << t_idx)) == 0;
-}
-
 static int route_variable_time_step_hit(const UiHit *hit, int coarse) {
     float frames = coarse ? GLR_ADJUST_COARSE_SCALE : 1.0f;
 

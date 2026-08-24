@@ -2157,11 +2157,11 @@ static int parse_keyword_statement(const char *p, GLCmd *cmd,
  *
  * Recognising these before the generic message matters because otherwise
  * `rand();` or `sin(t);` get the same diagnostic as a misspelled GL call,
- * which is actively misleading. The three arms are three different
+ * which is actively misleading. The cases are four different
  * mistakes: a builtin call used as a statement (it produces a value -
  * assign it), a C keyword (the REPL has no such statement *and* it is not
- * an operand either), and a REPL constant or scratch array (an operand
- * typed where a command goes).
+ * an operand either), a bare builtin function, and a REPL constant or scratch
+ * array (an operand typed where a command goes).
  *
  * `has_args` distinguishes `sin(t)` from a bare `sin`. */
 static int parser_report_reserved_not_command(const char *func, int has_args,
@@ -2177,6 +2177,10 @@ static int parser_report_reserved_not_command(const char *func, int has_args,
     } else if (repl_eval_is_c_keyword(func)) {
         parser_emit_error(ctx,
             "'%s' is a C keyword - the REPL has no such statement", func);
+    } else if (repl_eval_is_builtin_function(func)) {
+        parser_emit_error(ctx,
+            "'%s' is a builtin function, not a command - use it inside an "
+            "expression", func);
     } else {
         parser_emit_error(ctx,
             "'%s' is a reserved name (constant or scratch array), "
