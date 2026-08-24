@@ -49,6 +49,9 @@ drawMeshStar(z_apex) {
 drawBoundaryStar(z_apex) {
   float a0, a1, r0, r1;
   float x0, y0, x1, y1;
+  // Seed the first edge flag before glBegin; render-list creation must retain
+  // this GL_FALSE instead of treating an unallocated flag array as GL_TRUE.
+  glEdgeFlag(GL_FALSE);
   glBegin(GL_TRIANGLES);
     for(k, 0, 11) {
       a0 = k * PI / 6.0;
@@ -66,7 +69,6 @@ drawBoundaryStar(z_apex) {
       y1 = sin(a1) * r1;
 
       // Front face: suppress interior spokes, keep perimeter boundary
-      glEdgeFlag(GL_FALSE);
       glVertex3f(0.0, 0.0, z_apex);
       glEdgeFlag(GL_TRUE);
       glVertex3f(x0, y0, 0.0);
@@ -74,7 +76,6 @@ drawBoundaryStar(z_apex) {
       glVertex3f(x1, y1, 0.0);
 
       // Back face: suppress interior spokes, keep perimeter boundary
-      glEdgeFlag(GL_FALSE);
       glVertex3f(0.0, 0.0, -z_apex);
       glEdgeFlag(GL_TRUE);
       glVertex3f(x1, y1, 0.0);

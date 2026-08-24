@@ -6133,6 +6133,47 @@ static void test_variable_panel_t_change_reflattens_when_time_paused(void) {
                (int)repl_state_flat_program_args_dirty_mask(), 0);
 }
 
+static void test_variable_time_step_replay_policy(void) {
+    UiHit hit = ui_hit_none();
+
+    printf("--- variable-panel time step replay policy ---\n");
+    hit.kind = UI_HIT_VARIABLE_TIME_STEP;
+    hit.item_idx = 1;
+
+    glr_ctrl_reset_all();
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(t, 0, 0);");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(editor_state_edit_line());
+    repl_state_flat_program_clear_dirty();
+
+    replay_start();
+    ASSERT_TRUE("value-only t scene starts replay", replay_active());
+    ASSERT_INT("value-only time step is consumed",
+               glr_ctrl_router_handle_code_panel_hit(hit, 0, 0), 1);
+    ASSERT_TRUE("value-only t step keeps replay active", replay_active());
+    ASSERT_TRUE("value-only t step advances the clock",
+                g_predef_vars[repl_state_variables().time_var_idx].value > 0.0f);
+    replay_stop();
+
+    glr_ctrl_reset_all();
+    repl_state_time_set(1.0f);
+    editor_feed_line("for(i, 0, t) {");
+    editor_feed_line("glVertex3f(i, 0, 0);");
+    editor_feed_line("}");
+    repl_flatten_commands(editor_state_edit_line());
+    repl_state_flat_program_clear_dirty();
+
+    replay_start();
+    ASSERT_TRUE("structural t scene starts replay", replay_active());
+    ASSERT_INT("structural time step is consumed",
+               glr_ctrl_router_handle_code_panel_hit(hit, 0, 0), 1);
+    ASSERT_INT("structural t step stops replay", replay_active(), 0);
+    ASSERT_STR("structural t step explains replay stop",
+               ui_state_status_mut()->text,
+               "Replay stopped: t changes this scene's structure");
+}
+
 /* scene_execute_adapter is called by render.c on both the main fill
  * pass and the render3d_probe_eye_dist feedback pass. The probe pass
  * runs every frame in ortho/projection-transition mode; before the
@@ -8405,6 +8446,7 @@ int main(void) {
     test_numeric_swatch_no_op_in_insert_mode();
     test_numeric_swatch_scale_coarse_and_fine();
     test_variable_panel_t_change_reflattens_when_time_paused();
+    test_variable_time_step_replay_policy();
     test_auxiliary_scene_pass_side_effects();
     test_wireframe_renderer_ignores_user_draw_state();
     test_example_reset_reapplies_light_theme();

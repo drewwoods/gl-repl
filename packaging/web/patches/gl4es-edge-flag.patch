@@ -66,7 +66,7 @@ Odds and ends
 
 glEdgeFlag needs no packed-call entry for display lists: a compiling list
 picks the flag up through its own lastEdgeFlag, and a freshly extended one
-through glstate->edgeflag, which alloc_renderlist() seeds from. Executing or
+through the copied lastEdgeFlag state. Executing or
 appending a list propagates its tail lastEdgeFlag back into the current state,
 so subsequent immediate vertices and glGetBooleanv(GL_EDGE_FLAG) see the same
 value as native GL. glEdgeFlagv is promoted out of the stub table alongside
@@ -136,7 +136,7 @@ diff --git a/src/gl/gl4es.c b/src/gl/gl4es.c
 index b20bcff5..7a068848 100644
 --- a/src/gl/gl4es.c
 +++ b/src/gl/gl4es.c
-@@ -376,6 +376,34 @@ void APIENTRY_GL4ES gl4es_glVertex4fv(GLfloat* v) {
+@@ -376,6 +376,33 @@ void APIENTRY_GL4ES gl4es_glVertex4fv(GLfloat* v) {
  }
  AliasExport(void,glVertex4fv,,(GLfloat* v));
  
@@ -144,8 +144,7 @@ index b20bcff5..7a068848 100644
 + * CPU, when polygon-mode lines are generated in fill_lineIndices(), so this
 + * never reaches a gles_* entry point.  It needs no packed-call entry for
 + * display lists either - a compiling list picks the flag up through its own
-+ * lastEdgeFlag, and a freshly extended one through glstate->edgeflag, which
-+ * alloc_renderlist() seeds from. */
++ * lastEdgeFlag, and a freshly extended one through the copied list state. */
 +void APIENTRY_GL4ES gl4es_glEdgeFlag(GLboolean flag) {
 +    flag = flag ? GL_TRUE : GL_FALSE;
 +    if (glstate->list.active) {
@@ -180,7 +179,7 @@ index b20bcff5..7a068848 100644
 +        if (called) {
 +            renderlist_t *tail = called;
 +            while (tail->next) tail = tail->next;
-+            glstate->list.active->lastEdgeFlag = tail->lastEdgeFlag;
++            rlEdgeFlag(glstate->list.active, tail->lastEdgeFlag);
 +            if (!glstate->list.compiling ||
 +                glstate->list.mode == GL_COMPILE_AND_EXECUTE)
 +                glstate->edgeflag = tail->lastEdgeFlag;
@@ -263,11 +262,12 @@ diff --git a/src/gl/list.c b/src/gl/list.c
 index 585629ab..16b9ce59 100644
 --- a/src/gl/list.c
 +++ b/src/gl/list.c
-@@ -30,6 +30,7 @@ renderlist_t *alloc_renderlist() {
+@@ -30,6 +30,8 @@ renderlist_t *alloc_renderlist() {
      memcpy(list->lastSecondaryColors, glstate->secondary, 3*sizeof(GLfloat));
      memcpy(list->lastColors, glstate->color, 4*sizeof(GLfloat));
      memcpy(&list->lastFogCoord, glstate->fogcoord, 1*sizeof(GLfloat));
 +    list->lastEdgeFlag = glstate->edgeflag;
++    rlEdgeFlag(list, list->lastEdgeFlag);
  
      list->instanceCount = 1;
  
@@ -323,6 +323,25 @@ index 585629ab..16b9ce59 100644
      for (int i=0; i<a->maxtex; i++)
          if (a->tex[i]) memcpy(a->tex[i]+a->len*4, b->tex[i], b->len*4*sizeof(GLfloat));
      // indices
+@@ -628,6 +628,8 @@ renderlist_t *extend_renderlist(renderlist_t *list) {
+         memcpy(new->lastNormal, list->lastNormal, 3*sizeof(GLfloat));
+         memcpy(new->lastSecondaryColors, list->lastSecondaryColors, 3*sizeof(GLfloat));
+         memcpy(new->lastColors, list->lastColors, 4*sizeof(GLfloat));
+         new->lastColorsSet = list->lastColorsSet;
++        new->lastEdgeFlag = list->lastEdgeFlag;
++        rlEdgeFlag(new, new->lastEdgeFlag);
+         // detach
+         list->prev = NULL;
+@@ -643,7 +645,9 @@ renderlist_t *extend_renderlist(renderlist_t *list) {
+         memcpy(new->lastNormal, list->lastNormal, 3*sizeof(GLfloat));
+         memcpy(new->lastSecondaryColors, list->lastSecondaryColors, 3*sizeof(GLfloat));
+         memcpy(new->lastColors, (list->post_color)?list->post_colors:list->lastColors, 4*sizeof(GLfloat));
+         new->lastColorsSet = (list->post_color || list->lastColorsSet)?1:0;
++        new->lastEdgeFlag = list->lastEdgeFlag;
++        rlEdgeFlag(new, new->lastEdgeFlag);
+         return new;
+     }
+ }
 @@ -736,6 +761,7 @@ void free_renderlist(renderlist_t *list) {
                  if (list->color) free(list->color);
                  if (list->secondary) free(list->secondary);
@@ -583,10 +602,12 @@ index 784a1410..1365ee46 100644
  #include "list.h"
  
  #include "../glx/hardext.h"
-@@ -19,6 +22,7 @@ static inline void rlVertexCommon(renderlist_t *list, int idx, int l) {
+@@ -19,6 +22,9 @@ static inline void rlVertexCommon(renderlist_t *list, int idx, int l) {
          if (list->fogcoord) memcpy(list->fogcoord + (l * 1), glstate->fogcoord, sizeof(GLfloat) * 1);
      }
      // common part
++    if (list->edgeflag == NULL && !list->lastEdgeFlag)
++        rlEdgeFlag(list, list->lastEdgeFlag);
 +    if (list->edgeflag) list->edgeflag[l] = list->lastEdgeFlag;
      if (list->color)    memcpy(list->color + idx, list->lastColors, sizeof(GLfloat) * 4);
      if (list->secondary)    memcpy(list->secondary + (l * 4), glstate->secondary, sizeof(GLfloat) * 4);

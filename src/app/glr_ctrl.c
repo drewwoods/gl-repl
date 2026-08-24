@@ -3459,6 +3459,11 @@ void glr_ctrl_display_frame(void) {
      * profile panel reads them below. */
     repl_flat_refresh_profile_frame_end();
 
+    /* Publish Render3D subsection totals before opening the UI parent, so the
+     * CPU time represented by those samples cannot be attributed to UI (2D). */
+    for (ProfSection section_idx = PROF_RENDER3D_SETUP; section_idx <= PROF_RENDER3D_LAST; section_idx++)
+        prof_accum_commit(section_idx);
+
     /* --- 2D UI band (PROF_UI_2D) -------------------------------------------
      * Every overlay drawn over the finished scene, from the replay HUD down to
      * the status-history popup, is one profiled band: the panels below are its
@@ -3498,10 +3503,6 @@ void glr_ctrl_display_frame(void) {
     prof_begin(PROF_TOUR_HUD);
     tour_ui_hud_render(&ui_snap);
     prof_end(PROF_TOUR_HUD);
-
-    /* Commit the accumulated subsection totals now that all AA samples are done. */
-    for (ProfSection section_idx = PROF_RENDER3D_SETUP; section_idx <= PROF_RENDER3D_LAST; section_idx++)
-        prof_accum_commit(section_idx);
 
     prof_begin(PROF_CODE_PANEL);
     UiCodePanelOutput cp_out = { 0, 0, 0 };

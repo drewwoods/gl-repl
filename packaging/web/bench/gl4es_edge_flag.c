@@ -130,6 +130,40 @@ static int quad_perimeter_px(void)
     return g_edge_px[0] + g_edge_px[1] + g_edge_px[2] + g_edge_px[3];
 }
 
+/* The current edge flag may be set before glBegin.  In particular, a new
+ * renderlist can inherit GL_FALSE with no edge array yet; the first vertex
+ * must still record false rather than silently taking NULL to mean true. */
+static void test_flag_before_begin(void)
+{
+    int perimeter = quad_perimeter_px();
+    int slack = 8 + perimeter / 64;
+
+    clear_scene();
+    glEdgeFlag(GL_FALSE);
+    glBegin(GL_QUADS);
+    for (int i = 0; i < 4; ++i)
+        glVertex3f(g_quad_x[i], g_quad_y[i], 0.f);
+    glEnd();
+    int all_false = finish_coverage();
+    if (all_false > slack)
+        fail("GL_FALSE before glBegin still draws edges", all_false, 0);
+
+    clear_scene();
+    glEdgeFlag(GL_FALSE);
+    glBegin(GL_QUADS);
+    glVertex3f(g_quad_x[0], g_quad_y[0], 0.f);
+    for (int i = 1; i < 4; ++i) {
+        glEdgeFlag(GL_TRUE);
+        glVertex3f(g_quad_x[i], g_quad_y[i], 0.f);
+    }
+    glEnd();
+    int mixed = finish_coverage();
+    int want = perimeter - g_edge_px[0];
+    if (mixed < want - slack || mixed > want + slack)
+        fail("pre-glBegin GL_FALSE was not backfilled correctly", mixed, want);
+    report3(" prebegin=%d/%d/%d", all_false, mixed, want);
+}
+
 /* Clearing vertex v's flag must suppress exactly the edge that *begins* at v -
  * every other boundary edge stays. Checked against the calibrated segments, so
  * this pins the absolute result rather than a delta against a baseline that
@@ -502,6 +536,7 @@ static void display(void)
         calibrate_quad_edges();
         test_quad_suppresses_one_edge();
         test_triangle_suppresses_one_edge();
+        test_flag_before_begin();
         test_default_is_unchanged();
         test_quad_has_no_diagonal();
         test_quad_strip_boundary_edges();
