@@ -1,6 +1,6 @@
 # File-Scope Function Definitions In The Code Panel
 
-## Status - PROJECT 1 COMPLETE; INTERACTIVE HOIST FIXED; PROJECT 2 REMAINDER NOT APPROVED; FILE-SCOPE INSERT SLOT DESIGNED, NOT IMPLEMENTED (2026-08-25)
+## Status - PROJECT 1 COMPLETE; INTERACTIVE HOIST FIXED; PROJECT 2 REMAINDER NOT APPROVED; FILE-SCOPE INSERT SLOT DESIGNED (REV 4), NOT IMPLEMENTED (2026-08-25)
 
 Revision 2 closed the second read's blockers: the boundary helper's
 comment rule (it ate body-attached comments) and the two placement calls
@@ -664,7 +664,7 @@ would be flattened, so it lands in the same patch.
 | Block-closer indent | Unchanged; keep reformat's minus-2 (1d). |
 | Clear-pair exception | Removed for ordinary interactive commits: new functions clamp before the display-body boundary. It survives only during an active tutorial, whose locked-row remapping remains a Project 2 placement change (pinned by `test_func_def_tutorial_keeps_clear_prelude_placement`). |
 | Load-time hoist | Not in Project 1. A loaded document keeps a function wherever the file put it, so the below-the-clear-pair shape stays reachable through `repl_load_apply_line`. |
-| Explicit insertion above `display()` | Add a separate synthetic file-scope slot immediately before the generated display opener. It accepts only float declarations and function definitions. It does not replace the existing boundary ghost, which remains the first display-body insertion row. Design specified below; not implemented. |
+| Explicit insertion above `display()` | Add a separate synthetic file-scope slot immediately before the generated display opener. It accepts float declarations, function definitions and comments (revision 4 - prose introducing a definition is a shape the rest of the system already carries). It does not replace the existing boundary ghost, which remains the first display-body insertion row. Design specified below, revision 4; not implemented. |
 
 ## Project 2 - Making The Order Total (not approved)
 
@@ -720,12 +720,29 @@ Leave commit *placement*, import, clipboard and tutorials alone until
 Project 2 is an explicit yes. Project 1's edits to `commit.c` and
 `import.c` (1e) are indentation-formatting only.
 
-## Explicit File-Scope Insertion Slot (design approved; not implemented)
+## Explicit File-Scope Insertion Slot (design approved, revision 4; not implemented)
 
 The editor needs a visible insertion point above the generated
 `void display(void) {` line. This is an editor/UI affordance, not a change to
 the source document model and not permission to place arbitrary commands at
 file scope.
+
+**Revision 4** closed the design read's blockers, all five verified against the
+tree rather than argued: the commit chain cannot report success (so the
+scope-exit rule had no signal to read), boundary re-indentation was absent from
+a design whose whole purpose is moving rows across the boundary, the reverse
+row-mapping API cannot express two insert rows, there was no keyboard route in,
+and rejecting comments contradicted the func-def comment lift. Each is marked
+**R4** where it lands below.
+
+The read also confirmed the parts that were already right, and they are load
+bearing: every API the design names exists as named
+(`editor_try_commit_float_decl` / `_func_def` at `src/editor/commit.c:1070`
+and `:1190`, `EditorInputState.insert_mode` at `src/editor/state.h:58`,
+`src/app/glr_ctrl_router.c`, the `UI_HIT_CODE_*` prefix), and the premise holds
+under test - with `edit_line == display_body_start` the body ghost really does
+render after the display opener, so position alone cannot tell the two rows
+apart and a typed scope is the right fix.
 
 The projected order is:
 
@@ -734,7 +751,7 @@ static float radius;
 existing_function() {
 }
 
-+ float or function      // synthetic file-scope insertion slot
++ float, function or comment   // synthetic file-scope insertion slot
 
 void display(void) {
   + body command         // existing insertion ghost at display_body_start
@@ -772,6 +789,27 @@ any transition out of insert mode reset the scope to
 of the REPL document and does not alter import, paste, external-editor row maps
 or saved files.
 
+`EditorInputView` (`src/editor/state.h:62-76`) enumerates its by-value scalar
+fields in its own contract comment. Add `insert_scope` there too and extend
+that comment - a reader checking "what does the view snapshot" must not have to
+diff the two structs. Adding the field plus its accessors moves the ratchet
+baselines `scripts/baselines/mut-count.txt` and
+`scripts/baselines/editor-ownership-budget.txt`; both are expected deltas, not
+guard failures to route around.
+
+**R4 - keyboard entry.** `make keymap-list` reports zero free plain-Ctrl slots
+and zero free F-keys; only `Ctrl+Shift+M/Q/Y` remain. A mouse hit alone would
+make the slot unreachable from the keyboard while the coverage list below still
+demands Enter/semicolon parity *inside* it, so entry is specified rather than
+left implicit: **Up-arrow from the first display-body row enters the slot**,
+which is exactly the inverse of the navigation rule that leaves it. That costs
+no keymap slot, needs no `Ctrl+Shift+` allocation, and keeps the affordance
+symmetric with how the cursor already moves across the boundary. Down-arrow (or
+any other navigation) exits per the rule above. If entry is instead left
+mouse-only, say so deliberately and give the reason, the way the assignment
+plot documents its mouse-only controls - what is not acceptable is mouse-only
+by omission.
+
 ### Panel layout and hit routing
 
 `src/ui/app/repl_code_panel.c` emits a distinct virtual row immediately before
@@ -793,8 +831,20 @@ the opener. Add a distinct app hit such as
 commits or rejects pending input, then activates the scoped slot. Generated
 `display()` chrome itself remains inert.
 
+**R4 - the reverse mapping needs the same disambiguation as the hit.** A new
+`UiHit` covers pixels-to-row. The other direction is
+`ui_repl_code_panel_target_for_doc_line()`
+(`src/ui/app/repl_code_panel.h:131`), whose `out_on_insert_line` is a plain
+flag - it can say *that* a doc line resolved to an insert row but not *which*
+one, and with the slot both virtual rows carry
+`line_idx = display_body_start`. That function is what cursor-follow and
+wrapped-row hit translation read, and the coverage list below requires both to
+stay consistent, so it needs an out-parameter (or a small enum result) naming
+the scope. Resolving this by position is the same mistake the state model
+already rejects, one layer down.
+
 The row should exist in both full and code-focus views. When inactive it may
-render as a dim `+ float or function` placeholder; when active it renders the
+render as a dim `+ float, function or comment` placeholder; when active it renders the
 ordinary input buffer at column zero. Hide or disable it during an active
 tutorial: tutorial clear-prelude rows are locked, and moving a function above
 them remains the gated Project 2 remapping problem.
@@ -809,27 +859,115 @@ offered are, in order:
 2. `editor_try_commit_func_def()`.
 
 There is no fallthrough to assignments, `if`/`for`/close-brace handlers, the
-general GL parser, comments, blank-line insertion or paste. Any other input is
+general GL parser, blank-line insertion or paste. Any other input is
 consumed as an error with a direct diagnostic such as
-`File scope accepts only float declarations or function definitions`, leaving
+`File scope accepts only declarations, function definitions or comments`, leaving
 the input and scoped cursor in place.
+
+**R4 - the chain cannot report success, so the scope machine must not ask it
+to.** `editor_try_commit_block()` (`src/editor/commit.c:1162`) returns 1 on
+success *and* 1 on a rejected commit:
+
+```c
+if (r != REPL_COMPILE_OK) { repl_set_status_error(err); return 1; }
+...
+return 1;
+```
+
+`src/editor/commit.h:47` fixes that convention: 0 means the cmd-store preflight
+refused the change, not "no match". So `func0 already defined (line 3)`, a
+duplicate declaration name and a `MAX_PREDEF_VARS` overflow all return 1 with
+nothing mutated. Any rule phrased as "after a *successful* commit" therefore has
+no signal to read, and taken literally would drop the user out of the slot on
+the exact rejection they need to stay and fix.
+
+The slot must resolve success itself: call the compile function
+(`editor_compile_func_def` / `repl_compile_float_decl`) and inspect
+`plan.change.kind`, or introduce `_checked` wrappers that report applied vs.
+rejected. Do not add a second status-text inspection - the status line is a
+presentation surface, not a return channel. Until that signal exists, the state
+transitions below are unimplementable as written.
+
+**R4 - comments.** The slot rejecting comments contradicts the mechanism it is
+replacing: `compile_func_leading_comment_start()`
+(`src/editor/commit.c:479`) deliberately lifts a leading comment run *with* a
+relocated function, and export attaches a comment run to the definition it
+introduces (`comment_run_attached_func_idx()`), which is why
+`compile_decl_prologue_end` goes *above* such a run rather than splitting it.
+Prose introducing a file-scope definition is a shape the rest of the system is
+built around, so a slot that cannot type it forces the author back to the
+legacy route the slot exists to replace. **Accept `CMD_COMMENT` in the slot**
+(a comment is not executable state and cannot land in the wrong scope), and
+keep it out of the "any other input" rejection above. Blank lines stay
+rejected: they carry no attachment and the prologue rule already treats a
+trailing blank run as belonging below a new declaration.
 
 Commit-time restriction is the safety boundary; autocomplete filtering is a
 secondary usability improvement. In this scope completion should prefer
 `float`, `static float` and function-header guidance rather than advertising
 GL calls that the commit path will reject.
 
-After a successful float declaration, keep the scoped slot active and retarget
-it to the recomputed `display_body_start`, allowing consecutive declarations.
-Plain `float` and `static float` use the existing top-level declaration
-semantics; assignments remain forbidden. After a successful function header,
-reset to `EDITOR_INSERT_DOCUMENT` and preserve the existing function commit
-post-effect: the matching `}` is inserted automatically and the cursor lands
-inside the function body, where ordinary commands are legal.
+After a float declaration that actually applied, keep the scoped slot active and
+retarget it to the recomputed `display_body_start`, allowing consecutive
+declarations. Plain `float` and `static float` use the existing top-level
+declaration semantics; assignments remain forbidden. After a function header
+that actually applied, reset to `EDITOR_INSERT_DOCUMENT` and preserve the
+existing function commit post-effect: the matching `}` is inserted
+automatically and the cursor lands inside the function body, where ordinary
+commands are legal. A *rejected* commit of either kind holds the slot exactly
+as it was - scope, cursor and input text - so the diagnostic can be acted on
+in place; that is the whole reason the success signal above has to be real.
+
+Retargeting to the recomputed `display_body_start` is deliberate but not
+identical to where the legacy route would put the same declaration:
+`compile_decl_prologue_end()` goes *above* a comment run that leads into a
+function definition, while the boundary sits below that whole definition. Both
+land at file scope, so this is ordering cosmetics rather than a correctness
+split - but the two routes will interleave consecutive declarations
+differently around function-attached prose, and that is expected, not a bug to
+be found later.
 
 Directly typing a declaration or function from an ordinary body insertion row
 continues to use the existing hoist behavior. The explicit slot adds a
 discoverable, location-honest route; it does not remove the current route.
+
+### R4 - boundary re-indentation
+
+A row's base indent is a whole-document property: 0 above the boundary, 2
+below. Anything that moves `display_body_start` past an existing row therefore
+owes that row a re-indent.
+`repl_reindent_after_boundary_move()` (`src/repl/reformat.c:203`) exists for
+exactly this and is deliberately not `repl_reformat_program()` - it shifts only
+rows whose side changed and rewrites no canonical text. It currently has **one
+caller**, `src/repl/comment_toggle.c:429`. The commit path has none.
+
+That is already a live defect on the route this design preserves. Typing
+`static float radius;` from an ordinary body row in a comment-led scene:
+
+```
+before   body_start = 0            after   body_start = 2
+  // intro prose for the scene       // intro prose for the scene   <- indent 2
+  glClearColor(0.1, 0.1, 0.1, 1);    static float radius;           <- indent 2
+  glClear(GL_COLOR_BUFFER_BIT);      glClearColor(0.1, 0.1, 0.1, 1);
+                                     glClear(GL_COLOR_BUFFER_BIT);
+```
+
+Both leading rows crossed the boundary and neither was re-indented, so they
+render two-space indented *above* the `void display(void) {` opener.
+
+The slot's own coordinate does not have this problem - committing at
+`edit_line == display_body_start` inserts at index 0 with zero indent and moves
+no existing row across - but the slot makes boundary moves an everyday
+operation and the legacy route stays reachable, so this must be fixed with the
+slot rather than around it. Call `repl_reindent_after_boundary_move()` from the
+commit apply path, capturing `at_before` prior to the mutation, and cover it.
+
+Note which insertions *cannot* trigger it, so the fix is not over-scoped: a
+pure insert of N rows at the boundary shifts both the rows and the boundary by
+N, so no row changes sides. The func-def clamp shipped earlier is safe for this
+reason. Declarations are the exposed case because
+`compile_decl_insert_pos()` picks its own position from the declaration
+prologue, which can differ from `display_body_start`.
 
 ### Required coverage
 
@@ -845,14 +983,41 @@ discoverable, location-honest route; it does not remove the current route.
 - Consecutive float declarations keep the slot active at the recomputed
   boundary; a function header exits the scope and lands inside its generated
   body.
-- GL calls, assignments, comments, blank input, `if`, `for`, `}` and paste are
-  rejected without document mutation or generic-parser fallthrough.
+- GL calls, assignments, blank input, `if`, `for`, `}` and paste are
+  rejected without document mutation or generic-parser fallthrough. A comment
+  is **accepted** (R4) and lands at file scope with zero indent.
 - Escape, click/arrow navigation, undo/redo and scene changes clear the scoped
   state.
 - The slot is absent or inert during tutorials, so locked-row indices and
   expected-commit mapping do not move.
 - Cursor-follow, wrapped-row hit translation, panel total-line counts and both
   full/focus rendering remain consistent after the extra virtual row.
+
+R4 adds:
+
+- **A rejected commit holds the slot.** A duplicate `funcN`, a duplicate
+  declaration name and a `MAX_PREDEF_VARS` overflow each leave scope, cursor
+  and input text untouched and the document unmutated - the case the
+  return-1-for-both convention would otherwise silently break.
+- **Up-arrow from the first display-body row enters the slot**; down-arrow and
+  every other navigation leaves it. Enter/semicolon parity is asserted from a
+  keyboard-entered slot, not only a clicked one.
+- **Rows that change sides are re-indented.** Directly:
+  `repl_reindent_after_boundary_move()` fires from the commit path, asserted on
+  the comment-led declaration case above (both leading rows end at indent 0).
+  And negatively: a pure insert at the boundary re-indents nothing, so the
+  func-def path stays byte-stable.
+- **`ui_repl_code_panel_target_for_doc_line()` distinguishes the two insert
+  rows** at the same `doc_line`, and cursor-follow lands on the one the scope
+  names.
+- **The extedit input-row gate.** The slot parks a non-empty input buffer at a
+  caret row in a new mode, which is the exact shape of the documented
+  input-row gate trap (four bugs of that form). Assert a `--watch` session
+  defers and then resolves an external change while the slot is active, and
+  that entering/leaving the slot alone never trips an outbound sync - scope is
+  not document text.
+- **`EditorInputView` carries `insert_scope`**, and the by-value snapshot
+  guard baselines move by the expected amount rather than being suppressed.
 
 ## Test And Golden Impact (Project 1)
 
