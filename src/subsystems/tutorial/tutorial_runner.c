@@ -794,6 +794,9 @@ static int tutorial_load_scene_prelude(int idx) {
                                     (void *)name);
         repl_doc_order_init(&order);
         for (pos = 0; lines[pos]; pos++) {
+            if (repl_doc_order_line_is_display_open(lines[pos]))
+                repl_camera_header_set_region(&camera,
+                                              REPL_CAMERA_REGION_DISPLAY);
             ReplCameraLineResult result =
                 repl_camera_header_offer(&camera, lines[pos], pos + 1);
 
@@ -811,6 +814,8 @@ static int tutorial_load_scene_prelude(int idx) {
             }
             if (result != REPL_CAMERA_LINE_NOT_CAMERA)
                 continue;
+            if (repl_doc_order_last_line_was_wrapper(&order))
+                continue;
             if (pos < cfg_count || setup_line_is_blank(lines[pos]))
                 continue;
             if (!repl_load_apply_line(lines[pos], err, (int)sizeof(err),
@@ -821,6 +826,10 @@ static int tutorial_load_scene_prelude(int idx) {
                 repl_set_status(msg);
                 return 0;
             }
+        }
+        if (!repl_doc_order_finish(&order, pos + 1)) {
+            repl_set_status("Tutorial setup has an invalid display frame");
+            return 0;
         }
         camera_fin = repl_camera_header_finish(&camera,
                                                REPL_CAMERA_APPLY_EXAMPLE);

@@ -330,6 +330,7 @@ drawRipples(origX, origZ, maxRadius, count, phase) {
     }
   }
 }
+display() {
 
 glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
 glRotatef(22.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
@@ -437,3 +438,4 @@ for(b, 0, 14) {
 }
 
 glDisable(GL_BLEND);
+}

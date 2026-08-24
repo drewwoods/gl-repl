@@ -25,6 +25,7 @@ func0(depth, sz, angle) {
     glPopMatrix();
   }
 }
+display() {
 
 glTranslatef(0.0f, 0.0f, -12.00f);   // @camera dist
 glRotatef(25.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
@@ -38,3 +39,4 @@ glEnable(GL_DEPTH_TEST);
 
 // Run recursive structure 60 levels deep (limit is 64)
 func0(60, 0.45f, 8.0f);
+}

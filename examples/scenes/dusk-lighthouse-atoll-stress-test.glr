@@ -280,7 +280,7 @@ tree(depth, len, twist) {
 
 // --- fire_flies() - additive point sprites drifting over the atoll
 fire_flies(num) {
-  glPushAttrib(GL_POINT_BIT | GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT | GL_COLOR_BUFFER_BIT);
+  glPushAttrib(GL_POINT_BIT | GL_LIGHTING_BIT | GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
   glDisable(GL_LIGHTING);
   glDepthMask(GL_FALSE);
   glEnable(GL_BLEND);
@@ -300,6 +300,7 @@ fire_flies(num) {
   glEnd();
   glPopAttrib();
 }
+display() {
 glTranslatef(0.0000f, 0.0000f, -9.5000f);   // @camera dist
 glRotatef(26.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(-20.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -476,3 +477,4 @@ glColor3f(0.92, 0.95, 0.98);
 glRasterPos3f(-3.2, 1.4, 0);
 label("dusk atoll");
 glEnable(GL_LIGHTING);
+}

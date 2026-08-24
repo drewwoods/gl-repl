@@ -40,6 +40,7 @@ buildLift() {
   // array - the block writes a window, this rewrites one cell inside it.
   C[13] = bob * 0.5;
 }
+display() {
 
 glClearColor(0.05, 0.06, 0.09, 1);
 glClear(GL_COLOR_BUFFER_BIT);
@@ -87,3 +88,4 @@ glEnable(GL_LIGHTING);
 glColor3f(0.7, 0.7, 0.75);
 glRasterPos3f(-1.1, 1.9, 0.0);
 label("shear %f  lift %f", shear, bob);
+}

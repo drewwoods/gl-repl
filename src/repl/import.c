@@ -3109,15 +3109,22 @@ static int import_offer_camera_line(ImportState *state, const char *line) {
                      sizeof(REPL_EXPORT_DISPLAY_OPEN_SIGNATURE) - 1) == 0)
         repl_camera_header_set_region(&state->camera,
                                       REPL_CAMERA_REGION_DISPLAY);
+    else if (state->check_order &&
+             repl_doc_order_line_is_display_open(line))
+        repl_camera_header_set_region(&state->camera,
+                                      REPL_CAMERA_REGION_DISPLAY);
 
     {
         ReplCameraLineResult result =
             repl_camera_header_offer(&state->camera, line, state->line_no);
 
-        if (state->check_order &&
-            !repl_doc_order_offer(&state->order, line, state->line_no,
-                                  result != REPL_CAMERA_LINE_NOT_CAMERA))
-            state->order_failed = 1;
+        if (state->check_order) {
+            if (!repl_doc_order_offer(&state->order, line, state->line_no,
+                                      result != REPL_CAMERA_LINE_NOT_CAMERA))
+                state->order_failed = 1;
+            if (repl_doc_order_last_line_was_wrapper(&state->order))
+                return 1;
+        }
         return result != REPL_CAMERA_LINE_NOT_CAMERA;
     }
 }
@@ -3268,6 +3275,9 @@ static int import_finish_load(ImportState *state,
      * non-canonical files do not accumulate. Every violation has already been
      * reported through the sink, so the summary here just names the count -
      * the migration worklist is the sink's output, not this line. */
+    if (state->check_order &&
+        !repl_doc_order_finish(&state->order, state->line_no + 1))
+        state->order_failed = 1;
     if (state->order_failed) {
         snprintf(msg, sizeof(msg),
                  "Import failed: %s is not in canonical order (%d violations)",

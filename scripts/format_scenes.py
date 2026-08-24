@@ -9,6 +9,10 @@ gluBegin/gluEnd and glPushMatrix/glPopMatrix - so a body written by
 asymmetry the app has is reproduced here: glu (tessellator) commands belong to
 the tessellator scope, not the GL vertex block, so glBegin depth is excluded
 from their indent (`repl_source_scope_view_cmd_tess_indent()`).
+
+Function-bearing scenes carry an explicit `display() { ... }` wrapper, but
+their body rows remain authored at column 0. The wrapper is format syntax, not
+an indentation level; loaders consume it and re-derive the in-memory body base.
 """
 
 from __future__ import annotations
@@ -133,6 +137,7 @@ def format_content(content: str) -> str:
     formatted_lines: list[str] = []
     depths = [0] * NUM_DEPTHS
     in_block_comment = False
+    in_display = False
 
     for line in lines:
         stripped = line.strip()
@@ -140,6 +145,20 @@ def format_content(content: str) -> str:
         # Handle blank lines
         if not stripped:
             formatted_lines.append("")
+            continue
+
+        # The explicit function-scene frame is .glr syntax, not a source
+        # block: camera/body rows inside it remain column 0 on disk. Only the
+        # exact top-level spelling is recognized, matching doc_order.c.
+        if (not in_block_comment and not in_display and
+                not any(depths) and stripped == "display() {"):
+            formatted_lines.append(stripped)
+            in_display = True
+            continue
+        if (not in_block_comment and in_display and
+                not any(depths) and stripped == "}"):
+            formatted_lines.append(stripped)
+            in_display = False
             continue
 
         # Identify special comments that must not be indented

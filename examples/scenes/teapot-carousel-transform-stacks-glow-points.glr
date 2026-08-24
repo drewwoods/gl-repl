@@ -47,6 +47,7 @@ drawSeat(ang) {
     glPopMatrix();
   glPopMatrix();
 }
+display() {
 glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
 glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(24.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -153,4 +154,5 @@ glPopMatrix();
 
 if(t > 5 && t < 10) {
   console("Eerie...");
+}
 }

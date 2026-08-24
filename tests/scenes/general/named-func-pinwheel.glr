@@ -35,6 +35,7 @@ rim(s) {
     glutSolidTorus(0.05, s, 10, 22);
   glPopMatrix();
 }
+display() {
 
 glTranslatef(0.0f, 0.0f, -7.00f);   // @camera dist
 glRotatef(18.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
@@ -57,3 +58,4 @@ for(i, 0, folds) {
 
 rim(0.85);
 hub();
+}

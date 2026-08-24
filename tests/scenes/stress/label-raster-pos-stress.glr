@@ -20,6 +20,7 @@ mark(x, y, z, v0, v1) {
   label("v=%f p=%f", v0, v1);
   glPopMatrix();
 }
+display() {
 
 glTranslatef(0.0f, 0.0f, -10.00f);   // @camera dist
 glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
@@ -68,3 +69,4 @@ glBegin(GL_LINE_LOOP);
     glVertex3f(cos(i * TAU / 48.0f) * 2.2f, 0.0f, sin(i * TAU / 48.0f) * 2.2f);
   }
 glEnd();
+}

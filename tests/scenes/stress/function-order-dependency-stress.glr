@@ -36,6 +36,7 @@ func0(angle, sz) {
   glutSolidCube(sz);
   glPopMatrix();
 }
+display() {
 
 glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
 glRotatef(18.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
@@ -53,4 +54,5 @@ for(k, 0, 4) {
   glTranslatef((k - 1.5f) * 2.2f, 0.0f, 0.0f);
   func2(t + k * 0.8f);
   glPopMatrix();
+}
 }

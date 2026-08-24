@@ -39,6 +39,7 @@ func1(scale) {
     glPopMatrix();
   }
 }
+display() {
 
 glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
 glRotatef(12.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
@@ -67,3 +68,4 @@ glTranslatef(0.0f, 2.0f, 0.0f);
 glColor3f(0.2f, 0.9f, 0.9f);
 glutSolidSphere(0.1f * x, 16, 16);
 glPopMatrix();
+}

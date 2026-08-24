@@ -519,10 +519,13 @@ static OrderRecord check_order(const char *const *lines) {
     repl_doc_order_init(&ord);
     repl_doc_order_set_sink(&ord, order_sink, &rec);
     for (i = 0; lines[i]; i++) {
+        if (repl_doc_order_line_is_display_open(lines[i]))
+            repl_camera_header_set_region(&hdr, REPL_CAMERA_REGION_DISPLAY);
         ReplCameraLineResult r = repl_camera_header_offer(&hdr, lines[i], i + 1);
         (void)repl_doc_order_offer(&ord, lines[i], i + 1,
                                    r != REPL_CAMERA_LINE_NOT_CAMERA);
     }
+    (void)repl_doc_order_finish(&ord, i + 1);
     return rec;
 }
 
@@ -538,6 +541,7 @@ static void test_document_order(void) {
         "  glVertex3f(r, 0, 0);",
         "}",
         "",
+        "display() {",
         "glTranslatef(0, 0, -4);   // @camera dist",
         "glRotatef(15, 1, 0, 0);   // @camera rx",
         "glRotatef(20, 0, 1, 0);   // @camera ry",
@@ -545,12 +549,14 @@ static void test_document_order(void) {
         "",
         "glClear(GL_COLOR_BUFFER_BIT);",
         "func0(1.0);",
+        "}",
         NULL
     };
     ASSERT_INT("the canonical shape passes", check_order(canonical).count, 0);
 
-    /* The tolerated edge: camera straight after the declarations, functions
-     * after it. */
+    /* Camera-before-functions used to be a tolerated edge. An explicit
+     * display frame makes that shape structurally impossible: camera belongs
+     * inside display, after every function definition. */
     static const char *const camera_early[] = {
         "static float a;",
         "glTranslatef(0, 0, -4);   // @camera dist",
@@ -560,8 +566,13 @@ static void test_document_order(void) {
         "glClear(GL_COLOR_BUFFER_BIT);",
         NULL
     };
-    ASSERT_INT("DECLS -> CAMERA -> FUNCS -> BODY is accepted",
-               check_order(camera_early).count, 0);
+    {
+        OrderRecord rec = check_order(camera_early);
+        ASSERT_INT("DECLS -> CAMERA -> FUNCS is rejected",
+                   rec.count, 1);
+        ASSERT_INT("... with the FUNC_LATE rule",
+                   (int)rec.rule, (int)REPL_DOC_ORDER_FUNC_LATE);
+    }
 
     static const char *const decl_late[] = {
         "glClear(GL_COLOR_BUFFER_BIT);",
@@ -629,8 +640,10 @@ static void test_document_order(void) {
         "{",
         "  glVertex3f(x, 0, 0);",
         "}",
+        "display() {",
         "glTranslatef(0, 0, -4);   // @camera dist",
         "glClear(GL_COLOR_BUFFER_BIT);",
+        "}",
         NULL
     };
     ASSERT_INT("a split-brace definition is a definition",
@@ -649,9 +662,8 @@ static void test_document_order(void) {
         ASSERT_INT("... reported against its own line", rec.line_no, 2);
     }
 
-    /* A phase that does not occur must not change what is legal: a scene with
-     * no declarations gets the same tolerated CAMERA -> FUNCS edge as one
-     * that has them, or adding a variable would change whether it loads. */
+    /* Omitting declarations does not make the obsolete CAMERA -> FUNCS shape
+     * legal: the camera still belongs inside the required frame. */
     static const char *const camera_first_no_decls[] = {
         "glTranslatef(0, 0, -4);   // @camera dist",
         "func0(x) {",
@@ -660,8 +672,86 @@ static void test_document_order(void) {
         "glClear(GL_COLOR_BUFFER_BIT);",
         NULL
     };
-    ASSERT_INT("no declarations does not forbid CAMERA -> FUNCS",
-               check_order(camera_first_no_decls).count, 0);
+    {
+        OrderRecord rec = check_order(camera_first_no_decls);
+        ASSERT_INT("no declarations still rejects CAMERA -> FUNCS",
+                   rec.count, 1);
+        ASSERT_INT("... with the FUNC_LATE rule",
+                   (int)rec.rule, (int)REPL_DOC_ORDER_FUNC_LATE);
+    }
+
+    static const char *const missing_display[] = {
+        "func0() {",
+        "}",
+        "glClear(GL_COLOR_BUFFER_BIT);",
+        NULL
+    };
+    {
+        OrderRecord rec = check_order(missing_display);
+        ASSERT_INT("a function-bearing scene requires display", rec.count, 1);
+        ASSERT_INT("... with the DISPLAY_REQUIRED rule",
+                   (int)rec.rule, (int)REPL_DOC_ORDER_DISPLAY_REQUIRED);
+    }
+
+    static const char *const unexpected_display[] = {
+        "display() {",
+        "glClear(GL_COLOR_BUFFER_BIT);",
+        "}",
+        NULL
+    };
+    {
+        OrderRecord rec = check_order(unexpected_display);
+        ASSERT_TRUE("display without functions is rejected", rec.count > 0);
+        ASSERT_INT("... with the DISPLAY_UNEXPECTED rule",
+                   (int)rec.rule, (int)REPL_DOC_ORDER_DISPLAY_UNEXPECTED);
+    }
+
+    static const char *const decl_inside_display[] = {
+        "func0() {",
+        "}",
+        "display() {",
+        "static float too_late;",
+        "}",
+        NULL
+    };
+    {
+        OrderRecord rec = check_order(decl_inside_display);
+        ASSERT_INT("a file-scope variable cannot live inside display",
+                   rec.count, 1);
+        ASSERT_INT("... with the DECL_LATE rule",
+                   (int)rec.rule, (int)REPL_DOC_ORDER_DECL_LATE);
+    }
+
+    static const char *const unclosed_display[] = {
+        "func0() {",
+        "}",
+        "display() {",
+        "glClear(GL_COLOR_BUFFER_BIT);",
+        NULL
+    };
+    {
+        OrderRecord rec = check_order(unclosed_display);
+        ASSERT_INT("an unclosed display frame is rejected", rec.count, 1);
+        ASSERT_INT("... with the DISPLAY_UNCLOSED rule",
+                   (int)rec.rule, (int)REPL_DOC_ORDER_DISPLAY_UNCLOSED);
+    }
+
+    static const char *const content_after_display[] = {
+        "func0() {",
+        "}",
+        "display() {",
+        "glClear(GL_COLOR_BUFFER_BIT);",
+        "}",
+        "func0();",
+        NULL
+    };
+    {
+        OrderRecord rec = check_order(content_after_display);
+        ASSERT_INT("content after display is rejected", rec.count, 1);
+        ASSERT_INT("... with the CONTENT_AFTER_DISPLAY rule",
+                   (int)rec.rule,
+                   (int)REPL_DOC_ORDER_CONTENT_AFTER_DISPLAY);
+    }
 
     /* A compound literal contains a brace and is emphatically not a
      * definition. */

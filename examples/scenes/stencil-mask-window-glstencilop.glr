@@ -26,6 +26,7 @@ maskWindow() {
     glEnd();
   glPopMatrix();
 }
+display() {
 glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
 glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -93,3 +94,4 @@ glEnable(GL_DEPTH_TEST);
 //     angles; then GL_EQUAL, 2 in pass 2 keeps only the overlap.
 //   - drop glStencilMask(0) from pass 2 and watch the teapot chew
 //     through its own mask on the next frame.
+}

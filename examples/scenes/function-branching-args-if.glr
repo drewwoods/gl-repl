@@ -25,6 +25,7 @@ shape(scale, phase) {
     glEnd();
   }
 }
+display() {
 glTranslatef(0.0000f, 0.0000f, -4.0000f);   // @camera dist
 glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -49,3 +50,4 @@ glPushMatrix();
   glTranslatef(2.2, 0, 0);
   shape(0.65, -t*0.8);
 glPopMatrix();
+}

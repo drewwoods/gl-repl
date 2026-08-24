@@ -57,6 +57,7 @@ func0(x, y, z) {
   func1(a, b, z * 1.1f);
   glPopMatrix();
 }
+display() {
 
 glTranslatef(0.0f, 0.0f, -10.00f);   // @camera dist
 glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
@@ -75,4 +76,5 @@ for(u, -2, 3) {
     func0(u, sin(t + u * v) * 0.5f, v);
     glPopMatrix();
   }
+}
 }

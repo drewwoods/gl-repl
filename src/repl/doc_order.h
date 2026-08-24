@@ -7,21 +7,15 @@
  *
  *     1 DECLS    `static float ...;` / `float ...;` at top level
  *     2 FUNCS    funcN(...) { ... } and named function definitions
- *     3 CAMERA   `@camera`-tagged transforms
- *     4 BODY     everything else the user wrote
+ *                 then `display() {` when any function exists
+ *     3 CAMERA   `@camera`-tagged transforms inside display()
+ *     4 BODY     everything else the user wrote inside display()
  *
  * This is the exported C's own order - file-scope globals, then functions,
  * then the camera at the top of display() - so the two halves of one format
  * cannot disagree about line placement. It is a phase machine rather than a
  * list of forbidden pairs: a monotonic counter decides every case by
  * construction instead of inviting an argument about each one.
- *
- * One tolerated edge: CAMERA may be entered straight from DECLS, and FUNCS
- * may then follow it, because the `@camera` tag makes the placement
- * unambiguous and some layouts read better with the camera near the top.
- * "Straight from DECLS" includes a file with *no* declarations: a phase that
- * does not occur must not change what is legal, or adding one variable to a
- * scene would change whether its layout is accepted.
  *
  * **The phase machine runs on `.glr` only.** An exported `.c` is generated
  * output whose layout the exporter fixes, and that layout does not satisfy
@@ -55,7 +49,11 @@ typedef enum {
     REPL_DOC_ORDER_OK = 0,
     REPL_DOC_ORDER_DECL_LATE,     /* declaration after functions/camera/body */
     REPL_DOC_ORDER_FUNC_LATE,     /* function definition after body code */
-    REPL_DOC_ORDER_CAMERA_LATE    /* camera row after body code */
+    REPL_DOC_ORDER_CAMERA_LATE,   /* camera row after body code */
+    REPL_DOC_ORDER_DISPLAY_REQUIRED,
+    REPL_DOC_ORDER_DISPLAY_UNEXPECTED,
+    REPL_DOC_ORDER_DISPLAY_UNCLOSED,
+    REPL_DOC_ORDER_CONTENT_AFTER_DISPLAY
 } ReplDocOrderRule;
 
 /* An ordering violation is a relationship between two places, so the report
@@ -71,8 +69,13 @@ typedef struct {
     int              phase_line[5];      /* line that established each phase */
     int              depth;              /* raw brace depth */
     int              in_block_comment;
-    int              camera_from_decls;  /* the tolerated DECLS->CAMERA edge */
     int              pending_line;       /* split-brace header awaiting its { */
+    int              saw_function;
+    int              display_open_line;
+    int              display_close_line;
+    int              in_display;
+    int              display_required_reported;
+    int              last_line_was_wrapper;
     int              violations;
     ReplDocOrderSink sink;
     void            *sink_userdata;
@@ -90,6 +93,17 @@ void repl_doc_order_set_sink(ReplDocOrder *ord, ReplDocOrderSink sink,
  * produces the whole worklist instead of one error per reload. */
 int repl_doc_order_offer(ReplDocOrder *ord, const char *line, int line_no,
                          int is_camera_row);
+
+/* Finish the stream-level checks that cannot be decided until EOF: a
+ * function-only document still needs an explicit empty display frame, and an
+ * opened frame must close. Returns 1 when the complete document is valid. */
+int repl_doc_order_finish(ReplDocOrder *ord, int eof_line_no);
+
+/* Shared lexical recognition for loaders. Wrapper rows are format syntax,
+ * not editor commands; callers offer them to the order checker and camera
+ * reader, then skip their ordinary compile/feed path. */
+int repl_doc_order_line_is_display_open(const char *line);
+int repl_doc_order_last_line_was_wrapper(const ReplDocOrder *ord);
 
 const char *repl_doc_order_rule_text(ReplDocOrderRule rule);
 

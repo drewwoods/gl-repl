@@ -180,6 +180,7 @@ renderLattice(y11, y12, y21, y22) {
     glutSolidSphere(0.12, 12, 10);
   glPopMatrix();
 }
+display() {
 
 // Camera pose
 glTranslatef(0.0000f, 0.0000f, -7.3449f);   // @camera dist
@@ -218,3 +219,4 @@ glMaterialf(GL_BACK, GL_SHININESS, 32);
 // Render surface patch and control lattice
 renderPatch(y11, y12, y21, y22, u_steps, v_steps);
 renderLattice(y11, y12, y21, y22);
+}

@@ -31,6 +31,7 @@ layer(base) {
     glutSolidSphere(0.25f, 10, 10);
   glPopMatrix();
 }
+display() {
 
 glTranslatef(0.0f, 0.0f, -10.00f);   // @camera dist
 glRotatef(18.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
@@ -75,3 +76,4 @@ glPushMatrix();
   glColor3f(0.95f, 0.25f, 1.00f);
   glutSolidCube(0.2f * x);
 glPopMatrix();
+}

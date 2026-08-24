@@ -1,10 +1,8 @@
-// @cfg vertex_outlines = 0
-// @cfg vertex_points = 0
-// @cfg light_indicators = 0
-// @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_OFF
-// @cfg light_theme = LIGHT_THEME_SOLAR
 // @cfg backdrop = RENDER3D_BACKDROP_STARS
+// @cfg light_theme = LIGHT_THEME_SOLAR
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
 static float px, py, pz; // planet position - the caller hangs the body and its label off it
 static float orbitR; // log-compressed orbit radius, shared by the draw funcs
 static float ASTEROIDS = 140; // @tune
@@ -16,8 +14,8 @@ static float ASTEROIDS = 140; // @tune
 // planetKepler() the scope room to name every intermediate below.
 static float EARTH_R = 0.17; // @tune
 static float EARTH_RATE = 0.85; // @tune
-static float ORB_BASE = 0.00; // @tune
-static float ORB_SCALE = 10.00; // @tune
+static float ORB_BASE = 0; // @tune
+static float ORB_SCALE = 10; // @tune
 static float decYr, yr, leap, doy, mon, day; // calendar readout scratch
 
 orbitRings(Drel, node, incl) {
@@ -69,7 +67,7 @@ planet(Drel, Yrel, phase, node, incl) {
   cIncl = cos(incl);
   sIncl = sin(incl);
   ang = phase + t*EARTH_RATE/Yrel; // heliocentric longitude right now
-  u = ang - node;                  // ...measured from the ascending node
+  u = ang - node; // ...measured from the ascending node
   xo = orbitR*cos(u);
   yo = orbitR*sin(u);
   px = xo*cNode - yo*sNode*cIncl;
@@ -165,11 +163,12 @@ asteroidBelt(count) {
     }
   glEnd();
 }
+display() {
+glTranslatef(0.0000f, 0.0000f, -19.0000f);   // @camera dist
+glRotatef(30.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
 
-glTranslatef(0.0f, 0.0f, -19.0f);   // @camera dist
-glRotatef(30.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 glClearColor(0.02, 0.02, 0.05, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 glEnable(GL_NORMALIZE);
@@ -364,10 +363,10 @@ label("Neptune");
 // (leap years included via the 4/100/400 rule), so the readout tracks a true
 // calendar to the day. The if/else-if chain peels off whole months; flatten
 // evaluates it each frame, emitting only the live branch. t=0 is 2000-1-1.
-decYr = 2000 + t*EARTH_RATE/TAU;         // decimal year
-yr = floor(decYr);                       // integer year
+decYr = 2000 + t*EARTH_RATE/TAU; // decimal year
+yr = floor(decYr); // integer year
 leap = (fmod(yr, 4) == 0 && fmod(yr, 100) != 0) || fmod(yr, 400) == 0; // 1 in leap years
-doy = floor((decYr - yr)*(365 + leap));  // day of year, 0-based
+doy = floor((decYr - yr)*(365 + leap)); // day of year, 0-based
 if(doy < 31) {
   mon = 1;
   day = doy + 1;
@@ -412,7 +411,7 @@ label("Date %f-%f-%f", yr, mon, day);
 // Asteroid belt (see asteroidBelt() above)
 glDisable(GL_LIGHTING);
 //glEnable(GL_POINT_SMOOTH);
-glPointSize(8.0);
+glPointSize(8);
 asteroidBelt(ASTEROIDS);
 
 // faint orbit rings (unlit lines), one per planet at its inclination
@@ -453,6 +452,7 @@ glDisable(GL_BLEND);
 glColor4f(1, 0.85, 0.3, 0.5);
 glutSolidSphere(0.45, 24, 24);
 glDisable(GL_DEPTH_TEST);
-glColor3f(1.0, 0.72, 0.0);
+glColor3f(1, 0.72, 0);
 glRasterPos3f(0.62, 0.58, 0);
 label("Sun");
+}

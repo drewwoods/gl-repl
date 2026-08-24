@@ -1,12 +1,10 @@
-// @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
-// @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX
-// @cfg axes = AXES_THEME_OFF
-// @cfg vertex_outlines = 0
-// @cfg vertex_points = 0
-// @cfg light_indicators = 0
 // @cfg grid = GRID_THEME_AURORA
 // @cfg grid_extent = GRID_EXTENT_MID
 // @cfg backdrop = RENDER3D_BACKDROP_AURORA
+// @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
+// @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
 // @cfg variable_panel = 0
 static float dd, blink, ink, ph, slit; // expanding-pulse distance; beacon blink; brightness multiplier on the base ink color; shutter-cycle phase; slit half-angle
 static float dishAz; // dish azimuth, degrees -- see the note below
@@ -49,11 +47,12 @@ drift(x, z, s) {
     glutSolidSphere(1, 12, 8);
   glPopMatrix();
 }
+display() {
+glTranslatef(0.0000f, 0.0000f, -10.5000f);   // @camera dist
+glRotatef(13.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(-18.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, -1.3500f, 0.0000f);   // @camera pan
 
-glTranslatef(0.0f, 0.0f, -10.5f);   // @camera dist
-glRotatef(13.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(-18.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, -1.35f, 0.0f);   // @camera pan
 // The dish is posed twice: once in the lit opaque pass and again in the
 // unlit glow pass that hangs the feed struts and pulses off it. Both read
 // dishAz so the two frames cannot drift apart -- the same reason the
@@ -64,13 +63,13 @@ dishAz = 16*sin(0.22*t) - 12;
 // a sphere is ONE flat command however finely tessellated, so the whole
 // station renders in a few hundred flat commands. TWO_SIDE lighting
 // (below) keeps the exposed sphere interiors lit, not black.
-glClearColor(0.05, 0.06, 0.08, 1.0);
+glClearColor(0.05, 0.06, 0.08, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 glEnable(GL_COLOR_MATERIAL);
 glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
 glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
@@ -106,7 +105,7 @@ glPushMatrix();
   ink = 6;
   glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
   drum(1.05, 0, 1.0, 24);
-  glTranslatef(0, 1.0, 0);
+  glTranslatef(0, 1, 0);
   glRotatef(-172, 0, 1, 0);
   ink = 8;
   glColor3f(0.05*ink, 0.06*ink, 0.08*ink);
@@ -189,24 +188,24 @@ glDepthMask(GL_FALSE);
 // painting a flat panel over it, and a wider/dimmer halo behind the bright
 // core sells "glow" the same way the beacon's two-point halo does below.
 glPushMatrix();
-  glTranslatef(1.8, 1.0, 0.5);
+  glTranslatef(1.8, 1, 0.5);
   glRotatef(-172, 0, 1, 0);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE);
   glBegin(GL_QUADS);
     glColor4f(1.0, 0.85, 0.15, 0.35*slit/0.31);
-    glVertex3f(-0.40, 0.00, -0.56);
-    glVertex3f(0.40, 0.00, -0.56);
+    glVertex3f(-0.4, 0, -0.56);
+    glVertex3f(0.4, 0, -0.56);
     glColor4f(1.0, 0.85, 0.15, 0.08*slit/0.31);
     glVertex3f(0.24, 0.95, -0.32);
     glVertex3f(-0.24, 0.95, -0.32);
   glEnd();
   glBegin(GL_QUADS);
     glColor4f(1.0, 0.85, 0.15, 0.60*slit/0.31);
-    glVertex3f(-0.20, 0.02, -0.45);
-    glVertex3f(0.20, 0.02, -0.45);
+    glVertex3f(-0.2, 0.02, -0.45);
+    glVertex3f(0.2, 0.02, -0.45);
     glColor4f(1.0, 0.85, 0.15, 0.18*slit/0.31);
-    glVertex3f(0.12, 0.90, -0.30);
-    glVertex3f(-0.12, 0.90, -0.30);
+    glVertex3f(0.12, 0.9, -0.3);
+    glVertex3f(-0.12, 0.9, -0.3);
   glEnd();
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 glPopMatrix();
@@ -215,14 +214,14 @@ glPopMatrix();
 glPushMatrix();
   glTranslatef(1.8, 0, 0.5);
   glBegin(GL_QUADS);
-    glColor4f(1.0, 0.85, 0.15, 0.85);
+    glColor4f(1, 0.85, 0.15, 0.85);
     glVertex3f(-0.42, 0.38, 0.99);
     glVertex3f(-0.18, 0.38, 1.04);
     glVertex3f(-0.18, 0.62, 1.04);
     glVertex3f(-0.42, 0.62, 0.99);
     glVertex3f(0.16, 0.38, 1.04);
-    glVertex3f(0.40, 0.38, 0.99);
-    glVertex3f(0.40, 0.62, 0.99);
+    glVertex3f(0.4, 0.38, 0.99);
+    glVertex3f(0.4, 0.62, 0.99);
     glVertex3f(0.16, 0.62, 1.04);
   glEnd();
 glPopMatrix();
@@ -278,13 +277,13 @@ glPushMatrix();
   // aurora light catching the dish rim
   glBegin(GL_LINE_LOOP);
     for(j, 0, 32) {
-      glColor4f(0.10, 0.95, 0.85, 0.55);
+      glColor4f(0.1, 0.95, 0.85, 0.55);
       glVertex3f(1.25*cos(j*TAU/32), 0.38, 1.25*sin(j*TAU/32));
     }
   glEnd();
   glPointSize(6);
   glBegin(GL_POINTS);
-    glColor4f(0.10, 0.95, 0.85, 0.9);
+    glColor4f(0.1, 0.95, 0.85, 0.9);
     glVertex3f(0, 0.9, 0);
   glEnd();
   for(i, 0, 4) {
@@ -303,3 +302,4 @@ glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 glDepthMask(GL_TRUE);
 glDisable(GL_BLEND);
 glEnable(GL_LIGHTING);
+}

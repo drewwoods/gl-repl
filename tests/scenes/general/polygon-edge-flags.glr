@@ -84,6 +84,7 @@ drawBoundaryStar(z_apex) {
     }
   glEnd();
 }
+display() {
 
 glTranslatef(0.0f, 0.0f, -8.50f);   // @camera dist
 glRotatef(22.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
@@ -143,3 +144,4 @@ glPopMatrix();
 glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 glLineWidth(1.0);
 glEdgeFlag(GL_TRUE);
+}

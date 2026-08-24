@@ -10,6 +10,7 @@ triangle() {
     glVertex3f(0.7, -0.4, 0);
   glEnd();
 }
+display() {
 glTranslatef(0.0000f, 0.0000f, -3.0000f);   // @camera dist
 glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -29,3 +30,4 @@ triangle();
 glTranslatef(-4, 0, 0);
 glColor3f(0.55, 0.3, 1);
 triangle();
+}

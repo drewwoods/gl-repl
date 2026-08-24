@@ -48,6 +48,7 @@ sticker(nx, ny, nz, cr, cg, cb) {
     glVertex3f(nx * 0.48 - ux * 0.36 + vx * 0.36, ny * 0.48 - uy * 0.36 + vy * 0.36, nz * 0.48 - uz * 0.36 + vz * 0.36);
   glEnd();
 }
+display() {
 glTranslatef(0.0000f, 0.0000f, -7.2222f);   // @camera dist
 glRotatef(24.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(-32.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -155,3 +156,4 @@ glPushMatrix();
     }
   }
 glPopMatrix();
+}

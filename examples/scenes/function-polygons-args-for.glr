@@ -15,6 +15,7 @@ polygon(radius, sides, phase) {
     }
   glEnd();
 }
+display() {
 glTranslatef(0.0000f, 0.0000f, -4.0000f);   // @camera dist
 glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -38,3 +39,4 @@ glPushMatrix();
   glTranslatef(2.4, 0, 0);
   polygon(0.9, 10, t*0.15);
 glPopMatrix();
+}

@@ -23,6 +23,7 @@ drawDead(x, y, s) {
     glutSolidSphere(s, 12, 12);
   glPopMatrix();
 }
+display() {
 
 glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
 glRotatef(16.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
@@ -90,4 +91,5 @@ for(i, -2, 3) {
     }
 
   glPopMatrix();
+}
 }

@@ -270,6 +270,7 @@ volume() {
     }
   glPopMatrix();
 }
+display() {
 
 glTranslatef(0, 0, -16); // @camera dist
 glRotatef(14, 1, 0, 0); // @camera rx
@@ -367,3 +368,4 @@ glPushMatrix();
   glTranslatef(lx, ly, lz);
   glutSolidSphere(0.13, 12, 10);
 glPopMatrix();
+}

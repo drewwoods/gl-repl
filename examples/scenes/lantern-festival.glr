@@ -1,13 +1,10 @@
 // @cfg grid = GRID_THEME_OFF
-// @cfg axes = AXES_THEME_OFF
-// @cfg backdrop = RENDER3D_BACKDROP_OFF
 // @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
 // @cfg vertex_points = 0
 // @cfg vertex_outlines = 0
-// @cfg variable_panel = 1
-static float bright = 1.0;  // @tune @config overall lantern intensity
-static float spread = 12;   // @tune horizontal scatter of the flock and its glints
-static float rise = 0.55;   // @tune @config ascent speed
+static float bright = 1; // @tune @config overall lantern intensity
+static float spread = 12; // @tune horizontal scatter of the flock and its glints
+static float rise = 0.55; // @tune @config ascent speed
 static float lanterns = 20; // @tune @config number of lanterns in the flock
 
 // Dusk gradient backdrop: warm afterglow at the horizon, ink at zenith.
@@ -150,11 +147,12 @@ launch(i, mirror) {
     lantern(xpos, ypos + 0.35, zpos, sz, g);
   }
 }
+display() {
+glTranslatef(0.0000f, 0.0000f, -24.0000f);   // @camera dist
+glRotatef(6.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, -5.0000f, 0.0000f);   // @camera pan
 
-glTranslatef(0.0f, 0.0f, -24.0f);   // @camera dist
-glRotatef(6.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, -5.0f, 0.0f);   // @camera pan
 // Keep config sensible
 rise = clamp(rise, 0.1, 2.0);
 bright = clamp(bright, 0.1, 10.0);
@@ -195,3 +193,4 @@ for(i, 0, lanterns) {
   launch(i, 0);
 }
 glDepthMask(GL_TRUE);
+}

@@ -57,6 +57,7 @@ beacon(x) {
   y = sin(t + x) * 0.5f;
   leaf(x, y + 2.0f, 0.0f, 0.3f);
 }
+display() {
 
 glTranslatef(0.0f, 0.0f, -11.00f);   // @camera dist
 glRotatef(28.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
@@ -71,3 +72,4 @@ glEnable(GL_DEPTH_TEST);
 hub(1.2f);
 beacon(-2.5f);
 beacon(2.5f);
+}

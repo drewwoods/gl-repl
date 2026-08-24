@@ -273,6 +273,7 @@ scene() {
   glRasterPos3f(3.02, 1.66, 0);
   label("pulse");
 }
+display() {
 
 glTranslatef(0.0f, 0.0f, -6.10f);   // @camera dist
 glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
@@ -289,3 +290,4 @@ glEnable(GL_POINT_SMOOTH);
 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 glShadeModel(GL_SMOOTH);
 scene();
+}

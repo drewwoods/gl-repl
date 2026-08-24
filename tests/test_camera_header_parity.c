@@ -147,6 +147,68 @@ static void parity_free_lines(char **lines) {
     free(lines);
 }
 
+static int parity_files_equal(const char *a_path, const char *b_path) {
+    FILE *a = fopen(a_path, "rb");
+    FILE *b = fopen(b_path, "rb");
+    unsigned char a_buf[4096];
+    unsigned char b_buf[4096];
+    int equal = 1;
+
+    if (!a || !b) {
+        if (a) fclose(a);
+        if (b) fclose(b);
+        return 0;
+    }
+    for (;;) {
+        size_t an = fread(a_buf, 1, sizeof(a_buf), a);
+        size_t bn = fread(b_buf, 1, sizeof(b_buf), b);
+        if (an != bn || memcmp(a_buf, b_buf, an) != 0) {
+            equal = 0;
+            break;
+        }
+        if (an < sizeof(a_buf))
+            break;
+    }
+    fclose(a);
+    fclose(b);
+    return equal;
+}
+
+static int parity_camera_is_inside_display(const char *path) {
+    FILE *f = fopen(path, "rb");
+    char *text;
+    long size;
+    const char *display;
+    const char *camera;
+    const char *close;
+    int ok = 0;
+
+    if (!f || fseek(f, 0, SEEK_END) != 0) {
+        if (f) fclose(f);
+        return 0;
+    }
+    size = ftell(f);
+    if (size < 0 || fseek(f, 0, SEEK_SET) != 0) {
+        fclose(f);
+        return 0;
+    }
+    text = (char *)malloc((size_t)size + 1);
+    if (!text) {
+        fclose(f);
+        return 0;
+    }
+    if (fread(text, 1, (size_t)size, f) == (size_t)size) {
+        text[size] = '\0';
+        display = strstr(text, "display() {");
+        camera = display ? strstr(display, "@camera") : NULL;
+        close = strrchr(text, '}');
+        ok = display && camera && close && display < camera && camera < close;
+    }
+    free(text);
+    fclose(f);
+    return ok;
+}
+
 static int parity_diags_equal(const ReplCameraDiag *a, int an, int a_overflow,
                               const ReplCameraDiag *b, int bn, int b_overflow) {
     int i;
@@ -266,8 +328,11 @@ static void parity_collect_diags(char *const *lines, ReplCameraDiag *out,
     int i;
 
     repl_camera_header_init(&hdr);
-    for (i = 0; lines && lines[i]; i++)
+    for (i = 0; lines && lines[i]; i++) {
+        if (repl_doc_order_line_is_display_open(lines[i]))
+            repl_camera_header_set_region(&hdr, REPL_CAMERA_REGION_DISPLAY);
         (void)repl_camera_header_offer(&hdr, lines[i], i + 1);
+    }
     memcpy(out, hdr.diags, sizeof(hdr.diags));
     *out_count    = hdr.diag_count;
     *out_overflow = hdr.diag_overflow;
@@ -315,6 +380,31 @@ static void parity_check_file(const char *path, const char *name) {
                          &g_file_diag_overflow);
 
     (void)parity_compare(name, as_file, as_catalog);
+
+    if (strncmp(path, "examples/scenes/", 16) == 0 &&
+        strstr(path, ".glr") != NULL) {
+        const char *roundtrip = "/tmp/test_camera_parity_roundtrip.glr";
+        snprintf(label, sizeof(label), "%s: .glr re-save succeeds", name);
+        TEST_ASSERT_TRUE(&g_harness, label,
+                         repl_export_save_glr(roundtrip,
+                                              source_document_view()) != 0);
+        snprintf(label, sizeof(label), "%s: .glr re-save is byte-stable", name);
+        TEST_ASSERT_TRUE(&g_harness, label,
+                         parity_files_equal(path, roundtrip));
+        {
+            int has_func = 0;
+            for (int i = 0; i < as_file->row_count; i++)
+                if (as_file->types[i] == CMD_FUNC_DEF)
+                    has_func = 1;
+            if (has_func) {
+                snprintf(label, sizeof(label),
+                         "%s: camera is inside explicit display", name);
+                TEST_ASSERT_TRUE(&g_harness, label,
+                                 parity_camera_is_inside_display(roundtrip));
+            }
+        }
+        remove(roundtrip);
+    }
 
     snprintf(label, sizeof(label), "%s: diagnostics agree", name);
     TEST_ASSERT_TRUE(&g_harness, label,

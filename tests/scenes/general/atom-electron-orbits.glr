@@ -51,6 +51,7 @@ drawElectron(tiltX, tiltZ, speed, phase, er, eg, eb) {
     glMaterialfv(GL_FRONT, GL_EMISSION, (GLfloat[]){0, 0, 0, 1});
   glPopMatrix();
 }
+display() {
 glTranslatef(0.0000f, 0.0000f, -12.0000f);   // @camera dist
 glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -90,3 +91,4 @@ drawElectron(60.0, 30.0, 2.3, 0.5, 0.2, 0.9, 0.7);
 drawRing(-55.0, -40.0, 0.7, 0.25, 0.8);
 drawElectron(-55.0, -40.0, 1.5, 1.2, 0.8, 0.3, 0.9);
 drawElectron(-55.0, -40.0, 1.5, 1.2 + PI, 0.8, 0.3, 0.9);
+}

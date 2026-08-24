@@ -66,6 +66,7 @@ packPose(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11) {
     drawBody(s0, s1, s2, s3, s4, s5, s6);
   }
 }
+display() {
 
 glTranslatef(0.0f, 0.0f, -10.00f);   // @camera dist
 glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
@@ -79,3 +80,4 @@ glEnable(GL_DEPTH_TEST);
 
 packPose(1.0f, 2.0f, 0.5f, -0.5f, 1.2f, 0.3f, -1.0f, 0.8f, 0.2f, 1.5f, -0.3f, 0.9f);
 packPose(-1.0f, 0.5f, 1.5f, 0.2f, -0.8f, 1.1f, 0.4f, -0.6f, 1.3f, -0.2f, 0.7f, 0.1f);
+}

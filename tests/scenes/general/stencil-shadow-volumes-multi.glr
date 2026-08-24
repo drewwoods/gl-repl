@@ -313,6 +313,7 @@ hulls() {
   volume(2.0, 0.6, 0.7*scale, sB);
   volume(-0.1, 2.3, 0.55*scale, sC);
 }
+display() {
 
 glTranslatef(0, 0, -16); // @camera dist
 glRotatef(7, 1, 0, 0); // @camera rx
@@ -402,3 +403,4 @@ glPushMatrix();
   glTranslatef(lx, ly, lz);
   glutSolidSphere(0.13, 12, 10);
 glPopMatrix();
+}

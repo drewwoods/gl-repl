@@ -209,6 +209,9 @@ static int load_example_lines(const char *const *lines,
     repl_doc_order_set_sink(&order, example_order_diag, (void *)name);
 
     for (line_idx = 0; lines && lines[line_idx]; line_idx++) {
+        if (repl_doc_order_line_is_display_open(lines[line_idx]))
+            repl_camera_header_set_region(&camera,
+                                          REPL_CAMERA_REGION_DISPLAY);
         ReplCameraLineResult result =
             repl_camera_header_offer(&camera, lines[line_idx], line_idx + 1);
 
@@ -224,6 +227,8 @@ static int load_example_lines(const char *const *lines,
             continue;                     /* metadata, already consumed */
         if (result != REPL_CAMERA_LINE_NOT_CAMERA)
             continue;                     /* camera row: consumed either way */
+        if (repl_doc_order_last_line_was_wrapper(&order))
+            continue;                     /* .glr display frame syntax */
         /* Everything else is document content, blank rows included. The
          * loader used to eat the blank run between the @cfg header and the
          * body, which the file path keeps - so the same scene had one more
@@ -252,6 +257,8 @@ static int load_example_lines(const char *const *lines,
         }
     }
 
+    if (!repl_doc_order_finish(&order, line_idx + 1))
+        order_failed = 1;
     if (order_failed) {
         reset_example_load_state(example_idx);
         repl_dispatch_input_reset();

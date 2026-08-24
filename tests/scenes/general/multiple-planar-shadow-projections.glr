@@ -104,6 +104,7 @@ shadowMask() {
     cube();
   glPopMatrix();
 }
+display() {
 
 glTranslatef(0, 0, -12.5); // @camera dist
 glRotatef(22, 1, 0, 0); // @camera rx
@@ -188,3 +189,4 @@ glPushMatrix();
   glTranslatef(lx, ly, lz);
   glutSolidSphere(0.14, 12, 10);
 glPopMatrix();
+}

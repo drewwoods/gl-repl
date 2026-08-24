@@ -1,11 +1,9 @@
-// @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
-// @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX
-// @cfg axes = AXES_THEME_OFF
-// @cfg vertex_outlines = 0
-// @cfg vertex_points = 0
-// @cfg light_indicators = 0
 // @cfg grid = GRID_THEME_STARCHART
 // @cfg backdrop = RENDER3D_BACKDROP_NEBULA
+// @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
+// @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
 static float c, a; // color/brightness mix in [0,1] (planet + ring bands); comet orbit angle
 
 // ===== Ringed gas giant under nebula skies =====
@@ -66,17 +64,18 @@ ring(inner, outer, fade) {
     }
   glEnd();
 }
+display() {
+glTranslatef(0.0000f, 0.0000f, -12.5000f);   // @camera dist
+glRotatef(16.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(-30.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, -1.2000f, 0.0000f);   // @camera pan
 
-glTranslatef(0.0f, 0.0f, -12.5f);   // @camera dist
-glRotatef(16.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(-30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, -1.20f, 0.0f);   // @camera pan
-glClearColor(0.04, 0.04, 0.1, 1.0);
+glClearColor(0.04, 0.04, 0.1, 1);
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 glEnable(GL_COLOR_MATERIAL);
 glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
+glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
 glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 glEnable(GL_DEPTH_TEST);
 glEnable(GL_LIGHTING);
@@ -95,7 +94,7 @@ glPushMatrix();
 
   glColor3f(0.78, 0.72, 0.64);
   moon(3.9, 0.22, 34, 9);
-  glColor3f(0.55, 0.66, 0.80);
+  glColor3f(0.55, 0.66, 0.8);
   moon(5.1, 0.16, -21, -14);
 
   // translucent passes last: rings over the planet, then the comet
@@ -119,7 +118,7 @@ glPushMatrix();
   glEnd();
   glPointSize(6);
   glBegin(GL_POINTS);
-    glColor4f(0.85, 0.97, 1.0, 0.95);
+    glColor4f(0.85, 0.97, 1, 0.95);
     glVertex3f(5.6*cos(0.7*t), 1.1*sin(1.4*t), 4.2*sin(0.7*t));
   glEnd();
 
@@ -127,3 +126,4 @@ glPushMatrix();
   glDepthMask(GL_TRUE);
   glDisable(GL_BLEND);
 glPopMatrix();
+}

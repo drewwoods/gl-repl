@@ -33,6 +33,7 @@ blade(seed, x0, z0, height, width, ang, ph, stiffness) {
     }
   glEnd();
 }
+display() {
 glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
 glRotatef(5.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(32.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -53,4 +54,5 @@ for(p, 0, bladeCount) {
   phase = rand(p, 5)*TAU;
   flex = 0.55 + rand(p, 6)*1.1;
   blade(p, x, z, h, w, angle, phase, flex);
+}
 }

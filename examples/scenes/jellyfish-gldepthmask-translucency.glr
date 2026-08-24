@@ -1,18 +1,15 @@
-// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
-// @cfg vertex_outlines = 0
-// @cfg vertex_points = 0
-// @cfg light_indicators = 0
-// @cfg normal_vectors = 0
 // @cfg grid = GRID_THEME_OFF
-// @cfg axes = AXES_THEME_OFF
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
 static float pulse, bellR, bellH; // breath phase; bell radius/height pulse in opposition
 static float ang, rad, topY; // frill scratch: segment angle, rim radius, rim height (tentacle() hangs off topY)
 static float sway; // rim/tentacle sway -- read both at top level (frill) and inside tentacle()
-static float segs = 26;      // bell azimuth segments
-static float rings = 9;      // bell latitude strips
+static float segs = 26; // bell azimuth segments
+static float rings = 9; // bell latitude strips
 static float tentacles = 15; // @tune
-static float tentLen = 2.4;  // @tune
-static float marineSnow = 110;  // @tune
+static float tentLen = 2.4; // @tune
+static float marineSnow = 110; // @tune
 
 // bell: latitude strips from crown to just past the equator (it curls
 // under). Everything except the alpha ripple depends only on the latitude
@@ -68,11 +65,12 @@ tentacle(angAt, attach, len, phase, amp, cr, cg, cb) {
     }
   glEnd();
 }
+display() {
+glTranslatef(0.0000f, 0.0000f, -7.5000f);   // @camera dist
+glRotatef(4.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0000f, 0.7000f, 0.0000f);   // @camera pan
 
-glTranslatef(0.0f, 0.0f, -7.50f);   // @camera dist
-glRotatef(4.00f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.700f, 0.0f);   // @camera pan
 // Everything glows: additive blend with depth WRITES off (reads stay on).
 // glDepthMask(GL_FALSE) is the classic translucency trick - without it the
 // bell's far side would z-fight its near side and the tentacles would
@@ -115,9 +113,9 @@ glBegin(GL_TRIANGLE_STRIP);
   for(j, 0, segs+1) {
     ang = j*TAU/segs;
     sway = -0.18 - 0.10*pulse + 0.10*sin(ang*9 + t*2.6);
-    glColor4f(0.45, 0.85, 1.0, 0.30);
+    glColor4f(0.45, 0.85, 1, 0.3);
     glVertex3f(rad*cos(ang), topY, rad*sin(ang));
-    glColor4f(0.45, 0.85, 1.0, 0.03);
+    glColor4f(0.45, 0.85, 1, 0.03);
     glVertex3f(rad*1.04*cos(ang), topY + sway, rad*1.04*sin(ang));
   }
 glEnd();
@@ -135,15 +133,16 @@ glLineWidth(1);
 // bioluminescent core: two stacked soft points
 glPointSize(30);
 glBegin(GL_POINTS);
-  glColor4f(1.0, 0.55, 0.75, 0.30);
+  glColor4f(1, 0.55, 0.75, 0.3);
   glVertex3f(0, bellH*0.3, 0);
 glEnd();
 glPointSize(13);
 glBegin(GL_POINTS);
-  glColor4f(1.0, 0.8, 0.9, 0.55);
+  glColor4f(1, 0.8, 0.9, 0.55);
   glVertex3f(0, bellH*0.32, 0);
 glEnd();
 
 // leave shared GL state the way we found it
 glDepthMask(GL_TRUE);
 glDisable(GL_BLEND);
+}

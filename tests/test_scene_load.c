@@ -805,9 +805,11 @@ static void test_row_map_records_feed_order_not_read_order(void) {
         "func0(s) {",
         "glVertex3f(s, 0, 0);",
         "}",
+        "display() {",
         "glBegin(GL_POINTS);",
         "func0(1);",
         "glEnd();",
+        "}",
         NULL
     };
 
@@ -938,9 +940,11 @@ static void test_cursor_hole_inside_a_staged_function(void) {
         "glVertex3f(s, 0, 0);",
         "// @cursor-hole 7",              /* row 3: inside the body */
         "}",
+        "display() {",
         "glBegin(GL_POINTS);",
         "func0(1);",
         "glEnd();",
+        "}",
         NULL
     };
 

@@ -76,10 +76,14 @@ static int lint_one_file(const char *path, FILE *out) {
         while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
             line[--len] = '\0';
         line_no++;
+        if (repl_doc_order_line_is_display_open(line))
+            repl_camera_header_set_region(&camera,
+                                          REPL_CAMERA_REGION_DISPLAY);
         result = repl_camera_header_offer(&camera, line, line_no);
         (void)repl_doc_order_offer(&order, line, line_no,
                                    result != REPL_CAMERA_LINE_NOT_CAMERA);
     }
+    (void)repl_doc_order_finish(&order, line_no + 1);
     fclose(f);
 
     /* No bridge is installed here, so finish() validates and diagnoses but

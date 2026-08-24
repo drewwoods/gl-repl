@@ -17,6 +17,7 @@ bezier(u) {
   x = pow(1-u, 2) * ax + 2 * (1-u)*u * bx + u*u * cx;
   y = pow(1-u, 2) * ay + 2 * (1-u)*u * by + u*u * cy;
 }
+display() {
 glTranslatef(0.0000f, 0.0000f, -3.5000f);   // @camera dist
 glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -79,3 +80,4 @@ glBegin(GL_LINES);
   glVertex2f(x_a, y_a);
   glVertex2f(x_b, y_b);
 glEnd();
+}

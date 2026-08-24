@@ -31,6 +31,7 @@ sponge(depth, size) {
     }
   }
 }
+display() {
 glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
 glRotatef(18.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -52,3 +53,4 @@ glEnable(GL_LIGHT2);
 glEnable(GL_LIGHT3);
 glRotatef(16*t, 0, 1, 0);
 sponge(depth, size);
+}

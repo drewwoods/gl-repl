@@ -63,6 +63,7 @@ limb(depth, len, rad, seed) {
     }
   }
 }
+display() {
 
 glTranslatef(0.0000f, 0.0000f, -10.0000f);   // @camera dist
 glRotatef(8.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
@@ -84,3 +85,4 @@ glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 18);
 
 glRotatef(sin(t*0.3)*4, 0, 0, 1);
 limb(depth, len, rad, randSeed);
+}

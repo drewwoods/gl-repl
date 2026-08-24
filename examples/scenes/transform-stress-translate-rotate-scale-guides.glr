@@ -10,6 +10,7 @@ tri() {
     glVertex3f(0, 0.4, 0);
   glEnd();
 }
+display() {
 glTranslatef(0.0000f, 0.0000f, -5.0000f);   // @camera dist
 glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -68,3 +69,4 @@ glPushMatrix();
   glRotatef(t*30, 0, 1, 0);
   tri();
 glPopMatrix();
+}
