@@ -2946,8 +2946,8 @@ int main() {
         ASSERT_TRUE("replay follow helper reports visible",
                     apply_code_panel_follow_for_test(&follow_doc_line,
                                                      &visible_lines));
-        ASSERT_INT("replay follow scrolls row above status bar",
-                   g_scroll, follow_doc_line - visible_lines + 1);
+        ASSERT_INT("replay follow scrolls row above status bar with scrolloff",
+                   g_scroll, follow_doc_line - visible_lines + 1 + GLR_CODE_PANEL_SCROLLOFF);
         ASSERT_TRUE("replay follow line after scroll",
                     follow_doc_line >= g_scroll &&
                     follow_doc_line < g_scroll + visible_lines);

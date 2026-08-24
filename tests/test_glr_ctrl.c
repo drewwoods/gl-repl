@@ -7891,6 +7891,29 @@ static void test_code_panel_scroll_clamping_and_follow(void) {
     ASSERT_TRUE("parked cursor is inside visible range",
                 follow_doc_line >= editor_scroll() &&
                 follow_doc_line < editor_scroll() + visible_lines);
+
+    /* 3. Scrolloff margin test: cursor maintains GLR_CODE_PANEL_SCROLLOFF (2) lines margin */
+    {
+        UiReplCodePanelLayout l;
+        memset(&l, 0, sizeof(l));
+        l.visible_lines = 10;
+        l.total_lines = 50;
+
+        /* Move cursor down past bottom margin (visible_lines - 1 - scrolloff = 7) */
+        editor_scroll_set(0);
+        editor_scroll_follow_cursor_set(1);
+        l.follow_doc_line = 8;
+        glr_ctrl_apply_code_panel_follow_scroll(&l);
+        /* follow_doc_line (8) - visible_lines (10) + 1 + scrolloff (2) = 1 */
+        ASSERT_INT("scrolloff scrolls down when past bottom margin", editor_scroll(), 1);
+
+        /* Move cursor up past top margin (scroll + scrolloff = 1 + 2 = 3) */
+        l.follow_doc_line = 2;
+        editor_scroll_follow_cursor_set(1);
+        glr_ctrl_apply_code_panel_follow_scroll(&l);
+        /* follow_doc_line (2) - scrolloff (2) = 0 */
+        ASSERT_INT("scrolloff scrolls up when above top margin", editor_scroll(), 0);
+    }
 }
 
 static void test_post_filter_key_cycling(void) {

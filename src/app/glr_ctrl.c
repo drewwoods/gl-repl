@@ -4533,10 +4533,16 @@ void glr_ctrl_apply_code_panel_follow_scroll(
         scroll->scroll = 0;
 
     if (scroll->scroll_follow_cursor) {
-        if (layout->follow_doc_line < scroll->scroll)
-            scroll->scroll = layout->follow_doc_line;
-        if (layout->follow_doc_line >= scroll->scroll + layout->visible_lines)
-            scroll->scroll = layout->follow_doc_line - layout->visible_lines + 1;
+        int scrolloff = GLR_CODE_PANEL_SCROLLOFF;
+        if (scrolloff < 0)
+            scrolloff = 0;
+        if (scrolloff * 2 >= layout->visible_lines)
+            scrolloff = (layout->visible_lines > 0) ? (layout->visible_lines - 1) / 2 : 0;
+
+        if (layout->follow_doc_line < scroll->scroll + scrolloff)
+            scroll->scroll = layout->follow_doc_line - scrolloff;
+        if (layout->follow_doc_line >= scroll->scroll + layout->visible_lines - scrolloff)
+            scroll->scroll = layout->follow_doc_line - layout->visible_lines + 1 + scrolloff;
         if (scroll->scroll > max_scroll)
             scroll->scroll = max_scroll;
         if (scroll->scroll < 0)

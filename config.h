@@ -297,6 +297,15 @@
 #define GLR_VIEW_CAMERA_TO_2D_DECAY 0.75f
 #endif
 
+/* Code panel cursor follow scroll offset (scrolloff).
+ *
+ * Minimal number of screen lines kept exposed above and below the cursor
+ * when the code panel follows cursor movements (like Vim's 'scrolloff').
+ * Defaults to 2; overridable at compile time via -DGLR_CODE_PANEL_SCROLLOFF=<N>. */
+#ifndef GLR_CODE_PANEL_SCROLLOFF
+#define GLR_CODE_PANEL_SCROLLOFF 2
+#endif
+
 /* Camera ease/zoom tuning. Target decay is the per-frame damping applied
  * by glr_camera_ease_to: at 0.93, each 16ms tick applies 7% of the
  * remaining target delta. Wheel zoom step injects this amount per notch;

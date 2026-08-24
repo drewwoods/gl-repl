@@ -249,11 +249,13 @@ never sees.
 
 ### Compile-time defines
 
-Neither is a Make variable: both are `-D` defines, passed through `CFLAGS`.
+These are `-D` defines passed through `CFLAGS` (or `CPPFLAGS`).
 
 | Define | Values / default | Effect |
 |---|---|---|
 | `UI_THEME_DEFAULT` | `0` green (default), `1` warm, `2` cyan, `3` amber, `4` violet, `5` mono. | Compile-time UI color scheme, e.g. `make gl-repl CFLAGS=-DUI_THEME_DEFAULT=1`. Defined in [`config.h`](../config.h), range-checked in [`src/ui/core/theme.h`](../src/ui/core/theme.h). See [ARCHITECTURE.md > UI Color Theming](ARCHITECTURE.md#ui-color-theming). |
+| `GLR_CODE_PANEL_SCROLLOFF` | Integer $\ge 0$, default `2`. | Minimum number of screen lines kept exposed above and below the cursor when the code panel follows cursor navigation (like Vim's `scrolloff`), e.g. `make gl-repl CFLAGS=-DGLR_CODE_PANEL_SCROLLOFF=4`. Defined in [`config.h`](../config.h). |
+| `GLR_VIEW_CAMERA_TO_2D_DECAY` | Float in $(0, 1)$, default `0.75f`. | Damping decay factor for camera easing during 3D &rarr; 2D view flattening, applied before projection blending begins, e.g. `make gl-repl CFLAGS=-DGLR_VIEW_CAMERA_TO_2D_DECAY=0.85f`. Defined in [`config.h`](../config.h). |
 | `GLR_AUDIO_NO_THREAD` | `1` drops the worker; `0` forces it on. Auto-enabled on Emscripten (no `-pthread`). | Runs the playlist lifecycle ops (file open/uninit, state save) synchronously, drained from `glr_audio_tick()` on the caller, e.g. `make gl-repl CFLAGS=-DGLR_AUDIO_NO_THREAD=1`. Contained entirely in [`src/app/glr_audio.c`](../src/app/glr_audio.c). |
 
 ## Headless rendering (OSMesa)
