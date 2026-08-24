@@ -2495,6 +2495,28 @@ int main(void) {
         ASSERT_TRUE("bare keyword is not called an expression",
                     strstr(g_status, "inside an expression") == NULL);
     }
+    /* Parenthesized C keywords take the same reserved-name fallback, but the
+     * argument-bearing branch must not outrank the keyword-specific one.
+     * Otherwise `while(1)` / `sizeof(x)` are reported as expressions to
+     * assign, even though neither spelling is a REPL value-producing call. */
+    {
+        static const char *const keyword_calls[] = {
+            "while(1);", "sizeof(x);"
+        };
+        for (size_t ki = 0;
+             ki < sizeof(keyword_calls) / sizeof(keyword_calls[0]); ki++) {
+            glr_ctrl_reset_all();
+            declare_test_vars();
+            GLCmd cmd;
+            memset(&cmd, 0, sizeof(cmd));
+            int ok = parse_for_test(keyword_calls[ki], &cmd);
+            ASSERT_TRUE("parenthesized keyword rejected", ok == 0);
+            assert_status_contains("parenthesized keyword names the reason",
+                                   "is a C keyword");
+            ASSERT_TRUE("parenthesized keyword is not called an expression",
+                        strstr(g_status, "expression, not a command") == NULL);
+        }
+    }
     {
         glr_ctrl_reset_all();
         GLCmd cmd;

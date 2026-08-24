@@ -3022,13 +3022,29 @@ GL4ES_RENDER_BENCH_BINS = \
 bench-web-gl4es: require-emcc ## Build browser gl4es rendering benchmarks and coverage oracles.
 	scripts/web-deps.sh
 	$(MAKE) WEB=1 $(GL4ES_POLYGON_LINE_BENCH_BINS) $(GL4ES_LINE_WIDTH_BENCH_BINS) $(GL4ES_LINE_WIDTH_CASES_BENCH_BINS) $(GL4ES_EDGE_FLAG_BENCH_BINS) $(GL4ES_RENDER_BENCH_BINS)
-	@echo "Serve with: python3 scripts/web-serve.py $(WEB_BINDIR)"
-	@echo "Immediate:   http://localhost:8000/gl4es-polygon-line-immediate.html"
-	@echo "Display list: http://localhost:8000/gl4es-polygon-line-display-list.html"
-	@echo "Line width:   http://localhost:8000/gl4es-line-width.html"
-	@echo "Cases:        http://localhost:8000/gl4es-line-width-cases.html"
-	@echo "Edge flags:   http://localhost:8000/gl4es-edge-flag.html (PASS/FAIL in document.title)"
-	@echo "Render suite: http://localhost:8000/gl4es-render.html (PASS/FAIL in document.title and window.gl4esRenderBench)"
+	@set -eu; \
+		server_log=$$(mktemp "$${TMPDIR:-/tmp}/gl-repl-web-serve.XXXXXX"); \
+		python3 -u scripts/web-serve.py "$(WEB_BINDIR)" >"$$server_log" 2>&1 & \
+		server_pid=$$!; \
+		trap 'kill "$$server_pid" 2>/dev/null || true; rm -f "$$server_log"' EXIT INT TERM; \
+		port=; attempt=0; \
+		while test -z "$$port" && test "$$attempt" -lt 100; do \
+			port=$$(sed -n 's/.*port \([0-9][0-9]*\).*/\1/p' "$$server_log" | head -1); \
+			if test -n "$$port"; then break; fi; \
+			if ! kill -0 "$$server_pid" 2>/dev/null; then \
+				cat "$$server_log" >&2; exit 1; \
+			fi; \
+			attempt=$$((attempt + 1)); sleep 0.05; \
+		done; \
+		test -n "$$port" || { cat "$$server_log" >&2; echo "web server did not report a port" >&2; exit 1; }; \
+		echo "Serving $(WEB_BINDIR) at http://127.0.0.1:$$port/ (Ctrl-C to stop)"; \
+		echo "Immediate:   http://127.0.0.1:$$port/gl4es-polygon-line-immediate.html"; \
+		echo "Display list: http://127.0.0.1:$$port/gl4es-polygon-line-display-list.html"; \
+		echo "Line width:   http://127.0.0.1:$$port/gl4es-line-width.html"; \
+		echo "Cases:        http://127.0.0.1:$$port/gl4es-line-width-cases.html"; \
+		echo "Edge flags:   http://127.0.0.1:$$port/gl4es-edge-flag.html (PASS/FAIL in document.title)"; \
+		echo "Render suite: http://127.0.0.1:$$port/gl4es-render.html (PASS/FAIL in document.title and window.gl4esRenderBench)"; \
+		wait "$$server_pid"
 
 ifeq ($(WEB),1)
 $(WEB_BINDIR)/gl4es-polygon-line-immediate.html: $(GL4ES_POLYGON_LINE_BENCH_SRC) \

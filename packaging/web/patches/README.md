@@ -338,7 +338,10 @@ the patch that owns the code:
 - `GL_LIGHTING_BIT` saves/restores the `GL_COLOR_MATERIAL` enable.
 - Accum: probe a blended draw before keeping RGBA16F; immediate `GL_ACCUM`
   forces `GL_FUNC_ADD`; `GL_ACCUM_CLEAR_VALUE`; `DeleteGLState` frees GL
-  objects; reduce-shader failure is sticky.
+  objects; reduce-shader failure is sticky. The `accum-probe-state` case in
+  `bench/bench_render.c` is the state-hygiene regression oracle: it queries
+  `GL_ACCUM_RED_BITS` while alpha blending is live, then checks that a
+  translucent draw still uses the caller's enable and factors.
 - `gl4es_probe_line_width_and_depth()` after a real context exists (first
   `glViewport` / offset draw / wide-line query), so Emscripten notest no
   longer leaves `depthbits` at the pre-window default forever.

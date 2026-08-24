@@ -229,6 +229,31 @@ static void draw_accumulation(void)
     glAccum(GL_RETURN, 0.5f);
 }
 
+/* Querying GL_ACCUM_RED_BITS is the first call that runs gl4es's lazy
+ * accumulation-format probe in the browser.  Keep a non-default blend state
+ * live across that query, then draw a translucent red quad over blue.  The
+ * probe must restore both the raw GLES enable and blend factors; otherwise
+ * this becomes an opaque red or additive magenta quad while gl4es's tracked
+ * state still claims SRC_ALPHA / ONE_MINUS_SRC_ALPHA is active. */
+static void draw_accum_probe_state(void)
+{
+    GLint accum_bits = 0;
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glGetIntegerv(GL_ACCUM_RED_BITS, &accum_bits);
+
+    glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glColor4f(1.0f, 0.0f, 0.0f, 0.5f);
+    glBegin(GL_QUADS);
+    glVertex2f(-0.75f, -0.75f);
+    glVertex2f(0.75f, -0.75f);
+    glVertex2f(0.75f, 0.75f);
+    glVertex2f(-0.75f, 0.75f);
+    glEnd();
+}
+
 static void draw_bitmap_perspective(void)
 {
     static const char text[] = "GL4ES RENDER";
@@ -291,6 +316,7 @@ static const RenderCase g_cases[] = {
     { "accumulation", draw_accumulation },
     { "bitmap-perspective", draw_bitmap_perspective },
     { "material-faces", draw_material_faces },
+    { "accum-probe-state", draw_accum_probe_state },
 };
 
 static int case_count(void)
@@ -370,6 +396,9 @@ static int oracle_for_case(int index, const RenderMetrics *m)
                    abs((int)m->center[0] - (int)m->center[2]) > 100;
     case 5: return m->coverage < 100;
     case 6: return material_oracle(m);
+    case 7: return m->center[0] < 64 || m->center[0] > 192 ||
+                   m->center[1] > 64 || m->center[2] < 64 ||
+                   m->center[2] > 192;
     default: return 1;
     }
 }
