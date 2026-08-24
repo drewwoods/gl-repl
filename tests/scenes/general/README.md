@@ -86,6 +86,7 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 | `stellar-plasma-solar-prominence.glr` | 3D, Particles, Blending, Lighting | Magnetic solar prominence plasma arches erupting from a stellar sphere with traveling flux knots and additive blending. |
 | `rubber-duck.glr` | 3D, Hierarchical, Lighting, Animation | Iconic yellow rubber duck and duckling floating in a rippling water pool with bubbles. |
 | `polygon-edge-flags.glr` | General, EdgeFlag, Polygons, 3D | Polygon edge flags (`glEdgeFlag`) suppressing internal triangulation chords to render crisp boundary outlines and solid overlays. |
+| `bubble-sort-multi-scratch.glr` | General, 2D, Polygons, ScratchArrays, Algorithms | Bubble sort across up to 3 scratch arrays (`A`, `B`, `C` for 16-48 elements) with configurable length and pass-limited loop compares. |
 
 
 ## How to Run & Validate
