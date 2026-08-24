@@ -419,7 +419,7 @@ with accumulated *frame* cost, not only the steady-state cost of one refresh.
 [`GLCmd`](../src/repl/command.h#L127) is a pure parse-result struct: `type`, `args[]`, validity / vars
 flags, and provenance fields (`src_cmd_idx`, `call_src_cmd_idx`, etc.).
 There is no `source[]` member. Per-line canonical text lives in
-`EditorBuffer.lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN]` inside **[`EditorState`](../src/editor/state.h#L200)**
+`EditorBuffer.lines[MAX_EDITOR_COMMANDS][MAX_LINE_LEN]` inside **[`EditorState`](../src/editor/state.h#L207)**
 ([`src/editor/state.c`](../src/editor/state.c)), the editor's writable document model - *not* in
 [`ReplRuntimeState`](../src/repl/state.h#L18). The parser returns both the [`GLCmd`](../src/repl/command.h#L127) and the canonical
 text in `ReplParsedLine { GLCmd cmd; char text[MAX_LINE_LEN] }`; commit
@@ -428,7 +428,7 @@ code passes both to text-aware command-store APIs
 with the command array.
 
 **The neutral source-document port.** The REPL pipeline must not depend on
-[`EditorState`](../src/editor/state.h#L200), so it never touches the editor buffer directly. Instead it
+[`EditorState`](../src/editor/state.h#L207), so it never touches the editor buffer directly. Instead it
 reads and mutates source text through the neutral port in
 [`source_document.h`](../source_document.h):
 
@@ -448,7 +448,7 @@ not a runtime callback table:
 
 | Host | Backing implementation |
 |---|---|
-| Full app | [`src/app/glr_source_document.c`](../src/app/glr_source_document.c) - forwards to [`EditorState`](../src/editor/state.h#L200) |
+| Full app | [`src/app/glr_source_document.c`](../src/app/glr_source_document.c) - forwards to [`EditorState`](../src/editor/state.h#L207) |
 | Standalone `repl_demo` | [`tools/repl_demo/source_document.c`](../tools/repl_demo/source_document.c) - tiny editor-free line store |
 | Tests | whichever adapter the scenario links |
 
@@ -513,8 +513,8 @@ source line through `src_cmd_idx`, resolved via
 ### Document Cursor Ownership
 
 The active edit-line cursor is **editor-owned**: it lives in
-`EditorState.document.edit_line_idx` ([`EditorDocumentState`](../src/editor/state.h#L196)) and is read
-and written through [`editor_state_edit_line()`](../src/editor/state.h#L391) / `_set()` / `_clamp()`.
+`EditorState.document.edit_line_idx` ([`EditorDocumentState`](../src/editor/state.h#L203)) and is read
+and written through [`editor_state_edit_line()`](../src/editor/state.h#L400) / `_set()` / `_clamp()`.
 There is no `repl_state_edit_line()` and no cursor pointer inside
 [`ReplCommandStore`](../src/repl/command_store.h#L46). The REPL pipeline never reaches into editor cursor
 storage:
@@ -959,10 +959,10 @@ signature for audited renderers.
   controller reads them from there when filling the snapshot. Only the
   REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L133): the light-enable
   bitmask) remains a REPL slice.
-* pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L110), [`EditorInputView`](../src/editor/state.h#L68),
+* pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L110), [`EditorInputView`](../src/editor/state.h#L74),
   [`ReplImportExportView`](../src/repl/state_views.h#L186), [`FlatProgramView`](../src/repl/flatten.h#L59), [`ReplPredefView`](../src/repl/eval.h#L179))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
-  - sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L391),
+  - sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L400),
   `flat_program_count`, …)
 * user-scene names + slot-used flags
 * the controller-pushed editor snapshot pointers
@@ -973,17 +973,17 @@ signature for audited renderers.
   `current_begin_mode`
 
 Slices that would have been heavy to copy are deliberately excluded:
-[`EditorClipboardState`](../src/editor/state.h#L106) (~1.88 MB with the lines sidecar) is not on the
+[`EditorClipboardState`](../src/editor/state.h#L113) (~1.88 MB with the lines sidecar) is not on the
 snapshot - the per-row selection band reads `selection_lo/_hi` instead.
 
 **Two selection models, one clipboard.** `selection_lo/_hi` above is
 the *line-range* selection used by gutter drag and the multi-line
-clipboard (`anchor_idx`/`end_idx` on [`EditorSelectionState`](../src/editor/state.h#L80)). The
+clipboard (`anchor_idx`/`end_idx` on [`EditorSelectionState`](../src/editor/state.h#L87)). The
 *input-buffer* selection is a separate character-range model on
 `EditorInputState.anchor_pos`, scoped to the active edit row only
 - shift+arrow, double-click word, drag-on-edit-row, and partial-line
 copy/cut/paste all drive that anchor. The two share one tagged
-clipboard object ([`EditorClipboardState`](../src/editor/state.h#L106) carries an [`EditorClipboardKind`](../src/editor/state.h#L100)
+clipboard object ([`EditorClipboardState`](../src/editor/state.h#L113) carries an [`EditorClipboardKind`](../src/editor/state.h#L107)
 discriminator plus both a line array and an `input_text` slot) so
 `Ctrl+V` after a partial copy pastes characters and `Ctrl+V` after a
 line copy still pastes whole commands. Input selection wins over
@@ -1681,7 +1681,7 @@ The app controller installs five boundary mechanisms at startup.
 
 All source-text reads and mutations use `source_document_*`. The full app links
 [`glr_source_document.c`](../src/app/glr_source_document.c), which forwards to
-[`EditorState`](../src/editor/state.h#L200); the standalone demo links a tiny editor-free store
+[`EditorState`](../src/editor/state.h#L207); the standalone demo links a tiny editor-free store
 in [`tools/repl_demo/source_document.c`](../tools/repl_demo/source_document.c). This keeps editor state and
 logic out of the core link set.
 
@@ -1714,7 +1714,7 @@ the system clipboard on paste **only when it differs** from what we last
 published or adopted.
 
 That asymmetry is the design. The internal
-[`EditorClipboardState`](../src/editor/state.h#L106) stays the thing that is
+[`EditorClipboardState`](../src/editor/state.h#L113) stays the thing that is
 pasted, so a copy/paste that never left the app keeps its payload kind
 (LINES vs. INPUT_TEXT) and its block-aware line range - round-tripping every
 paste through plain OS text would flatten both. Foreign text has no kind, so
@@ -1761,7 +1761,7 @@ what they *could* plausibly cover, and the lines between them are load-bearing:
 | Pair | Owns | Excludes (intentionally) |
 |---|---|---|
 | [`repl_state_capture`](../src/repl/state.h#L29) / [`_restore`](../src/repl/state.h#L30) | The REPL slices on [`ReplRuntimeState`](../src/repl/state.h#L18): source document, flat program, predef vars + scratch arrays, executor-mutated render tail, scene/workspace identity, import/export buffers. | Editor session state; the user-scene catalog slots, which have their own [`repl_scenes_snapshot_capture`](../src/repl/scenes.h#L292). |
-| [`editor_state_capture`](../src/editor/state.h#L227) / [`_restore`](../src/editor/state.h#L228) | The editor session on [`EditorState`](../src/editor/state.h#L200): line buffer, input buffer, edit-line cursor, selection anchor, clipboard, search, autocomplete, scroll, cursor blink, and the per-frame overlay lists. | The REPL document. |
+| [`editor_state_capture`](../src/editor/state.h#L234) / [`_restore`](../src/editor/state.h#L235) | The editor session on [`EditorState`](../src/editor/state.h#L207): line buffer, input buffer, edit-line cursor, selection anchor, clipboard, search, autocomplete, scroll, cursor blink, and the per-frame overlay lists. | The REPL document. |
 | [`editor_undo_snapshot_save`](../src/editor/undo.h#L112) / [`_restore`](../src/editor/undo.h#L113) | One [`EditorUndoSnapshot`](../src/editor/undo.h#L60) ring entry: source commands, editor-buffer text, edit_line, predef names + values, scratch arrays, funcN aliases. | Input-buffer bytes, selection anchor, clipboard, search, autocomplete, scroll. Restore rebuilds the input row from the restored source via [`editor_load_line_to_input()`](../src/editor/input.h#L198). |
 
 Two rules fall out of that table.
@@ -1793,7 +1793,7 @@ rather than deferred; see
 The lean REPL variant, [`repl_state_checkpoint_capture`](../src/repl/state.h#L62),
 is everything above *except* the derived flat program, which restore leaves
 dirty to rebuild next frame. The tour baseline pairs it with
-[`editor_state_session_capture`](../src/editor/state.h#L249) - the persistent
+[`editor_state_session_capture`](../src/editor/state.h#L256) - the persistent
 editor slices only, since the per-frame overlay lists carry borrowed pointers
 that a long-lived baseline must not copy.
 
@@ -2505,7 +2505,7 @@ When a module starts owning mutable REPL state, follow this template:
    genuinely REPL-language/program state. App-frame presentation and render
    policy belongs on [`glr_state`](../src/app/glr_state.h#L2)
    ([`src/app/glr_state.c`](../src/app/glr_state.c)), editor document/session
-   state on [`EditorState`](../src/editor/state.h#L200), and intentional
+   state on [`EditorState`](../src/editor/state.h#L207), and intentional
    sidecars (undo rings, user-scene slots) stay separate - call those out
    explicitly rather than folding them into [`ReplRuntimeState`](../src/repl/state.h#L18). REPL-pipeline
    TUs must not reach `glr_state`
@@ -2804,7 +2804,7 @@ unused-parameter warnings with `(void)`, no real rendering.
 Most commands round-trip automatically: [`src/repl/export.c`](../src/repl/export.c) writes the
 source-document line text (`source_text_line(view, cmd_idx)` via the
 neutral port - flat commands do not own source text, and [`export.c`](../src/repl/export.c) does
-not reach into [`EditorState`](../src/editor/state.h#L200) directly)
+not reach into [`EditorState`](../src/editor/state.h#L207) directly)
 verbatim into the exported `display()` body, and `repl_export_load_from_file`
 feeds those lines back through
 [`repl_load_apply_line()`](../src/repl/load.h#L78) - the compile + apply path

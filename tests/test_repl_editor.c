@@ -5125,6 +5125,86 @@ int main() {
         ASSERT_STR("indentedCosText", line_text, "      glVertex3f(0, cos(t), 0);");
     }
 
+    /* File-scope insert slot: navigation, entry/exit, declarations, function definitions, and restrictions */
+    {
+        glr_ctrl_reset_all();
+        editor_feed_line("glVertex3f(0, 0, 0);");
+        ASSERT_INT("file_scope setup: document count", repl_state_document_count(), 1);
+        ASSERT_INT("file_scope setup: display body start", repl_source_scope_display_body_start(), 0);
+
+        /* 1. Arrow Up from line 0 enters file-scope insert slot */
+        editor_navigate_to_line(0);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("file_scope enter: insert mode active", editor_insert_mode(), 1);
+        ASSERT_INT("file_scope enter: insert scope file-scope", editor_insert_scope(), EDITOR_INSERT_FILE_SCOPE);
+        ASSERT_INT("file_scope enter: edit line at body start", editor_state_edit_line(), 0);
+
+        /* 2. Arrow Down from file-scope slot exits to display body start */
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("file_scope exit down: insert mode off", editor_insert_mode(), 0);
+        ASSERT_INT("file_scope exit down: insert scope document", editor_insert_scope(), EDITOR_INSERT_DOCUMENT);
+        ASSERT_INT("file_scope exit down: edit line at body start", editor_state_edit_line(), 0);
+
+        /* 3. Re-enter file-scope slot and test restricted commit: GL calls rejected */
+        editor_input_enter_file_scope_slot();
+        ASSERT_INT("file_scope re-enter: insert scope", editor_insert_scope(), EDITOR_INSERT_FILE_SCOPE);
+        editor_input_set_text("glVertex3f(1, 1, 1);");
+        g_status[0] = '\0';
+        editor_handle_key('\r', 0, 0);
+        ASSERT_INT("file_scope reject GL: input retained", editor_state_input().input_len > 0, 1);
+        ASSERT_INT("file_scope reject GL: document count unchanged", repl_state_document_count(), 1);
+        assert_status_contains("file_scope reject GL: status", "File scope accepts only");
+
+        /* 4. Comments in file-scope slot rejected */
+        editor_input_set_text("// file scope comment");
+        g_status[0] = '\0';
+        editor_handle_key('\r', 0, 0);
+        ASSERT_INT("file_scope reject comment: input retained", editor_state_input().input_len > 0, 1);
+        ASSERT_INT("file_scope reject comment: document count unchanged", repl_state_document_count(), 1);
+        assert_status_contains("file_scope reject comment: status", "File scope accepts only");
+
+        /* 5. Early gate: Ctrl+X / Ctrl+V / Ctrl+/ / Ctrl+\ ignored in file-scope slot */
+        {
+            int saved_mods = g_mock_modifiers;
+            g_mock_modifiers = GLUT_ACTIVE_CTRL;
+            editor_input_set_text("float my_var");
+            editor_handle_key('/', 0, 0);
+            ASSERT_STR("file_scope gate: Ctrl+/ ignored", editor_state_input().input, "float my_var");
+            g_mock_modifiers = saved_mods;
+        }
+
+        /* 6. Valid float declaration commit via Enter */
+        editor_input_set_text("float my_var;");
+        editor_handle_key('\r', 0, 0);
+        ASSERT_INT("file_scope decl: document count", repl_state_document_count(), 2);
+        ASSERT_INT("file_scope decl: line 0 is float decl", repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
+        ASSERT_INT("file_scope decl: display body start shifted", repl_source_scope_display_body_start(), 1);
+        ASSERT_INT("file_scope decl: slot remains active", editor_insert_mode(), 1);
+        ASSERT_INT("file_scope decl: scope remains file-scope", editor_insert_scope(), EDITOR_INSERT_FILE_SCOPE);
+        ASSERT_INT("file_scope decl: edit line matches new body start", editor_state_edit_line(), 1);
+        ASSERT_INT("file_scope decl: input cleared", editor_state_input().input_len, 0);
+
+        /* 7. Arrow Up moves to float decl line (display_body_start - 1) */
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("file_scope exit up: insert mode off", editor_insert_mode(), 0);
+        ASSERT_INT("file_scope exit up: insert scope document", editor_insert_scope(), EDITOR_INSERT_DOCUMENT);
+        ASSERT_INT("file_scope exit up: edit line at line 0", editor_state_edit_line(), 0);
+
+        /* 8. Arrow Down from line 0 enters file-scope insert slot */
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("file_scope enter from above: insert mode active", editor_insert_mode(), 1);
+        ASSERT_INT("file_scope enter from above: insert scope file-scope", editor_insert_scope(), EDITOR_INSERT_FILE_SCOPE);
+
+        /* 9. Valid function definition commit in file-scope slot */
+        editor_input_set_text("func0() {");
+        editor_handle_key('\r', 0, 0);
+        ASSERT_INT("file_scope func: document count", repl_state_document_count(), 4);
+        ASSERT_INT("file_scope func: slot exited", editor_insert_scope(), EDITOR_INSERT_DOCUMENT);
+        ASSERT_INT("file_scope func: line 1 is func def", repl_state_document_cmds()[1].type, CMD_FUNC_DEF);
+        ASSERT_INT("file_scope func: line 2 is func end", repl_state_document_cmds()[2].type, CMD_FUNC_END);
+        ASSERT_INT("file_scope func: display body start", repl_source_scope_display_body_start(), 3);
+    }
+
     printf("\n%d / %d tests passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;
 }

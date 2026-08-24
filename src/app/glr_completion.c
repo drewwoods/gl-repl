@@ -658,6 +658,9 @@ static void update_autocomplete(void) {
     editor_state_autocomplete_clear();
     reset_ac_statics();
 
+    if (inp.insert_scope == EDITOR_INSERT_FILE_SCOPE)
+        return;
+
     if (ac_try_tutorial_ghost(raw_input, ac))
         return;
 

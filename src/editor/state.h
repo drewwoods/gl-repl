@@ -40,39 +40,46 @@ typedef struct {
     int          line_count;
 } EditorBufferView;
 
+typedef enum {
+    EDITOR_INSERT_DOCUMENT = 0,
+    EDITOR_INSERT_FILE_SCOPE
+} EditorInsertScope;
+
 /* Live editor-input state: the typing buffer, cursor, insert mode,
- * and pending-newline scratch. The edit-line cursor lives on
- * EditorState.document.edit_line_idx and is read via
+ * insertion scope, and pending-newline scratch. The edit-line cursor
+ * lives on EditorState.document.edit_line_idx and is read via
  * editor_state_edit_line(); it is not duplicated here. */
 typedef struct {
-    char input[MAX_INPUT_LEN];
-    int  input_len;
-    int  cursor_pos;
+    char              input[MAX_INPUT_LEN];
+    int               input_len;
+    int               cursor_pos;
     /* Character-range selection anchor inside input[]. -1 = no
      * selection. When >= 0, the selection is [lo, hi) with
      * lo = min(anchor_pos, cursor_pos) and hi = max(...). An empty
     * selection (anchor_pos == cursor_pos) is not allowed and collapses
     * to -1; see done/editor-input-selection.md. */
-    int  anchor_pos;
-    char pending_newline[MAX_INPUT_LEN];
-    int  pending_newline_len;
-    int  insert_mode;
+    int               anchor_pos;
+    char              pending_newline[MAX_INPUT_LEN];
+    int               pending_newline_len;
+    int               insert_mode;
+    EditorInsertScope insert_scope;
 } EditorInputState;
 
 /* Read-only view of EditorInputState.  `input` and `pending_newline`
  * are borrowed pointers into live storage - they track mutations made
  * through the mutable API.  The scalar fields (input_len, cursor_pos,
- * anchor_pos, pending_newline_len, insert_mode) are by-value snapshots
- * captured at the time editor_state_input() is called.  Do not stash
- * the view across mutations and then rely on the scalar fields. */
+ * anchor_pos, pending_newline_len, insert_mode, insert_scope) are
+ * by-value snapshots captured at the time editor_state_input() is called.
+ * Do not stash the view across mutations and then rely on the scalar fields. */
 typedef struct {
-    const char *input;
-    int         input_len;
-    int         cursor_pos;
-    int         anchor_pos;
-    const char *pending_newline;
-    int         pending_newline_len;
-    int         insert_mode;
+    const char       *input;
+    int               input_len;
+    int               cursor_pos;
+    int               anchor_pos;
+    const char       *pending_newline;
+    int               pending_newline_len;
+    int               insert_mode;
+    EditorInsertScope insert_scope;
 } EditorInputView;
 
 /* Selection anchor pair: which source-line range is selected. The
@@ -371,6 +378,8 @@ int         editor_input_selection_lo(void);   /* -1 if inactive */
 int         editor_input_selection_hi(void);   /* -1 if inactive */
 int         editor_insert_mode(void);
 void        editor_insert_mode_set(int insert_mode);
+EditorInsertScope editor_insert_scope(void);
+void        editor_insert_scope_set(EditorInsertScope scope);
 char       *editor_pending_newline_buffer_mut(void);
 int         editor_pending_newline_len(void);
 void        editor_pending_newline_len_set(int newline_len);

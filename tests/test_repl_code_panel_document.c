@@ -869,7 +869,7 @@ int main(void) {
         int doc_line = ui_repl_code_panel_rows_before_cmd(&layout, 1);
         ASSERT_TRUE("target lookup succeeds",
                     ui_repl_code_panel_target_for_doc_line(
-                        &snap, doc_line, &layout, &target, &on_insert, &row_offset));
+                        &snap, doc_line, &layout, &target, &on_insert, &row_offset, NULL));
         ASSERT_TRUE("target lookup command index", target == 1);
         ASSERT_TRUE("target lookup is source row", on_insert == 0);
         ASSERT_TRUE("target lookup row offset", row_offset == 0);
@@ -886,7 +886,7 @@ int main(void) {
         int doc_line = ui_repl_code_panel_rows_before_cmd(&layout, 1);
         ASSERT_TRUE("insert row lookup succeeds",
                     ui_repl_code_panel_target_for_doc_line(
-                        &snap, doc_line, &layout, &target, &on_insert, &row_offset));
+                        &snap, doc_line, &layout, &target, &on_insert, &row_offset, NULL));
         ASSERT_TRUE("insert row reports virtual line", target == -1);
         ASSERT_TRUE("insert row flag", on_insert == 1);
     }
@@ -966,7 +966,7 @@ int main(void) {
             ASSERT_TRUE("focus doc-line mapping succeeds",
                         ui_repl_code_panel_target_for_doc_line(
                             &snap, doc_line, &layout, &target, &on_insert,
-                            &row_offset));
+                            &row_offset, NULL));
             ASSERT_TRUE("focus maps to command 1", target == 1);
             ASSERT_TRUE("focus maps to source row", on_insert == 0);
         }
@@ -1078,7 +1078,7 @@ int main(void) {
         ASSERT_TRUE("trailing slot after splice is targetable",
                     ui_repl_code_panel_target_for_doc_line(
                         &snap, trailing_row, &layout, &target, &on_insert,
-                        &row_offset));
+                        &row_offset, NULL));
         ASSERT_TRUE("trailing target remains the document count",
                     target == snap.document_count && on_insert == 0 &&
                     row_offset == 0);
@@ -1111,7 +1111,7 @@ int main(void) {
         ASSERT_TRUE("splice ghost lookup succeeds",
                     ui_repl_code_panel_target_for_doc_line(
                         &snap, ghost_line, &layout, &target, &on_insert,
-                        &row_offset));
+                        &row_offset, NULL));
         ASSERT_TRUE("splice ghost is the virtual insert row",
                     target == -1 && on_insert == 1 && row_offset == 0);
     }

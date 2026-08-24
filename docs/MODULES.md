@@ -111,7 +111,7 @@ glr_ctrl coordinator:     which subsystem receives this event and when frames re
 Consequences:
 
 - **State has explicit owners.** [`ReplRuntimeState`](../src/repl/state.h#L18) is the REPL program runtime.
-  [`EditorState`](../src/editor/state.h#L200) is the text-document session. [`UiState`](../src/ui/app/state.h#L20) is transient UI/session
+  [`EditorState`](../src/editor/state.h#L207) is the text-document session. [`UiState`](../src/ui/app/state.h#L20) is transient UI/session
   chrome. [`Render3dState`](../src/render3d/render.h#L101) is the render3d renderer's frame-to-frame
   instance state; the render3d module defines its semantics and each caller owns
   the instance lifetime. Runtime storage stays in the owning modules
@@ -149,7 +149,7 @@ Subsystems](#peer-subsystems-and-neutral-support) and
 |---|---|---|
 | [`ReplRuntimeState`](../src/repl/state.h#L18) | Parsed command array, flat program, REPL variable state (scalar predefined vars plus fixed scratch arrays `A/B/C` of `REPL_SCRATCH_ARRAY_LEN` floats and the `func0..func9` user-alias table), active scene/workspace identity, import/export metadata | Render/presentation config ([`GlrState`](../src/app/glr_state.h#L128), app layer), user-scene slot payloads (`repl_scenes`), replay runtime state (peer), variable-panel state (peer), help-session state (peer), color-picker state (peer), editable text, cursor, selection, search query, UI visibility, pointer/viewport chrome |
 | [`GlrState`](../src/app/glr_state.h#L128) (app) | App-level presentation/render toggles (grid/axes themes, wireframe, overlays, backdrop, scene + whole-frame post-process filters, camera-rotate, etc.). Defaults from [`glr_defaults.h`](../src/app/glr_defaults.h) (`CFG_DEFAULT_*`). Read/written through the `glr_config` keyed bridge and per-scene snapshots | Program model, editable text, REPL grammar |
-| [`EditorState`](../src/editor/state.h#L200) | Editable text buffer, active input, cursor/edit-line, insert mode, selection, clipboard, search/autocomplete, scroll, **cursor blink** (the editor controls cursor visibility/blink - UI just renders), undo/redo, editor transactions | Variable-panel drag (owned by the variable_panel peer), parsed command semantics, GL execution, menu chrome, transient status banners, render-output pixel coordinates |
+| [`EditorState`](../src/editor/state.h#L207) | Editable text buffer, active input, cursor/edit-line, insert mode, selection, clipboard, search/autocomplete, scroll, **cursor blink** (the editor controls cursor visibility/blink - UI just renders), undo/redo, editor transactions | Variable-panel drag (owned by the variable_panel peer), parsed command semantics, GL execution, menu chrome, transient status banners, render-output pixel coordinates |
 | [`UiState`](../src/ui/app/state.h#L20) | Viewport, pointer, status text TTL, help-overlay visibility (chrome flag), profile-panel visibility, panel-divider geometry (panel_frac + resizing_panel) | Help-session tab/scroll (peer), variable-panel state (peer), camera pose (lives on `glr_camera`), program model, editable text, command validation, cursor blink (editor owns), per-frame render-output (uses `Ui*Output`) |
 | [`Render3dState`](../src/render3d/render.h#L101) | Per-renderer 3D stage state that must persist across frames: ortho reference distance, active ortho edge tracking, and the most recent zero-jitter projection descriptor | REPL program state, editor text/session state, UI chrome, saved user-scene slots, app-level presentation config |
 | [`VariablePanelState`](../src/subsystems/variable_panel/variable_panel_state.h#L64) (peer) | Variable-panel visibility flag + slider drag transaction (var_idx, coarse, start_value, start_x, value_changed, final_value) | Editor text behavior, REPL grammar |
@@ -388,7 +388,7 @@ sweep, so the borrowed-API types above keep passing.
    Render-time discoveries return through output structs that the
    controller actualizes.
 4. Update the ownership checks in the same change. The capture/restore /
-   reset path for [`ReplRuntimeState`](../src/repl/state.h#L18), [`EditorState`](../src/editor/state.h#L200), and [`UiState`](../src/ui/app/state.h#L20) must stay in
+   reset path for [`ReplRuntimeState`](../src/repl/state.h#L18), [`EditorState`](../src/editor/state.h#L207), and [`UiState`](../src/ui/app/state.h#L20) must stay in
    lockstep with the state layout.
 
 ## Intended Frame Shape
@@ -475,7 +475,7 @@ The application shell bootstrap, event routing, frame/snapshot coordination, and
 | `src/app/glr_paths` | App-owned filesystem locations (per-user data, music, workspace root/default, and recovery state) plus canonical directory comparison, so lower layers receive explicit paths |
 | `src/app/glr_web_io` | Emscripten-only import/export bridge (inert in native builds): the exports the web shell calls to import dropped text and stage a scene in MEMFS for download |
 | `src/app/glr_clipboard` | The only TU that touches the *system* clipboard, and the installer of the [`EditorClipboardHostBridge`](../src/editor/clipboard.h#L88) the editor mirrors copy/cut through. Picks its backend at compile time: freeglut's `glutSetClipboardString`/`glutGetClipboardString` when `GLUT_HAS_CLIPBOARD` is visible (Cocoa implements them; other freeglut backends report an empty clipboard), `pbcopy`/`pbpaste` on the `make glut` Apple-framework build, none on web - where the DOM path in `glr_web_io` owns the clipboard instead. |
-| `src/app/glr_source_document` | Full-app adapter binding the neutral `source_document` port (read view + insert/replace/load/clear/apply) to the [`EditorState`](../src/editor/state.h#L200) text buffer, so REPL pipeline TUs never reach into editor state directly |
+| `src/app/glr_source_document` | Full-app adapter binding the neutral `source_document` port (read view + insert/replace/load/clear/apply) to the [`EditorState`](../src/editor/state.h#L207) text buffer, so REPL pipeline TUs never reach into editor state directly |
 | `src/app/glr_state` | Storage + accessors for app-level presentation/render state, owned by the app layer rather than [`ReplRuntimeState`](../src/repl/state.h#L18); reached through the `glr_config` keyed bridge |
 | `src/app/glr_audio` | App-level playlist engine and persisted audio config (`glr_audio_*`) |
 | `src/app/glr_extedit` | External-editor sync behind `--watch` ([BYOE.md](plans/active/BYOE.md)). Follows `repl_active_scene_bound_path()` - the same file Ctrl+S writes, so the writer and the watcher cannot name different files - through a two-level gate: a `stat()` per frame, a read + hash only when the change token (nanosecond mtime + inode + size) moves, a re-parse only when the content hash does. Reloads are ATOMIC with `apply_cfg = 0` and `camera_apply = NONE`, so an external *text* edit is geometry and never a presentation reset. Holds a save that would land on a dirty input row or during a tutorial/tour, and decides the wait by comparing the document fingerprint rather than by hooking commit/cancel - an unchanged document means the row was abandoned, a changed one means the user committed and the external payload is dismissed. Undo policy splits on scene identity: a user scene gets one undoable clobber over a heap-backed history capture, an unedited example gets no push at all (`editor_undo_push_snapshot` is the transient auto-promotion hook). Stage 2.5 adds a **live WIP sidecar**: `<file>.wip`, the editor's unsaved buffer plus a trailing `// @cursor <row> <col>`, followed per keystroke rather than per save. The payload hash excludes the cursor line, so a cursor-only publication costs a stat and a hash and places the caret through the physical->document map the last content import cached ([`ReplSceneRowMap`](../src/repl/scene_load.h)); the named row is parked in the input line wherever it sits in the file when it is lexically incomplete, via the nonce-scoped `@cursor-hole` marker. One undo entry per session, not per keystroke. A sidecar present at bind time is a dead editor's unsaved work and is offered (`GLR_MODAL_CONFIRM_WIP_RECOVER`), never applied; one that disappears splits on the same identity D4 does. Web build inert |
@@ -533,7 +533,7 @@ commands.
 | `src/repl/keymap_format` | Renders [`keymap.h`](../keymap.h) bindings as text for the help overlay and `make keymap-list`, so the binding table is never transcribed by hand |
 
 [`GLCmd`](../src/repl/command.h#L127) is a parse-result record: type, args, flags, provenance. It does
-not carry source text. Per-line text belongs to [`EditorState`](../src/editor/state.h#L200).
+not carry source text. Per-line text belongs to [`EditorState`](../src/editor/state.h#L207).
 
 ### 2. Editor - text, cursor, navigation, commit, undo
 
@@ -542,12 +542,12 @@ text edit into a committed program change.
 
 | Module | Role |
 |--------|------|
-| `editor_input` | Editor's pure text-document controller. Receives key/mouse events from `glr_ctrl` only after the controller has already filtered out non-editor concerns (replay, audio, config, save, camera, variable panel, scene press, scroll-wheel zoom). Mutates [`EditorState`](../src/editor/state.h#L200) directly: cursor, selection, scroll, search, autocomplete navigation, clipboard, undo. Also exposes hit-test predicates (`editor_input_point_in_code_panel`, etc.) and the [`EditorInputDispatchEffects`](../src/editor/input.h#L36) accumulation API that the controller consumes. `repl_editor.{c,h}` is deleted; this module is the sole dispatch boundary |
+| `editor_input` | Editor's pure text-document controller. Receives key/mouse events from `glr_ctrl` only after the controller has already filtered out non-editor concerns (replay, audio, config, save, camera, variable panel, scene press, scroll-wheel zoom). Mutates [`EditorState`](../src/editor/state.h#L207) directly: cursor, selection, scroll, search, autocomplete navigation, clipboard, undo. Also exposes hit-test predicates (`editor_input_point_in_code_panel`, etc.) and the [`EditorInputDispatchEffects`](../src/editor/input.h#L36) accumulation API that the controller consumes. `repl_editor.{c,h}` is deleted; this module is the sole dispatch boundary |
 | `editor_commit` | Transaction boundary for commits: compile, undo snapshot, text-buffer write, REPL apply, dirty-state updates |
-| `editor_state` | Owns [`EditorState`](../src/editor/state.h#L200): canonical per-line text buffer, active input, cursor, edit line, insert mode, **input-buffer selection anchor (`anchor_pos` on [`EditorInputState`](../src/editor/state.h#L47))**, line-range selection, search, autocomplete, scroll, undo/redo, transformers, highlights, virtual lines. The clipboard is a tagged union ([`EditorClipboardKind`](../src/editor/state.h#L100): EMPTY / LINES / INPUT_TEXT) so partial-line copy/cut and whole-line copy/cut share one slot. Single writer for editor buffer text |
+| `editor_state` | Owns [`EditorState`](../src/editor/state.h#L207): canonical per-line text buffer, active input, cursor, edit line, insert mode, **input-buffer selection anchor (`anchor_pos` on [`EditorInputState`](../src/editor/state.h#L52))**, line-range selection, search, autocomplete, scroll, undo/redo, transformers, highlights, virtual lines. The clipboard is a tagged union ([`EditorClipboardKind`](../src/editor/state.h#L107): EMPTY / LINES / INPUT_TEXT) so partial-line copy/cut and whole-line copy/cut share one slot. Single writer for editor buffer text |
 | `editor_undo` | Undo/redo transaction rings that restore editor text and REPL command state together |
 | `editor_clipboard` | Selection anchors plus copy/cut/paste payloads, including parallel text sidecars. Makes no platform calls: the OS clipboard reaches it through the optional [`EditorClipboardHostBridge`](../src/editor/clipboard.h#L88) that `glr_clipboard` installs - copy/cut mirror the internal payload outward, paste adopts the system clipboard only when something outside took it over, so an in-app round trip keeps its payload kind and block-aware line range |
-| `editor_search` | One [`EditorSearchState`](../src/editor/state.h#L136) covering both find and replace fields: query, match tracking, row/char hits, next/previous navigation, the `whole_word` flag (a *matching* concern, so highlight and replace can't disagree), and the find/replace/word-chip focus ring |
+| `editor_search` | One [`EditorSearchState`](../src/editor/state.h#L143) covering both find and replace fields: query, match tracking, row/char hits, next/previous navigation, the `whole_word` flag (a *matching* concern, so highlight and replace can't disagree), and the find/replace/word-chip focus ring |
 | `editor_replace` | Find-bar replace: substitutes text across the **committed** buffer (never the live input row, so a half-typed line can't fail the operation), then hands the result to `repl_document_rebuild`. Pushes one undo snapshot per replace and rewinds the ring via [`editor_undo_ring_state_restore()`](../src/editor/undo.h#L119) if the rebuild is rejected, so a failed replace leaves no trace. Replace-current addresses its match by occurrence ordinal within the row, not char offset |
 | [`src/app/glr_completion.c`](../src/app/glr_completion.c) | REPL-side completion provider. Walks command spec, predef-var table, and source `CMD_FUNC_DEF` entries; produces matches, ghost text, parameter hints. Registers itself with `editor_completion` at startup; the editor only invokes the provider, it does not know about variables or GL command names directly |
 | `editor_inline_rename` | Inline scene-name edit buffer and validation |
@@ -613,14 +613,14 @@ Program-side state that is not the source command array itself.
 
 These modules may consume editor text through the neutral
 `source_document` port ([`SourceTextView`](../source_document.h#L27) reads and `source_document_*`
-mutations, backed by [`glr_source_document.c`](../src/app/glr_source_document.c) over [`EditorState`](../src/editor/state.h#L200)) or, for
+mutations, backed by [`glr_source_document.c`](../src/app/glr_source_document.c) over [`EditorState`](../src/editor/state.h#L207)) or, for
 the few remaining direct readers, explicit [`EditorBufferView`](../src/editor/state.h#L38)
 parameters. They must not discover or mutate editor state globally.
 
 ### 4. 3D render3d rendering
 
 `render3d_*` owns the 3D stage. Render3d renderers consume snapshots/configs and
-never read REPL runtime state, [`EditorState`](../src/editor/state.h#L200), or [`UiState`](../src/ui/app/state.h#L20) directly.
+never read REPL runtime state, [`EditorState`](../src/editor/state.h#L207), or [`UiState`](../src/ui/app/state.h#L20) directly.
 
 Naming note: `render3d_*` is the current code prefix for the rendered world or
 stage: camera, projection, grid, axes, backdrop, lights, and 3D overlays around
@@ -846,7 +846,7 @@ Reading the layer view:
   REPL domain models but never reads editor or UI state directly.
 - Source text crosses the REPL/host boundary through the
   `source_document` port. The app shell provides the
-  [`EditorState`](../src/editor/state.h#L200)-backed adapter; the editor remains the single
+  [`EditorState`](../src/editor/state.h#L207)-backed adapter; the editor remains the single
   underlying writer.
 - Render3d and UI render are read-only - they consume snapshots and
   never mutate.
@@ -1373,7 +1373,7 @@ render-neutral types belong in explicit shared headers such as
 | New editor cursor/navigation behavior | `editor_input` (dispatch) + `editor_state` (the slice it moves) |
 | New commit behavior | `editor_commit` + pure `repl_compile` validator |
 | New cmd-array mutation | `repl_apply_*`; low-level shifts stay inside `repl_command_store` |
-| New editor session state | [`EditorState`](../src/editor/state.h#L200) slice |
+| New editor session state | [`EditorState`](../src/editor/state.h#L207) slice |
 | New UI visibility/status/chrome state | [`UiState`](../src/ui/app/state.h#L20) slice |
 | New program/persistence state | [`ReplRuntimeState`](../src/repl/state.h#L18) slice |
 | New header-only render helper | `include/` |

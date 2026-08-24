@@ -787,6 +787,39 @@ static int current_input_needs_navigation_commit(void) {
  *
  * test_repl_editor.c pins both invariants (search for
  * "commit_current_input ordering"). */
+static CommitResult commit_file_scope_input(int is_navigation) {
+    const char *input = editor_state_input().input;
+    int i = 0;
+    while (input[i] == ' ') i++;
+
+    if (input[i] == '\0') {
+        if (is_navigation)
+            return COMMIT_OK;
+        repl_set_status_error("File scope accepts only float declarations or function definitions");
+        return COMMIT_REJECTED;
+    }
+
+    if (input[i] == '/' || input[i] == '}' || input[i] == '{') {
+        repl_set_status_error("File scope accepts only float declarations or function definitions");
+        return COMMIT_REJECTED;
+    }
+
+    int decl_res = editor_try_commit_file_scope_decl();
+    if (decl_res == 1)
+        return COMMIT_OK;
+    if (decl_res == -1)
+        return COMMIT_REJECTED;
+
+    int func_res = editor_try_commit_file_scope_func_def();
+    if (func_res == 1)
+        return COMMIT_OK;
+    if (func_res == -1)
+        return COMMIT_REJECTED;
+
+    repl_set_status_error("File scope accepts only float declarations or function definitions");
+    return COMMIT_REJECTED;
+}
+
 /* `needs_commit_hint`: pass 1 when the caller has already verified
  * via `current_input_needs_navigation_commit()` that a commit is
  * needed (skips the redundant re-evaluation here - see
@@ -795,6 +828,10 @@ static int current_input_needs_navigation_commit(void) {
  * `enter_mode` is the only thing that can skip the early-exit). */
 static CommitResult commit_current_input(int enter_mode,
                                          int needs_commit_hint) {
+    if (editor_insert_scope() == EDITOR_INSERT_FILE_SCOPE) {
+        return commit_file_scope_input(!enter_mode);
+    }
+
     int needs_commit = needs_commit_hint;
     if (needs_commit < 0)
         needs_commit = current_input_needs_navigation_commit();
@@ -1157,6 +1194,41 @@ void editor_navigate_to_line(int target) {
     if (target > repl_state_document_count())
         target = repl_state_document_count();
     navigate_to_line_raw_resolved(target);
+}
+
+int editor_input_enter_file_scope_slot(void) {
+    if (commit_before_navigation() == COMMIT_REJECTED)
+        return 0;
+
+    editor_selection_clear_line_range();
+    editor_input_anchor_clear();
+
+    int body_start = repl_source_scope_display_body_start();
+    editor_state_edit_line_set(body_start);
+    editor_insert_mode_set(1);
+    editor_insert_scope_set(EDITOR_INSERT_FILE_SCOPE);
+    editor_input_clear();
+    editor_cursor_pos_set(0);
+    editor_completion_clear();
+    editor_scroll_follow_cursor_set(1);
+    return 1;
+}
+
+int editor_input_exit_file_scope_slot(int semantic_dir_up) {
+    if (commit_before_navigation() == COMMIT_REJECTED)
+        return 0;
+
+    editor_insert_mode_set(0);
+    editor_insert_scope_set(EDITOR_INSERT_DOCUMENT);
+
+    int body_start = repl_source_scope_display_body_start();
+    int target = semantic_dir_up ? (body_start > 0 ? body_start - 1 : 0) : body_start;
+
+    if (target > repl_state_document_count())
+        target = repl_state_document_count();
+    navigate_to_line_raw_resolved(target);
+    editor_scroll_follow_cursor_set(1);
+    return 1;
 }
 
 /* Code-panel-hidden helpers used by both the keyboard and special
@@ -1660,6 +1732,13 @@ static int handle_enter_key_route(unsigned char key) {
 static int handle_semicolon_commit_key_route(unsigned char key) {
     if (key == ';') {
         editor_input_anchor_clear();
+        if (editor_insert_scope() == EDITOR_INSERT_FILE_SCOPE) {
+            CommitResult res = commit_file_scope_input(/*is_navigation=*/0);
+            (void)res;
+            editor_completion_update();
+            repl_mark_source_dirty();
+            return 1;
+        }
         if (editor_state_input().input_len > 0) {
             CommitAttemptState *before = &g_commit_attempt_before;
 
@@ -1792,6 +1871,17 @@ static void keyboard_func(unsigned char key, int x, int y) {
     if (handle_cursor_endpoint_key_route(key)) return;
     if (handle_undo_redo_key_route(key))    return;
     if (handle_line_delete_key_route(key))  return;
+
+    if (editor_insert_scope() == EDITOR_INSERT_FILE_SCOPE) {
+        if (keymap_event_is(key, GLR_CUT) ||
+            keymap_event_is(key, GLR_PASTE) ||
+            key_is_comment_toggle(key) ||
+            keymap_event_is(key, GLR_REFORMAT)) {
+            repl_set_status_error("File scope accepts only float declarations or function definitions");
+            return;
+        }
+    }
+
     if (handle_buffer_command_key_route(key)) return;
     if (handle_copy_key_route(key))         return;
     if (handle_cut_key_route(key))          return;
@@ -2076,6 +2166,13 @@ static int handle_vertical_special_key_route(int key) {
                 selection_end--;
             editor_selection_set_end(selection_end);
             editor_navigate_to_line(selection_end);
+        } else if (editor_insert_scope() == EDITOR_INSERT_FILE_SCOPE) {
+            editor_selection_clear_line_range();
+            editor_input_exit_file_scope_slot(1);
+        } else if (!tutorial_active() &&
+                   (editor_state_edit_line() == repl_source_scope_display_body_start())) {
+            editor_selection_clear_line_range();
+            editor_input_enter_file_scope_slot();
         } else {
             editor_selection_clear_line_range();
             editor_navigate_to_line(editor_state_edit_line() - 1);
@@ -2095,6 +2192,13 @@ static int handle_vertical_special_key_route(int key) {
                 selection_end++;
             editor_selection_set_end(selection_end);
             editor_navigate_to_line(selection_end);
+        } else if (editor_insert_scope() == EDITOR_INSERT_FILE_SCOPE) {
+            editor_selection_clear_line_range();
+            editor_input_exit_file_scope_slot(0);
+        } else if (!tutorial_active() &&
+                   (editor_state_edit_line() == repl_source_scope_display_body_start() - 1)) {
+            editor_selection_clear_line_range();
+            editor_input_enter_file_scope_slot();
         } else {
             editor_selection_clear_line_range();
             editor_navigate_to_line(editor_state_edit_line() + 1);

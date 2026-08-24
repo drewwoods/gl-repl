@@ -293,6 +293,8 @@ void editor_state_edit_line_set(int line) {
      * the document count it happened to see, which gave the same
      * effective "store verbatim" behavior in the lockstep case. */
     if (line < 0) line = 0;
+    if (line != g_editor_state.document.edit_line_idx)
+        g_editor_state.input.insert_scope = EDITOR_INSERT_DOCUMENT;
     g_editor_state.document.edit_line_idx = line;
 }
 
@@ -319,6 +321,7 @@ EditorInputView editor_state_input(void) {
         .pending_newline = in->pending_newline,
         .pending_newline_len = in->pending_newline_len,
         .insert_mode = in->insert_mode,
+        .insert_scope = in->insert_scope,
     };
 }
 
@@ -330,6 +333,7 @@ void editor_state_input_reset(void) {
     editor_input_clear();
     editor_pending_newline_clear();
     editor_insert_mode_set(0);
+    editor_insert_scope_set(EDITOR_INSERT_DOCUMENT);
 }
 
 const char *editor_input_text(void) {
@@ -487,6 +491,18 @@ int editor_insert_mode(void) {
 
 void editor_insert_mode_set(int insert_mode) {
     g_editor_state.input.insert_mode = insert_mode ? 1 : 0;
+    if (!g_editor_state.input.insert_mode)
+        g_editor_state.input.insert_scope = EDITOR_INSERT_DOCUMENT;
+}
+
+EditorInsertScope editor_insert_scope(void) {
+    return g_editor_state.input.insert_scope;
+}
+
+void editor_insert_scope_set(EditorInsertScope scope) {
+    g_editor_state.input.insert_scope = (scope == EDITOR_INSERT_FILE_SCOPE)
+        ? EDITOR_INSERT_FILE_SCOPE
+        : EDITOR_INSERT_DOCUMENT;
 }
 
 char *editor_pending_newline_buffer_mut(void) {

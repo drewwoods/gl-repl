@@ -97,6 +97,7 @@ typedef struct {
     int display_open_rows;
     int display_open_at;
     int display_close_rows;
+    int file_scope_slot_rows;
     int footer_rows;
     int total_lines;
     int cursor_doc_line;
@@ -133,7 +134,8 @@ int  ui_repl_code_panel_target_for_doc_line(const UiRenderSnapshot *snap,
                                             const UiReplCodePanelLayout *layout,
                                             int *out_target,
                                             int *out_on_insert_line,
-                                            int *out_row_offset);
+                                            int *out_row_offset,
+                                            EditorInsertScope *out_insert_scope);
 
 void ui_repl_code_panel_render_with_chrome(const UiRenderSnapshot *snap,
                                struct UiCodePanelOutput *out);

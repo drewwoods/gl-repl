@@ -4,6 +4,7 @@
 #include "repl/reformat.h"
 
 #include "config.h"
+#include "repl/compile.h"
 #include "source_document.h"
 #include "support/cpuprof.h"
 #include "repl/command_store.h"
@@ -200,7 +201,43 @@ static void reformat_replace_cmd(ReplCommandStore *store,
  *
  * `at_before` is the boundary as it stood before the edit; the current
  * boundary is read from the live document. */
-void repl_reindent_after_boundary_move(int at_before) {
+static int map_post_change_to_pre(int cmd_idx, const ReplCompiledChange *change) {
+    if (!change)
+        return cmd_idx;
+
+    int mid_idx = cmd_idx;
+    switch (change->kind) {
+    case REPL_COMPILED_INSERT_ONE:
+        if (cmd_idx == change->pos)
+            return -1; /* newly inserted row */
+        if (cmd_idx > change->pos)
+            mid_idx = cmd_idx - 1;
+        break;
+    case REPL_COMPILED_INSERT_MANY:
+        if (cmd_idx >= change->pos && cmd_idx < change->pos + change->count)
+            return -1; /* newly inserted rows */
+        if (cmd_idx >= change->pos + change->count)
+            mid_idx = cmd_idx - change->count;
+        break;
+    case REPL_COMPILED_DELETE_RANGE:
+        if (cmd_idx >= change->pos)
+            mid_idx = cmd_idx + change->count;
+        break;
+    case REPL_COMPILED_REPLACE_ONE:
+    case REPL_COMPILED_NO_CHANGE:
+    default:
+        mid_idx = cmd_idx;
+        break;
+    }
+
+    if (change->delete_count > 0 && change->delete_pos >= 0) {
+        if (mid_idx >= change->delete_pos)
+            return mid_idx + change->delete_count;
+    }
+    return mid_idx;
+}
+
+void repl_reindent_after_change(int at_before, const ReplCompiledChange *change) {
     int count = repl_state_document_count();
     int at_after = repl_source_scope_display_body_start();
 
@@ -209,13 +246,17 @@ void repl_reindent_after_boundary_move(int at_before) {
 
     for (int cmd_idx = 0; cmd_idx < count; cmd_idx++) {
         const char *text;
-        int was_body, is_body, delta, lead, new_lead, rest_len;
+        int pre_idx, was_body, is_body, delta, lead, new_lead, rest_len;
         char rebuilt[MAX_LINE_LEN];
 
         if (!repl_state_document_cmds()[cmd_idx].valid)
             continue;
 
-        was_body = cmd_idx >= at_before;
+        pre_idx = map_post_change_to_pre(cmd_idx, change);
+        if (pre_idx < 0)
+            continue;
+
+        was_body = pre_idx >= at_before;
         is_body  = cmd_idx >= at_after;
         if (was_body == is_body)
             continue;
@@ -245,6 +286,10 @@ void repl_reindent_after_boundary_move(int at_before) {
 
     repl_source_scope_depth_cache_invalidate();
     repl_state_mark_source_dirty();
+}
+
+void repl_reindent_after_boundary_move(int at_before) {
+    repl_reindent_after_change(at_before, NULL);
 }
 
 /* The Ctrl+\ whole-document reformatter: re-derive canonical text for

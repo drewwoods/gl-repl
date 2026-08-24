@@ -39,6 +39,7 @@
 #include "subsystems/color_picker/color_picker_state.h"
 #include "subsystems/tutorial/tutorial.h"  /* tutorial_notify_state_changed */
 
+#include "repl/reformat.h"
 #include "repl/apply.h"
 #include "repl/compile.h"
 #include "repl/command.h"
@@ -103,6 +104,7 @@ static void apply_compiled_change_full(const ReplCompiledChange *change) {
         change->delete_count > 0) {
         color_picker_stop();
     }
+    int at_before = repl_source_scope_display_body_start();
     repl_apply_predef_ops(change);
     repl_apply_scratch_ops(change);
     editor_buffer_apply_compiled_change(change);
@@ -111,6 +113,7 @@ static void apply_compiled_change_full(const ReplCompiledChange *change) {
         editor_state_edit_line_set(edit_line);
         repl_apply_alias_ops(change);
     }
+    repl_reindent_after_change(at_before, change);
 }
 
 /* Fire the tutorial REQUIRE_VAR notify for any predef-var writeback
@@ -1260,6 +1263,74 @@ int editor_try_commit_var_statements_then_insert(void) {
         return 1;
     }
     return 0;
+}
+
+int editor_try_commit_file_scope_decl(void) {
+    ReplCompileContext ctx = editor_compile_context_live();
+    ReplCompiledChange change;
+    repl_compiled_change_init(&change);
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult result = repl_compile_float_decl(
+        editor_state_input().input, &ctx, &change, err, sizeof(err));
+    if (result == REPL_COMPILE_OK && change.kind == REPL_COMPILED_NO_CHANGE)
+        return 0;
+    if (result != REPL_COMPILE_OK) {
+        repl_set_status_error(err);
+        return -1;
+    }
+
+    if (!repl_apply_can_apply_compiled_change(&change)) {
+        repl_set_status_error("Command buffer full!");
+        return -1;
+    }
+
+    editor_undo_push_snapshot();
+    apply_compiled_change_full(&change);
+
+    /* Post-effects: clear input, retarget edit line to new body start, keep slot active */
+    editor_input_clear();
+    editor_cursor_pos_set(0);
+    editor_completion_clear();
+    int new_body_start = repl_source_scope_display_body_start();
+    editor_state_edit_line_set(new_body_start);
+    editor_insert_mode_set(1);
+    editor_insert_scope_set(EDITOR_INSERT_FILE_SCOPE);
+    if (change.commit_message[0])
+        repl_set_status(change.commit_message);
+    repl_mark_source_dirty();
+    return 1;
+}
+
+int editor_try_commit_file_scope_func_def(void) {
+    ReplCompileContext ctx = editor_compile_context_live();
+    EditorCommitPlan plan;
+    editor_commit_plan_init(&plan);
+    char err[REPL_STATUS_TEXT_MAX];
+
+    ReplCompileResult r = editor_compile_func_def(
+        editor_state_input().input, &ctx, &plan, err, sizeof(err));
+    if (r == REPL_COMPILE_OK &&
+        plan.change.kind == REPL_COMPILED_NO_CHANGE &&
+        !plan.change.commit_message[0])
+        return 0;
+    if (r != REPL_COMPILE_OK) {
+        repl_set_status_error(err);
+        return -1;
+    }
+    if (!repl_apply_can_apply_compiled_change(&plan.change)) {
+        repl_set_status_error("Command buffer full!");
+        return -1;
+    }
+
+    editor_undo_push_snapshot();
+    if (!editor_commit_apply_plan(&plan)) {
+        repl_set_status_error("Command buffer full!");
+        return -1;
+    }
+    editor_insert_scope_set(EDITOR_INSERT_DOCUMENT);
+    repl_mark_source_dirty();
+    return 1;
 }
 
 /* Split the multi-variable declaration under the cursor into one

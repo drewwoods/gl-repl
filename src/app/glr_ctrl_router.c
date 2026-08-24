@@ -1095,6 +1095,19 @@ static int route_code_insert_line_hit(const UiHit *hit) {
     return 1;
 }
 
+/* UI_HIT_CODE_FILE_SCOPE_INSERT: file-scope insertion slot above display().
+ * Routes through the editor transaction to activate the scoped slot. */
+static int route_code_file_scope_insert_hit(const UiHit *hit) {
+    (void)hit;
+    color_picker_stop();
+    editor_input_enter_file_scope_slot();
+    if (hit && hit->char_idx >= 0)
+        editor_cursor_pos_set(hit->char_idx);
+    route_code_click_epilog();
+    glr_ctrl_router_reset_code_panel_drag();
+    return 1;
+}
+
 /* UI_HIT_CODE_GUTTER: clicking the line-number column selects the
  * row. Same dispatch as CODE_TEXT minus the cursor-column move. */
 static int route_code_gutter_hit(const UiHit *hit) {
@@ -1991,6 +2004,7 @@ static int code_panel_target_from_hit(UiHit hit) {
     switch (hit.kind) {
     case UI_HIT_CODE_TEXT:
     case UI_HIT_CODE_GUTTER:
+    case UI_HIT_CODE_FILE_SCOPE_INSERT:
         return hit.line_idx;
     case UI_HIT_CODE_INSERT_LINE: {
         int target = hit.line_idx; /* Target line to focus on. */
@@ -2140,6 +2154,8 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_code_text_hit(&hit); break;
     case UI_HIT_CODE_INSERT_LINE:
         consumed = route_code_insert_line_hit(&hit); break;
+    case UI_HIT_CODE_FILE_SCOPE_INSERT:
+        consumed = route_code_file_scope_insert_hit(&hit); break;
     case UI_HIT_CODE_GUTTER:
         consumed = route_code_gutter_hit(&hit); break;
     case UI_HIT_CODE_SCROLLBAR:

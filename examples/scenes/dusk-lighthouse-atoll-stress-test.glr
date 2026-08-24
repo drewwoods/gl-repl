@@ -321,9 +321,9 @@ moon() {
       glColor4f(0.55, 0.3, 1, 0.45);
       glVertex3f(0, 0, -0.15);
       for(i, 0, 33) {
-          glColor4f(0.42, 0.32, 0.85, 0);
-          glVertex3f(1.4*cos(i*TAU/32), 1.4*sin(i*TAU/32), -0.15);
-        }
+        glColor4f(0.42, 0.32, 0.85, 0);
+        glVertex3f(1.4*cos(i*TAU/32), 1.4*sin(i*TAU/32), -0.15);
+      }
     glEnd();
 
     // 2. Stippled celestial halo ring (glLineStipple)
@@ -332,9 +332,9 @@ moon() {
     glLineWidth(1);
     glBegin(GL_LINE_LOOP);
       for(i, 0, 48) {
-          glColor4f(0.55, 0.3, 1, 0.75);
-          glVertex3f(1.05*cos(i*TAU/48), 1.05*sin(i*TAU/48), 0);
-        }
+        glColor4f(0.55, 0.3, 1, 0.75);
+        glVertex3f(1.05*cos(i*TAU/48), 1.05*sin(i*TAU/48), 0);
+      }
     glEnd();
     glDisable(GL_LINE_STIPPLE);
     glLineWidth(1);

@@ -285,7 +285,7 @@ authority; don't re-derive a file's job from its name.
 | **src/app/** | Frame-time controller: display/reshape/init-GL, input routing, config, camera, audio, PLY export, profiling. See [`src/app/README.md`](src/app/README.md) |
 | **src/app/boot/** | Startup lifecycle - pre/without frame loop, reached only from [`gl_repl.c`](gl_repl.c). CLI parsing, `--dump-*`, init trace, capture env, frame pacer, splash. **Guard `check-app-boot-band`: the controller must not include these.** |
 | **src/repl/** | Language pipeline: parse → compile → apply → flatten → execute, plus specs, eval, scenes, export/import, tutorials. See `src/repl/ARCHITECTURE.md` |
-| **src/editor/** | Text document: key dispatch, commit transaction, [`EditorState`](src/editor/state.h#L200), clipboard/undo/search/replace. `edit_ops.{c,h}` stays REPL-free (`check-edit-ops-pure`) |
+| **src/editor/** | Text document: key dispatch, commit transaction, [`EditorState`](src/editor/state.h#L207), clipboard/undo/search/replace. `edit_ops.{c,h}` stays REPL-free (`check-edit-ops-pure`) |
 | **src/subsystems/** | Editor/UI-independent peers: `replay/`, `tutorial/`, `color_picker/`, `variable_panel/`, `edit_overlays/` |
 | **src/render3d/** | 3D scene renderer - **no REPL dependency** (proof: `render3d_demo`). Grid/axes/backdrop/lights/overlays/depth-viz/guides |
 | **src/ui/** | 2D view rendering + hit-test, **pure over snapshots**. `core/` primitives, `app/` panels + menus + layout, `subsystems/` peer renderers, `support/` prof panels |
@@ -404,7 +404,7 @@ frame baseline so accumulating programs don't compound.
 
 ### Two-level command model
 
-Source `GLCmd[]` (per-line canonical **text lives in [`EditorState`](src/editor/state.h#L200)'s editor
+Source `GLCmd[]` (per-line canonical **text lives in [`EditorState`](src/editor/state.h#L207)'s editor
 buffer, not on [`GLCmd`](src/repl/command.h#L127)**) → flat array (loops unrolled, funcs inlined, ifs
 resolved; each flat cmd records `src_cmd_idx` / `call_src_cmd_idx` /
 `func_scope_mask`) → executor emits GL. Any edit marks the flat array dirty;
@@ -682,11 +682,11 @@ aliases (candidate text materialized in glr_completion.c statics, filtered to
 slots with a live `CMD_FUNC_DEF` - alias names outlive deleted defs). Param
 hints resolve the callee through `repl_scan_func_name_token`, so `funcN(` and
 `drawCube(` behave alike. Search: Ctrl+F, state via
-[`editor_state_search()`](src/editor/state.h#L428).
+[`editor_state_search()`](src/editor/state.h#L437).
 
 ### Find / replace
 
-One [`EditorSearchState`](src/editor/state.h#L136) holds both fields plus `whole_word` and a 3-stop
+One [`EditorSearchState`](src/editor/state.h#L143) holds both fields plus `whole_word` and a 3-stop
 focus ring (find field / replace field / word chip) that **Tab** cycles -
 there is no free Ctrl slot in [`keymap.h`](keymap.h), so the ring *is* the keyboard
 path. `whole_word` belongs to *matching*, not replacing: it feeds the

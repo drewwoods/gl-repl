@@ -489,6 +489,17 @@ static void repl_code_panel_precompute_layout_rows(const UiRenderSnapshot *snap,
     }
 }
 
+static int repl_code_panel_file_scope_slot_row_count(const UiRenderSnapshot *snap,
+                                                     int panel_w, int text_x) {
+    if (snap->tutorial.active)
+        return 0;
+    if (snap->editor_input.insert_mode &&
+        snap->editor_input.insert_scope == EDITOR_INSERT_FILE_SCOPE) {
+        return repl_code_panel_current_input_rows(snap, panel_w, text_x);
+    }
+    return 1;
+}
+
 static int repl_code_panel_insert_rows(const UiRenderSnapshot *snap,
                                        int panel_w, int text_x) {
     return repl_code_panel_current_input_rows(snap, panel_w, text_x);
@@ -503,27 +514,38 @@ static int repl_code_panel_trailing_row_count(const UiRenderSnapshot *snap,
 
 /* Rows drawn before document command `cmd_limit`: the file-scope chrome,
  * every earlier command's rows, and - once cmd_limit has reached the
- * display-body boundary - the spliced display-open chrome. */
+ * display-body boundary - the file-scope slot and spliced display-open chrome. */
 static int repl_code_panel_rows_before_cmd_in_layout(
         const UiReplCodePanelLayout *layout, int cmd_limit) {
     return layout->header_rows +
            repl_code_panel_rows_before_cmd(layout->cmd_main_rows,
                                            layout->replay_extra_rows,
                                            cmd_limit) +
-           (cmd_limit >= layout->display_open_at ? layout->display_open_rows : 0);
+           (cmd_limit >= layout->display_open_at
+                ? (layout->file_scope_slot_rows + layout->display_open_rows)
+                : 0);
 }
 
 static int repl_code_panel_cursor_doc_line_from_layout(
     const UiRenderSnapshot *snap,
     const UiReplCodePanelLayout *layout,
     int panel_w, int text_x) {
-    /* The three former branches (insert mode / in-range edit line /
-     * out-of-range fallback) all summed the same prefix and then added
-     * the identical cursor-row term. The prefix length is the same in
-     * every case: min(edit_line, document_count) - insert mode clamps
-     * to both bounds; non-insert uses edit_line when it is
-     * < document_count, otherwise document_count, which is that same
-     * min. So the dispatch was redundant. */
+    if (snap->editor_input.insert_mode &&
+        snap->editor_input.insert_scope == EDITOR_INSERT_FILE_SCOPE) {
+        int prefix = (snap->display_body_start < snap->document_count)
+                         ? snap->display_body_start : snap->document_count;
+        return layout->header_rows +
+               repl_code_panel_rows_before_cmd(layout->cmd_main_rows,
+                                               layout->replay_extra_rows,
+                                               prefix) +
+               repl_code_panel_cursor_row(snap,
+                                          snap->editor_input.input,
+                                          repl_code_panel_input_first_x(snap, text_x),
+                                          panel_w,
+                                          snap->editor_input.cursor_pos,
+                                          NULL, NULL, NULL);
+    }
+
     int prefix = (snap->edit_line < snap->document_count)
                      ? snap->edit_line : snap->document_count;
     int display_prefix = repl_code_panel_func_return_prefix_chars(
@@ -578,6 +600,8 @@ void ui_repl_code_panel_build_layout(const UiRenderSnapshot *snap,
         cp_h, ui_scene_tabs_band_h(snap));
     layout->header_rows = repl_code_panel_header_row_count(snap, panel_w, text_x);
     layout->footer_rows = repl_code_panel_footer_row_count(snap, panel_w, text_x);
+    layout->file_scope_slot_rows =
+        repl_code_panel_file_scope_slot_row_count(snap, panel_w, text_x);
     layout->display_open_rows =
         repl_code_panel_display_open_row_count(snap, panel_w, text_x);
     layout->display_close_rows =
@@ -594,10 +618,13 @@ void ui_repl_code_panel_build_layout(const UiRenderSnapshot *snap,
                                            layout->replay_extra_rows);
 
     total_lines = layout->header_rows + layout->footer_rows +
+                  layout->file_scope_slot_rows +
                   layout->display_open_rows + layout->display_close_rows +
                   repl_code_panel_trailing_row_count(snap, panel_w, text_x);
     for (int i = 0; i < snap->document_count; i++) {
-        if (snap->editor_input.insert_mode && i == snap->edit_line)
+        if (snap->editor_input.insert_mode &&
+            snap->editor_input.insert_scope == EDITOR_INSERT_DOCUMENT &&
+            i == snap->edit_line)
             total_lines += repl_code_panel_insert_rows(snap, panel_w, text_x);
         total_lines += layout->cmd_main_rows[i];
         total_lines += layout->replay_extra_rows[i];
@@ -618,7 +645,8 @@ int ui_repl_code_panel_display_open_row(const UiReplCodePanelLayout *layout) {
     return layout->header_rows +
            repl_code_panel_rows_before_cmd(layout->cmd_main_rows,
                                            layout->replay_extra_rows,
-                                           layout->display_open_at);
+                                           layout->display_open_at) +
+           layout->file_scope_slot_rows;
 }
 
 int ui_repl_code_panel_rows_before_cmd(const UiReplCodePanelLayout *layout,
@@ -629,11 +657,12 @@ int ui_repl_code_panel_rows_before_cmd(const UiReplCodePanelLayout *layout,
 }
 
 int ui_repl_code_panel_target_for_doc_line(const UiRenderSnapshot *snap,
-                                           int doc_line,
-                                           const UiReplCodePanelLayout *layout,
-                                           int *out_target,
-                                           int *out_on_insert_line,
-                                           int *out_row_offset) {
+                                            int doc_line,
+                                            const UiReplCodePanelLayout *layout,
+                                            int *out_target,
+                                            int *out_on_insert_line,
+                                            int *out_row_offset,
+                                            EditorInsertScope *out_insert_scope) {
     int row;
 
     if (!snap || !layout)
@@ -644,54 +673,77 @@ int ui_repl_code_panel_target_for_doc_line(const UiRenderSnapshot *snap,
         return 0;
 
     /* Consume rows in the same order the panel emits them after the
-     * file-scope chrome: the spliced display-open chrome once the
-     * boundary is reached, then optional insert row, command body rows,
-     * replay virtual rows, then the trailing newline/input slot.
-     *
-     * The splice is consumed BEFORE the insert row, which is what makes
-     * the ghost at the boundary read as "insert a body row here". */
+     * file-scope chrome: the file-scope insert slot, spliced display-open
+     * chrome once the boundary is reached, then optional insert row,
+     * command body rows, replay virtual rows, then the trailing newline/input slot. */
     for (int cmd_idx = 0; cmd_idx <= snap->document_count; cmd_idx++) {
         if (cmd_idx == layout->display_open_at) {
+            if (layout->file_scope_slot_rows > 0) {
+                if (row < layout->file_scope_slot_rows) {
+                    if (out_insert_scope)
+                        *out_insert_scope = EDITOR_INSERT_FILE_SCOPE;
+                    return repl_code_panel_return_target_result(out_target,
+                                                                out_on_insert_line,
+                                                                out_row_offset,
+                                                                snap->display_body_start, 1, row);
+                }
+                row -= layout->file_scope_slot_rows;
+            }
+
             if (row < layout->display_open_rows)
                 return 0;   /* generated chrome: not a document target */
             row -= layout->display_open_rows;
         }
 
-        if (snap->editor_input.insert_mode && cmd_idx == snap->edit_line) {
+        if (snap->editor_input.insert_mode &&
+            snap->editor_input.insert_scope == EDITOR_INSERT_DOCUMENT &&
+            cmd_idx == snap->edit_line) {
             int insert_rows = repl_code_panel_insert_rows(snap, layout->panel_w,
                                                           layout->text_x);
-            if (row < insert_rows)
+            if (row < insert_rows) {
+                if (out_insert_scope)
+                    *out_insert_scope = EDITOR_INSERT_DOCUMENT;
                 return repl_code_panel_return_target_result(out_target,
                                                             out_on_insert_line,
                                                             out_row_offset,
                                                             -1, 1, row);
+            }
             row -= insert_rows;
         }
 
         if (cmd_idx < snap->document_count) {
             int main_rows = layout->cmd_main_rows[cmd_idx];
-            if (row < main_rows)
+            if (row < main_rows) {
+                if (out_insert_scope)
+                    *out_insert_scope = EDITOR_INSERT_DOCUMENT;
                 return repl_code_panel_return_target_result(out_target,
                                                             out_on_insert_line,
                                                             out_row_offset,
                                                             cmd_idx, 0, row);
+            }
             row -= main_rows;
 
-            if (row < layout->replay_extra_rows[cmd_idx])
+            if (row < layout->replay_extra_rows[cmd_idx]) {
+                if (out_insert_scope)
+                    *out_insert_scope = EDITOR_INSERT_DOCUMENT;
                 return repl_code_panel_return_target_result(out_target,
                                                             out_on_insert_line,
                                                             out_row_offset,
                                                             cmd_idx, 0, 0);
+            }
             row -= layout->replay_extra_rows[cmd_idx];
         } else {
             int newline_rows = repl_code_panel_trailing_row_count(snap, layout->panel_w,
                                                             layout->text_x);
-            if (row < newline_rows)
+            if (row < newline_rows) {
+                if (out_insert_scope)
+                    *out_insert_scope = EDITOR_INSERT_DOCUMENT;
                 return repl_code_panel_return_target_result(out_target,
                                                             out_on_insert_line,
                                                             out_row_offset,
                                                             snap->document_count,
                                                             0, row);
+            }
             return 0;
         }
     }
@@ -2760,6 +2812,34 @@ static void repl_code_panel_end_walk_line(ReplCodePanelWalkState *state,
     }
 }
 
+static void repl_code_panel_add_file_scope_slot(ReplCodePanelBuilder *builder) {
+    const UiRenderSnapshot *snap;
+
+    if (!builder || !builder->snap)
+        return;
+    snap = builder->snap;
+    if (snap->tutorial.active)
+        return;
+
+    if (snap->editor_input.insert_mode &&
+        snap->editor_input.insert_scope == EDITOR_INSERT_FILE_SCOPE) {
+        repl_code_panel_add_input_row(builder, -1, snap->display_body_start,
+                                      0, snap->display_body_start, NULL);
+    } else {
+        UiTextPanelRow *row = repl_code_panel_push_row(builder);
+        if (!row)
+            return;
+        row->text = "+ float or function";
+        row->kind = UI_TEXT_PANEL_ROW_VIRTUAL;
+        row->left_gutter_label = 0;
+        row->source_line_idx = -1;
+        row->hit_target_line_idx = snap->display_body_start;
+        row->indent_chars = 0;
+        row->hit_eligible = 1;
+        row->color = repl_code_panel_rgb(0.28f, 0.28f, 0.35f);
+    }
+}
+
 static void repl_code_panel_add_rows_for_line(ReplCodePanelBuilder *builder,
                                               ReplCodePanelWalkState *state,
                                               int line_idx) {
@@ -2775,7 +2855,9 @@ static void repl_code_panel_add_rows_for_line(ReplCodePanelBuilder *builder,
     snap = builder->snap;
     cmd = &snap->document_cmds[line_idx];
 
-    if (snap->editor_input.insert_mode && line_idx == snap->edit_line) {
+    if (snap->editor_input.insert_mode &&
+        snap->editor_input.insert_scope == EDITOR_INSERT_DOCUMENT &&
+        line_idx == snap->edit_line) {
         repl_code_panel_add_input_row(builder, -1, snap->edit_line,
                                       snap->active_indent_chars, line_idx,
                                       NULL);
@@ -2842,18 +2924,21 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
         if (at > snap->document_count) at = snap->document_count;
 
         for (int i = 0; i < snap->document_count; i++) {
-            /* Before add_rows_for_line, so the insert ghost at the
-             * boundary draws INSIDE display() - it reads as "insert a
-             * body row here". */
-            if (i == at)
+            /* Before add_rows_for_line, so the file-scope slot and
+             * display() open chrome draw in sequence before body commands. */
+            if (i == at) {
+                repl_code_panel_add_file_scope_slot(builder);
                 repl_code_panel_add_display_open_rows(builder);
+            }
             repl_code_panel_add_rows_for_line(builder, &walk, i);
         }
         /* A declarations-and-functions-only document: the whole body is
          * empty, so the frame opens after the last command and before the
          * trailing input/placeholder row. */
-        if (at >= snap->document_count)
+        if (at >= snap->document_count) {
+            repl_code_panel_add_file_scope_slot(builder);
             repl_code_panel_add_display_open_rows(builder);
+        }
     }
 
     repl_code_panel_add_trailing_document_row(builder);
@@ -2951,6 +3036,18 @@ static UiHit repl_code_panel_rewrite_hit(const ReplCodePanelBuilder *builder,
         if (hit.line_idx < 0 && row->hit_target_line_idx >= 0)
             hit.line_idx = row->hit_target_line_idx;
         hit.char_idx = -1;
+        if (row->hit_target_line_idx == builder->snap->display_body_start &&
+            row->text && strcmp(row->text, "+ float or function") == 0) {
+            hit.kind = UI_HIT_CODE_FILE_SCOPE_INSERT;
+        }
+    } else if (row->kind == UI_TEXT_PANEL_ROW_INPUT &&
+               builder->snap->editor_input.insert_mode &&
+               builder->snap->editor_input.insert_scope == EDITOR_INSERT_FILE_SCOPE &&
+               row->hit_target_line_idx == builder->snap->display_body_start) {
+        hit.kind = UI_HIT_CODE_FILE_SCOPE_INSERT;
+        hit.line_idx = builder->snap->display_body_start;
+        if (hit.char_idx < 0)
+            hit.char_idx = 0;
     } else if ((row->kind == UI_TEXT_PANEL_ROW_TEXT ||
                 row->kind == UI_TEXT_PANEL_ROW_INPUT) &&
                hit.kind == UI_HIT_CODE_TEXT &&
@@ -3122,6 +3219,14 @@ int ui_repl_code_panel_source_line_point(const UiRenderSnapshot *snap,
 
     for (i = 0; i < builder.row_count; i++) {
         const UiTextPanelRow *row = &builder.text_snap.rows[i];
+        if (row->kind == UI_TEXT_PANEL_ROW_VIRTUAL &&
+            row->text && strcmp(row->text, "+ float or function") == 0)
+            continue;
+        if (row->kind == UI_TEXT_PANEL_ROW_INPUT &&
+            snap->editor_input.insert_mode &&
+            snap->editor_input.insert_scope == EDITOR_INSERT_FILE_SCOPE)
+            continue;
+
         int target = row->source_line_idx >= 0
                          ? row->source_line_idx
                          : row->hit_target_line_idx;

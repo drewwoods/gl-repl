@@ -274,6 +274,8 @@ int editor_try_commit_var_statements(void);
 int editor_try_commit_block_structs(void);
 int editor_try_commit_any(void);
 int editor_try_commit_var_statements_then_insert(void);
+int editor_try_commit_file_scope_decl(void);
+int editor_try_commit_file_scope_func_def(void);
 
 /* Split the multi-variable declaration under the cursor into one decl
  * per line. Shared by the File menu.

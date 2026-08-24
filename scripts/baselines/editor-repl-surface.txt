@@ -82,8 +82,14 @@
 # 2026-08-24: input_c dropped -1 (repl_source_scope_enclosing_func_at removed
 # as Ctrl+Up/Down always jumps directly to next/prev function definition).
 #
+# 2026-08-25: input_c bumped +1 for repl_source_scope_display_body_start
+# (file-scope insert slot navigation and slot targeting).
+# commit_c bumped +2 for repl_source_scope_display_body_start and
+# repl_reindent_after_change (file-scope decl commit targeting and
+# structural boundary re-indentation).
+#
 # Ratchet down as migrations land. The plan target
 # (docs/plans/done/editor-demo.md) is ~5 per file.
 
-input_c: 29
-commit_c: 29
+input_c: 30
+commit_c: 31

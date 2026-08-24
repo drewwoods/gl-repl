@@ -234,4 +234,9 @@ int editor_input_has_uncommitted_change(void);
 void editor_input_word_bounds_at(const char *text, int len, int char_idx,
                                  int *out_start, int *out_end);
 
+/* File-scope insert slot transitions.
+ * Returns 1 if transitioned successfully, 0 if blocked by rejected commit. */
+int editor_input_enter_file_scope_slot(void);
+int editor_input_exit_file_scope_slot(int semantic_dir_up);
+
 #endif /* EDITOR_INPUT_H */

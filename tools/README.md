@@ -81,7 +81,7 @@ example.
 <img src="../docs/images/demos/editor.png" alt="editor_demo: a plain-text document with line numbers, a File menu, and the cursor on the last row" width="100%">
 
 The text-document model driven by a *different* controller: this window is
-[`EditorState`](../src/editor/state.h#L200) plus `ui/core/text_panel`, with the
+[`EditorState`](../src/editor/state.h#L207) plus `ui/core/text_panel`, with the
 demo's own dispatcher ([`input.c`](editor_demo/input.c)) and File menu
 ([`menu.c`](editor_demo/menu.c)) - which is what makes `src/editor/input.c` the
 REPL editor's controller rather than the model's. It links `src/ui/core` but
