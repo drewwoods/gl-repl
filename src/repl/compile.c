@@ -318,6 +318,16 @@ static ReplCompileResult compile_validate_c_binder_name(
     return REPL_COMPILE_OK;
 }
 
+/* These names are C keywords, but they are also the heads/separators of
+ * structured REPL forms. Let their handlers claim the line instead of
+ * reporting them as attempted function names. Other C keywords cannot name a
+ * function because export emits the alias as a C function identifier. */
+static int compile_func_alias_is_structural_name(const char *name) {
+    return strcmp(name, "if") == 0 ||
+           strcmp(name, "else") == 0 ||
+           strcmp(name, "for") == 0;
+}
+
 /* Source index of the innermost open CMD_FUNC_DEF at `pos`, or -1 at
  * document top level. Resolves *through* a nested for/if - a declaration
  * typed one level down still belongs to the owning function, which is what
@@ -3437,6 +3447,10 @@ ReplCompileResult repl_compile_func_def_resolve_alias(const ReplCompileContext *
                      * and setting out->kind = REPL_COMPILED_NO_CHANGE so the next
                      * commit handler in the chain (if-block, close-brace, etc.) can claim the input. */
                     if (!repl_func_alias_name_is_valid(ident)) {
+                        if (repl_eval_is_c_keyword(ident) &&
+                            !compile_func_alias_is_structural_name(ident))
+                            return compile_validate_c_binder_name(
+                                ident, "function", err, err_size);
                         out->kind = REPL_COMPILED_NO_CHANGE;
                         if (rejected_keyword)
                             *rejected_keyword = 1;

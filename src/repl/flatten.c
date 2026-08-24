@@ -1728,8 +1728,7 @@ static void flatten_range(FlattenContext *ctx,
             continue;
         }
 
-        if (src_cmd->type == CMD_BREAK || src_cmd->type == CMD_CONTINUE ||
-            src_cmd->type == CMD_RETURN) {
+        if (repl_cmd_is_jump(src_cmd->type)) {
             flatten_raise_loop_signal(ctx, src_cmd->type);
             return;
         }

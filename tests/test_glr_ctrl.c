@@ -1333,10 +1333,10 @@ static void test_prof_nesting_guard(void) {
 /* The guard over a real frame, which is what the synthetic cases above cannot
  * check: every catalog parent claimed by the depth column has to be open across
  * its children in the frame the controller actually runs. The 2D UI band is the
- * reason this exists - it is an accumulated parent whose bracket steps out
- * around the assignment-plot and console panel draws, so both of those and the
- * whole run of panels between them have to land on the right side of it. Opened
- * plot and console, because the step-out legs only run when they draw. */
+ * reason this exists - it is a direct parent whose bracket stays open around
+ * the assignment-plot and console panel draws, so both of those and the whole
+ * run of panels between them have to land on the right side of it. Opened plot
+ * and console, because those children only run when they draw. */
 static void test_prof_nesting_guard_over_a_display_frame(void) {
     printf("--- imrepl_ctrl profile nesting over a frame ---\n");
 

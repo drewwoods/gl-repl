@@ -165,12 +165,13 @@ The 2D overlays are grouped the same way: `PROF_UI_2D` brackets the whole band
 drawn over the finished scene - replay/tour HUDs, code panel, popups, profile
 and memory panels - so the panel has one row for what the interface costs, and
 the draws between those children that carry no section of their own land in the
-parent rather than in unattributed Frame Work. It is *accumulated*
-(`prof_accum_*`) rather than one span: the assignment-plot and console panels
-draw inside the stretch but belong to their own accumulated roots, whose capture
-phases run earlier in the frame, so the band's bracket steps out around each of
-those draws and the three rows stay disjoint. Nesting is only ever claimed where
-it is real - the depth column in [`src/app/glr_prof.c`](../src/app/glr_prof.c)
+parent rather than in unattributed Frame Work. It is one direct span
+(`prof_begin`/`prof_end`), not an accumulated section: the assignment-plot and
+console panels draw inside the stretch, while their scan phases run earlier in
+the frame under their own sections. The whole UI band therefore remains the
+parent of every panel draw and of the uninstrumented work between them. Nesting
+is only ever claimed where it is real - the depth column in
+[`src/app/glr_prof.c`](../src/app/glr_prof.c)
 is checked every frame by the guard described in
 [`src/support/cpuprof.h`](../src/support/cpuprof.h).
 
@@ -837,7 +838,7 @@ GL pipeline rasterize the wireframe itself. The actual `glutSolid*` call
 goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L340) (shared with the live
 render loop in [`src/repl/executor.c`](../src/repl/executor.c), so the dispatch stays in one place
 and the GLUT-symbol call site stays inside the executor TU). The
-membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L352) in [`src/repl/command.h`](../src/repl/command.h)
+membership predicate is [`repl_cmd_is_glut_solid()`](../src/repl/command.h#L361) in [`src/repl/command.h`](../src/repl/command.h)
 - the single source that also feeds `repl_cmd_starts_geometry_emit` and
 `repl_cmd_consumes_current_color` (a new `glutSolid*` [`CmdType`](../src/repl/command.h#L48) joins all
 three at once; `test_is_glut_solid_predicate` in [`tests/test_replay_walk.c`](../tests/test_replay_walk.c)

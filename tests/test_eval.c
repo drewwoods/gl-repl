@@ -1071,7 +1071,8 @@ static void run_tests(void) {
          * the user to `float <keyword>;` and a second rejection.
          *
          * Names that merely start with a keyword must stay declarable:
-         * the check is whole-name, not a prefix match. */
+         * the check is whole-name, not a prefix match. Keep this inventory in
+         * step with eval.c's C89/C99 plus newer C11/C23 spellings. */
         {
             static const char *const kw[] = {
                 "auto", "break", "case", "char", "const", "continue",
@@ -1080,6 +1081,11 @@ static void run_tests(void) {
                 "return", "short", "signed", "sizeof", "static", "struct",
                 "switch", "typedef", "union", "unsigned", "void",
                 "volatile", "while", "inline", "restrict", "_Bool",
+                "_Complex", "_Imaginary",
+                "_Alignas", "_Alignof", "_Atomic", "_Generic", "_Noreturn",
+                "_Static_assert", "_Thread_local", "bool", "true", "false",
+                "alignas", "alignof", "constexpr", "nullptr", "static_assert",
+                "thread_local", "typeof",
                 NULL
             };
             for (int k = 0; kw[k]; k++) {

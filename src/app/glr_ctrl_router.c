@@ -548,27 +548,11 @@ int glr_ctrl_router_handle_variable_panel_drag_release(int state) {
  * The coarse modifier (right-press) jumps ten frames. Shift-fine is
  * deliberately not honored: there is nothing finer than a frame to step to,
  * and a sub-frame `t` is a sampling concept (accum blur), not a transport one. */
-/* Can a frame step keep a running replay? The step dirties `t`, and the next
- * frame's refresh boundary decides what that costs: an in-place rebake when
- * every use of `t` is a baked value, a full reflatten when `t` is structural
- * (loop bound / if condition / call arg - see ReplFlatProgramState's dep-mask
- * docs). That is exactly the split that matters here, because replay's PC is
- * an *index* into the flat stream:
- *
- *   rebake - same count, same indices, new argument values. The PC still names
- *            the command it named, so the highlighted row and the drawn prefix
- *            stay in step and the geometry so far re-animates.
- *   full   - the stream is rebuilt under the PC. Nothing crashes (the frame
- *            refreshes before replay_prepare_frame, which reclamps the PC to
- *            the new count), but index N is now some other command, so the
- *            replay silently starts lying about where it is.
- *
- * `rebake_ok` is the second half: without compiled programs on every has_vars
- * command, a value change escalates to a full flatten regardless of the mask.
- *
- * This is the same structural-vs-value decision accum time-blur already leans
- * on per sub-sample, which is why "most scenes survive it" is measured rather
- * than hoped. */
+/* A replay PC is an index into the flat stream. A value-only rebake preserves
+ * the stream's count and order, while a structural reflatten can put a
+ * different command at the same index. Keep stepping inside replay only when
+ * the scene has no structural `t` dependency and every affected command can
+ * rebake; otherwise stop replay before changing `t`. */
 static int time_step_keeps_replay_pc_honest(void) {
     int t_idx = repl_state_variables().time_var_idx;
 

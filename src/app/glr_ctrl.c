@@ -3319,9 +3319,9 @@ void glr_ctrl_display_frame(void) {
     }
 
     /* Assignment-plot replay markers, once the frame's exec limit is known.
-     * Its own accumulate bracket rather than a silent rider on SNAPSHOT_PREP:
-     * this is a flat-program scan, and per-frame work inside someone else's
-     * span shows up only as unattributed remainder. */
+     * Its own nested span rather than a silent rider on SNAPSHOT_PREP: this is
+     * a flat-program scan, and its cost should remain visible as a child of
+     * the prep bracket rather than becoming unattributed remainder. */
     g_assign_plot_replay_marker = 0;
     if (replay_active() && assign_plot_is_open()) {
         prof_begin(PROF_ASSIGN_PLOT_MARKERS);

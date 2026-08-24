@@ -263,6 +263,15 @@ static inline int repl_cmd_is_transform(CmdType type) {
             type == CMD_LOAD_IDENTITY || type == CMD_MULT_MATRIXF);
 }
 
+/* True for source-level control-flow jumps. These rows raise a flatten-time
+ * signal and never survive into the flat program. Keep the set here so
+ * walkers do not grow ad-hoc CMD_BREAK/CMD_CONTINUE/CMD_RETURN chains. */
+static inline int repl_cmd_is_jump(CmdType type) {
+    return (type == CMD_BREAK ||
+            type == CMD_CONTINUE ||
+            type == CMD_RETURN);
+}
+
 /* Which of glMultMatrixf's two argument forms this command is: 1 when the
  * matrix comes from the scratch array named in args[0], 0 when the 16
  * values are inline. num_args is the discriminator - the array form

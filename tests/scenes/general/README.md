@@ -87,6 +87,7 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 | `rubber-duck.glr` | 3D, Hierarchical, Lighting, Animation | Iconic yellow rubber duck and duckling floating in a rippling water pool with bubbles. |
 | `polygon-edge-flags.glr` | General, EdgeFlag, Polygons, 3D | Polygon edge flags (`glEdgeFlag`) suppressing internal triangulation chords to render crisp boundary outlines and solid overlays. |
 | `bubble-sort-multi-scratch.glr` | General, 2D, Polygons, ScratchArrays, Algorithms | Bubble sort across up to 3 scratch arrays (`A`, `B`, `C` for 16-48 elements) with configurable length and pass-limited loop compares. |
+| `return-early-exit.glr` | 3D, Control flow, Functions | Function calls stop at `return;`, while the caller continues drawing the remaining scene. |
 
 
 ## How to Run & Validate
@@ -177,4 +178,6 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 ./gl-repl tests/scenes/general/stellar-plasma-solar-prominence.glr
 ./gl-repl tests/scenes/general/rubber-duck.glr
 ./gl-repl tests/scenes/general/polygon-edge-flags.glr
+./gl-repl tests/scenes/general/bubble-sort-multi-scratch.glr
+./gl-repl tests/scenes/general/return-early-exit.glr
 ```

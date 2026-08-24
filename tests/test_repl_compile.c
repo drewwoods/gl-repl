@@ -2445,6 +2445,24 @@ static void test_c_keyword_binders_are_rejected(void) {
     {
         ReplCompileContext ctx =
             repl_compile_context_from_live(editor_state_edit_line());
+        ReplFuncDefKernel kernel;
+        char err[REPL_STATUS_TEXT_MAX] = "";
+        ReplCompileResult result = repl_compile_func_def_kernel(
+            "int() {", &ctx, -1, &kernel, err, sizeof(err));
+
+        ASSERT_INT("C keyword function name is rejected",
+                   result, REPL_COMPILE_ERROR);
+        ASSERT_TRUE("function name keyword diagnostic",
+                    strstr(err, "'int' is a C keyword") != NULL);
+        ASSERT_TRUE("function name keyword says function",
+                    strstr(err, "cannot name a function") != NULL);
+    }
+
+    glr_ctrl_reset_all();
+
+    {
+        ReplCompileContext ctx =
+            repl_compile_context_from_live(editor_state_edit_line());
         ReplForLoopKernel kernel;
         char err[REPL_STATUS_TEXT_MAX] = "";
         ReplCompileResult result = repl_compile_for_loop_kernel(

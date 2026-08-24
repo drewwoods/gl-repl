@@ -2139,6 +2139,15 @@ static int parse_keyword_statement(const char *p, GLCmd *cmd,
         return 1;
     }
 
+    /* Keep C-style spellings from falling through to the generic command
+     * error or the expression-only reserved-name diagnostic. `return` has no
+     * value in the REPL, so the only valid spelling is `return;`. */
+    if (strncmp(p, "return", 6) == 0 &&
+        !repl_eval_is_ident_continue((unsigned char)p[6]) && p[6] != '\0') {
+        parser_emit_error(ctx, "return takes no value - use 'return;'");
+        return 0;
+    }
+
     return -1;
 }
 

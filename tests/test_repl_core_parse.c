@@ -1717,6 +1717,29 @@ int main(void) {
         assert_status_contains("sin(t) status hints assign", "x = sin");
     }
 
+    /* `return;` is the only return spelling: it has no value in the REPL.
+     * Give C-style attempts a useful diagnostic instead of treating them as
+     * an unknown command or an expression that needs assignment. */
+    {
+        static const char *const bad_returns[] = {
+            "return 0;", "return();", "return(0);"
+        };
+        for (size_t ri = 0;
+             ri < sizeof(bad_returns) / sizeof(bad_returns[0]); ri++) {
+            glr_ctrl_reset_all();
+            GLCmd cmd;
+            memset(&cmd, 0, sizeof(cmd));
+            int ok = parse_for_test(bad_returns[ri], &cmd);
+            ASSERT_TRUE("invalid return spelling returns 0", ok == 0);
+            assert_status_contains("invalid return spelling explains value",
+                                   "return takes no value");
+            ASSERT_TRUE("invalid return spelling is not generic",
+                        strstr(g_status, "Unknown cmd") == NULL);
+            ASSERT_TRUE("invalid return spelling is not expression-only",
+                        strstr(g_status, "expression, not a command") == NULL);
+        }
+    }
+
     {
         glr_ctrl_reset_all();
         GLCmd cmd;
