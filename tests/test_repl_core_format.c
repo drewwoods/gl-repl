@@ -8,6 +8,7 @@
 #include "repl/export.h"
 #include "editor/input.h"
 #include "src/editor/reformat.h"
+#include "ui/app/state.h"
 #include "support/test_harness.h"
 
 #include <stdio.h>
@@ -344,6 +345,32 @@ int main(void) {
         ASSERT_TRUE("reformat push", strcmp(editor_buffer_line(0), "  glPushMatrix();") == 0);
         ASSERT_TRUE("reformat push body", strcmp(editor_buffer_line(1), "    glVertex3f(0, 0, 0);") == 0);
         ASSERT_TRUE("reformat pop", strcmp(editor_buffer_line(2), "  glPopMatrix();") == 0);
+    }
+
+    /* Scratch scalar and block assignments reformat with correct indentation and no error status. */
+    glr_ctrl_reset_all();
+    declare_test_vars();
+    editor_feed_line("for(i, 0, 3) {");
+    editor_feed_line("A[i] = rand(i, 0);");
+    editor_feed_line("A[0] = {1, 2, 3, 4};");
+    editor_feed_line("}");
+    ASSERT_TRUE("scratch assign in loop cmd count", repl_state_document_count() == 4);
+    ASSERT_TRUE("scratch assign in loop type", repl_state_document_cmds()[1].type == CMD_SCRATCH_ASSIGN);
+    ASSERT_TRUE("scratch block assign in loop type", repl_state_document_cmds()[2].type == CMD_SCRATCH_BLOCK_ASSIGN);
+    {
+        editor_buffer_set_line(1, "A[i]=rand(i,0)");
+        editor_buffer_set_line(2, "A[0]={1,2,3,4}");
+        ui_state_reset();
+        editor_reformat_commands();
+        const char *buf1 = editor_buffer_line(1);
+        const char *buf2 = editor_buffer_line(2);
+        ASSERT_TRUE("reformat scratch assign indent", buf1 && strncmp(buf1, "    ", 4) == 0);
+        ASSERT_TRUE("reformat scratch assign semicolon", buf1 && buf1[strlen(buf1) - 1] == ';');
+        ASSERT_TRUE("reformat scratch assign text", buf1 && strstr(buf1, "A[i] = rand(i,0);") != NULL);
+        ASSERT_TRUE("reformat scratch block indent", buf2 && strncmp(buf2, "    ", 4) == 0);
+        ASSERT_TRUE("reformat scratch block semicolon", buf2 && buf2[strlen(buf2) - 1] == ';');
+        ASSERT_TRUE("reformat scratch block text", buf2 && strstr(buf2, "A[0] = {1,2,3,4};") != NULL);
+        ASSERT_TRUE("reformat scratch assignments no error status", ui_state_status().kind != UI_STATUS_ERROR);
     }
 
     return test_harness_report(&g_harness, "repl_core_format");

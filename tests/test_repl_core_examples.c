@@ -2665,6 +2665,35 @@ int main(int argc, char **argv) {
         }
     }
 
+    {
+        int count = repl_example_count();
+        printf("--- catalog example loads have zero status errors (%d examples) ---\n", count);
+        for (int idx = 0; idx < count; idx++) {
+            ui_state_reset();
+            glr_ctrl_reset_all();
+            declare_test_vars();
+            pin_code_panel_state();
+            repl_load_example(idx);
+            settle_camera_transition_for_test();
+
+            UiStatusHistory h = ui_state_status_history();
+            int has_err = 0;
+            for (int i = 0; i < h.count; i++) {
+                int e_idx = ui_status_history_index(&h, i);
+                if (h.entries[e_idx].kind == UI_STATUS_ERROR) {
+                    has_err = 1;
+                    printf("ERROR on example %d (%s): %s\n", idx + 1,
+                           repl_example_name(idx) ? repl_example_name(idx) : "?",
+                           h.entries[e_idx].text);
+                }
+            }
+            char label[192];
+            snprintf(label, sizeof(label), "example %02d (%s) loads without status errors",
+                     idx + 1, repl_example_name(idx) ? repl_example_name(idx) : "?");
+            ASSERT_TRUE(label, !has_err);
+        }
+    }
+
     printf("--- built-in catalog: %d examples (golden text, export+cc, import "
            "round-trip, re-export+cc) ---\n", repl_example_count());
     for (int idx = 0; idx < repl_example_count(); idx++) {

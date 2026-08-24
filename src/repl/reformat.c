@@ -394,6 +394,63 @@ void repl_reformat_program(void) {
             reformat_replace_cmd(&store, cmd_idx, &fmt, fmt_text);
             break;
         }
+        case CMD_SCRATCH_ASSIGN: {
+            char name[16] = "";
+            char index_expr[MAX_LINE_LEN] = "";
+            char rhs[MAX_LINE_LEN] = "";
+            char comment[MAX_LINE_LEN] = "";
+            const char *cp = strstr(orig_text, "//");
+            if (cp) snprintf(comment, sizeof(comment), " %s", cp);
+
+            if (repl_extract_assignment_target_parts(orig_text, name, sizeof(name),
+                                                     index_expr, sizeof(index_expr),
+                                                     rhs, sizeof(rhs))) {
+                snprintf(fmt_text, sizeof(fmt_text), "%s%s[%s] = %s;%s",
+                         ind_s, name, index_expr, rhs, comment);
+            } else {
+                int arr_idx = (int)orig.args[0];
+                int elem_idx = (int)orig.args[1];
+                const char *arr_name = (arr_idx == 1) ? "B" : (arr_idx == 2) ? "C" : "A";
+                char val_buf[32];
+                repl_format_source_float(val_buf, sizeof(val_buf), orig.args[2]);
+                snprintf(fmt_text, sizeof(fmt_text), "%s%s[%d] = %s;%s",
+                         ind_s, arr_name, elem_idx, val_buf, comment);
+            }
+            reformat_replace_cmd(&store, cmd_idx, &fmt, fmt_text);
+            break;
+        }
+        case CMD_SCRATCH_BLOCK_ASSIGN: {
+            char name[16] = "";
+            char index_expr[MAX_LINE_LEN] = "";
+            char rhs[MAX_LINE_LEN] = "";
+            char comment[MAX_LINE_LEN] = "";
+            const char *cp = strstr(orig_text, "//");
+            if (cp) snprintf(comment, sizeof(comment), " %s", cp);
+
+            if (repl_extract_assignment_target_parts(orig_text, name, sizeof(name),
+                                                     index_expr, sizeof(index_expr),
+                                                     rhs, sizeof(rhs))) {
+                snprintf(fmt_text, sizeof(fmt_text), "%s%s[%s] = %s;%s",
+                         ind_s, name, index_expr, rhs, comment);
+            } else {
+                int arr_idx = (int)orig.args[0];
+                int base_idx = (int)orig.args[1];
+                int cell_count = (int)orig.args[2];
+                const char *arr_name = (arr_idx == 1) ? "B" : (arr_idx == 2) ? "C" : "A";
+                int off = snprintf(fmt_text, sizeof(fmt_text), "%s%s[%d] = {",
+                                   ind_s, arr_name, base_idx);
+                for (int k = 0; k < cell_count && off < (int)sizeof(fmt_text) - 8; k++) {
+                    char val_buf[32];
+                    repl_format_source_float(val_buf, sizeof(val_buf),
+                                             orig.payload.scratch_block.v[k]);
+                    off += snprintf(fmt_text + off, sizeof(fmt_text) - off,
+                                    "%s%s", k ? ", " : "", val_buf);
+                }
+                snprintf(fmt_text + off, sizeof(fmt_text) - off, "};%s", comment);
+            }
+            reformat_replace_cmd(&store, cmd_idx, &fmt, fmt_text);
+            break;
+        }
         case CMD_COMMENT: {
             const char *p = orig_text;
             while (*p && isspace((unsigned char)*p)) p++;
