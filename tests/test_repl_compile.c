@@ -25,6 +25,7 @@
 #include "repl/command.h"
 #include "repl/eval.h"
 #include "repl/load.h"           /* repl_load_apply_line for [P2] dup-check test */
+#include "subsystems/tutorial/tutorial.h"  /* tutorial_start / _stop / _active */
 #include "repl/state_owners.h"
 #include "source_document.h"
 #include "ui/app/state.h"
@@ -1460,6 +1461,82 @@ static void test_func_def_after_blank_separated_decls(void) {
                repl_state_document_cmds()[6].type, CMD_FUNC_END);
 }
 
+/* A scene-opening clear pair is executable display-body state, not a legal
+ * file-scope predecessor for a newly typed function.  The old hoist walk
+ * stepped over both calls (and their Render State comment), which put the new
+ * definition below the panel's generated display() opener. */
+static void test_func_def_hoists_before_display_clear_pair(void) {
+    glr_ctrl_reset_all();
+
+    editor_feed_line("static float phase;");
+    editor_feed_line("sea() {");
+    editor_feed_line("}");
+    editor_feed_line("// --- Render State ---");
+    editor_feed_line("glClearColor(0.05, 0.06, 0.08, 1);");
+    editor_feed_line("glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);");
+    editor_feed_line("glEnable(GL_DEPTH_TEST);");
+
+    editor_navigate_to_line(repl_state_document_count());
+    set_input("moon() {");
+    ASSERT_INT("moon func def commit consumed",
+               editor_try_commit_block_structs(), 1);
+
+    ASSERT_INT("global stays first",
+               repl_state_document_cmds()[0].type, CMD_VAR_DECLARE);
+    ASSERT_INT("existing func stays before moon",
+               repl_state_document_cmds()[1].type, CMD_FUNC_DEF);
+    ASSERT_INT("new func hoists above display body",
+               repl_state_document_cmds()[3].type, CMD_FUNC_DEF);
+    ASSERT_STR("new func header is file-scope",
+               editor_buffer_line(3), "moon() {");
+    ASSERT_INT("render-state comment remains first body row",
+               repl_state_document_cmds()[5].type, CMD_COMMENT);
+    ASSERT_STR("render-state comment keeps display indent",
+               editor_buffer_line(5), "  // --- Render State ---");
+    ASSERT_INT("display boundary follows both funcs",
+               repl_source_scope_display_body_start(), 5);
+}
+
+/* The other side of that clamp: an ACTIVE tutorial keeps the historical
+ * placement, below its injected clear prelude and therefore inside the
+ * projected display(). The prelude rows are locked and the runner's row
+ * bookkeeping assumes a function-open commit does not relocate above them;
+ * changing that is the still-gated Project 2 work, so this test pins the
+ * exception rather than the ideal.
+ *
+ * editor_try_commit_block_structs() is called directly: the tutorial write
+ * guard (tutorial_reject_noncommand_commit_with_hint) lives up in
+ * editor_handle_key, so the commit path itself is reachable here. */
+static void test_func_def_tutorial_keeps_clear_prelude_placement(void) {
+    int prelude_rows;
+
+    glr_ctrl_reset_all();
+    tutorial_start(0);
+    ASSERT_INT("tutorial is running", tutorial_active(), 1);
+
+    /* Every tutorial opens with the locked clear prelude, so the boundary
+     * sits at row 0 and the whole scaffold renders inside display(). */
+    prelude_rows = repl_state_document_count();
+    ASSERT_TRUE("tutorial injected a prelude", prelude_rows > 0);
+    ASSERT_INT("prelude is display-body state",
+               repl_source_scope_display_body_start(), 0);
+
+    editor_navigate_to_line(repl_state_document_count());
+    set_input("moon() {");
+    ASSERT_INT("moon func def commit consumed",
+               editor_try_commit_block_structs(), 1);
+
+    ASSERT_INT("func def lands after the locked prelude, not above it",
+               repl_state_document_cmds()[prelude_rows].type, CMD_FUNC_DEF);
+    ASSERT_STR("func header keeps the display-body indent",
+               editor_buffer_line(prelude_rows), "  moon() {");
+    ASSERT_INT("boundary is unmoved by the commit",
+               repl_source_scope_display_body_start(), 0);
+
+    tutorial_stop();
+    ASSERT_INT("tutorial stopped", tutorial_active(), 0);
+}
+
 /* Resume publish: when a func_def's relocation moves the original
  * cursor position above the inserted block, the apply step
  * publishes the delta so the matching close-brace's compile
@@ -1503,9 +1580,11 @@ static void test_func_def_resume_publish_consumed_by_close_brace(void) {
      *   [2] vertex
      *   [3] // about to define func
      *   cursor at 4.
-     * After delete of comment at [3,3]: insert_pos = 2
-     * (header, pre-vertex stepped over, vertex stops). resume_pos
-     * = 4 - 1 = 3. resume_delta = 3 - 2 = 1.
+     * After delete of comment at [3,3], the historical walk stops at
+     * the vertex (position 2), but the display-body boundary is 0:
+     * both leading comments belong to that executable row. A new
+     * file-scope function therefore clamps to insert_pos = 0.
+     * resume_pos = 4 - 1 = 3, so resume_delta = 3.
      */
     glr_ctrl_reset_all();
     editor_feed_line("// header");
@@ -1521,7 +1600,7 @@ static void test_func_def_resume_publish_consumed_by_close_brace(void) {
     /* After the migration, editor_commit_func_decl_resume_peek
      * should reflect the published delta. */
     int published = editor_commit_func_decl_resume_peek();
-    ASSERT_INT("resume delta published by func_def", published, 1);
+    ASSERT_INT("resume delta published by func_def", published, 3);
 
     /* Close the func block. The compile reads the delta (peek);
      * since end_type is CMD_FUNC_END, take + advance fires. */
@@ -2517,6 +2596,8 @@ int main(void) {
     test_func_def_comment_relocation();
     test_func_def_blank_line_relocation();
     test_func_def_after_blank_separated_decls();
+    test_func_def_hoists_before_display_clear_pair();
+    test_func_def_tutorial_keeps_clear_prelude_placement();
     test_func_def_resume_publish_consumed_by_close_brace();
     test_if_block_condition_eval_uses_context_predef();
     test_local_decl_inside_func();

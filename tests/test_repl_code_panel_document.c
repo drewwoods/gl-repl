@@ -12,6 +12,7 @@
 
 #include "ui/app/state.h"
 #include "repl/export.h"
+#include "repl/load.h"           /* repl_load_apply_line - the non-editor load path */
 #include "repl/state.h"
 #include "repl/state_owners.h"
 #include "subsystems/replay/replay_state.h"
@@ -1115,22 +1116,38 @@ int main(void) {
                     target == -1 && on_insert == 1 && row_offset == 0);
     }
 
-    /* The tutorial clear pair deliberately permits a later function
-     * definition to remain inside display(). It keeps its body indent and
-     * REPL spelling; adding `void` before that whitespace would render
-     * `void   func0()` and imply an invalid nested C definition. */
+    /* A function definition that sits INSIDE the display body still has to
+     * render as itself: body indent, REPL spelling, no synthetic `void`
+     * (which would print `void   func0()` and imply an invalid nested C
+     * definition).
+     *
+     * The document is built through repl_load_apply_line - the file/example
+     * loader - and not by typing, because those two paths place a func def
+     * differently and only the loader can still produce this shape. An
+     * interactive commit hoists a new function to file scope
+     * (editor_compile_func_def clamps to the display-body boundary), so
+     * feeding these lines with editor_feed_line would move func0 above the
+     * clear pair and test nothing. Load-time hoisting is deliberately not
+     * implemented, so a .glr whose author parked a function below the clear
+     * pair keeps it there - that is the case this covers. */
     {
         char row_text[MAX_LINE_LEN * 2];
-        int prefix;
+        char load_err[REPL_STATUS_TEXT_MAX];
+        int  load_line = 0;
+        int  prefix;
 
         reset_doc_fixture();
-        editor_feed_line("glClearColor(0, 0, 0, 1);");
-        editor_feed_line("glClear(GL_COLOR_BUFFER_BIT);");
-        editor_feed_line("func0() {");
-        editor_feed_line("}");
+        repl_load_apply_line("glClearColor(0, 0, 0, 1);",
+                             load_err, (int)sizeof(load_err), &load_line);
+        repl_load_apply_line("glClear(GL_COLOR_BUFFER_BIT);",
+                             load_err, (int)sizeof(load_err), &load_line);
+        repl_load_apply_line("func0() {",
+                             load_err, (int)sizeof(load_err), &load_line);
+        repl_load_apply_line("}",
+                             load_err, (int)sizeof(load_err), &load_line);
         glr_state_presentation_mut()->code_focus = 0;
         build_doc(&snap, &layout);
-        ASSERT_TRUE("clear-pair function stays below the panel boundary",
+        ASSERT_TRUE("loaded function stays below the panel boundary",
                     snap.display_body_start == 0);
         ASSERT_TRUE("indented function row is available",
                     ui_repl_code_panel_row_text_for_test(

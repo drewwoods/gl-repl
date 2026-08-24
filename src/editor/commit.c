@@ -585,7 +585,10 @@ static void compile_copy_text_with_rebased_indent(
 
 /* CONTRACT: context-pure for document data in the core
  * compile kernel. This editor-specific relocation wrapper uses the
- * live source-scope helpers required by the editor commit path. */
+ * live source-scope helpers required by the editor commit path, and
+ * reads one live mode flag - tutorial_active() - because a tutorial's
+ * locked prelude rows change where a new definition may land. That is
+ * the only non-ctx input; document data still comes from `ctx`. */
 ReplCompileResult editor_compile_func_def(const char *input,
                                           const ReplCompileContext *ctx,
                                           EditorCommitPlan *out,
@@ -677,6 +680,56 @@ ReplCompileResult editor_compile_func_def(const char *input,
     int insert_pos = compile_function_decl_insert_pos_after_delete(
         ctx, comment_start, comment_count);
 
+    /* Outside a tutorial, a newly typed function is file-scope source and
+     * must land before the display-body boundary.  The historical hoist walk
+     * deliberately steps over the scene-opening glClearColor/glClear pair;
+     * after display() became explicit panel framing, that leaves a new
+     * definition visibly nested inside display().  Clamp the legacy result to
+     * the boundary so body-attached prose such as "// --- Render State ---"
+     * stays with the body.
+     *
+     * COORDINATES: `insert_pos` is post-delete, `display_body_start` is
+     * pre-delete, so the boundary is translated down here before the two are
+     * compared.  The indent block below deliberately does the OPPOSITE - it
+     * compares `insert_pos` against the untranslated boundary - and both are
+     * right, because they ask different questions.  This one asks "where does
+     * the block land in the document the change is expressed against"; that
+     * one asks "which side of the boundary is that, given the lifted comments
+     * ride along in the same INSERT_MANY".  See the note there before
+     * changing either.
+     *
+     * A consequence worth knowing: after this clamp
+     * `insert_pos <= display_body_start` always holds in pre-delete
+     * coordinates too, so repl_source_scope_view_base_indent_for_insert()
+     * below can only return 0 on this path.  The indent computation stays
+     * live for the tutorial branch, which does not clamp.
+     *
+     * Active tutorials retain the old placement for now: their injected clear
+     * prelude rows are locked and their row tracking assumes a function-open
+     * commit does not relocate above those rows.  Covered by
+     * test_func_def_tutorial_keeps_clear_prelude_placement. */
+    if (!tutorial_active()) {
+        int display_at = ctx->source_scope.display_body_start;
+        if (comment_count > 0) {
+            if (display_at >= comment_start + comment_count) {
+                display_at -= comment_count;
+            } else if (display_at > comment_start) {
+                /* Defensive only. The boundary is either a comment run's
+                 * FIRST row or a non-comment row, and comment_start is the
+                 * first row of the maximal comment/blank run ending at the
+                 * cursor - so a boundary strictly inside the deleted range
+                 * should not be constructible. Clamped rather than asserted
+                 * because getting it wrong would silently relocate a
+                 * definition, and the walk's own translation
+                 * (compile_function_decl_insert_pos_after_delete) makes the
+                 * same "never straddles" assumption. */
+                display_at = comment_start;
+            }
+        }
+        if (insert_pos > display_at)
+            insert_pos = display_at;
+    }
+
     /* A func def always lives at depth 0, so its indent is the base indent
      * alone - 0 above the display-body boundary, 2 below it. The kernel's
      * fd / fd_text are built against `kernel.pos` (the current edit
@@ -691,6 +744,11 @@ ReplCompileResult editor_compile_func_def(const char *input,
      * that is the coordinate the prologue/body classification wants.
      * Adding the count back moves a boundary-hugging definition to indent
      * 2 above `display()`.
+     *
+     * Note this is NOT the comparison the clamp above makes, which
+     * translates the boundary into post-delete coordinates first. Two
+     * questions, two conventions - the COORDINATES note above spells out
+     * why. Neither one is a translation the other forgot.
      *
      * The INSERT comparison, not the existing-row one: at the boundary the
      * new definition EXTENDS the prologue. Both `at` and the comparison

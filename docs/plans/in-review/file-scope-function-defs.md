@@ -1,6 +1,6 @@
 # File-Scope Function Definitions In The Code Panel
 
-## Status - PROJECT 1 COMPLETE; PROJECT 2 NOT APPROVED (2026-08-24)
+## Status - PROJECT 1 COMPLETE; INTERACTIVE HOIST FIXED; PROJECT 2 REMAINDER NOT APPROVED (2026-08-25)
 
 Revision 2 closed the second read's blockers: the boundary helper's
 comment rule (it ate body-attached comments) and the two placement calls
@@ -9,6 +9,45 @@ vs. `cmd_indent` conflation in 1d, and the boundary comparison for a
 not-yet-inserted row in 1e - which must compare the returned
 `insert_pos` *untranslated*. Project 2 remains gated and must not be
 folded in.
+
+**Interactive new-function follow-up implemented** - a newly typed function
+now clamps its legacy hoist result to the computed display-body boundary, so a
+scene-opening Render State comment and `glClearColor`/`glClear` pair cannot
+strand the definition inside the projected `display()`. Active tutorials keep
+the historical clear-prelude placement because their locked-row bookkeeping is
+the still-gated Project 2 work.
+
+**The user-visible consequence, stated plainly**: committing a function can
+now reorder rows the user did not touch, including the first line of the
+document. The boundary rule attributes a leading comment run to the row it
+introduces, so in
+
+```
+// a scene that draws a wave        <- boundary is row 0: this run
+glVertex3f(...);                       belongs to the vertex
+```
+
+`display_body_start` is 0, and a newly typed `wave() {` lands at index 0 -
+*above* the file's opening prose, which stays inside `display()`. That is
+consistent with the projection (the comment really does describe body code),
+but it is a bigger edit than "the definition moved up past the clear pair",
+and it is what the reordering looks like in a scene whose author opened with
+a title comment. `tests/test_repl_compile.c`'s
+`test_func_def_resume_publish_consumed_by_close_brace` pins the arithmetic
+for exactly that shape.
+
+Placement is now split across three paths, and only one of them hoists:
+
+| Path | Where a new func def lands |
+|------|---------------------------|
+| Interactive commit, no tutorial | Clamped to the display-body boundary (file scope). |
+| Interactive commit, tutorial active | Below the locked clear prelude, inside `display()` - the retained exception. |
+| `repl_load_apply_line` (file/example/replace) | Exactly where it is fed; no hoist at all. |
+
+The third row is why a `.glr` can still hold a function below the clear pair,
+and it is the fixture
+`tests/test_repl_code_panel_document.c` uses to cover the panel's
+inside-the-body rendering - typing those lines no longer produces that shape.
 
 ### Implementation log
 
@@ -623,8 +662,8 @@ would be flattened, so it lands in the same patch.
 | Insert ghost at the splice | First display-body row (1h). |
 | Indent at the boundary | Existing row `pos < at`; new decl/func `insert_pos <= at`, compared in pre-change coordinates (1e). |
 | Block-closer indent | Unchanged; keep reformat's minus-2 (1d). |
-| Clear-pair exception | Survives Project 1. The executable clear pair renders inside `display()`; a function deliberately parked after it remains inside too. Moving tutorial functions above the locked prelude is a Project 2 placement change. |
-| Load-time hoist | Not in Project 1. |
+| Clear-pair exception | Removed for ordinary interactive commits: new functions clamp before the display-body boundary. It survives only during an active tutorial, whose locked-row remapping remains a Project 2 placement change (pinned by `test_func_def_tutorial_keeps_clear_prelude_placement`). |
+| Load-time hoist | Not in Project 1. A loaded document keeps a function wherever the file put it, so the below-the-clear-pair shape stays reachable through `repl_load_apply_line`. |
 
 ## Project 2 - Making The Order Total (not approved)
 
@@ -632,7 +671,8 @@ Project 1 projects the order that already holds for `.glr`. It does not
 hold for every path into the live document. Each of these is a separate
 decision, and none is a step of Project 1:
 
-- **The commit hoist vs. the tutorial contract.** Every tutorial injects
+- **The remaining tutorial commit hoist.** Ordinary interactive commits now
+  clamp new functions before the display-body boundary. Every tutorial injects
   four locked prelude rows (`g_tutorial_scene_prelude`,
   `src/subsystems/tutorial/tutorial_runner.c:722`: clear-color comment,
   `glClearColor`, comment, `glClear`), and `tutorial_guard_source_change`
