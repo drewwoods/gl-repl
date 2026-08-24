@@ -4299,7 +4299,7 @@ static void glr_ctrl_host_set_time_playing(int playing) {
     repl_state_time_set_playing(playing);
 }
 
-/* The host-effect bridge routing core pipeline events to the UI and editor state. */
+/* Host effects for the REPL pipeline and tutorial/app peers. */
 static const ReplHostEffects g_glr_host_effects = {
     .status                      = ui_state_status_set,
     .status_error                = ui_state_status_set_error,

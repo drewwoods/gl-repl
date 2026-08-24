@@ -102,7 +102,7 @@ the `float x;` / `x = expr;` / typed-as-text `for(...) {` flows live in
 [`src/editor/commit.c`](../editor/commit.c) (editor business), so the demo hand-constructs commands
 instead. [`tools/repl_demo/stubs.c`](../../tools/repl_demo/stubs.c) is empty - the pipeline has zero
 backfill dependencies once host effects flow through the one
-[`ReplHostEffects`](host_effects.h#L54) bridge.
+[`ReplHostEffects`](host_effects.h#L39) bridge.
 
 ## In the REPL app
 
@@ -166,7 +166,7 @@ at build time, like the example catalog.
 | [`source_scope.c`](source_scope.c) / `.h`, [`format.c`](format.c) / `.h`, [`reformat.c`](reformat.c) / `.h`, [`bootstrap.c`](bootstrap.c) / `.h` | Depth/indent/block-lookup cache, pure indentation, source reformat, startup loading |
 | [`line_scan.c`](line_scan.c) / `.h` | Where one statement ends and the next begins: the bracket-depth scan (string/char literals skipped, `//` ends the code, `()` and `[]` count but `{}` do not) plus the terminator set `; { } :`. Shared rather than duplicated because the importer's line accumulator and the external-editor watcher's incomplete-final-row heuristic must agree - a lookalike would park a row the importer would have accepted, or accept one it cannot parse |
 | [`scene_load.h`](scene_load.h) (header only) | The reader's load policy as one options bag instead of four things inferred from context: source format (which decides canonical-order checking - it used to be sniffed off the *diagnostic label*, so every catalog entry lost the check silently), TOLERANT vs ATOMIC failure handling, and whether `@cfg`/`@camera` reach live state. Implemented in [`import.c`](import.c); the `repl_export_load_from_*` trio are wrappers carrying today's defaults |
-| [`doc_order.c`](doc_order.c) / `.h` | The canonical `.glr` document order as a monotonic four-phase machine (decls → funcs → camera → body, one tolerated edge). `.glr` only; **every loader must run it** or the format has two readings. Names both the offending line and the line that set the phase, and reports the whole file in one pass (`ARCHITECTURE.md` §4.6) |
+| [`doc_order.c`](doc_order.c) / `.h` | The canonical `.glr` document order as a monotonic four-phase machine (decls → funcs → camera → body). Function-bearing scenes make the funcs/body transition explicit with `display() { ... }`. `.glr` only; **every loader must run it** or the format has two readings. Names both the offending line and the line that set the phase, and reports the whole file in one pass (`ARCHITECTURE.md` §4.6) |
 | [`camera_header.c`](camera_header.c) / `.h` | **The one camera reader.** `@camera`-tagged transform rows - the tag, never the position, is what makes a line a camera line. Every consumer offers *every* line (a pre-filtering caller mis-scopes) and applies nothing until `finish()`, which is what makes a partial pose unrepresentable. [`ReplCameraApplyMode`](camera_header.h#L69) names the three real transition/scene-default combinations; the fourth is deliberately undefined (`ARCHITECTURE.md` §4.7) |
 | **Frame flow** | *program model → GL* |
 | [`flatten.c`](flatten.c) / `.h` | Source → flat program (unroll/inline/resolve `if`) |

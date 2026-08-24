@@ -1,6 +1,6 @@
 # `src/repl` Clarity, Coupling & Extensibility Review
 
-## Status - FINDINGS 1-4 AND 9-11 LANDED; 5-8 DEFERRED (2026-08-14)
+## Status - FINDINGS 1-4, 7 AND 9-11 LANDED; 5, 6 AND 8 DEFERRED (2026-08-24)
 
 Findings 1, 2, 3, 4, 9, 10 and 11, plus the architecture-document gaps, are
 implemented on branch `repl-cleanup`. Everything below is left verbatim so the
@@ -13,10 +13,9 @@ Still open, with the reason each is deferred rather than done:
 |---|---|
 | 5 (two commit chains) | No cheap ratchet exists. Decide when the next structured form lands - see D3. |
 | 6 (checkpoint / invalidation tail) | Ready to do; the trigger is a seventh state slice or the next edit to the tail. |
-| 7 (`ReplHostEffects`) | The contract comment now names both audiences; the struct grouping and the split are not done. The split waits for a 17th callback, per the finding. |
 | 8 (import split) | Rides adjacent work; must not pre-empt `one-scene-loader.md`. |
 
-All four are signposted in the code. Each site carries a
+All three are signposted in the code. Each site carries a
 `DEFERRED (repl-clarity-review.md finding N, in docs/plans/partial/)` comment
 naming what is deferred and what would trigger doing it, so a reader who
 arrives with that file open finds this plan without knowing it exists:
@@ -204,8 +203,9 @@ confident about their mechanics or protection:
 ## Findings
 
 Ranked by (cost of leaving it) × (cheapness of fixing it). The first four are
-worth doing; 5-8 are worth doing when adjacent code is already open; 9-11 are
-judgement calls flagged for the record.
+worth doing; 5, 6 and 8 are worth doing when adjacent code is already open;
+9-11 are judgement calls flagged for the record. Finding 7 landed with the
+adjacent callback that triggered it.
 
 ---
 
@@ -543,6 +543,11 @@ the runtime and checkpoint structs.
 ---
 
 ### 7. `ReplHostEffects` has drifted from "the pipeline's host bridge" into a general editor service locator
+
+> **LANDED** (2026-08-24). `scroll_to_display_open` became the 17th callback.
+> The contract now names the pipeline and tutorial/app audiences, and the
+> struct groups their callbacks explicitly. The existing single installed
+> table remains the shared host boundary.
 
 **What.** `host_effects.h:19-31` states the contract: *"Loader, scene-switch,
 snippet-import, and replay code **in src/repl** call through this table."* Seven
@@ -893,8 +898,8 @@ behavioural risk — do them first and in any order.
 7. **Finding 5** — no dedicated change now. Choose an exhaustive shared
    handler-kind enum or explicit new-form parity coverage when the next
    structured form lands.
-8. **Finding 7** — rewrite the `ReplHostEffects` contract comment to name both
-   audiences. Split only if a 17th callback wants to land.
+8. **Finding 7** — landed with the 17th callback: the contract names both
+   audiences and the struct groups them explicitly.
 9. **Findings 8 and 9** — when adjacent code is next open. Finding 8 should not
    pre-empt `one-scene-loader.md`.
 10. **Finding 10** — optional table-driven builtin smoke coverage; the dispatch

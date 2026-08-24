@@ -523,7 +523,7 @@ storage:
   **explicit `int` parameter** (and cursor-shifting store/apply ops update
   a caller-owned `int *cursor_inout`).
 * Higher-level pipeline entry points that genuinely need to move the
-  cursor (e.g. [`scenes.c`](../src/repl/scenes.c)) go through the [`ReplHostEffects`](../src/repl/host_effects.h#L54)
+  cursor (e.g. [`scenes.c`](../src/repl/scenes.c)) go through the [`ReplHostEffects`](../src/repl/host_effects.h#L39)
   `edit_line_get` / `edit_line_set` hooks (`repl_dispatch_edit_line_*`),
   which are no-ops when no host bridge is installed.
 
@@ -1685,9 +1685,9 @@ All source-text reads and mutations use `source_document_*`. The full app links
 in [`tools/repl_demo/source_document.c`](../tools/repl_demo/source_document.c). This keeps editor state and
 logic out of the core link set.
 
-#### 2. Host-Effect Bridges ([`ReplHostEffects`](../src/repl/host_effects.h#L54))
+#### 2. Host-Effect Bridges ([`ReplHostEffects`](../src/repl/host_effects.h#L39))
 
-The controller-installed [`ReplHostEffects`](../src/repl/host_effects.h#L54) bridge routes status
+The controller-installed [`ReplHostEffects`](../src/repl/host_effects.h#L39) bridge routes status
 updates, example and input resets, scrolling, follow-scroll, and cursor parking
 to the UI, editor, and peer subsystems. The demo installs only edit-line hooks;
 status, editor, and tutorial hooks remain no-ops.
@@ -2977,7 +2977,7 @@ drops them and no `CmdType` or parser grammar is involved. See
 
 **Start-of-tutorial view reset.** `tutorial_start` opens a fresh
 transient scene, so it must not inherit the previous scene's view.
-`tutorial_baseline_apply` calls [`repl_dispatch_tutorial_presentation_reset()`](../src/repl/host_effects.h#L143)
+`tutorial_baseline_apply` calls [`repl_dispatch_tutorial_presentation_reset()`](../src/repl/host_effects.h#L128)
 (host effect, implemented by `glr_ctrl_reset_tutorial_chrome`), which runs
 the example chrome reset with no tag mask and then overrides what an
 example load deliberately inherits: the camera eases back to the built-in

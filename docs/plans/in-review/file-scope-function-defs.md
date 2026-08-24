@@ -1,6 +1,6 @@
 # File-Scope Function Definitions In The Code Panel
 
-## Status - IN PROGRESS (implementation started 2026-08-24)
+## Status - PROJECT 1 COMPLETE; PROJECT 2 NOT APPROVED (2026-08-24)
 
 Revision 2 closed the second read's blockers: the boundary helper's
 comment rule (it ate body-attached comments) and the two placement calls
@@ -16,9 +16,24 @@ folded in.
 three formatting paths of 1e, and the two re-derivation sites stage 1
 turned up (1i below). Suite green, 35 of 40 panel goldens regenerated.
 
-**Stage 2 in progress** - the panel chrome split (1b), the dump twin
-(1c), the `.glr` writer strip (1f) and the bootstrap splice (1g), plus
+**Stage 2 landed** (`82c7085f`) - the panel chrome split (1b), the dump
+twin (1c), the `.glr` writer strip (1f), the bootstrap splice (1g), and
 the always-visible `display()` framing added in 1j.
+
+**Completion review implemented** - explicit function-scene `.glr` frames
+(1k), non-focus `void` decoration on editable user function headers (1l),
+the host-effects 17th-callback rider, byte-stable scene re-save coverage,
+focus/framing and insert-splice tests, and the missed scratch-array dedent.
+The review also removed the former CAMERA -> FUNCS compatibility edge: the
+new format has one shape, not a legacy alternate.
+
+**Verification green** - `make test-stubs` (86 binaries, 32,132 assertions),
+`make test-scenes` (3 binaries, 8,278 assertions),
+`make check-state-ownership`, `make check-formatted`, both catalog/doc example
+guards, and `git diff --check`. A standalone `make check-c99` remains blocked
+by the pre-existing high-resolution GLUT font declarations in untouched
+`glr_pointer_script.c` / `compare_stroke_fonts.c`; the stubbed C99 build and
+all task-touched translation units compile cleanly.
 
 ### Corrections found while implementing
 
@@ -109,6 +124,11 @@ The `.glr` format gains the same distinction the panel now draws:
 - A scene that **defines any function** must carry an **explicit**
   `display() {` ... `}` around the body. The definitions sit outside it,
   exactly as they do in the exported C and in the code panel.
+- Camera rows live inside that explicit frame; top-level variable
+  declarations live outside it with the function definitions.
+- There is **no backward-compatible reader path**. CAMERA -> FUNCS and a
+  function-bearing file without the frame are rejected, which keeps the
+  writer, importer, catalog loader, tutorial loader and linter on one grammar.
 
 Rationale: once function definitions are file-scope, a reader of a
 function-bearing `.glr` has no way to tell where the definitions stop and
@@ -120,13 +140,29 @@ Touches the writer (`src/repl/export_glr.c`), the reader
 (`src/repl/import.c`), the phase machine
 (`src/repl/doc_order.{c,h}` - the `FUNCS -> BODY` transition becomes
 observable rather than inferred), `--lint-scenes`
-(`src/app/boot/glr_lint_scenes.c`), and regenerates every checked-in
-`.glr` that defines a function (`examples/scenes/`, `tests/scenes/**`).
+(`src/app/boot/glr_lint_scenes.c`), the scene formatter
+(`scripts/format_scenes.py`), and regenerates every checked-in `.glr` that
+defines a function (`examples/scenes/`, `tests/scenes/**`).
 
 **Ordering against 1f.** 1f (strip the base indent per phase, not
 uniformly) has to land first or with this: body rows inside an explicit
 `display() {` are still written at column 0 on disk - the wrapper is
 structure, not indentation, and the loader re-derives indent either way.
+
+## 1l. Non-focus C return type on user function headers (added 2026-08-24)
+
+Full-chrome mode projects editable `func0() {` / `name(args) {` rows as
+`void func0() {` / `void name(args) {`. Focus mode keeps the editable REPL
+spelling. This is display decoration only: the buffer and parser never receive
+the prefix.
+
+`UiTextPanelRow.display_prefix_chars` carries the synthetic width. The panel
+adds it to active-input length, cursor and anchor coordinates, ignores it when
+searching, and subtracts it from committed and active-input hits before a
+`char_idx` reaches the editor. The dump twin applies the same full-mode
+decoration to `source_prologue` rows. Coverage asserts exact text for committed
+and active rows plus a click on the synthetic prefix mapping to editor column
+zero.
 
 
 The work splits into **two projects**. Project 1 (the view) is
@@ -159,8 +195,9 @@ silently loaded. The writer half is `src/repl/export_glr.c`, which
 re-emits the live document in three passes keyed on `GlrRowPhase`
 (`glr_scene_write_phase`, `:171`) rather than verbatim.
 
-Camera rows never enter the editor document - the camera reader consumes
-them - so the *live* document is `[comments][decls][funcs][body]`.
+Camera rows and explicit display-wrapper rows never enter the editor document -
+the loader consumes them - so the *live* document remains
+`[comments][decls][funcs][body]`.
 
 That is the boundary the panel should project. It is **not**
 `compile_decl_prologue_end` (decls only, `src/repl/compile.c:1311`) and
@@ -181,8 +218,9 @@ Consequences already true, and load-bearing for the sizing:
 - **Hit-testing, replay markers, assign-plot and edit guides are keyed
   on `row->source_line_idx`**, so splicing chrome mid-walk does not
   touch them.
-- **`code_focus` already hides all chrome** via
-  `repl_code_panel_chrome_visible()`, so that mode needs no case.
+- **`code_focus` hides derived chrome but retains the frame.** It renders
+  `display() {` / `}` and keeps editable user function headers free of the
+  synthetic `void` prefix. Scratch arrays remain full-mode-only.
 
 **Declarations are not an optional companion.** The live document is
 `[decls][funcs][body]`; one splice point after the function prefix
@@ -579,8 +617,10 @@ Project 2 is an explicit yes. Project 1's edits to `commit.c` and
   (canonical text), `test_repl_core_examples` and `test_repl_core_io`
   (definition-order and round-trip assertions beyond the panel goldens).
 - `test_export_trace_parity` compares argument values and is unaffected.
-- `examples/scenes/*.glr` and `tests/scenes/**` regenerate cosmetically
-  once 1f is in.
+- Function-bearing files in `examples/scenes/*.glr` and `tests/scenes/**`
+  gain the explicit frame, with camera inside and globals/functions outside.
+  Four older no-function examples were also normalized once so the new
+  byte-stability assertion covers all 40 shipped scenes without exceptions.
 
 New coverage:
 
@@ -595,10 +635,12 @@ New coverage:
   a column-0 header with no Ctrl+\ reformat; and the same with a leading
   comment run, for the delete-coordinate translation (1e).
 - An unclosed trailing function.
-- The insert ghost at the splice.
-- `code_focus`.
-- A `.glr` save round-trip proving function-body indent survives (1f),
-  with a camera-row assertion alongside it.
+- The insert ghost at the splice, using a non-empty prologue.
+- Exact full/focus frame spellings, focus-only chrome suppression, scratch
+  visibility and column-zero alignment, and `void` decoration/hit translation.
+- A byte-for-byte `.glr` save round-trip across all 40 shipped scenes proving
+  function-body indent survives (1f), with a camera-inside-display assertion
+  for every function-bearing scene.
 
 ## Not Touched
 

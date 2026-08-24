@@ -32,13 +32,14 @@ Current residents:
   legacy names); the renames themselves and the `PLATFORM`/`GL_BACKEND` sugar
   are deferred - the plan calls both optional and they carry the ~150-file
   reference blast radius.
-- `repl-clarity-review.md` - findings 1-4 and 9-11 landed, plus the
+- `repl-clarity-review.md` - findings 1-4, 7 and 9-11 landed, plus the
   architecture-document gaps (`src/repl/ARCHITECTURE.md` §4.6, §4.7, §5.4,
-  §5.5 and the §10 invariants exist because of it). Findings 5-8 are deferred
+  §5.5 and the §10 invariants exist because of it). Findings 5, 6 and 8 are deferred
   and signposted in the code with `DEFERRED (repl-clarity-review.md finding N)`
   comments: each is gated on a specific future change - a new structured form,
-  a seventh state slice, a 17th host callback, or someone opening the import
-  state machine - rather than on finding time.
+  a seventh state slice, or someone opening the import state machine - rather
+  than on finding time. Finding 7's two-audience contract and struct grouping
+  rode the 17th host callback.
 - `app-clarity-review.md` - the three ranked extension guards landed
   (compiler-exhaustive `GlrConfigKey` maps + duplicate-key validation, the
   single-source and now-tested scene-local config roster, the modal-kind

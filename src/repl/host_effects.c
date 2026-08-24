@@ -9,9 +9,10 @@
  * is what tests want when they leave it unset. The standalone demo installs
  * only edit-line hooks, so UI/editor/tutorial effects remain unbound.
  *
- * The bridge bundles the callbacks needed by the pipeline while keeping
- * host-owned state out of src/repl. Callers install only the hooks
- * they need; a NULL hook is a no-op. */
+ * The bridge bundles callbacks for the REPL pipeline and for tutorial/app
+ * peers that operate on REPL-owned documents, while keeping host-owned state
+ * out of both. Callers install only the hooks they need; a NULL hook is a
+ * no-op. */
 static const ReplHostEffects *g_host_effects = 0;
 
 void repl_install_host_effects(const ReplHostEffects *effects) {

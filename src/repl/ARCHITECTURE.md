@@ -568,8 +568,8 @@ everything else falls in four phases, and the phase index may never decrease:
 |---|---|---|
 | 1 | `DECLS` | `static float ...;` / `float ...;` at top level |
 | 2 | `FUNCS` | `funcN(...) { ... }` and named function definitions |
-| 3 | `CAMERA` | `@camera`-tagged transforms |
-| 4 | `BODY` | everything else the user wrote |
+| 3 | `CAMERA` | `@camera`-tagged transforms inside `display()` |
+| 4 | `BODY` | everything else the user wrote inside `display()` |
 
 That is the exported C's own order - file-scope globals, then functions, then
 the camera at the top of `display()` - so the two halves of one format cannot
@@ -577,12 +577,12 @@ disagree about line placement. It is a **phase machine rather than a list of
 forbidden pairs**: one monotonic counter decides every case by construction,
 instead of inviting an argument about each one.
 
-One edge is tolerated: `CAMERA` may be entered straight from `DECLS`, and
-`FUNCS` may then follow it, because the `@camera` tag makes the placement
-unambiguous and some layouts read better with the camera near the top.
-"Straight from `DECLS`" includes a file with *no* declarations - a phase that
-does not occur must not change what is legal, or adding one variable to a
-scene would change whether its layout is accepted.
+When a scene defines a function, the format makes the phase boundary explicit:
+all declarations and function definitions remain at file scope, then
+`display() { ... }` encloses the camera and ordinary body. Scenes without
+functions keep an implicit display body and do not write the wrapper. The
+wrapper is format syntax, not an editor command, so loaders validate and
+consume it before feeding source rows into the document.
 
 Three properties are load-bearing and easy to break by accident:
 
@@ -1025,22 +1025,26 @@ REPL accessor. These exclusions are enforced by guards (§10).
 ## 7. The host-effects bridge
 
 `src/repl` must not link the editor, UI, or app shell - but loader,
-scene-switch, snippet-import, and replay code legitimately need host
-actions (clear the input buffer, scroll the panel, set a status message,
-read/write the cursor). The bridge ([`host_effects.h`](host_effects.h)) is how it asks for
-those *by purpose* without naming an implementation.
+scene-switch, snippet-import, and replay code legitimately need host actions
+(clear the input buffer, scroll the panel, set a status message, read/write
+the cursor). Tutorial/app peers also need editor and clock actions while
+operating on REPL-owned documents. The bridge
+([`host_effects.h`](host_effects.h)) is how both audiences ask for those *by
+purpose* without naming an implementation; the table groups the pipeline
+callbacks first and the peer callbacks second.
 
-The controller installs a [`ReplHostEffects`](host_effects.h#L54) table once at startup; REPL
+The controller installs a [`ReplHostEffects`](host_effects.h#L39) table once at startup; REPL
 code calls dispatchers (`repl_dispatch_*`, `repl_set_status`,
 `repl_set_status_error`). **Any unset callback is a no-op** - which is
 exactly why pure REPL tests and the standalone demo "just work" with no
 host: status messages go nowhere, `edit_line_get` returns 0,
 `edit_line_set` does nothing.
 
-What flows through it: status / error messages, example-presentation
-reset (with the example's tag mask), input reset, insert-mode-off,
-scroll-to-line, tutorial teardown, edit-line get/set, cursor parking,
-completion clear/update, input read, and time-playing toggle.
+What flows through it: status / error messages, example-presentation reset
+(with the example's tag mask), input reset, insert-mode-off, scroll-to-line,
+scroll-to-display-frame, tutorial teardown, edit-line get/set, tutorial
+presentation reset, cursor parking/focus, completion clear/update, input read,
+and the time-playing toggle.
 
 The export path uses the same pattern with dedicated bridges
 ([`ReplExportLightBridge`](export.h#L161), cfg/camera bridges) so [`export.c`](export.c) can emit
@@ -1691,10 +1695,9 @@ here lands in the same place.
 |---|---|---|
 | 5 | [`compile.c`](compile.c)'s `chain[]` and [`../editor/commit.c`](../editor/commit.c)'s three dispatchers spell the same load-bearing handler order twice, with nothing tying them together | A new structured / control-flow form is added. That change picks between a shared handler-kind enum and explicit parity coverage. A corpus test is *not* a completeness ratchet - see the plan's D3 |
 | 6 | [`ReplCheckpointState`](state.h) is [`ReplRuntimeState`](state.h) minus one slice, hand-copied, and the post-restore invalidation tail in [`state.c`](state.c) is written twice | A seventh REPL-owned slice is added (it would compile cleanly while being silently absent from every tour-baseline snapshot), or someone touches the invalidation tail |
-| 7 | [`host_effects.h`](host_effects.h)'s stated contract is narrower than its table: 7 of 16 callbacks have no `src/repl` caller | The contract comment can be rewritten any time; **splitting the table is explicitly not recommended as a dedicated change** - it rides the hook that would otherwise be the 17th |
 | 8 | [`import.c`](import.c) is one ~3,200-line TU facing a six-TU exporter; `ImportState`'s snippet phase is implicit; the reader API is named and declared as if it were the writer's | The line translators can be lifted out on their own. The state machine waits for [`one-scene-loader.md`](../../docs/plans/not-started/one-scene-loader.md), which changes how many `.glr` walkers exist |
 
-Findings 1-4 and 9-11 landed, as did the missing sections the review
+Findings 1-4, 7 and 9-11 landed, as did the missing sections the review
 identified - §4.6, §4.7, §5.4 and §5.5 above exist because of it, and §10
 gained the two cross-function invariants it was missing. Three gaps the review
 found already have their own design of record and are **not** re-derived in

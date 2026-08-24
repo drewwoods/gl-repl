@@ -16,12 +16,14 @@ void repl_set_status(const char *msg);
  * the text). */
 void repl_set_status_error(const char *msg);
 
-/* Controller-installed side-effect hooks for pipeline-only code paths.
+/* Controller-installed side-effect hooks for REPL pipeline code and the
+ * tutorial/app subsystems that operate on REPL-owned documents.
  *
- * Loader, scene-switch, snippet-import, and replay code in src/repl call
- * through this table when they need a host action such as clearing editor
- * input, scrolling the code panel, tearing down tutorial state before source
- * replacement, or resetting example presentation state.
+ * Loader, scene-switch, snippet-import, and replay code in src/repl use the
+ * first group when they need a host action such as clearing editor input,
+ * scrolling the code panel, tearing down tutorial state before source
+ * replacement, or resetting example presentation state. Tutorial/app peers
+ * use the second group for editor/completion mutations and clock ownership.
  * Most pure REPL tests leave the table unset; the standalone demo installs
  * only its edit-line hooks. Any unset callback makes the matching dispatcher
  * a no-op.
@@ -30,28 +32,12 @@ void repl_set_status_error(const char *msg);
  * purpose, without naming editor/UI implementation details. The callbacks
  * are grouped here so the pipeline has one host boundary to install.
  *
- * DEFERRED (repl-clarity-review.md finding 7, in docs/plans/partial/):
- * **the contract stated above is narrower than the table below.** Seven of
- * the sixteen callbacks have no caller inside src/repl at all - six are
- * driven only by src/subsystems/tutorial/tutorial_runner.c
- * (tutorial_presentation_reset, host_cursor_park, host_focus_line,
- * completion_clear, completion_update, host_input_get) and set_time_playing
- * belongs to the app/replay clock owner. The table is honest about the
- * second audience only at the "Decoupled editor/completion mutations"
- * comment further down. Nothing is broken; a reader just cannot tell which
- * callbacks are load-bearing for the pipeline and which are pass-through,
- * and an unclear table grows without resistance. **The plan says: do not
- * split this as a dedicated change** - it would undo an earlier
- * consolidation that was itself a review recommendation. Rewrite this
- * contract to name both audiences and group the struct accordingly; split
- * only as a rider on whatever would otherwise be the 17th callback. If you
- * are about to add one, that is now.
- *
  * Insert-mode QUERY (for ReplCompileContext.insert_mode) is the
  * caller's responsibility - repl_compile_context_from_live() defaults
  * to 0 (overwrite, the safe load-path value); editor-side callers
  * overwrite the field with editor_insert_mode() before compiling. */
 typedef struct {
+    /* REPL pipeline callers. */
     /* Surface a diagnostic/status message. The controller routes this
      * to UiState; pipeline TUs call repl_set_status() unchanged. */
     void (*status)(const char *msg);
@@ -78,15 +64,6 @@ typedef struct {
      * repl_live_demo) and by the tutorial reset. 0 is a valid catalog
      * index, so passing it means "apply example 0's tag defaults". */
     void (*example_presentation_reset)(int example_idx);
-    /* Same reset for a tutorial start, plus the two things an example
-     * load deliberately inherits: the camera pose (eased back to the
-     * built-in default) and the grid extent (narrowed to
-     * CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX). A tutorial is a fresh
-     * transient scene with unit-scale geometry, so it starts from the
-     * app's out-of-the-box view rather than wherever the previous scene
-     * left the camera. The tutorial's own leading `@cfg` still runs
-     * after this and wins. NULL = no-op (pure REPL tests, demo). */
-    void (*tutorial_presentation_reset)(void);
     /* Clear the editor input buffer. */
     void (*input_reset)(void);
     /* Force the editor out of insert mode. */
@@ -115,7 +92,16 @@ typedef struct {
      * tests run unchanged. */
     int  (*edit_line_get)(void);
     void (*edit_line_set)(int line);
-    /* Decoupled editor/completion mutations and reads for subsystems. */
+
+    /* Tutorial/app peer callers. */
+    /* Reset for a tutorial start, plus the two things an example load
+     * deliberately inherits: the camera pose (eased back to the built-in
+     * default) and the grid extent (narrowed to
+     * CFG_DEFAULT_TUTORIAL_GRID_EXTENT_IDX). A tutorial is a fresh transient
+     * scene with unit-scale geometry, so it starts from the app's out-of-box
+     * view rather than wherever the previous scene left the camera. Its own
+     * leading `@cfg` still runs after this and wins. NULL = no-op. */
+    void (*tutorial_presentation_reset)(void);
     void (*host_cursor_park)(int line, int insert_mode);
     /* Put the cursor ON an existing committed row: park it there AND load
      * that row's text into the input buffer, the way arrowing onto the line
@@ -136,9 +122,8 @@ typedef struct {
 
 void repl_install_host_effects(const ReplHostEffects *effects);
 
-/* Pipeline-side dispatchers - invoked by the loader / scene-switch /
- * snippet-import / replay paths. Each is a no-op when the bridge is
- * unset or the matching callback is NULL. */
+/* Bridge dispatchers for pipeline and tutorial/app-peer callers. Each is a
+ * no-op when the bridge is unset or the matching callback is NULL. */
 void        repl_dispatch_example_presentation_reset(int example_idx);
 void        repl_dispatch_tutorial_presentation_reset(void);
 void        repl_dispatch_input_reset(void);
