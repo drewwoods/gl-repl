@@ -104,7 +104,7 @@ index 6f493cb5..1978d479 100644
 +            realize_accumenv(a, a->program, a->uscale, 0.f);
              gles_glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
              ok = (gles_glGetError()==GL_NO_ERROR);
-             gles_glDisable(GL_BLEND);
+             accum_restore_probe_blend(saved_blend, saved_srgb, saved_drgb,
 @@ -315,6 +323,145 @@ static int accum_create_program(glesaccum_t *a) {
      return 1;
  }

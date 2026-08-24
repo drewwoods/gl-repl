@@ -2501,7 +2501,7 @@ int main(void) {
      * assign, even though neither spelling is a REPL value-producing call. */
     {
         static const char *const keyword_calls[] = {
-            "while(1);", "sizeof(x);"
+            "while(1);", "while(x);", "sizeof(x);", "switch(x);"
         };
         for (size_t ki = 0;
              ki < sizeof(keyword_calls) / sizeof(keyword_calls[0]); ki++) {

@@ -2163,20 +2163,22 @@ static int parse_keyword_statement(const char *p, GLCmd *cmd,
  * an operand either), a bare builtin function, and a REPL constant or scratch
  * array (an operand typed where a command goes).
  *
- * `has_args` distinguishes `sin(t)` from a bare `sin`. */
+ * Keywords outrank `has_args`: `while(x)` / `sizeof(x)` are still C
+ * keywords, not assignable calls. `has_args` then distinguishes `sin(t)`
+ * from a bare `sin`. */
 static int parser_report_reserved_not_command(const char *func, int has_args,
                                               const ReplParseContext *ctx) {
     if (!func || !func[0] || !repl_eval_is_reserved_ident(func))
         return 0;
 
-    if (has_args) {
+    if (repl_eval_is_c_keyword(func)) {
+        parser_emit_error(ctx,
+            "'%s' is a C keyword - the REPL has no such statement", func);
+    } else if (has_args) {
         parser_emit_error(ctx,
             "'%s(...)' is an expression, not a command - assign it "
             "(e.g. 'x = %s(...);') or use it inside another expression",
             func, func);
-    } else if (repl_eval_is_c_keyword(func)) {
-        parser_emit_error(ctx,
-            "'%s' is a C keyword - the REPL has no such statement", func);
     } else if (repl_eval_is_builtin_function(func)) {
         parser_emit_error(ctx,
             "'%s' is a builtin function, not a command - use it inside an "

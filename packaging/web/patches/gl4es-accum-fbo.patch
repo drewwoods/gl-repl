@@ -29,8 +29,12 @@ draws inherit the live scissor state.
 The accum target format is picked by a one-time 4x4 FBO-completeness
 probe, trying RGBA16F (GLES3/WebGL2 sized half-float), then unsized
 OES half-float, then RGBA8; GL_ACCUM_*_BITS reports 16/8/0
-accordingly. The probe deliberately does not consult the hardext
-floatfbo/halffloattex extension flags -- those stay 0 on backends that
+accordingly. The blend probe uses raw GLES (so it cannot compile into
+a display list) and then restores both the driver blend/program/attrib
+state and the gl4es mirrors -- otherwise later state-aware BlendFunc
+calls see a tracked match and keep GL_ONE,GL_ONE. The probe
+deliberately does not consult the hardext floatfbo/halffloattex
+extension flags -- those stay 0 on backends that
 run GetHardwareExtensions with notest (e.g. Emscripten, where no
 gles_getProcAddress hook is installed). Buffers are lazily (re)created
 at the drawable size (glstate FBO tracking, the getMainFBSize hook, or
@@ -85,7 +89,7 @@ new file mode 100644
 index 00000000..6f493cb5
 --- /dev/null
 +++ b/src/gl/accum.c
-@@ -0,0 +1,613 @@
+@@ -0,0 +1,694 @@
 +/* Accumulation buffer emulated with an internal FBO.
 + *
 + * Desktop GL's accumulation buffer does not exist on GLES/WebGL, so
@@ -202,6 +206,71 @@ index 00000000..6f493cb5
 +    }
 +}
 +
++static void accum_restore_tmu(GLuint tmu) {
++    LOAD_GLES(glActiveTexture);
++    glstate->gleshard->active = tmu;
++    gles_glActiveTexture(GL_TEXTURE0 + tmu);
++}
++
++// The format probe uses raw GLES so it does not compile into a display
++// list or flush a begin/end. Restore both the driver and the gl4es
++// mirrors: state-aware wrappers would see the still-unmodified tracked
++// blend/program values and skip the GLES restore, leaving later draws
++// on GL_ONE,GL_ONE.
++static void accum_restore_probe_blend(GLboolean enable,
++                                      GLenum srgb, GLenum drgb,
++                                      GLenum salpha, GLenum dalpha,
++                                      GLenum eqrgb, GLenum eqalpha)
++{
++    LOAD_GLES(glEnable);
++    LOAD_GLES(glDisable);
++    LOAD_GLES(glBlendFunc);
++    LOAD_GLES(glBlendEquation);
++    LOAD_GLES2_OR_OES(glBlendFuncSeparate);
++    LOAD_GLES2_OR_OES(glBlendEquationSeparate);
++    if(enable)
++        gles_glEnable(GL_BLEND);
++    else
++        gles_glDisable(GL_BLEND);
++    if(gles_glBlendFuncSeparate)
++        gles_glBlendFuncSeparate(srgb, drgb, salpha, dalpha);
++    else
++        gles_glBlendFunc(srgb, drgb);
++    if(!eqrgb) eqrgb = GL_FUNC_ADD;
++    if(!eqalpha) eqalpha = GL_FUNC_ADD;
++    if(gles_glBlendEquationSeparate)
++        gles_glBlendEquationSeparate(eqrgb, eqalpha);
++    else if(gles_glBlendEquation)
++        gles_glBlendEquation(eqrgb);
++}
++
++static void accum_restore_probe_gleshard(const gleshard_t *saved, GLuint saved_array)
++{
++    LOAD_GLES2(glUseProgram);
++    LOAD_GLES2(glEnableVertexAttribArray);
++    LOAD_GLES2(glDisableVertexAttribArray);
++    LOAD_GLES2(glVertexAttribPointer);
++    if(gles_glUseProgram)
++        gles_glUseProgram(saved->program);
++    for(int i=0; i<hardext.maxvattrib; i++) {
++        const vertexattrib_t *v = &saved->vertexattrib[i];
++        if(v->enabled) {
++            gles_glEnableVertexAttribArray(i);
++            if(v->size>0) {
++                bindBuffer(GL_ARRAY_BUFFER, v->real_buffer);
++                gles_glVertexAttribPointer(i, v->size, v->type, v->normalized,
++                                           v->stride,
++                                           v->real_buffer ? v->real_pointer : v->pointer);
++            }
++        } else {
++            gles_glDisableVertexAttribArray(i);
++        }
++    }
++    bindBuffer(GL_ARRAY_BUFFER, saved_array);
++    memcpy(glstate->gleshard, saved, sizeof(*saved));
++    accum_restore_tmu(saved->active);
++}
++
 +// one-time renderability test: can we create a small texture of this
 +// format and attach it to a complete FBO? test_blend also draws with
 +// GL_ONE,GL_ONE — WebGL2 can complete an RGBA16F FBO and still reject
@@ -241,6 +310,16 @@ index 00000000..6f493cb5
 +        gles_glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
 +        ok = (gles_glCheckFramebufferStatus(GL_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE);
 +        if(ok && test_blend && a->program) {
++            GLboolean saved_blend = glstate->enable.blend;
++            GLenum saved_srgb = glstate->blendsfactorrgb;
++            GLenum saved_drgb = glstate->blenddfactorrgb;
++            GLenum saved_salpha = glstate->blendsfactoralpha;
++            GLenum saved_dalpha = glstate->blenddfactoralpha;
++            GLenum saved_eqrgb = glstate->blendeqrgb;
++            GLenum saved_eqalpha = glstate->blendeqalpha;
++            GLuint saved_array = glstate->bind_buffer.array;
++            gleshard_t saved_hard;
++            memcpy(&saved_hard, glstate->gleshard, sizeof(saved_hard));
 +            gles_glEnable(GL_BLEND);
 +            gles_glBlendFunc(GL_ONE, GL_ONE);
 +            if(gles_glBlendEquation)
@@ -248,7 +327,10 @@ index 00000000..6f493cb5
 +            realize_accumenv(a, 0.f);
 +            gles_glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 +            ok = (gles_glGetError()==GL_NO_ERROR);
-+            gles_glDisable(GL_BLEND);
++            accum_restore_probe_blend(saved_blend, saved_srgb, saved_drgb,
++                                      saved_salpha, saved_dalpha,
++                                      saved_eqrgb, saved_eqalpha);
++            accum_restore_probe_gleshard(&saved_hard, saved_array);
 +        }
 +        gles_glDeleteFramebuffers(1, &fbo);
 +    }
@@ -264,9 +346,11 @@ index 00000000..6f493cb5
 +    a->probed = 1;
 +    a->bits = 0;
 +    if(hardext.esversion<2) return; // the scaled-quad path needs the GLES2 backend
++    GLuint saved_tmu = glstate->gleshard->active;
 +    accum_force_tmu0();
 +    if(!accum_create_program(a)) {
 +        SHUT_LOGD("Accum buffer emulation unavailable\n");
++        accum_restore_tmu(saved_tmu);
 +        return;
 +    }
 +    // Each format is attempted outright and judged by the FBO-completeness
@@ -295,6 +379,7 @@ index 00000000..6f493cb5
 +        SHUT_LOGD("Accum buffer emulation active (%d bits per channel)\n", a->bits);
 +    else
 +        SHUT_LOGD("Accum buffer emulation unavailable\n");
++    accum_restore_tmu(saved_tmu);
 +}
 +
 +// size the accum target to the framebuffer glAccum reads from / returns to

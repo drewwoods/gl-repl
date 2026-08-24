@@ -110,7 +110,9 @@ license text, reproduced verbatim from `third_party/freeglut/COPYING`:
     (16/8/0) and `GL_ACCUM_CLEAR_VALUE`, so gl-repl's runtime accum
     detection re-enables the accumulation effects (Accum AA, Blur, Blur
     Cam) in the browser. 16-bit targets are kept only if a blended draw
-    succeeds (otherwise RGBA8). `DeleteGLState` frees the FBO objects.
+    succeeds (otherwise RGBA8). The blended-format probe restores driver
+    and tracked blend/program state afterward. `DeleteGLState` frees the
+    FBO objects.
   - `packaging/web/patches/gl4es-accum-deferred-return.patch` - cache
     LOAD/ACCUM snapshots and reduce their weights once at RETURN.
   - `packaging/web/patches/gl4es-accum-deferred-scissor.patch` - size and
