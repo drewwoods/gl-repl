@@ -2079,8 +2079,8 @@ static int check_trailing_garbage(const char *after, const ReplParseContext *ctx
 }
 
 /* Bare-keyword statements: the REPL forms that are a word rather than a
- * `name(args)` call - `break` and `continue`. Split out of parse_command
- * so this keyword set can grow without the dispatcher doing.
+ * `name(args)` call - `break`, `continue` and `return`. Split out of
+ * parse_command so this keyword set can grow without the dispatcher doing.
  *
  * Returns 1 when the line parsed, 0 when it was one of these forms but
  * invalid (diagnostic already emitted), and -1 when it is none of them -
@@ -2114,6 +2114,27 @@ static int parse_keyword_statement(const char *p, GLCmd *cmd,
             parser_scope_cmd_indent(ctx, source_line_idx, ind_str,
                                     (int)sizeof(ind_str));
             write_text(text_out, text_sz, "%s%s;", ind_str, is_break ? "break" : "continue");
+        }
+        return 1;
+    }
+
+    /* return - leave the enclosing function body, or (at top level) end the
+     * frame early. Unlike break/continue there is no scope test to make:
+     * both destinations are legal, and both are legal in the exported C
+     * too, since a func def exports as `static void` and the display body
+     * as `static void draw_scene(void)`. The one placement that is not
+     * legal - inside a glBegin block - is rejected ahead of this by the
+     * command spec's valid_in_begin flag, so it needs no check here.
+     * Resolved entirely in flatten, like break/continue. */
+    if (strcmp(p, "return") == 0) {
+        cmd->type = CMD_RETURN;
+        cmd->valid = 1;
+        cmd->num_args = 0;
+        {
+            char ind_str[REPL_INDENT_TEXT_MAX];
+            parser_scope_cmd_indent(ctx, source_line_idx, ind_str,
+                                    (int)sizeof(ind_str));
+            write_text(text_out, text_sz, "%sreturn;", ind_str);
         }
         return 1;
     }

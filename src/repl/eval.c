@@ -447,7 +447,7 @@ static const ExprBuiltin k_expr_builtins[] = {
 static const char *const k_reserved_identifiers[] = {
     "t", "PI", "TAU", "e", "NAN", "INFINITY",
     "nan", "inf", "infinity",
-    "float", "var", "A", "B", "C", NULL
+    "float", "var", "return", "A", "B", "C", NULL
 };
 
 static const ExprBuiltin *find_expr_builtin(const char *name) {

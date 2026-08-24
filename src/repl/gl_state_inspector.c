@@ -1413,6 +1413,7 @@ static void gl_state_apply_cmd(ReplGlTrackedState *s, const GLCmd *cmd,
     case CMD_FOR_END:
     case CMD_BREAK:
     case CMD_CONTINUE:
+    case CMD_RETURN:
     case CMD_FUNC_DEF:
     case CMD_FUNC_END:
     case CMD_CALL:

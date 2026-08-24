@@ -976,7 +976,7 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
     case CMD_LOAD_IDENTITY: case CMD_MULT_MATRIXF:
     /* These are resolved during flatten and should not appear in flat_cmds. */
     case CMD_FOR_BEGIN: case CMD_FOR_END:
-    case CMD_BREAK: case CMD_CONTINUE:
+    case CMD_BREAK: case CMD_CONTINUE: case CMD_RETURN:
     case CMD_FUNC_DEF: case CMD_FUNC_END: case CMD_CALL:
     /* Expanded by flatten into one CMD_SCRATCH_ASSIGN per cell. */
     case CMD_SCRATCH_BLOCK_ASSIGN:

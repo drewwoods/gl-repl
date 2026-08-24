@@ -36,6 +36,7 @@ EXEMPT_TYPES: dict[str, str] = {
     "CMD_FOR_END":    "documented in the Variables / Loops prose section",
     "CMD_BREAK":      "documented in the Loops prose section",
     "CMD_CONTINUE":   "documented in the Loops prose section",
+    "CMD_RETURN":     "documented in the Loops prose section",
     "CMD_FUNC_DEF":   "documented in the Functions prose section",
     "CMD_FUNC_END":   "documented in the Functions prose section",
     "CMD_CALL":       "documented in the Functions prose section",

@@ -1,0 +1,76 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// `return` in all three placements that differ, in one scene.
+// Top row: a guarded return skips the odd cubes. Bottom row: a return
+// from inside a loop leaves the loop *and* the function, so the red
+// marker after the loop only appears once the guard stops firing.
+// The ring is drawn after a top-level return, so it disappears for the
+// part of the cycle where the frame ends early.
+static float span, grow;
+
+glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
+glRotatef(14.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+// Every column draws, then every other one returns before it does.
+func0(k) {
+  if(fmod(k, 2) > 0.5) {
+    return;
+  }
+  glPushMatrix();
+  glTranslatef(k * 0.5 - 1.75, 0.75, 0);
+  glutSolidCube(0.32);
+  glPopMatrix();
+}
+
+// The return unwinds the loop the way a break would, but also skips the
+// marker below it - which is the whole difference between the two.
+func1(n) {
+  for(i, 0, 6) {
+    if(i > n) {
+      return;
+    }
+    glPushMatrix();
+    glTranslatef(i * 0.45 - 1.2, -0.9, 0);
+    glutSolidSphere(0.15, 10, 8);
+    glPopMatrix();
+  }
+  glColor3f(1, 0.35, 0.2);
+  glPushMatrix();
+  glTranslatef(1.6, -0.9, 0);
+  glutSolidCube(0.24);
+  glPopMatrix();
+}
+
+glClearColor(0.05, 0.06, 0.09, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glEnable(GL_COLOR_MATERIAL);
+glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+
+span = 8;
+grow = floor(t * 2) + 1;
+
+glColor3f(0.45, 0.75, 1);
+for(k, 0, span) {
+  func0(k);
+}
+
+glColor3f(0.6, 0.9, 0.5);
+func1(grow);
+
+// Top-level return: everything below is dropped for the rest of the frame.
+if(t > 1.5) {
+  return;
+}
+
+glColor3f(1, 0.85, 0.3);
+glPushMatrix();
+glTranslatef(0, 1.75, 0);
+glRotatef(90, 1, 0, 0);
+glutSolidTorus(0.05, 0.45, 8, 20);
+glPopMatrix();

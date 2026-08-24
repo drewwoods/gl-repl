@@ -782,6 +782,8 @@ label("fmt", ...)              (bitmap text; REPL primitive)
 console("fmt", ...)            (debug trace to console panel; REPL primitive)
 for(var, start, end[, step]) { }   func0..func9(params) { }   if(expr) { }
 break;   continue;                (innermost enclosing loop, same func body)
+return;                        (C semantics, no value; at top level ends
+                                the frame. Rejected inside glBegin/glEnd)
 float name[, ...];    var = expr;    A[i] = expr;    // comment
 A[base] = {e0, ..., eN};       (2..16 cells at once; base is a required
                                 integer literal. Source-only

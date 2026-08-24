@@ -198,7 +198,7 @@ unsigned repl_attrib_bits_for_cmd(const GLCmd *cmd) {
     case CMD_CLEAR:
     /* Control flow, language primitives, editor rows: no GL state at all. */
     case CMD_FOR_BEGIN: case CMD_FOR_END:
-    case CMD_BREAK: case CMD_CONTINUE:
+    case CMD_BREAK: case CMD_CONTINUE: case CMD_RETURN:
     case CMD_FUNC_DEF: case CMD_FUNC_END: case CMD_CALL:
     case CMD_IF_BEGIN: case CMD_IF_END: case CMD_ELSE_IF: case CMD_ELSE:
     case CMD_VAR_ASSIGN: case CMD_SCRATCH_ASSIGN:

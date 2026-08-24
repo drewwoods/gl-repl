@@ -859,6 +859,13 @@ static const ReplCommandTypeSpec g_command_type_specs[CMD_TYPE_COUNT] = {
     CMD_TYPE_SPEC(CMD_FOR_END,                      1, CMD_CAT_LOOP),
     CMD_TYPE_SPEC(CMD_BREAK,                        1, CMD_CAT_LOOP),
     CMD_TYPE_SPEC(CMD_CONTINUE,                     1, CMD_CAT_LOOP),
+    /* Not-in-begin is load-bearing, not tidiness: `return` is the only
+     * statement that can let a glBegin execute without its glEnd. The
+     * REPL would auto-close the block (repl_exec_cursor_end reads the
+     * runtime in_begin flag) where the exported draw_scene() would not
+     * (its repair counts glBegin/glEnd over the source). Rejecting the
+     * row at commit time is what keeps the two from disagreeing. */
+    CMD_TYPE_SPEC_NAMED_NOT_IN_BEGIN(CMD_RETURN, "return", 1, CMD_CAT_FUNCTION),
     CMD_TYPE_SPEC(CMD_FUNC_DEF,                     1, CMD_CAT_FUNCTION),
     CMD_TYPE_SPEC(CMD_FUNC_END,                     1, CMD_CAT_FUNCTION),
     CMD_TYPE_SPEC(CMD_CALL,                         1, CMD_CAT_FUNCTION),

@@ -2111,6 +2111,185 @@ void test_loop_jump_commands(void) {
                 editor_feed_line("continue") == 1);
 }
 
+/* `return` is the third jump statement and, like break/continue, is
+ * resolved entirely by flatten - so every claim is again a claim about the
+ * shape of the flat program. What separates it from break is *who consumes
+ * it*: break stops at the innermost loop, return passes through every
+ * enclosing loop and is consumed at the call frame (or, at top level, ends
+ * the frame). */
+void test_return_command(void) {
+    printf("--- return ---\n");
+
+    /* 1. A return ends the callee's body; the caller carries on. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("func0() {");
+    editor_feed_line("glVertex3f(0,0,0);");
+    editor_feed_line("return;");
+    editor_feed_line("glVertex3f(1,1,1);");
+    editor_feed_line("}");
+    editor_feed_line("func0();");
+    editor_feed_line("glColor3f(1,0,0);");
+    repl_flatten_commands(editor_state_edit_line());
+    ASSERT_INT("return drops the rest of the callee body",
+               count_flat_type(CMD_VERTEX3F), 1);
+    ASSERT_INT("the caller's commands still run",
+               count_flat_type(CMD_COLOR3F), 1);
+    ASSERT_INT("return itself emits no flat command",
+               count_flat_type(CMD_RETURN), 0);
+
+    /* 2. The break/return divergence, stated directly: from inside a loop,
+     * break resumes after the loop, return does not. The trailing
+     * glColor3f is what tells them apart. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("func0() {");
+    editor_feed_line("for(k, 0, 8) {");
+    editor_feed_line("if(k > 2) {");
+    editor_feed_line("return;");
+    editor_feed_line("}");
+    editor_feed_line("glVertex3f(k,0,0);");
+    editor_feed_line("}");
+    editor_feed_line("glColor3f(1,0,0);");
+    editor_feed_line("}");
+    editor_feed_line("func0();");
+    repl_flatten_commands(editor_state_edit_line());
+    ASSERT_INT("return ends the unroll like a break",
+               count_flat_type(CMD_VERTEX3F), 3);
+    ASSERT_INT("return also skips what follows the loop",
+               count_flat_type(CMD_COLOR3F), 0);
+
+    /* 3. It passes through *every* enclosing loop, not just the innermost -
+     * the outer loop's trailing command must not appear either. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("func0() {");
+    editor_feed_line("for(i, 0, 3) {");
+    editor_feed_line("for(j, 0, 5) {");
+    editor_feed_line("if(j > 0) {");
+    editor_feed_line("return;");
+    editor_feed_line("}");
+    editor_feed_line("glVertex3f(i,j,0);");
+    editor_feed_line("}");
+    editor_feed_line("glColor3f(1,0,0);");
+    editor_feed_line("}");
+    editor_feed_line("}");
+    editor_feed_line("func0();");
+    repl_flatten_commands(editor_state_edit_line());
+    ASSERT_INT("return unwinds the outer loop too",
+               count_flat_type(CMD_COLOR3F), 0);
+    ASSERT_INT("only the first inner iteration emitted",
+               count_flat_type(CMD_VERTEX3F), 1);
+
+    /* 4. Consumed at the call frame: a callee's return must not truncate
+     * the caller's loop. Contrast case 3, where the loop was the callee's
+     * own. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("func0(n) {");
+    editor_feed_line("if(n > 0) {");
+    editor_feed_line("return;");
+    editor_feed_line("}");
+    editor_feed_line("glVertex3f(n,0,0);");
+    editor_feed_line("}");
+    editor_feed_line("for(i, 0, 3) {");
+    editor_feed_line("func0(i);");
+    editor_feed_line("glColor3f(1,0,0);");
+    editor_feed_line("}");
+    repl_flatten_commands(editor_state_edit_line());
+    ASSERT_INT("callee return does not end the caller's loop",
+               count_flat_type(CMD_COLOR3F), 3);
+    ASSERT_INT("callee return skips only its own remaining body",
+               count_flat_type(CMD_VERTEX3F), 1);
+
+    /* 5. Writes made before the return survive it, through the loop
+     * copy-back the signal now passes through rather than stopping at. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("n = 0;");
+    editor_feed_line("func0() {");
+    editor_feed_line("for(i, 0, 8) {");
+    editor_feed_line("n = n + 1;");
+    editor_feed_line("if(i > 2) {");
+    editor_feed_line("return;");
+    editor_feed_line("}");
+    editor_feed_line("}");
+    editor_feed_line("}");
+    editor_feed_line("func0();");
+    repl_flatten_commands(editor_state_edit_line());
+    {
+        ReplVariableView vv = repl_state_variables();
+        int idx = repl_eval_find_predef_var_idx("n");
+        ASSERT_TRUE("accumulator var found", idx >= 0);
+        if (idx >= 0)
+            ASSERT_TRUE("assignment before the return is kept",
+                        vv.vars[idx].value == 4.0f);
+    }
+
+    /* 6. Top level: a bare return ends the frame early. This is the case
+     * break/continue reject outright, and it is legal here because the
+     * exported draw_scene() is void too. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_TRUE("top-level return is accepted",
+                editor_feed_line("return;") == 1);
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glVertex3f(0,0,0);");
+    editor_feed_line("return;");
+    editor_feed_line("glColor3f(1,0,0);");
+    repl_flatten_commands(editor_state_edit_line());
+    ASSERT_INT("commands before a top-level return still emit",
+               count_flat_type(CMD_VERTEX3F), 1);
+    ASSERT_INT("a top-level return ends the frame",
+               count_flat_type(CMD_COLOR3F), 0);
+
+    /* 7. Top-level return from inside a loop: unwinds the loop, then ends
+     * the frame - and does so without the "outside a loop" diagnostic that
+     * an escaping break would raise. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("for(i, 0, 5) {");
+    editor_feed_line("if(i > 1) {");
+    editor_feed_line("return;");
+    editor_feed_line("}");
+    editor_feed_line("glVertex3f(i,0,0);");
+    editor_feed_line("}");
+    editor_feed_line("glColor3f(1,0,0);");
+    repl_flatten_commands(editor_state_edit_line());
+    ASSERT_INT("top-level return ends the unroll",
+               count_flat_type(CMD_VERTEX3F), 2);
+    ASSERT_INT("top-level return ends the frame after the loop",
+               count_flat_type(CMD_COLOR3F), 0);
+    ASSERT_INT("a legal top-level return leaves a runnable program",
+               repl_state_flat_program_count() > 0, 1);
+
+    /* 8. Rejected inside a glBegin block. `return` is the only statement
+     * that could let a glBegin execute without its glEnd, which the REPL
+     * would auto-close at program end and the exported C would not - so
+     * the row never commits in the first place. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    ASSERT_TRUE("return inside glBegin/glEnd rejected",
+                editor_feed_line("return;") == 0);
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("for(i, 0, 3) {");
+    ASSERT_TRUE("return nested in a loop inside glBegin also rejected",
+                editor_feed_line("return;") == 0);
+
+    /* 9. `return` is reserved, so it cannot be declared away. The decl
+     * handler consumes the line either way (success or error), so the
+     * claim is that no row committed - not the feed's return value. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    {
+        int before = repl_state_document_count();
+        editor_feed_line("float return;");
+        ASSERT_INT("'float return;' commits no row",
+                   repl_state_document_count(), before);
+        ASSERT_TRUE("'return' has no predef slot",
+                    repl_eval_find_predef_var_idx("return") < 0);
+    }
+
+    /* 10. The interactive `;` key hands the parser a line without the
+     * semicolon, so both spellings have to commit. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_TRUE("return commits without a trailing semicolon",
+                editor_feed_line("return") == 1);
+}
+
 void test_var_declare_cmd() {
     printf("--- CMD_VAR_DECLARE coverage ---\n");
 
@@ -2327,6 +2506,7 @@ int main(int argc, char **argv) {
     test_debug_dump_flat_commands();
     test_var_declare_cmd();
     test_loop_jump_commands();
+    test_return_command();
     test_time();
 
     printf("\n%d / %d tests passed\n", g_harness.passed, g_harness.run);

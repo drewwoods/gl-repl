@@ -142,16 +142,24 @@ typedef struct {
     FlatCmdActiveLoop active_loops[MAX_FLATTEN_ACTIVE_LOOPS];
     int active_loop_count;
     int call_depth;
-    /* Pending break/continue, set by the CMD_BREAK / CMD_CONTINUE arms of
-     * flatten_range and consumed by the innermost enclosing
-     * flatten_for_loop. Every walk that can sit between the statement and
-     * its loop unwinds on it: flatten_range returns, flatten_if_block
-     * returns through it, and flatten_call clears it at the frame boundary
-     * (a callee's break must not reach the caller's loop, exactly as in C).
-     * Zero when no jump is in flight. */
+    /* Pending jump, set by the CMD_BREAK / CMD_CONTINUE / CMD_RETURN arms
+     * of flatten_range. Every walk that can sit between the statement and
+     * the construct that consumes it unwinds on it: flatten_range returns
+     * and flatten_if_block returns through it.
+     *
+     * The two kinds differ only in who consumes them, which is exactly C's
+     * rule. BREAK/CONTINUE stop at the innermost enclosing
+     * flatten_for_loop. RETURN passes *through* every enclosing loop -
+     * ending each unroll as it goes - and is consumed at the call-frame
+     * boundary in flatten_call, or at the end of the top-level walk (a
+     * bare `return;` in the display body is an early end of frame).
+     * A callee's break must never reach the caller's loop, so flatten_call
+     * treats a surviving BREAK/CONTINUE as a miscompile. Zero when no jump
+     * is in flight. */
     enum { FLATTEN_LOOP_SIGNAL_NONE = 0,
            FLATTEN_LOOP_SIGNAL_BREAK,
-           FLATTEN_LOOP_SIGNAL_CONTINUE } loop_signal;
+           FLATTEN_LOOP_SIGNAL_CONTINUE,
+           FLATTEN_LOOP_SIGNAL_RETURN } loop_signal;
     int abort;
     int visit_budget;
     char status[REPL_DIAG_TEXT_MAX];
@@ -467,9 +475,15 @@ static void flatten_for_loop(FlattenContext *ctx,
          * before the break still happened, and dropping their values would
          * make `for(i,0,n){ acc = acc+i; if(...) break; }` lose the last
          * accumulation. CONTINUE just falls into the next iteration; BREAK
-         * ends the unroll. Either way the signal stops here - this is the
-         * innermost loop, so a nested loop's jump never reaches its
-         * parent. */
+         * ends the unroll. Either stops here - this is the innermost loop,
+         * so a nested loop's jump never reaches its parent.
+         *
+         * RETURN is not ours to consume. It ends this unroll like a break,
+         * but stays in flight so every enclosing loop unwinds in turn and
+         * the frame boundary (flatten_call, or the top-level walk) is what
+         * finally clears it. */
+        if (ctx->loop_signal == FLATTEN_LOOP_SIGNAL_RETURN)
+            return;
         if (ctx->loop_signal != FLATTEN_LOOP_SIGNAL_NONE) {
             int stop = (ctx->loop_signal == FLATTEN_LOOP_SIGNAL_BREAK);
             ctx->loop_signal = FLATTEN_LOOP_SIGNAL_NONE;
@@ -766,14 +780,21 @@ static void flatten_call(FlattenContext *ctx,
         if (ctx->call_depth > 0) ctx->call_depth--;
         ctx->current_frame = saved_frame;
         ctx->frame_has_locals = caller_has_locals;
-        /* Call-frame boundary for loop jumps. The parser rejects a break
-         * whose loop is not in the same function body, so reaching here
-         * with a signal means the document changed under a row that was
-         * valid when committed (the enclosing loop was deleted, say).
-         * Report it rather than letting the jump escape into whatever loop
-         * the *caller* happens to be in - that would be a silent
-         * miscompile against the exported C. */
-        if (ctx->loop_signal != FLATTEN_LOOP_SIGNAL_NONE) {
+        /* Call-frame boundary. A RETURN raised anywhere in the callee -
+         * including inside its loops, which passed it through - is
+         * consumed here: the callee's body ended early, the caller carries
+         * on. That is the whole of `return`'s semantics.
+         *
+         * A surviving break/continue is a different story. The parser
+         * rejects a break whose loop is not in the same function body, so
+         * reaching here with one means the document changed under a row
+         * that was valid when committed (the enclosing loop was deleted,
+         * say). Report it rather than letting the jump escape into
+         * whatever loop the *caller* happens to be in - that would be a
+         * silent miscompile against the exported C. */
+        if (ctx->loop_signal == FLATTEN_LOOP_SIGNAL_RETURN) {
+            ctx->loop_signal = FLATTEN_LOOP_SIGNAL_NONE;
+        } else if (ctx->loop_signal != FLATTEN_LOOP_SIGNAL_NONE) {
             ctx->loop_signal = FLATTEN_LOOP_SIGNAL_NONE;
             flatten_fail(ctx, "break/continue outside a loop");
         }
@@ -1644,17 +1665,21 @@ static int flatten_scratch_row(FlattenContext *ctx, const GLCmd *src_cmd,
                                   func_scope_mask);
 }
 
-/* Raise a pending loop jump. Kept out of flatten_range's body so the
- * reasoning lives somewhere it can be read: the statement emits nothing,
- * it only asks the walk to unwind to the innermost enclosing
- * flatten_for_loop, which decides whether to start the next iteration or
- * stop unrolling. A guarded jump needs no dep bookkeeping of its own -
+/* Raise a pending jump. Kept out of flatten_range's body so the reasoning
+ * lives somewhere it can be read: the statement emits nothing, it only
+ * asks the walk to unwind. break/continue unwind to the innermost
+ * enclosing flatten_for_loop, which decides whether to start the next
+ * iteration or stop unrolling; return unwinds all the way to the frame
+ * boundary. A guarded jump needs no dep bookkeeping of its own -
  * flatten_eval_if_line already notes the guarding condition's deps as
  * structural, which is what forces a re-flatten (rather than a value-only
  * rebake) when the condition's inputs change. */
 static void flatten_raise_loop_signal(FlattenContext *ctx, CmdType type) {
-    ctx->loop_signal = (type == CMD_BREAK) ? FLATTEN_LOOP_SIGNAL_BREAK
-                                           : FLATTEN_LOOP_SIGNAL_CONTINUE;
+    if (type == CMD_RETURN)
+        ctx->loop_signal = FLATTEN_LOOP_SIGNAL_RETURN;
+    else
+        ctx->loop_signal = (type == CMD_BREAK) ? FLATTEN_LOOP_SIGNAL_BREAK
+                                               : FLATTEN_LOOP_SIGNAL_CONTINUE;
 }
 
 /* Source rows the expansion walk consumes without emitting anything: the
@@ -1703,7 +1728,8 @@ static void flatten_range(FlattenContext *ctx,
             continue;
         }
 
-        if (src_cmd->type == CMD_BREAK || src_cmd->type == CMD_CONTINUE) {
+        if (src_cmd->type == CMD_BREAK || src_cmd->type == CMD_CONTINUE ||
+            src_cmd->type == CMD_RETURN) {
             flatten_raise_loop_signal(ctx, src_cmd->type);
             return;
         }
@@ -1885,10 +1911,14 @@ int repl_flatten_program(const ReplFlattenOptions *options,
         prof_accum_commit(PROF_FLATTEN_VAR_ASSIGN);
         prof_accum_commit(PROF_FLATTEN_SCRATCH_ASSIGN);
     }
-    /* Same escape check as the call-frame boundary, for a top-level jump:
-     * a `break` whose loop was deleted out from under it fails the frame
-     * with a diagnostic instead of quietly truncating the program. */
-    if (ctx.loop_signal != FLATTEN_LOOP_SIGNAL_NONE) {
+    /* Same boundary as flatten_call, for the top-level walk. A RETURN
+     * that reaches here is a `return;` in the display body itself: the
+     * frame simply ends early, exactly as the exported draw_scene() would.
+     * A `break` whose loop was deleted out from under it still fails the
+     * frame with a diagnostic instead of quietly truncating the program. */
+    if (ctx.loop_signal == FLATTEN_LOOP_SIGNAL_RETURN) {
+        ctx.loop_signal = FLATTEN_LOOP_SIGNAL_NONE;
+    } else if (ctx.loop_signal != FLATTEN_LOOP_SIGNAL_NONE) {
         ctx.loop_signal = FLATTEN_LOOP_SIGNAL_NONE;
         flatten_fail(&ctx, "break/continue outside a loop");
     }

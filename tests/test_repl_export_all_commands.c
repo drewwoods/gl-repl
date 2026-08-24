@@ -170,6 +170,9 @@ static int make_c89_probe(CmdType type, GLCmd *cmd,
     case CMD_CONTINUE:
         snprintf(line, line_sz, "continue; // c89 probe");
         break;
+    case CMD_RETURN:
+        snprintf(line, line_sz, "return; // c89 probe");
+        break;
     case CMD_FUNC_DEF:
         snprintf(line, line_sz, "func0() { // c89 probe");
         break;

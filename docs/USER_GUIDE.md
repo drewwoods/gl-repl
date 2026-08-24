@@ -816,6 +816,26 @@ for(i, 0, 64) {
 Both mean exactly what they mean in C, and export as themselves. `break` and
 `continue` address the **innermost enclosing** loop.
 
+#### Leaving early - `return`
+
+```c
+drawSpoke(k, limit) {
+    if(k > limit) {
+        return;                       // done with this call
+    }
+    glVertex3f(cos(k), sin(k), 0);
+}
+```
+
+Standard C semantics: it ends the current function call, unwinding any
+enclosing loops on the way, and exports as itself. Three REPL specifics:
+
+- It takes **no value** - every REPL function is a `void` in the exported C.
+- At the **top level** it ends the frame early, which makes it a quick way to
+  bisect a scene. The exported display body is a `void` function too.
+- It is rejected **inside a `glBegin`/`glEnd` block**, where it would leave the
+  block open.
+
 ### Functions
 
 ```c

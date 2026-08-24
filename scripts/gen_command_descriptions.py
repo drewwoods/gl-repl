@@ -22,6 +22,7 @@ NON_GL_COMMANDS = {
     "CMD_FOR_END",
     "CMD_BREAK",
     "CMD_CONTINUE",
+    "CMD_RETURN",
     "CMD_FUNC_DEF",
     "CMD_FUNC_END",
     "CMD_CALL",
