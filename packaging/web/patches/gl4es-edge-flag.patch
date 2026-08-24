@@ -611,7 +611,7 @@ index 784a1410..1365ee46 100644
      if (list->color)    memcpy(list->color + idx, list->lastColors, sizeof(GLfloat) * 4);
      if (list->secondary)    memcpy(list->secondary + (l * 4), glstate->secondary, sizeof(GLfloat) * 4);
      if (list->tex[0])   memcpy(list->tex[0] + idx, glstate->texcoord[0], sizeof(GLfloat) * 4);
-@@ -53,6 +57,31 @@ void FASTMATH rlVertex4fv(renderlist_t *list, GLfloat* v) {
+@@ -53,6 +57,35 @@ void FASTMATH rlVertex4fv(renderlist_t *list, GLfloat* v) {
      memcpy(vert, v, 4*sizeof(GLfloat));
  }
  
@@ -638,6 +638,10 @@ index 784a1410..1365ee46 100644
 +
 +int gl4es_edgeflag_test_last_capacity(void) {
 +    return g_edgeflag_test_capacity;
++}
++
++void gl4es_edgeflag_test_reset_capacity(void) {
++    g_edgeflag_test_capacity = 0;
 +}
 +
  void rlEnd(renderlist_t *list) {

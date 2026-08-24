@@ -30,6 +30,7 @@ static char g_report[512];
 
 /* Internal web-oracle hook supplied by the edge-flag gl4es patch. */
 extern int gl4es_edgeflag_test_last_capacity(void);
+extern void gl4es_edgeflag_test_reset_capacity(void);
 
 static int coverage(void)
 {
@@ -457,6 +458,8 @@ static void emit_capacity_triangles(void)
 
 static void test_fill_prebegin_capacity(void)
 {
+    gl4es_edgeflag_test_reset_capacity();
+
     clear_scene();
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     emit_capacity_triangles();
@@ -483,7 +486,7 @@ static void test_fill_prebegin_capacity(void)
         fail("prebegin GL_FALSE FILL edge storage was undersized", capacity, 96);
     if (all_false != all_true)
         fail("GL_FILL capacity path changed coverage", all_false, all_true);
-    report(" fill-capacity=%d/%d", all_false, all_true);
+    report3(" fill-capacity=%d/%d/%d", capacity, all_false, all_true);
 }
 
 /* glPushAttrib(GL_CURRENT_BIT) must save and restore the flag. */
