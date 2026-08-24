@@ -2681,6 +2681,7 @@ test-full: ## Run the full build, test, sanitizer, benchmark, and real-GL gate.
 	done
 	+$(MAKE) --no-print-directory test-stubs NO_SAN=0
 	+$(MAKE) --no-print-directory test-scenes
+	+REPL_SCENE_CORPUS=1 $(MAKE) --no-print-directory run-test-export-trace-parity ARGS='--full'
 	+$(MAKE) --no-print-directory test-msan
 	+$(MAKE) --no-print-directory gl-repl
 	+$(MAKE) --no-print-directory gl-tests
