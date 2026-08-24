@@ -1,17 +1,17 @@
 # File-Scope Function Definitions In The Code Panel
 
-## Status - IN REVIEW (revised 2026-08-24 after design read)
+## Status - IN REVIEW (revised twice, 2026-08-24)
 
-Investigation only; nothing implemented. Revised from the first draft,
-which invented a "prologue invariant" that already exists as
-[`doc_order.h`](../../../src/repl/doc_order.h), treated a tutorial
-contract change as a "hardening" step of the same project, and proposed
-a parallel row array where two scalars do.
+Investigation only; nothing implemented.
+
+Revision 2 closes the two blockers from the second design read: the
+boundary helper's comment rule (it ate body-attached comments) and the
+two placement calls section 1h had left open. Both are now written in.
+Project 2 remains gated and must not be folded in.
 
 The work splits into **two projects**. Project 1 (the view) is
-self-contained and ready to specify. Project 2 (making the order total
-for every entry point) is gated on a tutorial decision and must not be
-folded into it.
+self-contained and specified. Project 2 (making the order total for
+every entry point) is gated on a tutorial decision.
 
 ## Summary
 
@@ -32,13 +32,12 @@ machine ([`src/repl/doc_order.h`](../../../src/repl/doc_order.h)):
 `repl_doc_order_offer()` runs in the catalog loader
 (`src/repl/example_loader.c`), the file importer gated on a `.glr`
 source (`src/repl/import.c`), the tutorial setup-scaffold loader
-(`src/subsystems/tutorial/tutorial_runner.c`) and
-`--lint-scenes` (`src/app/boot/glr_lint_scenes.c`). A hand-written
-`.glr` with a mid-document definition is *rejected*
-(`REPL_DOC_ORDER_FUNC_LATE`), not silently loaded. The writer half is
-`src/repl/export_glr.c`, which re-emits the live document in three
-passes keyed on `GlrRowPhase` (`DECLS` / `FUNCS` / `BODY`) rather than
-verbatim.
+(`src/subsystems/tutorial/tutorial_runner.c`) and `--lint-scenes`
+(`src/app/boot/glr_lint_scenes.c`). A hand-written `.glr` with a
+mid-document definition is *rejected* (`REPL_DOC_ORDER_FUNC_LATE`), not
+silently loaded. The writer half is `src/repl/export_glr.c`, which
+re-emits the live document in three passes keyed on `GlrRowPhase`
+(`glr_scene_write_phase`, `:171`) rather than verbatim.
 
 Camera rows never enter the editor document - the camera reader consumes
 them - so the *live* document is `[comments][decls][funcs][body]`.
@@ -54,11 +53,11 @@ Consequences already true, and load-bearing for the sizing:
   (`src/repl/export_prologue.c:422`) emits each `CMD_FUNC_DEF` as a
   file-scope `static void`, forward declarations first. The
   `/* @func-body N */` markers in the display body
-  (`src/repl/export_cmd_writer.c:290`, `:682`) exist only so `.c` import
-  can restore document position.
+  (`src/repl/export_cmd_writer.c:290`, call at `:683`) exist only so
+  `.c` import can restore document position.
 - **Flatten is position-independent.** `flatten_range()` skips whole
-  func-def blocks (`src/repl/flatten.c:1737`) and resolves calls through
-  `ctx.func_def_idx[slot]` (`:1887`).
+  func-def blocks (`src/repl/flatten.c:1711`) and resolves calls through
+  `ctx.func_def_idx[slot]`, filled at `:1862-1864`.
 - **Hit-testing, replay markers, assign-plot and edit guides are keyed
   on `row->source_line_idx`**, so splicing chrome mid-walk does not
   touch them.
@@ -78,20 +77,47 @@ together: an indent-first intermediate renders column-0 function headers
 *inside* `void display(void) {`, which is a worse lie than the one being
 fixed, and costs a second golden regeneration.
 
-### 1a. One boundary helper
+### 1a. One boundary helper, with forward comment attachment
 
 Add to `src/repl/source_scope.c`, e.g.
-`repl_source_scope_view_display_body_start(view)`: from row 0, skip
-comments, blanks, top-level `CMD_VAR_DECLARE`, and **closed** depth-0
-`CMD_FUNC_DEF` blocks; stop at the first executable row or at an
-unclosed function header. Returns one document index, `at`.
+`repl_source_scope_view_display_body_start(view)`, returning one
+document index `at`.
+
+**A comment/blank run belongs to the row it precedes**, which is the
+rule `glr_scene_write_phase()` (`src/repl/export_glr.c:171-225`) already
+uses when it carries each row's leading run into that row's phase. A
+walk that skips comments unconditionally until the first executable row
+gets this wrong in the common case:
+
+    tri() { ... }
+                                        <- blank
+    // --- Render State ----------      <- belongs to glClearColor
+    glClearColor(...);
+
+The naive walk lands `at` on `glClearColor` and strands
+`// --- Render State ---` above `void display(void) {`. Every catalog
+function scene has this shape.
+
+The rule:
+
+- Buffer a pending comment/blank run rather than consuming it.
+- A pending run is prologue **iff** its next non-comment row is a
+  top-level `CMD_VAR_DECLARE` or a closed depth-0 `CMD_FUNC_DEF`.
+- Otherwise the run *starts the body*: `at` is the run's first row, not
+  the executable row after it.
+- Stop at the first executable row, an unclosed `CMD_FUNC_DEF`, or a
+  body-attached comment run.
 
 Closed-block only, because `find_block_end()` returns `document_count`
 for an unclosed block and a naive boundary would swallow the document.
-Note the unclosed case is *not* reachable by interactive typing -
+The unclosed case is *not* reachable by interactive typing -
 `editor_compile_func_def` inserts `fd` and `fe` together
-(`src/editor/commit.c:640-660`) - it is reachable via `--watch`, a
+(`src/editor/commit.c:640-672`) - it is reachable via `--watch`, a
 partial paste, and the load path's header-only `INSERT_ONE`.
+
+Point the implementation at `glr_scene_write_phase` for the attachment
+rule, but **do not import `GlrRowPhase` into the UI or into
+source_scope** - the helper answers one question with one index.
 
 Not frame-hot: reformat walks each row once per edit. A step function
 over `at` is enough; do not add a fifth prefix array to
@@ -99,12 +125,13 @@ over `at` is enough; do not add a fifth prefix array to
 
 ### 1b. Panel chrome split (`src/ui/app/repl_code_panel.c`)
 
-`repl_code_panel_add_header_rows()` (`:2373`) and its row-count twin
+`repl_code_panel_add_header_rows()` (`:2376`) and its row-count twin
 `repl_code_panel_header_row_count()` (`:211`) currently emit all chrome
 before row 0. Split into:
 
-- **file-scope chrome** - workspace header, includes, GL vector helpers -
-  before row 0, as today. This stays `layout.header_rows`.
+- **file-scope chrome** - workspace header, includes, GL vector helpers,
+  and the scratch decoration line (see 1h) - before row 0. This stays
+  `layout.header_rows`.
 - **display-open chrome** - `g_display_header`, lights, camera,
   `g_header_post` - spliced at `at`.
 
@@ -118,17 +145,27 @@ Three fields that cannot disagree; a third parallel array sized
 Sites: 12 `header_rows` uses in `repl_code_panel.c`, principally
 `repl_code_panel_rows_before_cmd()` (`:318`),
 `ui_repl_code_panel_target_for_doc_line()` (`:490`) and the
-cursor/follow helpers. Keeping `header_rows` meaning "file-scope chrome
-before row 0" keeps the existing test consumers compiling and mostly
-correct (see Test Impact).
+cursor/follow helpers.
 
-### 1c. Dump twin (`src/repl/export.c:526-586`)
+**`at == document_count` needs its own path.** A declarations- and
+functions-only document puts the whole display-open chrome after the
+last command and *before* the trailing input/placeholder row
+(`repl_code_panel_trailing_row_count()` `:394`,
+`repl_code_panel_add_trailing_document_row()` `:2590`). The trailing
+slot is the `cmd_idx == document_count` arm of both the emission walk
+and `target_for_doc_line`'s loop, so the `i >= at` term has to be
+applied there too, not only inside the command loop. `total_lines`,
+target lookup, cursor-follow and emission all need it. Test with a
+scene that is nothing but a function.
+
+### 1c. Dump twin (`src/repl/export.c:506-594`)
 
 `repl_dump_code_panel_text()` re-derives the same sections
 independently. Section order becomes:
 
     --- header_pre ---
     --- gl_vector_helpers ---
+    (scratch decoration line, untagged - as today)
     --- source_prologue ---      rows [0, at); omitted when at == 0
     --- display_header ---
     --- lights_pre_camera ---
@@ -137,15 +174,18 @@ independently. Section order becomes:
     --- source ---               rows [at, count)
     --- render_state ---
 
-`--- source ---` keeps its name for the body rows so tests that inspect
-the dump do not churn on a rename. The 40 goldens are byte-exact, so the
-new section name is load-bearing - fix it here before regenerating.
+The scratch line is printed untagged today, after `--- header_post ---`
+(`src/repl/export.c:577`); 1h moves it up with the file-scope chrome, so
+it moves here too. `--- source ---` keeps its name for the body rows so
+tests that inspect the dump do not churn on a rename. The 40 goldens are
+byte-exact, so both the new section name and the scratch line's new
+position are load-bearing - settle them here before regenerating.
 
 ### 1d. Indent base
 
 Six helpers in `src/repl/source_scope.c` start at `2 +` (`:261`, `:271`,
-`:284`, `:301`, `:322`, `:339`). Base becomes
-`pos < at ? 0 : 2`, via one shared `source_scope_base_indent(view, pos)`.
+`:284`, `:301`, `:322`, `:339`). Base becomes `pos < at ? 0 : 2`, via
+one shared `source_scope_base_indent(view, pos)`.
 
 **Use the boundary, not an "inside a depth-0 `CMD_FUNC_DEF`"
 predicate.** The boundary form covers three cases the narrow predicate
@@ -156,37 +196,61 @@ function definition, which export deliberately emits *with* the function
 own position; and a mid-document function the panel still draws inside
 `display()`, which the narrow predicate would wrongly dedent.
 
-The formula is otherwise unchanged and stays consistent:
-`base + 2*td + 2*bd + 2*kd + 2*md`. A top-level `def` gets 0, its body 2,
-a loop inside it 4, the closing `}` 0; a top-level body row still gets 2;
-a function-scoped local (`REPL_VAR_IDX_LOCAL`) has `kd >= 1` and lands at
-2.
+**Do not touch the block-closer special case.** `source_scope_base_indent`
+returns `base + 2` at a `CMD_FUNC_END`, because the prefix depth on the
+closer row is still 1; `reformat.c:250-264` subtracts 2, and
+`commit.c:671` copies the header's indent onto the `fe` text. A top-level
+`}` lands at column 0 through that subtraction, not through the base. A
+post-change "simplification" that drops the minus-2 will park `}` at
+indent 2.
 
-### 1e. Direct commit paths that bypass the helper
+### 1e. Direct formatting paths that bypass the helper
 
-Two sites format indentation without asking the source scope:
+Three sites format indentation without asking the source scope. All are
+*formatting* fixes; none of them changes where a row is placed (that is
+Project 2):
 
 - `src/repl/compile.c:1593` - `format_decl_text(&parsed, "  ", ...)`
-  hard-codes the two-space indent for a new global declaration. Once
-  declarations sit at base 0 this is wrong; it must ask for the indent at
-  the insert position.
+  hard-codes two spaces for a new global declaration.
+- `src/repl/import.c:754` - `@declare` reconstruction hard-codes
+  `"  static float"`, with a comment claiming it matches
+  `format_decl_text`. `repl_reformat_program()` rewrites it at
+  `import.c:3338`, so this is not a live-panel bug as long as reformat
+  always runs - but it is a lying intermediate and the comment rots.
+  Same patch as the line above, or neither is true.
 - `src/editor/commit.c:647` - `repl_source_scope_cmd_indent(0, ...)` for
-  a new function header. Position 0 is not guaranteed to be a file-scope
-  position (it is not, if the clear-pair exception survives - see
-  Project 2). Query the indent at the computed insert position instead.
+  a new function header. **This one is load-bearing, not tidy-up.**
+  After the indent change position 0 is base 0, but with the clear-pair
+  exception surviving Project 1 a new definition in a catalog scene
+  still parks *below* the clear pair, i.e. at `pos >= at`. Querying
+  position 0 would emit a column-0 header inside `display()`. Query the
+  computed insert position instead.
+
+Querying the insert position is sufficient; no insertion-destination
+kind is needed. A new declaration hoists to `compile_decl_prologue_end`,
+which is always `<= at`; a new function lands wherever the hoist puts
+it, and the panel's boundary agrees with that position by construction.
+The one genuinely ambiguous index, `pos == at`, is settled once by the
+insert-ghost rule in 1h.
 
 ### 1f. `REPL_GLR_BASE_INDENT`
 
 `glr_scene_write_line()` (`src/repl/export_glr.c:43-53`) strips
-`REPL_GLR_BASE_INDENT` (2) from **every** row on save, which is correct
-today because every row carries the display-body indent. With mixed
-bases it flattens function bodies (in-memory 2 -> on-disk 0) and
-declarations. Strip 2 only from `GLR_ROW_PHASE_BODY` rows; write
-`DECLS` and `FUNCS` rows verbatim.
+`REPL_GLR_BASE_INDENT` (2) from **every** line it writes, which is
+correct today because every document row carries the display-body
+indent. With mixed bases it flattens function bodies (in-memory 2 ->
+on-disk 0) and declarations. Strip 2 only from `GLR_ROW_PHASE_BODY`
+rows; write `DECLS` and `FUNCS` rows verbatim.
 
-Load re-derives indentation, so this is a fidelity bug in checked-in
-files rather than a runtime one - but every scene regenerated after the
-change would be flattened, so it must land in the same patch.
+**Camera rows keep the current behaviour.** `glr_scene_write_line` is
+also the writer for the generated camera block (`:101`), whose lines come
+from `IMPORT_EXPORT_VIEW.cam_lines[]` and are not document rows - they
+still carry two spaces and must still be stripped. A phase-keyed strip
+must not accidentally cover them. Add a camera round-trip assertion.
+
+Load re-derives indentation, so 1f is a fidelity bug in checked-in files
+rather than a runtime one - but every scene regenerated after the change
+would be flattened, so it lands in the same patch.
 
 ### 1g. Missed call sites
 
@@ -204,30 +268,36 @@ change would be flattened, so it must land in the same patch.
 - **`tests/test_repl_core_extra.c:130`** hard-asserts
   `repl_source_scope_cmd_indent_chars(0) == 2`.
 
-### 1h. Two placement calls to make
+### 1h. The two placement calls, decided
 
-- **The scratch decoration line.** The panel draws
-  `"  float A[16], B[16], C[16];"`
-  (`REPL_CODE_PANEL_SCRATCH_DECL_LINE`) as display-body chrome; export
-  emits `static float A[16] = {0};` at file scope
+- **The scratch decoration line goes to file-scope chrome**, after the
+  GL vector helpers and before `--- source_prologue ---`, with its two
+  leading spaces dropped. It keeps the panel-only
+  `float A[16], B[16], C[16];` spelling; export still emits
+  `static float A[16] = {0};` on demand
   (`emit_export_scratch_globals_section`, `src/repl/export.c:329-342`).
-  If the point is that the panel reads like the C, this belongs with the
-  file-scope chrome and should lose its two-space indent (or take the
-  `static float` spelling). Keeping it display-adjacent is a proximity
-  hint at the cost of one remaining lie. **Decide before coding.**
-- **The insert ghost at the splice.** `target_for_doc_line()` emits the
-  insert row before `cmd_idx`. At `cmd_idx == at` it is ambiguous
-  whether the new row is the last file-scope row or the first display
-  body row. **Pick one and test it.**
+  Rationale: proximity-to-source was the argument for keeping it in the
+  body, and that argument is spent once the declarations it decorates
+  sit above `display()` anyway. Leaving it below would preserve exactly
+  the lie this change removes for decls.
+- **The insert ghost at `at` is the first display-body row.**
+  `target_for_doc_line()` emits the ghost before `cmd_idx`, so at
+  `cmd_idx == at` it reads as "insert a body row here." A declaration or
+  function typed there still hoists into the prologue under the existing
+  commit rules, so nothing is lost by the tie-break. Test: insert mode
+  with the cursor on the first body command of a scene with a non-empty
+  prologue.
 
-## Decisions That Block Project 1
+## Decisions
 
 | Decision | Resolution |
 | --- | --- |
-| Closed-block boundary | Yes. Last closed depth-0 func block; stop at first executable row or unclosed header. |
-| Unclosed trailing function | Boundary stops *at* it, so it renders inside the body; chrome shifts down by its row count when `}` lands. Reachable only from `--watch` / partial paste / header-only load, all of which already reflow the panel wholesale. State it and test it. |
-| Scratch decoration line | Open - see 1h. |
-| Insert ghost at the splice | Open - see 1h. |
+| Comment attachment at the boundary | Forward: a run belongs to the row it precedes (1a). |
+| Closed-block boundary | Yes. Last closed depth-0 func block; stop at first executable row, unclosed header, or body-attached comment run. |
+| Unclosed trailing function | Boundary stops *at* it, so it renders inside the body; chrome shifts down when `}` lands. Reachable only from `--watch` / partial paste / header-only load, all of which already reflow the panel wholesale. |
+| Scratch decoration line | File-scope chrome, two spaces dropped (1h). |
+| Insert ghost at the splice | First display-body row (1h). |
+| Block-closer indent | Unchanged; keep reformat's minus-2 (1d). |
 | Clear-pair exception | Survives Project 1. Tutorials keep showing their clear pair above `display()`. |
 | Load-time hoist | Not in Project 1. |
 
@@ -235,7 +305,7 @@ change would be flattened, so it must land in the same patch.
 
 Project 1 projects the order that already holds for `.glr`. It does not
 hold for every path into the live document. Each of these is a separate
-decision, and none of them is a step of Project 1:
+decision, and none is a step of Project 1:
 
 - **The commit hoist vs. the tutorial contract.** Every tutorial injects
   four locked prelude rows (`g_tutorial_scene_prelude`,
@@ -250,9 +320,9 @@ decision, and none of them is a step of Project 1:
   `:2227-2243`). Changing the rule to "above all executable rows" is
   either rejected by that guard or becomes a tutorial project: remapping
   locked indices, instruction-comment attachment, and the validator.
-- **`.c` import ignoring `@func-body` position.** If a hoist happens on
-  load it needs its own helper (or `export_glr.c`'s phase walk) called
-  from the `.c` import finish path **after**
+- **`.c` import ignoring `@func-body` position.** A load hoist needs its
+  own helper (or `export_glr.c`'s phase walk) called from the `.c`
+  import finish path **after**
   `editor_undo_note_wholesale_replacement()`. Do **not** piggy-back it
   on `repl_reformat_program()` (`src/repl/import.c:3338`): that function
   rewrites canonical text and indentation only, and making it a
@@ -267,27 +337,29 @@ decision, and none of them is a step of Project 1:
   through it. Either hoist before mappings are recorded, or add the
   fixup pass that header says would be required.
 - **Paste of a func-def range.** `repl_compile_func_def` inserts at the
-  cursor with no hoist, so pasting a definition into the body produces
-  exactly the non-prefix document Project 1's boundary cannot represent
-  (it renders inside `display()`). If the order must be total, paste
-  should re-hoist rather than refuse.
+  cursor with no hoist, so pasting a definition into the body produces a
+  non-prefix document. Project 1 tolerates it - the boundary stops at the
+  first executable row and the pasted definition simply renders inside
+  `display()`, correctly indented - but if the order must be total,
+  paste should re-hoist rather than refuse.
 - **Cut/delete.** For the record, the first draft had this wrong:
-  `repl_compile_delete_range()` does not block cutting declarations -
-  it enforces reference integrity. Copy/cut of decl rows is blocked in
+  `repl_compile_delete_range()` does not block cutting declarations - it
+  enforces reference integrity. Copy/cut of decl rows is blocked in
   `src/editor/clipboard.c:450` via `repl_range_contains_var_decl`.
   Function definitions can be cut today. Do not invent a second
   refuse-reason modeled on declarations unless "delete a definition with
-  live calls" is independently a thing we want to block.
+  live calls" is independently worth blocking.
 
-Leave commit, import, clipboard and tutorials alone until Project 2 is an
-explicit yes.
+Leave commit *placement*, import, clipboard and tutorials alone until
+Project 2 is an explicit yes. Project 1's edits to `commit.c` and
+`import.c` (1e) are indentation-formatting only.
 
 ## Test And Golden Impact (Project 1)
 
 - 40 byte-exact panel goldens,
   `tests/testdata/repl_examples_ui/00.golden.txt`-`39.golden.txt`. The
-  section split and the dedent land together; regenerate once, from a
-  debug build.
+  section split, the scratch line's new position and the dedent land
+  together; regenerate once, from a debug build.
 - `tests/test_repl_core_extra.c:130` - the `indent_chars(0) == 2`
   assertion becomes 0 (or is re-pinned to a body position).
 - `tests/test_repl_editor.c:260,332` - the private header counter and
@@ -305,14 +377,23 @@ explicit yes.
 - `examples/scenes/*.glr` and `tests/scenes/**` regenerate cosmetically
   once 1f is in.
 
-New coverage: the boundary helper itself; an unclosed trailing function;
-the insert ghost at the splice; `code_focus`; a `.glr` save round-trip
-proving function-body indent survives (the 1f regression).
+New coverage:
+
+- The boundary helper, **including a `// --- Render State ---` comment
+  row between a function's `}` and the first `glClearColor`** - the case
+  the naive walk gets wrong.
+- A functions-only document (`at == document_count`), for the trailing
+  input row.
+- An unclosed trailing function.
+- The insert ghost at the splice.
+- `code_focus`.
+- A `.glr` save round-trip proving function-body indent survives (1f),
+  with a camera-row assertion alongside it.
 
 ## Not Touched
 
 Flatten, executor, replay, edit guides, the export writer's structure,
-and - in Project 1 - commit, import, clipboard and tutorials. No
+and all *placement* logic in commit, import, clipboard and tutorials. No
 `CmdType`, spec-table, config-key or keymap changes; no `@cfg` slug, so
 no config-golden churn beyond the panel goldens.
 

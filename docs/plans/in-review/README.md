@@ -8,5 +8,6 @@ or to `../active/` if implementation begins immediately.
   - draw function defs and global decls above the generated `display()`
     line, projecting the `.glr` phase order (`doc_order.h`) the exporter
     already writes. Project 1 (panel chrome + indent base + dump) is
-    specified; Project 2 (making the order total across commit, import,
-    paste and tutorials) is gated on a tutorial decision.
+    fully specified, no open decisions; Project 2 (making the order
+    total across commit, import, paste and tutorials) is gated on a
+    tutorial decision.
