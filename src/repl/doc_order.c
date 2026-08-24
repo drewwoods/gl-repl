@@ -40,11 +40,11 @@ const char *repl_doc_order_rule_text(ReplDocOrderRule rule) {
         return "camera row after body code. User geometry begins only once "
                "every camera row is behind it";
     case REPL_DOC_ORDER_DISPLAY_REQUIRED:
-        return "a scene with function definitions requires `display() { ... }` "
-               "around its camera and body";
-    case REPL_DOC_ORDER_DISPLAY_UNEXPECTED:
-        return "`display() { ... }` is only used when the scene defines a "
-               "function, and must follow all declarations and definitions";
+        return "every .glr scene requires `display() { ... }` around its "
+               "camera and body";
+    case REPL_DOC_ORDER_DISPLAY_MISPLACED:
+        return "`display() {` must appear exactly once after all declarations "
+               "and function definitions";
     case REPL_DOC_ORDER_DISPLAY_UNCLOSED:
         return "the explicit `display() {` frame is not closed";
     case REPL_DOC_ORDER_CONTENT_AFTER_DISPLAY:
@@ -259,9 +259,9 @@ int repl_doc_order_offer(ReplDocOrder *ord, const char *line, int line_no,
 
     if (repl_doc_order_line_is_display_open(line)) {
         ord->last_line_was_wrapper = 1;
-        if (!ord->saw_function || ord->depth != 0 || ord->in_display ||
+        if (ord->pending_line > 0 || ord->depth != 0 || ord->in_display ||
             ord->display_open_line > 0 || ord->phase > REPL_DOC_PHASE_FUNCS) {
-            order_report_rule(ord, REPL_DOC_ORDER_DISPLAY_UNEXPECTED, line_no,
+            order_report_rule(ord, REPL_DOC_ORDER_DISPLAY_MISPLACED, line_no,
                               ord->phase_line[ord->phase]);
             return 0;
         }
@@ -271,10 +271,14 @@ int repl_doc_order_offer(ReplDocOrder *ord, const char *line, int line_no,
     }
 
     if (ord->in_display && ord->depth == 0 && order_line_equals(line, "}")) {
+        if (ord->pending_line > 0) {
+            ok = order_commit(ord, REPL_DOC_PHASE_BODY, ord->pending_line);
+            ord->pending_line = 0;
+        }
         ord->last_line_was_wrapper = 1;
         ord->in_display = 0;
         ord->display_close_line = line_no;
-        return 1;
+        return ok;
     }
 
     depth_at_start = ord->depth;
@@ -306,17 +310,28 @@ int repl_doc_order_offer(ReplDocOrder *ord, const char *line, int line_no,
         int committed;
 
         ord->pending_line = 0;
+        if (opens && ord->in_display) {
+            order_report_rule(ord, REPL_DOC_ORDER_FUNC_LATE, deferred,
+                              ord->display_open_line);
+            return 0;
+        }
         committed = order_commit(ord, opens ? REPL_DOC_PHASE_FUNCS
                                             : REPL_DOC_PHASE_BODY, deferred);
         if (!committed)
             ok = 0;
-        else if (opens)
-            ord->saw_function = 1;
         if (opens)
             return ok;             /* the brace belongs to that definition */
     }
 
     phase = order_classify(line, is_camera_row, &pending);
+    if (pending) {
+        /* Undecided until the next line. A file that ends here is malformed
+         * on the loader's own terms, so nothing is lost by not classifying
+         * it. This must precede the in-display definition check: an ordinary
+         * semicolon-less body call has the same provisional shape. */
+        ord->pending_line = line_no;
+        return ok;
+    }
     if (ord->in_display && phase <= REPL_DOC_PHASE_FUNCS) {
         order_report_rule(ord,
                           phase == REPL_DOC_PHASE_DECLS
@@ -325,15 +340,7 @@ int repl_doc_order_offer(ReplDocOrder *ord, const char *line, int line_no,
                           line_no, ord->display_open_line);
         return 0;
     }
-    if (pending) {
-        /* Undecided until the next line. A file that ends here is malformed
-         * on the loader's own terms, so nothing is lost by not classifying
-         * it. */
-        ord->pending_line = line_no;
-        return ok;
-    }
-    if (ord->saw_function && !ord->in_display &&
-        ord->display_open_line == 0 &&
+    if (!ord->in_display && ord->display_open_line == 0 &&
         (phase == REPL_DOC_PHASE_CAMERA || phase == REPL_DOC_PHASE_BODY) &&
         !ord->display_required_reported) {
         order_report_rule(ord, REPL_DOC_ORDER_DISPLAY_REQUIRED, line_no,
@@ -343,8 +350,6 @@ int repl_doc_order_offer(ReplDocOrder *ord, const char *line, int line_no,
     }
     if (!order_commit(ord, phase, line_no))
         ok = 0;
-    else if (phase == REPL_DOC_PHASE_FUNCS && !ord->in_display)
-        ord->saw_function = 1;
     return ok;
 }
 
@@ -353,8 +358,7 @@ int repl_doc_order_finish(ReplDocOrder *ord, int eof_line_no) {
 
     if (!ord)
         return 1;
-    if (ord->saw_function && ord->display_open_line == 0 &&
-        !ord->display_required_reported) {
+    if (ord->display_open_line == 0 && !ord->display_required_reported) {
         order_report_rule(ord, REPL_DOC_ORDER_DISPLAY_REQUIRED, eof_line_no,
                           ord->phase_line[REPL_DOC_PHASE_FUNCS]);
         ord->display_required_reported = 1;

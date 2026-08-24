@@ -476,6 +476,7 @@ static const char *const g_tutorial_first_animation_cfg[] = {
  * watches the gradient appear. */
 static const char *const g_tutorial_color_interp_setup[] = {
     "// @cfg view_mode = RENDER3D_VIEW_2D",
+    "display() {",
     "// A triangle drawn in a single warm red.",
     "glBegin(GL_TRIANGLES)",
     "glColor3f(1, 0.3, 0.2)",
@@ -485,6 +486,7 @@ static const char *const g_tutorial_color_interp_setup[] = {
     "// @anchor right",
     "glVertex3f(2, -2, 0)",
     "glEnd()",
+    "}",
     NULL,
 };
 
@@ -559,6 +561,7 @@ static const TutorialStep g_tutorial_points_lines_steps[] = {
  * 11 keeps the +/-7 row inside the frame with room to spare at the default
  * window size. */
 static const char *const g_tutorial_glut_solids_setup[] = {
+    "display() {",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -11.00f); // @camera dist",
     "glRotatef(16.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
@@ -570,6 +573,7 @@ static const char *const g_tutorial_glut_solids_setup[] = {
     "glEnable(GL_LIGHT0)",
     "glEnable(GL_COLOR_MATERIAL)",
     "glColor3f(0.8, 0.7, 0.3)",
+    "}",
     NULL,
 };
 
@@ -702,12 +706,14 @@ static const TutorialStep g_tutorial_blending_steps[] = {
 };
 
 static const char *const g_tutorial_depth_mask_setup[] = {
+    "display() {",
     "// These locked lines are the minimal lit pipeline from the Lighting Basics tutorial.",
     "glEnable(GL_DEPTH_TEST)",
     "glEnable(GL_LIGHTING)",
     "glEnable(GL_LIGHT0)",
     "glEnable(GL_COLOR_MATERIAL)",
     "glColor3f(0.8, 0.7, 0.3)",
+    "}",
     NULL,
 };
 
@@ -754,6 +760,7 @@ static const char *const g_tutorial_fog_cfg[] = {
  * along Z, and looking straight down the tunnel stacks the rings concentrically
  * instead of showing them as a receding row. */
 static const char *const g_tutorial_fog_setup[] = {
+    "display() {",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -11.00f); // @camera dist",
     "glRotatef(10.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
@@ -768,6 +775,7 @@ static const char *const g_tutorial_fog_setup[] = {
     "  glTranslatef(0, 0, -i * 3)",
     "  glutSolidTorus(0.5, 1.5, 16, 24)",
     "  glPopMatrix()",
+    "}",
     "}",
     NULL,
 };
@@ -810,10 +818,12 @@ static const TutorialStep g_tutorial_clip_planes_steps[] = {
 };
 
 static const char *const g_tutorial_materials_setup[] = {
+    "display() {",
     "// These locked lines are the minimal lit pipeline from the Lighting Basics tutorial.",
     "glEnable(GL_DEPTH_TEST)",
     "glEnable(GL_LIGHTING)",
     "glEnable(GL_LIGHT0)",
+    "}",
     NULL,
 };
 
@@ -836,12 +846,14 @@ static const TutorialStep g_tutorial_materials_steps[] = {
 };
 
 static const char *const g_tutorial_shade_model_setup[] = {
+    "display() {",
     "// These locked lines are the minimal lit pipeline from the Lighting Basics tutorial.",
     "glEnable(GL_DEPTH_TEST)",
     "glEnable(GL_LIGHTING)",
     "glEnable(GL_LIGHT0)",
     "glEnable(GL_COLOR_MATERIAL)",
     "glColor3f(0.75, 0.78, 0.85)",
+    "}",
     NULL,
 };
 
@@ -870,6 +882,7 @@ static const TutorialStep g_tutorial_shade_model_steps[] = {
 };
 
 static const char *const g_tutorial_normals_setup[] = {
+    "display() {",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -9.00f); // @camera dist",
     "glRotatef(25.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
@@ -881,6 +894,7 @@ static const char *const g_tutorial_normals_setup[] = {
     "glEnable(GL_LIGHT0)",
     "glEnable(GL_COLOR_MATERIAL)",
     "glColor3f(0.75, 0.78, 0.85)",
+    "}",
     NULL,
 };
 
@@ -960,6 +974,7 @@ static const char *const g_tutorial_two_sided_cfg[] = {
 };
 
 static const char *const g_tutorial_two_sided_setup[] = {
+    "display() {",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -8.00f); // @camera dist",
     "glRotatef(12.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
@@ -971,6 +986,7 @@ static const char *const g_tutorial_two_sided_setup[] = {
     "glEnable(GL_LIGHT0)",
     "glEnable(GL_COLOR_MATERIAL)",
     "glColor3f(0.75, 0.78, 0.85)",
+    "}",
     NULL,
 };
 
@@ -1066,11 +1082,13 @@ static const TutorialStep g_tutorial_two_sided_steps[] = {
  * eye, so two identical triangles rendered visibly different sizes. Yaw 0
  * makes the pair symmetric on screen; nothing is preloaded into the document. */
 static const char *const g_tutorial_culling_setup[] = {
+    "display() {",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -9.00f); // @camera dist",
     "glRotatef(20.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
     "glRotatef(0.0f, 0.0f, 1.0f, 0.0f); // @camera ry",
     "glTranslatef(0.0f, 0.0f, 0.0f); // @camera pan",
+    "}",
     NULL,
 };
 
@@ -1242,11 +1260,13 @@ static const TutorialStep g_tutorial_conditionals_steps[] = {
  * plot of A[0..2], so their sizes have to read as equal and their 3-unit pitch
  * as even - exactly what the shared pose's yaw destroys. */
 static const char *const g_tutorial_scratch_arrays_setup[] = {
+    "display() {",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -10.00f); // @camera dist",
     "glRotatef(18.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
     "glRotatef(0.0f, 0.0f, 1.0f, 0.0f); // @camera ry",
     "glTranslatef(0.0f, 0.0f, 0.0f); // @camera pan",
+    "}",
     NULL,
 };
 
@@ -1279,11 +1299,13 @@ static const TutorialStep g_tutorial_scratch_arrays_steps[] = {
  * not here because COMMAND steps cannot carry a `float` declaration
  * (the validator rejects them - decls relocate). */
 static const char *const g_tutorial_nested_loops_setup[] = {
+    "display() {",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -10.00f); // @camera dist",
     "glRotatef(18.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
     "glRotatef(0.0f, 0.0f, 1.0f, 0.0f); // @camera ry",
     "glTranslatef(0.0f, 0.0f, 0.0f); // @camera pan",
+    "}",
     NULL,
 };
 
@@ -1364,6 +1386,7 @@ static const TutorialStep g_tutorial_expressions_steps[] = {
  * arm and the arm rides the body. Yaw 0 so the X-axis chain reads at even
  * size; auto_time is on so the nested rotations are the evidence. */
 static const char *const g_tutorial_transform_stacks_setup[] = {
+    "display() {",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -9.00f); // @camera dist",
     "glRotatef(18.0f, 1.0f, 0.0f, 0.0f); // @camera rx",
@@ -1375,6 +1398,7 @@ static const char *const g_tutorial_transform_stacks_setup[] = {
     "glEnable(GL_LIGHT0)",
     "glEnable(GL_COLOR_MATERIAL)",
     "glColor3f(0.8, 0.7, 0.3)",
+    "}",
     NULL,
 };
 

@@ -29,6 +29,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_INT(label, got, want)  TEST_ASSERT_INT(&g_harness, label, got, want)
 
 static const char *const k_tagged_scene[] = {
+    "display() {",
     "glTranslatef(0.0f, 0.0f, -12.0f);   // @camera dist",
     "glRotatef(41.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
     "glRotatef(52.0f, 0.0f, 1.0f, 0.0f);   // @camera ry",
@@ -36,6 +37,7 @@ static const char *const k_tagged_scene[] = {
     "glBegin(GL_POINTS);",
     "glVertex3f(0, 0, 0);",
     "glEnd();",
+    "}",
     NULL
 };
 
@@ -277,9 +279,11 @@ static void test_mid_ease_load_uses_destination(void) {
 static void test_quick_scene_switch_settles_outgoing_ease(void) {
     printf("--- a quick scene switch settles the outgoing ease ---\n");
     static const char *const body_only[] = {
+        "display() {",
         "glBegin(GL_POINTS);",
         "glVertex3f(1, 1, 1);",
         "glEnd();",
+        "}",
         NULL
     };
     int i;
@@ -329,6 +333,7 @@ static void test_body_budget_excludes_metadata(void) {
 
     lines[n++] = "// @cfg axes = 4";
     lines[n++] = "// @cfg grid = GRID_THEME_CLASSIC";
+    lines[n++] = "display() {";
     lines[n++] = "glTranslatef(0.0f, 0.0f, -4.0f);   // @camera dist";
     lines[n++] = "glRotatef(1.0f, 1.0f, 0.0f, 0.0f);   // @camera rx";
     lines[n++] = "glRotatef(2.0f, 0.0f, 1.0f, 0.0f);   // @camera ry";
@@ -337,6 +342,7 @@ static void test_body_budget_excludes_metadata(void) {
      * so the raw index runs past the cap while the body does not. */
     for (i = 0; i < EXAMPLE_BODY_LINES_MAX; i++)
         lines[n++] = "glVertex3f(0, 0, 0);";
+    lines[n++] = "}";
     lines[n] = NULL;
 
     ASSERT_TRUE("a full body plus metadata still loads",

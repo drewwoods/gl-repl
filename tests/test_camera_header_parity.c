@@ -174,12 +174,11 @@ static int parity_files_equal(const char *a_path, const char *b_path) {
     return equal;
 }
 
-static int parity_camera_is_inside_display(const char *path) {
+static int parity_has_explicit_display(const char *path) {
     FILE *f = fopen(path, "rb");
     char *text;
     long size;
     const char *display;
-    const char *camera;
     const char *close;
     int ok = 0;
 
@@ -200,9 +199,8 @@ static int parity_camera_is_inside_display(const char *path) {
     if (fread(text, 1, (size_t)size, f) == (size_t)size) {
         text[size] = '\0';
         display = strstr(text, "display() {");
-        camera = display ? strstr(display, "@camera") : NULL;
         close = strrchr(text, '}');
-        ok = display && camera && close && display < camera && camera < close;
+        ok = display && close && display < close;
     }
     free(text);
     fclose(f);
@@ -391,18 +389,10 @@ static void parity_check_file(const char *path, const char *name) {
         snprintf(label, sizeof(label), "%s: .glr re-save is byte-stable", name);
         TEST_ASSERT_TRUE(&g_harness, label,
                          parity_files_equal(path, roundtrip));
-        {
-            int has_func = 0;
-            for (int i = 0; i < as_file->row_count; i++)
-                if (as_file->types[i] == CMD_FUNC_DEF)
-                    has_func = 1;
-            if (has_func) {
-                snprintf(label, sizeof(label),
-                         "%s: camera is inside explicit display", name);
-                TEST_ASSERT_TRUE(&g_harness, label,
-                                 parity_camera_is_inside_display(roundtrip));
-            }
-        }
+        snprintf(label, sizeof(label), "%s: .glr re-save has display frame",
+                 name);
+        TEST_ASSERT_TRUE(&g_harness, label,
+                         parity_has_explicit_display(roundtrip));
         remove(roundtrip);
     }
 
@@ -424,8 +414,10 @@ static void parity_check_file(const char *path, const char *name) {
  * though their source labels differ. */
 static void test_partial_header_diagnostic_parity(void) {
     static const char *const lines[] = {
+        "display() {",
         "glTranslatef(0.0f, 0.0f, -4.0f);   // @camera dist",
         "glClear(GL_COLOR_BUFFER_BIT);",
+        "}",
         NULL
     };
     const char *path = "/tmp/test_camera_partial_header.glr";

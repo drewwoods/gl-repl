@@ -12,7 +12,7 @@
  *                                   load resets to)
  *     float a, b;                  (declarations)
  *     func0(x) { ... }             (function definitions)
- *     display() {                   (required with function definitions)
+ *     display() {                   (required in every scene)
  *     glTranslatef(...);  // @camera dist
  *     glRotatef(...);     // @camera rx
  *     glRotatef(...);     // @camera ry
@@ -38,9 +38,9 @@
 
 /* Body rows carry display()'s 2-space base indent in memory; declarations
  * and user functions do not. A .glr scene is authored at column 0 even when
- * its function-bearing form writes the explicit display wrapper. The loader
- * re-derives every indent level from block structure as it feeds lines back
- * in, so shedding the base indent here is presentation-only and round-trips
+ * the .glr writer always writes the explicit display wrapper. The loader
+ * re-derives every indent level from block structure as it feeds lines back in,
+ * so shedding the base indent here is presentation-only and round-trips
  * exactly. */
 #define REPL_GLR_BASE_INDENT 2
 
@@ -139,16 +139,6 @@ static GlrRowPhase glr_row_phase(const GLCmd *cmd, int in_func_body) {
     if (cmd->type == CMD_VAR_DECLARE)
         return GLR_ROW_PHASE_DECLS;
     return GLR_ROW_PHASE_BODY;
-}
-
-static int glr_scene_has_function(void) {
-    const GLCmd *cmds = repl_state_document_cmds();
-    int count = repl_state_document_count();
-
-    for (int i = 0; i < count; i++)
-        if (cmds[i].valid && cmds[i].type == CMD_FUNC_DEF)
-            return 1;
-    return 0;
 }
 
 /* Camera rows never enter the editor document, so blank rows authored on
@@ -256,7 +246,6 @@ int repl_export_save_glr(const char *filename, SourceTextView text) {
     int close_failed;
     int boundary_blanks;
     int split_blanks;
-    int has_function;
 
     if (!filename || !filename[0]) {
         repl_set_status_error("Error: no .glr path");
@@ -273,13 +262,10 @@ int repl_export_save_glr(const char *filename, SourceTextView text) {
     export_set_source_text_view(text);
     boundary_blanks = glr_scene_body_boundary_blanks();
     split_blanks = boundary_blanks >= 2 ? 2 : 0;
-    has_function = glr_scene_has_function();
-
     glr_scene_write_cfg_overrides(f);
     glr_scene_write_phase(f, GLR_ROW_PHASE_DECLS, 0);
     glr_scene_write_phase(f, GLR_ROW_PHASE_FUNCS, 0);
-    if (has_function)
-        fprintf(f, "display() {\n");
+    fprintf(f, "display() {\n");
     if (glr_scene_write_camera(f, split_blanks > 0)) {
         /* Camera rows are consumed by the loader instead of entering the
          * document, so the blank rows on either side become adjacent there.
@@ -291,8 +277,7 @@ int repl_export_save_glr(const char *filename, SourceTextView text) {
     } else {
         glr_scene_write_phase(f, GLR_ROW_PHASE_BODY, 0);
     }
-    if (has_function)
-        fprintf(f, "}\n");
+    fprintf(f, "}\n");
 
     had_error = ferror(f);
     close_failed = fclose(f) != 0;

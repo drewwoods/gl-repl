@@ -559,11 +559,13 @@ static void test_document_order(void) {
      * inside display, after every function definition. */
     static const char *const camera_early[] = {
         "static float a;",
+        "display() {",
         "glTranslatef(0, 0, -4);   // @camera dist",
         "func0(r) {",
         "  glVertex3f(r, 0, 0);",
         "}",
         "glClear(GL_COLOR_BUFFER_BIT);",
+        "}",
         NULL
     };
     {
@@ -575,8 +577,10 @@ static void test_document_order(void) {
     }
 
     static const char *const decl_late[] = {
+        "display() {",
         "glClear(GL_COLOR_BUFFER_BIT);",
         "static float a;",
+        "}",
         NULL
     };
     {
@@ -584,15 +588,17 @@ static void test_document_order(void) {
         ASSERT_INT("a declaration after body code is rejected", rec.count, 1);
         ASSERT_INT("... with the DECL_LATE rule",
                    (int)rec.rule, (int)REPL_DOC_ORDER_DECL_LATE);
-        ASSERT_INT("... naming its own line", rec.line_no, 2);
+        ASSERT_INT("... naming its own line", rec.line_no, 3);
         ASSERT_INT("... and the line that established the phase",
                    rec.conflict, 1);
     }
 
     static const char *const func_late[] = {
+        "display() {",
         "glClear(GL_COLOR_BUFFER_BIT);",
         "func0(r) {",
         "  glVertex3f(r, 0, 0);",
+        "}",
         "}",
         NULL
     };
@@ -605,8 +611,10 @@ static void test_document_order(void) {
     }
 
     static const char *const camera_late[] = {
+        "display() {",
         "glClear(GL_COLOR_BUFFER_BIT);",
         "glTranslatef(0, 0, -4);   // @camera dist",
+        "}",
         NULL
     };
     {
@@ -621,10 +629,12 @@ static void test_document_order(void) {
     static const char *const commented[] = {
         "// about the declarations",
         "static float a;",
+        "display() {",
         "// about the body",
         "",
         "glClear(GL_COLOR_BUFFER_BIT);",
         "// a trailing note",
+        "}",
         NULL
     };
     ASSERT_INT("comments and blanks never advance the phase",
@@ -652,24 +662,29 @@ static void test_document_order(void) {
     /* ... and the deferred classification must not turn ordinary body code
      * into a definition just because its trailing `;` is optional. */
     static const char *const bare_call[] = {
+        "display() {",
         "glClear(GL_COLOR_BUFFER_BIT)",
+        "glVertex3f(0, 0, 0);",
         "static float a;",
+        "}",
         NULL
     };
     {
         OrderRecord rec = check_order(bare_call);
         ASSERT_INT("a semicolon-less command is still body code", rec.count, 1);
-        ASSERT_INT("... reported against its own line", rec.line_no, 2);
+        ASSERT_INT("... reported against the late declaration", rec.line_no, 4);
     }
 
     /* Omitting declarations does not make the obsolete CAMERA -> FUNCS shape
      * legal: the camera still belongs inside the required frame. */
     static const char *const camera_first_no_decls[] = {
+        "display() {",
         "glTranslatef(0, 0, -4);   // @camera dist",
         "func0(x) {",
         "  glVertex3f(x, 0, 0);",
         "}",
         "glClear(GL_COLOR_BUFFER_BIT);",
+        "}",
         NULL
     };
     {
@@ -688,27 +703,35 @@ static void test_document_order(void) {
     };
     {
         OrderRecord rec = check_order(missing_display);
-        ASSERT_INT("a function-bearing scene requires display", rec.count, 1);
+        ASSERT_INT("every scene requires display", rec.count, 1);
         ASSERT_INT("... with the DISPLAY_REQUIRED rule",
                    (int)rec.rule, (int)REPL_DOC_ORDER_DISPLAY_REQUIRED);
     }
 
-    static const char *const unexpected_display[] = {
+    static const char *const function_free_display[] = {
         "display() {",
         "glClear(GL_COLOR_BUFFER_BIT);",
         "}",
         NULL
     };
+    ASSERT_INT("display without functions is canonical",
+               check_order(function_free_display).count, 0);
+
+    static const char *const misplaced_display[] = {
+        "display() {",
+        "glClear(GL_COLOR_BUFFER_BIT);",
+        "}",
+        "display() {",
+        NULL
+    };
     {
-        OrderRecord rec = check_order(unexpected_display);
-        ASSERT_TRUE("display without functions is rejected", rec.count > 0);
-        ASSERT_INT("... with the DISPLAY_UNEXPECTED rule",
-                   (int)rec.rule, (int)REPL_DOC_ORDER_DISPLAY_UNEXPECTED);
+        OrderRecord rec = check_order(misplaced_display);
+        ASSERT_INT("a second display frame is rejected", rec.count, 1);
+        ASSERT_INT("... with the DISPLAY_MISPLACED rule",
+                   (int)rec.rule, (int)REPL_DOC_ORDER_DISPLAY_MISPLACED);
     }
 
     static const char *const decl_inside_display[] = {
-        "func0() {",
-        "}",
         "display() {",
         "static float too_late;",
         "}",
@@ -722,9 +745,32 @@ static void test_document_order(void) {
                    (int)rec.rule, (int)REPL_DOC_ORDER_DECL_LATE);
     }
 
-    static const char *const unclosed_display[] = {
-        "func0() {",
+    static const char *const split_func_inside_display[] = {
+        "display() {",
+        "func0()",
+        "{",
         "}",
+        "}",
+        NULL
+    };
+    {
+        OrderRecord rec = check_order(split_func_inside_display);
+        ASSERT_TRUE("a split-brace definition inside display is rejected",
+                    rec.count > 0);
+        ASSERT_INT("... with the FUNC_LATE rule",
+                   (int)rec.rule, (int)REPL_DOC_ORDER_FUNC_LATE);
+    }
+
+    static const char *const bare_call_before_close[] = {
+        "display() {",
+        "glClear(GL_COLOR_BUFFER_BIT)",
+        "}",
+        NULL
+    };
+    ASSERT_INT("a final semicolon-less body call resolves before display closes",
+               check_order(bare_call_before_close).count, 0);
+
+    static const char *const unclosed_display[] = {
         "display() {",
         "glClear(GL_COLOR_BUFFER_BIT);",
         NULL
@@ -737,8 +783,6 @@ static void test_document_order(void) {
     }
 
     static const char *const content_after_display[] = {
-        "func0() {",
-        "}",
         "display() {",
         "glClear(GL_COLOR_BUFFER_BIT);",
         "}",
@@ -756,8 +800,10 @@ static void test_document_order(void) {
     /* A compound literal contains a brace and is emphatically not a
      * definition. */
     static const char *const compound_literal[] = {
+        "display() {",
         "glClear(GL_COLOR_BUFFER_BIT);",
         "glFogfv(GL_FOG_COLOR, (GLfloat[]){0.05, 0.06, 0.08, 1});",
+        "}",
         NULL
     };
     ASSERT_INT("a compound literal is body code, not a definition",
@@ -772,7 +818,7 @@ static void test_document_order(void) {
         "static float c;",
         NULL
     };
-    ASSERT_INT("one pass reports every violation", check_order(many).count, 3);
+    ASSERT_INT("one pass reports every violation", check_order(many).count, 4);
 }
 
 int main(void) {

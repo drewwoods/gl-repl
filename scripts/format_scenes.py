@@ -10,9 +10,9 @@ asymmetry the app has is reproduced here: glu (tessellator) commands belong to
 the tessellator scope, not the GL vertex block, so glBegin depth is excluded
 from their indent (`repl_source_scope_view_cmd_tess_indent()`).
 
-Function-bearing scenes carry an explicit `display() { ... }` wrapper, but
-their body rows remain authored at column 0. The wrapper is format syntax, not
-an indentation level; loaders consume it and re-derive the in-memory body base.
+Every scene carries an explicit `display() { ... }` wrapper, but body rows
+remain authored at column 0. The wrapper is format syntax, not an indentation
+level; loaders consume it and re-derive the in-memory body base.
 """
 
 from __future__ import annotations
@@ -147,7 +147,7 @@ def format_content(content: str) -> str:
             formatted_lines.append("")
             continue
 
-        # The explicit function-scene frame is .glr syntax, not a source
+        # The explicit scene frame is .glr syntax, not a source
         # block: camera/body rows inside it remain column 0 on disk. Only the
         # exact top-level spelling is recognized, matching doc_order.c.
         if (not in_block_comment and not in_display and

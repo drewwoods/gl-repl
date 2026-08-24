@@ -577,12 +577,11 @@ disagree about line placement. It is a **phase machine rather than a list of
 forbidden pairs**: one monotonic counter decides every case by construction,
 instead of inviting an argument about each one.
 
-When a scene defines a function, the format makes the phase boundary explicit:
-all declarations and function definitions remain at file scope, then
-`display() { ... }` encloses the camera and ordinary body. Scenes without
-functions keep an implicit display body and do not write the wrapper. The
-wrapper is format syntax, not an editor command, so loaders validate and
-consume it before feeding source rows into the document.
+The phase boundary is always explicit: all declarations and function
+definitions remain at file scope, then the required `display() { ... }`
+encloses the camera and ordinary body. The wrapper is format syntax, not an
+editor command, so loaders validate and consume it before feeding source rows
+into the document.
 
 Three properties are load-bearing and easy to break by accident:
 

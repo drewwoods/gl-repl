@@ -7,7 +7,7 @@
  *
  *     1 DECLS    `static float ...;` / `float ...;` at top level
  *     2 FUNCS    funcN(...) { ... } and named function definitions
- *                 then `display() {` when any function exists
+ *                 then the required `display() {`
  *     3 CAMERA   `@camera`-tagged transforms inside display()
  *     4 BODY     everything else the user wrote inside display()
  *
@@ -51,7 +51,7 @@ typedef enum {
     REPL_DOC_ORDER_FUNC_LATE,     /* function definition after body code */
     REPL_DOC_ORDER_CAMERA_LATE,   /* camera row after body code */
     REPL_DOC_ORDER_DISPLAY_REQUIRED,
-    REPL_DOC_ORDER_DISPLAY_UNEXPECTED,
+    REPL_DOC_ORDER_DISPLAY_MISPLACED,
     REPL_DOC_ORDER_DISPLAY_UNCLOSED,
     REPL_DOC_ORDER_CONTENT_AFTER_DISPLAY
 } ReplDocOrderRule;
@@ -70,7 +70,6 @@ typedef struct {
     int              depth;              /* raw brace depth */
     int              in_block_comment;
     int              pending_line;       /* split-brace header awaiting its { */
-    int              saw_function;
     int              display_open_line;
     int              display_close_line;
     int              in_display;
@@ -94,9 +93,9 @@ void repl_doc_order_set_sink(ReplDocOrder *ord, ReplDocOrderSink sink,
 int repl_doc_order_offer(ReplDocOrder *ord, const char *line, int line_no,
                          int is_camera_row);
 
-/* Finish the stream-level checks that cannot be decided until EOF: a
- * function-only document still needs an explicit empty display frame, and an
- * opened frame must close. Returns 1 when the complete document is valid. */
+/* Finish the stream-level checks that cannot be decided until EOF: every
+ * document needs an explicit display frame, and an opened frame must close.
+ * Returns 1 when the complete document is valid. */
 int repl_doc_order_finish(ReplDocOrder *ord, int eof_line_no);
 
 /* Shared lexical recognition for loaders. Wrapper rows are format syntax,

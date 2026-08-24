@@ -808,6 +808,7 @@ static void test_camera_clear_scene_default_falls_back(void) {
  * tags are what make these lines camera rows, so the marker is here only to
  * prove it lands in the document like any other comment. */
 static const char *const k_test_camera_example[] = {
+    "display() {",
     "// camera",
     "glTranslatef(0.0f, 0.0f, -8.0f);   // @camera dist",
     "glRotatef(30.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
@@ -816,6 +817,7 @@ static const char *const k_test_camera_example[] = {
     "glBegin(GL_TRIANGLES);",
     "glVertex3f(0, 0, 0);",
     "glEnd();",
+    "}",
     NULL
 };
 

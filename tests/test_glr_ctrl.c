@@ -4413,6 +4413,7 @@ static void test_view_mode_restore_honors_pending_camera_reset(void) {
  * result into the scene default. */
 static void test_import_camera_block_becomes_scene_default(void) {
     static const char *const k_lines[] = {
+        "display() {",
         "// camera",
         "glTranslatef(0.0f, 0.0f, -15.0f);   // @camera dist",
         "glRotatef(26.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
@@ -4420,6 +4421,7 @@ static void test_import_camera_block_becomes_scene_default(void) {
         "glTranslatef(-1.0f, -2.0f, -3.0f);   // @camera pan",
         "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
         "glColor3f(1.0f, 0.0f, 0.0f);",
+        "}",
         NULL
     };
     GlrCameraState cam;
@@ -4449,8 +4451,10 @@ static void test_import_camera_block_becomes_scene_default(void) {
  * using the built-in defaults. */
 static void test_import_without_camera_block_keeps_global_default(void) {
     static const char *const k_lines[] = {
+        "display() {",
         "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
         "glColor3f(0.0f, 1.0f, 0.0f);",
+        "}",
         NULL
     };
     GlrCameraState cam;
@@ -4475,9 +4479,11 @@ static void test_import_without_camera_block_keeps_global_default(void) {
 static void test_new_scene_from_2d_pose_does_not_poison_reset(void) {
     static const char *const k_lines[] = {
         "// @cfg view_mode = RENDER3D_VIEW_2D",
+        "display() {",
         "glBegin(GL_POINTS);",
         "glVertex3f(0, 0, 0);",
         "glEnd();",
+        "}",
         NULL
     };
     GlrCameraState cam;
@@ -4659,6 +4665,7 @@ static void test_view_mode_quick_2d_to_3d_waits_for_pending_example_pose(void) {
     static const char *const carpet[] = {
         "// @cfg view_mode = RENDER3D_VIEW_2D",
         "",
+        "display() {",
         "glTranslatef(0.0f, 0.0f, -6.0f);   // @camera dist",
         "glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
         "glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry",
@@ -4667,9 +4674,11 @@ static void test_view_mode_quick_2d_to_3d_waits_for_pending_example_pose(void) {
         "glBegin(GL_POINTS);",
         "glVertex3f(0, 0, 0);",
         "glEnd();",
+        "}",
         NULL
     };
     static const char *const sponge[] = {
+        "display() {",
         "glTranslatef(0.0f, 0.0f, -9.0f);   // @camera dist",
         "glRotatef(18.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
         "glRotatef(30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry",
@@ -4678,6 +4687,7 @@ static void test_view_mode_quick_2d_to_3d_waits_for_pending_example_pose(void) {
         "glBegin(GL_POINTS);",
         "glVertex3f(0, 0, 0);",
         "glEnd();",
+        "}",
         NULL
     };
     GlrCameraState cam;
@@ -7494,20 +7504,26 @@ static void test_scene_cycle_skips_failed_examples(void) {
                mkdir(scenes_dir, 0700), 0);
     ASSERT_TRUE("cycle fixture first example written",
                 write_cycle_fixture(good0_path,
+                                    "display() {\n"
                                     "glBegin(GL_POINTS);\n"
                                     "glVertex3f(0, 0, 0);\n"
-                                    "glEnd();\n"));
+                                    "glEnd();\n"
+                                    "}\n"));
     ASSERT_TRUE("cycle fixture broken example written",
                 write_cycle_fixture(bad_path,
+                                    "display() {\n"
                                     "glBegin(GL_POINTS);\n"
                                     "notACommand(1, 2, 3);\n"
-                                    "glEnd();\n"));
+                                    "glEnd();\n"
+                                    "}\n"));
     ASSERT_TRUE("cycle fixture last example written",
                 write_cycle_fixture(good2_path,
+                                    "display() {\n"
                                     "glBegin(GL_LINES);\n"
                                     "glVertex3f(0, 0, 0);\n"
                                     "glVertex3f(1, 0, 0);\n"
-                                    "glEnd();\n"));
+                                    "glEnd();\n"
+                                    "}\n"));
     ASSERT_TRUE("cycle fixture catalog written",
                 write_cycle_fixture(catalog_path,
                                     "[good-0]\n"

@@ -2522,9 +2522,11 @@ int main(void) {
         f = fopen(glr_path, "w");
         ASSERT_TRUE("write comment-body fixture", f != NULL);
         if (f) {
-            fputs("// the word infinity and inf in a comment\n"
+            fputs("display() {\n"
+                  "// the word infinity and inf in a comment\n"
                   "// also a trailing semicolon here;\n"
-                  "glClear(GL_COLOR_BUFFER_BIT);\n", f);
+                  "glClear(GL_COLOR_BUFFER_BIT);\n"
+                  "}\n", f);
             fclose(f);
 
             glr_ctrl_reset_all();
@@ -2563,6 +2565,9 @@ int main(void) {
             ASSERT_TRUE("comment-body: export-glr writes",
                         repl_export_save_glr(out_path, source_document_view()) == 1);
             read_text_file(out_path, file_buf, sizeof(file_buf));
+            ASSERT_TRUE("function-free export-glr writes display frame",
+                        strstr(file_buf, "display() {\n") != NULL &&
+                        strstr(file_buf, "\n}\n") != NULL);
             ASSERT_TRUE("export-glr keeps 'infinity' in comment",
                         strstr(file_buf, "infinity") != NULL);
             ASSERT_TRUE("export-glr keeps 'inf' in comment",

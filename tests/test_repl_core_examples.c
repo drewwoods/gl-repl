@@ -839,7 +839,7 @@ static void test_example_loader_body_import_limits(void) {
     {
         enum { OLD_EXAMPLE_BODY_LINES_MAX = 384 };
         enum { LINE_COUNT = OLD_EXAMPLE_BODY_LINES_MAX + 1 };
-        const char **lines = (const char **)malloc((LINE_COUNT + 1) * sizeof(*lines));
+        const char **lines = (const char **)malloc((LINE_COUNT + 3) * sizeof(*lines));
         int loaded;
 
         ASSERT_TRUE("public example body cap is 512",
@@ -848,9 +848,11 @@ static void test_example_loader_body_import_limits(void) {
                     EXAMPLE_BODY_LINES_MAX >= LINE_COUNT);
         ASSERT_TRUE("example body limit fixture alloc", lines != NULL);
         if (lines) {
+            lines[0] = "display() {";
             for (int i = 0; i < LINE_COUNT; i++)
-                lines[i] = "// body capacity sentinel";
-            lines[LINE_COUNT] = NULL;
+                lines[i + 1] = "// body capacity sentinel";
+            lines[LINE_COUNT + 1] = "}";
+            lines[LINE_COUNT + 2] = NULL;
 
             glr_ctrl_reset_all(); declare_test_vars();
             pin_code_panel_state();
@@ -865,9 +867,11 @@ static void test_example_loader_body_import_limits(void) {
 
     {
         static const char *const bad_body[] = {
+            "display() {",
             "glBegin(GL_POINTS);",
             "notACommand(1, 2, 3);",
             "glEnd();",
+            "}",
             NULL
         };
         int loaded;
@@ -964,9 +968,11 @@ static void test_runtime_examples_dir_catalog(const char *temp_dir) {
     ASSERT_TRUE("runtime .glr scene written",
                 write_text_path(glr_path,
                                 "// @cfg view_mode = 1\n"
+                                "display() {\n"
                                 "glBegin(GL_POINTS);\n"
                                 "glVertex3f(0, 0, 0);\n"
-                                "glEnd();\n"));
+                                "glEnd();\n"
+                                "}\n"));
     ASSERT_TRUE("runtime .c scene written",
                 write_text_path(c_path,
                                 "#include <GL/glut.h>\n"
@@ -1374,7 +1380,11 @@ static void test_dynamic_catalog_tags_registration(void) {
     FILE *f = fopen(scene_path, "w");
     ASSERT_TRUE("scene file open succeeds", f != NULL);
     if (f) {
-        fputs("glBegin(GL_TRIANGLES);\nglVertex3f(0,0,0);\nglEnd();\n", f);
+        fputs("display() {\n"
+              "glBegin(GL_TRIANGLES);\n"
+              "glVertex3f(0,0,0);\n"
+              "glEnd();\n"
+              "}\n", f);
         fclose(f);
     }
 
@@ -2160,9 +2170,11 @@ int main(int argc, char **argv) {
 
     {
         static const char *const no_cfg_reset_example[] = {
+            "display() {",
             "glBegin(GL_POINTS);",
             "glVertex3f(0, 0, 0);",
             "glEnd();",
+            "}",
             NULL
         };
 
@@ -2215,9 +2227,11 @@ int main(int argc, char **argv) {
             "// @cfg wireframe = 1",
             "// @cfg vertex_labels = 0",
             "// @cfg backdrop = 1",
+            "display() {",
             "glBegin(GL_POINTS);",
             "glVertex3f(0, 0, 0);",
             "glEnd();",
+            "}",
             NULL
         };
 
@@ -2264,23 +2278,29 @@ int main(int argc, char **argv) {
          * example set ortho. */
         static const char *const view_mode_2d_example[] = {
             "// @cfg view_mode = 1",
+            "display() {",
             "glBegin(GL_LINE_STRIP);",
             "glVertex3f(0, 0, 0);",
             "glVertex3f(1, 1, 0);",
             "glEnd();",
+            "}",
             NULL
         };
         static const char *const no_view_mode_example[] = {
+            "display() {",
             "glBegin(GL_POINTS);",
             "glVertex3f(0, 0, 0);",
             "glEnd();",
+            "}",
             NULL
         };
         static const char *const view_mode_3d_example[] = {
             "// @cfg view_mode = 0",
+            "display() {",
             "glBegin(GL_POINTS);",
             "glVertex3f(0, 0, 0);",
             "glEnd();",
+            "}",
             NULL
         };
 
@@ -2309,6 +2329,7 @@ int main(int argc, char **argv) {
 
     {
         static const char *const easing_camera_example[] = {
+            "display() {",
             "// camera",
             "glTranslatef(0.0f, 0.0f, -10.0f);   // @camera dist",
             "glRotatef(40.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
@@ -2317,6 +2338,7 @@ int main(int argc, char **argv) {
             "glBegin(GL_POINTS);",
             "glVertex3f(0, 0, 0);",
             "glEnd();",
+            "}",
             NULL
         };
         GlrCameraState before;
@@ -2485,6 +2507,7 @@ int main(int argc, char **argv) {
         static const char *const spaced_cfg_camera_example[] = {
             "// @cfg axes = 4",
             "",
+            "display() {",
             "// --- Camera -------------------------",
             "glTranslatef(0.0f, 0.0f, -8.0f);   // @camera dist",
             "glRotatef(14.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
@@ -2493,6 +2516,7 @@ int main(int argc, char **argv) {
             "glBegin(GL_POINTS);",
             "glVertex3f(0, 0, 0);",
             "glEnd();",
+            "}",
             NULL
         };
         char *dump;

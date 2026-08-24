@@ -49,6 +49,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 
 /* A scene that loads cleanly under any policy. */
 static const char *const k_good_scene[] = {
+    "display() {",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
     "glBegin(GL_TRIANGLES);",
@@ -56,15 +57,18 @@ static const char *const k_good_scene[] = {
     "glVertex3f(-1, -1, 0);",
     "glVertex3f(1, -1, 0);",
     "glEnd();",
+    "}",
     NULL
 };
 
 static const char *const k_other_scene[] = {
+    "display() {",
     "glClearColor(0.2, 0.2, 0.2, 1.0);",
     "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
     "glBegin(GL_POINTS);",
     "glVertex3f(9, 9, 9);",
     "glEnd();",
+    "}",
     NULL
 };
 
@@ -72,6 +76,7 @@ static const char *const k_other_scene[] = {
  * The REPL is one command per line, so the tail of the row is rejected -
  * while every other row in the file is perfectly good. */
 static const char *const k_scene_with_one_bad_row[] = {
+    "display() {",
     "glClearColor(0.1, 0.1, 0.1, 1.0);",
     "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
     "glBegin(GL_TRIANGLES);",
@@ -79,12 +84,24 @@ static const char *const k_scene_with_one_bad_row[] = {
     "glVertex3f(-1, -1, 0);",
     "glVertex3f(1, -1, 0);",
     "glEnd();",
+    "}",
     NULL
 };
 
 /* A declaration after body code: REPL_DOC_ORDER_DECL_LATE. Legal in an
  * exported `.c`, rejected in the authored `.glr` format. */
 static const char *const k_out_of_order_scene[] = {
+    "display() {",
+    "glBegin(GL_POINTS);",
+    "glVertex3f(0, 0, 0);",
+    "glEnd();",
+    "static float late;",
+    "}",
+    NULL
+};
+
+/* The exported-C comparison intentionally has no .glr frame syntax. */
+static const char *const k_out_of_order_c[] = {
     "glBegin(GL_POINTS);",
     "glVertex3f(0, 0, 0);",
     "glEnd();",
@@ -94,6 +111,7 @@ static const char *const k_out_of_order_scene[] = {
 
 static const char *const k_cfg_and_camera_scene[] = {
     "// @cfg grid = GRID_THEME_SOIL",
+    "display() {",
     "glTranslatef(0.0f, 0.0f, -12.0f);   // @camera dist",
     "glRotatef(41.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
     "glRotatef(52.0f, 0.0f, 1.0f, 0.0f);   // @camera ry",
@@ -101,6 +119,7 @@ static const char *const k_cfg_and_camera_scene[] = {
     "glBegin(GL_POINTS);",
     "glVertex3f(0, 0, 0);",
     "glEnd();",
+    "}",
     NULL
 };
 
@@ -151,7 +170,7 @@ static void test_format_drives_order_check(void) {
         ReplSceneLoadOpts opts = opts_for(REPL_EXAMPLE_SOURCE_C,
                                           REPL_SCENE_LOAD_POLICY_TOLERANT);
         ASSERT_TRUE("the same lines declared exported-C are exempt",
-                    repl_scene_load_from_lines(k_out_of_order_scene,
+                    repl_scene_load_from_lines(k_out_of_order_c,
                                                "Torus Knot", &opts, NULL) != 0);
     }
 
@@ -187,7 +206,7 @@ static void test_default_wrapper_keeps_suffix_behavior(void) {
 
     glr_ctrl_reset_all();
     ASSERT_TRUE("a label with no .glr suffix is not",
-                repl_export_load_from_lines(k_out_of_order_scene,
+                repl_export_load_from_lines(k_out_of_order_c,
                                             "scene.c", NULL) != 0);
 }
 
@@ -498,11 +517,13 @@ static void test_example_has_no_binding(void) {
  * is not repl_load_scene_as_new_slot. */
 static void test_reload_reuses_the_active_slot(void) {
     static const char *const revised[] = {
+        "display() {",
         "glClearColor(0.2, 0.2, 0.2, 1.0);",
         "glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);",
         "glBegin(GL_POINTS);",
         "glVertex3f(9, 9, 9);",
         "glEnd();",
+        "}",
         NULL
     };
     int slot;
@@ -571,9 +592,11 @@ static void test_reload_cannot_rebind_the_slot(void) {
     static const char *const renaming[] = {
         "// @scene-name Hijacked",
         "// @workspace-dir /tmp/gl_repl_scene_load_hijack",
+        "display() {",
         "glBegin(GL_POINTS);",
         "glVertex3f(0, 0, 0);",
         "glEnd();",
+        "}",
         NULL
     };
     char name_before[USER_SCENE_NAME_MAX];
@@ -671,13 +694,15 @@ static void test_open_path_wins_over_an_existing_workspace(void) {
 static const char *const k_mapped_scene[] = {
     "// @scene-name Mapped",           /* 1: consumed, no document row */
     "static float wob;",               /* 2: doc 0 */
-    "",                                /* 3: doc 1 */
-    "// a note",                       /* 4: doc 2 */
-    "glClearColor(0, 0, 0, 1);",       /* 5: doc 3 */
-    "glClear(GL_COLOR_BUFFER_BIT);",   /* 6: doc 4 */
-    "glBegin(GL_POINTS);",             /* 7: doc 5 */
-    "glVertex3f(0, 0, 0);",            /* 8: doc 6 */
-    "glEnd();",                        /* 9: doc 7 */
+    "display() {",                     /* 3: consumed, no document row */
+    "",                                /* 4: doc 1 */
+    "// a note",                       /* 5: doc 2 */
+    "glClearColor(0, 0, 0, 1);",       /* 6: doc 3 */
+    "glClear(GL_COLOR_BUFFER_BIT);",   /* 7: doc 4 */
+    "glBegin(GL_POINTS);",             /* 8: doc 5 */
+    "glVertex3f(0, 0, 0);",            /* 9: doc 6 */
+    "glEnd();",                        /* 10: doc 7 */
+    "}",                               /* 11: consumed, no document row */
     NULL
 };
 
@@ -730,11 +755,16 @@ static void test_row_map_survives_headers_and_directives(void) {
     ASSERT_INT("the consumed directive maps to nothing", mapped(&t, 1),
                REPL_ROW_MAP_NONE);
     ASSERT_INT("the declaration is document row 0", mapped(&t, 2), 0);
-    ASSERT_INT("the blank is a document row too", mapped(&t, 3), 1);
-    ASSERT_INT("so is the comment", mapped(&t, 4), 2);
-    ASSERT_INT("glClearColor is document row 3", mapped(&t, 5), 3);
-    ASSERT_INT("glEnd is document row 7", mapped(&t, 9), 7);
-    ASSERT_INT("nine physical rows were walked", t.map.count, 9);
+    ASSERT_INT("the display opener maps to nothing", mapped(&t, 3),
+               REPL_ROW_MAP_NONE);
+    ASSERT_INT("the blank is a document row too", mapped(&t, 4), 1);
+    ASSERT_INT("so is the comment", mapped(&t, 5), 2);
+    ASSERT_INT("glClearColor is document row 3", mapped(&t, 6), 3);
+    ASSERT_INT("glEnd is document row 7", mapped(&t, 10), 7);
+    ASSERT_INT("the display closer maps to nothing", mapped(&t, 11),
+               REPL_ROW_MAP_NONE);
+    ASSERT_INT("the mapped physical span ends at the last body row",
+               t.map.count, 10);
     ASSERT_INT("no hole was asked for", t.map.hole_row, -1);
 }
 
@@ -855,11 +885,13 @@ static void test_cursor_hole_reports_where_the_row_would_have_gone(void) {
     TestRowMap t;
     static const char *const holed[] = {
         "// @scene-name Holed",
+        "display() {",
         "glClearColor(0, 0, 0, 1);",
         "glClear(GL_COLOR_BUFFER_BIT);",
         "glBegin(GL_POINTS);",
-        "// @cursor-hole 4242",           /* row 5: was glVertex3f(0, 0, */
+        "// @cursor-hole 4242",           /* row 6: was glVertex3f(0, 0, */
         "glEnd();",
+        "}",
         NULL
     };
 
@@ -877,9 +909,9 @@ static void test_cursor_hole_reports_where_the_row_would_have_gone(void) {
     }
     ASSERT_INT("the marker produced no document row",
                repl_state_document_count(), 4);
-    ASSERT_INT("the hole is physical row 5", t.map.hole_row, 5);
+    ASSERT_INT("the hole is physical row 6", t.map.hole_row, 6);
     ASSERT_INT("and would have been document row 3", t.map.hole_doc_row, 3);
-    ASSERT_INT("the map agrees", mapped(&t, 5), 3);
+    ASSERT_INT("the map agrees", mapped(&t, 6), 3);
     ASSERT_STR("the row after it kept its place", unindented(3),
                "glEnd();");
 }
@@ -890,9 +922,11 @@ static void test_cursor_hole_reports_where_the_row_would_have_gone(void) {
 static void test_cursor_hole_needs_its_nonce(void) {
     TestRowMap t;
     static const char *const holed[] = {
+        "display() {",
         "glClearColor(0, 0, 0, 1);",
         "glClear(GL_COLOR_BUFFER_BIT);",
         "// @cursor-hole 4242",
+        "}",
         NULL
     };
 
@@ -978,15 +1012,17 @@ static void test_cursor_hole_inside_a_staged_function(void) {
 static void test_row_map_covers_continuation_rows(void) {
     TestRowMap t;
     static const char *const continued[] = {
-        "glClearColor(0, 0, 0, 1);",     /* 1 → 0 */
-        "glClear(GL_COLOR_BUFFER_BIT);", /* 2 → 1 */
-        "glBegin(GL_POINTS);",           /* 3 → 2 */
-        "glVertex3f(",                   /* 4 ─┐ */
-        "    1,",                        /* 5  │ one document row */
-        "    // mid",                    /* 6  │ comment: dropped, NONE */
-        "    2,",                        /* 7  │ */
-        "    3);",                       /* 8 ─┘ → 3 */
-        "glEnd();",                      /* 9 → 4 */
+        "display() {",                   /* 1: consumed */
+        "glClearColor(0, 0, 0, 1);",     /* 2 → 0 */
+        "glClear(GL_COLOR_BUFFER_BIT);", /* 3 → 1 */
+        "glBegin(GL_POINTS);",           /* 4 → 2 */
+        "glVertex3f(",                   /* 5 ─┐ */
+        "    1,",                        /* 6  │ one document row */
+        "    // mid",                    /* 7  │ comment: dropped, NONE */
+        "    2,",                        /* 8  │ */
+        "    3);",                       /* 9 ─┘ → 3 */
+        "glEnd();",                      /* 10 → 4 */
+        "}",                             /* 11: consumed */
         NULL
     };
 
@@ -1003,13 +1039,13 @@ static void test_row_map_covers_continuation_rows(void) {
                                               &opts, NULL), 1);
     }
     ASSERT_INT("five document rows", repl_state_document_count(), 5);
-    ASSERT_INT("the opener maps to the vertex row", mapped(&t, 4), 3);
-    ASSERT_INT("so does the first continuation", mapped(&t, 5), 3);
+    ASSERT_INT("the opener maps to the vertex row", mapped(&t, 5), 3);
+    ASSERT_INT("so does the first continuation", mapped(&t, 6), 3);
     ASSERT_INT("a comment inside the statement maps to nothing",
-               mapped(&t, 6), REPL_ROW_MAP_NONE);
-    ASSERT_INT("so does the later continuation", mapped(&t, 7), 3);
-    ASSERT_INT("and the closer", mapped(&t, 8), 3);
-    ASSERT_INT("glEnd is the next document row", mapped(&t, 9), 4);
+               mapped(&t, 7), REPL_ROW_MAP_NONE);
+    ASSERT_INT("so does the later continuation", mapped(&t, 8), 3);
+    ASSERT_INT("and the closer", mapped(&t, 9), 3);
+    ASSERT_INT("glEnd is the next document row", mapped(&t, 10), 4);
     ASSERT_INT("the joined statement is one document row",
                find_doc_row_with("1, 2, 3"), 3);
 }
@@ -1019,7 +1055,7 @@ static void test_row_map_covers_continuation_rows(void) {
  * it remains well below MAX_LINE_LEN after joining, but crosses the old
  * 64-row bookkeeping cap. */
 static void test_row_map_covers_more_than_64_continuation_rows(void) {
-    enum { PIECES = 67, MAX_LINES = 3 + 1 + PIECES + 1 + 1 + 1 };
+    enum { PIECES = 67, MAX_LINES = 1 + 3 + 1 + PIECES + 1 + 1 + 1 + 1 };
     const char *lines[MAX_LINES];
     TestRowMap t;
     int n = 0;
@@ -1028,6 +1064,7 @@ static void test_row_map_covers_more_than_64_continuation_rows(void) {
 
     printf("--- continuation mapping has no separate 64-row cap ---\n");
 
+    lines[n++] = "display() {";
     lines[n++] = "glClearColor(0, 0, 0, 1);";
     lines[n++] = "glClear(GL_COLOR_BUFFER_BIT);";
     lines[n++] = "glBegin(GL_POINTS);";
@@ -1038,6 +1075,7 @@ static void test_row_map_covers_more_than_64_continuation_rows(void) {
     lines[n++] = ", 0, 0);";
     closer_row = n;
     lines[n++] = "glEnd();";
+    lines[n++] = "}";
     lines[n] = NULL;
 
     glr_ctrl_reset_all();
