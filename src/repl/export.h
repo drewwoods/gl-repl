@@ -182,6 +182,16 @@ int repl_export_reshape_projection_lines(const char *out[REPL_EXPORT_PROJ_LINES]
  * scroll_to_display_function - exposed via this macro so both sides
  * stay in sync if the line text ever changes. */
 #define REPL_EXPORT_DISPLAY_OPEN_LINE "void display(void) {"
+/* The line that closes display(). Like the opener, the code panel draws
+ * this one unconditionally - the two together frame the user's body, so
+ * code focus hides what is inside them but never the frame itself. */
+#define REPL_EXPORT_DISPLAY_CLOSE_LINE "}"
+
+/* Code-focus spelling of the display() opener. Focus mode strips derived-C
+ * boilerplate down to what frames the user's own code, and the C return
+ * type and `(void)` parameter list are boilerplate; the name and the brace
+ * are the frame. The full C spelling is g_display_header[0]. */
+#define REPL_EXPORT_DISPLAY_OPEN_FOCUS_LINE "display() {"
 /* The same line without its brace. The importer matches on this to signal the
  * camera reader's display region, because a hand-formatted file may put the
  * `{` on its own line - so the signature, not the whole opener, is the part
@@ -190,6 +200,7 @@ int repl_export_reshape_projection_lines(const char *out[REPL_EXPORT_PROJ_LINES]
 extern const char  *g_header_pre[];
 extern const char  *g_display_header[];
 extern const char  *g_header_post[];
+extern const char  *g_display_footer[];
 extern const char  *g_footer_pre_init[];
 extern const char  *g_footer_post_init[];
 

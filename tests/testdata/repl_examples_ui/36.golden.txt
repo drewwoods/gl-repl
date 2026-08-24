@@ -96,19 +96,8 @@ static GLdouble *repl_gldouble4(GLdouble a, GLdouble b, GLdouble c, GLdouble d) 
   repl_gldouble4_buf[3] = d;
   return repl_gldouble4_buf;
 }
---- display_header ---
-void display(void) {
-  glLoadIdentity();
-  glPushAttrib(GL_ALL_ATTRIB_BITS);
---- lights_pre_camera ---
---- camera ---
-  glTranslatef(0.0000f, 0.0000f, -10.5000f);   // @camera dist
-  glRotatef(13.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(-18.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -1.3500f, -0.0000f);   // @camera pan
---- header_post ---
   float A[16], B[16], C[16];
---- source ---
+--- source_prologue ---
 static float dd, blink, ink, ph, slit; // expanding-pulse distance; beacon blink; brightness multiplier on the base ink color; shutter-cycle phase; slit half-angle
 static float dishAz; // dish azimuth, degrees -- see the note below
 static float cycleLength = 30; // seconds per dome shutter cycle (open ~2/3 of it)
@@ -150,6 +139,18 @@ drift(x, z, s) {
     glutSolidSphere(1, 12, 8);
   glPopMatrix();
 }
+--- display_header ---
+void display(void) {
+  glLoadIdentity();
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+--- lights_pre_camera ---
+--- camera ---
+  glTranslatef(0.0000f, 0.0000f, -10.5000f);   // @camera dist
+  glRotatef(13.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(-18.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -1.3500f, -0.0000f);   // @camera pan
+--- header_post ---
+--- source ---
 
   // The dish is posed twice: once in the lit opaque pass and again in the
   // unlit glow pass that hangs the feed struts and pulses off it. Both read

@@ -87,6 +87,14 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
+  float A[16], B[16], C[16];
+--- source_prologue ---
+// --- Description --------------------
+// 2D sketch driven purely by variable assignment: x accumulates across
+// loop iterations (x = x + 0.07) to sweep a running plot, and y is a
+// function of x and t -- no goto, no scratch arrays, just var = expr.
+
+static float x, y, s; // s = palette mix in [0,1]
 --- display_header ---
 void display(void) {
   glLoadIdentity();
@@ -98,14 +106,7 @@ void display(void) {
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
-  float A[16], B[16], C[16];
 --- source ---
-// --- Description --------------------
-// 2D sketch driven purely by variable assignment: x accumulates across
-// loop iterations (x = x + 0.07) to sweep a running plot, and y is a
-// function of x and t -- no goto, no scratch arrays, just var = expr.
-
-static float x, y, s; // s = palette mix in [0,1]
 
   // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);

@@ -27,19 +27,17 @@ static int startup_example_index(void) {
     return 0;
 }
 
+/* Park the view on the generated display() frame after a startup load.
+ *
+ * Asks the host rather than counting rows here. The frame is no longer
+ * part of the leading chrome: declarations and function definitions
+ * render above it, so its panel row depends on how many wrapped rows that
+ * prologue occupies - which needs a built code-panel layout, and the REPL
+ * pipeline has none. (The old walk searched g_header_pre[] for the
+ * display() opener, which lives in g_display_header[] and was never in
+ * that array, so it silently fell through to the end of the includes.) */
 static void scroll_to_display_function(void) {
-    repl_state_refresh_workspace_header_lines();
-    ReplImportExportView meta = repl_state_import_export();
-    unsigned collision_mask = repl_export_math_collision_mask();
-    int target = meta.workspace_header_line_count;
-    for (int line_idx = 0; g_header_pre[line_idx]; line_idx++) {
-        if (!repl_export_header_pre_line_visible(line_idx, collision_mask))
-            continue;
-        if (strcmp(g_header_pre[line_idx], REPL_EXPORT_DISPLAY_OPEN_LINE) == 0)
-            break;
-        target++;
-    }
-    repl_dispatch_scroll_to_line(target);
+    repl_dispatch_scroll_to_display_open();
 }
 
 static int activate_new_scene_after_failed_import(const char *source_path) {

@@ -93,19 +93,8 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
---- display_header ---
-void display(void) {
-  glLoadIdentity();
-  glPushAttrib(GL_ALL_ATTRIB_BITS);
---- lights_pre_camera ---
---- camera ---
-  glTranslatef(0.0000f, 0.0000f, -19.0000f);   // @camera dist
-  glRotatef(30.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
---- header_post ---
   float A[16], B[16], C[16];
---- source ---
+--- source_prologue ---
 static float px, py, pz; // planet position - the caller hangs the body and its label off it
 static float orbitR; // log-compressed orbit radius, shared by the draw funcs
 static float ASTEROIDS = 140; // @tune
@@ -266,6 +255,18 @@ asteroidBelt(count) {
     }
   glEnd();
 }
+--- display_header ---
+void display(void) {
+  glLoadIdentity();
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+--- lights_pre_camera ---
+--- camera ---
+  glTranslatef(0.0000f, 0.0000f, -19.0000f);   // @camera dist
+  glRotatef(30.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+--- header_post ---
+--- source ---
 
   glClearColor(0.02, 0.02, 0.05, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

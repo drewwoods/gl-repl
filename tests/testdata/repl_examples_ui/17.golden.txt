@@ -87,6 +87,13 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
+  float A[16], B[16], C[16];
+--- source_prologue ---
+static float R = 2; // major radius (ring center to tube center)
+static float r = 1; // minor radius (tube thickness)
+static float n = 20; // @config segment count around both u and v
+static float u, v, s; // current major/minor angles, color mix factor
+static float tr; // tube-offset radius R + r*cos(v), read twice per vertex line
 --- display_header ---
 void display(void) {
   glLoadIdentity();
@@ -98,13 +105,7 @@ void display(void) {
   glRotatef(35.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
-  float A[16], B[16], C[16];
 --- source ---
-static float R = 2; // major radius (ring center to tube center)
-static float r = 1; // minor radius (tube thickness)
-static float n = 20; // @config segment count around both u and v
-static float u, v, s; // current major/minor angles, color mix factor
-static float tr; // tube-offset radius R + r*cos(v), read twice per vertex line
 
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

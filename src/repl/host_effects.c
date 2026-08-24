@@ -57,6 +57,11 @@ void repl_dispatch_scroll_to_line(int target) {
         g_host_effects->scroll_to_line(target);
 }
 
+void repl_dispatch_scroll_to_display_open(void) {
+    if (g_host_effects && g_host_effects->scroll_to_display_open)
+        g_host_effects->scroll_to_display_open();
+}
+
 void repl_dispatch_tutorial_teardown(void) {
     if (g_host_effects && g_host_effects->tutorial_teardown)
         g_host_effects->tutorial_teardown();

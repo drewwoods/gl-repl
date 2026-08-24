@@ -96,19 +96,8 @@ static GLdouble *repl_gldouble4(GLdouble a, GLdouble b, GLdouble c, GLdouble d) 
   repl_gldouble4_buf[3] = d;
   return repl_gldouble4_buf;
 }
---- display_header ---
-void display(void) {
-  glLoadIdentity();
-  glPushAttrib(GL_ALL_ATTRIB_BITS);
---- lights_pre_camera ---
---- camera ---
-  glTranslatef(0.0000f, 0.0000f, -9.5000f);   // @camera dist
-  glRotatef(26.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(-20.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
---- header_post ---
   float A[16], B[16], C[16];
---- source ---
+--- source_prologue ---
 // --- Description -----------------
 // Dusk lighthouse atoll - a coherent feature tour:
 // One scene, many features: a parametric sea, a tessellated island with a
@@ -406,6 +395,18 @@ fire_flies(num) {
   glEnd();
   glPopAttrib();
 }
+--- display_header ---
+void display(void) {
+  glLoadIdentity();
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+--- lights_pre_camera ---
+--- camera ---
+  glTranslatef(0.0000f, 0.0000f, -9.5000f);   // @camera dist
+  glRotatef(26.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(-20.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+--- header_post ---
+--- source ---
 
   // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);

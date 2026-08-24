@@ -87,19 +87,8 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
---- display_header ---
-void display(void) {
-  glLoadIdentity();
-  glPushAttrib(GL_ALL_ATTRIB_BITS);
---- lights_pre_camera ---
---- camera ---
-  glTranslatef(0.0000f, 0.0000f, -24.0000f);   // @camera dist
-  glRotatef(6.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -5.0000f, -0.0000f);   // @camera pan
---- header_post ---
   float A[16], B[16], C[16];
---- source ---
+--- source_prologue ---
 static float bright = 1; // @tune @config overall lantern intensity
 static float spread = 12; // @tune horizontal scatter of the flock and its glints
 static float rise = 0.55; // @tune @config ascent speed
@@ -245,6 +234,18 @@ launch(i, mirror) {
     lantern(xpos, ypos + 0.35, zpos, sz, g);
   }
 }
+--- display_header ---
+void display(void) {
+  glLoadIdentity();
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+--- lights_pre_camera ---
+--- camera ---
+  glTranslatef(0.0000f, 0.0000f, -24.0000f);   // @camera dist
+  glRotatef(6.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -5.0000f, -0.0000f);   // @camera pan
+--- header_post ---
+--- source ---
 
   // Keep config sensible
   rise = clamp(rise, 0.1, 2.0);

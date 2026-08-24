@@ -918,7 +918,7 @@ static void test_ui_panels_hit_test(void) {
         ui_layout_scene_rect(&sx, &sy, &sw, &sh);
         ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
         build_test_code_panel_layout(&layout, cp_w, text_x, cp_h);
-        editor_scroll_set(layout.header_rows);     /* skip chrome */
+        editor_scroll_set(ui_repl_code_panel_rows_before_cmd(&layout, 0));  /* skip chrome */
 
         /* Scene: centre of the scene rect (GL -> GLUT my). */
         snprintf(lbl, sizeof lbl, "scene hit kind%s", tag);
@@ -1556,28 +1556,29 @@ static void test_ui_panels_hit_test_panel_divider(void) {
  * Caller is responsible for restoring editor_scroll() after the test
  * if it cares (the per-test glr_ctrl_reset_all() calls do this). */
 static void code_panel_first_row_text_click(int *out_mx, int *out_my) {
-    int cp_x, cp_y, cp_w, cp_h;
-    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
+    UiRenderSnapshot snap;
+    int mx = 0, my = 0;
 
-    int linenum_w = 4 * FONT_W;
-    int idx_col_w = 6 * FONT_W;
-    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    UiReplCodePanelLayout layout;
-    build_test_code_panel_layout(&layout, cp_w, text_x, cp_h);
+    make_test_ui_snapshot(&snap);
 
-    /* Scroll past the header so vis=0 maps to a resolvable doc row. */
-    editor_scroll_set(layout.header_rows);
+    /* Resolve the row through the panel's own row model instead of
+     * re-deriving its y from panel geometry. The derived-C chrome is no
+     * longer all above the document: `void display(void) {` is spliced at
+     * the display-body boundary and `}` follows the trailing row, so
+     * "scroll past header_rows, take vis 0" no longer names a document
+     * row - and when the whole panel fits, editor_scroll clamps to 0 and
+     * that scroll cannot happen at all.
+     *
+     * The first eligible row for edit_line is what the tests want in both
+     * shapes: the live input row for an empty document, and the insert
+     * ghost (emitted before its command) in insert mode. */
+    if (ui_repl_code_panel_source_line_point(&snap, editor_state_edit_line(),
+                                             &mx, &my)) {
+        /* One column past the row's first character, so the segment math
+         * has a real seg_x to clamp against. */
+        mx += FONT_W;
+    }
 
-    int line_y_start = (cp_y + cp_h) - CODE_MARGIN_Y - 2 * LINE_H;
-    /* gl_y for vis=0 lives in (line_y_start - 3, line_y_start - 3 + LINE_H);
-     * pick the midpoint so off-by-one shifts in CODE_MARGIN_Y don't
-     * leak into the test. */
-    int gl_y_mid = line_y_start - 3 + LINE_H / 2;
-    int my = ui_state_viewport().window_h - gl_y_mid;
-
-    /* mx in the text-area column (past the gutter), past the indent
-     * so the segment math has a real seg_x to clamp against. */
-    int mx = cp_x + CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w + 2 * FONT_W;
     if (out_mx) *out_mx = mx;
     if (out_my) *out_my = my;
 }
@@ -1725,7 +1726,7 @@ static void test_ui_panels_hit_test_trailing_blank_row_kind(void) {
 
         ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
         build_test_code_panel_layout(&layout, cp_w, text_x, cp_h);
-        editor_scroll_set(layout.header_rows);   /* skip chrome (0 in focus) */
+        editor_scroll_set(ui_repl_code_panel_rows_before_cmd(&layout, 0));   /* skip chrome */
 
         snprintf(lbl, sizeof lbl,
                  "trailing blank row -> CODE_TEXT @ document_count%s", mode);
@@ -1763,7 +1764,7 @@ static void test_ui_panels_hit_test_virtual_row_routes_to_source(void) {
 
         ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
         build_test_code_panel_layout(&layout, cp_w, text_x, cp_h);
-        editor_scroll_set(layout.header_rows);   /* skip chrome (0 in focus) */
+        editor_scroll_set(ui_repl_code_panel_rows_before_cmd(&layout, 0));   /* skip chrome */
 
         /* line 0 + char_idx == -1 uniquely identifies the virtual row;
          * the real glBegin row is line 0 with char_idx >= 0. This one

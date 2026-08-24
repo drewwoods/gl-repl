@@ -151,7 +151,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     build_test_ui_snapshot(&snap);
     ui_repl_code_panel_build_layout(&snap, &layout, panel_w, text_x, cp_h);
 
-    doc_line = layout.header_rows;
+    doc_line = ui_repl_code_panel_rows_before_cmd(&layout, 0);
     for (int i = 0; i < cmd_idx && i < repl_state_document_count(); i++)
         doc_line += layout.cmd_main_rows[i] + layout.replay_extra_rows[i];
 

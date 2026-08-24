@@ -87,6 +87,17 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
+  float A[16], B[16], C[16];
+--- source_prologue ---
+// --- Functions ----------------------
+triangle() {
+  glBegin(GL_TRIANGLES);
+    glNormal3f(0, 0, 1);
+    glVertex3f(0, 0.8, 0);
+    glVertex3f(-0.7, -0.4, 0);
+    glVertex3f(0.7, -0.4, 0);
+  glEnd();
+}
 --- display_header ---
 void display(void) {
   glLoadIdentity();
@@ -98,17 +109,7 @@ void display(void) {
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
-  float A[16], B[16], C[16];
 --- source ---
-// --- Functions ----------------------
-triangle() {
-  glBegin(GL_TRIANGLES);
-    glNormal3f(0, 0, 1);
-    glVertex3f(0, 0.8, 0);
-    glVertex3f(-0.7, -0.4, 0);
-    glVertex3f(0.7, -0.4, 0);
-  glEnd();
-}
 
   // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);

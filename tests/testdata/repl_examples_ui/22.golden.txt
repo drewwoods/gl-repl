@@ -87,6 +87,7 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
+  float A[16], B[16], C[16];
 --- display_header ---
 void display(void) {
   glLoadIdentity();
@@ -100,7 +101,6 @@ void display(void) {
   glRotatef(15.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
-  float A[16], B[16], C[16];
 --- source ---
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

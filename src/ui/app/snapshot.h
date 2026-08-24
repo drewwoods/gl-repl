@@ -237,6 +237,13 @@ typedef struct UiRenderSnapshot {
      * re-derive them per row or call into repl_source_scope_*. */
     int                         active_indent_chars;
     int                         trailing_indent_chars;
+    /* First document row of the display() body: rows before it are the
+     * file-scope prologue (global declarations and function definitions)
+     * and render ABOVE `void display(void) {`. Resolved once per frame
+     * from the source scope, like the indent fields above, so the panel
+     * stays free of repl_source_scope_* calls. Equals document_count for
+     * a declarations-and-functions-only document. */
+    int                         display_body_start;
     int                         in_begin_block;
     GLenum                      current_begin_mode;
     int                         current_begin_block_valid;

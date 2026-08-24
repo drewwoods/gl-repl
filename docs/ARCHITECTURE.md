@@ -1703,7 +1703,7 @@ values through these seams:
 | Camera bridge | [`glr_camera_export_install_bridge()`](../src/app/glr_camera_export.h#L14) formats the tagged `@camera` rows and applies a resolved pose; it does not parse - src/repl/camera_header.c is the one reader. |
 | Reshape-projection bridge | Supplies the active perspective or orthographic projection to export and code-panel calculations. |
 | Camera-distance source | Supplies executor point-size fallback data without linking [`glr_camera.c`](../src/app/glr_camera.c). |
-| [`ReplExportLayout`](../src/repl/export.h#L267) | Passes viewport and code-panel geometry explicitly instead of calling `ui_layout_*`. |
+| [`ReplExportLayout`](../src/repl/export.h#L263) | Passes viewport and code-panel geometry explicitly instead of calling `ui_layout_*`. |
 
 #### 4. OS-Clipboard Bridge ([`EditorClipboardHostBridge`](../src/editor/clipboard.h#L88))
 
@@ -2015,7 +2015,7 @@ Per the rule above:
   [`repl_export_reshape_projection_lines()`](../src/repl/export.h#L171) directly - a single pass on
   the Ctrl+S thread, not split across render3d render, so it correctly
   captures the projection in effect at save time. (Routing this through
-  a controller-owned [`ReplExportLayout`](../src/repl/export.h#L267)-style export context is the
+  a controller-owned [`ReplExportLayout`](../src/repl/export.h#L263)-style export context is the
   documented next step if save is ever folded into the frame path.)
 
 [`render3d_get_active_projection()`](../src/render3d/render.h#L145) is the *nearest-steady* projection: the
@@ -2977,7 +2977,7 @@ drops them and no `CmdType` or parser grammar is involved. See
 
 **Start-of-tutorial view reset.** `tutorial_start` opens a fresh
 transient scene, so it must not inherit the previous scene's view.
-`tutorial_baseline_apply` calls [`repl_dispatch_tutorial_presentation_reset()`](../src/repl/host_effects.h#L138)
+`tutorial_baseline_apply` calls [`repl_dispatch_tutorial_presentation_reset()`](../src/repl/host_effects.h#L143)
 (host effect, implemented by `glr_ctrl_reset_tutorial_chrome`), which runs
 the example chrome reset with no tag mask and then overrides what an
 example load deliberately inherits: the camera eases back to the built-in

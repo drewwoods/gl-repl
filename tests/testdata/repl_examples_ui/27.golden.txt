@@ -96,6 +96,15 @@ static GLdouble *repl_gldouble4(GLdouble a, GLdouble b, GLdouble c, GLdouble d) 
   repl_gldouble4_buf[3] = d;
   return repl_gldouble4_buf;
 }
+  float A[16], B[16], C[16];
+--- source_prologue ---
+// Clip planes carve new shapes out of stock solids. glClipPlane sets a
+// plane equation a*x + b*y + c*z + d >= 0; GL keeps that half-space and
+// discards everything else. The equation is captured in the modelview
+// frame current AT THE CALL, so transforms placed before glClipPlane
+// position the plane. glEnable(GL_CLIP_PLANEi) switches each one on.
+// Tip: park the cursor on a glClipPlane line to see its plane guide.
+static float d; // sliding cut offset for the animated cutaway
 --- display_header ---
 void display(void) {
   glLoadIdentity();
@@ -109,15 +118,7 @@ void display(void) {
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.5000f, -0.0000f);   // @camera pan
 --- header_post ---
-  float A[16], B[16], C[16];
 --- source ---
-// Clip planes carve new shapes out of stock solids. glClipPlane sets a
-// plane equation a*x + b*y + c*z + d >= 0; GL keeps that half-space and
-// discards everything else. The equation is captured in the modelview
-// frame current AT THE CALL, so transforms placed before glClipPlane
-// position the plane. glEnable(GL_CLIP_PLANEi) switches each one on.
-// Tip: park the cursor on a glClipPlane line to see its plane guide.
-static float d; // sliding cut offset for the animated cutaway
 
   // --- Render State -------------------
   glClearColor(0.04, 0.05, 0.08, 1);

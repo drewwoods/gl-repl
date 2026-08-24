@@ -87,19 +87,8 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
---- display_header ---
-void display(void) {
-  glLoadIdentity();
-  glPushAttrib(GL_ALL_ATTRIB_BITS);
---- lights_pre_camera ---
---- camera ---
-  glTranslatef(0.0000f, 0.0000f, -10.0000f);   // @camera dist
-  glRotatef(8.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(24.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -3.1000f, -0.0000f);   // @camera pan
---- header_post ---
   float A[16], B[16], C[16];
---- source ---
+--- source_prologue ---
 // A 3D recursive tree. One call draws one limb as a tapered pentagonal
 // tube, caps the joint with a knuckle sphere, walks to the tip, and
 // forks into three children 120 degrees apart -- so the whole
@@ -159,6 +148,18 @@ limb(depth, len, rad, seed) {
     }
   }
 }
+--- display_header ---
+void display(void) {
+  glLoadIdentity();
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+--- lights_pre_camera ---
+--- camera ---
+  glTranslatef(0.0000f, 0.0000f, -10.0000f);   // @camera dist
+  glRotatef(8.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(24.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -3.1000f, -0.0000f);   // @camera pan
+--- header_post ---
+--- source ---
 
 
   glClearColor(0.05, 0.06, 0.08, 1);

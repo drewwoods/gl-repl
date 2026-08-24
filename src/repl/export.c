@@ -546,6 +546,27 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
         }
     }
 
+    /* Panel-only scratch declaration. It decorates the global scratch
+     * arrays, which render above display() with the other declarations,
+     * so it sits with the file-scope chrome rather than below the frame.
+     * Untagged, as in the panel. */
+    fprintf(dst, "%s\n", REPL_CODE_PANEL_SCRATCH_DECL_LINE);
+
+    /* The file-scope prologue: global declarations and function
+     * definitions (with the comment runs that introduce them) render
+     * ABOVE `void display(void) {`. Omitted entirely when the document
+     * opens straight into body code. */
+    {
+        int body_start = repl_source_scope_display_body_start();
+        if (body_start > 0) {
+            fprintf(dst, "--- source_prologue ---\n");
+            for (int cmd_idx = 0; cmd_idx < body_start; cmd_idx++) {
+                if (!repl_state_document_cmds()[cmd_idx].valid) continue;
+                fprintf(dst, "%s\n", export_document_text(cmd_idx));
+            }
+        }
+    }
+
     fprintf(dst, "--- display_header ---\n");
     /* Dump display() opening lines (shared with export). */
     for (int line_idx = 0; g_display_header[line_idx]; line_idx++)
@@ -573,14 +594,17 @@ void repl_dump_code_panel_text(FILE *out, SourceTextView text) {
     for (int line_idx = 0; g_header_post[line_idx]; line_idx++)
         fprintf(dst, "%s\n", g_header_post[line_idx]);
 
-    /* Panel-only scratch declaration, adjacent to the source that uses it. */
-    fprintf(dst, "%s\n", REPL_CODE_PANEL_SCRATCH_DECL_LINE);
-
     fprintf(dst, "--- source ---\n");
-    /* Dump all valid user commands. */
-    for (int cmd_idx = 0; cmd_idx < repl_state_document_count(); cmd_idx++) {
-        if (!repl_state_document_cmds()[cmd_idx].valid) continue;
-        fprintf(dst, "%s\n", export_document_text(cmd_idx));
+    /* The display() body: the document rows from the boundary on. Keeps
+     * the section name it always had, so tests that look for
+     * `--- source ---` still find the user's program. */
+    {
+        int body_start = repl_source_scope_display_body_start();
+        for (int cmd_idx = body_start;
+             cmd_idx < repl_state_document_count(); cmd_idx++) {
+            if (!repl_state_document_cmds()[cmd_idx].valid) continue;
+            fprintf(dst, "%s\n", export_document_text(cmd_idx));
+        }
     }
 
     fprintf(dst, "--- render_state ---\n");

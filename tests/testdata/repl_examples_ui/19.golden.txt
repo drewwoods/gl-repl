@@ -91,6 +91,18 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
+  float A[16], B[16], C[16];
+--- source_prologue ---
+static float size = 3; // surface width and depth @tune
+static float steps = 15; // strips across the surface @tune
+static float amplitude = 0.4; // wave height @tune
+static float frequency = 2.5; // wave density @tune
+static float z_phase = 0.7; // z waves animate more slowly @tune
+static float step_size;
+static float half;
+static float x0, x1, z, y0, y1;
+static float slope_x0, slope_x1, slope_z0, slope_z1;
+static float color0, color1;
 --- display_header ---
 void display(void) {
   glLoadIdentity();
@@ -102,18 +114,7 @@ void display(void) {
   glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
-  float A[16], B[16], C[16];
 --- source ---
-static float size = 3; // surface width and depth @tune
-static float steps = 15; // strips across the surface @tune
-static float amplitude = 0.4; // wave height @tune
-static float frequency = 2.5; // wave density @tune
-static float z_phase = 0.7; // z waves animate more slowly @tune
-static float step_size;
-static float half;
-static float x0, x1, z, y0, y1;
-static float slope_x0, slope_x1, slope_z0, slope_z1;
-static float color0, color1;
 
 
   // The same animated surface, now lit with one analytic normal per vertex.

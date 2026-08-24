@@ -2602,6 +2602,7 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
      * into repl_source_scope_* / ui_repl_code_panel_* per row. */
     snap->active_indent_chars   = glr_ctrl_active_indent_chars();
     snap->trailing_indent_chars = repl_source_scope_cmd_indent_chars(snap->document_count);
+    snap->display_body_start    = repl_source_scope_display_body_start();
     snap->in_begin_block        = repl_source_scope_in_begin_block();
     snap->current_begin_mode    = repl_current_begin_mode();
     snap->current_begin_block_valid =
@@ -3861,6 +3862,25 @@ static void glr_ctrl_scroll_to_line(int target) {
     editor_scroll_follow_cursor_set(0);
 }
 
+/* Scroll so the generated display() frame sits at the top of the panel.
+ * The frame is spliced after the file-scope prologue (declarations and
+ * function definitions), so its row is not header_rows - it depends on
+ * how many wrapped panel rows that prologue occupies, which only a built
+ * layout knows. */
+static void glr_ctrl_scroll_to_display_open(void) {
+    UiRenderSnapshot snap;
+    UiReplCodePanelLayout layout;
+    int cp_w, cp_h, text_x;
+
+    glr_ctrl_build_ui_snapshot(&snap);
+    text_x = ui_repl_code_panel_compute_text_x(&snap);
+    ui_layout_code_panel_rect(NULL, NULL, &cp_w, &cp_h);
+    ui_repl_code_panel_build_layout(&snap, &layout, cp_w, text_x, cp_h);
+
+    editor_scroll_set(ui_repl_code_panel_display_open_row(&layout));
+    editor_scroll_follow_cursor_set(0);
+}
+
 const UiOverlayContent *glr_ctrl_help_overlay_content(void) {
     /* Keep headroom beyond today's five tabs so extending the REPL-owned
      * help content cannot silently hide the trailing tab again. */
@@ -4288,6 +4308,7 @@ static const ReplHostEffects g_glr_host_effects = {
     .input_reset                 = glr_ctrl_host_input_reset,
     .insert_mode_off             = glr_ctrl_host_insert_mode_off,
     .scroll_to_line              = glr_ctrl_scroll_to_line,
+    .scroll_to_display_open      = glr_ctrl_scroll_to_display_open,
     .tutorial_teardown           = tutorial_teardown,
     .edit_line_get               = editor_state_edit_line,
     .edit_line_set               = editor_state_edit_line_set,

@@ -93,6 +93,11 @@ typedef struct {
     void (*insert_mode_off)(void);
     /* Scroll the code panel so source line `target` is visible. */
     void (*scroll_to_line)(int target);
+    /* Scroll so the generated `display() {` frame sits at the top of the
+     * code panel. Symbolic rather than a row number: the frame is spliced
+     * after the file-scope prologue, and only the host can measure how
+     * many wrapped panel rows that prologue occupies. */
+    void (*scroll_to_display_open)(void);
     /* Tear down any active tutorial before wholesale source replacement.
      * The tutorial runner is a peer subsystem; routing this through the
      * host bridge keeps src/repl from linking tutorial.c just to request
@@ -139,6 +144,7 @@ void        repl_dispatch_tutorial_presentation_reset(void);
 void        repl_dispatch_input_reset(void);
 void        repl_dispatch_insert_mode_off(void);
 void        repl_dispatch_scroll_to_line(int target);
+void        repl_dispatch_scroll_to_display_open(void);
 void        repl_dispatch_tutorial_teardown(void);
 int         repl_dispatch_edit_line_get(void);
 void        repl_dispatch_edit_line_set(int line);

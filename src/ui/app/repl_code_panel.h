@@ -84,6 +84,19 @@ typedef struct {
     int cp_h;
     int visible_lines;
     int header_rows;
+    /* Display-open chrome (`void display(void) {` and the generated setup
+     * after it) is not part of header_rows: it is SPLICED at
+     * display_open_at, the first document row of the display() body, so
+     * the declarations and function definitions before that row render
+     * above it the way the exported C writes them. display_close_rows
+     * follows the trailing document row.
+     *
+     * Three scalars rather than a third MAX_EDITOR_COMMANDS array: a
+     * parallel array would encode one splice as a run of zeros plus a
+     * spike, and could then disagree with itself. */
+    int display_open_rows;
+    int display_open_at;
+    int display_close_rows;
     int footer_rows;
     int total_lines;
     int cursor_doc_line;
@@ -100,6 +113,21 @@ int        ui_repl_code_panel_visible_lines_for_height(int cp_h,
 void ui_repl_code_panel_build_layout(const UiRenderSnapshot *snap,
                                      UiReplCodePanelLayout *layout,
                                      int panel_w, int text_x, int cp_h);
+/* Rows drawn before document command `cmd_idx`: the file-scope chrome,
+ * every earlier command's rows (including replay virtual rows), and the
+ * spliced display-open chrome once `cmd_idx` has reached the display-body
+ * boundary. Scrolling to this row puts command `cmd_idx` at the top of
+ * the panel. Callers must not add layout->header_rows themselves - it is
+ * only part of the answer now that display() chrome is spliced mid-walk. */
+int  ui_repl_code_panel_rows_before_cmd(const UiReplCodePanelLayout *layout,
+                                        int cmd_idx);
+
+/* Panel row the display() frame opens on - the blank spacer if there is
+ * one, otherwise the `display() {` line itself. This is NOT header_rows:
+ * the frame is spliced after the file-scope prologue, whose rows wrap
+ * like any others. Scrolling here puts the frame at the top of the panel. */
+int  ui_repl_code_panel_display_open_row(const UiReplCodePanelLayout *layout);
+
 int  ui_repl_code_panel_target_for_doc_line(const UiRenderSnapshot *snap,
                                             int doc_line,
                                             const UiReplCodePanelLayout *layout,

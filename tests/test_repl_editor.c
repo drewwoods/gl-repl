@@ -250,103 +250,37 @@ static int cfg_row_for_key(GlrConfigKey key) {
     return -1;
 }
 
-static int test_code_panel_row_count_for_text(const char *text, int first_x,
-                                              int panel_w) {
-    CodeLayout layout =
-        code_layout_make(panel_w, first_x, FONT_W, glr_state_presentation().wrap_at_comma);
-    return code_layout_row_count_for_text(text, &layout);
-}
+/* The code panel's own row model answers "where is command N drawn"
+ * (code_panel_click_point_for_cmd below). This file used to reimplement
+ * the header-row counter and the per-command row sum to get there, which
+ * only worked while every generated row preceded command 0 - the
+ * display() frame is now spliced mid-document. */
 
-static int code_panel_header_row_count(void) {
-    int panel_w;
-    int linenum_w = 4 * FONT_W;
-    int idx_col_w = 6 * FONT_W;
-    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int rows = 0;
+/* Click point for the row that shows document command `cmd_idx`.
+ *
+ * Resolved through the panel's own row model rather than re-deriving it
+ * from panel geometry: the derived-C chrome is no longer all above the
+ * document. `void display(void) {` is spliced at the display-body
+ * boundary (declarations and function definitions render above it) and
+ * `}` follows the trailing row, so counting header rows and then summing
+ * command rows no longer names the right line. Returns 1 on success. */
+static int code_panel_click_point_for_cmd(int cmd_idx, int *out_mx,
+                                          int *out_my) {
+    UiRenderSnapshot snap;
+    UiReplCodePanelLayout layout;
+    int cp_w, cp_h, text_x;
 
-    /* Code focus hides every derived C-boilerplate stanza, so the
-     * production header row count collapses to 0 (see
-     * repl_code_panel_chrome_visible). Mirror that here, or the
-     * mouse-y math is off by the full-chrome height in focus mode. */
-    if (glr_state_presentation().code_focus)
-        return 0;
+    glr_ctrl_build_ui_snapshot(&snap);
+    ui_layout_code_panel_rect(NULL, NULL, &cp_w, &cp_h);
+    text_x = ui_repl_code_panel_compute_text_x(&snap);
+    ui_repl_code_panel_build_layout(&snap, &layout, cp_w, text_x, cp_h);
 
-    ui_layout_code_panel_rect(NULL, NULL, &panel_w, NULL);
-    refresh_workspace_header_lines();
-    {
-        ReplImportExportView ie = repl_state_import_export();
-        for (int i = 0; i < ie.workspace_header_line_count; i++)
-            rows += test_code_panel_row_count_for_text(ie.workspace_header_lines[i],
-                                                       text_x, panel_w);
-    }
-    {
-        unsigned collision_mask = repl_export_math_collision_mask();
-        for (int i = 0; g_header_pre[i]; i++) {
-            if (repl_export_header_pre_line_visible(i, collision_mask))
-                rows += test_code_panel_row_count_for_text(
-                    g_header_pre[i], text_x, panel_w);
-        }
-    }
-    {
-        unsigned helper_mask = repl_export_gl_vector_helper_mask();
-        int n = repl_export_gl_vector_helper_line_count(helper_mask);
-        char line[MAX_LINE_LEN];
-        for (int i = 0; i < n; i++) {
-            repl_export_gl_vector_helper_line(helper_mask, i,
-                                              line, sizeof(line));
-            rows += test_code_panel_row_count_for_text(line, text_x, panel_w);
-        }
-    }
-    for (int i = 0; g_display_header[i]; i++)
-        rows += test_code_panel_row_count_for_text(g_display_header[i], text_x, panel_w);
-    {
-        char line[MAX_LINE_LEN];
-        int n = repl_export_lights_pre_camera_line_count();
-        for (int pos_idx = 0; pos_idx < n; pos_idx++) {
-            repl_export_lights_pre_camera_line(pos_idx, line, sizeof(line));
-            rows += test_code_panel_row_count_for_text(line, text_x, panel_w);
-        }
-    }
-    {
-        const char (*cam)[REPL_EXPORT_CAMERA_LINE_MAX] =
-            repl_state_import_export().cam_lines;
-        for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++)
-            if (cam[i][0])
-                rows += test_code_panel_row_count_for_text(cam[i], text_x, panel_w);
-    }
-    {
-        char line[MAX_LINE_LEN];
-        int n = repl_export_lights_display_line_count();
-        for (int pos_idx = 0; pos_idx < n; pos_idx++) {
-            repl_export_lights_display_line(pos_idx, line, sizeof(line));
-            rows += test_code_panel_row_count_for_text(line, text_x, panel_w);
-        }
-    }
-    for (int i = 0; g_header_post[i]; i++)
-        rows += test_code_panel_row_count_for_text(g_header_post[i], text_x, panel_w);
-    rows += test_code_panel_row_count_for_text(REPL_CODE_PANEL_SCRATCH_DECL_LINE,
-                                               text_x, panel_w);
-    return rows;
-}
-
-static int code_panel_mouse_y_for_cmd(int cmd_idx) {
-    int cp_y, cp_h, panel_w;
-    int linenum_w = 4 * FONT_W;
-    int idx_col_w = 6 * FONT_W;
-    int text_x = CODE_MARGIN_X + linenum_w + FONT_W + idx_col_w;
-    int doc_line = code_panel_header_row_count();
-
-    ui_layout_code_panel_rect(NULL, &cp_y, &panel_w, &cp_h);
-    for (int i = 0; i < cmd_idx && i < repl_state_document_count(); i++) {
-        const char *line_text = editor_buffer_line(i);
-        doc_line += test_code_panel_row_count_for_text(line_text ? line_text : "",
-                                                       text_x, panel_w);
-    }
-
-    int vis = doc_line - g_scroll;
-    int line_y_start = cp_y + cp_h - CODE_MARGIN_Y - 2 * LINE_H;
-    int gl_y = line_y_start - vis * LINE_H + 1;
-    return ui_state_viewport().window_h - gl_y;
+    /* Scroll the row into view first - a row outside the visible window
+     * has no y, so source_line_point would find nothing. */
+    g_scroll = ui_repl_code_panel_rows_before_cmd(&layout, cmd_idx);
+    glr_ctrl_build_ui_snapshot(&snap);
+    return ui_repl_code_panel_source_line_point(&snap, cmd_idx,
+                                                out_mx, out_my);
 }
 
 static void assert_float_decl_rejected_atomic(const char *label,
@@ -3576,13 +3510,14 @@ int main() {
         g_panel_frac = 0.5f;
         glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT; glr_ctrl_sync_ui_chrome();
         glr_ctrl_sync_ui_chrome();
-        g_scroll = code_panel_header_row_count();
         editor_navigate_to_line(0);
         set_editor_input("glVertex3f(8, 0, 0)");
 
         {
-            int mx = CODE_MARGIN_X + 1;
-            int my = code_panel_mouse_y_for_cmd(2);
+            int mx = 0, my = 0;
+            snprintf(lbl, sizeof lbl,
+                     "mouse auto-commit: resolved a click point%s", mode);
+            ASSERT_TRUE(lbl, code_panel_click_point_for_cmd(2, &mx, &my));
             UiHit hit = code_panel_hit_test_current_snapshot(mx, my,
                                                              g_num_predef_vars);
             glr_ctrl_router_handle_code_panel_hit(hit, mx, my);

@@ -87,21 +87,8 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
---- display_header ---
-void display(void) {
-  glLoadIdentity();
-  glPushAttrib(GL_ALL_ATTRIB_BITS);
---- lights_pre_camera ---
-  // Eye-space light positions, set before the camera transform.
-  glLightfv(GL_LIGHT0, GL_POSITION, repl_glfloat4(0, 0, -1, 1));
---- camera ---
-  glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
-  glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
---- header_post ---
   float A[16], B[16], C[16];
---- source ---
+--- source_prologue ---
 // Stencil masking, minimum viable. Three passes over one shape:
 //   1. stamp it into the stencil buffer only - no color, no depth
 //   2. draw the payload where the stamp landed (GL_EQUAL, 1)
@@ -124,6 +111,20 @@ maskWindow() {
     glEnd();
   glPopMatrix();
 }
+--- display_header ---
+void display(void) {
+  glLoadIdentity();
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+--- lights_pre_camera ---
+  // Eye-space light positions, set before the camera transform.
+  glLightfv(GL_LIGHT0, GL_POSITION, repl_glfloat4(0, 0, -1, 1));
+--- camera ---
+  glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
+  glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+--- header_post ---
+--- source ---
 
   // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);

@@ -387,11 +387,21 @@ static const char *g_init_host_only_tess_c[] = {
     NULL
 };
 
-const char *g_footer_pre_init[] = {
+/* Closing lines of display(), split out of g_footer_pre_init because the
+ * code panel treats them differently: `}` FRAMES the user's body and is
+ * drawn even in code focus, while glPopAttrib/glutSwapBuffers are
+ * derived-C chrome like everything else. Panel-only, same as
+ * g_footer_pre_init - the exporter emits its own display close in
+ * export_display.c. */
+const char *g_display_footer[] = {
     "",
     "  glPopAttrib();",
     "  glutSwapBuffers();",
-    "}",
+    REPL_EXPORT_DISPLAY_CLOSE_LINE,
+    NULL
+};
+
+const char *g_footer_pre_init[] = {
     "",
     "void reshape(int w, int h) {",
     "  glViewport(0, 0, w, h);",

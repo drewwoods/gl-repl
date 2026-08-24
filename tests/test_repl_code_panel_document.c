@@ -808,7 +808,7 @@ int main(void) {
     ASSERT_TRUE("first command has one row", layout.cmd_main_rows[0] == 1);
 
     {
-        int doc_line = layout.header_rows + layout.cmd_main_rows[0];
+        int doc_line = ui_repl_code_panel_rows_before_cmd(&layout, 1);
         ASSERT_TRUE("target lookup succeeds",
                     ui_repl_code_panel_target_for_doc_line(
                         &snap, doc_line, &layout, &target, &on_insert, &row_offset));
@@ -825,7 +825,7 @@ int main(void) {
     editor_handle_key('\r', 0, 0);
     build_doc(&snap, &layout);
     {
-        int doc_line = layout.header_rows + layout.cmd_main_rows[0];
+        int doc_line = ui_repl_code_panel_rows_before_cmd(&layout, 1);
         ASSERT_TRUE("insert row lookup succeeds",
                     ui_repl_code_panel_target_for_doc_line(
                         &snap, doc_line, &layout, &target, &on_insert, &row_offset));
@@ -901,9 +901,10 @@ int main(void) {
         ASSERT_TRUE("focus keeps document rows",
                     layout.total_lines >= 4 && layout.cmd_main_rows[0] == 1);
         {
-            /* Command 1 starts right after command 0, at doc line
-             * header_rows(==0) + cmd_main_rows[0]. */
-            int doc_line = layout.header_rows + layout.cmd_main_rows[0];
+            /* Command 1's doc line. Not header_rows + cmd_main_rows[0]:
+             * the display() frame is spliced at the display-body
+             * boundary, so the prefix is only correct via the helper. */
+            int doc_line = ui_repl_code_panel_rows_before_cmd(&layout, 1);
             ASSERT_TRUE("focus doc-line mapping succeeds",
                         ui_repl_code_panel_target_for_doc_line(
                             &snap, doc_line, &layout, &target, &on_insert,
@@ -1073,7 +1074,7 @@ int main(void) {
              * the chrome (0 in focus), rebuild so the color row is at
              * the top of the visible area in both modes. */
             build_doc(&snap, &layout);
-            editor_scroll_set(layout.header_rows);
+            editor_scroll_set(ui_repl_code_panel_rows_before_cmd(&layout, 0));
             build_doc(&snap, &layout);
 
             ui_layout_code_panel_rect(&cp_x, NULL, &cp_w, NULL);

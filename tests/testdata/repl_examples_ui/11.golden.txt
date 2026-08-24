@@ -87,19 +87,8 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
---- display_header ---
-void display(void) {
-  glLoadIdentity();
-  glPushAttrib(GL_ALL_ATTRIB_BITS);
---- lights_pre_camera ---
---- camera ---
-  glTranslatef(0.0000f, 0.0000f, -3.5000f);   // @camera dist
-  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-1.0000f, -0.5000f, -0.0000f);   // @camera pan
---- header_post ---
   float A[16], B[16], C[16];
---- source ---
+--- source_prologue ---
 // Quadratic Bezier control points A=(ax,ay), B=(bx,by), C=(cx,cy).
 // ax/ay/cy are intentionally left at their implicit 0 -> A=(0,0), C=(2,0).
 static float ax, ay, bx = 1, by = 1, cx = 2, cy;
@@ -113,6 +102,18 @@ bezier(u) {
   x = pow(1-u, 2) * ax + 2 * (1-u)*u * bx + u*u * cx;
   y = pow(1-u, 2) * ay + 2 * (1-u)*u * by + u*u * cy;
 }
+--- display_header ---
+void display(void) {
+  glLoadIdentity();
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+--- lights_pre_camera ---
+--- camera ---
+  glTranslatef(0.0000f, 0.0000f, -3.5000f);   // @camera dist
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-1.0000f, -0.5000f, -0.0000f);   // @camera pan
+--- header_post ---
+--- source ---
 
   // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);

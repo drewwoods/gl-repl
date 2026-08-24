@@ -103,6 +103,19 @@ static GLfloat *repl_glfloat16(GLfloat m0, GLfloat m1, GLfloat m2, GLfloat m3,
   repl_glfloat16_buf[14] = m14; repl_glfloat16_buf[15] = m15;
   return repl_glfloat16_buf;
 }
+  float A[16], B[16], C[16];
+--- source_prologue ---
+static float lx, ly, lz; // orbiting lamp position, read by the matrix and the marker
+
+// The caster, drawn twice: once squashed by the shadow matrix, once for
+// real. One definition means the two can never drift apart.
+caster() {
+  glPushMatrix();
+    glTranslatef(0, 1.05, 0);
+    glRotatef(26*t, 0, 1, 0);
+    glutSolidTeapot(0.62);
+  glPopMatrix();
+}
 --- display_header ---
 void display(void) {
   glLoadIdentity();
@@ -116,19 +129,7 @@ void display(void) {
   glRotatef(-28.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -1.1500f, -0.0000f);   // @camera pan
 --- header_post ---
-  float A[16], B[16], C[16];
 --- source ---
-static float lx, ly, lz; // orbiting lamp position, read by the matrix and the marker
-
-// The caster, drawn twice: once squashed by the shadow matrix, once for
-// real. One definition means the two can never drift apart.
-caster() {
-  glPushMatrix();
-    glTranslatef(0, 1.05, 0);
-    glRotatef(26*t, 0, 1, 0);
-    glutSolidTeapot(0.62);
-  glPopMatrix();
-}
 
   // Translate, rotate and scale cannot flatten a solid onto a plane -- that
   // takes a matrix of their own. glMultMatrixf posts one onto the modelview

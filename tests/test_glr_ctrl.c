@@ -3596,9 +3596,13 @@ static void test_gl_state_popup_source_line_tracks_gutter(void) {
         }
     }
     ASSERT_TRUE("the cited row resolved a gutter label", focused_label > 0);
-    /* Focus on: chrome hidden, so the gutter is the 1-based document line. */
-    ASSERT_INT("focused gutter label is the document line",
-               focused_label, enable_line + 1);
+    /* Focus on: the derived-C chrome is hidden except the one row that
+     * frames the body - `display() {` - so the gutter is the 1-based
+     * document line shifted by that single row. (There is no blank spacer
+     * above it here: this document has no file-scope prologue, so the
+     * boundary is row 0.) */
+    ASSERT_INT("focused gutter label clears the display() frame row",
+               focused_label, enable_line + 2);
     focused_right = gl_state_popup_rightmost_hit_x(&view);
 
     /* Focus off: the derived-C boilerplate is emitted above the program, so

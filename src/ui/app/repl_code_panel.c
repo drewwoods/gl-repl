@@ -208,6 +208,11 @@ static int repl_code_panel_chrome_visible(const UiRenderSnapshot *snap) {
     return !(snap && snap->code_panel.code_focus);
 }
 
+/* FILE-SCOPE chrome: everything that precedes the first document row -
+ * workspace header, includes, the GL vector helpers, and the scratch
+ * decoration line. The declarations and function definitions the document
+ * opens with render after this and still ABOVE `void display(void) {`,
+ * which is spliced in later at the display-body boundary. */
 static int repl_code_panel_header_row_count(const UiRenderSnapshot *snap,
                                             int panel_w, int text_x) {
     if (!repl_code_panel_chrome_visible(snap))
@@ -228,7 +233,52 @@ static int repl_code_panel_header_row_count(const UiRenderSnapshot *snap,
     for (int i = 0; i < snap->gl_vector_helper_line_count; i++)
         rows += repl_code_panel_row_count(
             snap, snap->gl_vector_helper_lines[i], text_x, panel_w);
-    for (int i = 0; g_display_header[i]; i++)
+    rows += repl_code_panel_row_count(snap, REPL_CODE_PANEL_SCRATCH_DECL_LINE,
+                                      text_x, panel_w);
+    return rows;
+}
+
+/* Focus mode drops the C return type and parameter list from the display()
+ * opener: what frames the user's code is the name and the brace. */
+static const char *repl_code_panel_display_open_line(
+        const UiRenderSnapshot *snap) {
+    return repl_code_panel_chrome_visible(snap)
+               ? g_display_header[0]
+               : REPL_EXPORT_DISPLAY_OPEN_FOCUS_LINE;
+}
+
+/* Whether a blank row separates the file-scope prologue from the frame.
+ * There is a prologue exactly when the boundary is past row 0. */
+static int repl_code_panel_display_open_spacer(const UiRenderSnapshot *snap) {
+    return snap && snap->display_body_start > 0;
+}
+
+/* DISPLAY-OPEN chrome, spliced at the display-body boundary: the
+ * `void display(void) {` line plus the generated setup that runs before
+ * the user's first body row.
+ *
+ * g_display_header[0] is the frame and is drawn unconditionally - code
+ * focus hides what is INSIDE display(), never the line that says the body
+ * is inside it. Everything after it is ordinary chrome. */
+static int repl_code_panel_display_open_row_count(const UiRenderSnapshot *snap,
+                                                  int panel_w, int text_x) {
+    ReplImportExportView import_export = snap->import_export;
+    int rows = 0;
+
+    /* Blank spacer between the file-scope prologue and the frame, so the
+     * last function's `}` does not butt up against `display() {`. Only
+     * when there IS a prologue - a document that opens straight into body
+     * code has nothing to separate from. */
+    if (repl_code_panel_display_open_spacer(snap))
+        rows += repl_code_panel_row_count(snap, "", text_x, panel_w);
+
+    rows += repl_code_panel_row_count(
+        snap, repl_code_panel_display_open_line(snap), text_x, panel_w);
+
+    if (!repl_code_panel_chrome_visible(snap))
+        return rows;
+
+    for (int i = 1; g_display_header[i]; i++)
         rows += repl_code_panel_row_count(snap, g_display_header[i], text_x, panel_w);
     for (int i = 0; i < snap->lights_pre_camera_count; i++)
         rows += repl_code_panel_row_count(
@@ -240,16 +290,29 @@ static int repl_code_panel_header_row_count(const UiRenderSnapshot *snap,
             rows += repl_code_panel_row_count(snap,
                                               import_export.cam_lines[i],
                                               text_x, panel_w);
-    {
-        for (int i = 0; i < snap->lights_display_count; i++) {
-            rows += repl_code_panel_row_count(snap, snap->lights_display_lines[i], text_x, panel_w);
-        }
-    }
+    for (int i = 0; i < snap->lights_display_count; i++)
+        rows += repl_code_panel_row_count(snap, snap->lights_display_lines[i],
+                                          text_x, panel_w);
     for (int i = 0; g_header_post[i]; i++)
         rows += repl_code_panel_row_count(snap, g_header_post[i], text_x, panel_w);
-    rows += repl_code_panel_row_count(snap, REPL_CODE_PANEL_SCRATCH_DECL_LINE,
-                                      text_x, panel_w);
     return rows;
+}
+
+/* DISPLAY-CLOSE chrome, emitted after the trailing document row. The
+ * closing `}` is the other half of the frame and is drawn unconditionally;
+ * glPopAttrib/glutSwapBuffers above it are chrome. */
+static int repl_code_panel_display_close_row_count(const UiRenderSnapshot *snap,
+                                                   int panel_w, int text_x) {
+    int rows = 0;
+
+    if (repl_code_panel_chrome_visible(snap)) {
+        for (int i = 0; g_display_footer[i]; i++)
+            rows += repl_code_panel_row_count(snap, g_display_footer[i],
+                                              text_x, panel_w);
+        return rows;
+    }
+    return repl_code_panel_row_count(snap, REPL_EXPORT_DISPLAY_CLOSE_LINE,
+                                     text_x, panel_w);
 }
 
 static int repl_code_panel_footer_row_count(const UiRenderSnapshot *snap,
@@ -398,9 +461,21 @@ static int repl_code_panel_trailing_row_count(const UiRenderSnapshot *snap,
     return 1;
 }
 
+/* Rows drawn before document command `cmd_limit`: the file-scope chrome,
+ * every earlier command's rows, and - once cmd_limit has reached the
+ * display-body boundary - the spliced display-open chrome. */
+static int repl_code_panel_rows_before_cmd_in_layout(
+        const UiReplCodePanelLayout *layout, int cmd_limit) {
+    return layout->header_rows +
+           repl_code_panel_rows_before_cmd(layout->cmd_main_rows,
+                                           layout->replay_extra_rows,
+                                           cmd_limit) +
+           (cmd_limit >= layout->display_open_at ? layout->display_open_rows : 0);
+}
+
 static int repl_code_panel_cursor_doc_line_from_layout(
     const UiRenderSnapshot *snap,
-    int header_rows, const int *cmd_main_rows, const int *replay_extra_rows,
+    const UiReplCodePanelLayout *layout,
     int panel_w, int text_x) {
     /* The three former branches (insert mode / in-range edit line /
      * out-of-range fallback) all summed the same prefix and then added
@@ -412,9 +487,7 @@ static int repl_code_panel_cursor_doc_line_from_layout(
     int prefix = (snap->edit_line < snap->document_count)
                      ? snap->edit_line : snap->document_count;
 
-    return header_rows +
-           repl_code_panel_rows_before_cmd(cmd_main_rows, replay_extra_rows,
-                                           prefix) +
+    return repl_code_panel_rows_before_cmd_in_layout(layout, prefix) +
            repl_code_panel_cursor_row(snap,
                                       snap->editor_input.input,
                                       repl_code_panel_input_first_x(snap, text_x),
@@ -425,19 +498,16 @@ static int repl_code_panel_cursor_doc_line_from_layout(
 
 static int repl_code_panel_follow_doc_line_from_layout(
     const UiRenderSnapshot *snap,
-    int cursor_doc_line, int header_rows, const int *cmd_main_rows,
-    const int *replay_extra_rows) {
+    int cursor_doc_line, const UiReplCodePanelLayout *layout) {
     int src_line = snap->replay.src_line_idx;
 
     if (!(snap->replay.active &&
           src_line >= 0 && src_line < snap->document_count))
         return cursor_doc_line;
 
-    return header_rows +
-           repl_code_panel_rows_before_cmd(cmd_main_rows, replay_extra_rows,
-                                           src_line) +
-           repl_code_panel_last_row_offset_for_cmd(cmd_main_rows,
-                                                   replay_extra_rows,
+    return repl_code_panel_rows_before_cmd_in_layout(layout, src_line) +
+           repl_code_panel_last_row_offset_for_cmd(layout->cmd_main_rows,
+                                                   layout->replay_extra_rows,
                                                    src_line);
 }
 
@@ -462,11 +532,23 @@ void ui_repl_code_panel_build_layout(const UiRenderSnapshot *snap,
         cp_h, ui_scene_tabs_band_h(snap));
     layout->header_rows = repl_code_panel_header_row_count(snap, panel_w, text_x);
     layout->footer_rows = repl_code_panel_footer_row_count(snap, panel_w, text_x);
+    layout->display_open_rows =
+        repl_code_panel_display_open_row_count(snap, panel_w, text_x);
+    layout->display_close_rows =
+        repl_code_panel_display_close_row_count(snap, panel_w, text_x);
+    /* Clamped: a boundary past the last command means the whole body is
+     * empty, and the splice lands on the trailing row instead. */
+    layout->display_open_at = snap->display_body_start;
+    if (layout->display_open_at < 0)
+        layout->display_open_at = 0;
+    if (layout->display_open_at > snap->document_count)
+        layout->display_open_at = snap->document_count;
     repl_code_panel_precompute_layout_rows(snap, panel_w, text_x,
                                            layout->cmd_main_rows,
                                            layout->replay_extra_rows);
 
     total_lines = layout->header_rows + layout->footer_rows +
+                  layout->display_open_rows + layout->display_close_rows +
                   repl_code_panel_trailing_row_count(snap, panel_w, text_x);
     for (int i = 0; i < snap->document_count; i++) {
         if (snap->editor_input.insert_mode && i == snap->edit_line)
@@ -477,13 +559,27 @@ void ui_repl_code_panel_build_layout(const UiRenderSnapshot *snap,
     layout->total_lines = total_lines;
 
     layout->cursor_doc_line = repl_code_panel_cursor_doc_line_from_layout(
-        snap,
-        layout->header_rows, layout->cmd_main_rows, layout->replay_extra_rows,
-        panel_w, text_x);
+        snap, layout, panel_w, text_x);
     layout->follow_doc_line = repl_code_panel_follow_doc_line_from_layout(
-        snap,
-        layout->cursor_doc_line, layout->header_rows, layout->cmd_main_rows,
-        layout->replay_extra_rows);
+        snap, layout->cursor_doc_line, layout);
+}
+
+int ui_repl_code_panel_display_open_row(const UiReplCodePanelLayout *layout) {
+    if (!layout)
+        return 0;
+    /* rows_before_cmd() at the boundary would already include the spliced
+     * chrome; the frame starts just before it. */
+    return layout->header_rows +
+           repl_code_panel_rows_before_cmd(layout->cmd_main_rows,
+                                           layout->replay_extra_rows,
+                                           layout->display_open_at);
+}
+
+int ui_repl_code_panel_rows_before_cmd(const UiReplCodePanelLayout *layout,
+                                       int cmd_idx) {
+    if (!layout || cmd_idx < 0)
+        return 0;
+    return repl_code_panel_rows_before_cmd_in_layout(layout, cmd_idx);
 }
 
 int ui_repl_code_panel_target_for_doc_line(const UiRenderSnapshot *snap,
@@ -502,9 +598,19 @@ int ui_repl_code_panel_target_for_doc_line(const UiRenderSnapshot *snap,
         return 0;
 
     /* Consume rows in the same order the panel emits them after the
-     * header chrome: optional insert row, command body rows, replay
-     * virtual rows, then the trailing newline/input slot. */
+     * file-scope chrome: the spliced display-open chrome once the
+     * boundary is reached, then optional insert row, command body rows,
+     * replay virtual rows, then the trailing newline/input slot.
+     *
+     * The splice is consumed BEFORE the insert row, which is what makes
+     * the ghost at the boundary read as "insert a body row here". */
     for (int cmd_idx = 0; cmd_idx <= snap->document_count; cmd_idx++) {
+        if (cmd_idx == layout->display_open_at) {
+            if (row < layout->display_open_rows)
+                return 0;   /* generated chrome: not a document target */
+            row -= layout->display_open_rows;
+        }
+
         if (snap->editor_input.insert_mode && cmd_idx == snap->edit_line) {
             int insert_rows = repl_code_panel_insert_rows(snap, layout->panel_w,
                                                           layout->text_x);
@@ -2394,9 +2500,35 @@ static void repl_code_panel_add_header_rows(ReplCodePanelBuilder *builder) {
         snap->gl_vector_helper_line_count,
         sizeof(snap->gl_vector_helper_lines[0]),
         snap->gl_vector_helper_lines);
-    repl_code_panel_add_static_null_terminated_lines(
-        builder, g_display_header);
 
+    /* Scratch decoration row: panel-only (the exporter emits the arrays as
+     * file-scope statics on demand instead). It decorates the global
+     * declarations, which now sit above display() themselves, so it
+     * belongs with the file-scope chrome rather than below the frame. */
+    repl_code_panel_add_static_row(
+        builder, REPL_CODE_PANEL_SCRATCH_DECL_LINE);
+}
+
+/* Emitted at the display-body boundary - see
+ * repl_code_panel_display_open_row_count for what is frame and what is
+ * chrome. Must stay in lockstep with that counter. */
+static void repl_code_panel_add_display_open_rows(
+    ReplCodePanelBuilder *builder) {
+    const UiRenderSnapshot *snap;
+
+    if (!builder || !builder->snap)
+        return;
+    snap = builder->snap;
+
+    if (repl_code_panel_display_open_spacer(snap))
+        repl_code_panel_add_static_row(builder, "");
+    repl_code_panel_add_static_row(builder,
+                                   repl_code_panel_display_open_line(snap));
+    if (!repl_code_panel_chrome_visible(snap))
+        return;
+
+    for (int i = 1; g_display_header[i]; i++)
+        repl_code_panel_add_static_row(builder, g_display_header[i]);
     repl_code_panel_add_static_buffer_lines(
         builder,
         snap->lights_pre_camera_count,
@@ -2414,12 +2546,22 @@ static void repl_code_panel_add_header_rows(ReplCodePanelBuilder *builder) {
         snap->lights_display_lines);
     repl_code_panel_add_static_null_terminated_lines(
         builder, g_header_post);
+}
 
-    /* Scratch decoration row: panel-only (the exporter emits the arrays as
-     * file-scope statics on demand instead). Keep it adjacent to the user
-     * source so its role is clear. */
-    repl_code_panel_add_static_row(
-        builder, REPL_CODE_PANEL_SCRATCH_DECL_LINE);
+/* Emitted after the trailing document row. Mirrors
+ * repl_code_panel_display_close_row_count. */
+static void repl_code_panel_add_display_close_rows(
+    ReplCodePanelBuilder *builder) {
+    if (!builder || !builder->snap)
+        return;
+
+    if (!repl_code_panel_chrome_visible(builder->snap)) {
+        repl_code_panel_add_static_row(builder,
+                                       REPL_EXPORT_DISPLAY_CLOSE_LINE);
+        return;
+    }
+    repl_code_panel_add_static_null_terminated_lines(builder,
+                                                     g_display_footer);
 }
 
 static void repl_code_panel_add_footer_rows(ReplCodePanelBuilder *builder) {
@@ -2617,10 +2759,28 @@ static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
 
     repl_code_panel_add_header_rows(builder);
 
-    for (int i = 0; i < snap->document_count; i++)
-        repl_code_panel_add_rows_for_line(builder, &walk, i);
+    {
+        int at = snap->display_body_start;
+        if (at < 0) at = 0;
+        if (at > snap->document_count) at = snap->document_count;
+
+        for (int i = 0; i < snap->document_count; i++) {
+            /* Before add_rows_for_line, so the insert ghost at the
+             * boundary draws INSIDE display() - it reads as "insert a
+             * body row here". */
+            if (i == at)
+                repl_code_panel_add_display_open_rows(builder);
+            repl_code_panel_add_rows_for_line(builder, &walk, i);
+        }
+        /* A declarations-and-functions-only document: the whole body is
+         * empty, so the frame opens after the last command and before the
+         * trailing input/placeholder row. */
+        if (at >= snap->document_count)
+            repl_code_panel_add_display_open_rows(builder);
+    }
 
     repl_code_panel_add_trailing_document_row(builder);
+    repl_code_panel_add_display_close_rows(builder);
     repl_code_panel_add_footer_rows(builder);
 
     builder->text_snap.row_count = builder->row_count;

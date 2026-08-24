@@ -87,19 +87,8 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
   repl_glfloat4_buf[3] = d;
   return repl_glfloat4_buf;
 }
---- display_header ---
-void display(void) {
-  glLoadIdentity();
-  glPushAttrib(GL_ALL_ATTRIB_BITS);
---- lights_pre_camera ---
---- camera ---
-  glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
-  glRotatef(5.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(32.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -0.9000f, -0.5000f);   // @camera pan
---- header_post ---
   float A[16], B[16], C[16];
---- source ---
+--- source_prologue ---
 static float bladeCount = 135; // @tune
 static float field = 3.65; // half-width @tune
 static float x, z, h, w, angle, phase, flex;
@@ -129,6 +118,18 @@ blade(seed, x0, z0, height, width, ang, ph, stiffness) {
     }
   glEnd();
 }
+--- display_header ---
+void display(void) {
+  glLoadIdentity();
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+--- lights_pre_camera ---
+--- camera ---
+  glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
+  glRotatef(5.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(32.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.9000f, -0.5000f);   // @camera pan
+--- header_post ---
+--- source ---
 
   // --- Render State -------------------
   glClearColor(0.025, 0.055, 0.035, 1);
