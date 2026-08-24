@@ -14,9 +14,11 @@ GL_COLOR_BUFFER_BIT before every glyph-batch draw -- so each run of
 glutBitmapString text after other geometry stalled the pipeline.
 
 Mirror the missing values client-side. Clear color / line width /
-generate-mipmap hint are captured in their setters; GL_DEPTH_CLEAR_VALUE
-is served from glstate->depth.clear (the live setter is depth.c —
-wrap/gles.c's glClearDepthf is skip_glClearDepthf and never runs).
+generate-mipmap hint are captured in their setters (including the
+fixed-point glClearColorx / glClearDepthx paths). GL_DEPTH_CLEAR_VALUE
+is served from glstate->depth.clear (the live float setter is depth.c —
+wrap/gles.c's glClearDepthf is skip_glClearDepthf and never runs;
+glClearDepthx is not skipped and writes depth.clear itself).
 Viewport and scissor use tracked state once glViewport/glScissor has
 run (or an init query filled them), including a legal zero-size box —
 width==0 is not a "never set" sentinel. Scalar pnames go through
@@ -279,7 +281,21 @@ index c647cee4..842bdd6f 100644
      gles_glClearColor(red, green, blue, alpha);
  }
  AliasExport(void,glClearColor,,(GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha));
-@@ -242,6 +249,10 @@ void APIENTRY_GL4ES gl4es_glClearDepthf(GLclampf depth) {
+@@ -238,6 +245,13 @@ void APIENTRY_GL4ES gl4es_glClearColorx(GLclampx red, GLclampx green, GLclampx blue, GLclampx alpha) {
+ #ifndef direct_glClearColorx
+     PUSH_IF_COMPILING(glClearColorx)
+ #endif
++    {
++        extern GLfloat gl4es_mirror_clear_color[4];
++        gl4es_mirror_clear_color[0] = (GLfloat)red / 65536.0f;
++        gl4es_mirror_clear_color[1] = (GLfloat)green / 65536.0f;
++        gl4es_mirror_clear_color[2] = (GLfloat)blue / 65536.0f;
++        gl4es_mirror_clear_color[3] = (GLfloat)alpha / 65536.0f;
++    }
+     gles_glClearColorx(red, green, blue, alpha);
+ }
+ AliasExport(void,glClearColorx,,(GLclampx red, GLclampx green, GLclampx blue, GLclampx alpha));
+@@ -242,6 +257,10 @@ void APIENTRY_GL4ES gl4es_glClearDepthf(GLclampf depth) {
  #ifndef direct_glClearDepthf
      PUSH_IF_COMPILING(glClearDepthf)
  #endif
@@ -290,7 +306,24 @@ index c647cee4..842bdd6f 100644
      gles_glClearDepthf(depth);
  }
  AliasExport(void,glClearDepthf,,(GLclampf depth));
-@@ -1392,6 +1403,10 @@ void APIENTRY_GL4ES gl4es_glLineWidth(GLfloat width) {
+@@ -261,6 +275,16 @@ void APIENTRY_GL4ES gl4es_glClearDepthx(GLclampx depth) {
+ #ifndef direct_glClearDepthx
+     PUSH_IF_COMPILING(glClearDepthx)
+ #endif
++    {
++        GLfloat fdepth = (GLfloat)depth / 65536.0f;
++        if(fdepth < 0.f) fdepth = 0.f;
++        else if(fdepth > 1.f) fdepth = 1.f;
++        glstate->depth.clear = fdepth;
++        {
++            extern GLfloat gl4es_mirror_clear_depth;
++            gl4es_mirror_clear_depth = fdepth;
++        }
++    }
+     gles_glClearDepthx(depth);
+ }
+ AliasExport(void,glClearDepthx,,(GLclampx depth));
+@@ -1392,6 +1422,10 @@ void APIENTRY_GL4ES gl4es_glLineWidth(GLfloat width) {
  #ifndef direct_glLineWidth
      PUSH_IF_COMPILING(glLineWidth)
  #endif

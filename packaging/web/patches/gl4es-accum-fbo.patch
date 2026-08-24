@@ -10,6 +10,10 @@ disables accum on web entirely. This patch makes the emulation real and
 reports GL_ACCUM_*_BITS from the getter, so the same detection
 self-heals and re-enables the effects in the browser.
 
+GL_COLOR_BUFFER_BIT / glPopAttrib restore blend factors but not the
+blend equation, so immediate GL_ACCUM saves the live equation and
+restores it after PopAttrib (FUNC_ADD is forced only for the add).
+
 The translation is the textbook accumulate-in-a-texture pattern:
 glClear(GL_ACCUM_BUFFER_BIT) clears an internal FBO (hooked in
 gl4es_glClear before the mask strips the bit); GL_ACCUM copies the read
@@ -89,7 +93,7 @@ new file mode 100644
 index 00000000..6f493cb5
 --- /dev/null
 +++ b/src/gl/accum.c
-@@ -0,0 +1,694 @@
+@@ -0,0 +1,710 @@
 +/* Accumulation buffer emulated with an internal FBO.
 + *
 + * Desktop GL's accumulation buffer does not exist on GLES/WebGL, so
@@ -269,6 +273,19 @@ index 00000000..6f493cb5
 +    bindBuffer(GL_ARRAY_BUFFER, saved_array);
 +    memcpy(glstate->gleshard, saved, sizeof(*saved));
 +    accum_restore_tmu(saved->active);
++}
++
++// COLOR_BUFFER_BIT saves blend factors, not the blend equation. Immediate
++// GL_ACCUM forces FUNC_ADD through the state-aware wrapper; restore after
++// PopAttrib or a prior FUNC_SUBTRACT leaks.
++static void accum_restore_blend_equation(GLenum eqrgb, GLenum eqalpha)
++{
++    if(!eqrgb) eqrgb = GL_FUNC_ADD;
++    if(!eqalpha) eqalpha = GL_FUNC_ADD;
++    if(eqrgb==eqalpha)
++        gl4es_glBlendEquation(eqrgb);
++    else
++        gl4es_glBlendEquationSeparate(eqrgb, eqalpha);
 +}
 +
 +// one-time renderability test: can we create a small texture of this
@@ -737,6 +754,8 @@ index 00000000..6f493cb5
 +    realize_textures(1);
 +
 +    gl4es_glPushAttrib(GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT);
++    GLenum saved_eqrgb = glstate->blendeqrgb;
++    GLenum saved_eqalpha = glstate->blendeqalpha;
 +    GLint depthwrite = glstate->depth.mask;
 +    if(depthwrite)
 +        gl4es_glDepthMask(GL_FALSE);
@@ -781,6 +800,7 @@ index 00000000..6f493cb5
 +    if(depthwrite)
 +        gl4es_glDepthMask(GL_TRUE);
 +    gl4es_glPopAttrib();
++    accum_restore_blend_equation(saved_eqrgb, saved_eqalpha);
 +    noerrorShim();
 +}
 +AliasExport(void,glAccum,,(GLenum op, GLfloat value));

@@ -335,17 +335,21 @@ the patch that owns the code:
 - Getters: `GL_DEPTH_CLEAR_VALUE` from `glstate->depth.clear`; scalars in
   `gl4es_commonGet`; viewport/scissor/clear-color in all three typed getters;
   a `viewport_known` / `scissor_known` flag so width 0 is not "unset".
+  `glClearColorx` / `glClearDepthx` update the same client-side mirrors
+  (and `glstate->depth.clear`) as their float setters.
 - `GL_LIGHTING_BIT` saves/restores the `GL_COLOR_MATERIAL` enable.
 - Accum: probe a blended draw before keeping RGBA16F; immediate `GL_ACCUM`
   forces `GL_FUNC_ADD`; `GL_ACCUM_CLEAR_VALUE`; `DeleteGLState` frees GL
   objects; reduce-shader failure is sticky. The format probe restores
   driver blend enable/func/equation, the ARRAY_BUFFER bind, and the
   tracked `gleshard` program/attribs after the raw GLES draw, so later
-  state-aware `glBlendFunc` calls cannot keep `GL_ONE,GL_ONE`. The
-  `accum-probe-state` case in `bench/bench_render.c` is the state-hygiene
-  regression oracle: it queries `GL_ACCUM_RED_BITS` while alpha blending
-  is live, then checks that a translucent draw still uses the caller's
-  enable and factors.
+  state-aware `glBlendFunc` calls cannot keep `GL_ONE,GL_ONE`. Immediate
+  `GL_ACCUM` still forces `GL_FUNC_ADD`; `GL_COLOR_BUFFER_BIT` does not
+  save the blend equation, so the pre-call equation is restored after
+  `glPopAttrib`. The `accum-probe-state` case in `bench/bench_render.c`
+  is the state-hygiene regression oracle: it queries `GL_ACCUM_RED_BITS`
+  while alpha blending is live, then checks that a translucent draw still
+  uses the caller's enable and factors.
 - `gl4es_probe_line_width_and_depth()` after a real context exists (first
   `glViewport` / offset draw / wide-line query), so Emscripten notest no
   longer leaves `depthbits` at the pre-window default forever.
