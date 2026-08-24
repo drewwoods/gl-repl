@@ -548,11 +548,48 @@ int glr_ctrl_router_handle_variable_panel_drag_release(int state) {
  * The coarse modifier (right-press) jumps ten frames. Shift-fine is
  * deliberately not honored: there is nothing finer than a frame to step to,
  * and a sub-frame `t` is a sampling concept (accum blur), not a transport one. */
+/* Can a frame step keep a running replay? The step dirties `t`, and the next
+ * frame's refresh boundary decides what that costs: an in-place rebake when
+ * every use of `t` is a baked value, a full reflatten when `t` is structural
+ * (loop bound / if condition / call arg - see ReplFlatProgramState's dep-mask
+ * docs). That is exactly the split that matters here, because replay's PC is
+ * an *index* into the flat stream:
+ *
+ *   rebake - same count, same indices, new argument values. The PC still names
+ *            the command it named, so the highlighted row and the drawn prefix
+ *            stay in step and the geometry so far re-animates.
+ *   full   - the stream is rebuilt under the PC. Nothing crashes (the frame
+ *            refreshes before replay_prepare_frame, which reclamps the PC to
+ *            the new count), but index N is now some other command, so the
+ *            replay silently starts lying about where it is.
+ *
+ * `rebake_ok` is the second half: without compiled programs on every has_vars
+ * command, a value change escalates to a full flatten regardless of the mask.
+ *
+ * This is the same structural-vs-value decision accum time-blur already leans
+ * on per sub-sample, which is why "most scenes survive it" is measured rather
+ * than hoped. */
+static int time_step_keeps_replay_pc_honest(void) {
+    int t_idx = repl_state_variables().time_var_idx;
+
+    if (t_idx < 0 || !repl_state_flat_program_rebake_ok())
+        return 0;
+    return (repl_state_flat_program_structural_dep_mask() &
+            ((ReplExprDepMask)1u << t_idx)) == 0;
+}
+
 static int route_variable_time_step_hit(const UiHit *hit, int coarse) {
     float frames = coarse ? GLR_ADJUST_COARSE_SCALE : 1.0f;
 
-    if (replay_active())
+    /* Step inside a replay when the program's topology does not move with `t`;
+     * end the replay first when it does. Fade trails are deliberately left
+     * frozen either way: their baseline predefs are captured once at
+     * replay_start, so the trail stays at the time it was drawn while the live
+     * pass moves - history, not a second animation. */
+    if (replay_active() && !time_step_keeps_replay_pc_honest()) {
         replay_stop();
+        repl_set_status("Replay stopped: t changes this scene's structure");
+    }
     repl_step_time((hit->item_idx > 0 ? 1.0f : -1.0f) *
                    frames * GLR_FRAME_DT_SECS);
     editor_request_redraw();

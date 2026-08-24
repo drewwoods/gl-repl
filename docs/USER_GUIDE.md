@@ -1018,6 +1018,18 @@ on a number and the find bar puts on the match count.
 Stepping is a transport control, not an edit: it moves the clock, leaves your
 source untouched, and does not enter the undo history.
 
+It also works **during a replay**, without ending it, for most scenes: stepping
+re-evaluates the program at the new `t`, and as long as that only changes baked
+values the replay's position still means what it meant, so the geometry drawn
+so far re-animates under the playhead. Fade trails stay at the time they were
+drawn - they are history, not a second animation.
+
+The exception is a scene where `t` changes the program's *shape* rather than
+its numbers - a `t`-dependent loop bound, `if` condition, or call argument.
+There the command list is rebuilt underneath the replay and its position would
+silently start pointing at something else, so the step ends the replay first
+and says so in the status bar.
+
 ---
 
 ## Camera & Views

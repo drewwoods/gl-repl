@@ -42,6 +42,18 @@ void replay_render_fade_batches(const ReplayFadePlan *plan) {
     int batch_count = plan->batch_count;
     if (batch_count <= 0) return;
 
+    /* Live predef/scratch values, put back after the last batch. Each batch
+     * swaps the baseline in (replay_render_restore_baseline above), and the
+     * controller's frame-level restore only runs at the very END of the frame
+     * - after the 2D overlay pass. Without this bracket the variable panel
+     * spends every faded replay frame displaying replay-start values instead
+     * of live ones, which is how it reported `t` unchanged while the frame
+     * stepper was in fact moving it. */
+    ReplPredefSnapshot live_predef;
+    float live_scratch[REPL_SCRATCH_ARRAY_COUNT][REPL_SCRATCH_ARRAY_LEN];
+    repl_eval_capture_predef_snapshot(&live_predef);
+    repl_eval_copy_scratch_arrays(live_scratch);
+
     prof_begin(PROF_RENDER3D_FADE);
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -95,6 +107,8 @@ void replay_render_fade_batches(const ReplayFadePlan *plan) {
 
     prof_begin(PROF_RENDER3D_FADE_BATCH_POST);
     glPopAttrib();
+    repl_eval_restore_predef_values_by_snapshot(&live_predef);
+    repl_eval_restore_scratch_arrays(live_scratch);
     prof_accum_end(PROF_RENDER3D_FADE_BATCH_POST);
 
     prof_accum_end(PROF_RENDER3D_FADE);

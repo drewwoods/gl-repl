@@ -387,6 +387,55 @@ static void test_replay_fade_skips_program_clear(void) {
 
     replay_stop();
 }
+
+/* Regression: the fade pass swaps the replay baseline into the live predef
+ * table for each batch, but the controller's frame-level restore does not run
+ * until the END of the frame - after the 2D overlay pass reads that table. So
+ * a value changed during replay (the variable panel's frame stepper, which is
+ * allowed to run mid-replay when `t` is not structural) was drawn as its
+ * replay-start value for as long as the replay lasted. The fade renderer now
+ * puts the live values back itself. */
+static void test_replay_fade_leaves_live_predefs_intact(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(t, 0, 0);");
+    editor_feed_line("glVertex3f(1, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
+    repl_flatten_commands(editor_state_edit_line());
+
+    int t_idx = repl_eval_find_predef_var_idx("t");
+    ASSERT_TRUE("fade predef test has t", t_idx >= 0);
+    repl_state_time_set(0.0f);
+    repl_eval_scratch_set(0, 0, 1.0f);
+
+    replay_start();                    /* captures the baseline: t = 0, A[0] = 1 */
+    int count = repl_state_flat_program_view().cmd_count;
+    replay_push_fade_batch(0, count);
+
+    /* Move both after the baseline, the way a mid-replay frame step does. */
+    repl_state_time_step(0.25f);
+    repl_eval_scratch_set(0, 0, 7.0f);
+
+    ReplayFadePlan plan;
+    memset(&plan, 0, sizeof(plan));
+    replay_copy_baseline_predef_snapshot(&plan.baseline_predef);
+    replay_copy_baseline_scratch_arrays(plan.baseline_scratch_arrays);
+    ReplayFadeBatchView fade_batches = replay_fade_batches_view();
+    plan.batch_count = 1;
+    plan.batches[0] = fade_batches.batches[0];
+    plan.batch_alpha[0] = 0.5f;
+    plan.active = 1;
+
+    replay_render_fade_batches(&plan);
+
+    ASSERT_TRUE("fade pass leaves the live t in place",
+                fabsf(g_predef_vars[t_idx].value - 0.25f) < 1e-6f);
+    ASSERT_TRUE("fade pass leaves live scratch in place",
+                fabsf(repl_state_variables().scratch_arrays[0][0] - 7.0f) < 1e-6f);
+
+    replay_stop();
+}
 #endif
 
 /* Regression: replay annotation simulation must apply the precomputed
@@ -2414,6 +2463,7 @@ int main(void) {
 #ifdef GL_STUBS
     test_replay_rendering();
     test_replay_fade_skips_program_clear();
+    test_replay_fade_leaves_live_predefs_intact();
 #endif
 
     printf("test_repl_replay: %d/%d passed\n", g_harness.passed, g_harness.run);
