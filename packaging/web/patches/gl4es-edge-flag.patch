@@ -148,7 +148,7 @@ index b20bcff5..7a068848 100644
 +void APIENTRY_GL4ES gl4es_glEdgeFlag(GLboolean flag) {
 +    flag = flag ? GL_TRUE : GL_FALSE;
 +    if (glstate->list.active) {
-+        rlEdgeFlag(glstate->list.active, (GLubyte)flag);
++        glstate->list.active->lastEdgeFlag = (GLubyte)flag;
 +        noerrorShimNoPurge();
 +    } else {
 +        noerrorShim();
@@ -179,7 +179,7 @@ index b20bcff5..7a068848 100644
 +        if (called) {
 +            renderlist_t *tail = called;
 +            while (tail->next) tail = tail->next;
-+            rlEdgeFlag(glstate->list.active, tail->lastEdgeFlag);
++            glstate->list.active->lastEdgeFlag = tail->lastEdgeFlag;
 +            if (!glstate->list.compiling ||
 +                glstate->list.mode == GL_COMPILE_AND_EXECUTE)
 +                glstate->edgeflag = tail->lastEdgeFlag;
@@ -262,12 +262,11 @@ diff --git a/src/gl/list.c b/src/gl/list.c
 index 585629ab..16b9ce59 100644
 --- a/src/gl/list.c
 +++ b/src/gl/list.c
-@@ -30,6 +30,8 @@ renderlist_t *alloc_renderlist() {
+@@ -30,6 +30,7 @@ renderlist_t *alloc_renderlist() {
      memcpy(list->lastSecondaryColors, glstate->secondary, 3*sizeof(GLfloat));
      memcpy(list->lastColors, glstate->color, 4*sizeof(GLfloat));
      memcpy(&list->lastFogCoord, glstate->fogcoord, 1*sizeof(GLfloat));
 +    list->lastEdgeFlag = glstate->edgeflag;
-+    rlEdgeFlag(list, list->lastEdgeFlag);
  
      list->instanceCount = 1;
  
@@ -323,22 +322,20 @@ index 585629ab..16b9ce59 100644
      for (int i=0; i<a->maxtex; i++)
          if (a->tex[i]) memcpy(a->tex[i]+a->len*4, b->tex[i], b->len*4*sizeof(GLfloat));
      // indices
-@@ -628,6 +628,8 @@ renderlist_t *extend_renderlist(renderlist_t *list) {
+@@ -628,6 +628,7 @@ renderlist_t *extend_renderlist(renderlist_t *list) {
          memcpy(new->lastNormal, list->lastNormal, 3*sizeof(GLfloat));
          memcpy(new->lastSecondaryColors, list->lastSecondaryColors, 3*sizeof(GLfloat));
          memcpy(new->lastColors, list->lastColors, 4*sizeof(GLfloat));
          new->lastColorsSet = list->lastColorsSet;
 +        new->lastEdgeFlag = list->lastEdgeFlag;
-+        rlEdgeFlag(new, new->lastEdgeFlag);
          // detach
          list->prev = NULL;
-@@ -643,7 +645,9 @@ renderlist_t *extend_renderlist(renderlist_t *list) {
+@@ -643,7 +645,8 @@ renderlist_t *extend_renderlist(renderlist_t *list) {
          memcpy(new->lastNormal, list->lastNormal, 3*sizeof(GLfloat));
          memcpy(new->lastSecondaryColors, list->lastSecondaryColors, 3*sizeof(GLfloat));
          memcpy(new->lastColors, (list->post_color)?list->post_colors:list->lastColors, 4*sizeof(GLfloat));
          new->lastColorsSet = (list->post_color || list->lastColorsSet)?1:0;
 +        new->lastEdgeFlag = list->lastEdgeFlag;
-+        rlEdgeFlag(new, new->lastEdgeFlag);
          return new;
      }
  }

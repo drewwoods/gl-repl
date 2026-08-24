@@ -128,6 +128,11 @@ qstrip=1620/1624 qstripflag=1500/1504 pervertex=1280/1024
 fill=76800/76800 pushattrib=1/1 getter=1/1 merged=2170/2176
 ```
 
+The `fill-capacity` case also emits a 96-vertex `GL_TRIANGLES` FILL block
+with `glEdgeFlag(GL_FALSE)` set before `glBegin`, immediately after a merger
+batch has grown the shared capacity.  Its coverage must match the all-TRUE
+control block and it must leave `GL_NO_ERROR` set.
+
 Each of the quad's four and the triangle's three suppressions lands within a
 pixel of the calibrated edge it should remove. `gl4es-line-width` reproduces
 its documented pre-patch numbers exactly (`w1 20480 w1.5 32768 w3 61440
@@ -144,7 +149,8 @@ and the full mesh star differs by 4 px in ~1394 (rasterizer, not topology).
 
 `glEdgeFlag` needs no packed-call entry for display lists: a compiling list
 picks the flag up through its own `lastEdgeFlag`, and a freshly extended one
-through `glstate->edgeflag`, which `alloc_renderlist()` seeds from.
+copies the previous list's `lastEdgeFlag`.  The per-vertex array is materialized
+only when a vertex is emitted, after the list's merger capacity is known.
 `glEdgeFlagv` is promoted out of the stub table alongside it. `GL_CURRENT_BIT`
 now saves and restores the flag.
 

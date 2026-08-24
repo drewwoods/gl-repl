@@ -434,6 +434,52 @@ static void test_fill_mode_ignores_flags(void)
     report(" fill=%d/%d", all, one_off);
 }
 
+/* A merger batch grows glstate->merger_cap beyond the default list capacity.
+ * The next FILL list must size a pre-glBegin GL_FALSE edge array from that
+ * merger capacity, not from its still-small per-list cap. */
+static void emit_capacity_triangles(void)
+{
+    const int triangles = 32;
+
+    glBegin(GL_TRIANGLES);
+    for (int i = 0; i < triangles; ++i) {
+        float x = -0.9f + (float)(i % 8) * 0.24f;
+        float y = -0.8f + (float)(i / 8) * 0.45f;
+        glVertex3f(x,         y,         0.f);
+        glVertex3f(x + 0.18f, y,         0.f);
+        glVertex3f(x,         y + 0.35f, 0.f);
+    }
+    glEnd();
+}
+
+static void test_fill_prebegin_capacity(void)
+{
+    clear_scene();
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    emit_capacity_triangles();
+    while (glGetError() != GL_NO_ERROR)
+        ;
+
+    clear_scene();
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glEdgeFlag(GL_FALSE);
+    emit_capacity_triangles();
+    int error = glGetError();
+    int all_false = finish_coverage();
+
+    clear_scene();
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glEdgeFlag(GL_TRUE);
+    emit_capacity_triangles();
+    int all_true = finish_coverage();
+
+    if (error != GL_NO_ERROR)
+        fail("prebegin GL_FALSE FILL raised an error", error, GL_NO_ERROR);
+    if (all_false != all_true)
+        fail("GL_FILL capacity path changed coverage", all_false, all_true);
+    report(" fill-capacity=%d/%d", all_false, all_true);
+}
+
 /* glPushAttrib(GL_CURRENT_BIT) must save and restore the flag. */
 static void test_push_attrib_round_trip(void)
 {
@@ -542,6 +588,7 @@ static void display(void)
         test_quad_strip_boundary_edges();
         test_flag_is_per_vertex();
         test_fill_mode_ignores_flags();
+        test_fill_prebegin_capacity();
         test_push_attrib_round_trip();
         test_getter();
         test_merged_batches();
