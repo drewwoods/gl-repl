@@ -2418,6 +2418,47 @@ static void test_local_delete_guard_is_bounded_to_its_body(void) {
     ASSERT_INT("and emits no UNDECLARE", change.predef_op_count, 0);
 }
 
+/* Function parameters and loop iterators are exported as C declarations too,
+ * so the all-C-keywords reservation must cover these binders, not only float
+ * declarations. */
+static void test_c_keyword_binders_are_rejected(void) {
+    glr_ctrl_reset_all();
+
+    {
+        ReplCompileContext ctx =
+            repl_compile_context_from_live(editor_state_edit_line());
+        ReplFuncDefKernel kernel;
+        char err[REPL_STATUS_TEXT_MAX] = "";
+        ReplCompileResult result = repl_compile_func_def_kernel(
+            "func0(int) {", &ctx, -1, &kernel, err, sizeof(err));
+
+        ASSERT_INT("C keyword function parameter is rejected",
+                   result, REPL_COMPILE_ERROR);
+        ASSERT_TRUE("function parameter keyword diagnostic",
+                    strstr(err, "'int' is a C keyword") != NULL);
+        ASSERT_TRUE("function parameter keyword says parameter",
+                    strstr(err, "function parameter") != NULL);
+    }
+
+    glr_ctrl_reset_all();
+
+    {
+        ReplCompileContext ctx =
+            repl_compile_context_from_live(editor_state_edit_line());
+        ReplForLoopKernel kernel;
+        char err[REPL_STATUS_TEXT_MAX] = "";
+        ReplCompileResult result = repl_compile_for_loop_kernel(
+            "for(static, 0, 1) {", &ctx, &kernel, err, sizeof(err));
+
+        ASSERT_INT("C keyword loop iterator is rejected",
+                   result, REPL_COMPILE_ERROR);
+        ASSERT_TRUE("loop iterator keyword diagnostic",
+                    strstr(err, "'static' is a C keyword") != NULL);
+        ASSERT_TRUE("loop iterator keyword says loop variable",
+                    strstr(err, "loop variable") != NULL);
+    }
+}
+
 int main(void) {
     test_compile_float_decl_failure_is_pure();
     test_compile_float_decl_trailing_comment_no_semicolon();
@@ -2483,6 +2524,7 @@ int main(void) {
     test_func_def_header_keeps_a_registered_alias();
     test_block_comment_toggle_over_a_local_decl();
     test_local_delete_guard_is_bounded_to_its_body();
+    test_c_keyword_binders_are_rejected();
 
     /* [P1] regression: alias registration must roll back on parse
      * failure. Pre-fix, repl_compile_func_def called

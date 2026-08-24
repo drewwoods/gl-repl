@@ -305,6 +305,19 @@ static int compile_name_unavailable_err(char *err, int err_size,
     return 0;
 }
 
+/* Names that become C declarations in the exporter need one more guard than
+ * ordinary expression identifiers. Function parameters and loop iterators
+ * are binders rather than REPL variables, so they do not pass through the
+ * float-declaration validators above, but the exporter still writes them as
+ * `float <name>`. */
+static ReplCompileResult compile_validate_c_binder_name(
+        const char *name, const char *role, char *err, int err_size) {
+    if (repl_eval_is_c_keyword(name))
+        return compile_set_err(err, err_size,
+            "'%s' is a C keyword - it cannot name a %s", name, role);
+    return REPL_COMPILE_OK;
+}
+
 /* Source index of the innermost open CMD_FUNC_DEF at `pos`, or -1 at
  * document top level. Resolves *through* a nested for/if - a declaration
  * typed one level down still belongs to the owning function, which is what
@@ -3517,6 +3530,13 @@ ReplCompileResult repl_compile_func_def_kernel(const char *input,
         return REPL_COMPILE_OK;
     }
 
+    for (int param_idx = 0; param_idx < out->param_count; param_idx++) {
+        ReplCompileResult name_result = compile_validate_c_binder_name(
+            out->param_names[param_idx], "function parameter", err, err_size);
+        if (name_result != REPL_COMPILE_OK)
+            return name_result;
+    }
+
     /* Reject duplicate funcN definitions. The loader passes
      * allow_overwrite_at_pos = -1 to reject any duplicate; the editor
      * passes its edit_pos when it has detected an in-place rewrite so
@@ -3681,6 +3701,13 @@ ReplCompileResult repl_compile_for_loop_kernel(const char *input,
         snprintf(err, (size_t)err_size,
                  "for syntax: for(var, start, end[, step]) body;");
         return REPL_COMPILE_ERROR;
+    }
+
+    {
+        ReplCompileResult name_result = compile_validate_c_binder_name(
+            out->var_name, "loop variable", err, err_size);
+        if (name_result != REPL_COMPILE_OK)
+            return name_result;
     }
 
     /* Reverse binder guards, the loop-header twin of the func-def
