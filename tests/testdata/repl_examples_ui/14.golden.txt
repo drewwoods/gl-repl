@@ -100,36 +100,36 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  // Sierpinski carpet: cut the middle cell out of a 3x3 grid, then do the
-  // same to the 8 cells that remain. Each call owns one square; u is a
-  // 0..1 shade the children nudge so the tiles ramp MAGENTA -> AZURE.
-  carpet(depth, size, u) {
-    // Base case: fill this cell. The holes are simply cells nobody fills.
-    if(depth <= 0) {
-      glColor3f(0.95 - 0.8*u, 0.25 + 0.3*u, 1);
-      glBegin(GL_QUADS);
-        glNormal3f(0, 0, 1);
-        glVertex3f(-0.5*size, -0.5*size, 0);
-        glVertex3f(0.5*size, -0.5*size, 0);
-        glVertex3f(0.5*size, 0.5*size, 0);
-        glVertex3f(-0.5*size, 0.5*size, 0);
-      glEnd();
-    }
-    // Recursive case: walk the 3x3 grid -- loops are half-open, so
-    // -1..2 visits -1, 0, 1 -- and skip the center cell.
-    if(depth > 0) {
-      for(i, -1, 2) {
-        for(j, -1, 2) {
-          if(abs(i) + abs(j) > 0) {
-            glPushMatrix();
-              glTranslatef(i*size/3, j*size/3, 0);
-              carpet(depth - 1, size/3, u + (i + j)*0.12);
-            glPopMatrix();
-          }
+// Sierpinski carpet: cut the middle cell out of a 3x3 grid, then do the
+// same to the 8 cells that remain. Each call owns one square; u is a
+// 0..1 shade the children nudge so the tiles ramp MAGENTA -> AZURE.
+carpet(depth, size, u) {
+  // Base case: fill this cell. The holes are simply cells nobody fills.
+  if(depth <= 0) {
+    glColor3f(0.95 - 0.8*u, 0.25 + 0.3*u, 1);
+    glBegin(GL_QUADS);
+      glNormal3f(0, 0, 1);
+      glVertex3f(-0.5*size, -0.5*size, 0);
+      glVertex3f(0.5*size, -0.5*size, 0);
+      glVertex3f(0.5*size, 0.5*size, 0);
+      glVertex3f(-0.5*size, 0.5*size, 0);
+    glEnd();
+  }
+  // Recursive case: walk the 3x3 grid -- loops are half-open, so
+  // -1..2 visits -1, 0, 1 -- and skip the center cell.
+  if(depth > 0) {
+    for(i, -1, 2) {
+      for(j, -1, 2) {
+        if(abs(i) + abs(j) > 0) {
+          glPushMatrix();
+            glTranslatef(i*size/3, j*size/3, 0);
+            carpet(depth - 1, size/3, u + (i + j)*0.12);
+          glPopMatrix();
         }
       }
     }
   }
+}
 
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

@@ -1907,7 +1907,7 @@ int main(void) {
                                                                display, sizeof(display)));
         ASSERT_STR("local replay first assignment expansion",
                    display,
-                   "    local = seed + 1; // local = 3 + 1 = 4");
+                   "  local = seed + 1; // local = 3 + 1 = 4");
 
         replay_pc = 3;
         replay_src_line = 3;
@@ -1916,7 +1916,7 @@ int main(void) {
                                                                display, sizeof(display)));
         ASSERT_STR("local replay self assignment uses pre-write value",
                    display,
-                   "    local = local * 2; // local = 4 * 2 = 8");
+                   "  local = local * 2; // local = 4 * 2 = 8");
 
         /* Once replay advances past both writes, the earlier assignment
          * must remain associated with this invocation. Its local snapshot
@@ -1928,13 +1928,13 @@ int main(void) {
                                                                display, sizeof(display)));
         ASSERT_STR("local replay earlier assignment keeps invocation",
                    display,
-                   "    local = seed + 1; // local = 3 + 1 = 4");
+                   "  local = seed + 1; // local = 3 + 1 = 4");
         ASSERT_TRUE("local replay latest assignment remains expanded",
                     replay_code_panel_get_command_display_text(source_document_view(), 3,
                                                                display, sizeof(display)));
         ASSERT_STR("local replay latest assignment keeps invocation",
                    display,
-                   "    local = local * 2; // local = 4 * 2 = 8");
+                   "  local = local * 2; // local = 4 * 2 = 8");
 
         replay_pc = 6;
         replay_src_line = 4;
@@ -1943,13 +1943,13 @@ int main(void) {
                                                                display, sizeof(display)));
         ASSERT_STR("local replay later call uses its parameters",
                    display,
-                   "    local = seed + 1; // local = 7 + 1 = 8");
+                   "  local = seed + 1; // local = 7 + 1 = 8");
         ASSERT_TRUE("local replay later call self assignment remains expanded",
                     replay_code_panel_get_command_display_text(source_document_view(), 3,
                                                                display, sizeof(display)));
         ASSERT_STR("local replay later call uses its pre-write value",
                    display,
-                   "    local = local * 2; // local = 8 * 2 = 16");
+                   "  local = local * 2; // local = 8 * 2 = 16");
 
         replay_active = 0;
         replay_state = REPLAY_OFF;

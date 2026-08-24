@@ -109,47 +109,47 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float dd, blink, ink, ph, slit; // expanding-pulse distance; beacon blink; brightness multiplier on the base ink color; shutter-cycle phase; slit half-angle
-  static float dishAz; // dish azimuth, degrees -- see the note below
-  static float cycleLength = 30; // seconds per dome shutter cycle (open ~2/3 of it)
+static float dd, blink, ink, ph, slit; // expanding-pulse distance; beacon blink; brightness multiplier on the base ink color; shutter-cycle phase; slit half-angle
+static float dishAz; // dish azimuth, degrees -- see the note below
+static float cycleLength = 30; // seconds per dome shutter cycle (open ~2/3 of it)
 
-  // concrete pad a building stands on
-  pad(rad) {
-    glBegin(GL_TRIANGLE_FAN);
-      glNormal3f(0, 1, 0);
-      glVertex3f(0, 0.02, 0);
-      for(j, 0, 25) {
-        glVertex3f(rad*cos(j*TAU/24), 0.02, rad*sin(j*TAU/24));
-      }
-    glEnd();
-  }
+// concrete pad a building stands on
+pad(rad) {
+  glBegin(GL_TRIANGLE_FAN);
+    glNormal3f(0, 1, 0);
+    glVertex3f(0, 0.02, 0);
+    for(j, 0, 25) {
+      glVertex3f(rad*cos(j*TAU/24), 0.02, rad*sin(j*TAU/24));
+    }
+  glEnd();
+}
 
-  // cylinder wall between y0 and y1
-  drum(rad, y0, y1, segs) {
-    // ct/st are the wall direction at this segment: the normal IS the unit
-    // xz direction, and both rim vertices sit on it, so one cos/sin pair
-    // feeds all three lines instead of being retaken six times.
-    float th, ct, st;
-    glBegin(GL_QUAD_STRIP);
-      for(j, 0, segs + 1) {
-        th = j*TAU/segs;
-        ct = cos(th);
-        st = sin(th);
-        glNormal3f(ct, 0, st);
-        glVertex3f(rad*ct, y1, rad*st);
-        glVertex3f(rad*ct, y0, rad*st);
-      }
-    glEnd();
-  }
+// cylinder wall between y0 and y1
+drum(rad, y0, y1, segs) {
+  // ct/st are the wall direction at this segment: the normal IS the unit
+  // xz direction, and both rim vertices sit on it, so one cos/sin pair
+  // feeds all three lines instead of being retaken six times.
+  float th, ct, st;
+  glBegin(GL_QUAD_STRIP);
+    for(j, 0, segs + 1) {
+      th = j*TAU/segs;
+      ct = cos(th);
+      st = sin(th);
+      glNormal3f(ct, 0, st);
+      glVertex3f(rad*ct, y1, rad*st);
+      glVertex3f(rad*ct, y0, rad*st);
+    }
+  glEnd();
+}
 
-  // snow drift: a squashed mound
-  drift(x, z, s) {
-    glPushMatrix();
-      glTranslatef(x, 0, z);
-      glScalef(s*1.5, s*0.4, s);
-      glutSolidSphere(1, 12, 8);
-    glPopMatrix();
-  }
+// snow drift: a squashed mound
+drift(x, z, s) {
+  glPushMatrix();
+    glTranslatef(x, 0, z);
+    glScalef(s*1.5, s*0.4, s);
+    glutSolidSphere(1, 12, 8);
+  glPopMatrix();
+}
 
   // The dish is posed twice: once in the lit opaque pass and again in the
   // unlit glow pass that hangs the feed struts and pulses off it. Both read

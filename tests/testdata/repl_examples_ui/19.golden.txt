@@ -104,16 +104,16 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float size = 3; // surface width and depth @tune
-  static float steps = 15; // strips across the surface @tune
-  static float amplitude = 0.4; // wave height @tune
-  static float frequency = 2.5; // wave density @tune
-  static float z_phase = 0.7; // z waves animate more slowly @tune
-  static float step_size;
-  static float half;
-  static float x0, x1, z, y0, y1;
-  static float slope_x0, slope_x1, slope_z0, slope_z1;
-  static float color0, color1;
+static float size = 3; // surface width and depth @tune
+static float steps = 15; // strips across the surface @tune
+static float amplitude = 0.4; // wave height @tune
+static float frequency = 2.5; // wave density @tune
+static float z_phase = 0.7; // z waves animate more slowly @tune
+static float step_size;
+static float half;
+static float x0, x1, z, y0, y1;
+static float slope_x0, slope_x1, slope_z0, slope_z1;
+static float color0, color1;
 
 
   // The same animated surface, now lit with one analytic normal per vertex.

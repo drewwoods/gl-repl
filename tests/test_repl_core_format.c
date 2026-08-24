@@ -236,7 +236,7 @@ int main(void) {
         const char *buf0 = editor_buffer_line(0);
         ASSERT_TRUE("reformat decl keeps initializer text and comment",
                     buf0 && strcmp(buf0,
-                                   "  static float a = max(1, 2), b, c = abs(-3); // vars") == 0);
+                                   "static float a = max(1, 2), b, c = abs(-3); // vars") == 0);
     }
 
     glr_ctrl_reset_all();

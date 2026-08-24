@@ -191,6 +191,71 @@ static void reformat_replace_cmd(ReplCommandStore *store,
  * repl_parse_and_normalize with the line's visible loop/param vars. A
  * case that can't reconstruct the line leaves it untouched rather than
  * guessing. */
+/* Re-derive indentation after a structural edit moved the display-body
+ * boundary, without touching any other canonical text.
+ *
+ * A row's base indent is a whole-document property: 0 above the boundary
+ * (file-scope declarations and function definitions, which render above
+ * `void display(void) {`) and 2 below it. Nothing else about a row's
+ * indent depends on the boundary, so a row whose side changed shifts by
+ * exactly +/-2 and every other row is left alone. That makes this
+ * type-agnostic - no per-command dispatch, no re-canonicalization.
+ *
+ * This is deliberately NOT repl_reformat_program(): reformat rewrites
+ * canonical text, and doing that as a side effect of an unrelated edit
+ * has consequences. Comment toggling is the case in point - reformat
+ * trims a blank comment row's `// ` to `//`, and the uncomment pass then
+ * no longer recognizes its own prefix.
+ *
+ * `at_before` is the boundary as it stood before the edit; the current
+ * boundary is read from the live document. */
+void repl_reindent_after_boundary_move(int at_before) {
+    int count = repl_state_document_count();
+    int at_after = repl_source_scope_display_body_start();
+
+    if (at_before == at_after)
+        return;
+
+    for (int cmd_idx = 0; cmd_idx < count; cmd_idx++) {
+        const char *text;
+        int was_body, is_body, delta, lead, new_lead, rest_len;
+        char rebuilt[MAX_LINE_LEN];
+
+        if (!repl_state_document_cmds()[cmd_idx].valid)
+            continue;
+
+        was_body = cmd_idx >= at_before;
+        is_body  = cmd_idx >= at_after;
+        if (was_body == is_body)
+            continue;
+
+        delta = (is_body ? REPL_SOURCE_SCOPE_BODY_BASE_INDENT : 0)
+              - (was_body ? REPL_SOURCE_SCOPE_BODY_BASE_INDENT : 0);
+
+        text = source_text_line(source_document_view(), cmd_idx);
+        if (!text)
+            continue;
+
+        lead = 0;
+        while (text[lead] == ' ')
+            lead++;
+        new_lead = lead + delta;
+        if (new_lead < 0)
+            new_lead = 0;
+
+        rest_len = (int)strlen(text + lead);
+        if (new_lead + rest_len >= (int)sizeof(rebuilt))
+            continue;   /* would not fit: leave the row as it stands */
+
+        memset(rebuilt, ' ', (size_t)new_lead);
+        memcpy(rebuilt + new_lead, text + lead, (size_t)rest_len + 1);
+        source_document_replace_line(cmd_idx, rebuilt);
+    }
+
+    repl_source_scope_depth_cache_invalidate();
+    repl_state_mark_source_dirty();
+}
+
 void repl_reformat_program(void) {
     prof_begin(PROF_REFORMAT);
     ReplCommandStore store = repl_command_store_live();

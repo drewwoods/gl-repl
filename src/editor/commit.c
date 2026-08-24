@@ -644,14 +644,37 @@ ReplCompileResult editor_compile_func_def(const char *input,
                                     "too many leading comments (%d > %d); split or shorten",
                                     comment_count, MAX_COMMIT_CMDS - 2);
 
-    /* A func decl always lives at depth 0, so its indent is the
-     * depth-0 indent regardless of the (post-delete) insert position
-     * the kernel computed - query the source-scope helper at pos 0
-     * and re-format the header against that indent. The kernel's
+    /* Resolve the post-delete insert position first: it is both where the
+     * block lands and what decides the header's indent. */
+    int insert_pos = compile_function_decl_insert_pos_after_delete(
+        ctx, comment_start, comment_count);
+
+    /* A func def always lives at depth 0, so its indent is the base indent
+     * alone - 0 above the display-body boundary, 2 below it. The kernel's
      * fd / fd_text are built against `kernel.pos` (the current edit
-     * cursor), which can be nested for the relocation case. */
+     * cursor), which can be nested for the relocation case, so the header
+     * is re-formatted here.
+     *
+     * Compare `insert_pos` UNTRANSLATED against the boundary. It is in
+     * post-delete coordinates, which looks like it needs `delete_count`
+     * added back - it does not. The lifted comment run is not dropped: it
+     * rides with the function in the same INSERT_MANY below, so the
+     * post-delete `insert_pos` is exactly where the whole block lands, and
+     * that is the coordinate the prologue/body classification wants.
+     * Adding the count back moves a boundary-hugging definition to indent
+     * 2 above `display()`.
+     *
+     * The INSERT comparison, not the existing-row one: at the boundary the
+     * new definition EXTENDS the prologue. Both `at` and the comparison
+     * come from ctx->source_scope, the view bound to this document -
+     * reading a live `at` against a snapshot document is how they drift. */
     char indent[REPL_INDENT_TEXT_MAX];
-    repl_source_scope_cmd_indent(0, indent, sizeof(indent));
+    int header_base = repl_source_scope_view_base_indent_for_insert(
+        &ctx->source_scope, insert_pos);
+    if (header_base > (int)sizeof(indent) - 1)
+        header_base = (int)sizeof(indent) - 1;
+    memset(indent, ' ', (size_t)header_base);
+    indent[header_base] = '\0';
 
     GLCmd fd = kernel.fd;
 
@@ -669,10 +692,6 @@ ReplCompileResult editor_compile_func_def(const char *input,
 
     char fe_text[MAX_LINE_LEN];
     snprintf(fe_text, sizeof(fe_text), "%s}", indent);
-
-    /* Resolve the post-delete insert position. */
-    int insert_pos = compile_function_decl_insert_pos_after_delete(
-        ctx, comment_start, comment_count);
 
     /* Fill the change's cmds[] / text[] with comments + fd + fe.
      * Comment text comes from the source-text view; the cmds

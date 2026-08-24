@@ -38,6 +38,11 @@
  * the *_indent helpers below) lives in config.h so editor / UI code can
  * size their indent buffers without pulling in this header. */
 
+/* Base indent of a row that renders inside display(). Rows above the
+ * display-body boundary carry 0 instead - see
+ * repl_source_scope_view_base_indent. */
+#define REPL_SOURCE_SCOPE_BODY_BASE_INDENT 2
+
 typedef struct ReplSourceScopeView {
     const GLCmd *cmds;
     int count;
@@ -46,6 +51,12 @@ typedef struct ReplSourceScopeView {
     int begin_depth_prefix[MAX_EDITOR_COMMANDS + 1];
     int tess_depth_prefix[MAX_EDITOR_COMMANDS + 1];
     int matrix_depth_prefix[MAX_EDITOR_COMMANDS + 1];
+    /* First document row of the display() body - the boundary the code
+     * panel splices its `void display(void) {` chrome at, and the base
+     * indent switch. Computed once per bind (see
+     * repl_source_scope_view_display_body_start). Not a fifth prefix
+     * array: one index answers the whole question. */
+    int display_body_start;
 } ReplSourceScopeView;
 
 typedef struct {
@@ -83,6 +94,44 @@ void repl_source_scope_view_matrix_close_indent(const ReplSourceScopeView *view,
                                                 int pos, char *buf, int buf_sz);
 int  repl_source_scope_view_cmd_indent_chars(const ReplSourceScopeView *view,
                                              int pos);
+
+/* Index of the first display()-body row: everything before it is the
+ * file-scope prologue (global declarations and function definitions, plus
+ * the comment/blank runs that introduce them), which the code panel draws
+ * ABOVE `void display(void) {` at base indent 0.
+ *
+ * A comment/blank run belongs to the row it precedes - the same attachment
+ * rule glr_scene_write_phase() uses when it carries each row's leading run
+ * into that row's phase. A run is prologue only when its next non-comment
+ * row is a top-level declaration or a CLOSED depth-0 function definition;
+ * otherwise the run starts the body and the boundary lands on the run's
+ * first row, not on the executable row after it. Closed-block only because
+ * find_block_end() returns the document count for an unclosed block, and a
+ * naive boundary would swallow the whole document.
+ *
+ * Returns the document count for a declarations-and-functions-only
+ * document; that case puts the whole display-open chrome after the last
+ * command, so callers must apply the boundary to their trailing row too. */
+int  repl_source_scope_view_display_body_start(const ReplSourceScopeView *view);
+int  repl_source_scope_display_body_start(void);
+
+/* Base indent (0 or 2) for a row at `pos`: 0 above the display-body
+ * boundary, 2 inside it. The block/begin/tess/matrix levels are added on
+ * top by the indent helpers; this is only the leading term they used to
+ * spell as a literal 2.
+ *
+ * The two variants differ ONLY at the boundary itself, and the difference
+ * is load-bearing (reformat is not guaranteed to follow a commit):
+ *   _base_indent            - an EXISTING row: `pos < at`. At pos == at the
+ *                             row IS the first body row.
+ *   _base_indent_for_insert - a NOT-YET-INSERTED declaration or function
+ *                             definition: `pos <= at`. Equality means the
+ *                             insert EXTENDS the prologue, so the new row
+ *                             becomes prologue once inserted. */
+int  repl_source_scope_view_base_indent(const ReplSourceScopeView *view,
+                                        int pos);
+int  repl_source_scope_view_base_indent_for_insert(
+         const ReplSourceScopeView *view, int pos);
 int  repl_source_scope_view_find_block_end(const ReplSourceScopeView *view,
                                            int begin_idx);
 CmdType repl_source_scope_view_nearest_open_block_at(const ReplSourceScopeView *view,

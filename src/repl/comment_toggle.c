@@ -9,6 +9,7 @@
  * nothing behind.
  */
 #include "repl/comment_toggle.h"
+#include "repl/reformat.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -384,6 +385,7 @@ int repl_comment_toggle_run(const ReplCommentTogglePlan *plan,
     int rehearse = (mode == REPL_COMMENT_TOGGLE_REHEARSE);
     int n;
     int ok;
+    int at_before;
 
     result_init(out);
     if (!plan || !prefix || !prefix[0])
@@ -392,6 +394,10 @@ int repl_comment_toggle_run(const ReplCommentTogglePlan *plan,
     n = plan->last - plan->first + 1;
     if (plan->first < 0 || n <= 0 || plan->last >= repl_state_document_count())
         return result_fail(out, -1, "No line to toggle");
+
+    /* Captured before the toggle so the indent fixup below knows which
+     * rows changed side. */
+    at_before = repl_source_scope_display_body_start();
 
     if (plan->uncomment)
         ok = apply_uncomment(plan, prefix, rehearse, out);
@@ -407,6 +413,20 @@ int repl_comment_toggle_run(const ReplCommentTogglePlan *plan,
         out->uncommented = plan->uncomment;
     }
     if (!rehearse) {
+        /* Re-derive the base indent once the whole toggle has landed. A
+         * row's base indent is a property of the WHOLE document - which
+         * side of the display-body boundary it falls on - and a toggle
+         * moves that boundary: commenting out a function definition sinks
+         * the rows after it into display(), and uncommenting one lifts
+         * them out. The per-row loops above cannot see it, because each
+         * row is restored against a document where the block's closing
+         * brace is still a comment, i.e. against an UNCLOSED definition.
+         *
+         * Indent only, never repl_reformat_program(): reformat would trim
+         * a blank comment row's `// ` to `//`, and the uncomment pass
+         * would then no longer recognize its own prefix. */
+        repl_source_scope_depth_cache_invalidate();
+        repl_reindent_after_boundary_move(at_before);
         repl_state_mark_flat_dirty();
         repl_mark_source_dirty();
     }

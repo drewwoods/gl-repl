@@ -100,7 +100,7 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float p, d, s, h;
+static float p, d, s, h;
 
   // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);

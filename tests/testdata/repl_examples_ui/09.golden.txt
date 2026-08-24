@@ -100,9 +100,9 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float dist = 0.5; // @tune
-  static float n = 400; // @tune
-  static float x, y, ang, s; // s = palette mix in [0,1]
+static float dist = 0.5; // @tune
+static float n = 400; // @tune
+static float x, y, ang, s; // s = palette mix in [0,1]
 
   // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);

@@ -579,8 +579,8 @@ static void test_split_decl_menu_action(void) {
     ASSERT_INT("File Split Declaration consumed",
                glr_action_menu_item_activate(GLR_MENU_FILE, GLR_FILE_ITEM_SPLIT_DECL), 1);
     ASSERT_INT("decl split into two lines", source_document_view().line_count, 2);
-    ASSERT_STR("split line 0", editor_buffer_line(0), "  static float grid;");
-    ASSERT_STR("split line 1", editor_buffer_line(1), "  static float extent;");
+    ASSERT_STR("split line 0", editor_buffer_line(0), "static float grid;");
+    ASSERT_STR("split line 1", editor_buffer_line(1), "static float extent;");
 }
 
 static char g_actions_test_url[512];

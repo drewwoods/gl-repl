@@ -2009,8 +2009,8 @@ int main() {
         int r = editor_try_commit_func_def();
         ASSERT_INT("editor_try_commit_func_def returns 1", r, 1);
         ASSERT_INT("num_cmds 2 after func", repl_state_document_count(), 2);
-        ASSERT_STR("func def source", editor_buffer_line(0), "  func0(x, y) {");
-        ASSERT_STR("func end source", editor_buffer_line(1), "  }");
+        ASSERT_STR("func def source", editor_buffer_line(0), "func0(x, y) {");
+        ASSERT_STR("func end source", editor_buffer_line(1), "}");
     }
 
     /* 21. editor_try_commit_func_def - update existing func-def header */
@@ -4758,7 +4758,7 @@ int main() {
         ASSERT_INT("block symmetry: end restored",
                    repl_state_document_cmds()[2].type, CMD_FUNC_END);
         ASSERT_STR("block symmetry: alias and parameters survive",
-                   editor_buffer_line(0), "  triangle(sz) {");
+                   editor_buffer_line(0), "triangle(sz) {");
         ASSERT_INT("block symmetry: the alias still resolves",
                    repl_func_alias_lookup_slot("triangle"), 0);
 

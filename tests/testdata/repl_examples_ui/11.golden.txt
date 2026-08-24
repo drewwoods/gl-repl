@@ -100,19 +100,19 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  // Quadratic Bezier control points A=(ax,ay), B=(bx,by), C=(cx,cy).
-  // ax/ay/cy are intentionally left at their implicit 0 -> A=(0,0), C=(2,0).
-  static float ax, ay, bx = 1, by = 1, cx = 2, cy;
-  static float x, y; // bezier() output: the curve point at parameter u
-  static float period = 5;
-  static float x_a, x_b, y_a, y_b;
-  static float t0; // current progress
+// Quadratic Bezier control points A=(ax,ay), B=(bx,by), C=(cx,cy).
+// ax/ay/cy are intentionally left at their implicit 0 -> A=(0,0), C=(2,0).
+static float ax, ay, bx = 1, by = 1, cx = 2, cy;
+static float x, y; // bezier() output: the curve point at parameter u
+static float period = 5;
+static float x_a, x_b, y_a, y_b;
+static float t0; // current progress
 
-  // --- Functions ----------------------
-  bezier(u) {
-    x = pow(1-u, 2) * ax + 2 * (1-u)*u * bx + u*u * cx;
-    y = pow(1-u, 2) * ay + 2 * (1-u)*u * by + u*u * cy;
-  }
+// --- Functions ----------------------
+bezier(u) {
+  x = pow(1-u, 2) * ax + 2 * (1-u)*u * bx + u*u * cx;
+  y = pow(1-u, 2) * ay + 2 * (1-u)*u * by + u*u * cy;
+}
 
   // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);

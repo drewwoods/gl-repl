@@ -146,7 +146,7 @@ static void test_compile_float_decl_trailing_comment_no_semicolon(void) {
     ASSERT_INT("decl init+comment is INSERT_ONE", change.kind,
                REPL_COMPILED_INSERT_ONE);
     ASSERT_STR("decl init+comment text",
-               change.text[0], "  static float n = 1; // @tune");
+               change.text[0], "static float n = 1; // @tune");
     ASSERT_TRUE("decl init+comment text is @tune-tagged",
                 repl_eval_line_has_tune_tag(change.text[0]));
 
@@ -157,7 +157,7 @@ static void test_compile_float_decl_trailing_comment_no_semicolon(void) {
         "float m // @tune knob", &ctx, &change, err, sizeof(err));
     ASSERT_INT("decl no-init comment compile OK", r, REPL_COMPILE_OK);
     ASSERT_STR("decl no-init comment text",
-               change.text[0], "  static float m; // @tune knob");
+               change.text[0], "static float m; // @tune knob");
 
     /* multi-name with init + comment, no `;` */
     glr_ctrl_reset_all();
@@ -166,7 +166,7 @@ static void test_compile_float_decl_trailing_comment_no_semicolon(void) {
         "float a = 1, b // @tune", &ctx, &change, err, sizeof(err));
     ASSERT_INT("decl multi+comment compile OK", r, REPL_COMPILE_OK);
     ASSERT_STR("decl multi+comment text",
-               change.text[0], "  static float a = 1, b; // @tune");
+               change.text[0], "static float a = 1, b; // @tune");
 
     /* A single `/` (division) in the initializer is NOT a comment. */
     glr_ctrl_reset_all();
@@ -175,7 +175,7 @@ static void test_compile_float_decl_trailing_comment_no_semicolon(void) {
         "float h = 1/2 // @tune", &ctx, &change, err, sizeof(err));
     ASSERT_INT("decl division+comment compile OK", r, REPL_COMPILE_OK);
     ASSERT_STR("decl division initializer kept, comment split",
-               change.text[0], "  static float h = 0.5; // @tune");
+               change.text[0], "static float h = 0.5; // @tune");
 }
 
 /* Adding a comment to an existing decl that had none round-trips
@@ -187,7 +187,7 @@ static void test_float_decl_add_comment_to_existing(void) {
 
     editor_feed_line("float n = 1;");
     ASSERT_STR("baseline decl has no comment",
-               editor_buffer_line(0), "  static float n = 1;");
+               editor_buffer_line(0), "static float n = 1;");
 
     /* Re-commit the same decl with a comment appended, as the editor
      * would after loading the line (no trailing `;` in the input). */
@@ -203,7 +203,7 @@ static void test_float_decl_add_comment_to_existing(void) {
     ASSERT_INT("add-comment apply OK",
                editor_commit_apply_external_change(&change, 0, 0), 1);
     ASSERT_STR("existing decl now carries the comment",
-               editor_buffer_line(0), "  static float n = 1; // @tune");
+               editor_buffer_line(0), "static float n = 1; // @tune");
     ASSERT_TRUE("existing decl is now @tune-tagged",
                 repl_eval_line_has_tune_tag(editor_buffer_line(0)));
 }
@@ -214,7 +214,7 @@ static void test_split_decl_basic(void) {
     glr_ctrl_reset_all();
     editor_feed_line("float grid, extent, x;");
     ASSERT_STR("baseline multi-name decl",
-               editor_buffer_line(0), "  static float grid, extent, x;");
+               editor_buffer_line(0), "static float grid, extent, x;");
     int predefs_before = g_num_predef_vars;
 
     ReplCompileContext ctx = repl_compile_context_from_live(0);
@@ -227,15 +227,15 @@ static void test_split_decl_basic(void) {
     ASSERT_INT("split deletes the old line", change.delete_count, 1);
     ASSERT_INT("split delete pos", change.delete_pos, 0);
     ASSERT_INT("split emits no predef ops", change.predef_op_count, 0);
-    ASSERT_STR("split line 0", change.text[0], "  static float grid;");
-    ASSERT_STR("split line 1", change.text[1], "  static float extent;");
-    ASSERT_STR("split line 2", change.text[2], "  static float x;");
+    ASSERT_STR("split line 0", change.text[0], "static float grid;");
+    ASSERT_STR("split line 1", change.text[1], "static float extent;");
+    ASSERT_STR("split line 2", change.text[2], "static float x;");
 
     ASSERT_INT("split apply OK",
                editor_commit_apply_external_change(&change, 0, 0), 1);
     ASSERT_INT("document now has 3 decl lines", repl_state_document_count(), 3);
-    ASSERT_STR("applied line 0", editor_buffer_line(0), "  static float grid;");
-    ASSERT_STR("applied line 2", editor_buffer_line(2), "  static float x;");
+    ASSERT_STR("applied line 0", editor_buffer_line(0), "static float grid;");
+    ASSERT_STR("applied line 2", editor_buffer_line(2), "static float x;");
     ASSERT_INT("predef count unchanged by split", g_num_predef_vars, predefs_before);
     ASSERT_TRUE("grid still declared", repl_eval_find_predef_var_idx("grid") >= 0);
     ASSERT_TRUE("extent still declared", repl_eval_find_predef_var_idx("extent") >= 0);
@@ -254,9 +254,9 @@ static void test_split_decl_inits_and_comment(void) {
     ASSERT_INT("split inits compile OK", r, REPL_COMPILE_OK);
     ASSERT_INT("split inits count", change.count, 2);
     ASSERT_STR("init + comment on first line",
-               change.text[0], "  static float a = 1; // hello");
+               change.text[0], "static float a = 1; // hello");
     ASSERT_STR("init kept, comment dropped on rest",
-               change.text[1], "  static float b = 2;");
+               change.text[1], "static float b = 2;");
 }
 
 /* A single-name decl has nothing to split. */
@@ -294,8 +294,8 @@ static void test_split_decl_via_editor_entry(void) {
 
     ASSERT_INT("editor split consumed", editor_split_decl_at_cursor(), 1);
     ASSERT_INT("doc grew by one line", repl_state_document_count(), 3);
-    ASSERT_STR("split line 0", editor_buffer_line(0), "  static float p;");
-    ASSERT_STR("split line 1", editor_buffer_line(1), "  static float q;");
+    ASSERT_STR("split line 0", editor_buffer_line(0), "static float p;");
+    ASSERT_STR("split line 1", editor_buffer_line(1), "static float q;");
     ASSERT_TRUE("trailing command preserved",
                 strstr(editor_buffer_line(2), "glVertex3f") != NULL);
 
@@ -303,7 +303,7 @@ static void test_split_decl_via_editor_entry(void) {
     editor_undo_pop_snapshot();
     ASSERT_INT("undo restores single decl line", repl_state_document_count(), 2);
     ASSERT_STR("undo restores multi-name decl",
-               editor_buffer_line(0), "  static float p, q;");
+               editor_buffer_line(0), "static float p, q;");
 }
 
 /* repl_compile_var_assign is pure on the failure path. */
@@ -433,7 +433,7 @@ static void test_compile_apply_updates_both(void) {
     ASSERT_TRUE("post-apply predef registered",
                 repl_eval_find_predef_var_idx("energy") >= 0);
     ASSERT_STR("post-apply buffer line text",
-               editor_buffer_line(0), "  static float energy;");
+               editor_buffer_line(0), "static float energy;");
 }
 
 /* Var-assign compile + apply updates the predef value alongside the
@@ -921,7 +921,7 @@ static void test_set_predef_value_rewrites_decl_not_assignments(void) {
                REPL_COMPILED_REPLACE_ONE);
     ASSERT_INT("set_predef decl-first replace pos", change.pos, 0);
     ASSERT_STR("set_predef decl-first text",
-               change.text[0], "  static float x = 4.5, y;");
+               change.text[0], "static float x = 4.5, y;");
     ASSERT_INT("set_predef decl-first predef op count", change.predef_op_count, 1);
     ASSERT_INT("set_predef decl-first op kind", change.predef_ops[0].kind,
                REPL_PREDEF_OP_SET_VALUE);
@@ -929,7 +929,7 @@ static void test_set_predef_value_rewrites_decl_not_assignments(void) {
     ASSERT_INT("set_predef decl-first apply OK",
                editor_commit_apply_external_change(&change, 0, 0), 1);
     ASSERT_STR("set_predef decl-first buffer line updated",
-               editor_buffer_line(0), "  static float x = 4.5, y;");
+               editor_buffer_line(0), "static float x = 4.5, y;");
     ASSERT_STR("set_predef literal assignment preserved",
                editor_buffer_line(1), "  x = 2;");
     ASSERT_STR("set_predef expression assignment preserved",
@@ -959,12 +959,12 @@ static void test_set_predef_value_rewrites_declaration_initializer(void) {
     ASSERT_INT("set_predef decl replace kind", change.kind,
                REPL_COMPILED_REPLACE_ONE);
     ASSERT_STR("set_predef decl text",
-               change.text[0], "  static float a = 1, x = 2.5, y; // vars");
+               change.text[0], "static float a = 1, x = 2.5, y; // vars");
 
     ASSERT_INT("set_predef decl apply OK",
                editor_commit_apply_external_change(&change, 0, 0), 1);
     ASSERT_STR("set_predef decl buffer line updated",
-               editor_buffer_line(0), "  static float a = 1, x = 2.5, y; // vars");
+               editor_buffer_line(0), "static float a = 1, x = 2.5, y; // vars");
     {
         int x_idx = repl_eval_find_predef_var_idx("x");
         ASSERT_TRUE("set_predef decl x exists", x_idx >= 0);
@@ -987,12 +987,12 @@ static void test_set_predef_value_adds_declaration_initializer(void) {
     ASSERT_INT("set_predef add init compile OK", r, REPL_COMPILE_OK);
     ASSERT_INT("set_predef add init replace kind", change.kind,
                REPL_COMPILED_REPLACE_ONE);
-    ASSERT_STR("set_predef add init text", change.text[0], "  static float x = 2.5;");
+    ASSERT_STR("set_predef add init text", change.text[0], "static float x = 2.5;");
 
     ASSERT_INT("set_predef add init apply OK",
                editor_commit_apply_external_change(&change, 0, 0), 1);
     ASSERT_STR("set_predef add init buffer line updated",
-               editor_buffer_line(0), "  static float x = 2.5;");
+               editor_buffer_line(0), "static float x = 2.5;");
 }
 
 static void test_set_predef_value_rewrites_declaration_and_keeps_expression_sources(void) {
@@ -1012,14 +1012,14 @@ static void test_set_predef_value_rewrites_declaration_and_keeps_expression_sour
     ASSERT_INT("set_predef expr rewrites decl kind", change.kind,
                REPL_COMPILED_REPLACE_ONE);
     ASSERT_STR("set_predef expr decl text",
-               change.text[0], "  static float x = 8;");
+               change.text[0], "static float x = 8;");
 
     ASSERT_INT("set_predef expr apply OK",
                editor_commit_apply_external_change(&change, 0, 0), 1);
     ASSERT_STR("set_predef expr formula preserved",
                editor_buffer_line(2), "  x = y + 1;");
     ASSERT_STR("set_predef expr decl updated",
-               editor_buffer_line(0), "  static float x = 8;");
+               editor_buffer_line(0), "static float x = 8;");
     {
         int x_idx = repl_eval_find_predef_var_idx("x");
         ASSERT_TRUE("set_predef expr x exists", x_idx >= 0);
@@ -1103,7 +1103,7 @@ static void test_compile_set_predef_value_live_leaves_declaration(void) {
     ASSERT_INT("live set apply OK",
                editor_commit_apply_external_change(&change, 0, 0), 1);
     ASSERT_STR("live set leaves the declaration text alone",
-               editor_buffer_line(0), "  static float x = 2;");
+               editor_buffer_line(0), "static float x = 2;");
     {
         int x_idx = repl_eval_find_predef_var_idx("x");
         ASSERT_TRUE("live set x exists", x_idx >= 0);
@@ -1132,12 +1132,12 @@ static void test_compile_persist_predef_value_rewrites_declaration(void) {
     ASSERT_INT("persist carries no predef op", change.predef_op_count, 0);
     /* Byte-identical to the combined entry's rewrite: same kernel. */
     ASSERT_STR("persist decl text",
-               change.text[0], "  static float a = 1, x = 2.5, y; // vars");
+               change.text[0], "static float a = 1, x = 2.5, y; // vars");
 
     ASSERT_INT("persist apply OK",
                editor_commit_apply_external_change(&change, 0, 0), 1);
     ASSERT_STR("persist decl buffer line updated",
-               editor_buffer_line(0), "  static float a = 1, x = 2.5, y; // vars");
+               editor_buffer_line(0), "static float a = 1, x = 2.5, y; // vars");
 }
 
 /* No declaration row to rewrite: persistence is a no-op the caller can skip. */
@@ -1360,7 +1360,7 @@ static void test_func_def_comment_relocation(void) {
     ASSERT_TRUE("buffer line 2 contains 'func0'",
                 strstr(editor_buffer_line(2), "func0") != NULL);
     ASSERT_STR("buffer line 3 is closing brace",
-               editor_buffer_line(3), "  }");
+               editor_buffer_line(3), "}");
     ASSERT_STR("buffer line 4 is vertex",
                editor_buffer_line(4), "  glVertex3f(1, 0, 0);");
 }
@@ -1612,7 +1612,7 @@ static void test_local_decl_inside_func(void) {
     ASSERT_INT("local decl row is marked local",
                change.cmds[0].var_idx, REPL_VAR_IDX_LOCAL);
     ASSERT_STR("local decl text drops static and indents to the body",
-               change.text[0], "    float u;");
+               change.text[0], "  float u;");
     ASSERT_STR("local decl commit message names the storage and function",
                change.commit_message, "declared local u in func0");
 
@@ -1642,7 +1642,7 @@ static void test_static_keyword_selects_global_from_inside_func(void) {
                REPL_COMPILE_OK);
     ASSERT_INT("static decl lands at the document top", change.pos, 0);
     ASSERT_INT("static decl row is global", change.cmds[0].var_idx, 0);
-    ASSERT_STR("static decl keeps the keyword", change.text[0], "  static float g;");
+    ASSERT_STR("static decl keeps the keyword", change.text[0], "static float g;");
     ASSERT_INT("static decl applies",
                editor_commit_apply_external_change(&change, 0, 0), 1);
     ASSERT_TRUE("static decl from inside a func takes a predef slot",
@@ -1747,7 +1747,7 @@ static void test_local_decl_hoists_from_nested_block(void) {
     ASSERT_INT("it hoists to the function prologue, not the loop body",
                repl_state_document_cmds()[1].type, CMD_VAR_DECLARE);
     ASSERT_STR("and takes the body's indent",
-               editor_buffer_line(1), "    float u;");
+               editor_buffer_line(1), "  float u;");
     ASSERT_INT("the loop header follows it",
                repl_state_document_cmds()[2].type, CMD_FOR_BEGIN);
 }
@@ -1835,7 +1835,7 @@ static void test_local_to_global_conversion(void) {
     ASSERT_INT("the converted row is global",
                repl_state_document_cmds()[0].var_idx, 0);
     ASSERT_STR("the converted row is re-emitted in global form",
-               editor_buffer_line(0), "  static float u;");
+               editor_buffer_line(0), "static float u;");
     ASSERT_TRUE("the converted name now holds a predef slot",
                 repl_eval_find_predef_var_idx("u") >= 0);
     ASSERT_INT("the function header follows it",
@@ -1875,8 +1875,8 @@ static void test_split_decl_on_local_keeps_storage(void) {
     ASSERT_INT("split emits two rows", change.count, 2);
     ASSERT_INT("split keeps row 0 local", change.cmds[0].var_idx, REPL_VAR_IDX_LOCAL);
     ASSERT_INT("split keeps row 1 local", change.cmds[1].var_idx, REPL_VAR_IDX_LOCAL);
-    ASSERT_STR("split re-emits the local form", change.text[0], "    float u;");
-    ASSERT_STR("split re-emits the local form", change.text[1], "    float v;");
+    ASSERT_STR("split re-emits the local form", change.text[0], "  float u;");
+    ASSERT_STR("split re-emits the local form", change.text[1], "  float v;");
 }
 
 /* Deleting a local decl releases no predef slot - undeclaring by name

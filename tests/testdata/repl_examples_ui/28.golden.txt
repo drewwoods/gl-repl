@@ -100,23 +100,23 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  // Fog fades geometry toward the fog color with eye-space distance.
-  // glFogi picks the equation: GL_EXP2 (used here) and GL_EXP fall off
-  // exponentially with GL_FOG_DENSITY; GL_LINEAR instead ramps between
-  // glFogf(GL_FOG_START, ...) and glFogf(GL_FOG_END, ...) distances.
-  // Matching GL_FOG_COLOR to glClearColor makes far rings dissolve into
-  // the background, which is what hides each ring's respawn at the far
-  // end of this endless tunnel. Drag `fogDensity` to thicken or clear it.
-  // The tunnel snakes: each ring's center sits on a fixed curve
-  // (bendX, bendY) of its depth ringZ, and the ring is yawed/pitched to
-  // face along the curve's tangent, so rings sweep around the bends as
-  // they approach. Drag `twist` to straighten or sharpen the curve.
-  static float fogDensity = 0.055; // @tune
-  static float twist = 1.2; // @tune
-  static float rings = 12; // @tune
-  static float ringZ; // eye-space distance of the current ring
-  static float bendX; // tunnel centerline x at this depth
-  static float bendY; // tunnel centerline y at this depth
+// Fog fades geometry toward the fog color with eye-space distance.
+// glFogi picks the equation: GL_EXP2 (used here) and GL_EXP fall off
+// exponentially with GL_FOG_DENSITY; GL_LINEAR instead ramps between
+// glFogf(GL_FOG_START, ...) and glFogf(GL_FOG_END, ...) distances.
+// Matching GL_FOG_COLOR to glClearColor makes far rings dissolve into
+// the background, which is what hides each ring's respawn at the far
+// end of this endless tunnel. Drag `fogDensity` to thicken or clear it.
+// The tunnel snakes: each ring's center sits on a fixed curve
+// (bendX, bendY) of its depth ringZ, and the ring is yawed/pitched to
+// face along the curve's tangent, so rings sweep around the bends as
+// they approach. Drag `twist` to straighten or sharpen the curve.
+static float fogDensity = 0.055; // @tune
+static float twist = 1.2; // @tune
+static float rings = 12; // @tune
+static float ringZ; // eye-space distance of the current ring
+static float bendX; // tunnel centerline x at this depth
+static float bendY; // tunnel centerline y at this depth
 
   // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);

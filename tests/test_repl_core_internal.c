@@ -337,6 +337,158 @@ int main() {
                    repl_source_scope_view_next_func_def(&later_view, 1), 2);
     }
 
+    /* 6a3. Display-body boundary: which document prefix renders above
+     * `void display(void) {`. A comment/blank run belongs to the row it
+     * PRECEDES, so a run leading into a declaration or a closed function
+     * is prologue, and a run leading into body code starts the body. */
+    {
+        /* Canonical catalog shape: decls, a function, then a section
+         * comment introducing the first body row. The boundary must land
+         * on the COMMENT (row 5), not on glClearColor (row 6) - otherwise
+         * `// --- Render State ---` is stranded above display(). */
+        GLCmd cmds[8];
+        ReplSourceScopeView view;
+
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].valid = 1; cmds[0].type = CMD_COMMENT;      /* intro prose */
+        cmds[1].valid = 1; cmds[1].type = CMD_VAR_DECLARE;
+        cmds[2].valid = 1; cmds[2].type = CMD_FUNC_DEF;
+        cmds[3].valid = 1; cmds[3].type = CMD_VERTEX3F;
+        cmds[4].valid = 1; cmds[4].type = CMD_FUNC_END;
+        cmds[5].valid = 1; cmds[5].type = CMD_COMMENT;      /* Render State */
+        cmds[6].valid = 1; cmds[6].type = CMD_CLEAR_COLOR;
+        cmds[7].valid = 1; cmds[7].type = CMD_VERTEX3F;
+        repl_source_scope_view_bind(&view, cmds, 8);
+
+        ASSERT_INT("body start keeps section comment with its row",
+                   repl_source_scope_view_display_body_start(&view), 5);
+        ASSERT_INT("base indent: leading prose is prologue",
+                   repl_source_scope_view_base_indent(&view, 0), 0);
+        ASSERT_INT("base indent: decl is prologue",
+                   repl_source_scope_view_base_indent(&view, 1), 0);
+        ASSERT_INT("base indent: func header is prologue",
+                   repl_source_scope_view_base_indent(&view, 2), 0);
+        ASSERT_INT("base indent: func body row is prologue",
+                   repl_source_scope_view_base_indent(&view, 3), 0);
+        ASSERT_INT("base indent: section comment starts the body",
+                   repl_source_scope_view_base_indent(&view, 5), 2);
+        ASSERT_INT("base indent: body row",
+                   repl_source_scope_view_base_indent(&view, 6), 2);
+        /* The function body row still nests one block level on top of
+         * base 0, so its total indent is 2 - the same column it had
+         * before the base moved, which is what keeps .glr bytes stable. */
+        ASSERT_INT("func body total indent unchanged",
+                   repl_source_scope_view_cmd_indent_chars(&view, 3), 2);
+        ASSERT_INT("func header total indent is column 0",
+                   repl_source_scope_view_cmd_indent_chars(&view, 2), 0);
+        ASSERT_INT("body row total indent still 2",
+                   repl_source_scope_view_cmd_indent_chars(&view, 6), 2);
+    }
+    {
+        /* Functions-only document ending on `}`: the boundary is the
+         * document count, so the display-open chrome lands after the last
+         * command and before the trailing input row. */
+        GLCmd cmds[3];
+        ReplSourceScopeView view;
+
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].valid = 1; cmds[0].type = CMD_FUNC_DEF;
+        cmds[1].valid = 1; cmds[1].type = CMD_VERTEX3F;
+        cmds[2].valid = 1; cmds[2].type = CMD_FUNC_END;
+        repl_source_scope_view_bind(&view, cmds, 3);
+
+        ASSERT_INT("functions-only body start is document count",
+                   repl_source_scope_view_display_body_start(&view), 3);
+        /* The trailing slot renders INSIDE display(), so an existing-row
+         * query at the boundary is base 2 ... */
+        ASSERT_INT("trailing slot is inside the body",
+                   repl_source_scope_view_base_indent(&view, 3), 2);
+        /* ... while a new function committed there EXTENDS the prologue
+         * and must be formatted at column 0 without waiting for Ctrl+\. */
+        ASSERT_INT("new func at the boundary extends the prologue",
+                   repl_source_scope_view_base_indent_for_insert(&view, 3), 0);
+    }
+    {
+        /* A trailing comment/blank run belongs to the body, so it - not
+         * the document count - is the boundary. This is why the
+         * functions-only case above must end on `}`. */
+        GLCmd cmds[4];
+        ReplSourceScopeView view;
+
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].valid = 1; cmds[0].type = CMD_FUNC_DEF;
+        cmds[1].valid = 1; cmds[1].type = CMD_FUNC_END;
+        cmds[2].valid = 1; cmds[2].type = CMD_EMPTY;
+        cmds[3].valid = 1; cmds[3].type = CMD_COMMENT;
+        repl_source_scope_view_bind(&view, cmds, 4);
+
+        ASSERT_INT("trailing run starts the body",
+                   repl_source_scope_view_display_body_start(&view), 2);
+        /* The rev-3 worked example: a new function committed here lands
+         * at the run's first row, and the run rides with it. */
+        ASSERT_INT("insert at the trailing run extends the prologue",
+                   repl_source_scope_view_base_indent_for_insert(&view, 2), 0);
+        ASSERT_INT("insert past the trailing run is body",
+                   repl_source_scope_view_base_indent_for_insert(&view, 3), 2);
+    }
+    {
+        /* An unclosed function stops the walk AT its header, so it renders
+         * inside display() until the `}` lands. find_block_end() returns
+         * the document count for an unclosed block, and a boundary that
+         * trusted it would swallow the whole document. */
+        GLCmd cmds[3];
+        ReplSourceScopeView view;
+
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].valid = 1; cmds[0].type = CMD_VAR_DECLARE;
+        cmds[1].valid = 1; cmds[1].type = CMD_FUNC_DEF;
+        cmds[2].valid = 1; cmds[2].type = CMD_VERTEX3F;
+        repl_source_scope_view_bind(&view, cmds, 3);
+
+        ASSERT_INT("unclosed func stops the boundary at its header",
+                   repl_source_scope_view_display_body_start(&view), 1);
+    }
+    {
+        /* A comment run leading into an unclosed function belongs to the
+         * body with it - the run must not be left above display() while
+         * the header it introduces renders below. */
+        GLCmd cmds[3];
+        ReplSourceScopeView view;
+
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].valid = 1; cmds[0].type = CMD_COMMENT;
+        cmds[1].valid = 1; cmds[1].type = CMD_FUNC_DEF;
+        cmds[2].valid = 1; cmds[2].type = CMD_VERTEX3F;
+        repl_source_scope_view_bind(&view, cmds, 3);
+
+        ASSERT_INT("run into an unclosed func starts the body",
+                   repl_source_scope_view_display_body_start(&view), 0);
+    }
+    {
+        /* Body-only document: no prologue at all. */
+        GLCmd cmds[2];
+        ReplSourceScopeView view;
+
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].valid = 1; cmds[0].type = CMD_CLEAR_COLOR;
+        cmds[1].valid = 1; cmds[1].type = CMD_VERTEX3F;
+        repl_source_scope_view_bind(&view, cmds, 2);
+
+        ASSERT_INT("body-only document has no prologue",
+                   repl_source_scope_view_display_body_start(&view), 0);
+        ASSERT_INT("body-only row 0 is base 2",
+                   repl_source_scope_view_base_indent(&view, 0), 2);
+
+        /* An empty document is all prologue-boundary at 0; the trailing
+         * input row is still a body row. */
+        ReplSourceScopeView empty;
+        repl_source_scope_view_bind(&empty, NULL, 0);
+        ASSERT_INT("empty document body start",
+                   repl_source_scope_view_display_body_start(&empty), 0);
+        ASSERT_INT("empty document trailing row is body",
+                   repl_source_scope_view_base_indent(&empty, 0), 2);
+    }
+
     /* 6b. indent helpers with buf_sz == 0 must not write past the buffer.
      * Surround a 1-byte target with sentinels and confirm they survive.
      * Pre-fix the cmd_indent / cmd_tess_indent overloads wrote '\0' to

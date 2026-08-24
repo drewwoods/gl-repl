@@ -100,66 +100,66 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float c, a; // color/brightness mix in [0,1] (planet + ring bands); comet orbit angle
+static float c, a; // color/brightness mix in [0,1] (planet + ring bands); comet orbit angle
 
-  // ===== Ringed gas giant under nebula skies =====
-  // NOTE: stays well under the 8192 flattened-command budget --
-  // the sphere loop costs stacks*(slices + 1)*10 flat commands.
+// ===== Ringed gas giant under nebula skies =====
+// NOTE: stays well under the 8192 flattened-command budget --
+// the sphere loop costs stacks*(slices + 1)*10 flat commands.
 
-  // banded gas giant: quad strips over latitude, bands swirled by t
-  planet(rad, stacks, slices) {
-    // latA/latB = latitude angle at row i and i+1; cA/cB = cos(lat), shared by
-    // the normal and the vertex so each cosine is taken once, not three times.
-    // lon/cLon/sLon do the same for the per-column longitude angle.
-    float latA, latB, cA, cB, lon, cLon, sLon;
-    float y;
-    for(i, 0, stacks) {
-      glBegin(GL_QUAD_STRIP);
-        for(j, 0, slices + 1) {
-          latA = -PI/2 + PI*i/stacks;
-          latB = -PI/2 + PI*(i + 1)/stacks;
-          lon = j*TAU/slices;
-          cA = cos(latA);
-          cB = cos(latB);
-          cLon = cos(lon);
-          sLon = sin(lon);
-          y = sin(latA);
-          c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*lon + 0.6*t) + 0.4*t);
-          glColor3f(0.46 + 0.34*c, 0.30 + 0.16*c, 0.62 - 0.20*c);
-          glNormal3f(cA*cLon, y, cA*sLon);
-          glVertex3f(rad*cA*cLon, rad*y, rad*cA*sLon);
-          y = sin(latB);
-          c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*lon + 0.6*t) + 0.4*t);
-          glColor3f(0.46 + 0.34*c, 0.30 + 0.16*c, 0.62 - 0.20*c);
-          glNormal3f(cB*cLon, y, cB*sLon);
-          glVertex3f(rad*cB*cLon, rad*y, rad*cB*sLon);
-        }
-      glEnd();
-    }
-  }
-
-  // moon on a tilted circular orbit; caller sets the color
-  moon(orbit, rad, speed, tilt) {
-    glPushMatrix();
-      glRotatef(tilt, 0, 0, 1);
-      glRotatef(speed*t, 0, 1, 0);
-      glTranslatef(orbit, 0, 0);
-      glutSolidSphere(rad, 16, 12);
-    glPopMatrix();
-  }
-
-  // translucent ring band: bright inner lip fading outward
-  ring(inner, outer, fade) {
+// banded gas giant: quad strips over latitude, bands swirled by t
+planet(rad, stacks, slices) {
+  // latA/latB = latitude angle at row i and i+1; cA/cB = cos(lat), shared by
+  // the normal and the vertex so each cosine is taken once, not three times.
+  // lon/cLon/sLon do the same for the per-column longitude angle.
+  float latA, latB, cA, cB, lon, cLon, sLon;
+  float y;
+  for(i, 0, stacks) {
     glBegin(GL_QUAD_STRIP);
-      for(j, 0, 41) {
-        c = 0.75 + 0.25*sin(j*0.9);
-        glColor4f(0.70*c, 0.58*c, 0.88*c, fade);
-        glVertex3f(inner*cos(j*TAU/40), 0, inner*sin(j*TAU/40));
-        glColor4f(0.45*c, 0.50*c, 0.85*c, 0.25*fade);
-        glVertex3f(outer*cos(j*TAU/40), 0, outer*sin(j*TAU/40));
+      for(j, 0, slices + 1) {
+        latA = -PI/2 + PI*i/stacks;
+        latB = -PI/2 + PI*(i + 1)/stacks;
+        lon = j*TAU/slices;
+        cA = cos(latA);
+        cB = cos(latB);
+        cLon = cos(lon);
+        sLon = sin(lon);
+        y = sin(latA);
+        c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*lon + 0.6*t) + 0.4*t);
+        glColor3f(0.46 + 0.34*c, 0.30 + 0.16*c, 0.62 - 0.20*c);
+        glNormal3f(cA*cLon, y, cA*sLon);
+        glVertex3f(rad*cA*cLon, rad*y, rad*cA*sLon);
+        y = sin(latB);
+        c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*lon + 0.6*t) + 0.4*t);
+        glColor3f(0.46 + 0.34*c, 0.30 + 0.16*c, 0.62 - 0.20*c);
+        glNormal3f(cB*cLon, y, cB*sLon);
+        glVertex3f(rad*cB*cLon, rad*y, rad*cB*sLon);
       }
     glEnd();
   }
+}
+
+// moon on a tilted circular orbit; caller sets the color
+moon(orbit, rad, speed, tilt) {
+  glPushMatrix();
+    glRotatef(tilt, 0, 0, 1);
+    glRotatef(speed*t, 0, 1, 0);
+    glTranslatef(orbit, 0, 0);
+    glutSolidSphere(rad, 16, 12);
+  glPopMatrix();
+}
+
+// translucent ring band: bright inner lip fading outward
+ring(inner, outer, fade) {
+  glBegin(GL_QUAD_STRIP);
+    for(j, 0, 41) {
+      c = 0.75 + 0.25*sin(j*0.9);
+      glColor4f(0.70*c, 0.58*c, 0.88*c, fade);
+      glVertex3f(inner*cos(j*TAU/40), 0, inner*sin(j*TAU/40));
+      glColor4f(0.45*c, 0.50*c, 0.85*c, 0.25*fade);
+      glVertex3f(outer*cos(j*TAU/40), 0, outer*sin(j*TAU/40));
+    }
+  glEnd();
+}
 
   glClearColor(0.04, 0.04, 0.1, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

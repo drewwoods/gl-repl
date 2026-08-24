@@ -100,8 +100,8 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float n, p, q, ang, rr, x, y, z; // samples, winds, angle, ring radius, coords
-  static float s; // palette mix in [0,1]
+static float n, p, q, ang, rr, x, y, z; // samples, winds, angle, ring radius, coords
+static float s; // palette mix in [0,1]
 
   // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);

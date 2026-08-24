@@ -1,16 +1,133 @@
 # File-Scope Function Definitions In The Code Panel
 
-## Status - IN REVIEW (revision 3, 2026-08-24)
-
-Investigation only; nothing implemented.
+## Status - IN PROGRESS (implementation started 2026-08-24)
 
 Revision 2 closed the second read's blockers: the boundary helper's
 comment rule (it ate body-attached comments) and the two placement calls
-1h had left open. Revision 3 closes the third read's: the base-indent
+1h had left open. Revision 3 closed the third read's: the base-indent
 vs. `cmd_indent` conflation in 1d, and the boundary comparison for a
 not-yet-inserted row in 1e - which must compare the returned
 `insert_pos` *untranslated*. Project 2 remains gated and must not be
 folded in.
+
+### Implementation log
+
+**Stage 1 landed** - the boundary helper, the base-indent switch, the
+three formatting paths of 1e, and the two re-derivation sites stage 1
+turned up (1i below). Suite green, 35 of 40 panel goldens regenerated.
+
+**Stage 2 in progress** - the panel chrome split (1b), the dump twin
+(1c), the `.glr` writer strip (1f) and the bootstrap splice (1g), plus
+the always-visible `display()` framing added in 1j.
+
+### Corrections found while implementing
+
+- **1g over-lists one site.** `tests/test_repl_code_panel_syntax.c:214`
+  passes a string *literal* to `ui_repl_code_panel_generated_category()`,
+  not `REPL_CODE_PANEL_SCRATCH_DECL_LINE`. Dropping the constant's two
+  spaces does not touch it.
+- **1f is a byte-stability requirement, not a regeneration.** Working
+  the arithmetic through: a function-body row goes in-memory 4 -> 2 while
+  its strip goes 2 -> 0; headers and declarations go 2 -> 0 with the strip
+  2 -> 0. On-disk `.glr` output is unchanged in every phase. So the test
+  is `git diff --exit-code` over `examples/scenes/` after a save
+  round-trip, and *without* 1f the same round-trip flattens function
+  bodies. The checked-in files staying untouched during stage 1 proves
+  nothing on its own - nothing rewrote them.
+- **The UI needs the boundary on the snapshot.** 1a caches `at` on
+  `ReplSourceScopeView`, but `repl_code_panel.c` is pure over
+  `UiRenderSnapshot` and never calls `repl_source_scope_*`. `at` reaches
+  it as a snapshot field filled beside `active_indent_chars`
+  (`glr_ctrl.c`), which is the existing precedent for exactly this.
+- **1e needs a statement reorder in `commit.c`, not just a swapped
+  argument.** `insert_pos` was computed *after* the indent block it has
+  to feed; the call moves up.
+
+## 1i. Re-derivation sites (found during stage 1, not in the original plan)
+
+Making the base indent a function of the whole document creates an
+obligation the original plan did not name: **any bulk mutation that can
+move the boundary must re-derive indentation afterwards.** A row's stored
+text carries its indent, but the boundary depends on rows that may not
+exist yet at the moment that text is written. Two sites needed it, and
+they need *different* tools:
+
+- **The catalog loader** (`src/repl/example_loader.c`) now runs
+  `repl_reformat_program()` at its finish, the same finish
+  `src/repl/import.c` has always run. Without it the two loaders disagree
+  on canonical text for the same scene and `test_camera_header_parity`
+  fails on every function scene: the comment run introducing a scene's
+  declarations only becomes file-scope prologue once those declarations
+  have been fed, and the file path self-corrected via reformat while the
+  catalog path kept its incremental guess. This is provably a no-op
+  otherwise - the two paths agreed before, and the file path already
+  reformatted, so reformat was already a no-op on catalog text.
+
+- **Comment toggle** (`src/repl/comment_toggle.c`) must NOT use
+  `repl_reformat_program()`. Uncommenting restores rows one at a time
+  against a document where the block's closing brace is still a comment -
+  i.e. against an *unclosed* definition - so every restored row gets the
+  body base. But reformat re-canonicalizes text, and it trims a blank
+  comment row's `// ` to `//`, after which the uncomment pass no longer
+  recognizes its own prefix; a comment/uncomment round trip stops being
+  byte-identical. The tool is instead
+  `repl_reindent_after_boundary_move(at_before)`
+  (`src/repl/reformat.c`): only the *base* term can change, so a row that
+  changed side shifts by exactly +/-2 and every other row and byte is left
+  alone. No per-command dispatch, no re-canonicalization.
+
+The general rule to apply to any future site: **indent-only fixups use
+`repl_reindent_after_boundary_move`; only a loader that is already
+re-deriving canonical text may use `repl_reformat_program`.**
+
+## 1j. Always-visible `display()` framing (added 2026-08-24)
+
+Two requirements beyond the original plan:
+
+- The `void display(void) {` line and its matching `}` are **no longer
+  chrome**. They render in `code_focus` mode too, so the body is always
+  visibly enclosed and the file-scope declarations and function
+  definitions are always visibly outside it. Everything else that is
+  chrome today stays chrome: `glLoadIdentity`, `glPushAttrib`, the lights
+  and camera stanzas, `glPopAttrib`, `glutSwapBuffers`, and the whole
+  `reshape`/`keyboard`/`init` footer.
+- This retires the plan's note that "`code_focus` already hides all
+  chrome ... so that mode needs no case". Focus mode now has exactly one
+  case: the two framing rows.
+
+Note `g_header_post[]` is empty (`src/repl/export_setup.c:294`), so the
+"display-open chrome" of 1b is `g_display_header` + lights + camera; the
+display closer is `g_footer_pre_init[3]`.
+
+## 1k. Explicit `display() { }` in `.glr` when functions are used (added 2026-08-24)
+
+The `.glr` format gains the same distinction the panel now draws:
+
+- A scene with **no function definitions** keeps today's format. The
+  `display()` wrapper is **implicit** - the body is simply the rows after
+  the declarations and camera.
+- A scene that **defines any function** must carry an **explicit**
+  `display() {` ... `}` around the body. The definitions sit outside it,
+  exactly as they do in the exported C and in the code panel.
+
+Rationale: once function definitions are file-scope, a reader of a
+function-bearing `.glr` has no way to tell where the definitions stop and
+the body starts except by re-running the boundary walk. Writing the
+wrapper makes the file say it. A scene with no functions has nothing to
+disambiguate, so requiring the wrapper there would be ceremony.
+
+Touches the writer (`src/repl/export_glr.c`), the reader
+(`src/repl/import.c`), the phase machine
+(`src/repl/doc_order.{c,h}` - the `FUNCS -> BODY` transition becomes
+observable rather than inferred), `--lint-scenes`
+(`src/app/boot/glr_lint_scenes.c`), and regenerates every checked-in
+`.glr` that defines a function (`examples/scenes/`, `tests/scenes/**`).
+
+**Ordering against 1f.** 1f (strip the base indent per phase, not
+uniformly) has to land first or with this: body rows inside an explicit
+`display() {` are still written at column 0 on disk - the wrapper is
+structure, not indentation, and the loader re-derives indent either way.
+
 
 The work splits into **two projects**. Project 1 (the view) is
 self-contained and specified. Project 2 (making the order total for

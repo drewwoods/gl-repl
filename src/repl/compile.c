@@ -1639,9 +1639,23 @@ ReplCompileResult repl_compile_float_decl(const char *input,
     out->cmds[0] = cmd;
 
     char decl_text[MAX_LINE_LEN];
+    /* A global declaration always lands at depth 0, so its indentation is
+     * the display-body base alone - 0 above the boundary, 2 below it. Use
+     * the INSERT comparison: a declaration committed into an all-prologue
+     * document sits AT the boundary, and the existing-row rule would put
+     * it at indent 2 above `void display(void) {`. Nothing reformats
+     * behind this (Ctrl+\ is the user's call), so what is written here is
+     * canonical. */
+    char decl_indent[REPL_INDENT_TEXT_MAX];
+    int decl_base = repl_source_scope_view_base_indent_for_insert(
+        compile_source_scope(ctx), out->pos);
+    if (decl_base > (int)sizeof(decl_indent) - 1)
+        decl_base = (int)sizeof(decl_indent) - 1;
+    memset(decl_indent, ' ', (size_t)decl_base);
+    decl_indent[decl_base] = '\0';
     /* Before build_decl_predef_ops, so a rejected line registers nothing -
      * same atomicity as the "too many names" path above. */
-    if (!format_decl_text(&parsed, "  ", decl_text, (int)sizeof(decl_text)))
+    if (!format_decl_text(&parsed, decl_indent, decl_text, (int)sizeof(decl_text)))
         return compile_set_err(err, err_size,
             "declaration too long for one line (max %d chars once formatted); "
             "split across lines", MAX_LINE_LEN - 1);

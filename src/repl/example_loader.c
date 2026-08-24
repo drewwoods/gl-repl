@@ -2,6 +2,7 @@
  * src/repl/example_loader.c -- Built-in example loading and metadata handling.
  */
 #include "repl/load.h"           /* repl_load_apply_line */
+#include "repl/reformat.h"       /* repl_reformat_program */
 #include "repl/export.h"         /* ReplExportCameraBridge */
 #include "repl/command_store.h"
 #include "repl/examples.h"
@@ -263,6 +264,17 @@ static int load_example_lines(const char *const *lines,
      * unrepresentable rather than half-applied. */
     camera_fin = repl_camera_header_finish(&camera, REPL_CAMERA_APPLY_EXAMPLE);
     example_camera_report_missing(&camera_fin, name);
+
+    /* Re-derive canonical text once the whole document exists, the same
+     * finish the file importer runs (src/repl/import.c). A row's base
+     * indent depends on where the display-body boundary falls, and that
+     * is not knowable while feeding: the comment run introducing a
+     * scene's declarations only becomes file-scope prologue once those
+     * declarations have been fed. Without this the two loaders disagree
+     * on canonical text for the same scene (test_camera_header_parity).
+     * Text and indentation only - reformat never reorders rows. */
+    repl_source_scope_depth_cache_invalidate();
+    repl_reformat_program();
 
     /* Post-load editor cleanup mirrors the pre-load sink dispatch so a
      * stale input line or cursor doesn't survive the loaded body. */

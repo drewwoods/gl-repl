@@ -106,166 +106,166 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float px, py, pz; // planet position - the caller hangs the body and its label off it
-  static float orbitR; // log-compressed orbit radius, shared by the draw funcs
-  static float ASTEROIDS = 140; // @tune
+static float px, py, pz; // planet position - the caller hangs the body and its label off it
+static float orbitR; // log-compressed orbit radius, shared by the draw funcs
+static float ASTEROIDS = 140; // @tune
 
-  // The two orbit funcs below only POSITION a body: each leaves the result in
-  // px/py/pz and draws nothing. drawBody() then puts a lit sphere there and the
-  // caller hangs the label off the same px/py/pz. Keeping the orbital elements
-  // and the body's appearance in separate argument lists is what buys
-  // planetKepler() the scope room to name every intermediate below.
-  static float EARTH_R = 0.17; // @tune
-  static float EARTH_RATE = 0.85; // @tune
-  static float ORB_BASE = 0; // @tune
-  static float ORB_SCALE = 10; // @tune
-  static float decYr, yr, leap, doy, mon, day; // calendar readout scratch
+// The two orbit funcs below only POSITION a body: each leaves the result in
+// px/py/pz and draws nothing. drawBody() then puts a lit sphere there and the
+// caller hangs the label off the same px/py/pz. Keeping the orbital elements
+// and the body's appearance in separate argument lists is what buys
+// planetKepler() the scope room to name every intermediate below.
+static float EARTH_R = 0.17; // @tune
+static float EARTH_RATE = 0.85; // @tune
+static float ORB_BASE = 0; // @tune
+static float ORB_SCALE = 10; // @tune
+static float decYr, yr, leap, doy, mon, day; // calendar readout scratch
 
-  orbitRings(Drel, node, incl) {
-    // cNode/sNode/cIncl/sIncl are constant for the whole ring (node and incl
-    // are call-time constants), so they are hoisted out of the 96-point loop
-    // instead of being retaken every iteration; cu/su cache cos(u)/sin(u),
-    // each read twice in the vertex formula below.
-    float th, u, cNode, sNode, cIncl, sIncl, cu, su;
-    orbitR = ORB_BASE + ORB_SCALE*log(1 + Drel);
-    cNode = cos(node);
-    sNode = sin(node);
-    cIncl = cos(incl);
-    sIncl = sin(incl);
-    glBegin(GL_LINE_LOOP);
-      for(i, 0, 96) {
-        th = i*TAU/96;
-        u = th - node;
-        cu = cos(u);
-        su = sin(u);
-        glVertex3f(orbitR*(cNode*cu - sNode*su*cIncl), orbitR*su*sIncl, orbitR*(sNode*cu + cNode*su*cIncl));
-      }
-    glEnd();
-  }
-  // One lit sphere at the last position computed. Rrel is the body's true
-  // radius relative to Earth; the cube root squashes the 0.38..11x span into
-  // something legible.
-  drawBody(Rrel, cr, cg, cb) {
-    glEnable(GL_LIGHTING);
-    glColor3f(cr, cg, cb);
-    glPushMatrix();
-      glTranslatef(px, py, pz);
-      glutSolidSphere(EARTH_R * pow(Rrel, 1.0/3.0), 24, 18);
-    glPopMatrix();
-    glDisable(GL_LIGHTING);
-  }
-  // planet(): one body on an inclined CIRCULAR orbit. The caller passes TRUE
-  // ratios relative to Earth: distance from Sun (Drel), year length (Yrel),
-  // J2000 heliocentric longitude phase, and J2000 node/inclination. The
-  // display applies documented compression for orbit distance only.
-  // t=0 is year 2000.0 (J2000 alignment).
-  planet(Drel, Yrel, phase, node, incl) {
-    // cNode/sNode/cIncl/sIncl are constant for one call and each feeds two of
-    // the position terms; xo/yo are the coordinates in the orbit plane, before
-    // the node/inclination rotation (the same names planetKepler() uses).
-    float ang, u, xo, yo, cNode, sNode, cIncl, sIncl;
-    orbitR = ORB_BASE + ORB_SCALE*log(1 + Drel);
-    cNode = cos(node);
-    sNode = sin(node);
-    cIncl = cos(incl);
-    sIncl = sin(incl);
-    ang = phase + t*EARTH_RATE/Yrel; // heliocentric longitude right now
-    u = ang - node; // ...measured from the ascending node
-    xo = orbitR*cos(u);
-    yo = orbitR*sin(u);
-    px = xo*cNode - yo*sNode*cIncl;
-    py = yo*sIncl;
-    pz = xo*sNode + yo*cNode*cIncl;
-  }
-  planetKepler(a0, adot, e0, edot, I0, Idot, L0, Ldot, peri0, peridot, node0, nodedot) {
-    // 12 params + 18 locals + 1 loop iterator = 31 of the 32-slot function
-    // scope. That is what pays for the naming below: every step keeps its own
-    // variable, so nothing has to be recycled once it is no longer needed.
-    float cent, aK, eK, iK, lK, pK, nK, mK;
-    float eAn, xh, yh, r, argP, xo, yo;
-    float x1, y1, z1;
-    cent = t*EARTH_RATE/TAU/100.0; // Julian centuries since J2000.0
-    aK = a0 + adot*cent;
-    eK = e0 + edot*cent;
-    iK = (I0 + Idot*cent)*PI/180;
-    lK = (L0 + Ldot*cent)*PI/180;
-    pK = (peri0 + peridot*cent)*PI/180;
-    nK = (node0 + nodedot*cent)*PI/180;
-    mK = rem(lK - pK, TAU);
-    // Solve Kepler's equation M = E - e*sin(E) for the eccentric anomaly eAn
-    // via Newton's method: seed with mK, then refine a fixed 4 times (the
-    // loop bound is the iteration count -- raise it and every body follows).
-    eAn = mK + eK*sin(mK);
-    for(k, 0, 4) {
-      eAn = eAn + (mK - (eAn - eK*sin(eAn)))/(1 - eK*cos(eAn));
+orbitRings(Drel, node, incl) {
+  // cNode/sNode/cIncl/sIncl are constant for the whole ring (node and incl
+  // are call-time constants), so they are hoisted out of the 96-point loop
+  // instead of being retaken every iteration; cu/su cache cos(u)/sin(u),
+  // each read twice in the vertex formula below.
+  float th, u, cNode, sNode, cIncl, sIncl, cu, su;
+  orbitR = ORB_BASE + ORB_SCALE*log(1 + Drel);
+  cNode = cos(node);
+  sNode = sin(node);
+  cIncl = cos(incl);
+  sIncl = sin(incl);
+  glBegin(GL_LINE_LOOP);
+    for(i, 0, 96) {
+      th = i*TAU/96;
+      u = th - node;
+      cu = cos(u);
+      su = sin(u);
+      glVertex3f(orbitR*(cNode*cu - sNode*su*cIncl), orbitR*su*sIncl, orbitR*(sNode*cu + cNode*su*cIncl));
     }
-    // 1. Position in the orbital plane, relative to perihelion
-    xh = aK*(cos(eAn) - eK);
-    yh = aK*sqrt(1 - eK*eK)*sin(eAn);
-
-    // 2. Heliocentric distance r (a vector length, so it survives every
-    // rotation below unchanged -- step 5 divides by it to renormalize)
-    r = sqrt(xh*xh + yh*yh);
-    orbitR = ORB_BASE + ORB_SCALE*log(1 + r);
-
-    // 3. Decompose the 3D rotation, step A: rotate within the orbital plane
-    // by the argument of perihelion, so xo/yo are measured from the
-    // ascending node line instead of from perihelion.
-    argP = pK - nK;
-    xo = xh*cos(argP) - yh*sin(argP);
-    yo = xh*sin(argP) + yh*cos(argP);
-
-    // 4. Step B: project from the node line onto the ecliptic plane using
-    // ascending node longitude (nK) and inclination (iK)
-    x1 = xo*cos(nK) - yo*sin(nK)*cos(iK);
-    y1 = xo*sin(nK) + yo*cos(nK)*cos(iK);
-    z1 = yo*sin(iK);
-
-    // 5. Scale the 3D unit direction vector by the logarithmic orbit radius
-    px = orbitR*x1/r;
-    py = orbitR*z1/r;
-    pz = orbitR*y1/r;
+  glEnd();
+}
+// One lit sphere at the last position computed. Rrel is the body's true
+// radius relative to Earth; the cube root squashes the 0.38..11x span into
+// something legible.
+drawBody(Rrel, cr, cg, cb) {
+  glEnable(GL_LIGHTING);
+  glColor3f(cr, cg, cb);
+  glPushMatrix();
+    glTranslatef(px, py, pz);
+    glutSolidSphere(EARTH_R * pow(Rrel, 1.0/3.0), 24, 18);
+  glPopMatrix();
+  glDisable(GL_LIGHTING);
+}
+// planet(): one body on an inclined CIRCULAR orbit. The caller passes TRUE
+// ratios relative to Earth: distance from Sun (Drel), year length (Yrel),
+// J2000 heliocentric longitude phase, and J2000 node/inclination. The
+// display applies documented compression for orbit distance only.
+// t=0 is year 2000.0 (J2000 alignment).
+planet(Drel, Yrel, phase, node, incl) {
+  // cNode/sNode/cIncl/sIncl are constant for one call and each feeds two of
+  // the position terms; xo/yo are the coordinates in the orbit plane, before
+  // the node/inclination rotation (the same names planetKepler() uses).
+  float ang, u, xo, yo, cNode, sNode, cIncl, sIncl;
+  orbitR = ORB_BASE + ORB_SCALE*log(1 + Drel);
+  cNode = cos(node);
+  sNode = sin(node);
+  cIncl = cos(incl);
+  sIncl = sin(incl);
+  ang = phase + t*EARTH_RATE/Yrel; // heliocentric longitude right now
+  u = ang - node; // ...measured from the ascending node
+  xo = orbitR*cos(u);
+  yo = orbitR*sin(u);
+  px = xo*cNode - yo*sNode*cIncl;
+  py = yo*sIncl;
+  pz = xo*sNode + yo*cNode*cIncl;
+}
+planetKepler(a0, adot, e0, edot, I0, Idot, L0, Ldot, peri0, peridot, node0, nodedot) {
+  // 12 params + 18 locals + 1 loop iterator = 31 of the 32-slot function
+  // scope. That is what pays for the naming below: every step keeps its own
+  // variable, so nothing has to be recycled once it is no longer needed.
+  float cent, aK, eK, iK, lK, pK, nK, mK;
+  float eAn, xh, yh, r, argP, xo, yo;
+  float x1, y1, z1;
+  cent = t*EARTH_RATE/TAU/100.0; // Julian centuries since J2000.0
+  aK = a0 + adot*cent;
+  eK = e0 + edot*cent;
+  iK = (I0 + Idot*cent)*PI/180;
+  lK = (L0 + Ldot*cent)*PI/180;
+  pK = (peri0 + peridot*cent)*PI/180;
+  nK = (node0 + nodedot*cent)*PI/180;
+  mK = rem(lK - pK, TAU);
+  // Solve Kepler's equation M = E - e*sin(E) for the eccentric anomaly eAn
+  // via Newton's method: seed with mK, then refine a fixed 4 times (the
+  // loop bound is the iteration count -- raise it and every body follows).
+  eAn = mK + eK*sin(mK);
+  for(k, 0, 4) {
+    eAn = eAn + (mK - (eAn - eK*sin(eAn)))/(1 - eK*cos(eAn));
   }
-  // One flat ring band: a translucent triangle strip swept between radius rIn
-  // and rOut, shading from (r0,g0,b0,a0) on the inner edge to (r1,g1,b1,a1) on
-  // the outer one. Saturn stacks two of these with the Cassini gap between
-  // them; Uranus draws a single thin one.
-  ringBand(rIn, rOut, r0, g0, b0, a0, r1, g1, b1, a1) {
-    float ca, sa; // both edges sit on the same angle, so take its cos/sin once
-    glBegin(GL_TRIANGLE_STRIP);
-      for(s, 0, 33) {
-        ca = cos(s*TAU/32);
-        sa = sin(s*TAU/32);
-        glColor4f(r0, g0, b0, a0);
-        glVertex3f(ca*rIn, 0, sa*rIn);
-        glColor4f(r1, g1, b1, a1);
-        glVertex3f(ca*rOut, 0, sa*rOut);
-      }
-    glEnd();
-  }
-  // Asteroid belt: a decorative dusty band between Mars and Jupiter (the main
-  // belt, ~2.2-3.3 AU). Not physical - each speck is scattered with rand() onto
-  // its own near-circular orbit, drifting at the Kepler rate for its radius
-  // (EARTH_RATE/a^1.5, so inner specks lap the outer ones) and riding the same
-  // log-distance scale as the planets. Drawn as small unlit points, depth-tested
-  // so the planets pass in front of and behind the band.
-  asteroidBelt(count) {
-    // aRel is the speck's true distance in AU, ang its current orbit angle, r
-    // the log-compressed display radius and shade its dust tint. Naming them
-    // costs four assignments per speck and saves re-rolling the same rand()
-    // seeds two or three times apiece inside one very long vertex line.
-    float aRel, ang, r, shade;
-    glBegin(GL_POINTS);
-      for(i, 0, count) {
-        aRel = 2.2 + 1.1*rand(i, 1);
-        ang = rand(i, 2)*TAU + t*EARTH_RATE/pow(aRel, 1.5);
-        r = ORB_BASE + ORB_SCALE*log(1 + aRel);
-        shade = 0.45 + 0.5*rand(i, 3);
-        glColor3f(shade*0.55, shade*0.48, shade*0.4);
-        glVertex3f(r*cos(ang), rand2(i, 4)*0.35, r*sin(ang));
-      }
-    glEnd();
-  }
+  // 1. Position in the orbital plane, relative to perihelion
+  xh = aK*(cos(eAn) - eK);
+  yh = aK*sqrt(1 - eK*eK)*sin(eAn);
+
+  // 2. Heliocentric distance r (a vector length, so it survives every
+  // rotation below unchanged -- step 5 divides by it to renormalize)
+  r = sqrt(xh*xh + yh*yh);
+  orbitR = ORB_BASE + ORB_SCALE*log(1 + r);
+
+  // 3. Decompose the 3D rotation, step A: rotate within the orbital plane
+  // by the argument of perihelion, so xo/yo are measured from the
+  // ascending node line instead of from perihelion.
+  argP = pK - nK;
+  xo = xh*cos(argP) - yh*sin(argP);
+  yo = xh*sin(argP) + yh*cos(argP);
+
+  // 4. Step B: project from the node line onto the ecliptic plane using
+  // ascending node longitude (nK) and inclination (iK)
+  x1 = xo*cos(nK) - yo*sin(nK)*cos(iK);
+  y1 = xo*sin(nK) + yo*cos(nK)*cos(iK);
+  z1 = yo*sin(iK);
+
+  // 5. Scale the 3D unit direction vector by the logarithmic orbit radius
+  px = orbitR*x1/r;
+  py = orbitR*z1/r;
+  pz = orbitR*y1/r;
+}
+// One flat ring band: a translucent triangle strip swept between radius rIn
+// and rOut, shading from (r0,g0,b0,a0) on the inner edge to (r1,g1,b1,a1) on
+// the outer one. Saturn stacks two of these with the Cassini gap between
+// them; Uranus draws a single thin one.
+ringBand(rIn, rOut, r0, g0, b0, a0, r1, g1, b1, a1) {
+  float ca, sa; // both edges sit on the same angle, so take its cos/sin once
+  glBegin(GL_TRIANGLE_STRIP);
+    for(s, 0, 33) {
+      ca = cos(s*TAU/32);
+      sa = sin(s*TAU/32);
+      glColor4f(r0, g0, b0, a0);
+      glVertex3f(ca*rIn, 0, sa*rIn);
+      glColor4f(r1, g1, b1, a1);
+      glVertex3f(ca*rOut, 0, sa*rOut);
+    }
+  glEnd();
+}
+// Asteroid belt: a decorative dusty band between Mars and Jupiter (the main
+// belt, ~2.2-3.3 AU). Not physical - each speck is scattered with rand() onto
+// its own near-circular orbit, drifting at the Kepler rate for its radius
+// (EARTH_RATE/a^1.5, so inner specks lap the outer ones) and riding the same
+// log-distance scale as the planets. Drawn as small unlit points, depth-tested
+// so the planets pass in front of and behind the band.
+asteroidBelt(count) {
+  // aRel is the speck's true distance in AU, ang its current orbit angle, r
+  // the log-compressed display radius and shade its dust tint. Naming them
+  // costs four assignments per speck and saves re-rolling the same rand()
+  // seeds two or three times apiece inside one very long vertex line.
+  float aRel, ang, r, shade;
+  glBegin(GL_POINTS);
+    for(i, 0, count) {
+      aRel = 2.2 + 1.1*rand(i, 1);
+      ang = rand(i, 2)*TAU + t*EARTH_RATE/pow(aRel, 1.5);
+      r = ORB_BASE + ORB_SCALE*log(1 + aRel);
+      shade = 0.45 + 0.5*rand(i, 3);
+      glColor3f(shade*0.55, shade*0.48, shade*0.4);
+      glVertex3f(r*cos(ang), rand2(i, 4)*0.35, r*sin(ang));
+    }
+  glEnd();
+}
 
   glClearColor(0.02, 0.02, 0.05, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

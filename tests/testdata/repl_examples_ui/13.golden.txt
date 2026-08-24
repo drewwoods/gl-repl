@@ -100,20 +100,20 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  // --- Description --------------------
-  // Bubble sort, scrubbed by t. A[0..15] holds 16 bar heights; the nested
-  // loops below are the classic compare-and-swap, but each compare only
-  // runs once enough time has passed (its overall index p*15 + j must stay
-  // under steps). Every frame re-seeds and re-sorts from scratch, so the
-  // bars freeze mid-algorithm at exactly floor(steps) compares -- drag the
-  // time slider or replay to scrub the sort.
+// --- Description --------------------
+// Bubble sort, scrubbed by t. A[0..15] holds 16 bar heights; the nested
+// loops below are the classic compare-and-swap, but each compare only
+// runs once enough time has passed (its overall index p*15 + j must stay
+// under steps). Every frame re-seeds and re-sorts from scratch, so the
+// bars freeze mid-algorithm at exactly floor(steps) compares -- drag the
+// time slider or replay to scrub the sort.
 
-  static float rate = 45; // compare steps per second @tune
-  static float hold = 1.5; // seconds to rest on the sorted bars @tune
-  static float period, cycle, steps; // seconds per cycle; shuffle index; compares done so far
-  static float tmp; // swap scratch
-  static float x, h, s; // bar center x, bar height, palette mix
-  static float cur; // bar index under the compare marker
+static float rate = 45; // compare steps per second @tune
+static float hold = 1.5; // seconds to rest on the sorted bars @tune
+static float period, cycle, steps; // seconds per cycle; shuffle index; compares done so far
+static float tmp; // swap scratch
+static float x, h, s; // bar center x, bar height, palette mix
+static float cur; // bar index under the compare marker
 
   period = 225/rate + hold;
   cycle = floor(t/period);

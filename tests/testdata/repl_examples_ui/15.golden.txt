@@ -100,35 +100,35 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  // Sierpinski sponge: the carpet's rule lifted to 3D. Split the cube
-  // into 3x3x3 cells, drop the 6 face centers and the core, and recurse
-  // into the 20 cells that remain. Two levels deep -> 400 cubes.
+// Sierpinski sponge: the carpet's rule lifted to 3D. Split the cube
+// into 3x3x3 cells, drop the 6 face centers and the core, and recurse
+// into the 20 cells that remain. Two levels deep -> 400 cubes.
 
-  static float depth = 2; // @tune
-  static float size = 3; // @tune
+static float depth = 2; // @tune
+static float size = 3; // @tune
 
-  sponge(depth, size) {
-    // Base case: one solid cube -- the neon lights do the coloring.
-    if(depth <= 0) {
-      glutSolidCube(size);
-    }
-    // Recursive case: -1..1 on each axis -- half-open bounds, so -1..2.
-    // A cell survives when at least two of its coords are nonzero.
-    if(depth > 0) {
-      for(i, -1, 2) {
-        for(j, -1, 2) {
-          for(k, -1, 2) {
-            if(abs(i) + abs(j) + abs(k) > 1) {
-              glPushMatrix();
-                glTranslatef(i*size/3, j*size/3, k*size/3);
-                sponge(depth - 1, size/3);
-              glPopMatrix();
-            }
+sponge(depth, size) {
+  // Base case: one solid cube -- the neon lights do the coloring.
+  if(depth <= 0) {
+    glutSolidCube(size);
+  }
+  // Recursive case: -1..1 on each axis -- half-open bounds, so -1..2.
+  // A cell survives when at least two of its coords are nonzero.
+  if(depth > 0) {
+    for(i, -1, 2) {
+      for(j, -1, 2) {
+        for(k, -1, 2) {
+          if(abs(i) + abs(j) + abs(k) > 1) {
+            glPushMatrix();
+              glTranslatef(i*size/3, j*size/3, k*size/3);
+              sponge(depth - 1, size/3);
+            glPopMatrix();
           }
         }
       }
     }
   }
+}
 
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

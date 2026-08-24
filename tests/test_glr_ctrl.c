@@ -1549,14 +1549,14 @@ static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo
     /* Motion is live-only: the declaration keeps its drag-start text until
      * mouse-up, so a drag performs no source mutation per pointer event. */
     ASSERT_STR("drag leaves declaration source at its start text",
-               editor_buffer_line(0), "  static float testvar = 1;");
+               editor_buffer_line(0), "static float testvar = 1;");
     ASSERT_FLOAT("drag updates live predef value", g_predef_vars[var_idx].value, 11.0f);
 
     ASSERT_INT("drag release handled",
                glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
                1);
     ASSERT_STR("release rewrites declaration source through compiler",
-               editor_buffer_line(0), "  static float testvar = 11;");
+               editor_buffer_line(0), "static float testvar = 11;");
     ASSERT_FLOAT("release keeps live predef value",
                  g_predef_vars[var_idx].value, 11.0f);
     editor_undo_ring_state_capture(&undo_state);
@@ -1568,7 +1568,7 @@ static void test_variable_panel_motion_routes_through_compile_and_coalesces_undo
 
     editor_undo_pop_snapshot();
     ASSERT_STR("undo restores declaration source",
-               editor_buffer_line(0), "  static float testvar = 1;");
+               editor_buffer_line(0), "static float testvar = 1;");
     ASSERT_FLOAT("undo restores live predef value", g_predef_vars[var_idx].value, 1.0f);
 }
 
@@ -1621,13 +1621,13 @@ static void test_variable_panel_shift_left_drag_uses_fine_scale(void) {
                  g_predef_vars[var_idx].value,
                  1.0f + 10.0f * GLR_ADJUST_FINE_SCALE);
     ASSERT_STR("fine drag motion leaves declaration source alone",
-               editor_buffer_line(0), "  static float testvar = 1;");
+               editor_buffer_line(0), "static float testvar = 1;");
 
     ASSERT_INT("fine drag release handled",
                glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
                1);
     ASSERT_STR("fine drag release rewrites declaration source",
-               editor_buffer_line(0), "  static float testvar = 3;");
+               editor_buffer_line(0), "static float testvar = 3;");
     ASSERT_TRUE("fine drag inactive after release", !variable_panel_drag_active());
 
     g_simulated_mods = 0;
@@ -1749,7 +1749,7 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
     ASSERT_INT("uninitialized drag motions coalesce to one undo snapshot",
                undo_state.undo_count, 1);
     ASSERT_STR("uninitialized drag motion leaves the bare declaration",
-               editor_buffer_line(0), "  static float testvar;");
+               editor_buffer_line(0), "static float testvar;");
     ASSERT_FLOAT("uninitialized drag updates live predef value",
                  g_predef_vars[var_idx].value, 10.0f);
 
@@ -1757,7 +1757,7 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
                glr_ctrl_router_handle_variable_panel_drag_release(GLUT_UP),
                1);
     ASSERT_STR("uninitialized drag release adds explicit initializer",
-               editor_buffer_line(0), "  static float testvar = 10;");
+               editor_buffer_line(0), "static float testvar = 10;");
     ASSERT_TRUE("uninitialized drag inactive after release",
                 !variable_panel_drag_active());
     ASSERT_INT("uninitialized undo flag cleared after release",
@@ -1765,7 +1765,7 @@ static void test_variable_panel_motion_initializes_uninitialized_declaration(voi
 
     editor_undo_pop_snapshot();
     ASSERT_STR("undo restores bare declaration",
-               editor_buffer_line(0), "  static float testvar;");
+               editor_buffer_line(0), "static float testvar;");
     ASSERT_FLOAT("undo restores live value to zero",
                  g_predef_vars[var_idx].value, 0.0f);
 }
@@ -1826,7 +1826,7 @@ static void test_variable_panel_drag_motion_never_marks_source_dirty(void) {
     ASSERT_INT("100 motions mark the source dirty zero times",
                repl_state_normals_dirty(), 0);
     ASSERT_STR("100 motions leave the declaration text alone",
-               editor_buffer_line(0), "  static float testvar = 1;");
+               editor_buffer_line(0), "static float testvar = 1;");
     ASSERT_FLOAT("100 motions update the live value",
                  g_predef_vars[var_idx].value, 1.0f + 100.0f * 0.1f);
 
@@ -1836,7 +1836,7 @@ static void test_variable_panel_drag_motion_never_marks_source_dirty(void) {
     ASSERT_INT("release marks the source dirty once",
                repl_state_normals_dirty(), 1);
     ASSERT_STR("release persists the settled value",
-               editor_buffer_line(0), "  static float testvar = 11;");
+               editor_buffer_line(0), "static float testvar = 11;");
     ASSERT_FLOAT("release keeps the live value",
                  g_predef_vars[var_idx].value, 11.0f);
 }
@@ -1876,7 +1876,7 @@ static void test_variable_panel_drag_release_without_motion_is_a_noop(void) {
     ASSERT_INT("no-motion release does not mark the source dirty",
                repl_state_normals_dirty(), 0);
     ASSERT_STR("no-motion release leaves the declaration text alone",
-               editor_buffer_line(0), "  static float testvar = 1;");
+               editor_buffer_line(0), "static float testvar = 1;");
     ASSERT_FLOAT("no-motion release leaves the live value alone",
                  g_predef_vars[var_idx].value, 1.0f);
     editor_undo_ring_state_capture(&undo_state);

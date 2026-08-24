@@ -100,152 +100,152 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float launchVelX, launchVelY, launchVelZ;
-  static float currentVelY;
-  static float particleLife, particleAge;
-  static float dragDecay = 0.9;
-  static float gravityY = -3.5;
-  static float dragRate = 10;
-  static float particleX, particleY, particleZ;
-  static float floorY = 0;
-  static float spawnDelay;
-  static float emitDuration = 6; // spout emission window (s); the clock loops at 2x this @tune
-  static float speed = 0.5;
-  static float detail = 30;
-  static float blowHoleX = 0.95, blowHoleY = 0.71, blowHoleZ;
-  static float waterDroplets = 250; // @tune
+static float launchVelX, launchVelY, launchVelZ;
+static float currentVelY;
+static float particleLife, particleAge;
+static float dragDecay = 0.9;
+static float gravityY = -3.5;
+static float dragRate = 10;
+static float particleX, particleY, particleZ;
+static float floorY = 0;
+static float spawnDelay;
+static float emitDuration = 6; // spout emission window (s); the clock loops at 2x this @tune
+static float speed = 0.5;
+static float detail = 30;
+static float blowHoleX = 0.95, blowHoleY = 0.71, blowHoleZ;
+static float waterDroplets = 250; // @tune
 
-  computeVerticalMotion(ageSeconds, launchY) {
-    // Velocity is linear in age: currentVelY = gravityY*ageSeconds + launchVelY.
-    // Position is its integral:
-    //   (gravityY/2)*ageSeconds^2 + launchVelY*ageSeconds + launchY
-    // currentVelY is computed for illustration (the velocity term above);
-    // only particleY is read by the caller.
-    currentVelY = launchVelY + gravityY*ageSeconds;
-    particleY = launchY + gravityY/2 * ageSeconds * ageSeconds + launchVelY * ageSeconds;
-  }
+computeVerticalMotion(ageSeconds, launchY) {
+  // Velocity is linear in age: currentVelY = gravityY*ageSeconds + launchVelY.
+  // Position is its integral:
+  //   (gravityY/2)*ageSeconds^2 + launchVelY*ageSeconds + launchY
+  // currentVelY is computed for illustration (the velocity term above);
+  // only particleY is read by the caller.
+  currentVelY = launchVelY + gravityY*ageSeconds;
+  particleY = launchY + gravityY/2 * ageSeconds * ageSeconds + launchVelY * ageSeconds;
+}
 
-  computeLifespan(launchY) {
-    // Solve particleY(age) = floorY for age: how long the particle takes to fall
-    // from launchY to the floor. particleY is the projectile
-    //   (gravityY/2)*age^2 + launchVelY*age + (launchY - floorY) = 0
-    // a quadratic with a = gravityY/2, b = launchVelY, c = launchY - floorY, so
-    //   age = (-b - sqrt(b^2 - 4ac)) / 2a
-    // Substituting a = gravityY/2: 4ac = 2*gravityY*c and 2a = gravityY.
-    particleLife = (-launchVelY - sqrt(launchVelY*launchVelY - 2 * gravityY*(launchY - floorY))) / gravityY;
-  }
+computeLifespan(launchY) {
+  // Solve particleY(age) = floorY for age: how long the particle takes to fall
+  // from launchY to the floor. particleY is the projectile
+  //   (gravityY/2)*age^2 + launchVelY*age + (launchY - floorY) = 0
+  // a quadratic with a = gravityY/2, b = launchVelY, c = launchY - floorY, so
+  //   age = (-b - sqrt(b^2 - 4ac)) / 2a
+  // Substituting a = gravityY/2: 4ac = 2*gravityY*c and 2a = gravityY.
+  particleLife = (-launchVelY - sqrt(launchVelY*launchVelY - 2 * gravityY*(launchY - floorY))) / gravityY;
+}
 
-  computeDriftX(ageSeconds, launchX) {
-    // Integral over [0, age] of the decaying horizontal velocity
-    //   velX(s) = launchVelX * dragDecay^(dragRate*s)
-    particleX = launchX + (launchVelX * pow(dragDecay, ageSeconds*dragRate) - launchVelX) / (dragRate*ln(dragDecay));
-  }
+computeDriftX(ageSeconds, launchX) {
+  // Integral over [0, age] of the decaying horizontal velocity
+  //   velX(s) = launchVelX * dragDecay^(dragRate*s)
+  particleX = launchX + (launchVelX * pow(dragDecay, ageSeconds*dragRate) - launchVelX) / (dragRate*ln(dragDecay));
+}
 
-  computeDriftZ(ageSeconds, launchZ) {
-    // Integral over [0, age] of the decaying horizontal velocity
-    //   velZ(s) = launchVelZ * dragDecay^(dragRate*s)
-    particleZ = launchZ + (launchVelZ * pow(dragDecay, ageSeconds*dragRate) - launchVelZ) / (dragRate*ln(dragDecay));
-  }
+computeDriftZ(ageSeconds, launchZ) {
+  // Integral over [0, age] of the decaying horizontal velocity
+  //   velZ(s) = launchVelZ * dragDecay^(dragRate*s)
+  particleZ = launchZ + (launchVelZ * pow(dragDecay, ageSeconds*dragRate) - launchVelZ) / (dragRate*ln(dragDecay));
+}
 
-  // bhX/bhY/bhZ: blowhole position in the whale's local frame (the globals
-  // blowHoleX/Y/Z, passed in -- named apart so they don't shadow).
-  // flukeAng/finAng are function-scoped locals: plain `float` inside the
-  // body, rebuilt every call, invisible to the rest of the scene. `detail`
-  // stays a global on purpose -- it is a scrubbable knob whose value has to
-  // survive between frames for the clamp below to hold it, not a temporary.
-  drawWhale(bhX, bhY, bhZ) {
-    float flukeAng, finAng;
-    flukeAng = sin(speed*t*TAU)* 30;
-    finAng = cos(speed*t*TAU)* 5;
-    detail = max(12, floor(detail));
+// bhX/bhY/bhZ: blowhole position in the whale's local frame (the globals
+// blowHoleX/Y/Z, passed in -- named apart so they don't shadow).
+// flukeAng/finAng are function-scoped locals: plain `float` inside the
+// body, rebuilt every call, invisible to the rest of the scene. `detail`
+// stays a global on purpose -- it is a scrubbable knob whose value has to
+// survive between frames for the clamp below to hold it, not a temporary.
+drawWhale(bhX, bhY, bhZ) {
+  float flukeAng, finAng;
+  flukeAng = sin(speed*t*TAU)* 30;
+  finAng = cos(speed*t*TAU)* 5;
+  detail = max(12, floor(detail));
 
-    // Shiny wet whale
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.2, 0.2, 0.2, 1});
-    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 100);
+  // Shiny wet whale
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.2, 0.2, 0.2, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 100);
 
-    // Main body: elongated ellipsoid, dark blue-grey on top
-    glColor3f(0.24, 0.3, 0.4);
+  // Main body: elongated ellipsoid, dark blue-grey on top
+  glColor3f(0.24, 0.3, 0.4);
 
+  glPushMatrix();
+    glScalef(2, 0.85, 1.05);
+    glutSolidSphere(1, detail, detail);
+  glPopMatrix();
+
+  // Belly: lighter, sits just under the body so it shows the underside
+  glColor3f(0.72, 0.76, 0.78);
+  glPushMatrix();
+    glTranslatef(0.05, -0.42, 0);
+    glScalef(1.65, 0.45, 0.75);
+    glutSolidSphere(1, detail, detail);
+  glPopMatrix();
+
+  glColor3f(0.24, 0.3, 0.4);
+  glPushMatrix(); // begin tail
+    glTranslatef(-1.85, -0.2, 0);
+    glRotatef(flukeAng/2, 0, 0, 1);
+
+    // Tail peduncle (narrow part before the flukes)
     glPushMatrix();
-      glScalef(2, 0.85, 1.05);
+      glScalef(0.75, 0.3, 0.4);
       glutSolidSphere(1, detail, detail);
     glPopMatrix();
 
-    // Belly: lighter, sits just under the body so it shows the underside
-    glColor3f(0.72, 0.76, 0.78);
+    // Tail flukes -- two flat lobes, animated with flukeAng
     glPushMatrix();
-      glTranslatef(0.05, -0.42, 0);
-      glScalef(1.65, 0.45, 0.75);
-      glutSolidSphere(1, detail, detail);
+      glTranslatef(-0.65, 0, 0);
+      glRotatef(flukeAng, 0, 0, 1);
+      glPushMatrix();
+        glTranslatef(-0.1, 0, 0.55);
+        glRotatef(15, 0, 1, 0);
+        glScalef(0.35, 0.06, 0.65);
+        glutSolidSphere(1, detail, detail); // right fluke
+      glPopMatrix();
+      glPushMatrix();
+        glTranslatef(-0.1, 0, -0.55);
+        glRotatef(-15, 0, 1, 0);
+        glScalef(0.35, 0.06, 0.65);
+        glutSolidSphere(1, detail, detail); // left fluke
+      glPopMatrix();
+    glPopMatrix(); // end flukes
+  glPopMatrix(); // end tail
+
+  // Pectoral fins
+  glPushMatrix();
+    glRotatef(finAng, 0, 0, 1);
+    glRotatef(finAng/4, 0, 1, 0);
+
+    glPushMatrix();
+      glTranslatef(0.45, -0.25, 1);
+      glRotatef(25, 0, 1, 0);
+      glScalef(0.4, 0.08, 0.45);
+      glutSolidSphere(1, 14, 10); // right pectoral fin
     glPopMatrix();
 
-    glColor3f(0.24, 0.3, 0.4);
-    glPushMatrix(); // begin tail
-      glTranslatef(-1.85, -0.2, 0);
-      glRotatef(flukeAng/2, 0, 0, 1);
-
-      // Tail peduncle (narrow part before the flukes)
-      glPushMatrix();
-        glScalef(0.75, 0.3, 0.4);
-        glutSolidSphere(1, detail, detail);
-      glPopMatrix();
-
-      // Tail flukes -- two flat lobes, animated with flukeAng
-      glPushMatrix();
-        glTranslatef(-0.65, 0, 0);
-        glRotatef(flukeAng, 0, 0, 1);
-        glPushMatrix();
-          glTranslatef(-0.1, 0, 0.55);
-          glRotatef(15, 0, 1, 0);
-          glScalef(0.35, 0.06, 0.65);
-          glutSolidSphere(1, detail, detail); // right fluke
-        glPopMatrix();
-        glPushMatrix();
-          glTranslatef(-0.1, 0, -0.55);
-          glRotatef(-15, 0, 1, 0);
-          glScalef(0.35, 0.06, 0.65);
-          glutSolidSphere(1, detail, detail); // left fluke
-        glPopMatrix();
-      glPopMatrix(); // end flukes
-    glPopMatrix(); // end tail
-
-    // Pectoral fins
     glPushMatrix();
-      glRotatef(finAng, 0, 0, 1);
-      glRotatef(finAng/4, 0, 1, 0);
-
-      glPushMatrix();
-        glTranslatef(0.45, -0.25, 1);
-        glRotatef(25, 0, 1, 0);
-        glScalef(0.4, 0.08, 0.45);
-        glutSolidSphere(1, 14, 10); // right pectoral fin
-      glPopMatrix();
-
-      glPushMatrix();
-        glTranslatef(0.45, -0.25, -1);
-        glScalef(0.4, 0.08, 0.45);
-        glutSolidSphere(1, 14, 10); // left pectoral fin
-      glPopMatrix();
-    glPopMatrix(); // end fins
-
-    // Eyes
-    glDisable(GL_LIGHTING);
-    glColor3f(0.04, 0.04, 0.04);
-    glPushMatrix();
-      glTranslatef(1.45, 0.18, 0.63);
-      glutSolidSphere(0.07, 10, 8);
-      glTranslatef(0, 0, -1.26);
-      glutSolidSphere(0.07, 10, 8);
+      glTranslatef(0.45, -0.25, -1);
+      glScalef(0.4, 0.08, 0.45);
+      glutSolidSphere(1, 14, 10); // left pectoral fin
     glPopMatrix();
+  glPopMatrix(); // end fins
 
-    // Blowhole
-    glColor3f(0.08, 0.08, 0.12);
-    glPushMatrix();
-      glTranslatef(bhX, bhY, bhZ);
-      glScalef(0.15, 0.04, 0.1);
-      glutSolidSphere(1, 10, 8);
-    glPopMatrix();
-  }
+  // Eyes
+  glDisable(GL_LIGHTING);
+  glColor3f(0.04, 0.04, 0.04);
+  glPushMatrix();
+    glTranslatef(1.45, 0.18, 0.63);
+    glutSolidSphere(0.07, 10, 8);
+    glTranslatef(0, 0, -1.26);
+    glutSolidSphere(0.07, 10, 8);
+  glPopMatrix();
+
+  // Blowhole
+  glColor3f(0.08, 0.08, 0.12);
+  glPushMatrix();
+    glTranslatef(bhX, bhY, bhZ);
+    glScalef(0.15, 0.04, 0.1);
+    glutSolidSphere(1, 10, 8);
+  glPopMatrix();
+}
 
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glEnable(GL_COLOR_MATERIAL);

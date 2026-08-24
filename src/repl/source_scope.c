@@ -25,6 +25,77 @@ void repl_source_scope_depth_cache_invalidate(void) {
  *   begin_depth_prefix  - glBegin/glEnd nesting
  *   tess_depth_prefix   - gluBegin/gluEnd nesting
  *   matrix_depth_prefix - glPushMatrix/glPopMatrix nesting (indents like glBegin). */
+/* Walk the document prefix that renders ABOVE `void display(void) {`:
+ * global declarations and closed depth-0 function definitions, plus the
+ * comment/blank runs that introduce them. Returns the first display()-body
+ * row (see repl_source_scope_view_display_body_start for the contract).
+ *
+ * A comment/blank run is BUFFERED rather than consumed, because it belongs
+ * to the row it precedes - the attachment rule glr_scene_write_phase()
+ * already uses. A run whose next non-comment row is a declaration or a
+ * closed function definition is prologue and is dropped from the buffer; a
+ * run that leads into anything else STARTS the body, and the boundary is
+ * the run's first row. Every catalog function scene has that second shape:
+ *
+ *     tri() { ... }
+ *                                       <- blank
+ *     // --- Render State ----------    <- belongs to glClearColor
+ *     glClearColor(...);
+ *
+ * A walk that skipped comments unconditionally would land the boundary on
+ * glClearColor and strand the section header above `void display(void) {`.
+ *
+ * Invalid rows are skipped without disturbing the pending run, matching the
+ * export phase walk. Closed blocks only: find_block_end() returns the
+ * document count for an unclosed definition, so an unclosed header stops
+ * the walk instead of swallowing the rest of the document. */
+static int source_scope_view_scan_display_body_start(
+        const ReplSourceScopeView *view) {
+    int pos = 0;
+    int pending = -1;   /* first row of the buffered comment/blank run */
+
+    if (!view || !view->cmds)
+        return 0;
+
+    while (pos < view->count) {
+        CmdType t;
+
+        if (!view->cmds[pos].valid) {
+            pos++;
+            continue;
+        }
+        t = view->cmds[pos].type;
+
+        if (t == CMD_COMMENT || t == CMD_EMPTY) {
+            if (pending < 0)
+                pending = pos;
+            pos++;
+            continue;
+        }
+
+        /* The walk only ever stands at depth 0 (whole function blocks are
+         * stepped over), so any declaration here is a global. */
+        if (t == CMD_VAR_DECLARE) {
+            pending = -1;
+            pos++;
+            continue;
+        }
+
+        if (t == CMD_FUNC_DEF) {
+            int end = repl_source_scope_view_find_block_end(view, pos);
+            if (end >= view->count)
+                break;              /* unclosed: it renders inside the body */
+            pending = -1;
+            pos = end + 1;
+            continue;
+        }
+
+        break;                      /* first executable row */
+    }
+
+    return pending >= 0 ? pending : pos;
+}
+
 static void source_scope_view_build(ReplSourceScopeView *view) {
     if (!view) return;
 
@@ -67,6 +138,7 @@ static void source_scope_view_build(ReplSourceScopeView *view) {
     }
 
     view->built = 1;
+    view->display_body_start = source_scope_view_scan_display_body_start(view);
 }
 
 static int source_scope_clamp_pos(const ReplSourceScopeView *view, int pos) {
@@ -254,7 +326,8 @@ void repl_source_scope_view_cmd_indent(const ReplSourceScopeView *view,
     int md = repl_source_scope_view_matrix_scope_depth_at(view, pos);
     if (source_scope_view_line_is_if_branch_separator(view, pos) && kd > 0)
         kd--;
-    int spaces = 2 + 2 * td + 2 * bd + 2 * kd + 2 * md;
+    int spaces = repl_source_scope_view_base_indent(view, pos)
+                 + 2 * td + 2 * bd + 2 * kd + 2 * md;
     source_scope_write_indent(spaces, buf, buf_sz);
 }
 
@@ -273,7 +346,9 @@ void repl_source_scope_view_begin_indent(const ReplSourceScopeView *view,
     int td = repl_source_scope_view_tess_scope_depth_at(view, pos);
     int kd = repl_source_scope_view_block_depth_at(view, pos);
     int md = repl_source_scope_view_matrix_scope_depth_at(view, pos);
-    int spaces = 2 + 2 * td + 2 * kd + 2 * md;
+    int spaces = repl_source_scope_view_base_indent(
+                     view, source_scope_clamp_pos(view, pos))
+                 + 2 * td + 2 * kd + 2 * md;
     source_scope_write_indent(spaces, buf, buf_sz);
 }
 
@@ -289,7 +364,9 @@ void repl_source_scope_view_tess_close_indent(const ReplSourceScopeView *view,
     int spaces;
 
     if (td > 0) td--;
-    spaces = 2 + 2 * td + 2 * kd + 2 * md;
+    spaces = repl_source_scope_view_base_indent(
+                 view, source_scope_clamp_pos(view, pos))
+             + 2 * td + 2 * kd + 2 * md;
     source_scope_write_indent(spaces, buf, buf_sz);
 }
 
@@ -310,7 +387,8 @@ void repl_source_scope_view_matrix_close_indent(const ReplSourceScopeView *view,
     int kd = repl_source_scope_view_block_depth_at(view, pos);
     int md = repl_source_scope_view_matrix_scope_depth_at(view, pos);
     if (md > 0) md--;
-    int spaces = 2 + 2 * td + 2 * bd + 2 * kd + 2 * md;
+    int spaces = repl_source_scope_view_base_indent(view, pos)
+                 + 2 * td + 2 * bd + 2 * kd + 2 * md;
     source_scope_write_indent(spaces, buf, buf_sz);
 }
 
@@ -322,16 +400,40 @@ void repl_source_scope_matrix_close_indent(int pos, char *buf, int buf_sz) {
 int repl_source_scope_view_cmd_indent_chars(const ReplSourceScopeView *view,
                                             int pos) {
     pos = source_scope_clamp_pos(view, pos);
-    if (!view || !view->built) return 2;
+    if (!view || !view->built) return REPL_SOURCE_SCOPE_BODY_BASE_INDENT;
     int kd = view->block_depth_prefix[pos];
     if (source_scope_view_line_is_if_branch_separator(view, pos) && kd > 0)
         kd--;
-    return 2 + 2 * view->tess_depth_prefix[pos] + 2 * view->begin_depth_prefix[pos]
+    return repl_source_scope_view_base_indent(view, pos)
+             + 2 * view->tess_depth_prefix[pos] + 2 * view->begin_depth_prefix[pos]
              + 2 * kd + 2 * view->matrix_depth_prefix[pos];
 }
 
 int repl_source_scope_cmd_indent_chars(int pos) {
     return repl_source_scope_view_cmd_indent_chars(live_source_scope_view(), pos);
+}
+
+int repl_source_scope_view_display_body_start(const ReplSourceScopeView *view) {
+    if (!view || !view->built) return 0;
+    return view->display_body_start;
+}
+
+int repl_source_scope_display_body_start(void) {
+    return repl_source_scope_view_display_body_start(live_source_scope_view());
+}
+
+int repl_source_scope_view_base_indent(const ReplSourceScopeView *view,
+                                       int pos) {
+    if (!view || !view->built) return REPL_SOURCE_SCOPE_BODY_BASE_INDENT;
+    return pos < view->display_body_start
+               ? 0 : REPL_SOURCE_SCOPE_BODY_BASE_INDENT;
+}
+
+int repl_source_scope_view_base_indent_for_insert(
+        const ReplSourceScopeView *view, int pos) {
+    if (!view || !view->built) return REPL_SOURCE_SCOPE_BODY_BASE_INDENT;
+    return pos <= view->display_body_start
+               ? 0 : REPL_SOURCE_SCOPE_BODY_BASE_INDENT;
 }
 
 /* Tessellator leaf command indent: 2 + 2*tess + 2*block + 2*matrix
@@ -341,7 +443,9 @@ void repl_source_scope_view_cmd_tess_indent(const ReplSourceScopeView *view,
     int td = repl_source_scope_view_tess_scope_depth_at(view, pos);
     int kd = repl_source_scope_view_block_depth_at(view, pos);
     int md = repl_source_scope_view_matrix_scope_depth_at(view, pos);
-    int spaces = 2 + 2 * td + 2 * kd + 2 * md;
+    int spaces = repl_source_scope_view_base_indent(
+                     view, source_scope_clamp_pos(view, pos))
+                 + 2 * td + 2 * kd + 2 * md;
     source_scope_write_indent(spaces, buf, buf_sz);
 }
 

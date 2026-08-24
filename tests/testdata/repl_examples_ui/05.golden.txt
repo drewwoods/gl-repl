@@ -100,15 +100,15 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  // --- Functions ----------------------
-  triangle() {
-    glBegin(GL_TRIANGLES);
-      glNormal3f(0, 0, 1);
-      glVertex3f(0, 0.8, 0);
-      glVertex3f(-0.7, -0.4, 0);
-      glVertex3f(0.7, -0.4, 0);
-    glEnd();
-  }
+// --- Functions ----------------------
+triangle() {
+  glBegin(GL_TRIANGLES);
+    glNormal3f(0, 0, 1);
+    glVertex3f(0, 0.8, 0);
+    glVertex3f(-0.7, -0.4, 0);
+    glVertex3f(0.7, -0.4, 0);
+  glEnd();
+}
 
   // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);

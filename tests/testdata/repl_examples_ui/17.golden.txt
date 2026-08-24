@@ -100,11 +100,11 @@ void display(void) {
 --- header_post ---
   float A[16], B[16], C[16];
 --- source ---
-  static float R = 2; // major radius (ring center to tube center)
-  static float r = 1; // minor radius (tube thickness)
-  static float n = 20; // @config segment count around both u and v
-  static float u, v, s; // current major/minor angles, color mix factor
-  static float tr; // tube-offset radius R + r*cos(v), read twice per vertex line
+static float R = 2; // major radius (ring center to tube center)
+static float r = 1; // minor radius (tube thickness)
+static float n = 20; // @config segment count around both u and v
+static float u, v, s; // current major/minor angles, color mix factor
+static float tr; // tube-offset radius R + r*cos(v), read twice per vertex line
 
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

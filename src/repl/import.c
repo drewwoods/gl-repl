@@ -739,9 +739,10 @@ static int parse_snippet_declare(const char *args, ImportState *s) {
      * initializer through the round-trip so the canonical decl text matches
      * the original source byte-for-byte. */
     char decl_line[MAX_LINE_LEN];
-    /* Canonical form matches format_decl_text: `  static float ...`.
-     * The exporter writes file-scope `static float` lines anyway, so
-     * the keyword here reinforces that lifetime in the code panel.
+    /* Canonical form matches format_decl_text. Global declarations render
+     * ABOVE `void display(void) {` at column 0, which is also where the
+     * exporter writes them, so the reconstruction carries no indent. The
+     * `static` keyword reinforces that file-scope lifetime in the panel.
      *
      * The reconstruction is *wider than the marker it came from*: names get
      * `, ` separators and each stashed value is re-rendered from the float
@@ -751,7 +752,7 @@ static int parse_snippet_declare(const char *args, ImportState *s) {
      * - see src/repl/util.h for why the raw idiom writes out of bounds. */
     int truncated = 0;
     int off = repl_append_clamped(decl_line, sizeof(decl_line), 0, &truncated,
-                                  "  static float");
+                                  "static float");
     while (*p) {
         while (*p && isspace((unsigned char)*p)) p++;
         if (!*p) break;
