@@ -27,76 +27,78 @@ static float maxH, norm;
 static float r, g, b_col;
 static float neg;
 
-glTranslatef(0.0000f, 0.0000f, -5.7199f);   // @camera dist
-glRotatef(33.9995f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(10.4804f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+display() {
+  glTranslatef(0.0000f, 0.0000f, -5.7199f);   // @camera dist
+  glRotatef(33.9995f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(10.4804f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glClearColor(0.02, 0.02, 0.06, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glClearColor(0.02, 0.02, 0.06, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-glPointSize(3);
+  glPointSize(3);
 
-glBegin(GL_POINTS);
+  glBegin(GL_POINTS);
 
-  // Iterate over the grid
-  for(ix, 0, 64) {
-    gx = -gridSize + ix * step;
-    if(gx > gridSize) {
-      break;
-    }
-
-    for(iz, 0, 64) {
-      gz = -gridSize + iz * step;
-      if(gz > gridSize) {
+    // Iterate over the grid
+    for(ix, 0, 64) {
+      gx = -gridSize + ix * step;
+      if(gx > gridSize) {
         break;
       }
 
-      // Distance from each emitter
-      dx1 = gx - e1x;
-      dz1 = gz - e1z;
-      dist1 = sqrt(dx1 * dx1 + dz1 * dz1);
+      for(iz, 0, 64) {
+        gz = -gridSize + iz * step;
+        if(gz > gridSize) {
+          break;
+        }
 
-      dx2 = gx - e2x;
-      dz2 = gz - e2z;
-      dist2 = sqrt(dx2 * dx2 + dz2 * dz2);
+        // Distance from each emitter
+        dx1 = gx - e1x;
+        dz1 = gz - e1z;
+        dist1 = sqrt(dx1 * dx1 + dz1 * dz1);
 
-      // Wave from each source with distance attenuation
-      atten1 = 1.0 / (1.0 + 0.15 * dist1);
-      wave1 = amplitude * atten1 * sin(dist1 * freq - t * speed);
+        dx2 = gx - e2x;
+        dz2 = gz - e2z;
+        dist2 = sqrt(dx2 * dx2 + dz2 * dz2);
 
-      atten2 = 1.0 / (1.0 + 0.15 * dist2);
-      wave2 = amplitude * atten2 * sin(dist2 * freq - t * speed);
+        // Wave from each source with distance attenuation
+        atten1 = 1.0 / (1.0 + 0.15 * dist1);
+        wave1 = amplitude * atten1 * sin(dist1 * freq - t * speed);
 
-      // Superposition
-      h = wave1 + wave2;
+        atten2 = 1.0 / (1.0 + 0.15 * dist2);
+        wave2 = amplitude * atten2 * sin(dist2 * freq - t * speed);
 
-      // Normalize height for color mapping (-2*amplitude to +2*amplitude)
-      maxH = 2.0 * amplitude;
-      norm = clamp(h / maxH, -1.0, 1.0);
+        // Superposition
+        h = wave1 + wave2;
 
-      // Color: blue (troughs) -> white (zero) -> red (peaks)
-      r = 0.0;
-      g = 0.0;
-      b_col = 0.0;
+        // Normalize height for color mapping (-2*amplitude to +2*amplitude)
+        maxH = 2.0 * amplitude;
+        norm = clamp(h / maxH, -1.0, 1.0);
 
-      if(norm > 0.0) {
-        // Zero to peak: white to red
-        r = 0.5 + 0.5 * norm;
-        g = 1.0 - norm;
-        b_col = 1.0 - norm;
-      } else {
-        // Zero to trough: white to blue
-        neg = -norm;
-        r = 1.0 - neg;
-        g = 1.0 - neg;
-        b_col = 0.5 + 0.5 * neg;
+        // Color: blue (troughs) -> white (zero) -> red (peaks)
+        r = 0.0;
+        g = 0.0;
+        b_col = 0.0;
+
+        if(norm > 0.0) {
+          // Zero to peak: white to red
+          r = 0.5 + 0.5 * norm;
+          g = 1.0 - norm;
+          b_col = 1.0 - norm;
+        } else {
+          // Zero to trough: white to blue
+          neg = -norm;
+          r = 1.0 - neg;
+          g = 1.0 - neg;
+          b_col = 0.5 + 0.5 * neg;
+        }
+
+        glColor3f(r, g, b_col);
+        glVertex3f(gx, h, gz);
       }
-
-      glColor3f(r, g, b_col);
-      glVertex3f(gx, h, gz);
     }
-  }
 
-glEnd();
+  glEnd();
+}

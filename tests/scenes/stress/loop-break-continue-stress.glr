@@ -1,50 +1,52 @@
 // @cfg view_mode = RENDER3D_VIEW_3D
 // @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_CLASSIC
-glTranslatef(0.0f, 0.0f, -10.00f);   // @camera dist
-glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-glRotatef(15.0f * t, 0.0f, 1.0f, 0.0f);
+display() {
+  glTranslatef(0.0f, 0.0f, -10.00f);   // @camera dist
+  glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+  glRotatef(15.0f * t, 0.0f, 1.0f, 0.0f);
 
-glClearColor(0.05f, 0.04f, 0.06f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glClearColor(0.05f, 0.04f, 0.06f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-// Loop stress test featuring nested loops, dynamic step, break and continue.
-// Nesting up to 3 levels deep (4 supported max).
-for(x, -5, 6, 2) {
-  for(y, -5, 6, 2) {
-    // Condition to skip the center line
-    if(abs(x) < 1.0f && abs(y) < 1.0f) {
-      continue;
-    }
-
-    // Third nested loop to draw vertical columns
-    for(z, -3, 4) {
-      // Dynamic boundary break: stops drawing higher levels under modular condition
-      if(z > 2 && (x + y) % 4 == 0) {
-        break;
-      }
-
-      // Dynamic continue to skip specific z level based on time-varying sine wave
-      if(z == 0 && sin(t + x * 0.5f) > 0.0f) {
+  // Loop stress test featuring nested loops, dynamic step, break and continue.
+  // Nesting up to 3 levels deep (4 supported max).
+  for(x, -5, 6, 2) {
+    for(y, -5, 6, 2) {
+      // Condition to skip the center line
+      if(abs(x) < 1.0f && abs(y) < 1.0f) {
         continue;
       }
 
-      glPushMatrix();
-      glTranslatef(x * 0.9f, z * 0.6f + cos(t + y * 0.5f) * 0.3f, y * 0.9f);
+      // Third nested loop to draw vertical columns
+      for(z, -3, 4) {
+        // Dynamic boundary break: stops drawing higher levels under modular condition
+        if(z > 2 && (x + y) % 4 == 0) {
+          break;
+        }
 
-      // Determine color based on loop counters
-      glColor3f(clamp((x + 5.0f)/10.0f, 0.1f, 0.9f), clamp((z + 3.0f)/7.0f, 0.2f, 0.8f), clamp((y + 5.0f)/10.0f, 0.3f, 0.9f));
+        // Dynamic continue to skip specific z level based on time-varying sine wave
+        if(z == 0 && sin(t + x * 0.5f) > 0.0f) {
+          continue;
+        }
 
-      if(z % 2 == 0) {
-        glutSolidCube(0.25f);
-      } else {
-        glutSolidSphere(0.18f, 10, 10);
+        glPushMatrix();
+          glTranslatef(x * 0.9f, z * 0.6f + cos(t + y * 0.5f) * 0.3f, y * 0.9f);
+
+          // Determine color based on loop counters
+          glColor3f(clamp((x + 5.0f)/10.0f, 0.1f, 0.9f), clamp((z + 3.0f)/7.0f, 0.2f, 0.8f), clamp((y + 5.0f)/10.0f, 0.3f, 0.9f));
+
+          if(z % 2 == 0) {
+            glutSolidCube(0.25f);
+          } else {
+            glutSolidSphere(0.18f, 10, 10);
+          }
+
+        glPopMatrix();
       }
-
-      glPopMatrix();
     }
   }
 }

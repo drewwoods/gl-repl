@@ -9,44 +9,46 @@ static float p = 3;
 static float q = 7;
 static float phi, rad, x, y, z;
 static float r, g, b_col, size;
-glTranslatef(0.0000f, 0.0000f, -8.0063f);   // @camera dist
-glRotatef(39.9559f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+display() {
+  glTranslatef(0.0000f, 0.0000f, -8.0063f);   // @camera dist
+  glRotatef(39.9559f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glClearColor(0.03, 0.03, 0.05, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
+  glClearColor(0.03, 0.03, 0.05, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
 
-glPushMatrix();
-  glRotatef(t * 20.0, 0, 1, 0);
+  glPushMatrix();
+    glRotatef(t * 20.0, 0, 1, 0);
 
-  for(i, 0, num_points) {
-    phi = i * (2.0 * PI) / num_points;
+    for(i, 0, num_points) {
+      phi = i * (2.0 * PI) / num_points;
 
-    // Torus knot formula with time animation
-    rad = R + r_minor * cos(q * phi + t * 2.0);
-    x = rad * cos(p * phi + t * 0.5);
-    y = rad * sin(p * phi + t * 0.5);
-    z = r_minor * sin(q * phi + t * 2.0);
+      // Torus knot formula with time animation
+      rad = R + r_minor * cos(q * phi + t * 2.0);
+      x = rad * cos(p * phi + t * 0.5);
+      y = rad * sin(p * phi + t * 0.5);
+      z = r_minor * sin(q * phi + t * 2.0);
 
-    // Dynamic rainbow color gradient
-    r = 0.5 + 0.5 * sin(phi * 2.0 + t * 1.5);
-    g = 0.5 + 0.5 * sin(phi * 2.0 + 2.094 + t * 1.5);
-    b_col = 0.5 + 0.5 * sin(phi * 2.0 + 4.188 + t * 1.5);
+      // Dynamic rainbow color gradient
+      r = 0.5 + 0.5 * sin(phi * 2.0 + t * 1.5);
+      g = 0.5 + 0.5 * sin(phi * 2.0 + 2.094 + t * 1.5);
+      b_col = 0.5 + 0.5 * sin(phi * 2.0 + 4.188 + t * 1.5);
 
-    glPushMatrix();
-      glTranslatef(x, y, z);
-      glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){r, g, b_col, 1.0});
-      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.9, 0.9, 0.9, 1});
-      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 50);
+      glPushMatrix();
+        glTranslatef(x, y, z);
+        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){r, g, b_col, 1.0});
+        glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.9, 0.9, 0.9, 1});
+        glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 50);
 
-      // Vary sphere size along the knot to make it look like a slinky or beaded necklace
-      size = 0.14 + 0.07 * sin(phi * 6.0 + t * 4.0);
-      glutSolidSphere(size, 10, 10);
-    glPopMatrix();
-  }
+        // Vary sphere size along the knot to make it look like a slinky or beaded necklace
+        size = 0.14 + 0.07 * sin(phi * 6.0 + t * 4.0);
+        glutSolidSphere(size, 10, 10);
+      glPopMatrix();
+    }
 
-glPopMatrix();
+  glPopMatrix();
+}

@@ -2,40 +2,42 @@
 // @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_CLASSIC
 
-glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
-glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+display() {
+  glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
+  glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
-glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-glRotatef(30.0f * t, 0.0f, 1.0f, 0.0f);
+  glRotatef(30.0f * t, 0.0f, 1.0f, 0.0f);
 
-// 1. Red channel only pass (Green and Blue masked off)
-glColorMask(GL_TRUE, GL_FALSE, GL_FALSE, GL_TRUE);
-glPushMatrix();
-glTranslatef(-2.4f, 0.0f, 0.0f);
-glColor3f(1.0f, 1.0f, 1.0f);
-glutSolidCube(1.3f);
-glPopMatrix();
+  // 1. Red channel only pass (Green and Blue masked off)
+  glColorMask(GL_TRUE, GL_FALSE, GL_FALSE, GL_TRUE);
+  glPushMatrix();
+    glTranslatef(-2.4f, 0.0f, 0.0f);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glutSolidCube(1.3f);
+  glPopMatrix();
 
-// 2. Green channel only pass (Red and Blue masked off)
-glColorMask(GL_FALSE, GL_TRUE, GL_FALSE, GL_TRUE);
-glPushMatrix();
-glTranslatef(0.0f, 0.0f, 0.0f);
-glColor3f(1.0f, 1.0f, 1.0f);
-glutSolidSphere(0.9f, 16, 16);
-glPopMatrix();
+  // 2. Green channel only pass (Red and Blue masked off)
+  glColorMask(GL_FALSE, GL_TRUE, GL_FALSE, GL_TRUE);
+  glPushMatrix();
+    glTranslatef(0.0f, 0.0f, 0.0f);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glutSolidSphere(0.9f, 16, 16);
+  glPopMatrix();
 
-// 3. Blue channel only pass (Red and Green masked off)
-glColorMask(GL_FALSE, GL_FALSE, GL_TRUE, GL_TRUE);
-glPushMatrix();
-glTranslatef(2.4f, 0.0f, 0.0f);
-glColor3f(1.0f, 1.0f, 1.0f);
-glutSolidCube(1.3f);
-glPopMatrix();
+  // 3. Blue channel only pass (Red and Green masked off)
+  glColorMask(GL_FALSE, GL_FALSE, GL_TRUE, GL_TRUE);
+  glPushMatrix();
+    glTranslatef(2.4f, 0.0f, 0.0f);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glutSolidCube(1.3f);
+  glPopMatrix();
 
-// Restore full color mask
-glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+  // Restore full color mask
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+}

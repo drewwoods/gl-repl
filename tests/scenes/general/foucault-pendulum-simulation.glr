@@ -8,105 +8,107 @@ static float bob_x, bob_y, bob_z;
 static float peg_u, peg_x, peg_z, peg_h;
 static float u_dial, cu, su;
 
-glTranslatef(0.0000f, 0.0000f, -12.0000f);   // @camera dist
-glRotatef(22.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0000f, -0.6000f, 0.0000f);   // @camera pan
+display() {
+  glTranslatef(0.0000f, 0.0000f, -12.0000f);   // @camera dist
+  glRotatef(22.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0000f, -0.6000f, 0.0000f);   // @camera pan
 
-glClearColor(0.03, 0.03, 0.06, 1.0);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_LIGHT1);
-
-precess_ang = 12.0 * t;
-swing_ang   = 28.0 * sin(t * 2.2);
-
-// --- 1. Floor Compass Rose & Dial Platform ---
-glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.12, 0.12, 0.16, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.25, 0.28, 0.35, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.40, 0.45, 0.55, 1.0});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 32.0);
-
-glPushMatrix();
-  glTranslatef(0.0, -2.4, 0.0);
-
-  // Floor disc
-  glBegin(GL_QUAD_STRIP);
-    for(i, 0, 37) {
-      u_dial = i * (TAU / 36.0);
-      cu = cos(u_dial);
-      su = sin(u_dial);
-      glNormal3f(0.0, 1.0, 0.0);
-      glVertex3f(cu * 3.8, 0.0, su * 3.8);
-      glVertex3f(0.0, 0.0, 0.0);
-    }
-  glEnd();
-
-  // Outer brass dial ring
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.85, 0.70, 0.20, 1.0});
-  glutSolidTorus(0.08, 3.2, 12, 36);
-
-  // Perimeter marker pegs (24 pegs around circle)
-  for(i, 0, 24) {
-    peg_u = i * (TAU / 24.0);
-    peg_x = cos(peg_u) * 2.9;
-    peg_z = sin(peg_u) * 2.9;
-
-    glPushMatrix();
-      glTranslatef(peg_x, 0.0, peg_z);
-      // If precession angle has passed this peg, render it knocked down
-      if(fmod(precess_ang, 360.0) > (i * 15.0)) {
-        glRotatef(75.0, -sin(peg_u), 0.0, cos(peg_u));
-        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.90, 0.35, 0.20, 1.0});
-      }
-      if(fmod(precess_ang, 360.0) <= (i * 15.0)) {
-        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.35, 0.85, 0.90, 1.0});
-      }
-      glutSolidCube(0.25);
-    glPopMatrix();
-  }
-glPopMatrix();
-
-// --- 2. Ceiling Suspension Bracket ---
-glPushMatrix();
-  glTranslatef(0.0, 4.2, 0.0);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.7, 0.7, 0.75, 1.0});
-  glutSolidSphere(0.3, 16, 16);
-glPopMatrix();
-
-// --- 3. Precessing Pendulum Assembly ---
-glPushMatrix();
-  glTranslatef(0.0, 4.2, 0.0);
-  // Precession of swing plane around vertical axis
-  glRotatef(precess_ang, 0.0, 1.0, 0.0);
-  // Harmonic swing rotation
-  glRotatef(swing_ang, 0.0, 0.0, 1.0);
-
-  // Steel suspension cable
-  glDisable(GL_LIGHTING);
-  glColor3f(0.85, 0.85, 0.90);
-  glLineWidth(2.0);
-  glBegin(GL_LINES);
-    glVertex3f(0.0, 0.0, 0.0);
-    glVertex3f(0.0, -6.0, 0.0);
-  glEnd();
+  glClearColor(0.03, 0.03, 0.06, 1.0);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
   glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT1);
 
-  // Brass Bob at end of cable
-  glTranslatef(0.0, -6.0, 0.0);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.25, 0.20, 0.05, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.95, 0.78, 0.18, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){1.00, 0.90, 0.45, 1.0});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 90.0);
+  precess_ang = 12.0 * t;
+  swing_ang   = 28.0 * sin(t * 2.2);
 
-  glutSolidSphere(0.42, 24, 24);
+  // --- 1. Floor Compass Rose & Dial Platform ---
+  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.12, 0.12, 0.16, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.25, 0.28, 0.35, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.40, 0.45, 0.55, 1.0});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 32.0);
 
-  // Bottom pointer tip / spike
   glPushMatrix();
-    glTranslatef(0.0, -0.4, 0.0);
-    glRotatef(90.0, 1.0, 0.0, 0.0);
-    glutSolidCone(0.12, 0.35, 16, 6);
+    glTranslatef(0.0, -2.4, 0.0);
+
+    // Floor disc
+    glBegin(GL_QUAD_STRIP);
+      for(i, 0, 37) {
+        u_dial = i * (TAU / 36.0);
+        cu = cos(u_dial);
+        su = sin(u_dial);
+        glNormal3f(0.0, 1.0, 0.0);
+        glVertex3f(cu * 3.8, 0.0, su * 3.8);
+        glVertex3f(0.0, 0.0, 0.0);
+      }
+    glEnd();
+
+    // Outer brass dial ring
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.85, 0.70, 0.20, 1.0});
+    glutSolidTorus(0.08, 3.2, 12, 36);
+
+    // Perimeter marker pegs (24 pegs around circle)
+    for(i, 0, 24) {
+      peg_u = i * (TAU / 24.0);
+      peg_x = cos(peg_u) * 2.9;
+      peg_z = sin(peg_u) * 2.9;
+
+      glPushMatrix();
+        glTranslatef(peg_x, 0.0, peg_z);
+        // If precession angle has passed this peg, render it knocked down
+        if(fmod(precess_ang, 360.0) > (i * 15.0)) {
+          glRotatef(75.0, -sin(peg_u), 0.0, cos(peg_u));
+          glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.90, 0.35, 0.20, 1.0});
+        }
+        if(fmod(precess_ang, 360.0) <= (i * 15.0)) {
+          glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.35, 0.85, 0.90, 1.0});
+        }
+        glutSolidCube(0.25);
+      glPopMatrix();
+    }
   glPopMatrix();
-glPopMatrix();
+
+  // --- 2. Ceiling Suspension Bracket ---
+  glPushMatrix();
+    glTranslatef(0.0, 4.2, 0.0);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.7, 0.7, 0.75, 1.0});
+    glutSolidSphere(0.3, 16, 16);
+  glPopMatrix();
+
+  // --- 3. Precessing Pendulum Assembly ---
+  glPushMatrix();
+    glTranslatef(0.0, 4.2, 0.0);
+    // Precession of swing plane around vertical axis
+    glRotatef(precess_ang, 0.0, 1.0, 0.0);
+    // Harmonic swing rotation
+    glRotatef(swing_ang, 0.0, 0.0, 1.0);
+
+    // Steel suspension cable
+    glDisable(GL_LIGHTING);
+    glColor3f(0.85, 0.85, 0.90);
+    glLineWidth(2.0);
+    glBegin(GL_LINES);
+      glVertex3f(0.0, 0.0, 0.0);
+      glVertex3f(0.0, -6.0, 0.0);
+    glEnd();
+    glEnable(GL_LIGHTING);
+
+    // Brass Bob at end of cable
+    glTranslatef(0.0, -6.0, 0.0);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.25, 0.20, 0.05, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.95, 0.78, 0.18, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){1.00, 0.90, 0.45, 1.0});
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 90.0);
+
+    glutSolidSphere(0.42, 24, 24);
+
+    // Bottom pointer tip / spike
+    glPushMatrix();
+      glTranslatef(0.0, -0.4, 0.0);
+      glRotatef(90.0, 1.0, 0.0, 0.0);
+      glutSolidCone(0.12, 0.35, 16, 6);
+    glPopMatrix();
+  glPopMatrix();
+}

@@ -3,30 +3,32 @@
 // @cfg grid = GRID_THEME_CLASSIC
 static float r, theta, z, f; // helix calculation variables
 
-glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
-glRotatef(30.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+display() {
+  glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
+  glRotatef(30.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
-// Clear screen to Canvas color
-glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  // Clear screen to Canvas color
+  glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-// Rotate scene over time
-glRotatef(45.0f * t, 0.0f, 1.0f, 0.0f);
+  // Rotate scene over time
+  glRotatef(45.0f * t, 0.0f, 1.0f, 0.0f);
 
-glLineWidth(3.0f);
-glBegin(GL_LINE_STRIP);
-  for(i, -60, 60) {
-    theta = i * 0.15f + t;
-    r = 1.8f;
-    z = i * 0.04f;
-    f = sin(theta * 0.5f) * 0.5f + 0.5f;
+  glLineWidth(3.0f);
+  glBegin(GL_LINE_STRIP);
+    for(i, -60, 60) {
+      theta = i * 0.15f + t;
+      r = 1.8f;
+      z = i * 0.04f;
+      f = sin(theta * 0.5f) * 0.5f + 0.5f;
 
-    // Mix TEAL (0.1, 0.95, 0.85) and MAGENTA (0.95, 0.25, 1.0)
-    glColor3f(0.10f + 0.85f * f, 0.95f - 0.70f * f, 0.85f + 0.15f * f);
-    glVertex3f(cos(theta) * r, z, sin(theta) * r);
-  }
-glEnd();
-glLineWidth(1.0f);
+      // Mix TEAL (0.1, 0.95, 0.85) and MAGENTA (0.95, 0.25, 1.0)
+      glColor3f(0.10f + 0.85f * f, 0.95f - 0.70f * f, 0.85f + 0.15f * f);
+      glVertex3f(cos(theta) * r, z, sin(theta) * r);
+    }
+  glEnd();
+  glLineWidth(1.0f);
+}

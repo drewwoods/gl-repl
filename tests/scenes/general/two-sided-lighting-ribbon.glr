@@ -9,97 +9,99 @@
 // reason the back is not just a darkened copy of the front.
 static float u, y, nx, ny, nz, len;
 
-glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
-glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(166.3021f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+display() {
+  glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
+  glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(166.3021f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_LIGHT1);
-glEnable(GL_NORMALIZE);
-glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-glDisable(GL_CULL_FACE);
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT1);
+  glEnable(GL_NORMALIZE);
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+  glDisable(GL_CULL_FACE);
 
-glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){1, 0.35, 0.2, 1});
-glMaterialfv(GL_FRONT, GL_AMBIENT, (GLfloat[]){0.3, 0.1, 0.06, 1});
-glMaterialfv(GL_FRONT, GL_SPECULAR, (GLfloat[]){0.92, 0.95, 0.98, 1});
-glMaterialf(GL_FRONT, GL_SHININESS, 40);
-glMaterialfv(GL_BACK, GL_DIFFUSE, (GLfloat[]){0.15, 0.55, 1, 1});
-glMaterialfv(GL_BACK, GL_AMBIENT, (GLfloat[]){0.04, 0.14, 0.28, 1});
-glMaterialfv(GL_BACK, GL_SPECULAR, (GLfloat[]){0.55, 0.3, 1, 1});
-glMaterialf(GL_BACK, GL_SHININESS, 18);
+  glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){1, 0.35, 0.2, 1});
+  glMaterialfv(GL_FRONT, GL_AMBIENT, (GLfloat[]){0.3, 0.1, 0.06, 1});
+  glMaterialfv(GL_FRONT, GL_SPECULAR, (GLfloat[]){0.92, 0.95, 0.98, 1});
+  glMaterialf(GL_FRONT, GL_SHININESS, 40);
+  glMaterialfv(GL_BACK, GL_DIFFUSE, (GLfloat[]){0.15, 0.55, 1, 1});
+  glMaterialfv(GL_BACK, GL_AMBIENT, (GLfloat[]){0.04, 0.14, 0.28, 1});
+  glMaterialfv(GL_BACK, GL_SPECULAR, (GLfloat[]){0.55, 0.3, 1, 1});
+  glMaterialf(GL_BACK, GL_SHININESS, 18);
 
-glRotatef(t * 18, 0, 1, 0);
+  glRotatef(t * 18, 0, 1, 0);
 
-// Pole
-glEnable(GL_COLOR_MATERIAL);
-glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-glColor3f(0.92, 0.95, 0.98);
-glPushMatrix();
-  glTranslatef(-2.05, 0, 0);
-  glScalef(0.08, 2.6, 0.08);
-  glutSolidCube(1);
-glPopMatrix();
-glDisable(GL_COLOR_MATERIAL);
+  // Pole
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glColor3f(0.92, 0.95, 0.98);
+  glPushMatrix();
+    glTranslatef(-2.05, 0, 0);
+    glScalef(0.08, 2.6, 0.08);
+    glutSolidCube(1);
+  glPopMatrix();
+  glDisable(GL_COLOR_MATERIAL);
 
-// Flag: x across, z the short width, y a traveling sine.
-// Tangent ~ (1, 0.8*cos(...), 0), bitangent (0,0,1),
-// normal = tangent x bitangent = (0.8*cos, -1, 0).
-glBegin(GL_QUAD_STRIP);
-  for(i, 0, 28) {
-    u = i / 27;
-    y = 0.42 * sin(u * 4.2 - t * 3.4);
-    nx = 0.8 * cos(u * 4.2 - t * 3.4);
-    ny = -1;
-    nz = 0;
-    len = sqrt(nx * nx + ny * ny + nz * nz);
-    glNormal3f(nx / len, ny / len, nz / len);
-    glVertex3f(-2 + u * 4, y + 0.55, -0.35);
-    glVertex3f(-2 + u * 4, y + 0.55, 0.35);
-  }
-glEnd();
+  // Flag: x across, z the short width, y a traveling sine.
+  // Tangent ~ (1, 0.8*cos(...), 0), bitangent (0,0,1),
+  // normal = tangent x bitangent = (0.8*cos, -1, 0).
+  glBegin(GL_QUAD_STRIP);
+    for(i, 0, 28) {
+      u = i / 27;
+      y = 0.42 * sin(u * 4.2 - t * 3.4);
+      nx = 0.8 * cos(u * 4.2 - t * 3.4);
+      ny = -1;
+      nz = 0;
+      len = sqrt(nx * nx + ny * ny + nz * nz);
+      glNormal3f(nx / len, ny / len, nz / len);
+      glVertex3f(-2 + u * 4, y + 0.55, -0.35);
+      glVertex3f(-2 + u * 4, y + 0.55, 0.35);
+    }
+  glEnd();
 
-// Lower edge for a second row so the flag has height.
-glBegin(GL_QUAD_STRIP);
-  for(i, 0, 28) {
-    u = i / 27;
-    y = 0.42 * sin(u * 4.2 - t * 3.4);
-    nx = 0.8 * cos(u * 4.2 - t * 3.4);
-    ny = -1;
-    nz = 0;
-    len = sqrt(nx * nx + ny * ny + nz * nz);
-    glNormal3f(nx / len, ny / len, nz / len);
-    glVertex3f(-2 + u * 4, y - 0.55, -0.35);
-    glVertex3f(-2 + u * 4, y + 0.55, -0.35);
-  }
-glEnd();
-glBegin(GL_QUAD_STRIP);
-  for(i, 0, 28) {
-    u = i / 27;
-    y = 0.42 * sin(u * 4.2 - t * 3.4);
-    nx = 0.8 * cos(u * 4.2 - t * 3.4);
-    ny = -1;
-    nz = 0;
-    len = sqrt(nx * nx + ny * ny + nz * nz);
-    glNormal3f(nx / len, ny / len, nz / len);
-    glVertex3f(-2 + u * 4, y - 0.55, 0.35);
-    glVertex3f(-2 + u * 4, y + 0.55, 0.35);
-  }
-glEnd();
-glBegin(GL_QUAD_STRIP);
-  for(i, 0, 28) {
-    u = i / 27;
-    y = 0.42 * sin(u * 4.2 - t * 3.4);
-    nx = 0.8 * cos(u * 4.2 - t * 3.4);
-    ny = -1;
-    nz = 0;
-    len = sqrt(nx * nx + ny * ny + nz * nz);
-    glNormal3f(nx / len, ny / len, nz / len);
-    glVertex3f(-2 + u * 4, y - 0.55, -0.35);
-    glVertex3f(-2 + u * 4, y - 0.55, 0.35);
-  }
-glEnd();
+  // Lower edge for a second row so the flag has height.
+  glBegin(GL_QUAD_STRIP);
+    for(i, 0, 28) {
+      u = i / 27;
+      y = 0.42 * sin(u * 4.2 - t * 3.4);
+      nx = 0.8 * cos(u * 4.2 - t * 3.4);
+      ny = -1;
+      nz = 0;
+      len = sqrt(nx * nx + ny * ny + nz * nz);
+      glNormal3f(nx / len, ny / len, nz / len);
+      glVertex3f(-2 + u * 4, y - 0.55, -0.35);
+      glVertex3f(-2 + u * 4, y + 0.55, -0.35);
+    }
+  glEnd();
+  glBegin(GL_QUAD_STRIP);
+    for(i, 0, 28) {
+      u = i / 27;
+      y = 0.42 * sin(u * 4.2 - t * 3.4);
+      nx = 0.8 * cos(u * 4.2 - t * 3.4);
+      ny = -1;
+      nz = 0;
+      len = sqrt(nx * nx + ny * ny + nz * nz);
+      glNormal3f(nx / len, ny / len, nz / len);
+      glVertex3f(-2 + u * 4, y - 0.55, 0.35);
+      glVertex3f(-2 + u * 4, y + 0.55, 0.35);
+    }
+  glEnd();
+  glBegin(GL_QUAD_STRIP);
+    for(i, 0, 28) {
+      u = i / 27;
+      y = 0.42 * sin(u * 4.2 - t * 3.4);
+      nx = 0.8 * cos(u * 4.2 - t * 3.4);
+      ny = -1;
+      nz = 0;
+      len = sqrt(nx * nx + ny * ny + nz * nz);
+      glNormal3f(nx / len, ny / len, nz / len);
+      glVertex3f(-2 + u * 4, y - 0.55, -0.35);
+      glVertex3f(-2 + u * 4, y - 0.55, 0.35);
+    }
+  glEnd();
+}

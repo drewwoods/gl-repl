@@ -8,52 +8,54 @@
 // A slow spin makes the mid/right inversion obvious.
 static float spin;
 
-glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
-glRotatef(16.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(8.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+display() {
+  glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
+  glRotatef(16.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(8.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_NORMALIZE);
-glEnable(GL_COLOR_MATERIAL);
-glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-glEnable(GL_CULL_FACE);
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_NORMALIZE);
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glEnable(GL_CULL_FACE);
 
-spin = t * 24;
+  spin = t * 24;
 
-// LEFT: conventional
-glFrontFace(GL_CCW);
-glCullFace(GL_BACK);
-glPushMatrix();
-  glTranslatef(-2.3, 0, 0);
-  glRotatef(spin, 0, 1, 0);
-  glColor3f(0.10, 0.95, 0.85);
-  glutSolidTeapot(0.7);
-glPopMatrix();
+  // LEFT: conventional
+  glFrontFace(GL_CCW);
+  glCullFace(GL_BACK);
+  glPushMatrix();
+    glTranslatef(-2.3, 0, 0);
+    glRotatef(spin, 0, 1, 0);
+    glColor3f(0.10, 0.95, 0.85);
+    glutSolidTeapot(0.7);
+  glPopMatrix();
 
-// MID: reversed winding, still culling backs -- the teapot inverts
-glFrontFace(GL_CW);
-glCullFace(GL_BACK);
-glPushMatrix();
-  glTranslatef(0, 0, 0);
-  glRotatef(spin, 0, 1, 0);
-  glColor3f(1.00, 0.35, 0.20);
-  glutSolidTeapot(0.7);
-glPopMatrix();
+  // MID: reversed winding, still culling backs -- the teapot inverts
+  glFrontFace(GL_CW);
+  glCullFace(GL_BACK);
+  glPushMatrix();
+    glTranslatef(0, 0, 0);
+    glRotatef(spin, 0, 1, 0);
+    glColor3f(1.00, 0.35, 0.20);
+    glutSolidTeapot(0.7);
+  glPopMatrix();
 
-// RIGHT: conventional winding, cull fronts -- a hollow shell
-glFrontFace(GL_CCW);
-glCullFace(GL_FRONT);
-glPushMatrix();
-  glTranslatef(2.3, 0, 0);
-  glRotatef(spin, 0, 1, 0);
-  glColor3f(0.15, 0.55, 1.00);
-  glutSolidTeapot(0.7);
-glPopMatrix();
+  // RIGHT: conventional winding, cull fronts -- a hollow shell
+  glFrontFace(GL_CCW);
+  glCullFace(GL_FRONT);
+  glPushMatrix();
+    glTranslatef(2.3, 0, 0);
+    glRotatef(spin, 0, 1, 0);
+    glColor3f(0.15, 0.55, 1.00);
+    glutSolidTeapot(0.7);
+  glPopMatrix();
 
-glDisable(GL_CULL_FACE);
-glFrontFace(GL_CCW);
+  glDisable(GL_CULL_FACE);
+  glFrontFace(GL_CCW);
+}

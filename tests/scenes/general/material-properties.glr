@@ -1,30 +1,32 @@
 // @cfg view_mode = RENDER3D_VIEW_3D
 // @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_CLASSIC
-glTranslatef(0.0f, 0.0f, -6.50f);   // @camera dist
-glRotatef(25.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+display() {
+  glTranslatef(0.0f, 0.0f, -6.50f);   // @camera dist
+  glRotatef(25.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
-// Clear screen to Canvas color
-glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  // Clear screen to Canvas color
+  glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-// Apply dynamic rotation animation
-glRotatef(30.0f * t, 0.0f, 1.0f, 0.0f);
+  // Apply dynamic rotation animation
+  glRotatef(30.0f * t, 0.0f, 1.0f, 0.0f);
 
-// Enable lighting
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
+  // Enable lighting
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
 
-// Use TEAL as the diffuse color and high specular highlights
-glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, 0.10f, 0.95f, 0.85f, 1.0f);
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, 1.00f, 1.00f, 1.00f, 1.0f);
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 60.0f);
+  // Use TEAL as the diffuse color and high specular highlights
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, 0.10f, 0.95f, 0.85f, 1.0f);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, 1.00f, 1.00f, 1.00f, 1.0f);
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 60.0f);
 
-// Render the teapot
-glutSolidTeapot(1.2f);
+  // Render the teapot
+  glutSolidTeapot(1.2f);
 
-glDisable(GL_LIGHT0);
-glDisable(GL_LIGHTING);
+  glDisable(GL_LIGHT0);
+  glDisable(GL_LIGHTING);
+}

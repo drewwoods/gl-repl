@@ -8,95 +8,97 @@ static float dx, dy, dz, tx, ty, tz;
 static float nx, ny, nz, bx, by, bz;
 static float v, cv, sv, rad, len, orb_u;
 
-glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
-glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+display() {
+  glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
+  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
 
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_LIGHT1);
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT1);
 
-glRotatef(t * 15, 0, 1, 0);
-glRotatef(t * 8, 1, 0, 0);
+  glRotatef(t * 15, 0, 1, 0);
+  glRotatef(t * 8, 1, 0, 0);
 
-glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.10, 0.15, 0.25, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.20, 0.65, 0.95, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.85, 0.95, 1.00, 1.0});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 80.0);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.10, 0.15, 0.25, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.20, 0.65, 0.95, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.85, 0.95, 1.00, 1.0});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 80.0);
 
-rad = 0.22;
+  rad = 0.22;
 
-for(i, 0, 36) {
-  u1 = i * (TAU / 36.0);
-  u2 = (i + 1) * (TAU / 36.0);
+  for(i, 0, 36) {
+    u1 = i * (TAU / 36.0);
+    u2 = (i + 1) * (TAU / 36.0);
 
-  x1 = (sin(u1) + 2.0 * sin(2.0 * u1)) * 0.75;
-  y1 = (cos(u1) - 2.0 * cos(2.0 * u1)) * 0.75;
-  z1 = (-sin(3.0 * u1)) * 0.75;
+    x1 = (sin(u1) + 2.0 * sin(2.0 * u1)) * 0.75;
+    y1 = (cos(u1) - 2.0 * cos(2.0 * u1)) * 0.75;
+    z1 = (-sin(3.0 * u1)) * 0.75;
 
-  x2 = (sin(u2) + 2.0 * sin(2.0 * u2)) * 0.75;
-  y2 = (cos(u2) - 2.0 * cos(2.0 * u2)) * 0.75;
-  z2 = (-sin(3.0 * u2)) * 0.75;
+    x2 = (sin(u2) + 2.0 * sin(2.0 * u2)) * 0.75;
+    y2 = (cos(u2) - 2.0 * cos(2.0 * u2)) * 0.75;
+    z2 = (-sin(3.0 * u2)) * 0.75;
 
-  dx = cos(u1) + 4.0 * cos(2.0 * u1);
-  dy = -sin(u1) + 4.0 * sin(2.0 * u1);
-  dz = -3.0 * cos(3.0 * u1);
-  len = sqrt(dx * dx + dy * dy + dz * dz);
-  tx = dx / len;
-  ty = dy / len;
-  tz = dz / len;
+    dx = cos(u1) + 4.0 * cos(2.0 * u1);
+    dy = -sin(u1) + 4.0 * sin(2.0 * u1);
+    dz = -3.0 * cos(3.0 * u1);
+    len = sqrt(dx * dx + dy * dy + dz * dz);
+    tx = dx / len;
+    ty = dy / len;
+    tz = dz / len;
 
-  nx = ty;
-  ny = -tx;
-  nz = 0;
-  len = sqrt(nx * nx + ny * ny);
-  nx = nx / len;
-  ny = ny / len;
+    nx = ty;
+    ny = -tx;
+    nz = 0;
+    len = sqrt(nx * nx + ny * ny);
+    nx = nx / len;
+    ny = ny / len;
 
-  bx = -tz * ny;
-  by = tz * nx;
-  bz = tx * ny - ty * nx;
+    bx = -tz * ny;
+    by = tz * nx;
+    bz = tx * ny - ty * nx;
 
-  glBegin(GL_QUAD_STRIP);
-    for(j, 0, 9) {
-      v = j * (TAU / 8.0);
-      cv = cos(v);
-      sv = sin(v);
+    glBegin(GL_QUAD_STRIP);
+      for(j, 0, 9) {
+        v = j * (TAU / 8.0);
+        cv = cos(v);
+        sv = sin(v);
 
-      dx = cv * nx + sv * bx;
-      dy = cv * ny + sv * by;
-      dz = cv * nz + sv * bz;
+        dx = cv * nx + sv * bx;
+        dy = cv * ny + sv * by;
+        dz = cv * nz + sv * bz;
 
-      glNormal3f(dx, dy, dz);
-      glVertex3f(x1 + rad * dx, y1 + rad * dy, z1 + rad * dz);
-      glVertex3f(x2 + rad * dx, y2 + rad * dy, z2 + rad * dz);
-    }
-  glEnd();
-}
+        glNormal3f(dx, dy, dz);
+        glVertex3f(x1 + rad * dx, y1 + rad * dy, z1 + rad * dz);
+        glVertex3f(x2 + rad * dx, y2 + rad * dy, z2 + rad * dz);
+      }
+    glEnd();
+  }
 
-// 3 Orbiting energy beads
-glEnable(GL_COLOR_MATERIAL);
-glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  // 3 Orbiting energy beads
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 
-for(k, 0, 3) {
-  orb_u = fmod(t * 1.8 + k * (TAU / 3.0), TAU);
-  x1 = (sin(orb_u) + 2.0 * sin(2.0 * orb_u)) * 0.75;
-  y1 = (cos(orb_u) - 2.0 * cos(2.0 * orb_u)) * 0.75;
-  z1 = (-sin(3.0 * orb_u)) * 0.75;
+  for(k, 0, 3) {
+    orb_u = fmod(t * 1.8 + k * (TAU / 3.0), TAU);
+    x1 = (sin(orb_u) + 2.0 * sin(2.0 * orb_u)) * 0.75;
+    y1 = (cos(orb_u) - 2.0 * cos(2.0 * orb_u)) * 0.75;
+    z1 = (-sin(3.0 * orb_u)) * 0.75;
 
-  glPushMatrix();
-    glTranslatef(x1, y1, z1);
-    if(k == 0) {
-      glColor3f(1.00, 0.35, 0.20);
-    } else if(k == 1) {
-      glColor3f(1.00, 0.85, 0.15);
-    } else {
-      glColor3f(0.10, 0.95, 0.85);
-    }
-    glutSolidSphere(0.14, 14, 10);
-  glPopMatrix();
+    glPushMatrix();
+      glTranslatef(x1, y1, z1);
+      if(k == 0) {
+        glColor3f(1.00, 0.35, 0.20);
+      } else if(k == 1) {
+        glColor3f(1.00, 0.85, 0.15);
+      } else {
+        glColor3f(0.10, 0.95, 0.85);
+      }
+      glutSolidSphere(0.14, 14, 10);
+    glPopMatrix();
+  }
 }

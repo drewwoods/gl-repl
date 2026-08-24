@@ -1,63 +1,65 @@
 // @cfg view_mode = RENDER3D_VIEW_3D
 // @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_CLASSIC
-glTranslatef(0.0f, 0.0f, -12.00f);   // @camera dist
-glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-glRotatef(25.0f * t, 0.0f, 1.0f, 0.0f);
+display() {
+  glTranslatef(0.0f, 0.0f, -12.00f);   // @camera dist
+  glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+  glRotatef(25.0f * t, 0.0f, 1.0f, 0.0f);
 
-glClearColor(0.02f, 0.05f, 0.04f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glClearColor(0.02f, 0.05f, 0.04f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-// Setup scratch array A to represent a shear and translation matrix
-// Column 1 (identity-like)
-A[0] = 1.0f;
-A[1] = 0.0f;
-A[2] = 0.0f;
-A[3] = 0.0f;
+  // Setup scratch array A to represent a shear and translation matrix
+  // Column 1 (identity-like)
+  A[0] = 1.0f;
+  A[1] = 0.0f;
+  A[2] = 0.0f;
+  A[3] = 0.0f;
 
-// Column 2 carries a time-varying shear factor
-A[4] = sin(t) * 0.5f;
-A[5] = 1.0f;
-A[6] = 0.0f;
-A[7] = 0.0f;
+  // Column 2 carries a time-varying shear factor
+  A[4] = sin(t) * 0.5f;
+  A[5] = 1.0f;
+  A[6] = 0.0f;
+  A[7] = 0.0f;
 
-// Column 3
-A[8] = 0.0f;
-A[9] = 0.0f;
-A[10] = 1.0f;
-A[11] = 0.0f;
+  // Column 3
+  A[8] = 0.0f;
+  A[9] = 0.0f;
+  A[10] = 1.0f;
+  A[11] = 0.0f;
 
-// Column 4 carries translation, updated inside loop below
-A[12] = 0.0f;
-A[13] = 0.0f;
-A[14] = 0.0f;
-A[15] = 1.0f;
+  // Column 4 carries translation, updated inside loop below
+  A[12] = 0.0f;
+  A[13] = 0.0f;
+  A[14] = 0.0f;
+  A[15] = 1.0f;
 
-// Populate scratch array B to do indexed arithmetic on color coordinates
-for(k, 0, 16) {
-  B[k] = k * 0.06f;
-}
+  // Populate scratch array B to do indexed arithmetic on color coordinates
+  for(k, 0, 16) {
+    B[k] = k * 0.06f;
+  }
 
-// Nested loop accessing scratch arrays to draw sheared grid
-for(i, -2, 3) {
-  for(j, -2, 3) {
-    glPushMatrix();
+  // Nested loop accessing scratch arrays to draw sheared grid
+  for(i, -2, 3) {
+    for(j, -2, 3) {
+      glPushMatrix();
 
-    // Assign translations dynamically to A
-    A[12] = i * 2.0f;
-    A[13] = cos(t + i + j) * 1.0f;
-    A[14] = j * 2.0f;
+        // Assign translations dynamically to A
+        A[12] = i * 2.0f;
+        A[13] = cos(t + i + j) * 1.0f;
+        A[14] = j * 2.0f;
 
-    // Apply matrix transformation stored in scratch array A
-    glMultMatrixf(A);
+        // Apply matrix transformation stored in scratch array A
+        glMultMatrixf(A);
 
-    // Color determined by values in B based on coordinates
-    glColor3f(B[abs(i + 2) * 3], B[abs(j + 2) * 3], clamp(abs(sin(t)), 0.3f, 0.8f));
+        // Color determined by values in B based on coordinates
+        glColor3f(B[abs(i + 2) * 3], B[abs(j + 2) * 3], clamp(abs(sin(t)), 0.3f, 0.8f));
 
-    glutSolidCube(0.8f);
-    glPopMatrix();
+        glutSolidCube(0.8f);
+      glPopMatrix();
+    }
   }
 }

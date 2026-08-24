@@ -10,43 +10,45 @@ static float lx;
 static float ly;
 static float lz;
 
-glTranslatef(0.0f, 0.0f, -11.00f);   // @camera dist
-glRotatef(24.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-glRotatef(12.0f * t, 0.0f, 1.0f, 0.0f);
+display() {
+  glTranslatef(0.0f, 0.0f, -11.00f);   // @camera dist
+  glRotatef(24.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+  glRotatef(12.0f * t, 0.0f, 1.0f, 0.0f);
 
-glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-lx = 2.0f * sin(t * 0.8f);
-ly = 2.5f;
-lz = 2.0f * cos(t * 0.8f);
+  lx = 2.0f * sin(t * 0.8f);
+  ly = 2.5f;
+  lz = 2.0f * cos(t * 0.8f);
 
-for(i, -2, 3) {
-  for(j, -2, 3) {
-    glPushMatrix();
-      // Translation + mild shear baked into one MultMatrix (column-major)
-      glMultMatrixf((GLfloat[]){1.0f, 0.15f * sin(t + i), 0.0f, 0.0f, 0.12f * cos(t + j), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, i * 1.6f + 0.2f * sin(t + i), 0.4f * cos(t + j * 0.7f), j * 1.6f, 1.0f});
-      if((i + j) % 2 == 0) {
-        // Planar-shadow style projection from a moving light
-        glMultMatrixf((GLfloat[]){ly, 0.0f, 0.0f, 0.0f, -lx, 0.0f, -lz, -1.0f, 0.0f, 0.0f, ly, 0.0f, 0.0f, 0.0f, 0.0f, ly});
-        glColor3f(0.05f, 0.06f, 0.08f);
-        glutSolidCube(0.55f);
-      } else {
-        // Scale via expression cells
-        glMultMatrixf((GLfloat[]){0.7f + 0.2f * sin(t + i), 0.0f, 0.0f, 0.0f, 0.0f, 0.7f + 0.2f * cos(t + j), 0.0f, 0.0f, 0.0f, 0.0f, 0.7f + 0.15f * sin(t * 1.3f), 0.0f, 0.0f, 0.35f, 0.0f, 1.0f});
-        glColor3f(clamp(0.4f + 0.1f * i, 0.1f, 0.95f), clamp(0.5f + 0.1f * j, 0.2f, 0.9f), 0.85f);
-        glutSolidSphere(0.4f, 12, 12);
-      }
-    glPopMatrix();
+  for(i, -2, 3) {
+    for(j, -2, 3) {
+      glPushMatrix();
+        // Translation + mild shear baked into one MultMatrix (column-major)
+        glMultMatrixf((GLfloat[]){1.0f, 0.15f * sin(t + i), 0.0f, 0.0f, 0.12f * cos(t + j), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, i * 1.6f + 0.2f * sin(t + i), 0.4f * cos(t + j * 0.7f), j * 1.6f, 1.0f});
+        if((i + j) % 2 == 0) {
+          // Planar-shadow style projection from a moving light
+          glMultMatrixf((GLfloat[]){ly, 0.0f, 0.0f, 0.0f, -lx, 0.0f, -lz, -1.0f, 0.0f, 0.0f, ly, 0.0f, 0.0f, 0.0f, 0.0f, ly});
+          glColor3f(0.05f, 0.06f, 0.08f);
+          glutSolidCube(0.55f);
+        } else {
+          // Scale via expression cells
+          glMultMatrixf((GLfloat[]){0.7f + 0.2f * sin(t + i), 0.0f, 0.0f, 0.0f, 0.0f, 0.7f + 0.2f * cos(t + j), 0.0f, 0.0f, 0.0f, 0.0f, 0.7f + 0.15f * sin(t * 1.3f), 0.0f, 0.0f, 0.35f, 0.0f, 1.0f});
+          glColor3f(clamp(0.4f + 0.1f * i, 0.1f, 0.95f), clamp(0.5f + 0.1f * j, 0.2f, 0.9f), 0.85f);
+          glutSolidSphere(0.4f, 12, 12);
+        }
+      glPopMatrix();
+    }
   }
-}
 
-// Standalone full-expression spin matrix at origin
-glPushMatrix();
-  glMultMatrixf((GLfloat[]){cos(t), 0.0f, sin(t), 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, -sin(t), 0.0f, cos(t), 0.0f, 0.0f, 1.6f, 0.0f, 1.0f});
-  glColor3f(1.00f, 0.85f, 0.15f);
-  glutSolidTeapot(0.55f);
-glPopMatrix();
+  // Standalone full-expression spin matrix at origin
+  glPushMatrix();
+    glMultMatrixf((GLfloat[]){cos(t), 0.0f, sin(t), 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, -sin(t), 0.0f, cos(t), 0.0f, 0.0f, 1.6f, 0.0f, 1.0f});
+    glColor3f(1.00f, 0.85f, 0.15f);
+    glutSolidTeapot(0.55f);
+  glPopMatrix();
+}

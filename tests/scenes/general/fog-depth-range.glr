@@ -3,36 +3,38 @@
 // @cfg grid = GRID_THEME_CLASSIC
 static float zdist; // retreating z distance
 
-glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
-glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+display() {
+  glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
+  glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
-// Clear screen to Canvas color
-glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  // Clear screen to Canvas color
+  glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-// Apply dynamic rotation animation
-glRotatef(20.0f * t, 0.0f, 1.0f, 0.0f);
+  // Apply dynamic rotation animation
+  glRotatef(20.0f * t, 0.0f, 1.0f, 0.0f);
 
-// Enable linear fog
-glEnable(GL_FOG);
-glFogi(GL_FOG_MODE, GL_LINEAR);
-glFogfv(GL_FOG_COLOR, (GLfloat[]){0.05f, 0.06f, 0.08f, 1.0f});
-glFogf(GL_FOG_START, 4.0f);
-glFogf(GL_FOG_END, 12.0f);
+  // Enable linear fog
+  glEnable(GL_FOG);
+  glFogi(GL_FOG_MODE, GL_LINEAR);
+  glFogfv(GL_FOG_COLOR, (GLfloat[]){0.05f, 0.06f, 0.08f, 1.0f});
+  glFogf(GL_FOG_START, 4.0f);
+  glFogf(GL_FOG_END, 12.0f);
 
-// Draw a line of spheres retreating into the fog
-for(i, -3, 3) {
-  glPushMatrix();
-  zdist = i * 2.5f;
-  glTranslatef(i * 1.5f, 0.0f, zdist);
+  // Draw a line of spheres retreating into the fog
+  for(i, -3, 3) {
+    glPushMatrix();
+      zdist = i * 2.5f;
+      glTranslatef(i * 1.5f, 0.0f, zdist);
 
-  // Use AMBER color anchor
-  glColor3f(1.00f, 0.85f, 0.15f);
-  glutSolidSphere(0.7f, 16, 16);
-  glPopMatrix();
+      // Use AMBER color anchor
+      glColor3f(1.00f, 0.85f, 0.15f);
+      glutSolidSphere(0.7f, 16, 16);
+    glPopMatrix();
+  }
+
+  glDisable(GL_FOG);
 }
-
-glDisable(GL_FOG);

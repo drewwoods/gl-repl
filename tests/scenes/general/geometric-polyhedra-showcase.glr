@@ -7,115 +7,117 @@ static float ring_radius = 3.6;
 static float angle, px, pz;
 static float u, cu, su;
 
-glTranslatef(0.0000f, 0.0000f, -12.0000f);   // @camera dist
-glRotatef(28.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0000f, -0.8000f, 0.0000f);   // @camera pan
+display() {
+  glTranslatef(0.0000f, 0.0000f, -12.0000f);   // @camera dist
+  glRotatef(28.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0000f, -0.8000f, 0.0000f);   // @camera pan
 
-glClearColor(0.03, 0.03, 0.06, 1.0);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_LIGHT1);
+  glClearColor(0.03, 0.03, 0.06, 1.0);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT1);
 
-// Ground showcase pedestal platform (dark circular disc)
-glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.1, 0.1, 0.14, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.18, 0.18, 0.24, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.3, 0.3, 0.4, 1.0});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 32.0);
+  // Ground showcase pedestal platform (dark circular disc)
+  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.1, 0.1, 0.14, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.18, 0.18, 0.24, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.3, 0.3, 0.4, 1.0});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 32.0);
 
-glPushMatrix();
-  glTranslatef(0.0, -1.8, 0.0);
-  glBegin(GL_QUAD_STRIP);
-    for(i, 0, 37) {
-      u = i * (TAU / 36.0);
-      cu = cos(u);
-      su = sin(u);
-      glNormal3f(0.0, 1.0, 0.0);
-      glVertex3f(cu * 4.8, 0.0, su * 4.8);
-      glVertex3f(0.0, 0.0, 0.0);
-    }
-  glEnd();
+  glPushMatrix();
+    glTranslatef(0.0, -1.8, 0.0);
+    glBegin(GL_QUAD_STRIP);
+      for(i, 0, 37) {
+        u = i * (TAU / 36.0);
+        cu = cos(u);
+        su = sin(u);
+        glNormal3f(0.0, 1.0, 0.0);
+        glVertex3f(cu * 4.8, 0.0, su * 4.8);
+        glVertex3f(0.0, 0.0, 0.0);
+      }
+    glEnd();
 
-  // Platform rim edge
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.3, 0.35, 0.45, 1.0});
-  glBegin(GL_QUAD_STRIP);
-    for(i, 0, 37) {
-      u = i * (TAU / 36.0);
-      cu = cos(u);
-      su = sin(u);
-      glNormal3f(cu, 0.0, su);
-      glVertex3f(cu * 4.8, 0.0, su * 4.8);
-      glVertex3f(cu * 4.8, -0.3, su * 4.8);
-    }
-  glEnd();
-glPopMatrix();
+    // Platform rim edge
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.3, 0.35, 0.45, 1.0});
+    glBegin(GL_QUAD_STRIP);
+      for(i, 0, 37) {
+        u = i * (TAU / 36.0);
+        cu = cos(u);
+        su = sin(u);
+        glNormal3f(cu, 0.0, su);
+        glVertex3f(cu * 4.8, 0.0, su * 4.8);
+        glVertex3f(cu * 4.8, -0.3, su * 4.8);
+      }
+    glEnd();
+  glPopMatrix();
 
-// --- 1. Center Solid: Polished Gold Teapot ---
-glPushMatrix();
-  glTranslatef(0.0, 0.0, 0.0);
-  glRotatef(25.0 * t, 0.0, 1.0, 0.0);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.25, 0.20, 0.07, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.85, 0.65, 0.15, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.95, 0.85, 0.40, 1.0});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 80.0);
-  glutSolidTeapot(0.9);
-glPopMatrix();
+  // --- 1. Center Solid: Polished Gold Teapot ---
+  glPushMatrix();
+    glTranslatef(0.0, 0.0, 0.0);
+    glRotatef(25.0 * t, 0.0, 1.0, 0.0);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.25, 0.20, 0.07, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.85, 0.65, 0.15, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.95, 0.85, 0.40, 1.0});
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 80.0);
+    glutSolidTeapot(0.9);
+  glPopMatrix();
 
-// --- 2. Pedestal Solid: Ruby Cube ---
-angle = t * 0.4;
-px = cos(angle) * ring_radius;
-pz = sin(angle) * ring_radius;
-glPushMatrix();
-  glTranslatef(px, -0.2, pz);
-  glRotatef(45.0 * t, 1.0, 1.0, 0.0);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.25, 0.05, 0.05, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.85, 0.15, 0.20, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.90, 0.60, 0.65, 1.0});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 76.0);
-  glutSolidCube(1.0);
-glPopMatrix();
+  // --- 2. Pedestal Solid: Ruby Cube ---
+  angle = t * 0.4;
+  px = cos(angle) * ring_radius;
+  pz = sin(angle) * ring_radius;
+  glPushMatrix();
+    glTranslatef(px, -0.2, pz);
+    glRotatef(45.0 * t, 1.0, 1.0, 0.0);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.25, 0.05, 0.05, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.85, 0.15, 0.20, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.90, 0.60, 0.65, 1.0});
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 76.0);
+    glutSolidCube(1.0);
+  glPopMatrix();
 
-// --- 3. Pedestal Solid: Emerald Sphere ---
-angle = t * 0.4 + PI * 0.5;
-px = cos(angle) * ring_radius;
-pz = sin(angle) * ring_radius;
-glPushMatrix();
-  glTranslatef(px, -0.2, pz);
-  glRotatef(30.0 * t, 0.0, 1.0, 0.0);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.05, 0.22, 0.08, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.15, 0.85, 0.30, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.60, 0.95, 0.70, 1.0});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 64.0);
-  glutSolidSphere(0.7, 24, 24);
-glPopMatrix();
+  // --- 3. Pedestal Solid: Emerald Sphere ---
+  angle = t * 0.4 + PI * 0.5;
+  px = cos(angle) * ring_radius;
+  pz = sin(angle) * ring_radius;
+  glPushMatrix();
+    glTranslatef(px, -0.2, pz);
+    glRotatef(30.0 * t, 0.0, 1.0, 0.0);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.05, 0.22, 0.08, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.15, 0.85, 0.30, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.60, 0.95, 0.70, 1.0});
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 64.0);
+    glutSolidSphere(0.7, 24, 24);
+  glPopMatrix();
 
-// --- 4. Pedestal Solid: Sapphire Torus ---
-angle = t * 0.4 + PI;
-px = cos(angle) * ring_radius;
-pz = sin(angle) * ring_radius;
-glPushMatrix();
-  glTranslatef(px, -0.2, pz);
-  glRotatef(50.0 * t, 1.0, 0.5, 0.2);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.05, 0.10, 0.25, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.15, 0.45, 0.95, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.50, 0.75, 0.95, 1.0});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 100.0);
-  glutSolidTorus(0.22, 0.55, 16, 32);
-glPopMatrix();
+  // --- 4. Pedestal Solid: Sapphire Torus ---
+  angle = t * 0.4 + PI;
+  px = cos(angle) * ring_radius;
+  pz = sin(angle) * ring_radius;
+  glPushMatrix();
+    glTranslatef(px, -0.2, pz);
+    glRotatef(50.0 * t, 1.0, 0.5, 0.2);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.05, 0.10, 0.25, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.15, 0.45, 0.95, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.50, 0.75, 0.95, 1.0});
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 100.0);
+    glutSolidTorus(0.22, 0.55, 16, 32);
+  glPopMatrix();
 
-// --- 5. Pedestal Solid: Copper Cone ---
-angle = t * 0.4 + PI * 1.5;
-px = cos(angle) * ring_radius;
-pz = sin(angle) * ring_radius;
-glPushMatrix();
-  glTranslatef(px, -0.7, pz);
-  glRotatef(-90.0, 1.0, 0.0, 0.0);
-  glRotatef(40.0 * t, 0.0, 0.0, 1.0);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.22, 0.10, 0.05, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.90, 0.45, 0.20, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.95, 0.70, 0.50, 1.0});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 50.0);
-  glutSolidCone(0.65, 1.2, 24, 8);
-glPopMatrix();
+  // --- 5. Pedestal Solid: Copper Cone ---
+  angle = t * 0.4 + PI * 1.5;
+  px = cos(angle) * ring_radius;
+  pz = sin(angle) * ring_radius;
+  glPushMatrix();
+    glTranslatef(px, -0.7, pz);
+    glRotatef(-90.0, 1.0, 0.0, 0.0);
+    glRotatef(40.0 * t, 0.0, 0.0, 1.0);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.22, 0.10, 0.05, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.90, 0.45, 0.20, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.95, 0.70, 0.50, 1.0});
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 50.0);
+    glutSolidCone(0.65, 1.2, 24, 8);
+  glPopMatrix();
+}

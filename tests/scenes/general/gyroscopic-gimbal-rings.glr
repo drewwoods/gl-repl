@@ -6,132 +6,134 @@
 static float yaw_ang, pitch_ang, roll_ang, spin_ang;
 static float u_ang, cu, su;
 
-glTranslatef(0.0000f, 0.0000f, -11.0000f);   // @camera dist
-glRotatef(22.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0000f, -0.4000f, 0.0000f);   // @camera pan
+display() {
+  glTranslatef(0.0000f, 0.0000f, -11.0000f);   // @camera dist
+  glRotatef(22.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0000f, -0.4000f, 0.0000f);   // @camera pan
 
-glClearColor(0.03, 0.03, 0.06, 1.0);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_LIGHT1);
+  glClearColor(0.03, 0.03, 0.06, 1.0);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT1);
 
-yaw_ang   = 35.0 * sin(t * 0.6);
-pitch_ang = 45.0 * sin(t * 0.85 + 1.2);
-roll_ang  = 55.0 * sin(t * 1.10 + 2.4);
-spin_ang  = 360.0 * t;
+  yaw_ang   = 35.0 * sin(t * 0.6);
+  pitch_ang = 45.0 * sin(t * 0.85 + 1.2);
+  roll_ang  = 55.0 * sin(t * 1.10 + 2.4);
+  spin_ang  = 360.0 * t;
 
-// Stand Base and Support Fork
-glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.15, 0.15, 0.18, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.30, 0.32, 0.38, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.50, 0.55, 0.60, 1.0});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 32.0);
+  // Stand Base and Support Fork
+  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.15, 0.15, 0.18, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.30, 0.32, 0.38, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.50, 0.55, 0.60, 1.0});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 32.0);
 
-glPushMatrix();
-  glTranslatef(0.0, -3.8, 0.0);
-  glBegin(GL_QUAD_STRIP);
-    for(i, 0, 25) {
-      u_ang = i * (TAU / 24.0);
-      cu = cos(u_ang);
-      su = sin(u_ang);
-      glNormal3f(0.0, 1.0, 0.0);
-      glVertex3f(cu * 2.2, 0.0, su * 2.2);
-      glVertex3f(0.0, 0.0, 0.0);
-    }
-  glEnd();
-glPopMatrix();
-
-// Fork support posts
-glLineWidth(3.0);
-glBegin(GL_LINES);
-  glNormal3f(0.0, 1.0, 0.0);
-  glVertex3f(0.0, -3.8, 0.0);
-  glVertex3f(0.0, -3.4, 0.0);
-  glVertex3f(0.0, -3.4, 0.0);
-  glVertex3f(-3.5, -3.4, 0.0);
-  glVertex3f(-3.5, -3.4, 0.0);
-  glVertex3f(-3.5, 0.0, 0.0);
-  glVertex3f(0.0, -3.4, 0.0);
-  glVertex3f(3.5, -3.4, 0.0);
-  glVertex3f(3.5, -3.4, 0.0);
-  glVertex3f(3.5, 0.0, 0.0);
-glEnd();
-
-// --- 1. Outer Gimbal Ring (Yaw Axis - Chrome/Titanium) ---
-glPushMatrix();
-  glRotatef(yaw_ang, 0.0, 1.0, 0.0);
-
-  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.15, 0.18, 0.22, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.55, 0.65, 0.75, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.90, 0.95, 1.00, 1.0});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 90.0);
-
-  glutSolidTorus(0.12, 3.2, 16, 48);
-
-  // Pivot pins on Outer Ring
   glPushMatrix();
-    glTranslatef(3.2, 0.0, 0.0);
-    glutSolidSphere(0.18, 12, 12);
-    glTranslatef(-6.4, 0.0, 0.0);
-    glutSolidSphere(0.18, 12, 12);
+    glTranslatef(0.0, -3.8, 0.0);
+    glBegin(GL_QUAD_STRIP);
+      for(i, 0, 25) {
+        u_ang = i * (TAU / 24.0);
+        cu = cos(u_ang);
+        su = sin(u_ang);
+        glNormal3f(0.0, 1.0, 0.0);
+        glVertex3f(cu * 2.2, 0.0, su * 2.2);
+        glVertex3f(0.0, 0.0, 0.0);
+      }
+    glEnd();
   glPopMatrix();
 
-  // --- 2. Intermediate Gimbal Ring (Pitch Axis - Burnished Copper) ---
+  // Fork support posts
+  glLineWidth(3.0);
+  glBegin(GL_LINES);
+    glNormal3f(0.0, 1.0, 0.0);
+    glVertex3f(0.0, -3.8, 0.0);
+    glVertex3f(0.0, -3.4, 0.0);
+    glVertex3f(0.0, -3.4, 0.0);
+    glVertex3f(-3.5, -3.4, 0.0);
+    glVertex3f(-3.5, -3.4, 0.0);
+    glVertex3f(-3.5, 0.0, 0.0);
+    glVertex3f(0.0, -3.4, 0.0);
+    glVertex3f(3.5, -3.4, 0.0);
+    glVertex3f(3.5, -3.4, 0.0);
+    glVertex3f(3.5, 0.0, 0.0);
+  glEnd();
+
+  // --- 1. Outer Gimbal Ring (Yaw Axis - Chrome/Titanium) ---
   glPushMatrix();
-    glRotatef(pitch_ang, 1.0, 0.0, 0.0);
+    glRotatef(yaw_ang, 0.0, 1.0, 0.0);
 
-    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.25, 0.12, 0.08, 1.0});
-    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.85, 0.45, 0.25, 1.0});
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.95, 0.75, 0.55, 1.0});
-    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 64.0);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.15, 0.18, 0.22, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.55, 0.65, 0.75, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.90, 0.95, 1.00, 1.0});
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 90.0);
 
-    glutSolidTorus(0.10, 2.3, 14, 40);
+    glutSolidTorus(0.12, 3.2, 16, 48);
 
-    // Pivot pins on Intermediate Ring
+    // Pivot pins on Outer Ring
     glPushMatrix();
-      glTranslatef(0.0, 0.0, 2.3);
-      glutSolidSphere(0.15, 12, 12);
-      glTranslatef(0.0, 0.0, -4.6);
-      glutSolidSphere(0.15, 12, 12);
+      glTranslatef(3.2, 0.0, 0.0);
+      glutSolidSphere(0.18, 12, 12);
+      glTranslatef(-6.4, 0.0, 0.0);
+      glutSolidSphere(0.18, 12, 12);
     glPopMatrix();
 
-    // --- 3. Inner Gimbal Ring (Roll Axis - Gunmetal Steel) ---
+    // --- 2. Intermediate Gimbal Ring (Pitch Axis - Burnished Copper) ---
     glPushMatrix();
-      glRotatef(roll_ang, 0.0, 0.0, 1.0);
+      glRotatef(pitch_ang, 1.0, 0.0, 0.0);
 
-      glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.12, 0.15, 0.20, 1.0});
-      glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.35, 0.45, 0.60, 1.0});
-      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.75, 0.85, 0.95, 1.0});
-      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 75.0);
+      glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.25, 0.12, 0.08, 1.0});
+      glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.85, 0.45, 0.25, 1.0});
+      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.95, 0.75, 0.55, 1.0});
+      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 64.0);
 
-      glutSolidTorus(0.09, 1.5, 12, 36);
+      glutSolidTorus(0.10, 2.3, 14, 40);
 
-      // --- 4. Central Gyroscopic Rotor (High-Speed Spin - Polished Brass/Gold) ---
+      // Pivot pins on Intermediate Ring
       glPushMatrix();
-        glRotatef(spin_ang, 0.0, 1.0, 0.0);
-
-        glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.25, 0.20, 0.05, 1.0});
-        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.90, 0.75, 0.15, 1.0});
-        glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){1.00, 0.90, 0.45, 1.0});
-        glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 100.0);
-
-        // Flywheel heavy outer rim
-        glutSolidTorus(0.14, 0.85, 14, 32);
-
-        // Central gyro hub and axle
-        glutSolidSphere(0.35, 16, 16);
-
-        // Flywheel spokes
-        glBegin(GL_LINES);
-          glVertex3f(-0.85, 0.0, 0.0);
-          glVertex3f( 0.85, 0.0, 0.0);
-          glVertex3f(0.0, 0.0, -0.85);
-          glVertex3f(0.0, 0.0,  0.85);
-        glEnd();
+        glTranslatef(0.0, 0.0, 2.3);
+        glutSolidSphere(0.15, 12, 12);
+        glTranslatef(0.0, 0.0, -4.6);
+        glutSolidSphere(0.15, 12, 12);
       glPopMatrix();
 
+      // --- 3. Inner Gimbal Ring (Roll Axis - Gunmetal Steel) ---
+      glPushMatrix();
+        glRotatef(roll_ang, 0.0, 0.0, 1.0);
+
+        glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.12, 0.15, 0.20, 1.0});
+        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.35, 0.45, 0.60, 1.0});
+        glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.75, 0.85, 0.95, 1.0});
+        glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 75.0);
+
+        glutSolidTorus(0.09, 1.5, 12, 36);
+
+        // --- 4. Central Gyroscopic Rotor (High-Speed Spin - Polished Brass/Gold) ---
+        glPushMatrix();
+          glRotatef(spin_ang, 0.0, 1.0, 0.0);
+
+          glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.25, 0.20, 0.05, 1.0});
+          glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.90, 0.75, 0.15, 1.0});
+          glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){1.00, 0.90, 0.45, 1.0});
+          glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 100.0);
+
+          // Flywheel heavy outer rim
+          glutSolidTorus(0.14, 0.85, 14, 32);
+
+          // Central gyro hub and axle
+          glutSolidSphere(0.35, 16, 16);
+
+          // Flywheel spokes
+          glBegin(GL_LINES);
+            glVertex3f(-0.85, 0.0, 0.0);
+            glVertex3f( 0.85, 0.0, 0.0);
+            glVertex3f(0.0, 0.0, -0.85);
+            glVertex3f(0.0, 0.0,  0.85);
+          glEnd();
+        glPopMatrix();
+
+      glPopMatrix();
     glPopMatrix();
   glPopMatrix();
-glPopMatrix();
+}

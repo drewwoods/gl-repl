@@ -5,35 +5,37 @@
 static float bars = 16;
 static float width = 7;
 static float step_x, x, h, r, g, b_col;
-glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
-glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+display() {
+  glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
+  glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
 
-glClearColor(0.04, 0.04, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
+  glClearColor(0.04, 0.04, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
 
-step_x = width / bars;
+  step_x = width / bars;
 
-for(i, 0, bars) {
-  x = -width * 0.5 + i * step_x + step_x * 0.5;
-  h = 0.4 + 2.2 * abs(sin(i * 0.7 + t * 3.5)) * (0.6 + 0.4 * cos(i * 0.3));
+  for(i, 0, bars) {
+    x = -width * 0.5 + i * step_x + step_x * 0.5;
+    h = 0.4 + 2.2 * abs(sin(i * 0.7 + t * 3.5)) * (0.6 + 0.4 * cos(i * 0.3));
 
-  glPushMatrix();
-    glTranslatef(x, h * 0.5 - 1.2, 0);
-    glScalef(step_x * 0.75, h, 0.4);
+    glPushMatrix();
+      glTranslatef(x, h * 0.5 - 1.2, 0);
+      glScalef(step_x * 0.75, h, 0.4);
 
-    if(h > 1.8) {
-      glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.95, 0.2, 0.3, 1});
-    } else if(h > 1.1) {
-      glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.95, 0.8, 0.1, 1});
-    } else {
-      glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.2, 0.75, 0.95, 1});
-    }
-    glutSolidCube(1);
-  glPopMatrix();
+      if(h > 1.8) {
+        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.95, 0.2, 0.3, 1});
+      } else if(h > 1.1) {
+        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.95, 0.8, 0.1, 1});
+      } else {
+        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.2, 0.75, 0.95, 1});
+      }
+      glutSolidCube(1);
+    glPopMatrix();
+  }
 }

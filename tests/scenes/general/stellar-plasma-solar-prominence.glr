@@ -7,87 +7,89 @@ static float u, r, ang, flow_t, knot_u;
 static float px, py, pz, k_rot;
 static float c, s;
 
-glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
-glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(20.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+display() {
+  glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
+  glRotatef(25.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(20.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
 
-glClearColor(0.04, 0.04, 0.06, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glClearColor(0.04, 0.04, 0.06, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-glRotatef(t * 8.0, 0, 1, 0);
+  glRotatef(t * 8.0, 0, 1, 0);
 
-// --- Central Stellar Core ---
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.35, 0.15, 0.05, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){1.00, 0.55, 0.15, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){1.00, 0.90, 0.40, 1.0});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 32.0);
+  // --- Central Stellar Core ---
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.35, 0.15, 0.05, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){1.00, 0.55, 0.15, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){1.00, 0.90, 0.40, 1.0});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 32.0);
 
-glutSolidSphere(1.2, 28, 20);
+  glutSolidSphere(1.2, 28, 20);
 
-// --- Glowing Magnetic Coronal Loops ---
-glDisable(GL_LIGHTING);
-glEnable(GL_BLEND);
-glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  // --- Glowing Magnetic Coronal Loops ---
+  glDisable(GL_LIGHTING);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 
-for(k, 0, 4) {
-  k_rot = k * 90.0 + 20.0 * sin(0.5 * t + k);
+  for(k, 0, 4) {
+    k_rot = k * 90.0 + 20.0 * sin(0.5 * t + k);
 
-  glPushMatrix();
-    glRotatef(k_rot, 0, 1, 0);
-    glRotatef(30.0 * sin(0.3 * t + k), 1, 0, 0);
+    glPushMatrix();
+      glRotatef(k_rot, 0, 1, 0);
+      glRotatef(30.0 * sin(0.3 * t + k), 1, 0, 0);
 
-    // Arch filament line
-    glLineWidth(3.0);
-    glBegin(GL_LINE_STRIP);
-      for(i, 0, 31) {
-        u = i / 30.0;
-        ang = u * PI;
+      // Arch filament line
+      glLineWidth(3.0);
+      glBegin(GL_LINE_STRIP);
+        for(i, 0, 31) {
+          u = i / 30.0;
+          ang = u * PI;
+          r = 1.2 + (0.9 + 0.3 * sin(1.2 * t + k * 1.5)) * sin(ang);
+
+          px = r * cos(ang * 0.7 - 0.35 * PI);
+          py = r * sin(ang * 0.7 - 0.35 * PI);
+          pz = 0.15 * sin(u * TAU + t * 2.0);
+
+          glColor4f(1.00, 0.35 + 0.50 * sin(ang), 0.20 + 0.60 * (1.0 - sin(ang)), 0.85);
+          glVertex3f(px, py, pz);
+        }
+      glEnd();
+
+      // Traveling plasma wave knots along the loop
+      for(m, 0, 3) {
+        flow_t = fmod(t * 0.8 + m * 0.33, 1.0);
+        knot_u = flow_t;
+        ang = knot_u * PI;
         r = 1.2 + (0.9 + 0.3 * sin(1.2 * t + k * 1.5)) * sin(ang);
 
         px = r * cos(ang * 0.7 - 0.35 * PI);
         py = r * sin(ang * 0.7 - 0.35 * PI);
-        pz = 0.15 * sin(u * TAU + t * 2.0);
+        pz = 0.15 * sin(knot_u * TAU + t * 2.0);
 
-        glColor4f(1.00, 0.35 + 0.50 * sin(ang), 0.20 + 0.60 * (1.0 - sin(ang)), 0.85);
-        glVertex3f(px, py, pz);
+        glPointSize(8.0);
+        glBegin(GL_POINTS);
+          glColor4f(1.00, 0.85, 0.15, 0.9);
+          glVertex3f(px, py, pz);
+        glEnd();
       }
-    glEnd();
-
-    // Traveling plasma wave knots along the loop
-    for(m, 0, 3) {
-      flow_t = fmod(t * 0.8 + m * 0.33, 1.0);
-      knot_u = flow_t;
-      ang = knot_u * PI;
-      r = 1.2 + (0.9 + 0.3 * sin(1.2 * t + k * 1.5)) * sin(ang);
-
-      px = r * cos(ang * 0.7 - 0.35 * PI);
-      py = r * sin(ang * 0.7 - 0.35 * PI);
-      pz = 0.15 * sin(knot_u * TAU + t * 2.0);
-
-      glPointSize(8.0);
-      glBegin(GL_POINTS);
-        glColor4f(1.00, 0.85, 0.15, 0.9);
-        glVertex3f(px, py, pz);
-      glEnd();
-    }
-  glPopMatrix();
-}
-
-// Outer glowing corona halo
-glLineWidth(1.5);
-glBegin(GL_LINE_LOOP);
-  for(i, 0, 36) {
-    ang = i * (TAU / 36.0);
-    c = cos(ang);
-    s = sin(ang);
-    r = 1.45 + 0.08 * sin(6.0 * ang + 3.0 * t);
-    glColor4f(1.00, 0.45, 0.15, 0.4);
-    glVertex3f(c * r, s * r, 0);
+    glPopMatrix();
   }
-glEnd();
 
-glDisable(GL_BLEND);
+  // Outer glowing corona halo
+  glLineWidth(1.5);
+  glBegin(GL_LINE_LOOP);
+    for(i, 0, 36) {
+      ang = i * (TAU / 36.0);
+      c = cos(ang);
+      s = sin(ang);
+      r = 1.45 + 0.08 * sin(6.0 * ang + 3.0 * t);
+      glColor4f(1.00, 0.45, 0.15, 0.4);
+      glVertex3f(c * r, s * r, 0);
+    }
+  glEnd();
+
+  glDisable(GL_BLEND);
+}

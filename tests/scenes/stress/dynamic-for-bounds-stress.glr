@@ -9,49 +9,51 @@ static float lo;
 static float hi;
 static float step;
 
-glTranslatef(0.0f, 0.0f, -11.00f);   // @camera dist
-glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-glRotatef(14.0f * t, 0.0f, 1.0f, 0.0f);
+display() {
+  glTranslatef(0.0f, 0.0f, -11.00f);   // @camera dist
+  glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+  glRotatef(14.0f * t, 0.0f, 1.0f, 0.0f);
 
-glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-lo = -3.0f - floor(sin(t) + 1.0f);
-hi = 4.0f + floor(cos(t * 0.7f) + 1.0f);
-step = 1.0f + (floor(t) % 2);
+  lo = -3.0f - floor(sin(t) + 1.0f);
+  hi = 4.0f + floor(cos(t * 0.7f) + 1.0f);
+  step = 1.0f + (floor(t) % 2);
 
-// Outer range depends on t; inner range depends on outer counter
-for(u, lo, hi, step) {
-  for(v, -abs(u) - 1, abs(u) + 2) {
-    if(u == 0 && v == 0) {
-      continue;
+  // Outer range depends on t; inner range depends on outer counter
+  for(u, lo, hi, step) {
+    for(v, -abs(u) - 1, abs(u) + 2) {
+      if(u == 0 && v == 0) {
+        continue;
+      }
+      if(abs(u) + abs(v) > 6) {
+        break;
+      }
+
+      glPushMatrix();
+        glTranslatef(u * 0.85f, 0.3f * sin(t + u + v), v * 0.85f);
+        glColor3f(clamp((u - lo) / (hi - lo + 0.001f), 0.1f, 0.95f), clamp(0.3f + 0.1f * abs(v), 0.2f, 0.9f), clamp(0.5f + 0.2f * sin(t + u), 0.2f, 0.9f));
+        if((u + v) % 2 == 0) {
+          glutSolidCube(0.4f);
+        } else {
+          glutSolidSphere(0.28f, 10, 10);
+        }
+      glPopMatrix();
     }
-    if(abs(u) + abs(v) > 6) {
-      break;
-    }
-
-    glPushMatrix();
-    glTranslatef(u * 0.85f, 0.3f * sin(t + u + v), v * 0.85f);
-    glColor3f(clamp((u - lo) / (hi - lo + 0.001f), 0.1f, 0.95f), clamp(0.3f + 0.1f * abs(v), 0.2f, 0.9f), clamp(0.5f + 0.2f * sin(t + u), 0.2f, 0.9f));
-    if((u + v) % 2 == 0) {
-      glutSolidCube(0.4f);
-    } else {
-      glutSolidSphere(0.28f, 10, 10);
-    }
-    glPopMatrix();
   }
-}
 
-// Second nest: step from expression, end from outer iterator
-for(r, 1, 4) {
-  for(a, 0, r * 6, 1 + (r % 2)) {
-    glPushMatrix();
-    glTranslatef(cos(a * TAU / (r * 6.0f) + t * 0.4f) * r * 0.9f, 1.8f + 0.15f * sin(t + a), sin(a * TAU / (r * 6.0f) + t * 0.4f) * r * 0.9f);
-    glColor3f(1.00f, 0.85f, 0.15f);
-    glutSolidCube(0.18f + r * 0.04f);
-    glPopMatrix();
+  // Second nest: step from expression, end from outer iterator
+  for(r, 1, 4) {
+    for(a, 0, r * 6, 1 + (r % 2)) {
+      glPushMatrix();
+        glTranslatef(cos(a * TAU / (r * 6.0f) + t * 0.4f) * r * 0.9f, 1.8f + 0.15f * sin(t + a), sin(a * TAU / (r * 6.0f) + t * 0.4f) * r * 0.9f);
+        glColor3f(1.00f, 0.85f, 0.15f);
+        glutSolidCube(0.18f + r * 0.04f);
+      glPopMatrix();
+    }
   }
 }

@@ -9,66 +9,68 @@ static float spacing = 0.55;
 static float bar_half;
 static float freq, swing, px, py, rod_len;
 static float r, g, b_col;
-glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
-glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+display() {
+  glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
 
-glClearColor(0.03, 0.03, 0.06, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
+  glClearColor(0.03, 0.03, 0.06, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
 
-bar_half = (num_pendulums - 1) * spacing * 0.5;
+  bar_half = (num_pendulums - 1) * spacing * 0.5;
 
-// Support bar across the top
-glDisable(GL_LIGHTING);
-glLineWidth(3);
-glColor3f(0.5, 0.5, 0.55);
-glBegin(GL_LINES);
-  glVertex3f(-bar_half - 0.4, 2.0, 0);
-  glVertex3f(bar_half + 0.4, 2.0, 0);
-glEnd();
-glEnable(GL_LIGHTING);
+  // Support bar across the top
+  glDisable(GL_LIGHTING);
+  glLineWidth(3);
+  glColor3f(0.5, 0.5, 0.55);
+  glBegin(GL_LINES);
+    glVertex3f(-bar_half - 0.4, 2.0, 0);
+    glVertex3f(bar_half + 0.4, 2.0, 0);
+  glEnd();
+  glEnable(GL_LIGHTING);
 
-for(i, 0, num_pendulums) {
-  // Each pendulum has a slightly different frequency
-  freq = 1.8 + i * 0.12;
-  swing = 35.0 * sin(t * freq);
+  for(i, 0, num_pendulums) {
+    // Each pendulum has a slightly different frequency
+    freq = 1.8 + i * 0.12;
+    swing = 35.0 * sin(t * freq);
 
-  // Rod length varies slightly to justify the frequency difference
-  rod_len = 2.5 + i * 0.08;
+    // Rod length varies slightly to justify the frequency difference
+    rod_len = 2.5 + i * 0.08;
 
-  // Pivot X position
-  px = -bar_half + i * spacing;
+    // Pivot X position
+    px = -bar_half + i * spacing;
 
-  // Rainbow color gradient across the row
-  r = 0.5 + 0.5 * sin(i * 0.45);
-  g = 0.5 + 0.5 * sin(i * 0.45 + 2.094);
-  b_col = 0.5 + 0.5 * sin(i * 0.45 + 4.188);
+    // Rainbow color gradient across the row
+    r = 0.5 + 0.5 * sin(i * 0.45);
+    g = 0.5 + 0.5 * sin(i * 0.45 + 2.094);
+    b_col = 0.5 + 0.5 * sin(i * 0.45 + 4.188);
 
-  glPushMatrix();
-    glTranslatef(px, 2.0, 0);
-    glRotatef(swing, 0, 0, 1);
+    glPushMatrix();
+      glTranslatef(px, 2.0, 0);
+      glRotatef(swing, 0, 0, 1);
 
-    // Draw the rod
-    glDisable(GL_LIGHTING);
-    glLineWidth(1.5);
-    glColor3f(0.4, 0.4, 0.45);
-    glBegin(GL_LINES);
-      glVertex3f(0, 0, 0);
-      glVertex3f(0, -rod_len, 0);
-    glEnd();
-    glEnable(GL_LIGHTING);
+      // Draw the rod
+      glDisable(GL_LIGHTING);
+      glLineWidth(1.5);
+      glColor3f(0.4, 0.4, 0.45);
+      glBegin(GL_LINES);
+        glVertex3f(0, 0, 0);
+        glVertex3f(0, -rod_len, 0);
+      glEnd();
+      glEnable(GL_LIGHTING);
 
-    // Draw the bob sphere
-    glTranslatef(0, -rod_len, 0);
-    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){r, g, b_col, 1.0});
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.8, 0.8, 0.8, 1});
-    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 40);
-    glutSolidSphere(0.2, 12, 12);
+      // Draw the bob sphere
+      glTranslatef(0, -rod_len, 0);
+      glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){r, g, b_col, 1.0});
+      glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.8, 0.8, 0.8, 1});
+      glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 40);
+      glutSolidSphere(0.2, 12, 12);
 
-  glPopMatrix();
+    glPopMatrix();
+  }
 }

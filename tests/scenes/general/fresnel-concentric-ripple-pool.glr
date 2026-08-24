@@ -9,85 +9,87 @@ static float d1_1, d2_1, h1, d1_2, d2_2, h2;
 static float damp1, damp2, nx1, nz1, nx2, nz2;
 static float nlen1, nlen2;
 
-glTranslatef(0.0000f, 0.0000f, -7.2116f);   // @camera dist
-glRotatef(38.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(36.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+display() {
+  glTranslatef(0.0000f, 0.0000f, -7.2116f);   // @camera dist
+  glRotatef(38.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(36.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
 
-// --- Circular Basin Rim ---
-glPushMatrix();
-  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.15, 0.18, 0.22, 1});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.4, 0.45, 0.55, 1});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.7, 0.75, 0.85, 1});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 32);
-  glutSolidTorus(0.15, 2.75, 12, 36);
-glPopMatrix();
+  // --- Circular Basin Rim ---
+  glPushMatrix();
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.15, 0.18, 0.22, 1});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.4, 0.45, 0.55, 1});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.7, 0.75, 0.85, 1});
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 32);
+    glutSolidTorus(0.15, 2.75, 12, 36);
+  glPopMatrix();
 
-// --- Water Surface Material ---
-glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.04, 0.15, 0.25, 1});
-glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.15, 0.55, 1, 1});
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.92, 0.95, 0.98, 1});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 96);
+  // --- Water Surface Material ---
+  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.04, 0.15, 0.25, 1});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.15, 0.55, 1, 1});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.92, 0.95, 0.98, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 96);
 
-for(i, 0, 16) {
-  r1 = (i / 16.0) * 2.65;
-  r2 = ((i + 1) / 16.0) * 2.65;
-  damp1 = 1.0 - (r1 / 2.7) * (r1 / 2.7);
-  damp2 = 1.0 - (r2 / 2.7) * (r2 / 2.7);
+  for(i, 0, 16) {
+    r1 = (i / 16.0) * 2.65;
+    r2 = ((i + 1) / 16.0) * 2.65;
+    damp1 = 1.0 - (r1 / 2.7) * (r1 / 2.7);
+    damp2 = 1.0 - (r2 / 2.7) * (r2 / 2.7);
 
-  glBegin(GL_QUAD_STRIP);
-    for(j, 0, 21) {
-      th = j * (TAU / 32.0);
-      c = cos(th);
-      s = sin(th);
+    glBegin(GL_QUAD_STRIP);
+      for(j, 0, 21) {
+        th = j * (TAU / 32.0);
+        c = cos(th);
+        s = sin(th);
 
-      x1 = r1 * c;
-      z1 = r1 * s;
-      d1_1 = sqrt((x1 + 1.0) * (x1 + 1.0) + z1 * z1);
-      d2_1 = sqrt((x1 - 1.0) * (x1 - 1.0) + z1 * z1);
-      h1 = damp1 * (0.16 * sin(5.0 * d1_1 - 3.8 * t) + 0.16 * sin(5.0 * d2_1 - 3.8 * t + 1.4));
+        x1 = r1 * c;
+        z1 = r1 * s;
+        d1_1 = sqrt((x1 + 1.0) * (x1 + 1.0) + z1 * z1);
+        d2_1 = sqrt((x1 - 1.0) * (x1 - 1.0) + z1 * z1);
+        h1 = damp1 * (0.16 * sin(5.0 * d1_1 - 3.8 * t) + 0.16 * sin(5.0 * d2_1 - 3.8 * t + 1.4));
 
-      nx1 = -damp1 * (0.8 * cos(5.0 * d1_1 - 3.8 * t) * (x1 + 1.0) / (d1_1 + 0.1) + 0.8 * cos(5.0 * d2_1 - 3.8 * t + 1.4) * (x1 - 1.0) / (d2_1 + 0.1));
-      nz1 = -damp1 * (0.8 * cos(5.0 * d1_1 - 3.8 * t) * z1 / (d1_1 + 0.1) + 0.8 * cos(5.0 * d2_1 - 3.8 * t + 1.4) * z1 / (d2_1 + 0.1));
-      nlen1 = sqrt(nx1 * nx1 + 1.0 + nz1 * nz1);
+        nx1 = -damp1 * (0.8 * cos(5.0 * d1_1 - 3.8 * t) * (x1 + 1.0) / (d1_1 + 0.1) + 0.8 * cos(5.0 * d2_1 - 3.8 * t + 1.4) * (x1 - 1.0) / (d2_1 + 0.1));
+        nz1 = -damp1 * (0.8 * cos(5.0 * d1_1 - 3.8 * t) * z1 / (d1_1 + 0.1) + 0.8 * cos(5.0 * d2_1 - 3.8 * t + 1.4) * z1 / (d2_1 + 0.1));
+        nlen1 = sqrt(nx1 * nx1 + 1.0 + nz1 * nz1);
 
-      x2 = r2 * c;
-      z2 = r2 * s;
-      d1_2 = sqrt((x2 + 1.0) * (x2 + 1.0) + z2 * z2);
-      d2_2 = sqrt((x2 - 1.0) * (x2 - 1.0) + z2 * z2);
-      h2 = damp2 * (0.16 * sin(5.0 * d1_2 - 3.8 * t) + 0.16 * sin(5.0 * d2_2 - 3.8 * t + 1.4));
+        x2 = r2 * c;
+        z2 = r2 * s;
+        d1_2 = sqrt((x2 + 1.0) * (x2 + 1.0) + z2 * z2);
+        d2_2 = sqrt((x2 - 1.0) * (x2 - 1.0) + z2 * z2);
+        h2 = damp2 * (0.16 * sin(5.0 * d1_2 - 3.8 * t) + 0.16 * sin(5.0 * d2_2 - 3.8 * t + 1.4));
 
-      nx2 = -damp2 * (0.8 * cos(5.0 * d1_2 - 3.8 * t) * (x2 + 1.0) / (d1_2 + 0.1) + 0.8 * cos(5.0 * d2_2 - 3.8 * t + 1.4) * (x2 - 1.0) / (d2_2 + 0.1));
-      nz2 = -damp2 * (0.8 * cos(5.0 * d1_2 - 3.8 * t) * z2 / (d1_2 + 0.1) + 0.8 * cos(5.0 * d2_2 - 3.8 * t + 1.4) * z2 / (d2_2 + 0.1));
-      nlen2 = sqrt(nx2 * nx2 + 1.0 + nz2 * nz2);
+        nx2 = -damp2 * (0.8 * cos(5.0 * d1_2 - 3.8 * t) * (x2 + 1.0) / (d1_2 + 0.1) + 0.8 * cos(5.0 * d2_2 - 3.8 * t + 1.4) * (x2 - 1.0) / (d2_2 + 0.1));
+        nz2 = -damp2 * (0.8 * cos(5.0 * d1_2 - 3.8 * t) * z2 / (d1_2 + 0.1) + 0.8 * cos(5.0 * d2_2 - 3.8 * t + 1.4) * z2 / (d2_2 + 0.1));
+        nlen2 = sqrt(nx2 * nx2 + 1.0 + nz2 * nz2);
 
-      glNormal3f(nx1 / nlen1, 1.0 / nlen1, nz1 / nlen1);
-      glVertex3f(x1, h1, z1);
+        glNormal3f(nx1 / nlen1, 1.0 / nlen1, nz1 / nlen1);
+        glVertex3f(x1, h1, z1);
 
-      glNormal3f(nx2 / nlen2, 1.0 / nlen2, nz2 / nlen2);
-      glVertex3f(x2, h2, z2);
-    }
-  glEnd();
+        glNormal3f(nx2 / nlen2, 1.0 / nlen2, nz2 / nlen2);
+        glVertex3f(x2, h2, z2);
+      }
+    glEnd();
+  }
+
+  // Wave emitters markers
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+
+  glColor3f(1, 0.35, 0.2);
+  glPushMatrix();
+    glTranslatef(-1.0, 0.2 + 0.1 * sin(3.8 * t), 0);
+    glutSolidSphere(0.12, 12, 10);
+  glPopMatrix();
+
+  glColor3f(0.1, 0.95, 0.85);
+  glPushMatrix();
+    glTranslatef(1.0, 0.2 + 0.1 * sin(3.8 * t + 1.4), 0);
+    glutSolidSphere(0.12, 12, 10);
+  glPopMatrix();
 }
-
-// Wave emitters markers
-glEnable(GL_COLOR_MATERIAL);
-glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-
-glColor3f(1, 0.35, 0.2);
-glPushMatrix();
-  glTranslatef(-1.0, 0.2 + 0.1 * sin(3.8 * t), 0);
-  glutSolidSphere(0.12, 12, 10);
-glPopMatrix();
-
-glColor3f(0.1, 0.95, 0.85);
-glPushMatrix();
-  glTranslatef(1.0, 0.2 + 0.1 * sin(3.8 * t + 1.4), 0);
-  glutSolidSphere(0.12, 12, 10);
-glPopMatrix();

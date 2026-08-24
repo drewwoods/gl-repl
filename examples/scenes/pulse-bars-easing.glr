@@ -1,39 +1,41 @@
 // @cfg grid = GRID_THEME_SKETCH
 // @cfg grid_extent = GRID_EXTENT_CLOSE
 static float p, d, s, h;
-glTranslatef(0.0000f, 0.0000f, -7.6741f);   // @camera dist
-glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.5000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -1.3500f, -0.0000f);   // @camera pan
+display() {
+  glTranslatef(0.0000f, 0.0000f, -7.6741f);   // @camera dist
+  glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.5000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -1.3500f, -0.0000f);   // @camera pan
 
-// --- Render State -------------------
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_COLOR_MATERIAL);
-glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  // --- Render State -------------------
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 
-// the sine's own cosine falloff eases each turnaround, so the pulse reverses
-// the moment it reaches a rail -- no hold. Wrap this in
-// smoothstep(-1, 1, k * sin(...)) with k > 1 to buy a dwell at the ends.
-p = 3 * sin(1.2 * t);
+  // the sine's own cosine falloff eases each turnaround, so the pulse reverses
+  // the moment it reaches a rail -- no hold. Wrap this in
+  // smoothstep(-1, 1, k * sin(...)) with k > 1 to buy a dwell at the ends.
+  p = 3 * sin(1.2 * t);
 
-for(i, -3, 4) {
-  d = i - p;
-  // s eases from 1 at the pulse to 0 two units away
-  s = 1 - smoothstep(0, 2, abs(d));
-  h = lerp(0.3, 1.15, s);
-  glPushMatrix();
-    glTranslatef(i, 0, 0);
-    // bars lean away from the pulse, hardest a bar-width off center and
-    // upright right under it; clamp bounds the lean to the falloff radius,
-    // where s has already faded to 0
-    glRotatef(-27 * s * clamp(d, -2, 2), 0, 0, 1);
-    glColor3f(lerp(0.2, 1, s), lerp(0.25, 0.55, s), lerp(0.9, 0.25, s));
-    glTranslatef(0, h / 2, 0);
-    glScalef(0.55, h, 0.55);
-    glutSolidCube(1);
-  glPopMatrix();
+  for(i, -3, 4) {
+    d = i - p;
+    // s eases from 1 at the pulse to 0 two units away
+    s = 1 - smoothstep(0, 2, abs(d));
+    h = lerp(0.3, 1.15, s);
+    glPushMatrix();
+      glTranslatef(i, 0, 0);
+      // bars lean away from the pulse, hardest a bar-width off center and
+      // upright right under it; clamp bounds the lean to the falloff radius,
+      // where s has already faded to 0
+      glRotatef(-27 * s * clamp(d, -2, 2), 0, 0, 1);
+      glColor3f(lerp(0.2, 1, s), lerp(0.25, 0.55, s), lerp(0.9, 0.25, s));
+      glTranslatef(0, h / 2, 0);
+      glScalef(0.55, h, 0.55);
+      glutSolidCube(1);
+    glPopMatrix();
+  }
 }

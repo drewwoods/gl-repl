@@ -2,30 +2,32 @@
 // @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_CLASSIC
 
-glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
-glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+display() {
+  glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
+  glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
-glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_BLEND);
-glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-glRotatef(20.0f * t, 0.0f, 1.0f, 0.0f);
+  glRotatef(20.0f * t, 0.0f, 1.0f, 0.0f);
 
-// Pass 1: opaque cube written to depth buffer normally
-glDepthMask(GL_TRUE);
-glColor3f(0.10f, 0.95f, 0.85f);
-glutSolidCube(1.5f);
+  // Pass 1: opaque cube written to depth buffer normally
+  glDepthMask(GL_TRUE);
+  glColor3f(0.10f, 0.95f, 0.85f);
+  glutSolidCube(1.5f);
 
-// Pass 2: translucent sphere drawn on top, but does NOT write depth so
-// the cube behind it stays correctly occluded
-glDepthMask(GL_FALSE);
-glColor4f(0.95f, 0.25f, 1.00f, 0.35f);
-glutSolidSphere(1.5f, 24, 24);
+  // Pass 2: translucent sphere drawn on top, but does NOT write depth so
+  // the cube behind it stays correctly occluded
+  glDepthMask(GL_FALSE);
+  glColor4f(0.95f, 0.25f, 1.00f, 0.35f);
+  glutSolidSphere(1.5f, 24, 24);
 
-// Restore depth writing before next frame
-glDepthMask(GL_TRUE);
-glDisable(GL_BLEND);
+  // Restore depth writing before next frame
+  glDepthMask(GL_TRUE);
+  glDisable(GL_BLEND);
+}

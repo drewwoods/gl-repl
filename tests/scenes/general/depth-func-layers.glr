@@ -10,55 +10,57 @@
 // keeps it; slide it forward in the editor and it vanishes.
 static float spin;
 
-glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
-glRotatef(14.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+display() {
+  glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
+  glRotatef(14.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_COLOR_MATERIAL);
-glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 
-spin = t * 28;
+  spin = t * 28;
 
-// Back plate -- the depth reference every cube is tested against.
-glDepthFunc(GL_LESS);
-glPushMatrix();
-  glTranslatef(0, 0, -0.55);
-  glScalef(8.2, 3.2, 0.12);
-  glColor3f(0.55, 0.30, 1.00);
-  glutSolidCube(1);
-glPopMatrix();
+  // Back plate -- the depth reference every cube is tested against.
+  glDepthFunc(GL_LESS);
+  glPushMatrix();
+    glTranslatef(0, 0, -0.55);
+    glScalef(8.2, 3.2, 0.12);
+    glColor3f(0.55, 0.30, 1.00);
+    glutSolidCube(1);
+  glPopMatrix();
 
-// LEFT: default less-than
-glDepthFunc(GL_LESS);
-glPushMatrix();
-  glTranslatef(-2.3, 0, 0);
-  glRotatef(spin, 1, 1, 0);
-  glColor3f(1.00, 0.35, 0.20);
-  glutSolidCube(1.15);
-glPopMatrix();
+  // LEFT: default less-than
+  glDepthFunc(GL_LESS);
+  glPushMatrix();
+    glTranslatef(-2.3, 0, 0);
+    glRotatef(spin, 1, 1, 0);
+    glColor3f(1.00, 0.35, 0.20);
+    glutSolidCube(1.15);
+  glPopMatrix();
 
-// MID: greater-than -- parked just behind the plate
-glDepthFunc(GL_GREATER);
-glPushMatrix();
-  glTranslatef(0, 0, -0.85);
-  glRotatef(spin * 0.7, 0, 1, 1);
-  glColor3f(0.15, 0.55, 1.00);
-  glutSolidCube(1.15);
-glPopMatrix();
+  // MID: greater-than -- parked just behind the plate
+  glDepthFunc(GL_GREATER);
+  glPushMatrix();
+    glTranslatef(0, 0, -0.85);
+    glRotatef(spin * 0.7, 0, 1, 1);
+    glColor3f(0.15, 0.55, 1.00);
+    glutSolidCube(1.15);
+  glPopMatrix();
 
-// RIGHT: not-equal -- sits in front, so it always differs from the plate
-glDepthFunc(GL_NOTEQUAL);
-glPushMatrix();
-  glTranslatef(2.3, 0, 0.15);
-  glRotatef(spin * 1.1, 1, 0, 1);
-  glColor3f(0.10, 0.95, 0.85);
-  glutSolidCube(1.15);
-glPopMatrix();
+  // RIGHT: not-equal -- sits in front, so it always differs from the plate
+  glDepthFunc(GL_NOTEQUAL);
+  glPushMatrix();
+    glTranslatef(2.3, 0, 0.15);
+    glRotatef(spin * 1.1, 1, 0, 1);
+    glColor3f(0.10, 0.95, 0.85);
+    glutSolidCube(1.15);
+  glPopMatrix();
 
-glDepthFunc(GL_LESS);
+  glDepthFunc(GL_LESS);
+}

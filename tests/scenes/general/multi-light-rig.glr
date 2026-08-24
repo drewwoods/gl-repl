@@ -7,42 +7,44 @@
 // section 3), so LIGHT0/LIGHT1 keep the theme positions/colours and the spheres are
 // only visual markers of where those slots typically sit.
 
-glTranslatef(0.0f, 0.0f, -10.00f);   // @camera dist
-glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+display() {
+  glTranslatef(0.0f, 0.0f, -10.00f);   // @camera dist
+  glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(30.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
-glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_LIGHT1);
-glEnable(GL_NORMALIZE);
-glShadeModel(GL_SMOOTH);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT1);
+  glEnable(GL_NORMALIZE);
+  glShadeModel(GL_SMOOTH);
 
-// Draw a neutral white/gray teapot in the center to catch both lights
-glEnable(GL_COLOR_MATERIAL);
-glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-glColor3f(0.9f, 0.9f, 0.9f); // Neutral base color
+  // Draw a neutral white/gray teapot in the center to catch both lights
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glColor3f(0.9f, 0.9f, 0.9f); // Neutral base color
 
-glPushMatrix();
-glRotatef(t * 20.0f, 0.0f, 1.0f, 0.0f);
-glutSolidTeapot(1.5f);
-glPopMatrix();
+  glPushMatrix();
+    glRotatef(t * 20.0f, 0.0f, 1.0f, 0.0f);
+    glutSolidTeapot(1.5f);
+  glPopMatrix();
 
-// Unlit markers for the approximate LIGHT0 / LIGHT1 directions
-glDisable(GL_LIGHTING);
+  // Unlit markers for the approximate LIGHT0 / LIGHT1 directions
+  glDisable(GL_LIGHTING);
 
-glPushMatrix();
-glTranslatef(3.0f, 3.0f, 3.0f);
-glColor3f(1.0f, 0.35f, 0.20f);
-glutSolidSphere(0.2f, 10, 10);
-glPopMatrix();
+  glPushMatrix();
+    glTranslatef(3.0f, 3.0f, 3.0f);
+    glColor3f(1.0f, 0.35f, 0.20f);
+    glutSolidSphere(0.2f, 10, 10);
+  glPopMatrix();
 
-glPushMatrix();
-glTranslatef(-3.0f, -3.0f, -3.0f);
-glColor3f(0.15f, 0.55f, 1.00f);
-glutSolidSphere(0.2f, 10, 10);
-glPopMatrix();
+  glPushMatrix();
+    glTranslatef(-3.0f, -3.0f, -3.0f);
+    glColor3f(0.15f, 0.55f, 1.00f);
+    glutSolidSphere(0.2f, 10, 10);
+  glPopMatrix();
+}

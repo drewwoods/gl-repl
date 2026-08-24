@@ -885,7 +885,7 @@ static void test_example_loader_body_import_limits(void) {
         ASSERT_TRUE("example body parse failure clears partial document",
                     repl_state_document_count() == 0);
         ASSERT_TRUE("example body parse failure reports line",
-                    strstr(status.text, "Example load failed at body line 2") != NULL);
+                    strstr(status.text, "Example load failed at body line 3") != NULL);
         ASSERT_TRUE("example body parse failure is error status",
                     status.kind == UI_STATUS_ERROR);
     }
@@ -2424,6 +2424,7 @@ int main(int argc, char **argv) {
             "// @cfg accum_effect = 0",
             "// @cfg top_code_panel = 1",
             "// @cfg code_panel = 3",
+            "display() {",
             "// camera",
             "glTranslatef(0.0f, 0.0f, -9.0f);   // @camera dist",
             "glRotatef(11.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
@@ -2432,6 +2433,7 @@ int main(int argc, char **argv) {
             "glBegin(GL_POINTS);",
             "glVertex3f(0, 0, 0);",
             "glEnd();",
+            "}",
             NULL
         };
         char *dump;
@@ -2481,9 +2483,11 @@ int main(int argc, char **argv) {
         static const char *const nonleading_cfg_example[] = {
             "// plain comment",
             "// @cfg axes = 4",
+            "display() {",
             "glBegin(GL_POINTS);",
             "glVertex3f(1, 0, 0);",
             "glEnd();",
+            "}",
             NULL
         };
         char *dump;
@@ -2569,6 +2573,7 @@ int main(int argc, char **argv) {
          * comment mentioning the word - and the untagged transforms below it -
          * stay ordinary scene source. */
         static const char *const prose_camera_example[] = {
+            "display() {",
             "// The camera starts here.",
             "glTranslatef(0.0f, 0.0f, -8.0f);",
             "glRotatef(14.0f, 1.0f, 0.0f, 0.0f);",
@@ -2577,6 +2582,7 @@ int main(int argc, char **argv) {
             "glBegin(GL_POINTS);",
             "glVertex3f(0, 0, 0);",
             "glEnd();",
+            "}",
             NULL
         };
         char *dump;
@@ -2604,6 +2610,7 @@ int main(int argc, char **argv) {
          * three roles are fine and apply, and `dist` merges from the camera's
          * destination - so a partial pose is still a complete one. */
         static const char *const invalid_camera_example[] = {
+            "display() {",
             "// camera",
             "glTranslatef(1.0f, 0.0f, -9.0f);   // @camera dist",
             "glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx",
@@ -2612,6 +2619,7 @@ int main(int argc, char **argv) {
             "glBegin(GL_POINTS);",
             "glVertex3f(1, 2, 3);",
             "glEnd();",
+            "}",
             NULL
         };
         char *dump;
@@ -2658,12 +2666,14 @@ int main(int argc, char **argv) {
          * camera state is left untouched because the bridge rejected
          * the malformed 2-line block. */
         static const char *const truncated_camera_example[] = {
+            "display() {",
             "// camera",
             "glTranslatef(0.0f, 0.0f, -9.0f);",
             "glRotatef(20.0f, 1.0f, 0.0f, 0.0f);",
             "glBegin(GL_POINTS);",
             "glVertex3f(7, 8, 9);",
             "glEnd();",
+            "}",
             NULL
         };
         char *dump;

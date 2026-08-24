@@ -1,70 +1,72 @@
 // @cfg view_mode = RENDER3D_VIEW_3D
 // @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_CLASSIC
-glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
-glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-glRotatef(25.0f * t, 0.0f, 1.0f, 0.0f);
+display() {
+  glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
+  glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+  glRotatef(25.0f * t, 0.0f, 1.0f, 0.0f);
 
-// Baseline state setup
-glClearColor(0.08f, 0.08f, 0.12f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  // Baseline state setup
+  glClearColor(0.08f, 0.08f, 0.12f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_NORMALIZE);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_NORMALIZE);
 
-// Base lit object in original state
-glPushMatrix();
-glTranslatef(-2.2f, 0.0f, 0.0f);
-glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.9f, 0.3f, 0.2f, 1.0f});
-glutSolidSphere(0.9f, 20, 20);
-glPopMatrix();
+  // Base lit object in original state
+  glPushMatrix();
+    glTranslatef(-2.2f, 0.0f, 0.0f);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.9f, 0.3f, 0.2f, 1.0f});
+    glutSolidSphere(0.9f, 20, 20);
+  glPopMatrix();
 
-// --- Attrib Push Level 1: Save Enables & Lighting & Color ---
-glPushAttrib(GL_ENABLE_BIT | GL_LIGHTING_BIT | GL_COLOR_BUFFER_BIT);
+  // --- Attrib Push Level 1: Save Enables & Lighting & Color ---
+  glPushAttrib(GL_ENABLE_BIT | GL_LIGHTING_BIT | GL_COLOR_BUFFER_BIT);
 
-// Mutate state in Level 1: disable lighting & mask green channel off
-glDisable(GL_LIGHTING);
-glColorMask(GL_TRUE, GL_FALSE, GL_TRUE, GL_TRUE);
-glColor3f(1.0f, 1.0f, 1.0f); // Unlit white -> appears Magenta due to green mask
+  // Mutate state in Level 1: disable lighting & mask green channel off
+  glDisable(GL_LIGHTING);
+  glColorMask(GL_TRUE, GL_FALSE, GL_TRUE, GL_TRUE);
+  glColor3f(1.0f, 1.0f, 1.0f); // Unlit white -> appears Magenta due to green mask
 
-glPushMatrix();
-glTranslatef(-0.7f, 0.0f, 0.0f);
-glutSolidCube(1.2f);
-glPopMatrix();
+  glPushMatrix();
+    glTranslatef(-0.7f, 0.0f, 0.0f);
+    glutSolidCube(1.2f);
+  glPopMatrix();
 
-// --- Attrib Push Level 2: Push All Attribs ---
-glPushAttrib(GL_ALL_ATTRIB_BITS);
+  // --- Attrib Push Level 2: Push All Attribs ---
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
 
-// Mutate state in Level 2: disable depth test
-glDisable(GL_DEPTH_TEST);
-glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // Restore mask inside level 2
-glColor3f(0.2f, 0.9f, 0.3f); // Bright unlit green
+  // Mutate state in Level 2: disable depth test
+  glDisable(GL_DEPTH_TEST);
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // Restore mask inside level 2
+  glColor3f(0.2f, 0.9f, 0.3f); // Bright unlit green
 
-glPushMatrix();
-glTranslatef(0.8f, 0.0f, 0.0f);
-glutSolidCube(0.9f);
-glPopMatrix();
+  glPushMatrix();
+    glTranslatef(0.8f, 0.0f, 0.0f);
+    glutSolidCube(0.9f);
+  glPopMatrix();
 
-// --- Restore Level 2 (Pops ALL_ATTRIB_BITS) ---
-glPopAttrib();
+  // --- Restore Level 2 (Pops ALL_ATTRIB_BITS) ---
+  glPopAttrib();
 
-// Draw after Level 2 pop: should be back in Level 1 state (unlit, green masked off)
-glColor3f(1.0f, 1.0f, 0.0f); // Yellow -> appears Red due to green mask
-glPushMatrix();
-glTranslatef(1.8f, 0.0f, 0.0f);
-glutSolidSphere(0.7f, 12, 12);
-glPopMatrix();
+  // Draw after Level 2 pop: should be back in Level 1 state (unlit, green masked off)
+  glColor3f(1.0f, 1.0f, 0.0f); // Yellow -> appears Red due to green mask
+  glPushMatrix();
+    glTranslatef(1.8f, 0.0f, 0.0f);
+    glutSolidSphere(0.7f, 12, 12);
+  glPopMatrix();
 
-// --- Restore Level 1 (Pops ENABLE | LIGHTING | COLOR_BUFFER) ---
-glPopAttrib();
+  // --- Restore Level 1 (Pops ENABLE | LIGHTING | COLOR_BUFFER) ---
+  glPopAttrib();
 
-// Final object after full pop: should be back in baseline state (lit, depth tested, full color mask)
-glPushMatrix();
-glTranslatef(2.8f, 0.0f, 0.0f);
-glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.2f, 0.6f, 0.9f, 1.0f});
-glutSolidSphere(0.7f, 20, 20);
-glPopMatrix();
+  // Final object after full pop: should be back in baseline state (lit, depth tested, full color mask)
+  glPushMatrix();
+    glTranslatef(2.8f, 0.0f, 0.0f);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.2f, 0.6f, 0.9f, 1.0f});
+    glutSolidSphere(0.7f, 20, 20);
+  glPopMatrix();
+}

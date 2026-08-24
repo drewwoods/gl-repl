@@ -6,97 +6,28 @@
 static float ang, a_next, c1, s1, c2, s2;
 static float px, py, p_ang, r_in, r_out, r_tip;
 
-glTranslatef(0.0000f, 0.0000f, -9.5000f);   // @camera dist
-glRotatef(28.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+display() {
+  glTranslatef(0.0000f, 0.0000f, -9.5000f);   // @camera dist
+  glRotatef(28.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
 
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_LIGHT1);
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT1);
 
-// --- 1. Sun Gear (Center, 12 Teeth, Radius 0.8, Gold) ---
-glPushMatrix();
-  glRotatef(40.0 * t, 0, 0, 1);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.25, 0.20, 0.05, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.85, 0.70, 0.20, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.90, 0.80, 0.40, 1.0});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 64.0);
-
-  r_in = 0.25;
-  r_out = 0.70;
-  r_tip = 0.90;
-
-  glBegin(GL_QUAD_STRIP);
-    for(i, 0, 25) {
-      ang = i * (TAU / 24.0);
-      glNormal3f(0, 0, 1);
-      glVertex3f(cos(ang) * r_out, sin(ang) * r_out, 0.08);
-      glVertex3f(cos(ang) * r_in, sin(ang) * r_in, 0.08);
-    }
-  glEnd();
-
-  for(i, 0, 12) {
-    ang = i * (TAU / 12.0);
-    a_next = ang + (TAU / 24.0);
-    c1 = cos(ang);
-    s1 = sin(ang);
-    c2 = cos(a_next);
-    s2 = sin(a_next);
-    glBegin(GL_QUADS);
-      glNormal3f(0, 0, 1);
-      glVertex3f(c1 * r_out, s1 * r_out, 0.08);
-      glVertex3f(c1 * r_tip, s1 * r_tip, 0.08);
-      glVertex3f(c2 * r_tip, s2 * r_tip, 0.08);
-      glVertex3f(c2 * r_out, s2 * r_out, 0.08);
-    glEnd();
-  }
-  glutSolidTorus(0.08, 0.22, 10, 20);
-glPopMatrix();
-
-// --- 2. Planet Carrier (3 Arms, Rose-Bronze) ---
-glPushMatrix();
-  glRotatef(10.0 * t, 0, 0, 1);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.20, 0.10, 0.12, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.75, 0.35, 0.45, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.85, 0.60, 0.70, 1.0});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 48.0);
-
-  for(i, 0, 3) {
-    ang = i * (TAU / 3.0);
-    glPushMatrix();
-      glRotatef(ang * (180.0 / PI), 0, 0, 1);
-      glTranslatef(0.8, 0, -0.06);
-      glScalef(1.6, 0.22, 0.06);
-      glutSolidCube(1);
-    glPopMatrix();
-
-    glPushMatrix();
-      glTranslatef(cos(ang) * 1.6, sin(ang) * 1.6, 0.0);
-      glutSolidSphere(0.12, 12, 10);
-    glPopMatrix();
-  }
-glPopMatrix();
-
-// --- 3. Three Planet Gears (12 Teeth, Radius 0.8, Steel-Blue) ---
-glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.10, 0.15, 0.25, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.35, 0.65, 0.90, 1.0});
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.80, 0.90, 1.00, 1.0});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 80.0);
-
-for(k, 0, 3) {
-  p_ang = (10.0 * t + k * 120.0) * (PI / 180.0);
-  px = cos(p_ang) * 1.6;
-  py = sin(p_ang) * 1.6;
-
+  // --- 1. Sun Gear (Center, 12 Teeth, Radius 0.8, Gold) ---
   glPushMatrix();
-    glTranslatef(px, py, 0.0);
-    glRotatef(-20.0 * t + k * 120.0 + 15.0, 0, 0, 1);
+    glRotatef(40.0 * t, 0, 0, 1);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.25, 0.20, 0.05, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.85, 0.70, 0.20, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.90, 0.80, 0.40, 1.0});
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 64.0);
 
-    r_in = 0.22;
+    r_in = 0.25;
     r_out = 0.70;
     r_tip = 0.90;
 
@@ -124,44 +55,115 @@ for(k, 0, 3) {
         glVertex3f(c2 * r_out, s2 * r_out, 0.08);
       glEnd();
     }
-    glutSolidTorus(0.06, 0.18, 10, 16);
+    glutSolidTorus(0.08, 0.22, 10, 20);
+  glPopMatrix();
+
+  // --- 2. Planet Carrier (3 Arms, Rose-Bronze) ---
+  glPushMatrix();
+    glRotatef(10.0 * t, 0, 0, 1);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.20, 0.10, 0.12, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.75, 0.35, 0.45, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.85, 0.60, 0.70, 1.0});
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 48.0);
+
+    for(i, 0, 3) {
+      ang = i * (TAU / 3.0);
+      glPushMatrix();
+        glRotatef(ang * (180.0 / PI), 0, 0, 1);
+        glTranslatef(0.8, 0, -0.06);
+        glScalef(1.6, 0.22, 0.06);
+        glutSolidCube(1);
+      glPopMatrix();
+
+      glPushMatrix();
+        glTranslatef(cos(ang) * 1.6, sin(ang) * 1.6, 0.0);
+        glutSolidSphere(0.12, 12, 10);
+      glPopMatrix();
+    }
+  glPopMatrix();
+
+  // --- 3. Three Planet Gears (12 Teeth, Radius 0.8, Steel-Blue) ---
+  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.10, 0.15, 0.25, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.35, 0.65, 0.90, 1.0});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.80, 0.90, 1.00, 1.0});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 80.0);
+
+  for(k, 0, 3) {
+    p_ang = (10.0 * t + k * 120.0) * (PI / 180.0);
+    px = cos(p_ang) * 1.6;
+    py = sin(p_ang) * 1.6;
+
+    glPushMatrix();
+      glTranslatef(px, py, 0.0);
+      glRotatef(-20.0 * t + k * 120.0 + 15.0, 0, 0, 1);
+
+      r_in = 0.22;
+      r_out = 0.70;
+      r_tip = 0.90;
+
+      glBegin(GL_QUAD_STRIP);
+        for(i, 0, 25) {
+          ang = i * (TAU / 24.0);
+          glNormal3f(0, 0, 1);
+          glVertex3f(cos(ang) * r_out, sin(ang) * r_out, 0.08);
+          glVertex3f(cos(ang) * r_in, sin(ang) * r_in, 0.08);
+        }
+      glEnd();
+
+      for(i, 0, 12) {
+        ang = i * (TAU / 12.0);
+        a_next = ang + (TAU / 24.0);
+        c1 = cos(ang);
+        s1 = sin(ang);
+        c2 = cos(a_next);
+        s2 = sin(a_next);
+        glBegin(GL_QUADS);
+          glNormal3f(0, 0, 1);
+          glVertex3f(c1 * r_out, s1 * r_out, 0.08);
+          glVertex3f(c1 * r_tip, s1 * r_tip, 0.08);
+          glVertex3f(c2 * r_tip, s2 * r_tip, 0.08);
+          glVertex3f(c2 * r_out, s2 * r_out, 0.08);
+        glEnd();
+      }
+      glutSolidTorus(0.06, 0.18, 10, 16);
+    glPopMatrix();
+  }
+
+  // --- 4. Outer Ring Gear (Radius 2.4 - 2.8, Violet Casing) ---
+  glPushMatrix();
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.15, 0.10, 0.22, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.50, 0.30, 0.75, 1.0});
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.75, 0.60, 0.95, 1.0});
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 60.0);
+
+    r_in = 2.40;
+    r_out = 2.75;
+
+    glBegin(GL_QUAD_STRIP);
+      for(i, 0, 37) {
+        ang = i * (TAU / 36.0);
+        glNormal3f(0, 0, 1);
+        glVertex3f(cos(ang) * r_out, sin(ang) * r_out, 0.08);
+        glVertex3f(cos(ang) * r_in, sin(ang) * r_in, 0.08);
+      }
+    glEnd();
+
+    // Internal teeth pointing inward
+    r_tip = 2.22;
+    for(i, 0, 36) {
+      ang = i * (TAU / 36.0);
+      a_next = ang + (TAU / 72.0);
+      c1 = cos(ang);
+      s1 = sin(ang);
+      c2 = cos(a_next);
+      s2 = sin(a_next);
+      glBegin(GL_QUADS);
+        glNormal3f(0, 0, 1);
+        glVertex3f(c1 * r_in, s1 * r_in, 0.08);
+        glVertex3f(c1 * r_tip, s1 * r_tip, 0.08);
+        glVertex3f(c2 * r_tip, s2 * r_tip, 0.08);
+        glVertex3f(c2 * r_in, s2 * r_in, 0.08);
+      glEnd();
+    }
   glPopMatrix();
 }
-
-// --- 4. Outer Ring Gear (Radius 2.4 - 2.8, Violet Casing) ---
-glPushMatrix();
-  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.15, 0.10, 0.22, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.50, 0.30, 0.75, 1.0});
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.75, 0.60, 0.95, 1.0});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 60.0);
-
-  r_in = 2.40;
-  r_out = 2.75;
-
-  glBegin(GL_QUAD_STRIP);
-    for(i, 0, 37) {
-      ang = i * (TAU / 36.0);
-      glNormal3f(0, 0, 1);
-      glVertex3f(cos(ang) * r_out, sin(ang) * r_out, 0.08);
-      glVertex3f(cos(ang) * r_in, sin(ang) * r_in, 0.08);
-    }
-  glEnd();
-
-  // Internal teeth pointing inward
-  r_tip = 2.22;
-  for(i, 0, 36) {
-    ang = i * (TAU / 36.0);
-    a_next = ang + (TAU / 72.0);
-    c1 = cos(ang);
-    s1 = sin(ang);
-    c2 = cos(a_next);
-    s2 = sin(a_next);
-    glBegin(GL_QUADS);
-      glNormal3f(0, 0, 1);
-      glVertex3f(c1 * r_in, s1 * r_in, 0.08);
-      glVertex3f(c1 * r_tip, s1 * r_tip, 0.08);
-      glVertex3f(c2 * r_tip, s2 * r_tip, 0.08);
-      glVertex3f(c2 * r_in, s2 * r_in, 0.08);
-    glEnd();
-  }
-glPopMatrix();

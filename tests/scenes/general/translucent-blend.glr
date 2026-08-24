@@ -1,46 +1,48 @@
 // @cfg view_mode = RENDER3D_VIEW_3D
 // @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_CLASSIC
-glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
-glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+display() {
+  glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
+  glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
-// Clear screen to Canvas color
-glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  // Clear screen to Canvas color
+  glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-// Apply dynamic rotation animation
-glRotatef(25.0f * t, 0.0f, 1.0f, 0.0f);
+  // Apply dynamic rotation animation
+  glRotatef(25.0f * t, 0.0f, 1.0f, 0.0f);
 
-// Enable blending for transparency
-glEnable(GL_BLEND);
-glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  // Enable blending for transparency
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-// Quad 1: Teal with alpha 0.6 (in back-ish)
-glPushMatrix();
-glTranslatef(0.0f, 0.0f, -1.0f);
-glBegin(GL_QUADS);
-  glColor4f(0.10f, 0.95f, 0.85f, 0.6f);
-  glVertex3f(-2.0f, -1.5f, 0.0f);
-  glVertex3f( 2.0f, -1.5f, 0.0f);
-  glVertex3f( 2.0f,  1.5f, 0.0f);
-  glVertex3f(-2.0f,  1.5f, 0.0f);
-glEnd();
-glPopMatrix();
+  // Quad 1: Teal with alpha 0.6 (in back-ish)
+  glPushMatrix();
+    glTranslatef(0.0f, 0.0f, -1.0f);
+    glBegin(GL_QUADS);
+      glColor4f(0.10f, 0.95f, 0.85f, 0.6f);
+      glVertex3f(-2.0f, -1.5f, 0.0f);
+      glVertex3f( 2.0f, -1.5f, 0.0f);
+      glVertex3f( 2.0f,  1.5f, 0.0f);
+      glVertex3f(-2.0f,  1.5f, 0.0f);
+    glEnd();
+  glPopMatrix();
 
-// Quad 2: Violet with alpha 0.5 (crosses/front)
-glPushMatrix();
-glTranslatef(0.0f, 0.0f, 1.0f);
-glRotatef(45.0f, 0.0f, 0.0f, 1.0f);
-glBegin(GL_QUADS);
-  glColor4f(0.55f, 0.30f, 1.00f, 0.5f);
-  glVertex3f(-1.5f, -1.5f, 0.0f);
-  glVertex3f( 1.5f, -1.5f, 0.0f);
-  glVertex3f( 1.5f,  1.5f, 0.0f);
-  glVertex3f(-1.5f,  1.5f, 0.0f);
-glEnd();
-glPopMatrix();
+  // Quad 2: Violet with alpha 0.5 (crosses/front)
+  glPushMatrix();
+    glTranslatef(0.0f, 0.0f, 1.0f);
+    glRotatef(45.0f, 0.0f, 0.0f, 1.0f);
+    glBegin(GL_QUADS);
+      glColor4f(0.55f, 0.30f, 1.00f, 0.5f);
+      glVertex3f(-1.5f, -1.5f, 0.0f);
+      glVertex3f( 1.5f, -1.5f, 0.0f);
+      glVertex3f( 1.5f,  1.5f, 0.0f);
+      glVertex3f(-1.5f,  1.5f, 0.0f);
+    glEnd();
+  glPopMatrix();
 
-glDisable(GL_BLEND);
+  glDisable(GL_BLEND);
+}

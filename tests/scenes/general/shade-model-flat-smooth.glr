@@ -2,87 +2,89 @@
 // @cfg axes = AXES_THEME_OFF
 // @cfg grid = GRID_THEME_CLASSIC
 
-glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
-glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+display() {
+  glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
+  glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
-glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-glRotatef(25.0f * t, 0.0f, 1.0f, 0.0f);
+  glRotatef(25.0f * t, 0.0f, 1.0f, 0.0f);
 
-// Left: Flat shaded pyramid (GL_FLAT) - each face takes color of provocation vertex
-glPushMatrix();
-glTranslatef(-2.2f, 0.0f, 0.0f);
-glShadeModel(GL_FLAT);
-glBegin(GL_TRIANGLES);
-  // Front face
-  glColor3f(1.00f, 0.35f, 0.20f);
-  glVertex3f( 0.0f,  1.2f,  0.0f);
-  glColor3f(0.10f, 0.95f, 0.85f);
-  glVertex3f(-1.0f, -1.0f,  1.0f);
-  glColor3f(1.00f, 0.85f, 0.15f);
-  glVertex3f( 1.0f, -1.0f,  1.0f);
-  // Right face
-  glColor3f(1.00f, 0.35f, 0.20f);
-  glVertex3f( 0.0f,  1.2f,  0.0f);
-  glColor3f(1.00f, 0.85f, 0.15f);
-  glVertex3f( 1.0f, -1.0f,  1.0f);
-  glColor3f(0.55f, 0.30f, 1.00f);
-  glVertex3f( 1.0f, -1.0f, -1.0f);
-  // Back face
-  glColor3f(1.00f, 0.35f, 0.20f);
-  glVertex3f( 0.0f,  1.2f,  0.0f);
-  glColor3f(0.55f, 0.30f, 1.00f);
-  glVertex3f( 1.0f, -1.0f, -1.0f);
-  glColor3f(0.15f, 0.55f, 1.00f);
-  glVertex3f(-1.0f, -1.0f, -1.0f);
-  // Left face
-  glColor3f(1.00f, 0.35f, 0.20f);
-  glVertex3f( 0.0f,  1.2f,  0.0f);
-  glColor3f(0.15f, 0.55f, 1.00f);
-  glVertex3f(-1.0f, -1.0f, -1.0f);
-  glColor3f(0.10f, 0.95f, 0.85f);
-  glVertex3f(-1.0f, -1.0f,  1.0f);
-glEnd();
-glPopMatrix();
+  // Left: Flat shaded pyramid (GL_FLAT) - each face takes color of provocation vertex
+  glPushMatrix();
+    glTranslatef(-2.2f, 0.0f, 0.0f);
+    glShadeModel(GL_FLAT);
+    glBegin(GL_TRIANGLES);
+      // Front face
+      glColor3f(1.00f, 0.35f, 0.20f);
+      glVertex3f( 0.0f,  1.2f,  0.0f);
+      glColor3f(0.10f, 0.95f, 0.85f);
+      glVertex3f(-1.0f, -1.0f,  1.0f);
+      glColor3f(1.00f, 0.85f, 0.15f);
+      glVertex3f( 1.0f, -1.0f,  1.0f);
+      // Right face
+      glColor3f(1.00f, 0.35f, 0.20f);
+      glVertex3f( 0.0f,  1.2f,  0.0f);
+      glColor3f(1.00f, 0.85f, 0.15f);
+      glVertex3f( 1.0f, -1.0f,  1.0f);
+      glColor3f(0.55f, 0.30f, 1.00f);
+      glVertex3f( 1.0f, -1.0f, -1.0f);
+      // Back face
+      glColor3f(1.00f, 0.35f, 0.20f);
+      glVertex3f( 0.0f,  1.2f,  0.0f);
+      glColor3f(0.55f, 0.30f, 1.00f);
+      glVertex3f( 1.0f, -1.0f, -1.0f);
+      glColor3f(0.15f, 0.55f, 1.00f);
+      glVertex3f(-1.0f, -1.0f, -1.0f);
+      // Left face
+      glColor3f(1.00f, 0.35f, 0.20f);
+      glVertex3f( 0.0f,  1.2f,  0.0f);
+      glColor3f(0.15f, 0.55f, 1.00f);
+      glVertex3f(-1.0f, -1.0f, -1.0f);
+      glColor3f(0.10f, 0.95f, 0.85f);
+      glVertex3f(-1.0f, -1.0f,  1.0f);
+    glEnd();
+  glPopMatrix();
 
-// Right: Smooth shaded pyramid (GL_SMOOTH) - color smoothly interpolates
-glPushMatrix();
-glTranslatef(2.2f, 0.0f, 0.0f);
-glShadeModel(GL_SMOOTH);
-glBegin(GL_TRIANGLES);
-  // Front face
-  glColor3f(1.00f, 0.35f, 0.20f);
-  glVertex3f( 0.0f,  1.2f,  0.0f);
-  glColor3f(0.10f, 0.95f, 0.85f);
-  glVertex3f(-1.0f, -1.0f,  1.0f);
-  glColor3f(1.00f, 0.85f, 0.15f);
-  glVertex3f( 1.0f, -1.0f,  1.0f);
-  // Right face
-  glColor3f(1.00f, 0.35f, 0.20f);
-  glVertex3f( 0.0f,  1.2f,  0.0f);
-  glColor3f(1.00f, 0.85f, 0.15f);
-  glVertex3f( 1.0f, -1.0f,  1.0f);
-  glColor3f(0.55f, 0.30f, 1.00f);
-  glVertex3f( 1.0f, -1.0f, -1.0f);
-  // Back face
-  glColor3f(1.00f, 0.35f, 0.20f);
-  glVertex3f( 0.0f,  1.2f,  0.0f);
-  glColor3f(0.55f, 0.30f, 1.00f);
-  glVertex3f( 1.0f, -1.0f, -1.0f);
-  glColor3f(0.15f, 0.55f, 1.00f);
-  glVertex3f(-1.0f, -1.0f, -1.0f);
-  // Left face
-  glColor3f(1.00f, 0.35f, 0.20f);
-  glVertex3f( 0.0f,  1.2f,  0.0f);
-  glColor3f(0.15f, 0.55f, 1.00f);
-  glVertex3f(-1.0f, -1.0f, -1.0f);
-  glColor3f(0.10f, 0.95f, 0.85f);
-  glVertex3f(-1.0f, -1.0f,  1.0f);
-glEnd();
-glPopMatrix();
+  // Right: Smooth shaded pyramid (GL_SMOOTH) - color smoothly interpolates
+  glPushMatrix();
+    glTranslatef(2.2f, 0.0f, 0.0f);
+    glShadeModel(GL_SMOOTH);
+    glBegin(GL_TRIANGLES);
+      // Front face
+      glColor3f(1.00f, 0.35f, 0.20f);
+      glVertex3f( 0.0f,  1.2f,  0.0f);
+      glColor3f(0.10f, 0.95f, 0.85f);
+      glVertex3f(-1.0f, -1.0f,  1.0f);
+      glColor3f(1.00f, 0.85f, 0.15f);
+      glVertex3f( 1.0f, -1.0f,  1.0f);
+      // Right face
+      glColor3f(1.00f, 0.35f, 0.20f);
+      glVertex3f( 0.0f,  1.2f,  0.0f);
+      glColor3f(1.00f, 0.85f, 0.15f);
+      glVertex3f( 1.0f, -1.0f,  1.0f);
+      glColor3f(0.55f, 0.30f, 1.00f);
+      glVertex3f( 1.0f, -1.0f, -1.0f);
+      // Back face
+      glColor3f(1.00f, 0.35f, 0.20f);
+      glVertex3f( 0.0f,  1.2f,  0.0f);
+      glColor3f(0.55f, 0.30f, 1.00f);
+      glVertex3f( 1.0f, -1.0f, -1.0f);
+      glColor3f(0.15f, 0.55f, 1.00f);
+      glVertex3f(-1.0f, -1.0f, -1.0f);
+      // Left face
+      glColor3f(1.00f, 0.35f, 0.20f);
+      glVertex3f( 0.0f,  1.2f,  0.0f);
+      glColor3f(0.15f, 0.55f, 1.00f);
+      glVertex3f(-1.0f, -1.0f, -1.0f);
+      glColor3f(0.10f, 0.95f, 0.85f);
+      glVertex3f(-1.0f, -1.0f,  1.0f);
+    glEnd();
+  glPopMatrix();
 
-glShadeModel(GL_SMOOTH);
+  glShadeModel(GL_SMOOTH);
+}

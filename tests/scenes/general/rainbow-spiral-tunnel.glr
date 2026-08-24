@@ -7,28 +7,30 @@ static float radius = 2;
 static float length = 15;
 static float rotations = 4;
 static float step, angle, z, r, g, b;
-glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
-glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+display() {
+  glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glClearColor(0.03, 0.03, 0.05, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glClearColor(0.03, 0.03, 0.05, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-glBegin(GL_QUAD_STRIP);
-  for(i, 0, segments + 1) {
-    step = i / segments;
-    angle = step * rotations * TAU + t * 2.0;
+  glBegin(GL_QUAD_STRIP);
+    for(i, 0, segments + 1) {
+      step = i / segments;
+      angle = step * rotations * TAU + t * 2.0;
 
-    z = -length * 0.5 + step * length;
+      z = -length * 0.5 + step * length;
 
-    r = 0.5 + 0.5 * sin(angle);
-    g = 0.5 + 0.5 * sin(angle + 2.094);
-    b = 0.5 + 0.5 * sin(angle + 4.188);
+      r = 0.5 + 0.5 * sin(angle);
+      g = 0.5 + 0.5 * sin(angle + 2.094);
+      b = 0.5 + 0.5 * sin(angle + 4.188);
 
-    glColor3f(r, g, b);
-    glVertex3f(cos(angle) * radius, sin(angle) * radius, z);
-    glVertex3f(cos(angle) * (radius + 0.4), sin(angle) * (radius + 0.4), z + 0.1);
-  }
-glEnd();
+      glColor3f(r, g, b);
+      glVertex3f(cos(angle) * radius, sin(angle) * radius, z);
+      glVertex3f(cos(angle) * (radius + 0.4), sin(angle) * (radius + 0.4), z + 0.1);
+    }
+  glEnd();
+}

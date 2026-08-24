@@ -13,31 +13,33 @@ static float driftMax = 0.5; // max horizontal drift magnitude
 static float fallBase = -1.5; // base fall speed (NOT gravity)
 static float wrapX = 12, wrapY = 5; // half-extents of the wrap region
 static float depthScale = 10; // multiplier on `depth` for z position
-glTranslatef(0.0000f, 0.0000f, -13.5000f);   // @camera dist
-glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+display() {
+  glTranslatef(0.0000f, 0.0000f, -13.5000f);   // @camera dist
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-// --- Render State -------------------
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  // --- Render State -------------------
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-glEnable(GL_POINT_SMOOTH);
-glEnable(GL_DEPTH_TEST);
-glPointSize(10);
+  glEnable(GL_POINT_SMOOTH);
+  glEnable(GL_DEPTH_TEST);
+  glPointSize(10);
 
-// --- Scene Geometry -----------------
-glBegin(GL_POINTS);
-  for(p, 0, flakeCount) {
-    drift = driftMax * rand2(p, 1);
-    flakeX = rem(wrapX * rand2(p,4) + t * drift, 2 * wrapX);
+  // --- Scene Geometry -----------------
+  glBegin(GL_POINTS);
+    for(p, 0, flakeCount) {
+      drift = driftMax * rand2(p, 1);
+      flakeX = rem(wrapX * rand2(p,4) + t * drift, 2 * wrapX);
 
-    fall = fallBase - rand(p, 2);
-    flakeY = rem(wrapY * rand2(p,3) + t * fall, 2 * wrapY);
+      fall = fallBase - rand(p, 2);
+      flakeY = rem(wrapY * rand2(p,3) + t * fall, 2 * wrapY);
 
-    depth = rand(p, 5); // z affects color and distance
+      depth = rand(p, 5); // z affects color and distance
 
-    glColor3f(0.5 + 0.5 * depth, 0.5 + 0.5 * depth, 0.5 + 0.5 * depth);
-    glVertex3f(flakeX, flakeY, depthScale * depth);
-  }
-glEnd();
+      glColor3f(0.5 + 0.5 * depth, 0.5 + 0.5 * depth, 0.5 + 0.5 * depth);
+      glVertex3f(flakeX, flakeY, depthScale * depth);
+    }
+  glEnd();
+}
