@@ -1,13 +1,16 @@
 # File-Scope Function Definitions In The Code Panel
 
-## Status - IN REVIEW (revised twice, 2026-08-24)
+## Status - IN REVIEW (revision 3, 2026-08-24)
 
 Investigation only; nothing implemented.
 
-Revision 2 closes the two blockers from the second design read: the
-boundary helper's comment rule (it ate body-attached comments) and the
-two placement calls section 1h had left open. Both are now written in.
-Project 2 remains gated and must not be folded in.
+Revision 2 closed the second read's blockers: the boundary helper's
+comment rule (it ate body-attached comments) and the two placement calls
+1h had left open. Revision 3 closes the third read's: the base-indent
+vs. `cmd_indent` conflation in 1d, and the boundary comparison for a
+not-yet-inserted row in 1e - which must compare the returned
+`insert_pos` *untranslated*. Project 2 remains gated and must not be
+folded in.
 
 The work splits into **two projects**. Project 1 (the view) is
 self-contained and specified. Project 2 (making the order total for
@@ -231,13 +234,16 @@ Project 2):
   `import.c:3338`, so this is not a live-panel bug as long as reformat
   always runs - but it is a lying intermediate and the comment rots.
   Same patch as the line above, or neither is true.
-- `src/editor/commit.c:647` - `repl_source_scope_cmd_indent(0, ...)` for
+- `src/editor/commit.c:654` - `repl_source_scope_cmd_indent(0, ...)` for
   a new function header. **This one is load-bearing, not tidy-up.**
   After the indent change position 0 is base 0, but with the clear-pair
   exception surviving Project 1 a new definition in a catalog scene
   still parks *below* the clear pair, i.e. at `pos >= at`. Querying
   position 0 would emit a column-0 header inside `display()`. Query the
-  computed insert position instead.
+  computed insert position instead - and take both the indent and `at`
+  from `ctx->source_scope` (`src/repl/compile.h:187`), the bound view
+  that caches `at`, rather than the live wrapper. Reading a live `at`
+  against a snapshot document is how the comparison drifts.
 
 **The comparison at the boundary differs for an existing row and a
 not-yet-inserted one**, and reformat is not a follow-up that would paper
@@ -261,14 +267,45 @@ The insert-ghost tie-break in 1h is about where the live cursor's ghost
 row draws, not about formatting a row that does not exist yet. They are
 different questions and can disagree at the same index.
 
-**Coordinate contract.** `at` comes from a scope view bound to the
-*pre-change* document, while `compile_function_decl_insert_pos_after_delete()`
-returns `insert_pos` in *post-delete* coordinates (the relocation deletes
-the cursor's leading comment run first, `src/editor/commit.c:673-676`).
-Compare in the view's coordinates: translate `insert_pos` back up by
-`delete_count` when the helper translated it down, which is the same
-arithmetic that helper already documents, inverted. Do **not** build a
-virtual post-change view to format one row.
+**Coordinate contract: compare the returned `insert_pos` as-is. Do not
+translate it.** `at` comes from a scope view bound to the *pre-change*
+document, and `compile_function_decl_insert_pos_after_delete()` returns
+`insert_pos` in *post-delete* coordinates
+(`src/editor/commit.c:551-554`), so adding `delete_count` back looks like
+the correcting move. It is not - that shift exists to place the insert,
+not to classify prologue vs. body, and inverting it fails the very test
+this section adds.
+
+The reason is the relocation rule: **the deleted comment run is not
+dropped, it rides with the function.** `editor_compile_func_def` emits
+one `REPL_COMPILED_INSERT_MANY` whose `cmds[]` is
+`comments + fd + fe` at `insert_pos`, with `delete_pos`/`delete_count`
+naming the run it lifted (`src/editor/commit.c:676-699`). So the
+post-delete `insert_pos` is exactly where the whole block lands in the
+final document, which is the coordinate the classification wants.
+
+Worked example - a functions-only scene with a comment above the cursor,
+rows `0:fd 1:fe 2:// note`, cursor at 3:
+
+| | |
+| --- | --- |
+| `at` (pre-change) | 2 - the trailing run starts the body (1a) |
+| hoist walk | skips the func, skips the comment, stops at 3 |
+| subtracts `delete_count` | yes (3 >= 2+1) -> `insert_pos = 2` |
+| after insert | the comment rides with the def; both are prologue |
+
+Untranslated: `2 <= 2` -> base 0. Correct. Translated: `3 <= 2` is false
+-> base 2, and the new header sits two spaces too deep above
+`display()` - the exact bug this section exists to prevent.
+
+The untranslated `<=` also holds for the other two shapes: the clear-pair
+case (the walk stops on the executable row before the cursor's comments,
+nothing is subtracted, `insert_pos > at` -> base 2) and functions-only
+with no comment run (`insert_pos == at == count` -> base 0). Global
+declarations have no such delete and are already in current-document
+coordinates.
+
+Do **not** build a virtual post-change view to format one row.
 
 Tests must cover the exact-boundary commit both ways: a second function
 committed at end-of-document in a functions-only scene (assert the new
