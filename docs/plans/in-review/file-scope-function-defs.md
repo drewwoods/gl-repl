@@ -1,6 +1,6 @@
 # File-Scope Function Definitions In The Code Panel
 
-## Status - PROJECT 1 COMPLETE; INTERACTIVE HOIST FIXED; PROJECT 2 REMAINDER NOT APPROVED (2026-08-25)
+## Status - PROJECT 1 COMPLETE; INTERACTIVE HOIST FIXED; PROJECT 2 REMAINDER NOT APPROVED; FILE-SCOPE INSERT SLOT DESIGNED, NOT IMPLEMENTED (2026-08-25)
 
 Revision 2 closed the second read's blockers: the boundary helper's
 comment rule (it ate body-attached comments) and the two placement calls
@@ -664,6 +664,7 @@ would be flattened, so it lands in the same patch.
 | Block-closer indent | Unchanged; keep reformat's minus-2 (1d). |
 | Clear-pair exception | Removed for ordinary interactive commits: new functions clamp before the display-body boundary. It survives only during an active tutorial, whose locked-row remapping remains a Project 2 placement change (pinned by `test_func_def_tutorial_keeps_clear_prelude_placement`). |
 | Load-time hoist | Not in Project 1. A loaded document keeps a function wherever the file put it, so the below-the-clear-pair shape stays reachable through `repl_load_apply_line`. |
+| Explicit insertion above `display()` | Add a separate synthetic file-scope slot immediately before the generated display opener. It accepts only float declarations and function definitions. It does not replace the existing boundary ghost, which remains the first display-body insertion row. Design specified below; not implemented. |
 
 ## Project 2 - Making The Order Total (not approved)
 
@@ -718,6 +719,140 @@ decision, and none is a step of Project 1:
 Leave commit *placement*, import, clipboard and tutorials alone until
 Project 2 is an explicit yes. Project 1's edits to `commit.c` and
 `import.c` (1e) are indentation-formatting only.
+
+## Explicit File-Scope Insertion Slot (design approved; not implemented)
+
+The editor needs a visible insertion point above the generated
+`void display(void) {` line. This is an editor/UI affordance, not a change to
+the source document model and not permission to place arbitrary commands at
+file scope.
+
+The projected order is:
+
+```c
+static float radius;
+existing_function() {
+}
+
++ float or function      // synthetic file-scope insertion slot
+
+void display(void) {
+  + body command         // existing insertion ghost at display_body_start
+}
+```
+
+### State model
+
+The file-scope slot and the first display-body insertion point both name the
+same document coordinate, `display_body_start`. Position alone therefore
+cannot distinguish them. Add an explicit editor insertion scope beside
+`EditorInputState.insert_mode` in `src/editor/state.h`:
+
+```c
+typedef enum {
+    EDITOR_INSERT_DOCUMENT,
+    EDITOR_INSERT_FILE_SCOPE
+} EditorInsertScope;
+```
+
+Do not overload the boolean `insert_mode` and do not infer scope from
+`edit_line == display_body_start`; both the file-scope slot and the body ghost
+legitimately satisfy that equality.
+
+Entering the slot sets:
+
+- `edit_line = display_body_start`;
+- `insert_mode = 1`;
+- `insert_scope = EDITOR_INSERT_FILE_SCOPE`;
+- input indentation to zero.
+
+Escape, ordinary navigation, undo/redo restore, scene/workspace switches and
+any transition out of insert mode reset the scope to
+`EDITOR_INSERT_DOCUMENT`. The scope is transient editor state; it is not part
+of the REPL document and does not alter import, paste, external-editor row maps
+or saved files.
+
+### Panel layout and hit routing
+
+`src/ui/app/repl_code_panel.c` emits a distinct virtual row immediately before
+the display-open chrome. The existing insert ghost at the splice keeps its 1h
+decision and remains *after* the display opener, as the first body row. The
+order at the boundary is therefore:
+
+1. file-scope virtual slot;
+2. generated display-open rows;
+3. existing document/body insert ghost;
+4. the first body command.
+
+Give the new row its own layout count/position instead of folding it invisibly
+into `display_open_rows`; cursor-follow, total-line arithmetic and
+`ui_repl_code_panel_display_open_row()` must agree on whether the slot precedes
+the opener. Add a distinct app hit such as
+`UI_HIT_CODE_FILE_SCOPE_INSERT`, carrying `line_idx = display_body_start`.
+`src/app/glr_ctrl_router.c` routes that hit to an editor entry point that first
+commits or rejects pending input, then activates the scoped slot. Generated
+`display()` chrome itself remains inert.
+
+The row should exist in both full and code-focus views. When inactive it may
+render as a dim `+ float or function` placeholder; when active it renders the
+ordinary input buffer at column zero. Hide or disable it during an active
+tutorial: tutorial clear-prelude rows are locked, and moving a function above
+them remains the gated Project 2 remapping problem.
+
+### Restricted commit chain
+
+Both Enter and the semicolon commit key must intercept
+`EDITOR_INSERT_FILE_SCOPE` before the ordinary commit path. The only handlers
+offered are, in order:
+
+1. `editor_try_commit_float_decl()`;
+2. `editor_try_commit_func_def()`.
+
+There is no fallthrough to assignments, `if`/`for`/close-brace handlers, the
+general GL parser, comments, blank-line insertion or paste. Any other input is
+consumed as an error with a direct diagnostic such as
+`File scope accepts only float declarations or function definitions`, leaving
+the input and scoped cursor in place.
+
+Commit-time restriction is the safety boundary; autocomplete filtering is a
+secondary usability improvement. In this scope completion should prefer
+`float`, `static float` and function-header guidance rather than advertising
+GL calls that the commit path will reject.
+
+After a successful float declaration, keep the scoped slot active and retarget
+it to the recomputed `display_body_start`, allowing consecutive declarations.
+Plain `float` and `static float` use the existing top-level declaration
+semantics; assignments remain forbidden. After a successful function header,
+reset to `EDITOR_INSERT_DOCUMENT` and preserve the existing function commit
+post-effect: the matching `}` is inserted automatically and the cursor lands
+inside the function body, where ordinary commands are legal.
+
+Directly typing a declaration or function from an ordinary body insertion row
+continues to use the existing hoist behavior. The explicit slot adds a
+discoverable, location-honest route; it does not remove the current route.
+
+### Required coverage
+
+- The inactive slot renders immediately before `display()` with and without an
+  existing file-scope prologue, including `display_body_start == 0` and
+  `display_body_start == document_count`.
+- The existing boundary ghost still renders after the display opener and
+  remains a normal body insertion point.
+- Hit-testing the slot returns the dedicated hit kind and routing activates
+  file-scope scope at the boundary with zero indentation.
+- Enter and semicolon have identical behavior for `float`, `static float`, a
+  predefined `funcN` header and a named function header.
+- Consecutive float declarations keep the slot active at the recomputed
+  boundary; a function header exits the scope and lands inside its generated
+  body.
+- GL calls, assignments, comments, blank input, `if`, `for`, `}` and paste are
+  rejected without document mutation or generic-parser fallthrough.
+- Escape, click/arrow navigation, undo/redo and scene changes clear the scoped
+  state.
+- The slot is absent or inert during tutorials, so locked-row indices and
+  expected-commit mapping do not move.
+- Cursor-follow, wrapped-row hit translation, panel total-line counts and both
+  full/focus rendering remain consistent after the extra virtual row.
 
 ## Test And Golden Impact (Project 1)
 
