@@ -85,6 +85,8 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 | `tesseract-4d-hypercube-rotation.glr` | 3D, Math, Transforms, Geometry | 4D Hypercube (tesseract) rotating simultaneously across XW and YZ planes, projected into 3D perspective. |
 | `stellar-plasma-solar-prominence.glr` | 3D, Particles, Blending, Lighting | Magnetic solar prominence plasma arches erupting from a stellar sphere with traveling flux knots and additive blending. |
 | `rubber-duck.glr` | 3D, Hierarchical, Lighting, Animation | Iconic yellow rubber duck and duckling floating in a rippling water pool with bubbles. |
+| `polygon-edge-flags.glr` | General, EdgeFlag, Polygons, 3D | Polygon edge flags (`glEdgeFlag`) suppressing internal triangulation chords to render crisp boundary outlines and solid overlays. |
+
 
 ## How to Run & Validate
 
@@ -173,4 +175,5 @@ Like [`tests/scenes/stress/`](../stress/README.md), this corpus can be loaded dy
 ./gl-repl tests/scenes/general/tesseract-4d-hypercube-rotation.glr
 ./gl-repl tests/scenes/general/stellar-plasma-solar-prominence.glr
 ./gl-repl tests/scenes/general/rubber-duck.glr
+./gl-repl tests/scenes/general/polygon-edge-flags.glr
 ```

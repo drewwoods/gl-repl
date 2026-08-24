@@ -1,0 +1,144 @@
+// @cfg view_mode = RENDER3D_VIEW_3D
+// @cfg axes = AXES_THEME_OFF
+// @cfg grid = GRID_THEME_CLASSIC
+// Polygon edge flags (glEdgeFlag).
+// Triangulated polygons share internal diagonal seams. In wireframe mode:
+//   LEFT   All edge flags GL_TRUE   -- raw triangulation mesh with internal spokes
+//   MID    Edge flags GL_FALSE      -- internal chords suppressed, perimeter outline only
+//   RIGHT  GL_FILL + outline overlay -- solid shaded facets with crisp boundary contour
+static float spin;
+
+drawMeshStar(z_apex) {
+  float a0, a1, r0, r1;
+  float x0, y0, x1, y1;
+  glBegin(GL_TRIANGLES);
+    for(k, 0, 11) {
+      a0 = k * PI / 6.0;
+      a1 = (k + 1) * PI / 6.0;
+      if(fmod(k, 2) < 0.5) {
+        r0 = 1.35;
+        r1 = 0.60;
+      } else {
+        r0 = 0.60;
+        r1 = 1.35;
+      }
+      x0 = cos(a0) * r0;
+      y0 = sin(a0) * r0;
+      x1 = cos(a1) * r1;
+      y1 = sin(a1) * r1;
+
+      // Front face: all edges marked as boundary (GL_TRUE)
+      glEdgeFlag(GL_TRUE);
+      glVertex3f(0.0, 0.0, z_apex);
+      glEdgeFlag(GL_TRUE);
+      glVertex3f(x0, y0, 0.0);
+      glEdgeFlag(GL_TRUE);
+      glVertex3f(x1, y1, 0.0);
+
+      // Back face: all edges marked as boundary (GL_TRUE)
+      glEdgeFlag(GL_TRUE);
+      glVertex3f(0.0, 0.0, -z_apex);
+      glEdgeFlag(GL_TRUE);
+      glVertex3f(x1, y1, 0.0);
+      glEdgeFlag(GL_TRUE);
+      glVertex3f(x0, y0, 0.0);
+    }
+  glEnd();
+}
+
+drawBoundaryStar(z_apex) {
+  float a0, a1, r0, r1;
+  float x0, y0, x1, y1;
+  glBegin(GL_TRIANGLES);
+    for(k, 0, 11) {
+      a0 = k * PI / 6.0;
+      a1 = (k + 1) * PI / 6.0;
+      if(fmod(k, 2) < 0.5) {
+        r0 = 1.35;
+        r1 = 0.60;
+      } else {
+        r0 = 0.60;
+        r1 = 1.35;
+      }
+      x0 = cos(a0) * r0;
+      y0 = sin(a0) * r0;
+      x1 = cos(a1) * r1;
+      y1 = sin(a1) * r1;
+
+      // Front face: suppress interior spokes, keep perimeter boundary
+      glEdgeFlag(GL_FALSE);
+      glVertex3f(0.0, 0.0, z_apex);
+      glEdgeFlag(GL_TRUE);
+      glVertex3f(x0, y0, 0.0);
+      glEdgeFlag(GL_FALSE);
+      glVertex3f(x1, y1, 0.0);
+
+      // Back face: suppress interior spokes, keep perimeter boundary
+      glEdgeFlag(GL_FALSE);
+      glVertex3f(0.0, 0.0, -z_apex);
+      glEdgeFlag(GL_TRUE);
+      glVertex3f(x1, y1, 0.0);
+      glEdgeFlag(GL_FALSE);
+      glVertex3f(x0, y0, 0.0);
+    }
+  glEnd();
+}
+
+glTranslatef(0.0f, 0.0f, -8.50f);   // @camera dist
+glRotatef(22.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+
+glClearColor(0.05, 0.06, 0.08, 1);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+glEnable(GL_DEPTH_TEST);
+
+spin = t * 30.0;
+
+// LEFT: Full wireframe mesh (all edge flags GL_TRUE)
+glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+glLineWidth(2.0);
+glPushMatrix();
+  glTranslatef(-2.6, 0.0, 0.0);
+  glRotatef(spin, 0.0, 1.0, 0.0);
+  glRotatef(15.0, 1.0, 0.0, 0.0);
+  glColor3f(1.00, 0.85, 0.15);
+  drawMeshStar(0.55);
+glPopMatrix();
+
+// MID: Boundary-only outline (interior spokes suppressed via GL_FALSE)
+glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+glLineWidth(2.0);
+glPushMatrix();
+  glTranslatef(0.0, 0.0, 0.0);
+  glRotatef(spin, 0.0, 1.0, 0.0);
+  glRotatef(15.0, 1.0, 0.0, 0.0);
+  glColor3f(0.10, 0.95, 0.85);
+  drawBoundaryStar(0.55);
+glPopMatrix();
+
+// RIGHT: Shaded solid + clean boundary wireframe overlay
+glPushMatrix();
+  glTranslatef(2.6, 0.0, 0.0);
+  glRotatef(spin, 0.0, 1.0, 0.0);
+  glRotatef(15.0, 1.0, 0.0, 0.0);
+
+  // Pass 1: Filled solid facets
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  glEnable(GL_POLYGON_OFFSET_FILL);
+  glPolygonOffset(1.0, 1.0);
+  glColor3f(0.55, 0.30, 1.00);
+  drawMeshStar(0.55);
+  glDisable(GL_POLYGON_OFFSET_FILL);
+
+  // Pass 2: Boundary outline overlay
+  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  glLineWidth(2.5);
+  glColor3f(1.00, 0.35, 0.20);
+  drawBoundaryStar(0.55);
+glPopMatrix();
+
+// Restore defaults
+glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+glLineWidth(1.0);
+glEdgeFlag(GL_TRUE);
