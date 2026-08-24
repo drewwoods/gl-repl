@@ -199,10 +199,10 @@ index dc7ebb19..c8c4536f 100644
              ShadAppend(buff);
          }
 diff --git a/src/gl/getter.c b/src/gl/getter.c
-index 3a9acc55..1c413957 100644
+index 9edc08c0..295e3b46 100644
 --- a/src/gl/getter.c
 +++ b/src/gl/getter.c
-@@ -508,6 +508,12 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
+@@ -550,6 +550,12 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
          case GL_LIGHT_MODEL_TWO_SIDE:
              *params=glstate->light.two_side;
              break;
@@ -236,10 +236,10 @@ index 674eaa5e..b1b41be0 100644
  AliasExport(void,glColor4fv,,(GLfloat* v));
  
 diff --git a/src/gl/glstate.c b/src/gl/glstate.c
-index b0e87bfc..16716187 100644
+index 16b29bd8..c7d19dd0 100644
 --- a/src/gl/glstate.c
 +++ b/src/gl/glstate.c
-@@ -278,6 +278,8 @@ void* NewGLState(void* shared_glstate, int es2only) {
+@@ -279,6 +279,8 @@ void* NewGLState(void* shared_glstate, int es2only) {
      glstate->material.front.emission[3] = 1.0f;
      glstate->material.front.colormat = GL_AMBIENT_AND_DIFFUSE;
      memcpy(&glstate->material.back, &glstate->material.front, sizeof(material_t));
@@ -371,27 +371,29 @@ index b6d226f9..739f1181 100644
  
  #endif // _GL4ES_LIGHT_H_
 diff --git a/src/gl/stack.c b/src/gl/stack.c
-index 1a6d5556..59376bae 100644
+index 1a6d5556..75b94328 100644
 --- a/src/gl/stack.c
 +++ b/src/gl/stack.c
-@@ -154,6 +154,8 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
+@@ -154,6 +154,9 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
          cur->lighting = gl4es_glIsEnabled(GL_LIGHTING);
          gl4es_glGetFloatv(GL_LIGHT_MODEL_AMBIENT, cur->light_model_ambient);
          gl4es_glGetIntegerv(GL_LIGHT_MODEL_TWO_SIDE, &cur->light_model_two_side);
 +        gl4es_glGetIntegerv(GL_COLOR_MATERIAL_FACE, &cur->color_material_face);
 +        gl4es_glGetIntegerv(GL_COLOR_MATERIAL_PARAMETER, &cur->color_material_parameter);
++        cur->colormaterial = gl4es_glIsEnabled(GL_COLOR_MATERIAL);
  
          int i;
          int j=0;
-@@ -465,6 +467,7 @@ DBG(printf("glPopAttrib()\n");)
+@@ -465,6 +468,8 @@ DBG(printf("glPopAttrib()\n");)
          enable_disable(GL_LIGHTING, cur->lighting);
          gl4es_glLightModelfv(GL_LIGHT_MODEL_AMBIENT, cur->light_model_ambient);
          gl4es_glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, cur->light_model_two_side);
 +        gl4es_glColorMaterial(cur->color_material_face, cur->color_material_parameter);
++        enable_disable(GL_COLOR_MATERIAL, cur->colormaterial);
  
          int i;
          int j=0;
-@@ -660,4 +663,4 @@ void APIENTRY_GL4ES gl4es_glPopClientAttrib(void) {
+@@ -660,4 +665,4 @@ void APIENTRY_GL4ES gl4es_glPopClientAttrib(void) {
  AliasExport(void,glPushClientAttrib,,(GLbitfield mask));
  AliasExport_V(void,glPopClientAttrib);
  AliasExport(void,glPushAttrib,,(GLbitfield mask));
@@ -411,4 +413,3 @@ index 3a6fc275..d145bf1f 100644
      GLfloat *materials;
      GLint shade_model;
  
-

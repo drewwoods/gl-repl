@@ -67,20 +67,27 @@ license text, reproduced verbatim from `third_party/freeglut/COPYING`:
 - **Local patches:** applied by `scripts/web-deps.sh` after cloning, before
   building (none yet upstream or in a public fork):
   - `packaging/web/patches/gl4es-rasterpos-perspective-divide.patch` - a
-    `glRasterPos3f` perspective-divide fix.
+    `glRasterPos3f` perspective-divide fix. Clip-space `w<=0` or NDC
+    outside [-1, 1] invalidates the raster position so a later
+    `glBitmap`/`label()` is ignored.
   - `packaging/web/patches/gl4es-bitmap-dirty-clear.patch` - clear only the
     glyph batch's dirty rectangle of the CPU bitmap buffer instead of
-    memsetting the full viewport at every batch start.
+    memsetting the full viewport at every batch start. Realloc always
+    zeros the new buffer.
   - `packaging/web/patches/gl4es-getter-client-state.patch` - serve
     `glGet*` of clear color/depth, line width, scissor box, viewport, and
     the generate-mipmap hint from client-side mirrors instead of the GLES
     driver (on WebGL a driver `glGet*` is a synchronous `getParameter()`
     that stalls the pipeline; `glPushAttrib` reads several of these).
+    `GL_DEPTH_CLEAR_VALUE` is `glstate->depth.clear` (the wrap/gles.c
+    setter is `skip_glClearDepthf`). Viewport/scissor use a "has been
+    set" flag so a legal zero-size box is not treated as uninitialized.
   - `packaging/web/patches/gl4es-color-material-face.patch` - track the
     single active `GL_COLOR_MATERIAL_FACE` so `glColorMaterial(GL_FRONT, …)`
     / `(GL_BACK, …)` updates only the selected side's material in the
     generated shaders (two-sided scenes had back-face colors leaking onto
-    front faces).
+    front faces). `glPushAttrib(GL_LIGHTING_BIT)` also restores the
+    `GL_COLOR_MATERIAL` enable.
   - `packaging/web/patches/gl4es-pushattrib-gaps.patch` - implement the
     `glPushAttrib`/`glPopAttrib` groups gl4es left as TODOs, for the
     state gl-repl exercises: all of `GL_POLYGON_BIT` (front-face winding,
@@ -100,15 +107,29 @@ license text, reproduced verbatim from `third_party/freeglut/COPYING`:
     copy the read framebuffer into a scratch texture and blend it into
     an RGBA16F (RGBA8 fallback) accum texture scaled by the weight;
     `GL_RETURN` draws it back. The getter reports `GL_ACCUM_*_BITS`
-    (16/8/0), so gl-repl's runtime accum detection re-enables the
-    accumulation effects (Accum AA, Blur, Blur Cam) in the browser.
+    (16/8/0) and `GL_ACCUM_CLEAR_VALUE`, so gl-repl's runtime accum
+    detection re-enables the accumulation effects (Accum AA, Blur, Blur
+    Cam) in the browser. 16-bit targets are kept only if a blended draw
+    succeeds (otherwise RGBA8). `DeleteGLState` frees the FBO objects.
+  - `packaging/web/patches/gl4es-accum-deferred-return.patch` - cache
+    LOAD/ACCUM snapshots and reduce their weights once at RETURN.
+  - `packaging/web/patches/gl4es-accum-deferred-scissor.patch` - size and
+    copy deferred samples to the WebGL scene scissor.
+  - `packaging/web/patches/gl4es-point-smooth.patch` - emulate round
+    antialiased points in the GLES2 fixed-pipeline shader.
+  - `packaging/web/patches/gl4es-polygon-line-drawarrays.patch` - expand
+    polygon-mode edges to `glDrawArrays` instead of client-indexed
+    `glDrawElements`.
+  - `packaging/web/patches/gl4es-point-size-batch.patch` - apply
+    `glPointSize` to the batch it was called on.
   - `packaging/web/patches/gl4es-polygon-offset-line.patch` - shadow
     `GL_POLYGON_OFFSET_LINE` and apply a projection-row depth bias
     around polygon-mode line draws so vertex outlines are not a
     silent `GL_INVALID_ENUM` on WebGL.
   - `packaging/web/patches/gl4es-line-width-quads.patch` - expand
     `glLineWidth` > 1 into screen-space quads on stacks whose
-    `ALIASED_LINE_WIDTH_RANGE` is `[1, 1]`.
+    `ALIASED_LINE_WIDTH_RANGE` is `[1, 1]`. `gl4es_probe_line_width_and_depth`
+    fills `maxlinewidth` / `GL_DEPTH_BITS` once a context exists.
 - **License:** MIT. Reproduced verbatim from gl4es's `LICENSE`:
 
 ```

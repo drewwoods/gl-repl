@@ -23,7 +23,13 @@ saving 2.443 ms per frame.  See packaging/web/patches/README.md for the
 three-stage A/B and measurement caveats.
 
 Applied by scripts/web-deps.sh immediately after gl4es-accum-fbo.patch.
+
+Reduce-shader compile/link failure deletes the GL objects and sticks
+so a later LOAD does not retry every frame. Dispose also frees sample
+textures and the reduce program.
+
 diff --git a/src/gl/accum.c b/src/gl/accum.c
+index 6f493cb5..1978d479 100644
 --- a/src/gl/accum.c
 +++ b/src/gl/accum.c
 @@ -1,35 +1,42 @@
@@ -81,19 +87,16 @@ diff --git a/src/gl/accum.c b/src/gl/accum.c
  #include <stdlib.h>
  #include <string.h>
  
-@@ -273,7 +280,134 @@
-     gles_glUseProgram(a->program);
-     gles_glUniform1i(gles_glGetUniformLocation(a->program, "uTex"), 0);
-     a->uscale = gles_glGetUniformLocation(a->program, "uScale");
-+    gles_glUseProgram(oldprog);
-+    return 1;
-+}
-+
+@@ -315,6 +322,145 @@ static int accum_create_program(glesaccum_t *a) {
+     return 1;
+ }
+ 
 +/* Build one reduction shader sized to the real fragment-sampler limit.  The
 + * Emscripten bootstrap initializes gl4es through its conservative "notest"
 + * path, whose cached limit can be lower than WebGL2's real value, so query the
 + * live context here just as the accumulation-format probe does. */
 +static int accum_create_reduce_program(glesaccum_t *a) {
++    if(a->reduce_failed) return 0;
 +    if(a->reduce_program) return 1;
 +
 +    LOAD_GLES(glGetIntegerv);
@@ -181,9 +184,13 @@ diff --git a/src/gl/accum.c b/src/gl/accum.c
 +    free(source);
 +    if(!success) {
 +        LOAD_GLES(glGetShaderInfoLog);
++        LOAD_GLES2(glDeleteShader);
 +        char log[400];
 +        gles_glGetShaderInfoLog(a->reduce_pixelshader, 399, NULL, log);
 +        SHUT_LOGE("Failed to produce deferred accum fragment shader.\n%s", log);
++        if(gles_glDeleteShader) gles_glDeleteShader(a->reduce_pixelshader);
++        a->reduce_pixelshader = 0;
++        a->reduce_failed = 1;
 +        return 0;
 +    }
 +
@@ -195,8 +202,15 @@ diff --git a/src/gl/accum.c b/src/gl/accum.c
 +    gles_glLinkProgram(a->reduce_program);
 +    gles_glGetProgramiv(a->reduce_program, GL_LINK_STATUS, &success);
 +    if(!success) {
++        LOAD_GLES2(glDeleteProgram);
++        LOAD_GLES2(glDeleteShader);
 +        SHUT_LOGE("Failed to link deferred accum program.\n");
++        if(gles_glDeleteProgram) gles_glDeleteProgram(a->reduce_program);
++        if(gles_glDeleteShader && a->reduce_pixelshader)
++            gles_glDeleteShader(a->reduce_pixelshader);
 +        a->reduce_program = 0;
++        a->reduce_pixelshader = 0;
++        a->reduce_failed = 1;
 +        return 0;
 +    }
 +
@@ -211,12 +225,15 @@ diff --git a/src/gl/accum.c b/src/gl/accum.c
 +        snprintf(name, sizeof(name), "uWeight%d", i);
 +        a->reduce_weight[i] = gles_glGetUniformLocation(a->reduce_program, name);
 +    }
-     gles_glUseProgram(oldprog);
++    gles_glUseProgram(oldprog);
 +    a->sample_capacity = capacity;
-     return 1;
- }
- 
-@@ -316,6 +450,14 @@
++    return 1;
++}
++
+ // (re)create the accum FBO + textures at the current target size.
+ // Returns 0 (op becomes a no-op) when the target size is unknown or
+ // creation fails; a->bits is only zeroed on hard shader failure.
+@@ -354,6 +500,14 @@ static int accum_ensure(glesaccum_t *a) {
          gles_glDeleteTextures(1, &a->scratch_tex);
          a->scratch_tex = 0;
      }
@@ -231,7 +248,7 @@ diff --git a/src/gl/accum.c b/src/gl/accum.c
  
      accum_force_tmu0();
      while(gles_glGetError()!=GL_NO_ERROR);
-@@ -373,16 +515,51 @@
+@@ -411,16 +565,51 @@ static int accum_ensure(glesaccum_t *a) {
      return ok;
  }
  
@@ -289,7 +306,7 @@ diff --git a/src/gl/accum.c b/src/gl/accum.c
      unboundBuffers();
      for(int i=0; i<hardext.maxvattrib; i++) {
          vertexattrib_t *v = &glstate->gleshard->vertexattrib[i];
-@@ -420,11 +597,126 @@
+@@ -458,11 +647,126 @@ static void accum_draw_quad(glesaccum_t *a, GLuint texture, GLfloat scale) {
      LOAD_GLES(glDrawArrays);
      accum_force_tmu0();
      gles_glBindTexture(GL_TEXTURE_2D, texture);
@@ -417,7 +434,29 @@ diff --git a/src/gl/accum.c b/src/gl/accum.c
  int gl4es_accum_get_bits() {
      glesaccum_t *a = accum_state();
      accum_probe(a);
-@@ -436,6 +728,18 @@
+@@ -489,12 +793,21 @@ void gl4es_accum_dispose(void *accum) {
+             gles_glDeleteTextures(1, &a->accum_tex);
+         if(a->scratch_tex && gles_glDeleteTextures)
+             gles_glDeleteTextures(1, &a->scratch_tex);
++        if(gles_glDeleteTextures) {
++            for(int i=0; i<GL4ES_ACCUM_MAX_DEFERRED_SAMPLES; i++)
++                if(a->sample_tex[i])
++                    gles_glDeleteTextures(1, &a->sample_tex[i]);
++        }
+         if(a->program && gles_glDeleteProgram)
+             gles_glDeleteProgram(a->program);
++        if(a->reduce_program && gles_glDeleteProgram)
++            gles_glDeleteProgram(a->reduce_program);
+         if(a->pixelshader && gles_glDeleteShader)
+             gles_glDeleteShader(a->pixelshader);
+         if(a->vertexshader && gles_glDeleteShader)
+             gles_glDeleteShader(a->vertexshader);
++        if(a->reduce_pixelshader && gles_glDeleteShader)
++            gles_glDeleteShader(a->reduce_pixelshader);
+     }
+     free(a);
+ }
+@@ -504,6 +817,18 @@ void gl4es_accum_clear() {
      accum_probe(a);
      if(!a->bits) return;
      if(!accum_ensure(a)) return;
@@ -436,7 +475,7 @@ diff --git a/src/gl/accum.c b/src/gl/accum.c
      LOAD_GLES(glClearColor);
      LOAD_GLES(glClear);
      LOAD_GLES2_OR_OES(glBindFramebuffer);
-@@ -504,37 +808,62 @@
+@@ -572,24 +897,47 @@ void APIENTRY_GL4ES gl4es_glAccum(GLenum op, GLfloat value) {
      gl4es_glDisable(GL_STENCIL_TEST);
      // scissor left untouched: real glAccum is bounded by the scissor box
  
@@ -496,8 +535,10 @@ diff --git a/src/gl/accum.c b/src/gl/accum.c
          gles_glBindFramebuffer(GL_FRAMEBUFFER, a->fbo);
          gl4es_glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
          if(op==GL_ACCUM) {
-             gl4es_glEnable(GL_BLEND);
+@@ -597,14 +945,16 @@ void APIENTRY_GL4ES gl4es_glAccum(GLenum op, GLfloat value) {
              gl4es_glBlendFunc(GL_ONE, GL_ONE);
+             gl4es_glBlendEquation(GL_FUNC_ADD);
+             gl4es_glDisable(GL_COLOR_LOGIC_OP);
 -        } else
 +        } else {
              gl4es_glDisable(GL_BLEND);
@@ -513,9 +554,10 @@ diff --git a/src/gl/accum.c b/src/gl/accum.c
          gl4es_glDepthMask(GL_TRUE);
      gl4es_glPopAttrib();
 diff --git a/src/gl/state.h b/src/gl/state.h
+index 3e2fd41d..0ddbdd57 100644
 --- a/src/gl/state.h
 +++ b/src/gl/state.h
-@@ -248,6 +248,8 @@
+@@ -250,6 +250,8 @@ typedef struct {
      GLfloat         vert[8], tex[8];
  } glesblit_t;
  
@@ -524,7 +566,7 @@ diff --git a/src/gl/state.h b/src/gl/state.h
  // accumulation-buffer emulation state (accum.c)
  typedef struct {
      // one-time renderability probe
-@@ -260,6 +262,13 @@
+@@ -262,6 +264,13 @@ typedef struct {
      GLuint          fbo;
      GLuint          accum_tex;
      GLuint          scratch_tex;    // framebuffer snapshot for GL_ACCUM/GL_LOAD
@@ -538,13 +580,14 @@ diff --git a/src/gl/state.h b/src/gl/state.h
      int             width, height;
      GLfloat         clear[4];       // glClearAccum value
      // private scaled-copy program
-@@ -267,6 +276,12 @@
+@@ -269,6 +278,13 @@ typedef struct {
      GLuint          pixelshader;
      GLuint          program;
      GLint           uscale;
 +    // deferred weighted-reduction program
 +    GLuint          reduce_pixelshader;
 +    GLuint          reduce_program;
++    int             reduce_failed;  /* sticky: do not retry a failed reduce shader */
 +    GLint           reduce_uscale;
 +    GLint           reduce_tex[GL4ES_ACCUM_MAX_DEFERRED_SAMPLES];
 +    GLint           reduce_weight[GL4ES_ACCUM_MAX_DEFERRED_SAMPLES];

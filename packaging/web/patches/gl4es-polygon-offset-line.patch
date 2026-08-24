@@ -38,6 +38,12 @@ native _LINE never applied to line primitives.
 Applied by scripts/web-deps.sh after gl4es-point-size-batch.patch
 (needs the polygon-line DrawArrays path). Must also sit after
 gl4es-pushattrib-gaps.patch (same stack.c polygon block).
+
+After a real GL context exists, gl4es_probe_line_width_and_depth()
+(idempotent) fills maxlinewidth and depthbits. Emscripten GetHardwareExtensions
+runs with notest before glutCreateWindow, so the first glViewport / offset
+draw / wide-line query is what actually probes GL_DEPTH_BITS.
+
 diff --git a/src/gl/enable.c b/src/gl/enable.c
 index 166ec797..142223be 100644
 --- a/src/gl/enable.c
@@ -45,7 +51,7 @@ index 166ec797..142223be 100644
 @@ -4,6 +4,10 @@
  #include "loader.h"
  #include "debug.h"
-
+ 
 +#ifndef GL_POLYGON_OFFSET_LINE
 +#define GL_POLYGON_OFFSET_LINE 0x2A02
 +#endif
@@ -55,11 +61,11 @@ index 166ec797..142223be 100644
  #define DBG(a) a
 @@ -166,6 +170,8 @@ static void proxy_glEnable(GLenum cap, bool enable, void (APIENTRY_GLES *next)(G
          proxy_GOFPE(GL_LINE_SMOOTH, line_smooth, );
-
+ 
          proxy_GO(GL_POLYGON_OFFSET_FILL, polyfill_offset);
 +        /* Desktop-only enum: shadow it, do not forward to GLES. */
 +        GO(GL_POLYGON_OFFSET_LINE, polyline_offset);
-
+ 
          // color logic op
          proxy_GOFPE(GL_COLOR_LOGIC_OP, color_logic_op, );
 @@ -394,6 +400,7 @@ GLboolean APIENTRY_GL4ES gl4es_glIsEnabled(GLenum cap) {
@@ -71,19 +77,19 @@ index 166ec797..142223be 100644
          clientisenabled(GL_SECONDARY_COLOR_ARRAY, vertexattrib[ATT_SECONDARY].enabled);
          clientisenabled(GL_FOG_COORD_ARRAY, vertexattrib[ATT_FOGCOORD].enabled);
 diff --git a/src/gl/getter.c b/src/gl/getter.c
-index 1e743074..f4a57fed 100644
+index 94115767..52611ff3 100644
 --- a/src/gl/getter.c
 +++ b/src/gl/getter.c
-@@ -26,6 +26,8 @@
+@@ -28,6 +28,8 @@
  GLfloat gl4es_mirror_clear_color[4] = {0.f, 0.f, 0.f, 0.f};
- GLfloat gl4es_mirror_clear_depth = 1.0f;
+ GLfloat gl4es_mirror_clear_depth = 1.0f; /* written from depth.c; getter reads glstate->depth.clear */
  GLfloat gl4es_mirror_line_width = 1.0f;
 +GLfloat gl4es_mirror_polygon_offset_factor = 0.0f;
 +GLfloat gl4es_mirror_polygon_offset_units = 0.0f;
  GLint   gl4es_mirror_mipmap_hint = GL_DONT_CARE;
-
+ 
  GLenum APIENTRY_GL4ES gl4es_glGetError(void) {
-@@ -307,6 +309,12 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
+@@ -329,6 +331,12 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
          case GL_DOUBLEBUFFER:
              *params = 1;    // Fake double buffering...
              break;
@@ -103,7 +109,7 @@ index d915e654..15ffc58e 100644
 @@ -11,6 +11,24 @@
  #include "render.h"
  #include "fpe.h"
-
+ 
 +/* Temporary projection-row bias for polygon-mode lines when
 + * GL_POLYGON_OFFSET_LINE is on. GLES fill-offset does not apply to
 + * GL_LINES; cached object-space verts are never written. */
@@ -127,7 +133,7 @@ index d915e654..15ffc58e 100644
      uintptr_t   real_base;
 @@ -912,6 +930,8 @@ void draw_renderlist(renderlist_t *list) {
  			mode = GL_POINTS;
-
+ 
          if (use_line_arrays) {
 +            gl4es_mvp_save_t zbias_saved;
 +            int zbias = begin_polygon_line_zbias(1, &zbias_saved);
@@ -171,22 +177,22 @@ index d915e654..15ffc58e 100644
                      if(list->instanceCount==1)
                          gles_glDrawArrays(mode, 0, len);
 diff --git a/src/gl/matrix.c b/src/gl/matrix.c
-index e9990d61..41d35771 100644
+index e9990d61..732aa705 100644
 --- a/src/gl/matrix.c
 +++ b/src/gl/matrix.c
 @@ -1,5 +1,8 @@
  #include "matrix.h"
-
+ 
 +#include <math.h>
 +#include <string.h>
 +
  #include "../glx/hardext.h"
  #include "debug.h"
  #include "fpe.h"
-@@ -8,6 +11,67 @@
+@@ -8,6 +11,68 @@
  #include "init.h"
  #include "loader.h"
-
+ 
 +extern GLfloat gl4es_mirror_polygon_offset_units;
 +
 +void gl4es_mat_mark_dirty(void)
@@ -235,6 +241,7 @@ index e9990d61..41d35771 100644
 +
 +GLfloat gl4es_polygon_offset_ndc_d(void)
 +{
++    gl4es_probe_line_width_and_depth();
 +    GLfloat denom = glstate->depth.Far - glstate->depth.Near;
 +    if (denom == 0.f)
 +        denom = 1.f;
@@ -258,7 +265,7 @@ index 43596d61..05b6379a 100644
 @@ -55,5 +55,22 @@ static inline GLfloat* getMVPMat()
  	return glstate->mvp_matrix;
  }
-
+ 
 +/* Transient MV/P poke. Never use public glPushMatrix: a full stack
 + * would GL_STACK_OVERFLOW and silently skip the draw. Always dirty
 + * mvp / inv_mv / normal on poke and restore so a getInvMVMat /
@@ -276,14 +283,26 @@ index 43596d61..05b6379a 100644
 +void gl4es_mvp_load_identity(void);
 +void gl4es_mvp_poke_proj_zbias(GLfloat d);
 +GLfloat gl4es_polygon_offset_ndc_d(void);
-
+ 
  #endif // _GL4ES_MATRIX_H_
+diff --git a/src/gl/raster.c b/src/gl/raster.c
+index 71900301..f02dabd9 100644
+--- a/src/gl/raster.c
++++ b/src/gl/raster.c
+@@ -115,6 +115,7 @@ void APIENTRY_GL4ES gl4es_glViewport(GLint x, GLint y, GLsizei width, GLsizei he
+ 		  glstate->raster.viewport.width = width;
+ 		  glstate->raster.viewport.height = height;
+ 		  glstate->raster.viewport_known = 1;
++		  gl4es_probe_line_width_and_depth();
+     }
+ #if !defined(NO_EGL) && !defined(NOX11)
+ 		if(!globals4es.usefbo && !globals4es.usefb && glstate->fbo.fbo_draw->id==0) {
 diff --git a/src/gl/stack.c b/src/gl/stack.c
-index e7343fd6..cce967d5 100644
+index 77981a15..23dad138 100644
 --- a/src/gl/stack.c
 +++ b/src/gl/stack.c
 @@ -4,6 +4,7 @@
-
+ 
  #include "../glx/hardext.h"
  #include "wrap/gl4es.h"
 +#include "const.h"
@@ -299,7 +318,7 @@ index e7343fd6..cce967d5 100644
          cur->polygon_offset_fill = gl4es_glIsEnabled(GL_POLYGON_OFFSET_FILL);
          //TODO: GL_POLYGON_OFFSET_POINT
          //TODO: GL_POLYGON_SMOOTH
-@@ -241,8 +242,11 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
+@@ -242,8 +243,11 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
          gl4es_glGetIntegerv(GL_FRONT_FACE, &cur->front_face);
          cur->polygon_mode = glstate->polygon_mode;  // 0 means GL_FILL here
          cur->polygon_offset_fill = gl4es_glIsEnabled(GL_POLYGON_OFFSET_FILL);
@@ -311,8 +330,8 @@ index e7343fd6..cce967d5 100644
 +        //TODO: GL_POLYGON_OFFSET_POINT enable (not shadowed)
      }
      // TODO: GL_POLYGON_STIPPLE_BIT
-
-@@ -433,7 +437,7 @@ DBG(printf("glPopAttrib()\n");)
+ 
+@@ -434,7 +438,7 @@ DBG(printf("glPopAttrib()\n");)
          enable_disable(GL_MULTISAMPLE, cur->multisample);
          enable_disable(GL_NORMALIZE, cur->normalize);
          enable_disable(GL_POINT_SMOOTH, cur->point_smooth);
@@ -321,14 +340,14 @@ index e7343fd6..cce967d5 100644
          enable_disable(GL_POLYGON_OFFSET_FILL, cur->polygon_offset_fill);
          //TODO: GL_POLYGON_OFFSET_POINT
          //TODO: GL_POLYGON_SMOOTH
-@@ -581,6 +585,8 @@ DBG(printf("glPopAttrib()\n");)
+@@ -583,6 +587,8 @@ DBG(printf("glPopAttrib()\n");)
          gl4es_glFrontFace(cur->front_face);
          gl4es_glPolygonMode(GL_FRONT_AND_BACK, cur->polygon_mode?cur->polygon_mode:GL_FILL);
          enable_disable(GL_POLYGON_OFFSET_FILL, cur->polygon_offset_fill);
 +        enable_disable(GL_POLYGON_OFFSET_LINE, cur->polygon_offset_line);
 +        gl4es_glPolygonOffset(cur->polygon_offset_factor, cur->polygon_offset_units);
      }
-
+ 
      if (cur->mask & GL_SCISSOR_BIT) {
 diff --git a/src/gl/stack.h b/src/gl/stack.h
 index 7f17a164..f41cebd7 100644
@@ -345,7 +364,7 @@ index 7f17a164..f41cebd7 100644
 @@ -119,10 +120,12 @@ typedef struct _glstack_t {
      GLfloat point_fade_threshold;
      GLfloat point_distance_attenuation[3];
-
+ 
 -    // GL_POLYGON_BIT (cull_face & polygon_offset_fill enables shared with GL_ENABLE_BIT)
 +    // GL_POLYGON_BIT (cull / offset enables shared with GL_ENABLE_BIT)
      GLint cull_face_mode;
@@ -353,11 +372,11 @@ index 7f17a164..f41cebd7 100644
      GLenum polygon_mode;
 +    GLfloat polygon_offset_factor;
 +    GLfloat polygon_offset_units;
-
+ 
      // TODO: GL_POLYGON_STIPPLE_BIT
-
+ 
 diff --git a/src/gl/state.h b/src/gl/state.h
-index 0b4ebd58..4f29d943 100644
+index f5589c45..531b7712 100644
 --- a/src/gl/state.h
 +++ b/src/gl/state.h
 @@ -57,6 +57,7 @@ typedef struct {
@@ -378,7 +397,7 @@ index 842bdd6f..88e6eb95 100644
  #include "../loader.h"
 +#include "../../glx/hardext.h"
  #include "skips.h"
-
+ 
  // emulation of 'glTexParameteri' (for internal use only)
 @@ -1405,6 +1406,21 @@ void APIENTRY_GL4ES gl4es_glLineWidth(GLfloat width) {
  #endif
@@ -429,35 +448,43 @@ index 842bdd6f..88e6eb95 100644
  }
  AliasExport(void,glPolygonOffsetx,,(GLfixed factor, GLfixed units));
 diff --git a/src/glx/hardext.c b/src/glx/hardext.c
-index c89a1237..9d6fafbe 100644
+index c89a1237..94defaff 100644
 --- a/src/glx/hardext.c
 +++ b/src/glx/hardext.c
-@@ -88,6 +88,41 @@ static int testTextureCubeLod() {
+@@ -88,6 +88,48 @@ static int testTextureCubeLod() {
      return compiled;
  }
-
+ 
 +/* Line-width range and depth bits. Only call this after a GL context
 + * exists: the Emscripten notest path runs before glutCreateWindow and
 + * therefore keeps the defaults installed by GetHardwareExtensions. */
-+static void probe_line_width_and_depth(void)
++void gl4es_probe_line_width_and_depth(void)
 +{
++    static int probed = 0;
++    if (probed)
++        return;
++
 +    GLfloat linewidthrange[2] = {1.0f, 1.0f};
 +    LOAD_GLES(glGetFloatv);
 +    LOAD_GLES(glGetIntegerv);
 +    LOAD_GLES(glGetError);
-+    if (gles_glGetFloatv && gles_glGetError) {
-+        gles_glGetFloatv(GL_ALIASED_LINE_WIDTH_RANGE, linewidthrange);
-+        if (gles_glGetError() != GL_NO_ERROR || linewidthrange[1] < 1.0f)
-+            linewidthrange[1] = 1.0f;
-+        hardext.maxlinewidth = (int)linewidthrange[1];
-+    }
++    if (!gles_glGetFloatv || !gles_glGetError)
++        return;
++    /* A missing context returns error; keep the safe defaults and retry later. */
++    while (gles_glGetError() != GL_NO_ERROR);
++    gles_glGetFloatv(GL_ALIASED_LINE_WIDTH_RANGE, linewidthrange);
++    if (gles_glGetError() != GL_NO_ERROR)
++        return;
++    if (linewidthrange[1] < 1.0f)
++        linewidthrange[1] = 1.0f;
++    hardext.maxlinewidth = (int)linewidthrange[1];
 +    if (hardext.maxlinewidth < 1)
 +        hardext.maxlinewidth = 1;
 +    GLint bits = 16;
 +    if (gles_glGetIntegerv) {
 +        bits = 0;
 +        gles_glGetIntegerv(GL_DEPTH_BITS, &bits);
-+        if (bits <= 0)
++        if (gles_glGetError() != GL_NO_ERROR || bits <= 0)
 +            bits = 16;
 +        if (bits < 8)
 +            bits = 8;
@@ -465,8 +492,7 @@ index c89a1237..9d6fafbe 100644
 +            bits = 32;
 +    }
 +    hardext.depthbits = bits;
-+    if (gles_glGetError)
-+        gles_glGetError();
++    probed = 1;
 +    SHUT_LOGD("Max line width: %d\n", hardext.maxlinewidth);
 +    SHUT_LOGD("Depth bits: %d\n", hardext.depthbits);
 +}
@@ -474,26 +500,25 @@ index c89a1237..9d6fafbe 100644
  EXPORT
  void GetHardwareExtensions(int notest)
  {
-@@ -98,5 +133,7 @@ void GetHardwareExtensions(int notest)
+@@ -98,6 +140,8 @@ void GetHardwareExtensions(int notest)
      hardext.maxlights = 8;
      hardext.maxplanes = 6;
      hardext.maxdrawbuffers = 1;
 +    hardext.maxlinewidth = 1;
 +    hardext.depthbits = 16;
-
+ 
      hardext.esversion = globals4es.es;
-@@ -391,6 +429,9 @@ void GetHardwareExtensions(int notest)
+     if(notest) 
+@@ -391,6 +435,7 @@ void GetHardwareExtensions(int notest)
      // Now get some max stuffs
      gles_glGetIntegerv(GL_MAX_TEXTURE_SIZE, &hardext.maxsize);
      SHUT_LOGD("Max texture size: %d\n", hardext.maxsize);
-+#if !defined(__EMSCRIPTEN__)
-+    probe_line_width_and_depth();
-+#endif
++    gl4es_probe_line_width_and_depth();
      gles_glGetIntegerv((hardext.esversion==1)?GL_MAX_TEXTURE_UNITS:GL_MAX_TEXTURE_IMAGE_UNITS, &hardext.maxtex);
      if (hardext.esversion==1) {
          gles_glGetIntegerv(GL_MAX_LIGHTS, &hardext.maxlights);
 diff --git a/src/glx/hardext.h b/src/glx/hardext.h
-index 05738fb6..2c611a48 100644
+index 05738fb6..b2f31e6b 100644
 --- a/src/glx/hardext.h
 +++ b/src/glx/hardext.h
 @@ -14,6 +14,8 @@ typedef struct _hardext {
@@ -505,3 +530,13 @@ index 05738fb6..2c611a48 100644
      int blendsub;       // GL_OES_blend_subtract
      int blendfunc;      // GL_OES_blend_func_separate
      int blendeq;        // GL_OES_blend_equation_separate
+@@ -77,5 +79,9 @@ typedef struct _hardext {
+ EXPORT extern hardext_t hardext;
+ 
+ EXPORT void GetHardwareExtensions(int test);
++/* Probe ALIASED_LINE_WIDTH_RANGE and DEPTH_BITS once a GL context exists.
++ * GetHardwareExtensions(notest) on Emscripten runs before glutCreateWindow,
++ * so those defaults stay at 1 / 16 until this runs. Idempotent. */
++void gl4es_probe_line_width_and_depth(void);
+ 
+ #endif

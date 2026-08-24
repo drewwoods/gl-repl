@@ -10,14 +10,18 @@ is especially expensive for bitmap-heavy immediate-mode UI in WebAssembly.
 Initialize the full buffer only after allocation/growth. Once a batch has been
 uploaded and blitted, clear just its dirty rectangle; that maintains the same
 transparent-buffer invariant for the next batch while making the clear cost
-proportional to the bitmap area.
+proportional to the bitmap area. A realloc (including during a batch) always
+zeros the new buffer and resets the dirty rectangle; malloc failure is a
+no-op. An invalid raster position (see the raster-position patch) skips the
+draw rather than using the previous on-screen rPos.
 
 Applied by scripts/web-deps.sh after the raster-position patch.
 
 diff --git a/src/gl/raster.c b/src/gl/raster.c
+index 9a5bc4de..f481b1a3 100644
 --- a/src/gl/raster.c
 +++ b/src/gl/raster.c
-@@ -362,6 +362,13 @@ void bitmap_flush() {
+@@ -380,6 +380,13 @@ void bitmap_flush() {
  	);
  
  	glstate->raster.bm_drawing = 0;
@@ -31,7 +35,16 @@ diff --git a/src/gl/raster.c b/src/gl/raster.c
  
  	if(IS_TEX1D(old_active)) gl4es_glEnable(GL_TEXTURE_1D);
  	if(!IS_TEX2D(old_active)) gl4es_glDisable(GL_TEXTURE_2D);
-@@ -451,15 +458,18 @@ void APIENTRY_GL4ES gl4es_glBitmap(GLsizei width, GLsizei height, GLfloat xorig,
+@@ -403,6 +410,8 @@ void APIENTRY_GL4ES gl4es_glBitmap(GLsizei width, GLsizei height, GLfloat xorig,
+     // TODO: negative width/height mirrors bitmap?
+ 	noerrorShim();
+ 	FLUSH_BEGINEND;
++	if(!glstate->list.active && !glstate->raster.rPos_valid)
++		return;
+ 	if(glstate->list.active) {
+ 		renderlist_t* list = glstate->list.active;
+ 		if (!list->bitmaps) {
+@@ -462,15 +471,29 @@ void APIENTRY_GL4ES gl4es_glBitmap(GLsizei width, GLsizei height, GLfloat xorig,
  	if (ex<0 || ey<0 || sx<0 || sy<0 || sx==ex || sy==ey)	// nothing to draw, no changes
  		return;
  	// create/realloc buffer if needed
@@ -41,14 +54,26 @@ diff --git a/src/gl/raster.c b/src/gl/raster.c
  			free(glstate->raster.bitmap);
  		glstate->raster.bm_alloc = glstate->raster.viewport.width*glstate->raster.viewport.height*4;
  		glstate->raster.bitmap = (GLubyte*)malloc(glstate->raster.bm_alloc);
++		if(!glstate->raster.bitmap) {
++			glstate->raster.bm_alloc = 0;
++			return;
++		}
 +		bitmap_reallocated = 1;
  	}
 -	// clear buffer if needed
-+	// A new allocation has no prior dirty rectangle to clear.
- 	if(!glstate->raster.bm_drawing) {
+-	if(!glstate->raster.bm_drawing) {
 -		memset(glstate->raster.bitmap, 0, glstate->raster.viewport.width*glstate->raster.viewport.height*4);
-+		if(bitmap_reallocated)
-+			memset(glstate->raster.bitmap, 0, glstate->raster.viewport.width*glstate->raster.viewport.height*4);
++	/* A new allocation has no prior dirty rectangle (and the old buffer
++	 * is gone), so always zero it — including realloc-while-drawing. */
++	if(bitmap_reallocated) {
++		memset(glstate->raster.bitmap, 0, glstate->raster.bm_alloc);
++		glstate->raster.bm_width = glstate->raster.viewport.width;
++		glstate->raster.bm_height = glstate->raster.viewport.height;
++		glstate->raster.bm_x1 = glstate->raster.bm_width;
++		glstate->raster.bm_y1 = glstate->raster.bm_height;
++		glstate->raster.bm_x2 = 0;
++		glstate->raster.bm_y2 = 0;
++	} else if(!glstate->raster.bm_drawing) {
  		glstate->raster.bm_width = glstate->raster.viewport.width;
  		glstate->raster.bm_height = glstate->raster.viewport.height;
  		glstate->raster.bm_x1 = glstate->raster.bm_width;

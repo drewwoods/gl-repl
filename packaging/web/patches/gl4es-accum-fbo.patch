@@ -42,6 +42,24 @@ re-realizes cleanly afterwards.
 
 Applied by scripts/web-deps.sh after cloning the pinned gl4es
 checkout, after gl4es-pushattrib-texenv.patch.
+diff --git a/names.txt b/names.txt
+new file mode 100644
+index 00000000..eb55a85b
+--- /dev/null
++++ b/names.txt
+@@ -0,0 +1,12 @@
++src/CMakeLists.txt
++src/gl/const.h
++src/gl/getter.c
++src/gl/gl4es.c
++src/gl/gl_lookup.c
++src/gl/glstate.c
++src/gl/glstate.h
++src/gl/stack.c
++src/gl/stack.h
++src/gl/state.h
++src/gl/wrap/glstub.c
++src/gl/wrap/stub.h
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
 index 0ddf1607..5767649d 100644
 --- a/src/CMakeLists.txt
@@ -64,10 +82,10 @@ index 0ddf1607..5767649d 100644
  	${CMAKE_CURRENT_SOURCE_DIR}/gl/arbhelper.h
 diff --git a/src/gl/accum.c b/src/gl/accum.c
 new file mode 100644
-index 00000000..bb2a8cf1
+index 00000000..6f493cb5
 --- /dev/null
 +++ b/src/gl/accum.c
-@@ -0,0 +1,543 @@
+@@ -0,0 +1,613 @@
 +/* Accumulation buffer emulated with an internal FBO.
 + *
 + * Desktop GL's accumulation buffer does not exist on GLES/WebGL, so
@@ -173,6 +191,9 @@ index 00000000..bb2a8cf1
 +
 +// force the GLES-side active texture unit to 0; tracked, so the next user
 +// draw re-realizes (same dance as gl4es_blitTexture)
++static void realize_accumenv(glesaccum_t *a, GLfloat scale);
++static int accum_create_program(glesaccum_t *a);
++
 +static void accum_force_tmu0() {
 +    if(glstate->gleshard->active) {
 +        LOAD_GLES(glActiveTexture);
@@ -182,14 +203,22 @@ index 00000000..bb2a8cf1
 +}
 +
 +// one-time renderability test: can we create a small texture of this
-+// format and attach it to a complete FBO?
-+static int accum_try_format(GLenum intformat, GLenum format, GLenum type) {
++// format and attach it to a complete FBO? test_blend also draws with
++// GL_ONE,GL_ONE — WebGL2 can complete an RGBA16F FBO and still reject
++// blending into it without EXT_float_blend.
++static int accum_try_format(glesaccum_t *a, GLenum intformat, GLenum format,
++                            GLenum type, int test_blend) {
 +    LOAD_GLES(glGetError);
 +    LOAD_GLES(glGenTextures);
 +    LOAD_GLES(glDeleteTextures);
 +    LOAD_GLES(glBindTexture);
 +    LOAD_GLES(glTexImage2D);
 +    LOAD_GLES(glTexParameteri);
++    LOAD_GLES(glEnable);
++    LOAD_GLES(glDisable);
++    LOAD_GLES(glBlendFunc);
++    LOAD_GLES(glDrawArrays);
++    LOAD_GLES(glBlendEquation);
 +    LOAD_GLES2_OR_OES(glGenFramebuffers);
 +    LOAD_GLES2_OR_OES(glDeleteFramebuffers);
 +    LOAD_GLES2_OR_OES(glBindFramebuffer);
@@ -211,6 +240,16 @@ index 00000000..bb2a8cf1
 +        gles_glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 +        gles_glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
 +        ok = (gles_glCheckFramebufferStatus(GL_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE);
++        if(ok && test_blend && a->program) {
++            gles_glEnable(GL_BLEND);
++            gles_glBlendFunc(GL_ONE, GL_ONE);
++            if(gles_glBlendEquation)
++                gles_glBlendEquation(GL_FUNC_ADD);
++            realize_accumenv(a, 0.f);
++            gles_glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
++            ok = (gles_glGetError()==GL_NO_ERROR);
++            gles_glDisable(GL_BLEND);
++        }
 +        gles_glDeleteFramebuffers(1, &fbo);
 +    }
 +    gles_glDeleteTextures(1, &tex);
@@ -226,23 +265,27 @@ index 00000000..bb2a8cf1
 +    a->bits = 0;
 +    if(hardext.esversion<2) return; // the scaled-quad path needs the GLES2 backend
 +    accum_force_tmu0();
++    if(!accum_create_program(a)) {
++        SHUT_LOGD("Accum buffer emulation unavailable\n");
++        return;
++    }
 +    // Each format is attempted outright and judged by the FBO-completeness
 +    // test -- the hardext floatfbo/halffloattex flags stay 0 on backends
 +    // that run GetHardwareExtensions with notest (e.g. Emscripten, where
 +    // no gles_getProcAddress hook is installed), so they can't gate this.
-+    if(accum_try_format(GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT)) {
++    if(accum_try_format(a, GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT, 1)) {
 +        // GLES3/WebGL2 sized half-float, renderable per EXT_color_buffer_(half_)float
 +        a->intformat = GL_RGBA16F;
 +        a->format = GL_RGBA;
 +        a->type = GL_HALF_FLOAT;
 +        a->bits = 16;
-+    } else if(accum_try_format(GL_RGBA, GL_RGBA, GL_HALF_FLOAT_OES)) {
++    } else if(accum_try_format(a, GL_RGBA, GL_RGBA, GL_HALF_FLOAT_OES, 1)) {
 +        // GLES2 unsized half-float (OES_texture_half_float)
 +        a->intformat = GL_RGBA;
 +        a->format = GL_RGBA;
 +        a->type = GL_HALF_FLOAT_OES;
 +        a->bits = 16;
-+    } else if(accum_try_format(GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE)) {
++    } else if(accum_try_format(a, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, 0)) {
 +        a->intformat = GL_RGBA;
 +        a->format = GL_RGBA;
 +        a->type = GL_UNSIGNED_BYTE;
@@ -310,9 +353,12 @@ index 00000000..bb2a8cf1
 +    gles_glGetShaderiv(a->pixelshader, GL_COMPILE_STATUS, &success);
 +    if(!success) {
 +        LOAD_GLES(glGetShaderInfoLog);
++        LOAD_GLES2(glDeleteShader);
 +        char log[400];
 +        gles_glGetShaderInfoLog(a->pixelshader, 399, NULL, log);
 +        SHUT_LOGE("Failed to produce accum fragment shader.\n%s", log);
++        if(gles_glDeleteShader) gles_glDeleteShader(a->pixelshader);
++        a->pixelshader = 0;
 +        return 0;
 +    }
 +    src[0] = accum_vsh;
@@ -322,9 +368,16 @@ index 00000000..bb2a8cf1
 +    gles_glGetShaderiv(a->vertexshader, GL_COMPILE_STATUS, &success);
 +    if(!success) {
 +        LOAD_GLES(glGetShaderInfoLog);
++        LOAD_GLES2(glDeleteShader);
 +        char log[400];
 +        gles_glGetShaderInfoLog(a->vertexshader, 399, NULL, log);
 +        SHUT_LOGE("Failed to produce accum vertex shader.\n%s", log);
++        if(gles_glDeleteShader) {
++            gles_glDeleteShader(a->vertexshader);
++            if(a->pixelshader) gles_glDeleteShader(a->pixelshader);
++        }
++        a->vertexshader = 0;
++        a->pixelshader = 0;
 +        return 0;
 +    }
 +    a->program = gles_glCreateProgram();
@@ -335,7 +388,10 @@ index 00000000..bb2a8cf1
 +    gles_glLinkProgram(a->program);
 +    gles_glGetProgramiv(a->program, GL_LINK_STATUS, &success);
 +    if(!success) {
++        LOAD_GLES2(glDeleteProgram);
 +        SHUT_LOGE("Failed to link accum program.\n");
++        if(gles_glDeleteProgram && a->program)
++            gles_glDeleteProgram(a->program);
 +        a->program = 0;
 +        return 0;
 +    }
@@ -501,6 +557,36 @@ index 00000000..bb2a8cf1
 +    return a->bits;
 +}
 +
++void gl4es_accum_get_clear(GLfloat *params) {
++    glesaccum_t *a = accum_state();
++    memcpy(params, a->clear, 4 * sizeof(GLfloat));
++}
++
++void gl4es_accum_dispose(void *accum) {
++    glesaccum_t *a = (glesaccum_t *)accum;
++    if(!a)
++        return;
++    {
++        LOAD_GLES(glDeleteTextures);
++        LOAD_GLES2(glDeleteProgram);
++        LOAD_GLES2(glDeleteShader);
++        LOAD_GLES2_OR_OES(glDeleteFramebuffers);
++        if(a->fbo && gles_glDeleteFramebuffers)
++            gles_glDeleteFramebuffers(1, &a->fbo);
++        if(a->accum_tex && gles_glDeleteTextures)
++            gles_glDeleteTextures(1, &a->accum_tex);
++        if(a->scratch_tex && gles_glDeleteTextures)
++            gles_glDeleteTextures(1, &a->scratch_tex);
++        if(a->program && gles_glDeleteProgram)
++            gles_glDeleteProgram(a->program);
++        if(a->pixelshader && gles_glDeleteShader)
++            gles_glDeleteShader(a->pixelshader);
++        if(a->vertexshader && gles_glDeleteShader)
++            gles_glDeleteShader(a->vertexshader);
++    }
++    free(a);
++}
++
 +void gl4es_accum_clear() {
 +    glesaccum_t *a = accum_state();
 +    accum_probe(a);
@@ -597,6 +683,8 @@ index 00000000..bb2a8cf1
 +        if(op==GL_ACCUM) {
 +            gl4es_glEnable(GL_BLEND);
 +            gl4es_glBlendFunc(GL_ONE, GL_ONE);
++            gl4es_glBlendEquation(GL_FUNC_ADD);
++            gl4es_glDisable(GL_COLOR_LOGIC_OP);
 +        } else
 +            gl4es_glDisable(GL_BLEND);
 +        pushViewport(0, 0, a->width, a->height);
@@ -613,10 +701,10 @@ index 00000000..bb2a8cf1
 +AliasExport(void,glAccum,,(GLenum op, GLfloat value));
 diff --git a/src/gl/accum.h b/src/gl/accum.h
 new file mode 100644
-index 00000000..af0f13b7
+index 00000000..62f0da4d
 --- /dev/null
 +++ b/src/gl/accum.h
-@@ -0,0 +1,15 @@
+@@ -0,0 +1,19 @@
 +#ifndef _GL4ES_ACCUM_H_
 +#define _GL4ES_ACCUM_H_
 +
@@ -630,6 +718,10 @@ index 00000000..af0f13b7
 +void gl4es_accum_clear(void);
 +// GL_ACCUM_*_BITS for the getter: 16 (half-float target), 8 (RGBA8 fallback), 0 (unavailable)
 +int gl4es_accum_get_bits(void);
++void gl4es_accum_get_clear(GLfloat *params);
++// Delete GL objects and free the accum state (DeleteGLState).
++// Takes the glesaccum_t pointer; void* avoids a state.h cycle.
++void gl4es_accum_dispose(void *accum);
 +
 +#endif // _GL4ES_ACCUM_H_
 diff --git a/src/gl/const.h b/src/gl/const.h
@@ -657,7 +749,7 @@ index 3d9563c3..1b575af1 100644
  #define GL_CLIENT_VERTEX_ARRAY_BIT 0x00000002
  #define GL_ALL_CLIENT_ATTRIB_BITS  0xFFFFFFFF
 diff --git a/src/gl/getter.c b/src/gl/getter.c
-index 9291e2d7..1e743074 100644
+index 295e3b46..94115767 100644
 --- a/src/gl/getter.c
 +++ b/src/gl/getter.c
 @@ -1,5 +1,6 @@
@@ -667,7 +759,7 @@ index 9291e2d7..1e743074 100644
  #include "debug.h"
  #include "gl4es.h"
  #include "glstate.h"
-@@ -319,6 +320,13 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
+@@ -341,6 +342,13 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
          case GL_AUX_BUFFERS:
              *params = 0;
              break;
@@ -678,9 +770,46 @@ index 9291e2d7..1e743074 100644
 +            // accum-buffer FBO emulation (accum.c): 16 / 8 / 0 (= none)
 +            *params = gl4es_accum_get_bits();
 +            break;
-         case GL_MAX_TEXTURE_UNITS:
-             *params = hardext.maxtex;
+         case GL_DEPTH_CLEAR_VALUE:
+             *params = glstate->depth.clear;
              break;
+@@ -956,6 +964,15 @@ void APIENTRY_GL4ES gl4es_glGetIntegerv(GLenum pname, GLint *params) {
+             params[2] = (GLint)gl4es_mirror_clear_color[2];
+             params[3] = (GLint)gl4es_mirror_clear_color[3];
+             break;
++        case GL_ACCUM_CLEAR_VALUE: {
++            GLfloat c[4];
++            gl4es_accum_get_clear(c);
++            params[0] = (GLint)c[0];
++            params[1] = (GLint)c[1];
++            params[2] = (GLint)c[2];
++            params[3] = (GLint)c[3];
++            break;
++        }
+         default:
+             errorGL();
+             gles_glGetIntegerv(pname, params);
+@@ -1026,6 +1043,9 @@ void APIENTRY_GL4ES gl4es_glGetFloatv(GLenum pname, GLfloat *params) {
+         case GL_COLOR_CLEAR_VALUE:
+             memcpy(params, gl4es_mirror_clear_color, 4*sizeof(GLfloat));
+             break;
++        case GL_ACCUM_CLEAR_VALUE:
++            gl4es_accum_get_clear(params);
++            break;
+         case GL_VIEWPORT:
+             if (!getter_viewport4(params))
+                 gles_glGetFloatv(GL_VIEWPORT, params);
+@@ -1120,6 +1140,10 @@ void APIENTRY_GL4ES gl4es_glGetDoublev(GLenum pname, GLdouble *params) {
+             memcpy(tmp, gl4es_mirror_clear_color, 4*sizeof(GLfloat));
+             for (int i=0; i<4; i++) params[i] = tmp[i];
+             break;
++        case GL_ACCUM_CLEAR_VALUE:
++            gl4es_accum_get_clear(tmp);
++            for (int i=0; i<4; i++) params[i] = tmp[i];
++            break;
+         case GL_VIEWPORT:
+             if (getter_viewport4(tmp)) {
+                 for (int i=0; i<4; i++) params[i] = tmp[i];
 diff --git a/src/gl/gl4es.c b/src/gl/gl4es.c
 index b1b41be0..ae6ec683 100644
 --- a/src/gl/gl4es.c
@@ -729,17 +858,24 @@ index e79c31a0..6c6ed2a2 100644
      _EX(glCopyTexSubImage3D);   // It's a stub, calling the 2D one
      STUB(glFeedbackBuffer);
 diff --git a/src/gl/glstate.c b/src/gl/glstate.c
-index 16716187..40428dd4 100644
+index c7d19dd0..2d37841b 100644
 --- a/src/gl/glstate.c
 +++ b/src/gl/glstate.c
-@@ -571,6 +571,11 @@ void DeleteGLState(void* oldstate) {
+@@ -1,6 +1,7 @@
+ #include "glstate.h"
+ 
+ #include "../glx/hardext.h"
++#include "accum.h"
+ #include "fpe.h"
+ #include "framebuffers.h"
+ #include "gl4es.h"
+@@ -574,6 +575,10 @@ void DeleteGLState(void* oldstate) {
          //TODO: check if should delete GL object too
          free(state->blit);
      }
-+    // free accum emulation stuff
 +    if(state->accum) {
-+        //TODO: check if should delete GL objects too (same as blit above)
-+        free(state->accum);
++        gl4es_accum_dispose(state->accum);
++        state->accum = NULL;
 +    }
      if(!state->shared_cnt) {
          FreeOldProgramMap(state);
@@ -757,10 +893,10 @@ index 147e7e28..a8622330 100644
      int                 fbowidth, fboheight;    // initial size (useful only on LIBGL_FB=1 or 2)
      depth_state_t       depth;
 diff --git a/src/gl/state.h b/src/gl/state.h
-index 02a7d3d7..0b4ebd58 100644
+index fec8110b..3e2fd41d 100644
 --- a/src/gl/state.h
 +++ b/src/gl/state.h
-@@ -247,6 +247,28 @@ typedef struct {
+@@ -250,6 +250,28 @@ typedef struct {
      GLfloat         vert[8], tex[8];
  } glesblit_t;
  

@@ -21,7 +21,7 @@ not treated as “already applied”.
 
 | Patch | Purpose |
 |---|---|
-| `gl4es-rasterpos-perspective-divide.patch` | Perspective-divide clip coordinates before deriving the raster position. |
+| `gl4es-rasterpos-perspective-divide.patch` | Perspective-divide clip coordinates before deriving the raster position; invalidate on `w<=0` / out of clip. |
 | `gl4es-bitmap-dirty-clear.patch` | Clear only the dirty CPU bitmap rectangle between glyph batches. |
 | `gl4es-getter-client-state.patch` | Answer tracked `glGet*` state locally instead of synchronously draining WebGL. |
 | `gl4es-color-material-face.patch` | Track front/back `GL_COLOR_MATERIAL` independently in the fixed-pipeline emulator. |
@@ -321,6 +321,27 @@ scene complexity, canvas layout, pass count, GPU, and thermal state change the
 absolute result. The important boundary is that the second percentage is
 incremental over deferred RETURN, not another comparison against the original
 baseline.
+
+## 2026-08-24: review follow-ups folded into existing patches
+
+No new patch file. Fixes from a review of the whole set were folded into
+the patch that owns the code:
+
+- Raster position: `w<=0` / non-finite / NDC outside [-1, 1] sets
+  `rPos_valid` so `glBitmap` does not keep drawing at the previous
+  on-screen position.
+- Bitmap realloc: always zero the new buffer (including realloc-while-drawing)
+  and treat `malloc` failure as a no-op.
+- Getters: `GL_DEPTH_CLEAR_VALUE` from `glstate->depth.clear`; scalars in
+  `gl4es_commonGet`; viewport/scissor/clear-color in all three typed getters;
+  a `viewport_known` / `scissor_known` flag so width 0 is not "unset".
+- `GL_LIGHTING_BIT` saves/restores the `GL_COLOR_MATERIAL` enable.
+- Accum: probe a blended draw before keeping RGBA16F; immediate `GL_ACCUM`
+  forces `GL_FUNC_ADD`; `GL_ACCUM_CLEAR_VALUE`; `DeleteGLState` frees GL
+  objects; reduce-shader failure is sticky.
+- `gl4es_probe_line_width_and_depth()` after a real context exists (first
+  `glViewport` / offset draw / wide-line query), so Emscripten notest no
+  longer leaves `depthbits` at the pre-window default forever.
 
 ## 2026-08-19: `GL_POLYGON_OFFSET_LINE` and `glLineWidth` on WebGL
 

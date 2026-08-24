@@ -11,45 +11,40 @@ glPushAttrib reads several of these (GL_COLOR_BUFFER_BIT reads the
 clear color; GL_VIEWPORT_BIT the viewport; GL_LINE_BIT the line width;
 GL_SCISSOR_BIT the scissor box), and bitmap_flush's blit pushes
 GL_COLOR_BUFFER_BIT before every glyph-batch draw -- so each run of
-glutBitmapString text after other geometry stalled the pipeline. The
-stall lands on whichever flush follows the frame's bulk: in gl-repl's
-web build the menu-bar label pass absorbed 1.5-4 ms per frame for a
-104x14 px strip of text.
+glutBitmapString text after other geometry stalled the pipeline.
 
-Mirror the missing values client-side: clear color / clear depth /
-line width / generate-mipmap hint are captured in their setters and
-read back from the mirrors; viewport and scissor already had tracked
-state (glstate->raster) and only needed getter cases, with a fallback
-to the driver before the first glViewport/glScissor call (width==0)
-where the tracked state does not yet know the surface-sized default.
-
-Headless-Chrome A/B on gl-repl's default scene: gl4es flush work fell
-from ~12.2 ms to ~0.6 ms per frame; the remaining driver glGet* per
-run is a single GL_SAMPLES query at context init.
-
-Fallthrough sites at the pinned SHA (17f0894e):
-  glGetIntegerv default -> gles_glGetIntegerv:
-    https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/getter.c#L883
-  glGetFloatv default -> gles_glGetFloatv:
-    https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/getter.c#L950
-glPushAttrib reads that hit them:
-  GL_COLOR_CLEAR_VALUE  https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/stack.c#L61
-  GL_DEPTH_CLEAR_VALUE  https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/stack.c#L74
-  GL_GENERATE_MIPMAP_HINT  https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/stack.c#L148
-  GL_LINE_WIDTH  https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/stack.c#L189
-  GL_SCISSOR_BOX  https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/stack.c#L234
-  GL_VIEWPORT  https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/stack.c#L285
-The per-glyph-batch trigger (bitmap_flush -> gl4es_blitTexture ->
-glPushAttrib(... | GL_COLOR_BUFFER_BIT | ...)):
-  https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/raster.c#L347
-  https://github.com/ptitSeb/gl4es/blob/17f0894e19d1553e4176276c759915dab44c08e2/src/gl/blit.c#L354
+Mirror the missing values client-side. Clear color / line width /
+generate-mipmap hint are captured in their setters; GL_DEPTH_CLEAR_VALUE
+is served from glstate->depth.clear (the live setter is depth.c —
+wrap/gles.c's glClearDepthf is skip_glClearDepthf and never runs).
+Viewport and scissor use tracked state once glViewport/glScissor has
+run (or an init query filled them), including a legal zero-size box —
+width==0 is not a "never set" sentinel. Scalar pnames go through
+gl4es_commonGet so glGetIntegerv/glGetFloatv/glGetDoublev agree;
+4-component pnames are answered in all three typed getters.
 
 Applied by scripts/web-deps.sh after the bitmap-dirty-clear patch.
 
+diff --git a/src/gl/depth.c b/src/gl/depth.c
+index 84298216..b741fef2 100644
+--- a/src/gl/depth.c
++++ b/src/gl/depth.c
+@@ -60,6 +60,10 @@ void APIENTRY_GL4ES gl4es_glClearDepthf(GLclampf depth) {
+     }
+     noerrorShim();
+     glstate->depth.clear = depth;
++    {
++        extern GLfloat gl4es_mirror_clear_depth;
++        gl4es_mirror_clear_depth = depth;
++    }
+     LOAD_GLES(glClearDepthf);
+     errorGL();
+     gles_glClearDepthf(depth);
 diff --git a/src/gl/getter.c b/src/gl/getter.c
+index 3a9acc55..9edc08c0 100644
 --- a/src/gl/getter.c
 +++ b/src/gl/getter.c
-@@ -16,6 +16,17 @@
+@@ -16,6 +16,19 @@
  #define DBG(a)
  #endif
  
@@ -58,66 +53,166 @@ diff --git a/src/gl/getter.c b/src/gl/getter.c
 + * drains the queued GPU pipeline before returning -- glPushAttrib paths that
 + * read these (GL_COLOR_BUFFER_BIT -> GL_COLOR_CLEAR_VALUE, etc.) turn every
 + * push into a multi-millisecond stall mid-frame. Written by the matching
-+ * state setters (glClearColor / glClearDepthf / glLineWidth / glHint). */
++ * state setters (glClearColor / glLineWidth / glHint). GL_DEPTH_CLEAR_VALUE
++ * is served from glstate->depth.clear (depth.c); wrap/gles.c's ClearDepthf
++ * is skip_glClearDepthf and never runs. */
 +GLfloat gl4es_mirror_clear_color[4] = {0.f, 0.f, 0.f, 0.f};
-+GLfloat gl4es_mirror_clear_depth = 1.0f;
++GLfloat gl4es_mirror_clear_depth = 1.0f; /* written from depth.c; getter reads glstate->depth.clear */
 +GLfloat gl4es_mirror_line_width = 1.0f;
 +GLint   gl4es_mirror_mipmap_hint = GL_DONT_CARE;
 +
  GLenum APIENTRY_GL4ES gl4es_glGetError(void) {
      DBG(printf("glGetError(), noerror=%d, type_error=%d shim_error=%s\n", globals4es.noerror, glstate->type_error, PrintEnum(glstate->shim_error));)
      if(globals4es.noerror)
-@@ -878,6 +889,21 @@ void APIENTRY_GL4ES gl4es_glGetIntegerv(GLenum pname, GLint *params) {
+@@ -284,6 +297,26 @@ AliasExport(const GLubyte*,glGetString,,(GLenum name));
+ 
+ #define TOP(A) (glstate->A->stack+(glstate->A->top*16))
+ 
++static int getter_viewport4(GLfloat *params) {
++    if (!glstate->raster.viewport_known)
++        return 0;
++    params[0] = (GLfloat)glstate->raster.viewport.x;
++    params[1] = (GLfloat)glstate->raster.viewport.y;
++    params[2] = (GLfloat)glstate->raster.viewport.width;
++    params[3] = (GLfloat)glstate->raster.viewport.height;
++    return 1;
++}
++
++static int getter_scissor4(GLfloat *params) {
++    if (!glstate->raster.scissor_known)
++        return 0;
++    params[0] = (GLfloat)glstate->raster.scissor.x;
++    params[1] = (GLfloat)glstate->raster.scissor.y;
++    params[2] = (GLfloat)glstate->raster.scissor.width;
++    params[3] = (GLfloat)glstate->raster.scissor.height;
++    return 1;
++}
++
+ int gl4es_commonGet(GLenum pname, GLfloat *params) {
+     switch (pname) {
+         case GL_MAJOR_VERSION:
+@@ -308,6 +341,15 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
+         case GL_AUX_BUFFERS:
+             *params = 0;
+             break;
++        case GL_DEPTH_CLEAR_VALUE:
++            *params = glstate->depth.clear;
++            break;
++        case GL_LINE_WIDTH:
++            *params = gl4es_mirror_line_width;
++            break;
++        case GL_GENERATE_MIPMAP_HINT:
++            *params = (GLfloat)gl4es_mirror_mipmap_hint;
++            break;
+         case GL_MAX_TEXTURE_UNITS:
+             *params = hardext.maxtex;
+             break;
+@@ -878,6 +920,36 @@ void APIENTRY_GL4ES gl4es_glGetIntegerv(GLenum pname, GLint *params) {
              params[0] = glstate->depth.Near*2147483647l;
              params[1] = glstate->depth.Far*2147483647l;
              break;
-+        case GL_VIEWPORT:
-+            /* Tracked since the first glViewport; before that (width==0)
-+             * fall back to the driver for the surface-sized default. */
-+            if (glstate->raster.viewport.width == 0) {
-+                gles_glGetIntegerv(GL_VIEWPORT, params);
++        case GL_VIEWPORT: {
++            GLfloat v[4];
++            if (getter_viewport4(v)) {
++                params[0] = (GLint)v[0];
++                params[1] = (GLint)v[1];
++                params[2] = (GLint)v[2];
++                params[3] = (GLint)v[3];
 +            } else {
-+                params[0] = glstate->raster.viewport.x;
-+                params[1] = glstate->raster.viewport.y;
-+                params[2] = glstate->raster.viewport.width;
-+                params[3] = glstate->raster.viewport.height;
++                gles_glGetIntegerv(GL_VIEWPORT, params);
 +            }
 +            break;
-+        case GL_GENERATE_MIPMAP_HINT:
-+            params[0] = gl4es_mirror_mipmap_hint;
++        }
++        case GL_SCISSOR_BOX: {
++            GLfloat v[4];
++            if (getter_scissor4(v)) {
++                params[0] = (GLint)v[0];
++                params[1] = (GLint)v[1];
++                params[2] = (GLint)v[2];
++                params[3] = (GLint)v[3];
++            } else {
++                gles_glGetIntegerv(GL_SCISSOR_BOX, params);
++            }
++            break;
++        }
++        case GL_COLOR_CLEAR_VALUE:
++            params[0] = (GLint)gl4es_mirror_clear_color[0];
++            params[1] = (GLint)gl4es_mirror_clear_color[1];
++            params[2] = (GLint)gl4es_mirror_clear_color[2];
++            params[3] = (GLint)gl4es_mirror_clear_color[3];
 +            break;
          default:
              errorGL();
              gles_glGetIntegerv(pname, params);
-@@ -945,6 +971,27 @@ void APIENTRY_GL4ES gl4es_glGetFloatv(GLenum pname, GLfloat *params) {
+@@ -945,6 +1017,17 @@ void APIENTRY_GL4ES gl4es_glGetFloatv(GLenum pname, GLfloat *params) {
              params[0] = glstate->depth.Near;
              params[1] = glstate->depth.Far;
              break;
 +        case GL_COLOR_CLEAR_VALUE:
 +            memcpy(params, gl4es_mirror_clear_color, 4*sizeof(GLfloat));
 +            break;
-+        case GL_DEPTH_CLEAR_VALUE:
-+            params[0] = gl4es_mirror_clear_depth;
-+            break;
-+        case GL_LINE_WIDTH:
-+            params[0] = gl4es_mirror_line_width;
++        case GL_VIEWPORT:
++            if (!getter_viewport4(params))
++                gles_glGetFloatv(GL_VIEWPORT, params);
 +            break;
 +        case GL_SCISSOR_BOX:
-+            /* Tracked since the first glScissor; before that (width==0)
-+             * fall back to the driver for the surface-sized default. */
-+            if (glstate->raster.scissor.width == 0) {
++            if (!getter_scissor4(params))
 +                gles_glGetFloatv(GL_SCISSOR_BOX, params);
-+            } else {
-+                params[0] = glstate->raster.scissor.x;
-+                params[1] = glstate->raster.scissor.y;
-+                params[2] = glstate->raster.scissor.width;
-+                params[3] = glstate->raster.scissor.height;
-+            }
 +            break;
          default:
              errorGL();
              gles_glGetFloatv(pname, params);
+@@ -1027,6 +1110,26 @@ void APIENTRY_GL4ES gl4es_glGetDoublev(GLenum pname, GLdouble *params) {
+             params[0] = glstate->depth.Near;
+             params[1] = glstate->depth.Far;
+             break;
++        case GL_COLOR_CLEAR_VALUE:
++            memcpy(tmp, gl4es_mirror_clear_color, 4*sizeof(GLfloat));
++            for (int i=0; i<4; i++) params[i] = tmp[i];
++            break;
++        case GL_VIEWPORT:
++            if (getter_viewport4(tmp)) {
++                for (int i=0; i<4; i++) params[i] = tmp[i];
++            } else {
++                gles_glGetFloatv(GL_VIEWPORT, tmp);
++                for (int i=0; i<4; i++) params[i] = tmp[i];
++            }
++            break;
++        case GL_SCISSOR_BOX:
++            if (getter_scissor4(tmp)) {
++                for (int i=0; i<4; i++) params[i] = tmp[i];
++            } else {
++                gles_glGetFloatv(GL_SCISSOR_BOX, tmp);
++                for (int i=0; i<4; i++) params[i] = tmp[i];
++            }
++            break;
+         default:
+             errorGL();
+             gles_glGetFloatv(pname, tmp);
+diff --git a/src/gl/glstate.c b/src/gl/glstate.c
+index 11929120..16b29bd8 100644
+--- a/src/gl/glstate.c
++++ b/src/gl/glstate.c
+@@ -391,6 +391,8 @@ void* NewGLState(void* shared_glstate, int es2only) {
+     LOAD_GLES(glGetIntegerv);
+     gles_glGetIntegerv(GL_VIEWPORT, (GLint*)&glstate->raster.viewport);
+     gles_glGetIntegerv(GL_SCISSOR_BOX, (GLint*)&glstate->raster.scissor);
++    glstate->raster.viewport_known = 1;
++    glstate->raster.scissor_known = 1;
+ #if defined(AMIGAOS4) || defined(__EMSCRIPTEN__)
+     }
+ #endif
+@@ -615,6 +617,8 @@ void ActivateGLState(void* new_glstate) {
+         LOAD_GLES(glGetIntegerv);
+         gles_glGetIntegerv(GL_VIEWPORT, (GLint*)&newstate->raster.viewport);
+         gles_glGetIntegerv(GL_SCISSOR_BOX, (GLint*)&newstate->raster.scissor);
++        newstate->raster.viewport_known = 1;
++        newstate->raster.scissor_known = 1;
+     }
+     glstate = newstate;
+ }
 diff --git a/src/gl/hint.c b/src/gl/hint.c
+index feef2e30..73105095 100644
 --- a/src/gl/hint.c
 +++ b/src/gl/hint.c
 @@ -127,6 +127,12 @@ void APIENTRY_GL4ES gl4es_glHint(GLenum pname, GLenum mode) {
@@ -133,7 +228,41 @@ diff --git a/src/gl/hint.c b/src/gl/hint.c
          default:
              errorGL();
              gles_glHint(pname, mode);
+diff --git a/src/gl/raster.c b/src/gl/raster.c
+index f481b1a3..71900301 100644
+--- a/src/gl/raster.c
++++ b/src/gl/raster.c
+@@ -114,6 +114,7 @@ void APIENTRY_GL4ES gl4es_glViewport(GLint x, GLint y, GLsizei width, GLsizei he
+ 		  glstate->raster.viewport.y = y;
+ 		  glstate->raster.viewport.width = width;
+ 		  glstate->raster.viewport.height = height;
++		  glstate->raster.viewport_known = 1;
+     }
+ #if !defined(NO_EGL) && !defined(NOX11)
+ 		if(!globals4es.usefbo && !globals4es.usefb && glstate->fbo.fbo_draw->id==0) {
+@@ -158,6 +159,7 @@ void APIENTRY_GL4ES gl4es_glScissor(GLint x, GLint y, GLsizei width, GLsizei hei
+ 		  glstate->raster.scissor.y = y;
+ 		  glstate->raster.scissor.width = width;
+ 		  glstate->raster.scissor.height = height;
++		  glstate->raster.scissor_known = 1;
+     }
+ 	}
+ }
+diff --git a/src/gl/state.h b/src/gl/state.h
+index 81448352..fec8110b 100644
+--- a/src/gl/state.h
++++ b/src/gl/state.h
+@@ -127,6 +127,8 @@ typedef struct {
+     GLboolean   rPos_valid;     /* 0 once glRasterPos clips or w<=0 */
+     viewport_t viewport;
+     viewport_t scissor;
++    int         viewport_known; /* 1 after glViewport or an init query; width==0 is legal */
++    int         scissor_known;  /* 1 after glScissor or an init query */
+     GLfloat raster_scale[4];
+     GLfloat raster_bias[4];
+     GLfloat raster_zoomx;
 diff --git a/src/gl/wrap/gles.c b/src/gl/wrap/gles.c
+index c647cee4..842bdd6f 100644
 --- a/src/gl/wrap/gles.c
 +++ b/src/gl/wrap/gles.c
 @@ -222,6 +222,13 @@ void APIENTRY_GL4ES gl4es_glClearColor(GLclampf red, GLclampf green, GLclampf bl

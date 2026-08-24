@@ -1,6 +1,11 @@
 # GL-REPL / tutorial script files: use C highlighting on GitHub
 *.glr linguist-language=C
 
+# Unified diffs of tab-indented third-party C. A context line is " \t..."
+# which git diff --check would flag as space-before-tab; empty context is a
+# lone space. check-trailing-whitespace already excludes this directory.
+packaging/web/patches/*.patch -whitespace
+
 # Regenerated doc media (scripts/docs-assets.sh) — binary, re-churns on every
 # regen. Route raster formats through Git LFS so new versions don't bloat the
 # packfile. SVGs stay in normal git (they're text and delta-compress fine).
