@@ -3169,12 +3169,20 @@ int main() {
                    editor_cursor_pos(), editor_input_len());
 
         editor_handle_special(GLUT_KEY_DOWN, 0, 0);
-        ASSERT_INT("ctrl-down at last func: stay",
-                   editor_state_edit_line(), 3);
+        ASSERT_INT("ctrl-down from func1 header: display() start",
+                   editor_state_edit_line(), 6);
+
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl-down from display() start: display() end",
+                   editor_state_edit_line(), 7);
+
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl-down at display() end: stay",
+                   editor_state_edit_line(), 7);
 
         editor_navigate_to_line(1);
         editor_handle_special(GLUT_KEY_DOWN, 0, 0);
-        ASSERT_INT("ctrl-down from body: func1 header",
+        ASSERT_INT("ctrl-down from func0 body: func1 header",
                    editor_state_edit_line(), 3);
 
         editor_navigate_to_line(1);
@@ -3198,8 +3206,8 @@ int main() {
 
         editor_navigate_to_line(repl_state_document_count());
         editor_handle_special(GLUT_KEY_UP, 0, 0);
-        ASSERT_INT("ctrl-up from append row: last func header",
-                   editor_state_edit_line(), 3);
+        ASSERT_INT("ctrl-up from append row: display() start",
+                   editor_state_edit_line(), 6);
         editor_navigate_to_line(repl_state_document_count());
         editor_handle_special(GLUT_KEY_DOWN, 0, 0);
         ASSERT_INT("ctrl-down from append row: stay",
@@ -3225,15 +3233,25 @@ int main() {
         ASSERT_INT("ctrl-down from func0 closer: func1 header",
                    editor_state_edit_line(), 3);
 
+        editor_navigate_to_line(5);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl-down from func1 closer: display() start",
+                   editor_state_edit_line(), 6);
+
+        editor_navigate_to_line(7);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("ctrl-up from inside display(): display() start",
+                   editor_state_edit_line(), 6);
+
         editor_navigate_to_line(6);
         editor_handle_special(GLUT_KEY_UP, 0, 0);
-        ASSERT_INT("ctrl-up from outside: prev header",
+        ASSERT_INT("ctrl-up from display() start: func1 header",
                    editor_state_edit_line(), 3);
 
         editor_navigate_to_line(6);
         editor_handle_special(GLUT_KEY_DOWN, 0, 0);
-        ASSERT_INT("ctrl-down from outside past funcs: stay",
-                   editor_state_edit_line(), 6);
+        ASSERT_INT("ctrl-down from display() start: display() end",
+                   editor_state_edit_line(), 7);
 
         g_mock_modifiers = 0;
         editor_navigate_to_line(0);
@@ -3273,7 +3291,10 @@ int main() {
         set_editor_input("glColor3f(0.5, 0.5, 0.5);");
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
         editor_handle_special(GLUT_KEY_UP, 0, 0);
-        ASSERT_INT("ctrl+up auto-commits modified row before navigation",
+        ASSERT_INT("ctrl+up auto-commits modified row before navigation: display() start",
+                   editor_state_edit_line(), 6);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("second ctrl+up jumps to func1 header",
                    editor_state_edit_line(), 3);
 
         g_mock_modifiers = saved_mods;
@@ -3345,7 +3366,7 @@ int main() {
         g_mock_modifiers = saved_mods;
     }
 
-    /* Function nav on document with no functions: safe no-op */
+    /* Function nav on document with only display() (no user functions) */
     {
         int saved_mods = g_mock_modifiers;
         glr_ctrl_reset_all();
@@ -3355,10 +3376,18 @@ int main() {
 
         g_mock_modifiers = GLUT_ACTIVE_CTRL;
         editor_handle_special(GLUT_KEY_DOWN, 0, 0);
-        ASSERT_INT("ctrl-down with no functions: stay at 0",
-                   editor_state_edit_line(), 0);
+        ASSERT_INT("ctrl-down from display() start: display() end",
+                   editor_state_edit_line(), 1);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl-down at display() end: stay at 1",
+                   editor_state_edit_line(), 1);
         editor_handle_special(GLUT_KEY_UP, 0, 0);
-        ASSERT_INT("ctrl-up with no functions: stay at 0",
+        ASSERT_INT("ctrl-up from display() end: display() start",
+                   editor_state_edit_line(), 0);
+
+        editor_navigate_to_line(1);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("ctrl-up inside display(): display() start",
                    editor_state_edit_line(), 0);
 
         g_mock_modifiers = saved_mods;

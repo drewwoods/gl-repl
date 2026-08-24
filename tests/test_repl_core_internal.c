@@ -201,16 +201,22 @@ int main() {
                    repl_source_scope_next_func_def(0), 5);
         ASSERT_INT("next func from func0 closer",
                    repl_source_scope_next_func_def(4), 5);
-        ASSERT_INT("next func from last header",
-                   repl_source_scope_next_func_def(5), -1);
+        ASSERT_INT("next func from last user func: display() start",
+                   repl_source_scope_next_func_def(5), 8);
+        ASSERT_INT("next func from display() start: display() end",
+                   repl_source_scope_next_func_def(8), 9);
+        ASSERT_INT("next func from display() end",
+                   repl_source_scope_next_func_def(9), -1);
         ASSERT_INT("prev func from func0 header",
                    repl_source_scope_prev_func_def(0), -1);
         ASSERT_INT("prev func from func1 header",
                    repl_source_scope_prev_func_def(5), 0);
-        ASSERT_INT("prev func from outside",
+        ASSERT_INT("prev func from display() start: func1",
                    repl_source_scope_prev_func_def(8), 5);
-        ASSERT_INT("prev func from past end",
-                   repl_source_scope_prev_func_def(10), 5);
+        ASSERT_INT("prev func from inside display() body: display() start",
+                   repl_source_scope_prev_func_def(9), 8);
+        ASSERT_INT("prev func from past end: display() start",
+                   repl_source_scope_prev_func_def(10), 8);
 
         /* Explicit ReplSourceScopeView query tests */
         ReplSourceScopeView view;
@@ -225,14 +231,14 @@ int main() {
         ASSERT_INT("view: next func from 0",
                    repl_source_scope_view_next_func_def(&view, 0), 5);
         ASSERT_INT("view: prev func from 10 (append row)",
-                   repl_source_scope_view_prev_func_def(&view, 10), 5);
+                   repl_source_scope_view_prev_func_def(&view, 10), 8);
         ASSERT_INT("view: prev func negative pos",
                    repl_source_scope_view_prev_func_def(&view, -1), -1);
         ASSERT_INT("enclosing on append row after closed funcs",
                    repl_source_scope_enclosing_func_at(
                        repl_state_document_count(), &def, &end), 0);
         ASSERT_INT("prev func from append row",
-                   repl_source_scope_prev_func_def(repl_state_document_count()), 5);
+                   repl_source_scope_prev_func_def(repl_state_document_count()), 8);
         ASSERT_INT("next func from append row",
                    repl_source_scope_next_func_def(repl_state_document_count()), -1);
 

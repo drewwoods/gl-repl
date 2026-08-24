@@ -561,6 +561,14 @@ int repl_source_scope_view_next_func_def(const ReplSourceScopeView *view,
         if (view->cmds[i].valid && view->cmds[i].type == CMD_FUNC_DEF)
             return i;
     }
+    int disp = view->display_body_start;
+    if (disp < view->count && view->cmds[disp].valid &&
+        view->cmds[disp].type != CMD_FUNC_DEF) {
+        if (pos < disp)
+            return disp;
+        if (pos < view->count - 1)
+            return view->count - 1;
+    }
     return -1;
 }
 
@@ -574,6 +582,11 @@ int repl_source_scope_view_prev_func_def(const ReplSourceScopeView *view,
         return -1;
     if (pos > view->count)
         pos = view->count;
+    int disp = view->display_body_start;
+    int has_disp = (disp < view->count && view->cmds[disp].valid &&
+                    view->cmds[disp].type != CMD_FUNC_DEF);
+    if (has_disp && pos > disp)
+        return disp;
     for (int i = pos - 1; i >= 0; i--) {
         if (view->cmds[i].valid && view->cmds[i].type == CMD_FUNC_DEF)
             return i;

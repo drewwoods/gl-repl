@@ -216,7 +216,8 @@ CmdType repl_source_scope_nearest_open_block_at(int pos);
  * repl_source_scope_enclosing_func_at() writes the FUNC_DEF index and its
  * matching closer (or -1 if unmatched) and returns 1, or 0 when `pos` is
  * outside any function. next/prev return the first FUNC_DEF strictly after
- * / before `pos`, or -1. */
+ * / before `pos` (or the main display() function start / end rows when
+ * navigating to/from the display body), or -1. */
 int repl_source_scope_view_enclosing_func_at(const ReplSourceScopeView *view,
                                             int pos,
                                             int *out_def, int *out_end);
