@@ -172,6 +172,11 @@ typedef struct UiRenderSnapshot {
      * the segment. */
     int                         cursor_cost_count;
     char                        cursor_cost_label[8];
+    /* Name of the funcN body the cursor sits in - its alias when the slot
+     * has one, else "funcN". Empty at top level (the display() body), which
+     * is what hides the statusbar segment. Resolved by the controller;
+     * enclosing-scope walks are not the UI layer's to make. */
+    char                        cursor_func_name[REPL_FUNC_NAME_MAX];
     /* Count of structurally unbalanced bracket commands (unmatched
      * glPushMatrix/glBegin openers + orphan glPopMatrix/glEnd closers).
      * Shown as a warning segment in the editor statusbar; 0 = balanced. */

@@ -2518,6 +2518,29 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
         snprintf(snap->cursor_cost_label, sizeof(snap->cursor_cost_label),
                  "%s", label);
     }
+    /* Enclosing-function readout: which funcN body the cursor is in.
+     * Sitting on the header or the closing brace counts as inside, so
+     * the segment does not blink off while navigating a definition. */
+    {
+        int def_idx = -1;
+        int end_idx = -1;
+
+        snap->cursor_func_name[0] = '\0';
+        if (repl_source_scope_enclosing_func_at(snap->edit_line,
+                                                &def_idx, &end_idx) &&
+            def_idx >= 0 && def_idx < snap->document_count) {
+            int slot = (int)snap->document_cmds[def_idx].args[0];
+            if (slot >= 0 && slot < REPL_FUNC_SLOT_COUNT) {
+                const char *alias = repl_func_alias_get(slot);
+                if (alias && alias[0])
+                    snprintf(snap->cursor_func_name,
+                             sizeof(snap->cursor_func_name), "%s", alias);
+                else
+                    snprintf(snap->cursor_func_name,
+                             sizeof(snap->cursor_func_name), "func%d", slot);
+            }
+        }
+    }
     snap->anim_time           = repl_state_variables().anim_time;
 
     snap->view_ortho_mode       = glr_state_presentation().ortho_mode;

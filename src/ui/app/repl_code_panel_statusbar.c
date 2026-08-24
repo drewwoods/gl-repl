@@ -23,7 +23,7 @@
 #include <stdio.h>
 #include <string.h>
 
-/* 18 live items today. Room to grow; STATIC_ASSERT guards the table. */
+/* 19 live items today. Room to grow; STATIC_ASSERT guards the table. */
 #define STATUSBAR_ITEM_MAX 24
 #define STATUSBAR_SEP_W    16
 /* Shared by Overlay scope / Vertex labels / Polygon highlight. Only the
@@ -187,6 +187,23 @@ static void prepare_line(const StatusbarSlot *slot, StatusbarPrepared *p) {
                  snap->edit_line + 1, edit_col);
     p->eligible = 1;
     p->active = 0;
+    prepare_text_len(p);
+}
+
+/* Which funcN body the cursor is in. The controller resolves the name
+ * (alias, else "funcN") and leaves it empty at top level, which is what
+ * hides the segment - the display() body is the whole document and
+ * naming it would say nothing. */
+static void prepare_func(const StatusbarSlot *slot, StatusbarPrepared *p) {
+    const UiRenderSnapshot *snap = slot->snap;
+
+    p->eligible = snap->cursor_func_name[0] != '\0';
+    p->active = 0;
+    p->width = 0;
+    p->text[0] = '\0';
+    if (!p->eligible)
+        return;
+    snprintf(p->text, sizeof p->text, "%s()", snap->cursor_func_name);
     prepare_text_len(p);
 }
 
@@ -375,8 +392,10 @@ static void draw_cmds(const StatusbarSlot *slot, const StatusbarPrepared *p,
                  p->active ? UI_TOK_TEXT_PRIMARY : UI_TOK_STATUS_ERR_TEXT);
 }
 
-static void draw_line(const StatusbarSlot *slot, const StatusbarPrepared *p,
-                      int x, int y, int w, int h) {
+/* Plain muted readout: the cursor's line/column and the function it
+ * sits in. Both state where the caret is, so they share a weight. */
+static void draw_muted_text(const StatusbarSlot *slot, const StatusbarPrepared *p,
+                            int x, int y, int w, int h) {
     (void)y; (void)w; (void)h;
     draw_text_at(slot, p->text, x, UI_TOK_TEXT_MUTED);
 }
@@ -848,7 +867,13 @@ static const StatusbarItem k_statusbar_items[] = {
         .align = STATUSBAR_ALIGN_LEFT,
         .gap_before = STATUSBAR_GAP_SEP,
         .prepare = prepare_line,
-        .draw = draw_line,
+        .draw = draw_muted_text,
+    },
+    {
+        .align = STATUSBAR_ALIGN_LEFT,
+        .gap_before = STATUSBAR_GAP_SEP,
+        .prepare = prepare_func,
+        .draw = draw_muted_text,
     },
     {
         .align = STATUSBAR_ALIGN_LEFT,

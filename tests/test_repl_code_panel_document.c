@@ -646,6 +646,63 @@ static void test_statusbar_hover_band_host(TestHarness *h) {
     glr_ctrl_sync_ui_chrome();
 }
 
+/* The statusbar's enclosing-function readout. The name is resolved by
+ * the controller into snap.cursor_func_name (empty == top level, which
+ * is what hides the segment); the statusbar item is a plain read of it. */
+static void test_statusbar_cursor_function(TestHarness *h) {
+    UiRenderSnapshot snap;
+    UiReplCodePanelLayout layout;
+
+    printf("Testing statusbar current-function readout...\n");
+    reset_doc_fixture();
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    ui_state_viewport_set_size(1600, 300);
+    glr_ctrl_sync_ui_chrome();
+    editor_feed_line("func0(s) {");                /* 0: header        */
+    editor_feed_line("for(i, 0, 2) {");            /* 1: nested opener */
+    editor_feed_line("glVertex3f(s, i, 0);");      /* 2: nested body   */
+    editor_feed_line("}");                         /* 3                */
+    editor_feed_line("}");                         /* 4: closer        */
+    editor_feed_line("glClearColor(0, 0, 0, 1);"); /* 5: top level     */
+    TEST_ASSERT_TRUE(h, "setup: function fixture committed",
+                     repl_state_document_count() == 6);
+
+    editor_navigate_to_line(0);
+    build_doc(&snap, &layout);
+    TEST_ASSERT_STR(h, "func header belongs to its own function",
+                    snap.cursor_func_name, "func0");
+
+    editor_navigate_to_line(2);
+    build_doc(&snap, &layout);
+    TEST_ASSERT_STR(h, "loop nested in a func body is transparent",
+                    snap.cursor_func_name, "func0");
+
+    editor_navigate_to_line(4);
+    build_doc(&snap, &layout);
+    TEST_ASSERT_STR(h, "func closer belongs to its own function",
+                    snap.cursor_func_name, "func0");
+
+    editor_navigate_to_line(5);
+    build_doc(&snap, &layout);
+    TEST_ASSERT_STR(h, "top-level line names no function",
+                    snap.cursor_func_name, "");
+
+    /* An aliased definition reports the alias, not its funcN slot. */
+    reset_doc_fixture();
+    ui_state_viewport_set_size(1600, 300);
+    glr_ctrl_sync_ui_chrome();
+    editor_feed_line("triangle(sz) {");
+    editor_feed_line("glVertex3f(sz, 0, 0);");
+    editor_feed_line("}");
+    TEST_ASSERT_TRUE(h, "setup: aliased function committed",
+                     repl_state_document_count() == 3);
+
+    editor_navigate_to_line(1);
+    build_doc(&snap, &layout);
+    TEST_ASSERT_STR(h, "aliased function reports its alias",
+                    snap.cursor_func_name, "triangle");
+}
+
 /* Select all: a mouse-only chip (no keymap slot is free), so the click
  * path through glr_ctrl_mouse is the only way in and a missing router
  * arm has to fail here. */
@@ -1268,6 +1325,7 @@ int main(void) {
     test_statusbar_readouts(&g_harness);
     test_statusbar_cull_rank_independent_of_order(&g_harness);
     test_statusbar_hover_band_host(&g_harness);
+    test_statusbar_cursor_function(&g_harness);
     test_statusbar_select_all_chip(&g_harness);
     test_statusbar_right_chips_do_not_repack(&g_harness);
 
