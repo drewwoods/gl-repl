@@ -592,9 +592,11 @@ diff --git a/src/gl/listrl.c b/src/gl/listrl.c
 index 784a1410..1365ee46 100644
 --- a/src/gl/listrl.c
 +++ b/src/gl/listrl.c
-@@ -1,3 +1,6 @@
+@@ -1,3 +1,8 @@
 +#include <stdlib.h>
 +#include <string.h>
++
++static int g_edgeflag_test_capacity;
 +
  #include "list.h"
  
@@ -609,7 +611,7 @@ index 784a1410..1365ee46 100644
      if (list->color)    memcpy(list->color + idx, list->lastColors, sizeof(GLfloat) * 4);
      if (list->secondary)    memcpy(list->secondary + (l * 4), glstate->secondary, sizeof(GLfloat) * 4);
      if (list->tex[0])   memcpy(list->tex[0] + idx, glstate->texcoord[0], sizeof(GLfloat) * 4);
-@@ -53,6 +57,24 @@ void FASTMATH rlVertex4fv(renderlist_t *list, GLfloat* v) {
+@@ -53,6 +57,31 @@ void FASTMATH rlVertex4fv(renderlist_t *list, GLfloat* v) {
      memcpy(vert, v, 4*sizeof(GLfloat));
  }
  
@@ -624,11 +626,18 @@ index 784a1410..1365ee46 100644
 +        const unsigned long cap = list->use_glstate ? (unsigned long)glstate->merger_cap
 +                                                    : list->cap;
 +        list->edgeflag = (GLubyte *)malloc(cap * sizeof(GLubyte));
-+        if (!list->edgeflag)
++        if (!list->edgeflag) {
++            g_edgeflag_test_capacity = 0;
 +            return;
++        }
++        g_edgeflag_test_capacity = (int)cap;
 +        // catch up: everything already emitted took the default
 +        memset(list->edgeflag, GL_TRUE, list->len * sizeof(GLubyte));
 +    }
++}
++
++int gl4es_edgeflag_test_last_capacity(void) {
++    return g_edgeflag_test_capacity;
 +}
 +
  void rlEnd(renderlist_t *list) {

@@ -131,7 +131,10 @@ fill=76800/76800 pushattrib=1/1 getter=1/1 merged=2170/2176
 The `fill-capacity` case also emits a 96-vertex `GL_TRIANGLES` FILL block
 with `glEdgeFlag(GL_FALSE)` set before `glBegin`, immediately after a merger
 batch has grown the shared capacity.  Its coverage must match the all-TRUE
-control block and it must leave `GL_NO_ERROR` set.
+control block and it must leave `GL_NO_ERROR` set.  Because FILL does not
+consume the edge array, the patch also exposes a test-only capacity hook; the
+oracle directly rejects a requested capacity below 96 instead of relying on
+a silent heap overrun to disturb rendering.
 
 Each of the quad's four and the triangle's three suppressions lands within a
 pixel of the calibrated edge it should remove. `gl4es-line-width` reproduces
