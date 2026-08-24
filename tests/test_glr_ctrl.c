@@ -7895,23 +7895,32 @@ static void test_code_panel_scroll_clamping_and_follow(void) {
     /* 3. Scrolloff margin test: cursor maintains GLR_CODE_PANEL_SCROLLOFF (2) lines margin */
     {
         UiReplCodePanelLayout l;
+        int scrolloff = GLR_CODE_PANEL_SCROLLOFF;
+        int expected_scroll;
+
         memset(&l, 0, sizeof(l));
         l.visible_lines = 10;
         l.total_lines = 50;
+        if (scrolloff < 0)
+            scrolloff = 0;
+        if (scrolloff * 2 >= l.visible_lines)
+            scrolloff = (l.visible_lines - 1) / 2;
 
-        /* Move cursor down past bottom margin (visible_lines - 1 - scrolloff = 7) */
+        /* Move cursor down past the effective bottom margin. */
         editor_scroll_set(0);
         editor_scroll_follow_cursor_set(1);
         l.follow_doc_line = 8;
         glr_ctrl_apply_code_panel_follow_scroll(&l);
-        /* follow_doc_line (8) - visible_lines (10) + 1 + scrolloff (2) = 1 */
-        ASSERT_INT("scrolloff scrolls down when past bottom margin", editor_scroll(), 1);
+        expected_scroll = 8 - 10 + 1 + scrolloff;
+        if (expected_scroll < 0)
+            expected_scroll = 0;
+        ASSERT_INT("scrolloff scrolls down when past bottom margin",
+                   editor_scroll(), expected_scroll);
 
-        /* Move cursor up past top margin (scroll + scrolloff = 1 + 2 = 3) */
+        /* Move cursor up past the effective top margin. */
         l.follow_doc_line = 2;
         editor_scroll_follow_cursor_set(1);
         glr_ctrl_apply_code_panel_follow_scroll(&l);
-        /* follow_doc_line (2) - scrolloff (2) = 0 */
         ASSERT_INT("scrolloff scrolls up when above top margin", editor_scroll(), 0);
     }
 }

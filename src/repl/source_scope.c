@@ -553,22 +553,41 @@ int repl_source_scope_enclosing_func_at(int pos, int *out_def, int *out_end) {
 
 int repl_source_scope_view_next_func_def(const ReplSourceScopeView *view,
                                          int pos) {
+    int disp;
+    int display_end;
+    int scan_end;
+
     if (!view || !view->cmds)
+        return -1;
+    if (view->count <= 0)
         return -1;
     if (pos < 0)
         pos = -1;
-    for (int i = pos + 1; i < view->count; i++) {
+    disp = view->display_body_start;
+    if (disp < 0)
+        disp = 0;
+    if (disp > view->count)
+        disp = view->count;
+
+    /* The display opener is a virtual navigation landmark at the first
+     * body row (or at the trailing row when the body is empty).  When the
+     * cursor is still in the file-scope prefix, it must win over function
+     * definitions that happen to remain in the display body. */
+    scan_end = pos < disp ? disp : view->count;
+    for (int i = pos + 1; i < scan_end; i++) {
         if (view->cmds[i].valid && view->cmds[i].type == CMD_FUNC_DEF)
             return i;
     }
-    int disp = view->display_body_start;
-    if (disp < view->count && view->cmds[disp].valid &&
-        view->cmds[disp].type != CMD_FUNC_DEF) {
-        if (pos < disp)
-            return disp;
-        if (pos < view->count - 1)
-            return view->count - 1;
-    }
+
+    if (pos < disp)
+        return disp;
+
+    /* The display closer is after the last document row.  A non-empty body
+     * uses its last row as the closest editable anchor; an empty body uses
+     * the targetable trailing row at document_count. */
+    display_end = disp < view->count ? view->count - 1 : view->count;
+    if (pos < display_end)
+        return display_end;
     return -1;
 }
 
@@ -578,15 +597,31 @@ int repl_source_scope_next_func_def(int pos) {
 
 int repl_source_scope_view_prev_func_def(const ReplSourceScopeView *view,
                                          int pos) {
+    int disp;
+
     if (!view || !view->cmds)
         return -1;
     if (pos > view->count)
         pos = view->count;
-    int disp = view->display_body_start;
-    int has_disp = (disp < view->count && view->cmds[disp].valid &&
-                    view->cmds[disp].type != CMD_FUNC_DEF);
-    if (has_disp && pos > disp)
+
+    disp = view->display_body_start;
+    if (disp < 0)
+        disp = 0;
+    if (disp > view->count)
+        disp = view->count;
+
+    /* A function that remains in the display body is still a valid live
+     * document target.  Search that region before falling back to the
+     * display opener; otherwise Ctrl+Up cannot return to such a function
+     * after the cursor has moved past it. */
+    if (pos > disp) {
+        for (int i = pos - 1; i >= disp; i--) {
+            if (view->cmds[i].valid && view->cmds[i].type == CMD_FUNC_DEF)
+                return i;
+        }
         return disp;
+    }
+
     for (int i = pos - 1; i >= 0; i--) {
         if (view->cmds[i].valid && view->cmds[i].type == CMD_FUNC_DEF)
             return i;

@@ -267,6 +267,56 @@ int main() {
                    repl_source_scope_view_find_func_def_line(&mal_view, 0), -1);
     }
 
+    /* Function navigation remains symmetric for a live document that keeps
+     * a definition inside display() after the tutorial clear pair.  The
+     * display opener is the first target, the body definition is next, and
+     * the last body row is the display closer anchor. */
+    {
+        GLCmd cmds[6];
+        ReplSourceScopeView view;
+
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].valid = 1; cmds[0].type = CMD_CLEAR_COLOR;
+        cmds[1].valid = 1; cmds[1].type = CMD_CLEAR;
+        cmds[2].valid = 1; cmds[2].type = CMD_FUNC_DEF;
+        cmds[3].valid = 1; cmds[3].type = CMD_VERTEX3F;
+        cmds[4].valid = 1; cmds[4].type = CMD_FUNC_END;
+        cmds[5].valid = 1; cmds[5].type = CMD_VERTEX3F;
+        repl_source_scope_view_bind(&view, cmds, 6);
+
+        ASSERT_INT("body-function view starts at display body",
+                   repl_source_scope_view_display_body_start(&view), 0);
+        ASSERT_INT("next from file-scope prefix reaches display start",
+                   repl_source_scope_view_next_func_def(&view, -1), 0);
+        ASSERT_INT("next from display start reaches body function",
+                   repl_source_scope_view_next_func_def(&view, 0), 2);
+        ASSERT_INT("next from body function reaches display end",
+                   repl_source_scope_view_next_func_def(&view, 2), 5);
+        ASSERT_INT("prev from display end returns body function",
+                   repl_source_scope_view_prev_func_def(&view, 5), 2);
+        ASSERT_INT("prev from body function returns display start",
+                   repl_source_scope_view_prev_func_def(&view, 2), 0);
+    }
+
+    /* An empty display body is represented by the targetable trailing row at
+     * document_count, so function navigation must expose that row too. */
+    {
+        GLCmd cmds[2];
+        ReplSourceScopeView view;
+
+        memset(cmds, 0, sizeof(cmds));
+        cmds[0].valid = 1; cmds[0].type = CMD_FUNC_DEF;
+        cmds[1].valid = 1; cmds[1].type = CMD_FUNC_END;
+        repl_source_scope_view_bind(&view, cmds, 2);
+
+        ASSERT_INT("functions-only body starts at document count",
+                   repl_source_scope_view_display_body_start(&view), 2);
+        ASSERT_INT("next from last function reaches empty display body",
+                   repl_source_scope_view_next_func_def(&view, 1), 2);
+        ASSERT_INT("prev from empty display body returns function",
+                   repl_source_scope_view_prev_func_def(&view, 2), 0);
+    }
+
     /* Nested if/else inside a function: enclosing is the FUNC_DEF, not
      * the if-chain, from either arm. */
     {

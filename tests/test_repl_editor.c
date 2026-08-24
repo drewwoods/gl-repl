@@ -3393,6 +3393,28 @@ int main() {
         g_mock_modifiers = saved_mods;
     }
 
+    /* Functions-only documents place the empty display body at the
+     * targetable append row. Ctrl+Down must reach it, and Ctrl+Up must still
+     * return to the last function. */
+    {
+        int saved_mods = g_mock_modifiers;
+
+        glr_ctrl_reset_all();
+        editor_feed_line("func0() {");
+        editor_feed_line("}");
+        editor_navigate_to_line(1);
+
+        g_mock_modifiers = GLUT_ACTIVE_CTRL;
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("ctrl-down from last function reaches empty display body",
+                   editor_state_edit_line(), 2);
+        editor_handle_special(GLUT_KEY_UP, 0, 0);
+        ASSERT_INT("ctrl-up from empty display body returns function",
+                   editor_state_edit_line(), 0);
+
+        g_mock_modifiers = saved_mods;
+    }
+
     /* Regression: pressing Up when the cursor is below the visible area
      * must scroll the viewport to reveal it. */
     {
