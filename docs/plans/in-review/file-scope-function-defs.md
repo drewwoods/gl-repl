@@ -52,12 +52,32 @@ the generated C helpers preserve the same split. Each case's trace-driver and
 standalone compiler checks now run concurrently; the curated 12-case run fell
 from 23.46s to 17.41s locally without reducing coverage.
 
-**Verification green** - `make test-stubs` (86 binaries, 32,436 assertions),
+**Mandatory-frame simplification implemented; corpus migration deferred** -
+every `.glr` now requires exactly one `display() { ... }` frame, regardless of
+whether it defines a function. The writer always emits it and the phase machine
+no longer switches grammar based on function presence. Per request, the
+mechanical wrapper insertion across most checked-in `.glr` scenes remains
+outstanding; three representative catalog scenes were migrated to exercise the
+real loader, and catalog/corpus gates are expected to reject the rest until the
+bulk migration lands.
+
+**Previous completion verification (before the mandatory-frame follow-up)** -
+`make test-stubs` (86 binaries, 32,436 assertions),
 `make test-scenes` (3 binaries, 8,302 assertions),
 `make check-state-ownership`, `make check-c99`, `make check-formatted`, both
 catalog/doc example guards, `git diff --check`, and
 `REPL_SCENE_CORPUS=1 make run-test-export-trace-parity ARGS='--full'`
 (159/159, including two documented XFAILs).
+
+**Mandatory-frame verification** - the document-order, camera-apply,
+REPL-state and scene-loader suites pass against the new grammar, including
+function-free export, split-brace rejection inside `display()`, and physical
+row-map coverage across the consumed wrapper. A three-scene runtime catalog
+covering the migrated logo, scratch-array and analytic-normal scenes passes
+export trace parity (15/15, including the existing curated XFAIL), and the C99,
+formatting and state-ownership guards pass. The full catalog gates remain
+intentionally red: 98 of the 148 checked-in `.glr` files still await the
+separate mechanical wrapper insertion requested above.
 
 ### Corrections found while implementing
 
@@ -138,35 +158,33 @@ Note `g_header_post[]` is empty (`src/repl/export_setup.c:294`), so the
 "display-open chrome" of 1b is `g_display_header` + lights + camera; the
 display closer is `g_footer_pre_init[3]`.
 
-## 1k. Explicit `display() { }` in `.glr` when functions are used (added 2026-08-24)
+## 1k. Mandatory explicit `display() { }` in `.glr` (added 2026-08-24)
 
-The `.glr` format gains the same distinction the panel now draws:
+The `.glr` format has one shape:
 
-- A scene with **no function definitions** keeps today's format. The
-  `display()` wrapper is **implicit** - the body is simply the rows after
-  the declarations and camera.
-- A scene that **defines any function** must carry an **explicit**
-  `display() {` ... `}` around the body. The definitions sit outside it,
-  exactly as they do in the exported C and in the code panel.
+- Every scene carries exactly one explicit `display() {` ... `}` around its
+  camera and body, including scenes with no function definitions.
+- Function definitions sit outside it, exactly as they do in exported C and in
+  the code panel.
 - Camera rows live inside that explicit frame; top-level variable
   declarations live outside it with the function definitions.
 - There is **no backward-compatible reader path**. CAMERA -> FUNCS and a
-  function-bearing file without the frame are rejected, which keeps the
-  writer, importer, catalog loader, tutorial loader and linter on one grammar.
+  file without the frame are rejected, which keeps the writer, importer,
+  catalog loader, tutorial loader and linter on one grammar.
 
-Rationale: once function definitions are file-scope, a reader of a
-function-bearing `.glr` has no way to tell where the definitions stop and
-the body starts except by re-running the boundary walk. Writing the
-wrapper makes the file say it. A scene with no functions has nothing to
-disambiguate, so requiring the wrapper there would be ceremony.
+Rationale: making frame presence conditional on function presence leaves two
+permanent grammars and requires EOF-sensitive `saw_function` state. The two
+wrapper lines are cheap; requiring them makes the phase boundary explicit and
+matches the C representation for every scene.
 
 Touches the writer (`src/repl/export_glr.c`), the reader
 (`src/repl/import.c`), the phase machine
 (`src/repl/doc_order.{c,h}` - the `FUNCS -> BODY` transition becomes
 observable rather than inferred), `--lint-scenes`
 (`src/app/boot/glr_lint_scenes.c`), the scene formatter
-(`scripts/format_scenes.py`), and regenerates every checked-in `.glr` that
-defines a function (`examples/scenes/`, `tests/scenes/**`).
+(`scripts/format_scenes.py`), and requires a mechanical wrapper insertion in
+every checked-in `.glr` that does not already carry one (`examples/scenes/`,
+`tests/scenes/**`). That migration is deliberately separate from this change.
 
 **Ordering against 1f.** 1f (strip the base indent per phase, not
 uniformly) has to land first or with this: body rows inside an explicit

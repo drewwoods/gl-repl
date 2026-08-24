@@ -5,6 +5,7 @@
 // @cfg projection = PROJ_ORTHO
 // @cfg vertex_points = 0
 // @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD_INVERTED
+display() {
 glTranslatef(0.0000f, 0.0000f, -6.5000f);   // @camera dist
 glRotatef(35.2500f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(45.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -71,3 +72,4 @@ glBegin(GL_QUADS);
   glVertex3f(-1, 1, -1);
   glVertex3f(1, 1, -1);
 glEnd();
+}

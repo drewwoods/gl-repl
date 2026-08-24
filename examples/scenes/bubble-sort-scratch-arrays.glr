@@ -18,6 +18,7 @@ static float period, cycle, steps; // seconds per cycle; shuffle index; compares
 static float tmp; // swap scratch
 static float x, h, s; // bar center x, bar height, palette mix
 static float cur; // bar index under the compare marker
+display() {
 glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
 glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
 glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
@@ -79,4 +80,5 @@ if(steps < 225) {
   glColor3f(0.92, 0.95, 0.98);
   glRasterPos3f(-3.4, 1.7, 0);
   label("sorted");
+}
 }
