@@ -5,7 +5,8 @@ implementation. Move a plan to `../not-started/` once its design is accepted,
 or to `../active/` if implementation begins immediately.
 
 - [File-Scope Function Definitions In The Code Panel](file-scope-function-defs.md)
-  - draw function defs (and global decls) above the generated
-    `display()` line; export and flatten already treat them as
-    file-scope, so the work is the panel projection plus the base
-    indent.
+  - draw function defs and global decls above the generated `display()`
+    line, projecting the `.glr` phase order (`doc_order.h`) the exporter
+    already writes. Project 1 (panel chrome + indent base + dump) is
+    specified; Project 2 (making the order total across commit, import,
+    paste and tutorials) is gated on a tutorial decision.
