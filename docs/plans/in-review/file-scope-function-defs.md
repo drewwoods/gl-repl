@@ -27,7 +27,17 @@ focus/framing and insert-splice tests, and the missed scratch-array dedent.
 The review also removed the former CAMERA -> FUNCS compatibility edge: the
 new format has one shape, not a legacy alternate.
 
-**Verification green** - `make test-stubs` (86 binaries, 32,132 assertions),
+**Post-completion review implemented** - real end-of-document commits now
+cover both the plain and leading-comment relocation cases from 1e; a
+functions-only panel fixture covers the `at == document_count` trailing-slot
+splice from 1b. The review also corrected two stale comments, routed the
+commit test's mouse-row helper through the splice-aware layout API, and
+limited `void` decoration to definitions that actually render at file scope.
+The new relocation test also exposed that the attached comment text retained
+its former body base even though the header and closer were rebased; the
+commit plan now shifts the carried run by the same base delta.
+
+**Verification green** - `make test-stubs` (86 binaries, 32,411 assertions),
 `make test-scenes` (3 binaries, 8,278 assertions),
 `make check-state-ownership`, `make check-formatted`, both catalog/doc example
 guards, and `git diff --check`. A standalone `make check-c99` remains blocked
@@ -151,10 +161,13 @@ structure, not indentation, and the loader re-derives indent either way.
 
 ## 1l. Non-focus C return type on user function headers (added 2026-08-24)
 
-Full-chrome mode projects editable `func0() {` / `name(args) {` rows as
-`void func0() {` / `void name(args) {`. Focus mode keeps the editable REPL
-spelling. This is display decoration only: the buffer and parser never receive
-the prefix.
+Full-chrome mode projects file-scope editable `func0() {` / `name(args) {`
+rows as `void func0() {` / `void name(args) {`. Focus mode keeps the editable
+REPL spelling. A mid-document definition that remains inside `display()`
+(currently possible through the tutorial clear-pair placement rule or paste)
+also keeps its indented REPL spelling; decorating it would imply a nested C
+definition. This is display decoration only: the buffer and parser never
+receive the prefix.
 
 `UiTextPanelRow.display_prefix_chars` carries the synthetic width. The panel
 adds it to active-input length, cursor and anchor coordinates, ignores it when

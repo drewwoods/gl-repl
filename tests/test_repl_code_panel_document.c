@@ -999,6 +999,33 @@ int main(void) {
         ASSERT_TRUE("focus function row has no synthetic prefix", prefix == 0);
     }
 
+    /* A functions-only document splices the display opener after the last
+     * command and before the trailing input slot. Exercise the count-valued
+     * boundary through layout and target lookup, not just the scope helper. */
+    {
+        int open_row;
+        int trailing_row;
+
+        reset_doc_fixture();
+        editor_feed_line("func0() {");
+        editor_feed_line("}");
+        build_doc(&snap, &layout);
+        ASSERT_TRUE("functions-only panel boundary is document count",
+                    layout.display_open_at == snap.document_count);
+        open_row = ui_repl_code_panel_display_open_row(&layout);
+        trailing_row = ui_repl_code_panel_rows_before_cmd(
+            &layout, snap.document_count);
+        ASSERT_TRUE("count-valued splice precedes trailing slot",
+                    trailing_row == open_row + layout.display_open_rows);
+        ASSERT_TRUE("trailing slot after splice is targetable",
+                    ui_repl_code_panel_target_for_doc_line(
+                        &snap, trailing_row, &layout, &target, &on_insert,
+                        &row_offset));
+        ASSERT_TRUE("trailing target remains the document count",
+                    target == snap.document_count && on_insert == 0 &&
+                    row_offset == 0);
+    }
+
     /* An insert ghost exactly at the file-scope/body splice belongs below
      * display(), not between the final function and the frame. */
     {
@@ -1029,6 +1056,33 @@ int main(void) {
                         &row_offset));
         ASSERT_TRUE("splice ghost is the virtual insert row",
                     target == -1 && on_insert == 1 && row_offset == 0);
+    }
+
+    /* The tutorial clear pair deliberately permits a later function
+     * definition to remain inside display(). It keeps its body indent and
+     * REPL spelling; adding `void` before that whitespace would render
+     * `void   func0()` and imply an invalid nested C definition. */
+    {
+        char row_text[MAX_LINE_LEN * 2];
+        int prefix;
+
+        reset_doc_fixture();
+        editor_feed_line("glClearColor(0, 0, 0, 1);");
+        editor_feed_line("glClear(GL_COLOR_BUFFER_BIT);");
+        editor_feed_line("func0() {");
+        editor_feed_line("}");
+        glr_state_presentation_mut()->code_focus = 0;
+        build_doc(&snap, &layout);
+        ASSERT_TRUE("clear-pair function stays below the panel boundary",
+                    snap.display_body_start == 0);
+        ASSERT_TRUE("indented function row is available",
+                    ui_repl_code_panel_row_text_for_test(
+                        &snap, 2, row_text, (int)sizeof(row_text), &prefix));
+        TEST_ASSERT_STR(&g_harness,
+                        "body function keeps indented REPL spelling",
+                        row_text, "  func0() {");
+        ASSERT_TRUE("body function has no synthetic return prefix",
+                    prefix == 0);
     }
 
     /* P1: glr_ctrl_toggle_code_focus() (shared by Ctrl+Shift+F and the

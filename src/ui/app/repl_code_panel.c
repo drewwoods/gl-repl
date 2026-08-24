@@ -209,14 +209,18 @@ static int repl_code_panel_chrome_visible(const UiRenderSnapshot *snap) {
     return !(snap && snap->code_panel.code_focus);
 }
 
-/* Function headers are stored in the editable REPL spelling (`func0() {`)
- * but full-chrome mode projects the C return type the same way it projects
- * `void display(void) {`. Keep the prefix as row metadata so every path that
- * crosses back into editor coordinates can remove it explicitly. */
+/* File-scope function headers are stored in the editable REPL spelling
+ * (`func0() {`) but full-chrome mode projects the C return type the same way
+ * it projects `void display(void) {`. A function definition left at or below
+ * the body boundary stays inside display() and keeps its indented REPL
+ * spelling; prefixing that row would render invalid-looking nested C. Keep
+ * the synthetic prefix as row metadata so every path that crosses back into
+ * editor coordinates can remove it explicitly. */
 static int repl_code_panel_func_return_prefix_chars(
         const UiRenderSnapshot *snap, int line_idx) {
     if (!repl_code_panel_chrome_visible(snap) || !snap ||
-        line_idx < 0 || line_idx >= snap->document_count)
+        line_idx < 0 || line_idx >= snap->document_count ||
+        line_idx >= snap->display_body_start)
         return 0;
     return snap->document_cmds[line_idx].valid &&
            snap->document_cmds[line_idx].type == CMD_FUNC_DEF

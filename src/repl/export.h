@@ -178,9 +178,9 @@ int repl_export_reshape_projection_lines(const char *out[REPL_EXPORT_PROJ_LINES]
  * display(); g_footer_pre_init / g_footer_post_init bracket the init()
  * function. Together they form a valid C program. */
 /* The literal that opens the exported display() function. Used as
- * g_display_header[0] and as the search needle from bootstrap.c's
- * scroll_to_display_function - exposed via this macro so both sides
- * stay in sync if the line text ever changes. */
+ * g_display_header[0] and shared by export, the full-mode code-panel
+ * frame and its dump twin. Panel scrolling locates the splice through
+ * ui_repl_code_panel_display_open_row(), not by searching this text. */
 #define REPL_EXPORT_DISPLAY_OPEN_LINE "void display(void) {"
 /* The line that closes display(). Like the opener, the code panel draws
  * this one unconditionally - the two together frame the user's body, so

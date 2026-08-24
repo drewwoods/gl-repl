@@ -555,6 +555,34 @@ static int compile_function_decl_insert_pos_after_delete(
     return pos;
 }
 
+static void compile_copy_text_with_rebased_indent(
+        char *out, size_t out_sz, const char *text,
+        int old_base, int new_base) {
+    int lead = 0;
+    int new_lead;
+    size_t rest_len;
+
+    if (!out || out_sz == 0)
+        return;
+    if (!text)
+        text = "";
+    while (text[lead] == ' ')
+        lead++;
+
+    new_lead = lead + new_base - old_base;
+    if (new_lead < 0)
+        new_lead = 0;
+    if ((size_t)new_lead >= out_sz)
+        new_lead = (int)out_sz - 1;
+
+    memset(out, ' ', (size_t)new_lead);
+    rest_len = strlen(text + lead);
+    if (rest_len > out_sz - (size_t)new_lead - 1)
+        rest_len = out_sz - (size_t)new_lead - 1;
+    memcpy(out + new_lead, text + lead, rest_len);
+    out[new_lead + (int)rest_len] = '\0';
+}
+
 /* CONTRACT: context-pure for document data in the core
  * compile kernel. This editor-specific relocation wrapper uses the
  * live source-scope helpers required by the editor commit path. */
@@ -698,12 +726,13 @@ ReplCompileResult editor_compile_func_def(const char *input,
      * themselves come from the document. */
     SourceTextView text_view = ctx->text;
     for (int i = 0; i < comment_count; i++) {
+        int source_idx = comment_start + i;
+        int old_base = source_idx < ctx->source_scope.display_body_start
+                           ? 0 : REPL_SOURCE_SCOPE_BODY_BASE_INDENT;
         out->change.cmds[i] = ctx->document_cmds[comment_start + i];
-        const char *line = source_text_line(text_view,
-                                            comment_start + i);
-        if (line)
-            repl_copy_string_fits(out->change.text[i],
-                                  sizeof(out->change.text[i]), line);
+        compile_copy_text_with_rebased_indent(
+            out->change.text[i], sizeof(out->change.text[i]),
+            source_text_line(text_view, source_idx), old_base, header_base);
     }
     out->change.cmds[comment_count]     = fd;
     out->change.cmds[comment_count + 1] = fe;

@@ -151,9 +151,7 @@ static int code_panel_mouse_y_for_cmd(int cmd_idx) {
     build_test_ui_snapshot(&snap);
     ui_repl_code_panel_build_layout(&snap, &layout, panel_w, text_x, cp_h);
 
-    doc_line = ui_repl_code_panel_rows_before_cmd(&layout, 0);
-    for (int i = 0; i < cmd_idx && i < repl_state_document_count(); i++)
-        doc_line += layout.cmd_main_rows[i] + layout.replay_extra_rows[i];
+    doc_line = ui_repl_code_panel_rows_before_cmd(&layout, cmd_idx);
 
     {
         int visible_lines = layout.visible_lines;
@@ -1805,6 +1803,40 @@ int main(void) {
                 repl_state_document_cmds()[2].type == CMD_FUNC_DEF &&
                 repl_state_document_cmds()[3].type == CMD_VERTEX3F &&
                 repl_state_document_cmds()[4].type == CMD_FUNC_END);
+
+    /* A new function committed in the trailing slot of a functions-only
+     * document extends the file-scope prefix. Its header and synthesized
+     * closer must be column zero immediately, without a Ctrl+\ reformat. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("func0() {");
+    editor_feed_line("}");
+    editor_feed_line("func1() {");
+    editor_feed_line("}");
+    ASSERT_TRUE("second function commit adds header and closer",
+                repl_state_document_count() == 4);
+    TEST_ASSERT_STR(&g_harness, "second EOD function header is column zero",
+                    editor_buffer_line(2), "func1() {");
+    TEST_ASSERT_STR(&g_harness, "second EOD function closer is column zero",
+                    editor_buffer_line(3), "}");
+
+    /* The same boundary case with an attached comment run exercises the
+     * post-delete insert coordinate: the comment is lifted with the new
+     * definition and the untranslated insert_pos still equals the old
+     * boundary. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    editor_feed_line("func0() {");
+    editor_feed_line("}");
+    editor_feed_line("// Describes func1.");
+    editor_feed_line("func1() {");
+    editor_feed_line("}");
+    ASSERT_TRUE("commented EOD function adds its three-row block",
+                repl_state_document_count() == 5);
+    TEST_ASSERT_STR(&g_harness, "EOD function carries its leading comment",
+                    editor_buffer_line(2), "// Describes func1.");
+    TEST_ASSERT_STR(&g_harness, "commented EOD function header is column zero",
+                    editor_buffer_line(3), "func1() {");
+    TEST_ASSERT_STR(&g_harness, "commented EOD function closer is column zero",
+                    editor_buffer_line(4), "}");
 
     glr_ctrl_reset_all(); declare_test_vars();
     editor_feed_line("func0() {");

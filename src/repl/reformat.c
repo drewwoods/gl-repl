@@ -182,15 +182,6 @@ static void reformat_replace_cmd(ReplCommandStore *store,
         source_document_replace_line(cmd_idx, text);
 }
 
-/* The Ctrl+\ whole-document reformatter: re-derive canonical text for
- * every valid source command and write it back through the command
- * store. One independent case per command family - block heads re-emit
- * their header from parsed args (or the original expression text when
- * has_vars), block ends re-align to their opening line's indent, and
- * the default arm round-trips plain GL commands through
- * repl_parse_and_normalize with the line's visible loop/param vars. A
- * case that can't reconstruct the line leaves it untouched rather than
- * guessing. */
 /* Re-derive indentation after a structural edit moved the display-body
  * boundary, without touching any other canonical text.
  *
@@ -256,6 +247,15 @@ void repl_reindent_after_boundary_move(int at_before) {
     repl_state_mark_source_dirty();
 }
 
+/* The Ctrl+\ whole-document reformatter: re-derive canonical text for
+ * every valid source command and write it back through the command
+ * store. One independent case per command family - block heads re-emit
+ * their header from parsed args (or the original expression text when
+ * has_vars), block ends re-align to their opening line's indent, and
+ * the default arm round-trips plain GL commands through
+ * repl_parse_and_normalize with the line's visible loop/param vars. A
+ * case that can't reconstruct the line leaves it untouched rather than
+ * guessing. */
 void repl_reformat_program(void) {
     prof_begin(PROF_REFORMAT);
     ReplCommandStore store = repl_command_store_live();
