@@ -11,9 +11,10 @@
  *   1. feeds curated snippets through editor_feed_line(), or loads catalog
  *      `.glr` scenes through repl_load_example_lines();
  *   2. writes the program to a temp file via repl_export_save_output();
- *   3. shells out to cc, compiling that file + the stubs + the trace
- *      driver into a child binary (with -Dmain=app_main so the exported
- *      file's GLUT main() is renamed out of the way);
+ *   3. shells out to two parallel cc jobs: one compiles that file + the
+ *      stubs + the trace driver into a child binary (with -Dmain=app_main
+ *      so the exported file's GLUT main() is renamed out of the way), and
+ *      the other verifies the standalone exported program;
  *   4. runs BOTH legs over g_time_samples as successive frames of one
  *      session - the REPL leg through repl_refresh_flat_program() (so the
  *      value-only rebake path is exercised, not just a full flatten), the
@@ -31,7 +32,7 @@
  * scene whose numbers are all wrong - a frozen vertex, a stale matrix -
  * used to pass here with every counter matching.
  *
- * Pass --full to walk every built-in example (slow: one cc invocation
+ * Pass --full to walk every built-in example (slow: two parallel cc jobs
  * per example). Default is the curated set, which covers the
  * representative bug-prone shapes (loop body in glBegin, function call,
  * GLUT solid, label, transforms).
@@ -54,11 +55,13 @@
 
 #include <GL/gl_stub_counts.h>
 
+#include <errno.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 /* This test runs its own four-bucket tally (PASS/FAIL/XFAIL/XPASS) and
@@ -90,7 +93,7 @@ typedef enum {
 
 /* Curated programs. Each exercises a shape the executor / exporter
  * could plausibly disagree on. Keep them small - every entry triggers
- * one cc invocation. */
+ * two cc jobs, run concurrently. */
 static const char *prog_triangle[] = {
     "glBegin(GL_TRIANGLES);",
     "glVertex3f(0, 0, 0);",
@@ -420,6 +423,31 @@ static void compose_compile_cmd(char *buf, size_t n,
         exported_c, bin_path, log_path);
 }
 
+static pid_t start_shell_command(const char *cmd) {
+    pid_t pid = fork();
+
+    if (pid != 0)
+        return pid;
+    execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+    _exit(127);
+}
+
+static int wait_shell_command(pid_t pid) {
+    int status;
+    pid_t waited;
+
+    do {
+        waited = waitpid(pid, &status, 0);
+    } while (waited < 0 && errno == EINTR);
+    if (waited < 0)
+        return -1;
+    if (WIFEXITED(status))
+        return WEXITSTATUS(status);
+    if (WIFSIGNALED(status))
+        return 128 + WTERMSIG(status);
+    return -1;
+}
+
 /* ---- Trace (argument-value) comparison ---------------------------------
  *
  * Counters answer "were the same calls made"; they cannot answer "with the
@@ -723,12 +751,17 @@ static ParityResult run_one_case(const TraceProgram *prog) {
     }
     char temp_c[256], temp_bin[256], temp_out[256], temp_log[256];
     char temp_repl_tr[256], temp_child_tr[256];
+    char standalone_bin[256], standalone_log[256];
     snprintf(temp_c,        sizeof temp_c,        "/tmp/test_trace_%d_%s.c",         (int)pid, safe_name);
     snprintf(temp_bin,      sizeof temp_bin,      "/tmp/test_trace_%d_%s.bin",       (int)pid, safe_name);
     snprintf(temp_out,      sizeof temp_out,      "/tmp/test_trace_%d_%s.txt",       (int)pid, safe_name);
     snprintf(temp_log,      sizeof temp_log,      "/tmp/test_trace_%d_%s.log",       (int)pid, safe_name);
     snprintf(temp_repl_tr,  sizeof temp_repl_tr,  "/tmp/test_trace_%d_%s.repl.tr",   (int)pid, safe_name);
     snprintf(temp_child_tr, sizeof temp_child_tr, "/tmp/test_trace_%d_%s.child.tr",  (int)pid, safe_name);
+    snprintf(standalone_bin, sizeof standalone_bin,
+             "/tmp/test_trace_%d_%s_standalone.bin", (int)pid, safe_name);
+    snprintf(standalone_log, sizeof standalone_log,
+             "/tmp/test_trace_%d_%s_standalone.log", (int)pid, safe_name);
 
     /* Feed once so there is a document to export. Each t sample re-feeds
      * from scratch below; this call only has to leave the document live. */
@@ -741,36 +774,61 @@ static ParityResult run_one_case(const TraceProgram *prog) {
     /* Export leg. */
     repl_export_save_output(temp_c, source_document_view(), NULL);
 
-    char cmd[1024];
+    char cmd[1024], standalone_cmd[1024];
     compose_compile_cmd(cmd, sizeof cmd, temp_c, temp_bin, temp_log);
-    int rc = system(cmd);
+    snprintf(standalone_cmd, sizeof standalone_cmd,
+        "cc -Wall -std=c99 -O0 -g "
+        "-DGL_STUBS -DGL_SILENCE_DEPRECATION -Wno-deprecated-declarations "
+        "-Wno-unused-function -Wno-unused-variable "
+        "-Itests/gl-stubs/include -Iinclude -I. -Isrc "
+        "'%s' tests/gl-stubs/gl_stub_counts.c -lm -o '%s' >'%s' 2>&1",
+        temp_c, standalone_bin, standalone_log);
+
+    /* Both compilers consume the same immutable export and write distinct
+     * outputs, so overlap them while keeping scene execution serialized. */
+    pid_t trace_compile_pid = start_shell_command(cmd);
+    if (trace_compile_pid < 0) {
+        fprintf(stderr, "  [%s] trace compiler fork failed: %s\n",
+                prog->name, strerror(errno));
+        return PARITY_FAIL;
+    }
+    pid_t standalone_compile_pid = start_shell_command(standalone_cmd);
+    if (standalone_compile_pid < 0) {
+        int fork_errno = errno;
+        (void)wait_shell_command(trace_compile_pid);
+        fprintf(stderr, "  [%s] standalone compiler fork failed: %s\n",
+                prog->name, strerror(fork_errno));
+        return PARITY_FAIL;
+    }
+
+    int rc = wait_shell_command(trace_compile_pid);
+    int rc_standalone = wait_shell_command(standalone_compile_pid);
+    int compile_failed = 0;
     if (rc != 0) {
         fprintf(stderr,
             "  [%s] compile failed (rc=%d). cmd:\n    %s\n  log: %s\n",
             prog->name, rc, cmd, temp_log);
+        compile_failed = 1;
+    }
+    if (rc_standalone != 0) {
+        fprintf(stderr, "  [%s] Standalone compilation failed (rc=%d). cmd:\n    %s\n  log: %s\n",
+                prog->name, rc_standalone, standalone_cmd, standalone_log);
+        compile_failed = 1;
+    }
+    if (compile_failed) {
+        if (rc == 0) {
+            unlink(temp_bin);
+            unlink(temp_log);
+        }
+        if (rc_standalone == 0) {
+            unlink(standalone_bin);
+            unlink(standalone_log);
+        }
         return PARITY_FAIL;
     }
 
-    /* Standalone compilation and execution test (Priority 8) */
+    /* Standalone execution test (Priority 8). */
     {
-        char standalone_bin[256], standalone_log[256];
-        snprintf(standalone_bin, sizeof standalone_bin, "/tmp/test_trace_%d_%s_standalone.bin", (int)pid, safe_name);
-        snprintf(standalone_log, sizeof standalone_log, "/tmp/test_trace_%d_%s_standalone.log", (int)pid, safe_name);
-        char standalone_cmd[1024];
-        snprintf(standalone_cmd, sizeof standalone_cmd,
-            "cc -Wall -std=c99 -O0 -g "
-            "-DGL_STUBS -DGL_SILENCE_DEPRECATION -Wno-deprecated-declarations "
-            "-Wno-unused-function -Wno-unused-variable "
-            "-Itests/gl-stubs/include -Iinclude -I. -Isrc "
-            "'%s' tests/gl-stubs/gl_stub_counts.c -lm -o '%s' >'%s' 2>&1",
-            temp_c, standalone_bin, standalone_log);
-        int rc_standalone = system(standalone_cmd);
-        if (rc_standalone != 0) {
-            fprintf(stderr, "  [%s] Standalone compilation failed (rc=%d). cmd:\n    %s\n  log: %s\n",
-                    prog->name, rc_standalone, standalone_cmd, standalone_log);
-            unlink(standalone_log);
-            return PARITY_FAIL;
-        }
         char run_cmd[512];
         snprintf(run_cmd, sizeof run_cmd, "'%s' >/dev/null 2>&1", standalone_bin);
         int run_rc = system(run_cmd);

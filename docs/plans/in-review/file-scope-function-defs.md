@@ -48,9 +48,11 @@ remains deferred to Project 2.
 `.glr` loader so camera and explicit-display rows are consumed as format syntax.
 The run also exposed a pre-existing formatter conflation: bitmap `label(%f)`
 is compact again, while only `console(%f)` keeps stable six-character fields;
-the generated C helpers preserve the same split.
+the generated C helpers preserve the same split. Each case's trace-driver and
+standalone compiler checks now run concurrently; the curated 12-case run fell
+from 23.46s to 17.41s locally without reducing coverage.
 
-**Verification green** - `make test-stubs` (86 binaries, 32,416 assertions),
+**Verification green** - `make test-stubs` (86 binaries, 32,436 assertions),
 `make test-scenes` (3 binaries, 8,302 assertions),
 `make check-state-ownership`, `make check-c99`, `make check-formatted`, both
 catalog/doc example guards, `git diff --check`, and
