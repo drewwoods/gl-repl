@@ -12,61 +12,61 @@ static float az;
 
 mark(x, y, z, v0, v1) {
   glPushMatrix();
-  glTranslatef(x, y, z);
-  glColor3f(0.10f, 0.95f, 0.85f);
-  glutSolidSphere(0.12f, 8, 8);
-  glColor3f(0.92f, 0.95f, 0.98f);
-  glRasterPos3f(0.18f, 0.18f, 0.0f);
-  label("v=%f p=%f", v0, v1);
+    glTranslatef(x, y, z);
+    glColor3f(0.10f, 0.95f, 0.85f);
+    glutSolidSphere(0.12f, 8, 8);
+    glColor3f(0.92f, 0.95f, 0.98f);
+    glRasterPos3f(0.18f, 0.18f, 0.0f);
+    label("v=%f p=%f", v0, v1);
   glPopMatrix();
 }
 display() {
 
-glTranslatef(0.0f, 0.0f, -10.00f);   // @camera dist
-glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-glRotatef(10.0f * t, 0.0f, 1.0f, 0.0f);
+  glTranslatef(0.0f, 0.0f, -10.00f);   // @camera dist
+  glRotatef(20.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+  glRotatef(10.0f * t, 0.0f, 1.0f, 0.0f);
 
-glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-ax = 1.5f * cos(t);
-ay = 0.6f * sin(t * 1.3f);
-az = 1.5f * sin(t);
+  ax = 1.5f * cos(t);
+  ay = 0.6f * sin(t * 1.3f);
+  az = 1.5f * sin(t);
 
-// HUD-style labels at fixed raster positions
-glColor3f(0.92f, 0.95f, 0.98f);
-glRasterPos3f(-3.2f, 2.4f, 0.0f);
-label("t=%f", t);
-glRasterPos3f(-3.2f, 2.0f, 0.0f);
-label("ax=%f ay=%f", ax, ay);
-glRasterPos3f(-3.2f, 1.6f, 0.0f);
-label("az=%f n=%f m=%f", az, ax + ay, ax * az);
-glRasterPos3f(-3.2f, 1.2f, 0.0f);
-label("pct %% and %f %f %f %f", ax, ay, az, t);
+  // HUD-style labels at fixed raster positions
+  glColor3f(0.92f, 0.95f, 0.98f);
+  glRasterPos3f(-3.2f, 2.4f, 0.0f);
+  label("t=%f", t);
+  glRasterPos3f(-3.2f, 2.0f, 0.0f);
+  label("ax=%f ay=%f", ax, ay);
+  glRasterPos3f(-3.2f, 1.6f, 0.0f);
+  label("az=%f n=%f m=%f", az, ax + ay, ax * az);
+  glRasterPos3f(-3.2f, 1.2f, 0.0f);
+  label("pct %% and %f %f %f %f", ax, ay, az, t);
 
-// Moving body with attached label
-glPushMatrix();
-glTranslatef(ax, ay, az);
-glColor3f(1.00f, 0.35f, 0.20f);
-glutSolidCube(0.5f);
-glColor3f(0.92f, 0.95f, 0.98f);
-glRasterPos3f(0.4f, 0.4f, 0.0f);
-label("pos %f %f %f", ax, ay, az);
-glPopMatrix();
+  // Moving body with attached label
+  glPushMatrix();
+    glTranslatef(ax, ay, az);
+    glColor3f(1.00f, 0.35f, 0.20f);
+    glutSolidCube(0.5f);
+    glColor3f(0.92f, 0.95f, 0.98f);
+    glRasterPos3f(0.4f, 0.4f, 0.0f);
+    label("pos %f %f %f", ax, ay, az);
+  glPopMatrix();
 
-// Labels from a function + loop
-for(i, 0, 5) {
-  mark(cos(i * 1.256f + t * 0.5f) * 2.2f, sin(i * 0.9f + t) * 0.8f, sin(i * 1.256f + t * 0.5f) * 2.2f, i, sin(t + i));
-}
-
-// Orbit ring so labels have spatial context
-glColor3f(0.15f, 0.55f, 1.00f);
-glBegin(GL_LINE_LOOP);
-  for(i, 0, 48) {
-    glVertex3f(cos(i * TAU / 48.0f) * 2.2f, 0.0f, sin(i * TAU / 48.0f) * 2.2f);
+  // Labels from a function + loop
+  for(i, 0, 5) {
+    mark(cos(i * 1.256f + t * 0.5f) * 2.2f, sin(i * 0.9f + t) * 0.8f, sin(i * 1.256f + t * 0.5f) * 2.2f, i, sin(t + i));
   }
-glEnd();
+
+  // Orbit ring so labels have spatial context
+  glColor3f(0.15f, 0.55f, 1.00f);
+  glBegin(GL_LINE_LOOP);
+    for(i, 0, 48) {
+      glVertex3f(cos(i * TAU / 48.0f) * 2.2f, 0.0f, sin(i * TAU / 48.0f) * 2.2f);
+    }
+  glEnd();
 }

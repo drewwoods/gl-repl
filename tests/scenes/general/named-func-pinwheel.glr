@@ -37,25 +37,25 @@ rim(s) {
 }
 display() {
 
-glTranslatef(0.0f, 0.0f, -7.00f);   // @camera dist
-glRotatef(18.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+  glTranslatef(0.0f, 0.0f, -7.00f);   // @camera dist
+  glRotatef(18.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_BLEND);
-glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-for(i, 0, folds) {
-  if(fmod(i, 2) < 0.5) {
-    petal(i * 36, 2.05, 1.00, 0.35, 0.20);
-  } else {
-    petal(i * 36, 1.75, 0.15, 0.55, 1.00);
+  for(i, 0, folds) {
+    if(fmod(i, 2) < 0.5) {
+      petal(i * 36, 2.05, 1.00, 0.35, 0.20);
+    } else {
+      petal(i * 36, 1.75, 0.15, 0.55, 1.00);
+    }
   }
-}
 
-rim(0.85);
-hub();
+  rim(0.85);
+  hub();
 }

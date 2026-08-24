@@ -63,96 +63,96 @@ compareAndSwap(j) {
 
 display() {
 
-glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
-glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-count = clamp(round(count), 16, 48);
-totalSteps = count*(count - 1)*0.5;
-period = totalSteps/rate + hold;
-cycle = floor(t/period);
-steps = fmod(t, period)*rate;
+  count = clamp(round(count), 16, 48);
+  totalSteps = count*(count - 1)*0.5;
+  period = totalSteps/rate + hold;
+  cycle = floor(t/period);
+  steps = fmod(t, period)*rate;
 
-// --- Render State -------------------
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_POINT_SMOOTH);
+  // --- Render State -------------------
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_POINT_SMOOTH);
 
-// --- Scene Geometry -----------------
+  // --- Scene Geometry -----------------
 
-// A fresh deterministic shuffle across scratch arrays A, B, C
-for(i, 0, count) {
-  if(i < 16) {
-    A[i] = rand(i, cycle);
-  } else if(i < 32) {
-    k = max(0, i - 16);
-    B[k] = rand(i, cycle);
-  } else {
-    k = max(0, i - 32);
-    C[k] = rand(i, cycle);
-  }
-}
-
-// Pass p bubbles the largest unsorted value to the right;
-// elements at the end are already sorted so each pass stops at count-1-p
-step = 0;
-cur = 0;
-curPass = 0;
-for(p, 0, count - 1) {
-  for(j, 0, count - 1 - p) {
-    if(step < steps) {
-      compareAndSwap(j);
-    }
-    if(step == floor(steps)) {
-      cur = j;
-      curPass = p;
-    }
-    step = step + 1;
-  }
-}
-
-barWidth = 6.4/count;
-barHalf = barWidth*0.36;
-
-// Bars: height and color both follow the value, so sorted reads as a
-// staircase with a smooth left-to-right gradient
-glBegin(GL_QUADS);
+  // A fresh deterministic shuffle across scratch arrays A, B, C
   for(i, 0, count) {
     if(i < 16) {
-      s = A[i];
+      A[i] = rand(i, cycle);
     } else if(i < 32) {
       k = max(0, i - 16);
-      s = B[k];
+      B[k] = rand(i, cycle);
     } else {
       k = max(0, i - 32);
-      s = C[k];
+      C[k] = rand(i, cycle);
     }
-    glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
-    x = (i - (count - 1)*0.5)*barWidth;
-    h = 0.3 + 2.4*s;
-    glVertex3f(x - barHalf, -1.5, 0);
-    glVertex3f(x + barHalf, -1.5, 0);
-    glVertex3f(x + barHalf, -1.5 + h, 0);
-    glVertex3f(x - barHalf, -1.5 + h, 0);
   }
-glEnd();
 
-if(steps < totalSteps) {
-  // Two dots mark the pair the sort is comparing right now
-  glPointSize(7);
-  glColor3f(1, 0.85, 0.15);
-  glBegin(GL_POINTS);
-    glVertex3f((cur - (count - 1)*0.5)*barWidth, -1.75, 0);
-    glVertex3f((cur + 1 - (count - 1)*0.5)*barWidth, -1.75, 0);
+  // Pass p bubbles the largest unsorted value to the right;
+  // elements at the end are already sorted so each pass stops at count-1-p
+  step = 0;
+  cur = 0;
+  curPass = 0;
+  for(p, 0, count - 1) {
+    for(j, 0, count - 1 - p) {
+      if(step < steps) {
+        compareAndSwap(j);
+      }
+      if(step == floor(steps)) {
+        cur = j;
+        curPass = p;
+      }
+      step = step + 1;
+    }
+  }
+
+  barWidth = 6.4/count;
+  barHalf = barWidth*0.36;
+
+  // Bars: height and color both follow the value, so sorted reads as a
+  // staircase with a smooth left-to-right gradient
+  glBegin(GL_QUADS);
+    for(i, 0, count) {
+      if(i < 16) {
+        s = A[i];
+      } else if(i < 32) {
+        k = max(0, i - 16);
+        s = B[k];
+      } else {
+        k = max(0, i - 32);
+        s = C[k];
+      }
+      glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
+      x = (i - (count - 1)*0.5)*barWidth;
+      h = 0.3 + 2.4*s;
+      glVertex3f(x - barHalf, -1.5, 0);
+      glVertex3f(x + barHalf, -1.5, 0);
+      glVertex3f(x + barHalf, -1.5 + h, 0);
+      glVertex3f(x - barHalf, -1.5 + h, 0);
+    }
   glEnd();
-  glColor3f(0.92, 0.95, 0.98);
-  glRasterPos3f(-3.4, 1.7, 0);
-  label("pass %f of %f", curPass + 1, count - 1);
-} else {
-  glColor3f(0.92, 0.95, 0.98);
-  glRasterPos3f(-3.4, 1.7, 0);
-  label("sorted");
-}
+
+  if(steps < totalSteps) {
+    // Two dots mark the pair the sort is comparing right now
+    glPointSize(7);
+    glColor3f(1, 0.85, 0.15);
+    glBegin(GL_POINTS);
+      glVertex3f((cur - (count - 1)*0.5)*barWidth, -1.75, 0);
+      glVertex3f((cur + 1 - (count - 1)*0.5)*barWidth, -1.75, 0);
+    glEnd();
+    glColor3f(0.92, 0.95, 0.98);
+    glRasterPos3f(-3.4, 1.7, 0);
+    label("pass %f of %f", curPass + 1, count - 1);
+  } else {
+    glColor3f(0.92, 0.95, 0.98);
+    glRasterPos3f(-3.4, 1.7, 0);
+    label("sorted");
+  }
 }

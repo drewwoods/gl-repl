@@ -148,49 +148,49 @@ launch(i, mirror) {
   }
 }
 display() {
-glTranslatef(0.0000f, 0.0000f, -24.0000f);   // @camera dist
-glRotatef(6.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0000f, -5.0000f, 0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -24.0000f);   // @camera dist
+  glRotatef(6.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0000f, -5.0000f, 0.0000f);   // @camera pan
 
-// Keep config sensible
-rise = clamp(rise, 0.1, 2.0);
-bright = clamp(bright, 0.1, 10.0);
-lanterns = max(0, round(lanterns));
+  // Keep config sensible
+  rise = clamp(rise, 0.1, 2.0);
+  bright = clamp(bright, 0.1, 10.0);
+  lanterns = max(0, round(lanterns));
 
-// Lantern Festival - first night.
-// Paper lanterns rise off dark water into a dusk sky: additive glow,
-// wobbling reflections under a translucent water plane, twinkling
-// stars, and firelight glints riding the ripples. Every lantern is
-// deterministic - rand(seed, i) - so the flock repeats exactly, and a
-// wrapped lantern respawns at a reshuffled spot while faded to zero.
+  // Lantern Festival - first night.
+  // Paper lanterns rise off dark water into a dusk sky: additive glow,
+  // wobbling reflections under a translucent water plane, twinkling
+  // stars, and firelight glints riding the ripples. Every lantern is
+  // deterministic - rand(seed, i) - so the flock repeats exactly, and a
+  // wrapped lantern respawns at a reshuffled spot while faded to zero.
 
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glDisable(GL_LIGHTING);
-glEnable(GL_BLEND);
-glEnable(GL_POINT_SMOOTH);
-glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){0.3, 0, 0.004});
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glDisable(GL_LIGHTING);
+  glEnable(GL_BLEND);
+  glEnable(GL_POINT_SMOOTH);
+  glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){0.3, 0, 0.004});
 
-sky();
-stars();
-// Reflections go down first, under the water plane...
-glDepthMask(GL_FALSE);
-glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-for(i, 0, lanterns) {
-  launch(i, 1);
-}
-// ...then the translucent surface seals them in...
-glDepthMask(GL_TRUE);
-glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-water();
-// ...and the real flock burns additively above it.
-glDepthMask(GL_FALSE);
-glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-glints();
-for(i, 0, lanterns) {
-  launch(i, 0);
-}
-glDepthMask(GL_TRUE);
+  sky();
+  stars();
+  // Reflections go down first, under the water plane...
+  glDepthMask(GL_FALSE);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  for(i, 0, lanterns) {
+    launch(i, 1);
+  }
+  // ...then the translucent surface seals them in...
+  glDepthMask(GL_TRUE);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  water();
+  // ...and the real flock burns additively above it.
+  glDepthMask(GL_FALSE);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glints();
+  for(i, 0, lanterns) {
+    launch(i, 0);
+  }
+  glDepthMask(GL_TRUE);
 }

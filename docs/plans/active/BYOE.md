@@ -682,7 +682,7 @@ rewrites spacing, indentation and `1.0f` literals.
   the if/else-if/else round-trip block. That is not a document-wide guarantee.
   If BYOE promises the file stops churning, **that needs a new fixed-point
   test over the scene corpus** — it is in the test list below.
-- `.glr` survives best (`src/repl/export_glr.c:36-53`; indent is
+- `.glr` survives best (`src/repl/export_glr.c`; its C-like display indent is
   presentation-only and round-trips exactly).
 - Expressions with visible variables keep verbatim text (`preserve_expr` /
   `has_vars`, `src/repl/normalize.h:17-23`).

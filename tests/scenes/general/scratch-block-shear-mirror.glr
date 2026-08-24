@@ -42,50 +42,50 @@ buildLift() {
 }
 display() {
 
-glClearColor(0.05, 0.06, 0.09, 1);
-glClear(GL_COLOR_BUFFER_BIT);
-glClear(GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glClearColor(0.05, 0.06, 0.09, 1);
+  glClear(GL_COLOR_BUFFER_BIT);
+  glClear(GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-shear = 0.45 * sin(t * 0.7);
-bob = 0.6 * sin(t * 1.3);
-tick = fmod(t, TAU);
+  shear = 0.45 * sin(t * 0.7);
+  bob = 0.6 * sin(t * 1.3);
+  tick = fmod(t, TAU);
 
-buildShear();
-buildMirror();
-buildLift();
+  buildShear();
+  buildMirror();
+  buildLift();
 
-// -- Sheared, lifted teapot -----------------------------
-glPushMatrix();
-  glTranslatef(-1.6, 0.0, 0.0);
-  glMultMatrixf(C);
-  glMultMatrixf(A);
-  glColor3f(0.95, 0.72, 0.28);
-  glutSolidTeapot(0.75);
-glPopMatrix();
+  // -- Sheared, lifted teapot -----------------------------
+  glPushMatrix();
+    glTranslatef(-1.6, 0.0, 0.0);
+    glMultMatrixf(C);
+    glMultMatrixf(A);
+    glColor3f(0.95, 0.72, 0.28);
+    glutSolidTeapot(0.75);
+  glPopMatrix();
 
-// -- Its mirror image, sheared the same way -------------
-glPushMatrix();
-  glTranslatef(1.6, 0.0, 0.0);
-  glMultMatrixf(B);
-  glMultMatrixf(A);
-  glColor3f(0.38, 0.72, 0.95);
-  glutSolidTeapot(0.75);
-glPopMatrix();
+  // -- Its mirror image, sheared the same way -------------
+  glPushMatrix();
+    glTranslatef(1.6, 0.0, 0.0);
+    glMultMatrixf(B);
+    glMultMatrixf(A);
+    glColor3f(0.38, 0.72, 0.95);
+    glutSolidTeapot(0.75);
+  glPopMatrix();
 
-// -- Ground line so the shear reads against something ---
-glDisable(GL_LIGHTING);
-glLineWidth(1.5);
-glColor3f(0.28, 0.30, 0.36);
-glBegin(GL_LINES);
-  for(i, 0, 13) {
-    glVertex3f(-3.0 + i * 0.5, -1.1, -1.5);
-    glVertex3f(-3.0 + i * 0.5, -1.1, 1.5);
-  }
-glEnd();
-glEnable(GL_LIGHTING);
+  // -- Ground line so the shear reads against something ---
+  glDisable(GL_LIGHTING);
+  glLineWidth(1.5);
+  glColor3f(0.28, 0.30, 0.36);
+  glBegin(GL_LINES);
+    for(i, 0, 13) {
+      glVertex3f(-3.0 + i * 0.5, -1.1, -1.5);
+      glVertex3f(-3.0 + i * 0.5, -1.1, 1.5);
+    }
+  glEnd();
+  glEnable(GL_LIGHTING);
 
-glColor3f(0.7, 0.7, 0.75);
-glRasterPos3f(-1.1, 1.9, 0.0);
-label("shear %f  lift %f", shear, bob);
+  glColor3f(0.7, 0.7, 0.75);
+  glRasterPos3f(-1.1, 1.9, 0.0);
+  label("shear %f  lift %f", shear, bob);
 }

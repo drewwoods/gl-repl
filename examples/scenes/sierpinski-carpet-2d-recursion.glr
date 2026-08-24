@@ -32,16 +32,16 @@ carpet(depth, size, u) {
   }
 }
 display() {
-glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
-glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
 
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_NORMALIZE);
-glRotatef(sin(t*0.35)*10, 0, 0, 1);
-carpet(2, 3.6, 0.5);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_NORMALIZE);
+  glRotatef(sin(t*0.35)*10, 0, 0, 1);
+  carpet(2, 3.6, 0.5);
 }

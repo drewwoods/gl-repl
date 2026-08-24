@@ -323,93 +323,93 @@ hulls() {
 }
 display() {
 
-glTranslatef(0, 0, -16); // @camera dist
-glRotatef(7, 1, 0, 0); // @camera rx
-glRotatef(-34, 0, 1, 0); // @camera ry
-glTranslatef(0, -1.5, 0); // @camera pan
+  glTranslatef(0, 0, -16); // @camera dist
+  glRotatef(7, 1, 0, 0); // @camera rx
+  glRotatef(-34, 0, 1, 0); // @camera ry
+  glTranslatef(0, -1.5, 0); // @camera pan
 
-glClearColor(0.05, 0.06, 0.08, 1);
-glClearStencil(0);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glDepthFunc(GL_LESS);
-glShadeModel(GL_SMOOTH);
-glFrontFace(GL_CCW);
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClearStencil(0);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glDepthFunc(GL_LESS);
+  glShadeModel(GL_SMOOTH);
+  glFrontFace(GL_CCW);
 
-// Held above every caster and on the camera's side of them, so the hulls run
-// down and away from the eye. z-pass requires that; the finite-extrusion twin
-// counts z-fail and is free of the constraint.
-lx = 2.6 + 1.8*sin(0.50*t);
-ly = 3.9 + 0.5*sin(0.31*t);
-lz = 3.6 + 1.2*cos(0.40*t);
-sA = 24*t;
-sB = -31*t;
-sC = 45*t;
+  // Held above every caster and on the camera's side of them, so the hulls run
+  // down and away from the eye. z-pass requires that; the finite-extrusion twin
+  // counts z-fail and is free of the constraint.
+  lx = 2.6 + 1.8*sin(0.50*t);
+  ly = 3.9 + 0.5*sin(0.31*t);
+  lz = 3.6 + 1.2*cos(0.40*t);
+  sA = 24*t;
+  sB = -31*t;
+  sC = 45*t;
 
-// Pass 1: shadowed everywhere. This lays down the depth buffer the stencil
-// pass tests against, so it has to draw every surface a shadow can fall on.
-glDisable(GL_STENCIL_TEST);
-glDisable(GL_LIGHTING);
-glDepthMask(GL_TRUE);
-room(0.24);
-occluderCubes(0.24);
-
-// Pass 2: count in front, all three hulls into one tally. Front faces that
-// pass the depth test add, back faces that pass subtract, so the count is of
-// hull boundaries between the eye and the nearest surface - a quantity that
-// never reads the clipped-away far end. The sweeps are kept whole, every INCR
-// before any DECR, so the count never has to survive a decrement at zero.
-glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-glDepthMask(GL_FALSE);
-glEnable(GL_STENCIL_TEST);
-glStencilMask(0xFF);
-glStencilFunc(GL_ALWAYS, 0, 0xFF);
-glEnable(GL_CULL_FACE);
-glCullFace(GL_BACK);
-glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
-hulls();
-glCullFace(GL_FRONT);
-glStencilOp(GL_KEEP, GL_KEEP, GL_DECR);
-hulls();
-glDisable(GL_CULL_FACE);
-glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-glDepthMask(GL_TRUE);
-
-// Pass 3: repaint the lit version only where the count came back to zero.
-// Zero, not "less than one" - so two overlapping shadows are the same shade
-// as one. Depth-equal against pass 1 keeps it to pixels already drawn.
-glStencilFunc(GL_EQUAL, 0, 0xFF);
-glDepthFunc(GL_EQUAL);
-glDepthMask(GL_FALSE);
-room(1);
-occluderCubes(1);
-glDepthMask(GL_TRUE);
-glDepthFunc(GL_LESS);
-glDisable(GL_STENCIL_TEST);
-
-// The hulls themselves, drawn translucent so the counted volumes are visible
-// rather than inferred. They run to the far clip plane now rather than
-// stopping at a chosen length - the w = 0 extrusion made visible.
-if(showVolume > 0.5) {
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-  glDepthMask(GL_FALSE);
-  glColor4f(1.00, 0.85, 0.15, 0.035);
-  hulls();
-  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-  glLineWidth(1);
-  glColor4f(1.00, 0.85, 0.15, 0.11);
-  hulls();
-  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  // Pass 1: shadowed everywhere. This lays down the depth buffer the stencil
+  // pass tests against, so it has to draw every surface a shadow can fall on.
+  glDisable(GL_STENCIL_TEST);
+  glDisable(GL_LIGHTING);
   glDepthMask(GL_TRUE);
-  glDisable(GL_BLEND);
-}
+  room(0.24);
+  occluderCubes(0.24);
 
-// The lamp, so each silhouette's response to it reads as cause and effect.
-glColor3f(1.00, 0.85, 0.15);
-glPushMatrix();
-  glTranslatef(lx, ly, lz);
-  glutSolidSphere(0.13, 12, 10);
-glPopMatrix();
+  // Pass 2: count in front, all three hulls into one tally. Front faces that
+  // pass the depth test add, back faces that pass subtract, so the count is of
+  // hull boundaries between the eye and the nearest surface - a quantity that
+  // never reads the clipped-away far end. The sweeps are kept whole, every INCR
+  // before any DECR, so the count never has to survive a decrement at zero.
+  glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+  glDepthMask(GL_FALSE);
+  glEnable(GL_STENCIL_TEST);
+  glStencilMask(0xFF);
+  glStencilFunc(GL_ALWAYS, 0, 0xFF);
+  glEnable(GL_CULL_FACE);
+  glCullFace(GL_BACK);
+  glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
+  hulls();
+  glCullFace(GL_FRONT);
+  glStencilOp(GL_KEEP, GL_KEEP, GL_DECR);
+  hulls();
+  glDisable(GL_CULL_FACE);
+  glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+  glDepthMask(GL_TRUE);
+
+  // Pass 3: repaint the lit version only where the count came back to zero.
+  // Zero, not "less than one" - so two overlapping shadows are the same shade
+  // as one. Depth-equal against pass 1 keeps it to pixels already drawn.
+  glStencilFunc(GL_EQUAL, 0, 0xFF);
+  glDepthFunc(GL_EQUAL);
+  glDepthMask(GL_FALSE);
+  room(1);
+  occluderCubes(1);
+  glDepthMask(GL_TRUE);
+  glDepthFunc(GL_LESS);
+  glDisable(GL_STENCIL_TEST);
+
+  // The hulls themselves, drawn translucent so the counted volumes are visible
+  // rather than inferred. They run to the far clip plane now rather than
+  // stopping at a chosen length - the w = 0 extrusion made visible.
+  if(showVolume > 0.5) {
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    glDepthMask(GL_FALSE);
+    glColor4f(1.00, 0.85, 0.15, 0.035);
+    hulls();
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glLineWidth(1);
+    glColor4f(1.00, 0.85, 0.15, 0.11);
+    hulls();
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+  }
+
+  // The lamp, so each silhouette's response to it reads as cause and effect.
+  glColor3f(1.00, 0.85, 0.15);
+  glPushMatrix();
+    glTranslatef(lx, ly, lz);
+    glutSolidSphere(0.13, 12, 10);
+  glPopMatrix();
 }

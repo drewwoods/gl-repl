@@ -106,87 +106,87 @@ shadowMask() {
 }
 display() {
 
-glTranslatef(0, 0, -12.5); // @camera dist
-glRotatef(22, 1, 0, 0); // @camera rx
-glRotatef(-28, 0, 1, 0); // @camera ry
-glTranslatef(0, -0.8, 0); // @camera pan
+  glTranslatef(0, 0, -12.5); // @camera dist
+  glRotatef(22, 1, 0, 0); // @camera rx
+  glRotatef(-28, 0, 1, 0); // @camera ry
+  glTranslatef(0, -0.8, 0); // @camera pan
 
-glClearColor(0.05, 0.06, 0.08, 1);
-glClearStencil(0);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_NORMALIZE);
-glShadeModel(GL_SMOOTH);
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClearStencil(0);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_NORMALIZE);
+  glShadeModel(GL_SMOOTH);
 
-// The virtual lamp follows the same pattern as the planar-shadow example:
-// expressions update both the marker and the generated shadow every frame.
-lx = 3.5*cos(0.45*t);
-ly = 3.5 + sin(0.32*t);
-lz = 2.8*sin(0.50*t + 0.80);
+  // The virtual lamp follows the same pattern as the planar-shadow example:
+  // expressions update both the marker and the generated shadow every frame.
+  lx = 3.5*cos(0.45*t);
+  ly = 3.5 + sin(0.32*t);
+  lz = 2.8*sin(0.50*t + 0.80);
 
-// Pass 1: an unlit base establishes the depth buffer everywhere the room
-// and cube are visible. The later lit pass is depth-equal to this pass.
-glDisable(GL_STENCIL_TEST);
-glDisable(GL_LIGHTING);
-glDepthFunc(GL_LESS);
-glDepthMask(GL_TRUE);
-glColor3f(0.28 * 0.10, 0.28 * 0.95, 0.28 * 0.85);
-room();
-glColor3f(0.20 * 1.00, 0.20 * 0.35, 0.20 * 0.20);
-cube();
+  // Pass 1: an unlit base establishes the depth buffer everywhere the room
+  // and cube are visible. The later lit pass is depth-equal to this pass.
+  glDisable(GL_STENCIL_TEST);
+  glDisable(GL_LIGHTING);
+  glDepthFunc(GL_LESS);
+  glDepthMask(GL_TRUE);
+  glColor3f(0.28 * 0.10, 0.28 * 0.95, 0.28 * 0.85);
+  room();
+  glColor3f(0.20 * 1.00, 0.20 * 0.35, 0.20 * 0.20);
+  cube();
 
-// Pass 2: the three moving planar projections replace stencil with 1 where
-// they land on the already-filled receiver depth.
-glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-glDepthMask(GL_FALSE);
-glEnable(GL_STENCIL_TEST);
-glStencilMask(0xFF);
-glStencilFunc(GL_ALWAYS, 1, 0xFF);
-glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-glDisable(GL_LIGHTING);
-glDepthFunc(GL_LEQUAL);
-glEnable(GL_POLYGON_OFFSET_FILL);
-glPolygonOffset(-1, -1);
-shadowMask();
-glDisable(GL_POLYGON_OFFSET_FILL);
-glDepthFunc(GL_LESS);
-glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-glDepthMask(GL_TRUE);
-glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+  // Pass 2: the three moving planar projections replace stencil with 1 where
+  // they land on the already-filled receiver depth.
+  glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+  glDepthMask(GL_FALSE);
+  glEnable(GL_STENCIL_TEST);
+  glStencilMask(0xFF);
+  glStencilFunc(GL_ALWAYS, 1, 0xFF);
+  glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+  glDisable(GL_LIGHTING);
+  glDepthFunc(GL_LEQUAL);
+  glEnable(GL_POLYGON_OFFSET_FILL);
+  glPolygonOffset(-1, -1);
+  shadowMask();
+  glDisable(GL_POLYGON_OFFSET_FILL);
+  glDepthFunc(GL_LESS);
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+  glDepthMask(GL_TRUE);
+  glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
 
-// Pass 3: paint the bright scene only where the stencil count is zero. This
-// emulates illumination from the virtual lamp without a movable glLightfv.
-glDisable(GL_LIGHTING);
-glStencilFunc(GL_EQUAL, 0, 0xFF);
-glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-glDepthFunc(GL_EQUAL);
-glDepthMask(GL_FALSE);
-glColor3f(0.10, 0.95, 0.85);
-room();
-glColor3f(1.00, 0.35, 0.20);
-cube();
-glDepthMask(GL_TRUE);
-glDepthFunc(GL_LESS);
+  // Pass 3: paint the bright scene only where the stencil count is zero. This
+  // emulates illumination from the virtual lamp without a movable glLightfv.
+  glDisable(GL_LIGHTING);
+  glStencilFunc(GL_EQUAL, 0, 0xFF);
+  glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+  glDepthFunc(GL_EQUAL);
+  glDepthMask(GL_FALSE);
+  glColor3f(0.10, 0.95, 0.85);
+  room();
+  glColor3f(1.00, 0.35, 0.20);
+  cube();
+  glDepthMask(GL_TRUE);
+  glDepthFunc(GL_LESS);
 
-// A second stencil-tested pass makes the shadow readable on the floor and
-// both walls without relying on a screen-space projection matrix.
-glStencilFunc(GL_NOTEQUAL, 0, 0xFF);
-glDisable(GL_LIGHTING);
-glEnable(GL_BLEND);
-glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-glDepthFunc(GL_EQUAL);
-glDepthMask(GL_FALSE);
-glColor4f(0.05, 0.06, 0.08, 0.38);
-room();
-glDisable(GL_BLEND);
-glDepthMask(GL_TRUE);
-glDepthFunc(GL_LESS);
-glDisable(GL_STENCIL_TEST);
+  // A second stencil-tested pass makes the shadow readable on the floor and
+  // both walls without relying on a screen-space projection matrix.
+  glStencilFunc(GL_NOTEQUAL, 0, 0xFF);
+  glDisable(GL_LIGHTING);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glDepthFunc(GL_EQUAL);
+  glDepthMask(GL_FALSE);
+  glColor4f(0.05, 0.06, 0.08, 0.38);
+  room();
+  glDisable(GL_BLEND);
+  glDepthMask(GL_TRUE);
+  glDepthFunc(GL_LESS);
+  glDisable(GL_STENCIL_TEST);
 
-// The marker makes the virtual light's orbit and the shadow response explicit.
-glColor3f(1.00, 0.85, 0.15);
-glPushMatrix();
-  glTranslatef(lx, ly, lz);
-  glutSolidSphere(0.14, 12, 10);
-glPopMatrix();
+  // The marker makes the virtual light's orbit and the shadow response explicit.
+  glColor3f(1.00, 0.85, 0.15);
+  glPushMatrix();
+    glTranslatef(lx, ly, lz);
+    glutSolidSphere(0.14, 12, 10);
+  glPopMatrix();
 }

@@ -13,11 +13,11 @@
  *     float a, b;                  (declarations)
  *     func0(x) { ... }             (function definitions)
  *     display() {                   (required in every scene)
- *     glTranslatef(...);  // @camera dist
- *     glRotatef(...);     // @camera rx
- *     glRotatef(...);     // @camera ry
- *     glTranslatef(...);  // @camera pan
- *     <the body>
+ *       glTranslatef(...);  // @camera dist
+ *       glRotatef(...);     // @camera rx
+ *       glRotatef(...);     // @camera ry
+ *       glTranslatef(...);  // @camera pan
+ *       <the body>
  *     }
  *
  * That order - declarations, then function definitions, then camera and
@@ -36,33 +36,25 @@
  */
 #include "repl/export_internal.h"
 
-/* Body rows carry display()'s 2-space base indent in memory; declarations
- * and user functions do not. A .glr scene is authored at column 0 even when
- * the .glr writer always writes the explicit display wrapper. The loader
- * re-derives every indent level from block structure as it feeds lines back in,
- * so shedding the base indent here is presentation-only and round-trips
- * exactly. */
-#define REPL_GLR_BASE_INDENT 2
+/* Most document rows already carry their canonical C-like indentation.
+ * Leading prose is the exception: the boundary walk can keep it at file scope
+ * even when the phase writer attaches it to the first body command. Enforce a
+ * minimum display base for camera/body output without disturbing deeper
+ * nesting; declarations and functions pass zero and remain verbatim. */
+#define REPL_GLR_DISPLAY_INDENT 2
 
-/* `strip` shears the display() body's base indent off a line. It is NOT
- * unconditional: only rows that render inside display() carry that base.
- * Declarations and function definitions are file-scope and already sit at
- * column 0 in the document, so stripping them again would eat a real
- * nesting level - a function body would flatten onto its header. The
- * generated camera block is not a document row at all; its lines are
- * built with two spaces and always strip. */
-static void glr_scene_write_line(FILE *f, const char *line, int strip) {
-    int skip = 0;
+static void glr_scene_write_line(FILE *f, const char *line, int min_indent) {
+    int indent = 0;
 
-    if (!line) {
+    if (!line || !line[0]) {
         fprintf(f, "\n");
         return;
     }
-    if (strip) {
-        while (skip < REPL_GLR_BASE_INDENT && line[skip] == ' ')
-            skip++;
-    }
-    fprintf(f, "%s\n", line + skip);
+    while (line[indent] == ' ')
+        indent++;
+    for (int pad = indent; pad < min_indent; pad++)
+        fputc(' ', f);
+    fprintf(f, "%s\n", line);
 }
 
 /* Emit `// @cfg slug = value` for every scene-subset slug whose live value
@@ -111,7 +103,8 @@ static int glr_scene_write_camera(FILE *f, int leading_blank) {
         fprintf(f, "\n");
     for (int i = 0; i < REPL_EXPORT_CAMERA_LINES; i++)
         if (IMPORT_EXPORT_VIEW.cam_lines[i][0])
-            glr_scene_write_line(f, IMPORT_EXPORT_VIEW.cam_lines[i], 1);
+            glr_scene_write_line(f, IMPORT_EXPORT_VIEW.cam_lines[i],
+                                 REPL_GLR_DISPLAY_INDENT);
     return 1;
 }
 
@@ -189,10 +182,8 @@ static void glr_scene_write_phase(FILE *f, GlrRowPhase want,
     int count = repl_state_document_count();
     int pending_start = -1;   /* first row of the current comment/blank run */
     int func_depth = 0;
-    /* Only body rows carry the display() base indent - see
-     * glr_scene_write_line. */
-    int strip = (want == GLR_ROW_PHASE_BODY);
-
+    int min_indent = want == GLR_ROW_PHASE_BODY
+                         ? REPL_GLR_DISPLAY_INDENT : 0;
     for (int cmd_idx = 0; cmd_idx < count; cmd_idx++) {
         GlrRowPhase phase;
         int was_in_func;
@@ -222,9 +213,9 @@ static void glr_scene_write_phase(FILE *f, GlrRowPhase want,
                     skip_leading_blanks--;
                     continue;
                 }
-                glr_scene_write_line(f, export_document_text(run), strip);
+                glr_scene_write_line(f, export_document_text(run), min_indent);
             }
-            glr_scene_write_line(f, export_document_text(cmd_idx), strip);
+            glr_scene_write_line(f, export_document_text(cmd_idx), min_indent);
             skip_leading_blanks = 0;
         }
         pending_start = -1;
@@ -235,7 +226,7 @@ static void glr_scene_write_phase(FILE *f, GlrRowPhase want,
     if (want == GLR_ROW_PHASE_BODY && pending_start >= 0) {
         for (int run = pending_start; run < count; run++)
             if (cmds[run].valid)
-                glr_scene_write_line(f, export_document_text(run), strip);
+                glr_scene_write_line(f, export_document_text(run), min_indent);
     }
 }
 

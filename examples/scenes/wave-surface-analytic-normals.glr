@@ -14,60 +14,60 @@ static float half;
 static float x0, x1, z, y0, y1;
 static float slope_x0, slope_x1, slope_z0, slope_z1;
 static float color0, color1;
-
 display() {
-glTranslatef(0.0000f, 0.0000f, -5.0000f);   // @camera dist
-glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-// The same animated surface, now lit with one analytic normal per vertex.
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glTranslatef(0.0000f, 0.0000f, -5.0000f);   // @camera dist
+  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(30.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glEnable(GL_COLOR_MATERIAL);
-glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
-glEnable(GL_LIGHTING);
-glEnable(GL_NORMALIZE);
-glEnable(GL_LIGHT0);
-glEnable(GL_LIGHT1);
-glEnable(GL_LIGHT2);
-glEnable(GL_LIGHT3);
-glShadeModel(GL_SMOOTH);
+  // The same animated surface, now lit with one analytic normal per vertex.
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-step_size = size / steps;
-half = size * 0.5;
+  glEnable(GL_COLOR_MATERIAL);
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_NORMALIZE);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT1);
+  glEnable(GL_LIGHT2);
+  glEnable(GL_LIGHT3);
+  glShadeModel(GL_SMOOTH);
 
-for(i, 0, steps) {
-  x0 = -half + i * step_size;
-  x1 = x0 + step_size;
+  step_size = size / steps;
+  half = size * 0.5;
 
-  glBegin(GL_TRIANGLE_STRIP);
-    for(j, 0, steps + 1) {
-      z = -half + j * step_size;
+  for(i, 0, steps) {
+    x0 = -half + i * step_size;
+    x1 = x0 + step_size;
 
-      y0 = amplitude * sin(x0 * frequency + t) * cos(z * frequency + z_phase * t);
-      y1 = amplitude * sin(x1 * frequency + t) * cos(z * frequency + z_phase * t);
+    glBegin(GL_TRIANGLE_STRIP);
+      for(j, 0, steps + 1) {
+        z = -half + j * step_size;
 
-      // For y = f(x,z), the surface normal is (-df/dx, 1, -df/dz).
-      // Emit the high-x edge first so the upward-facing triangles are CCW.
-      slope_x1 = amplitude * frequency * cos(x1 * frequency + t) * cos(z * frequency + z_phase * t);
-      slope_z1 = -amplitude * frequency * sin(x1 * frequency + t) * sin(z * frequency + z_phase * t);
-      glNormal3f(-slope_x1, 1, -slope_z1);
-      color1 = 0.5 + 0.5 * y1 / amplitude;
-      glColor3f(1 - 0.85 * color1, 0.35 + 0.2 * color1, 0.2 + 0.8 * color1); // CORAL -> AZURE
-      glVertex3f(x1, y1, z);
+        y0 = amplitude * sin(x0 * frequency + t) * cos(z * frequency + z_phase * t);
+        y1 = amplitude * sin(x1 * frequency + t) * cos(z * frequency + z_phase * t);
 
-      slope_x0 = amplitude * frequency * cos(x0 * frequency + t) * cos(z * frequency + z_phase * t);
-      slope_z0 = -amplitude * frequency * sin(x0 * frequency + t) * sin(z * frequency + z_phase * t);
-      glNormal3f(-slope_x0, 1, -slope_z0);
-      color0 = 0.5 + 0.5 * y0 / amplitude;
-      glColor3f(1 - 0.85 * color0, 0.35 + 0.2 * color0, 0.2 + 0.8 * color0); // CORAL -> AZURE
-      glVertex3f(x0, y0, z);
-    }
-  glEnd();
-}
+        // For y = f(x,z), the surface normal is (-df/dx, 1, -df/dz).
+        // Emit the high-x edge first so the upward-facing triangles are CCW.
+        slope_x1 = amplitude * frequency * cos(x1 * frequency + t) * cos(z * frequency + z_phase * t);
+        slope_z1 = -amplitude * frequency * sin(x1 * frequency + t) * sin(z * frequency + z_phase * t);
+        glNormal3f(-slope_x1, 1, -slope_z1);
+        color1 = 0.5 + 0.5 * y1 / amplitude;
+        glColor3f(1 - 0.85 * color1, 0.35 + 0.2 * color1, 0.2 + 0.8 * color1); // CORAL -> AZURE
+        glVertex3f(x1, y1, z);
+
+        slope_x0 = amplitude * frequency * cos(x0 * frequency + t) * cos(z * frequency + z_phase * t);
+        slope_z0 = -amplitude * frequency * sin(x0 * frequency + t) * sin(z * frequency + z_phase * t);
+        glNormal3f(-slope_x0, 1, -slope_z0);
+        color0 = 0.5 + 0.5 * y0 / amplitude;
+        glColor3f(1 - 0.85 * color0, 0.35 + 0.2 * color0, 0.2 + 0.8 * color0); // CORAL -> AZURE
+        glVertex3f(x0, y0, z);
+      }
+    glEnd();
+  }
 }

@@ -26,15 +26,15 @@ sierpinski(x, y, size, depth) {
 }
 display() {
 
-glTranslatef(0.0f, 0.0f, -5.50f);   // @camera dist
-glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, -0.5f, 0.0f);   // @camera pan
+  glTranslatef(0.0f, 0.0f, -5.50f);   // @camera dist
+  glRotatef(0.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, -0.5f, 0.0f);   // @camera pan
 
-glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glClearColor(0.05f, 0.06f, 0.08f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-// Pulse the color slowly between CORAL and VIOLET
-glColor3f(1.00f - 0.45f * sin(t * 0.5f), 0.35f - 0.05f * sin(t * 0.5f), 0.20f + 0.75f * sin(t * 0.5f));
-sierpinski(0.0f, 0.0f, 2.2f, 4);
+  // Pulse the color slowly between CORAL and VIOLET
+  glColor3f(1.00f - 0.45f * sin(t * 0.5f), 0.35f - 0.05f * sin(t * 0.5f), 0.20f + 0.75f * sin(t * 0.5f));
+  sierpinski(0.0f, 0.0f, 2.2f, 4);
 }

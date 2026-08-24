@@ -2568,6 +2568,12 @@ int main(void) {
             ASSERT_TRUE("function-free export-glr writes display frame",
                         strstr(file_buf, "display() {\n") != NULL &&
                         strstr(file_buf, "\n}\n") != NULL);
+            ASSERT_TRUE("export-glr indents display body comments",
+                        strstr(file_buf,
+                               "\n  // the word infinity") != NULL);
+            ASSERT_TRUE("export-glr indents display body commands",
+                        strstr(file_buf,
+                               "\n  glClear(GL_COLOR_BUFFER_BIT);\n") != NULL);
             ASSERT_TRUE("export-glr keeps 'infinity' in comment",
                         strstr(file_buf, "infinity") != NULL);
             ASSERT_TRUE("export-glr keeps 'inf' in comment",

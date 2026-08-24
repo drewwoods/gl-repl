@@ -301,180 +301,180 @@ fire_flies(num) {
   glPopAttrib();
 }
 display() {
-glTranslatef(0.0000f, 0.0000f, -9.5000f);   // @camera dist
-glRotatef(26.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(-20.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -9.5000f);   // @camera dist
+  glRotatef(26.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(-20.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-// --- Render State -------------------
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  // --- Render State -------------------
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-glEnable(GL_DEPTH_TEST);
-glLineWidth(1);
-
-glEnable(GL_LIGHTING);
-glEnable(GL_NORMALIZE);
-glEnable(GL_LIGHT0);
-glEnable(GL_LIGHT2);
-glEnable(GL_LIGHT3);
-glEnable(GL_COLOR_MATERIAL);
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
-glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16);
-
-// --- Scene Geometry -----------------
-// Sea sheet under everything
-glPushMatrix();
-  glTranslatef(0, -0.62, 0);
-  sea(5.5, 13, 0.16);
-glPopMatrix();
-
-// Island shelf raised above the water waves
-glPushMatrix();
-  glTranslatef(0, -0.38, 0);
-  island(2.2, 0.45);
-glPopMatrix();
-
-// Lighthouse on the island
-glPushMatrix();
-  glTranslatef(0.5, -0.38, 0.1);
-  lighthouse();
-glPopMatrix();
-
-// Wind-swayed tree across the island
-glPushMatrix();
-  glTranslatef(-1.2, -0.38, 0.4);
-  glRotatef(4*sin(t*0.4), 0, 0, 1);
-  tree(3, 0.62, t*0.2);
-glPopMatrix();
-
-// Ring of rocks around the shoreline (loop + GLUT solids)
-for(i, 0, 7) {
-  glPushMatrix();
-    glRotatef(i*360/7 + 20, 0, 1, 0);
-    glTranslatef(1.55, -0.42, 0);
-    glColor3f(0.28, 0.31, 0.4);
-    glScalef(1, 0.55, 1);
-    glutSolidSphere(0.16 + 0.07*rand(i, 7), 8, 6);
-  glPopMatrix();
-}
-
-// Some June-bugs
-fire_flies(fireflies);
-
-// Moon: crescent carved by glClipPlane, radiant corona & stippled halo
-glPushMatrix();
-  glTranslatef(-3.2, 2.5, -2);
-  glRotatef(-28, 0, 0, 1);
-  glRotatef(25, 0, 1, 0);
-
-  // 1. Soft glowing corona (additive blended radial fan)
-  glDisable(GL_LIGHTING);
-  glDepthMask(GL_FALSE);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-  glBegin(GL_TRIANGLE_FAN);
-    glColor4f(0.55, 0.3, 1, 0.45);
-    glVertex3f(0, 0, -0.15);
-    for(i, 0, 33) {
-      glColor4f(0.42, 0.32, 0.85, 0);
-      glVertex3f(1.4*cos(i*TAU/32), 1.4*sin(i*TAU/32), -0.15);
-    }
-  glEnd();
-
-  // 2. Stippled celestial halo ring (glLineStipple)
-  glEnable(GL_LINE_STIPPLE);
-  glLineStipple(2, 0xCCCC);
+  glEnable(GL_DEPTH_TEST);
   glLineWidth(1);
-  glBegin(GL_LINE_LOOP);
-    for(i, 0, 48) {
-      glColor4f(0.55, 0.3, 1, 0.75);
-      glVertex3f(1.05*cos(i*TAU/48), 1.05*sin(i*TAU/48), 0);
-    }
-  glEnd();
-  glDisable(GL_LINE_STIPPLE);
-  glLineWidth(1);
-  glDisable(GL_BLEND);
-  glDepthMask(GL_TRUE);
-
-  // 3. Crescent moon carved with glClipPlane
-  glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0.65, 0.15, 0.45, -0.02});
-  glEnable(GL_CLIP_PLANE0);
-  glColor3f(0.993333, 0.989095, 0.887378);
-  glutSolidSphere(0.56, 24, 18);
-  glDisable(GL_CLIP_PLANE0);
-
-  // 4. Earthshine dark-side sphere
-  glColor3f(0.12, 0.15, 0.25);
-  glutSolidSphere(0.53, 20, 14);
-
-  // 5. Visible lunar craters and maria on the dark earthshine face
-  // Large crater with dark floor and raised rim
-  glPushMatrix();
-    glTranslatef(0.16, 0.12, 0.49);
-    glRotatef(-14, 1, 0, 0);
-    glRotatef(18, 0, 1, 0);
-    glColor3f(0.05, 0.07, 0.12);
-    glutSolidSphere(0.07, 10, 8);
-    glColor3f(0.32, 0.36, 0.54);
-    glutSolidTorus(0.035, 0.08, 6, 14);
-  glPopMatrix();
-
-  // Medium crater
-  glPushMatrix();
-    glTranslatef(-0.08, -0.16, 0.5);
-    glRotatef(18, 1, 0, 0);
-    glRotatef(-10, 0, 1, 0);
-    glColor3f(0.06, 0.08, 0.14);
-    glutSolidSphere(0.055, 8, 6);
-    glColor3f(0.3, 0.34, 0.5);
-    glutSolidTorus(0.038, 0.055, 6, 12);
-  glPopMatrix();
-
-  // Terminator crater with illuminated rim
-  glPushMatrix();
-    glTranslatef(-0.2, 0.08, 0.48);
-    glRotatef(-10, 1, 0, 0);
-    glRotatef(-22, 0, 1, 0);
-    glColor3f(0.06, 0.08, 0.14);
-    glutSolidSphere(0.055, 8, 6);
-    glColor3f(0.55, 0.6, 0.78);
-    glutSolidTorus(0.038, 0.05, 6, 10);
-  glPopMatrix();
 
   glEnable(GL_LIGHTING);
-glPopMatrix();
+  glEnable(GL_NORMALIZE);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT2);
+  glEnable(GL_LIGHT3);
+  glEnable(GL_COLOR_MATERIAL);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16);
 
-// Sweeping light beams from the lantern (blend + depth-mask off)
-glPushMatrix();
-  glTranslatef(0.5, 1.54, 0.1);
-  glRotatef(t*55, 0, 1, 0);
+  // --- Scene Geometry -----------------
+  // Sea sheet under everything
+  glPushMatrix();
+    glTranslatef(0, -0.62, 0);
+    sea(5.5, 13, 0.16);
+  glPopMatrix();
+
+  // Island shelf raised above the water waves
+  glPushMatrix();
+    glTranslatef(0, -0.38, 0);
+    island(2.2, 0.45);
+  glPopMatrix();
+
+  // Lighthouse on the island
+  glPushMatrix();
+    glTranslatef(0.5, -0.38, 0.1);
+    lighthouse();
+  glPopMatrix();
+
+  // Wind-swayed tree across the island
+  glPushMatrix();
+    glTranslatef(-1.2, -0.38, 0.4);
+    glRotatef(4*sin(t*0.4), 0, 0, 1);
+    tree(3, 0.62, t*0.2);
+  glPopMatrix();
+
+  // Ring of rocks around the shoreline (loop + GLUT solids)
+  for(i, 0, 7) {
+    glPushMatrix();
+      glRotatef(i*360/7 + 20, 0, 1, 0);
+      glTranslatef(1.55, -0.42, 0);
+      glColor3f(0.28, 0.31, 0.4);
+      glScalef(1, 0.55, 1);
+      glutSolidSphere(0.16 + 0.07*rand(i, 7), 8, 6);
+    glPopMatrix();
+  }
+
+  // Some June-bugs
+  fire_flies(fireflies);
+
+  // Moon: crescent carved by glClipPlane, radiant corona & stippled halo
+  glPushMatrix();
+    glTranslatef(-3.2, 2.5, -2);
+    glRotatef(-28, 0, 0, 1);
+    glRotatef(25, 0, 1, 0);
+
+    // 1. Soft glowing corona (additive blended radial fan)
+    glDisable(GL_LIGHTING);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    glBegin(GL_TRIANGLE_FAN);
+      glColor4f(0.55, 0.3, 1, 0.45);
+      glVertex3f(0, 0, -0.15);
+      for(i, 0, 33) {
+        glColor4f(0.42, 0.32, 0.85, 0);
+        glVertex3f(1.4*cos(i*TAU/32), 1.4*sin(i*TAU/32), -0.15);
+      }
+    glEnd();
+
+    // 2. Stippled celestial halo ring (glLineStipple)
+    glEnable(GL_LINE_STIPPLE);
+    glLineStipple(2, 0xCCCC);
+    glLineWidth(1);
+    glBegin(GL_LINE_LOOP);
+      for(i, 0, 48) {
+        glColor4f(0.55, 0.3, 1, 0.75);
+        glVertex3f(1.05*cos(i*TAU/48), 1.05*sin(i*TAU/48), 0);
+      }
+    glEnd();
+    glDisable(GL_LINE_STIPPLE);
+    glLineWidth(1);
+    glDisable(GL_BLEND);
+    glDepthMask(GL_TRUE);
+
+    // 3. Crescent moon carved with glClipPlane
+    glClipPlane(GL_CLIP_PLANE0, (GLdouble[]){0.65, 0.15, 0.45, -0.02});
+    glEnable(GL_CLIP_PLANE0);
+    glColor3f(0.993333, 0.989095, 0.887378);
+    glutSolidSphere(0.56, 24, 18);
+    glDisable(GL_CLIP_PLANE0);
+
+    // 4. Earthshine dark-side sphere
+    glColor3f(0.12, 0.15, 0.25);
+    glutSolidSphere(0.53, 20, 14);
+
+    // 5. Visible lunar craters and maria on the dark earthshine face
+    // Large crater with dark floor and raised rim
+    glPushMatrix();
+      glTranslatef(0.16, 0.12, 0.49);
+      glRotatef(-14, 1, 0, 0);
+      glRotatef(18, 0, 1, 0);
+      glColor3f(0.05, 0.07, 0.12);
+      glutSolidSphere(0.07, 10, 8);
+      glColor3f(0.32, 0.36, 0.54);
+      glutSolidTorus(0.035, 0.08, 6, 14);
+    glPopMatrix();
+
+    // Medium crater
+    glPushMatrix();
+      glTranslatef(-0.08, -0.16, 0.5);
+      glRotatef(18, 1, 0, 0);
+      glRotatef(-10, 0, 1, 0);
+      glColor3f(0.06, 0.08, 0.14);
+      glutSolidSphere(0.055, 8, 6);
+      glColor3f(0.3, 0.34, 0.5);
+      glutSolidTorus(0.038, 0.055, 6, 12);
+    glPopMatrix();
+
+    // Terminator crater with illuminated rim
+    glPushMatrix();
+      glTranslatef(-0.2, 0.08, 0.48);
+      glRotatef(-10, 1, 0, 0);
+      glRotatef(-22, 0, 1, 0);
+      glColor3f(0.06, 0.08, 0.14);
+      glutSolidSphere(0.055, 8, 6);
+      glColor3f(0.55, 0.6, 0.78);
+      glutSolidTorus(0.038, 0.05, 6, 10);
+    glPopMatrix();
+
+    glEnable(GL_LIGHTING);
+  glPopMatrix();
+
+  // Sweeping light beams from the lantern (blend + depth-mask off)
+  glPushMatrix();
+    glTranslatef(0.5, 1.54, 0.1);
+    glRotatef(t*55, 0, 1, 0);
+    glDisable(GL_LIGHTING);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    glBegin(GL_TRIANGLES);
+      glColor4f(1, 0.85, 0.15, 0.55);
+      glVertex3f(0, 0, 0);
+      glColor4f(0.98, 0.82, 0.45, 0);
+      glVertex3f(7, -0.5, 0.7);
+      glVertex3f(7, 0.5, -0.7);
+      glColor4f(1, 0.85, 0.15, 0.55);
+      glVertex3f(0, 0, 0);
+      glColor4f(0.98, 0.82, 0.45, 0);
+      glVertex3f(-7, 0.5, 0.7);
+      glVertex3f(-7, -0.5, -0.7);
+    glEnd();
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
+    glEnable(GL_LIGHTING);
+  glPopMatrix();
+
+  // Caption readout (glRasterPos + bitmap label)
   glDisable(GL_LIGHTING);
-  glDepthMask(GL_FALSE);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-  glBegin(GL_TRIANGLES);
-    glColor4f(1, 0.85, 0.15, 0.55);
-    glVertex3f(0, 0, 0);
-    glColor4f(0.98, 0.82, 0.45, 0);
-    glVertex3f(7, -0.5, 0.7);
-    glVertex3f(7, 0.5, -0.7);
-    glColor4f(1, 0.85, 0.15, 0.55);
-    glVertex3f(0, 0, 0);
-    glColor4f(0.98, 0.82, 0.45, 0);
-    glVertex3f(-7, 0.5, 0.7);
-    glVertex3f(-7, -0.5, -0.7);
-  glEnd();
-  glDepthMask(GL_TRUE);
-  glDisable(GL_BLEND);
+  glColor3f(0.92, 0.95, 0.98);
+  glRasterPos3f(-3.2, 1.4, 0);
+  label("dusk atoll");
   glEnable(GL_LIGHTING);
-glPopMatrix();
-
-// Caption readout (glRasterPos + bitmap label)
-glDisable(GL_LIGHTING);
-glColor3f(0.92, 0.95, 0.98);
-glRasterPos3f(-3.2, 1.4, 0);
-label("dusk atoll");
-glEnable(GL_LIGHTING);
 }

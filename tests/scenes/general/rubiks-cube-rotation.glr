@@ -49,111 +49,111 @@ sticker(nx, ny, nz, cr, cg, cb) {
   glEnd();
 }
 display() {
-glTranslatef(0.0000f, 0.0000f, -7.2222f);   // @camera dist
-glRotatef(24.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(-32.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -7.2222f);   // @camera dist
+  glRotatef(24.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(-32.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glClearColor(0.04, 0.04, 0.06, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
+  glClearColor(0.04, 0.04, 0.06, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
 
-cell = 1.0;
-// 0.8 s per quarter turn, 8 moves per cycle.
-phase = fmod(t, 8 * 0.8) / 0.8;
+  cell = 1.0;
+  // 0.8 s per quarter turn, 8 moves per cycle.
+  phase = fmod(t, 8 * 0.8) / 0.8;
 
-// Bake the move table for this frame.
-for(m, 0, 8) {
-  // Moves pair up as m <-> 7 - m: same face, opposite direction.
-  ax = min(m, 7 - m) + 1;
-  B[m] = ax;
-  if(ax > 3.5) {
-    B[m] = -1;
+  // Bake the move table for this frame.
+  for(m, 0, 8) {
+    // Moves pair up as m <-> 7 - m: same face, opposite direction.
+    ax = min(m, 7 - m) + 1;
+    B[m] = ax;
+    if(ax > 3.5) {
+      B[m] = -1;
+    }
+    A[m] = 90 * sign(3.5 - m) * smoothstep(0, 1, clamp(phase - m, 0, 1));
   }
-  A[m] = 90 * sign(3.5 - m) * smoothstep(0, 1, clamp(phase - m, 0, 1));
-}
 
-glPushMatrix();
-  glRotatef(t * 11.0, 0, 1, 0);
-  glRotatef(9.0 * sin(t * 0.5), 1, 0, 0);
+  glPushMatrix();
+    glRotatef(t * 11.0, 0, 1, 0);
+    glRotatef(9.0 * sin(t * 0.5), 1, 0, 0);
 
-  for(hx, -1, 2) {
-    for(hy, -1, 2) {
-      for(hz, -1, 2) {
-        // Forward pass: walk this cubie's lattice coordinate through the
-        // move history, recording which moves picked it up.
-        px = hx;
-        py = hy;
-        pz = hz;
-        for(m, 0, 8) {
-          C[m] = 0;
-          if(abs(A[m]) > 0.0001) {
-            layer = sign(B[m]);
-            dir = sign(A[m]);
-            ax = abs(B[m]);
-            if(ax < 1.5) {
-              sel = max(0, 1 - abs(px - layer));
-              qy = lerp(py, -dir * pz, sel);
-              qz = lerp(pz, dir * py, sel);
-              py = qy;
-              pz = qz;
-              C[m] = sel;
-            }
-            if(ax > 1.5 && ax < 2.5) {
-              sel = max(0, 1 - abs(py - layer));
-              qx = lerp(px, dir * pz, sel);
-              qz = lerp(pz, -dir * px, sel);
-              px = qx;
-              pz = qz;
-              C[m] = sel;
-            }
-            if(ax > 2.5) {
-              sel = max(0, 1 - abs(pz - layer));
-              qx = lerp(px, -dir * py, sel);
-              qy = lerp(py, dir * px, sel);
-              px = qx;
-              py = qy;
-              C[m] = sel;
+    for(hx, -1, 2) {
+      for(hy, -1, 2) {
+        for(hz, -1, 2) {
+          // Forward pass: walk this cubie's lattice coordinate through the
+          // move history, recording which moves picked it up.
+          px = hx;
+          py = hy;
+          pz = hz;
+          for(m, 0, 8) {
+            C[m] = 0;
+            if(abs(A[m]) > 0.0001) {
+              layer = sign(B[m]);
+              dir = sign(A[m]);
+              ax = abs(B[m]);
+              if(ax < 1.5) {
+                sel = max(0, 1 - abs(px - layer));
+                qy = lerp(py, -dir * pz, sel);
+                qz = lerp(pz, dir * py, sel);
+                py = qy;
+                pz = qz;
+                C[m] = sel;
+              }
+              if(ax > 1.5 && ax < 2.5) {
+                sel = max(0, 1 - abs(py - layer));
+                qx = lerp(px, dir * pz, sel);
+                qz = lerp(pz, -dir * px, sel);
+                px = qx;
+                pz = qz;
+                C[m] = sel;
+              }
+              if(ax > 2.5) {
+                sel = max(0, 1 - abs(pz - layer));
+                qx = lerp(px, -dir * py, sel);
+                qy = lerp(py, dir * px, sel);
+                px = qx;
+                py = qy;
+                C[m] = sel;
+              }
             }
           }
+
+          glPushMatrix();
+            // Reverse pass: newest turn first, so GL composes them in order.
+            for(k, 0, 8) {
+              mi = 7 - k;
+              glRotatef(C[mi] * A[mi], max(0, 1 - abs(abs(B[mi]) - 1)), max(0, 1 - abs(abs(B[mi]) - 2)), max(0, 1 - abs(abs(B[mi]) - 3)));
+            }
+            glTranslatef(hx * cell, hy * cell, hz * cell);
+
+            // Plastic body, then the stickers this cubie was born with.
+            glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.06, 0.06, 0.07, 1});
+            glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.15, 0.15, 0.15, 1});
+            glutSolidCube(0.94);
+
+            if(hx > 0.5) {
+              sticker(1, 0, 0, 0.85, 0.16, 0.13);
+            }
+            if(hx < -0.5) {
+              sticker(-1, 0, 0, 0.95, 0.45, 0.10);
+            }
+            if(hy > 0.5) {
+              sticker(0, 1, 0, 0.95, 0.95, 0.93);
+            }
+            if(hy < -0.5) {
+              sticker(0, -1, 0, 0.95, 0.83, 0.15);
+            }
+            if(hz > 0.5) {
+              sticker(0, 0, 1, 0.12, 0.68, 0.30);
+            }
+            if(hz < -0.5) {
+              sticker(0, 0, -1, 0.10, 0.36, 0.85);
+            }
+          glPopMatrix();
         }
-
-        glPushMatrix();
-          // Reverse pass: newest turn first, so GL composes them in order.
-          for(k, 0, 8) {
-            mi = 7 - k;
-            glRotatef(C[mi] * A[mi], max(0, 1 - abs(abs(B[mi]) - 1)), max(0, 1 - abs(abs(B[mi]) - 2)), max(0, 1 - abs(abs(B[mi]) - 3)));
-          }
-          glTranslatef(hx * cell, hy * cell, hz * cell);
-
-          // Plastic body, then the stickers this cubie was born with.
-          glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.06, 0.06, 0.07, 1});
-          glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.15, 0.15, 0.15, 1});
-          glutSolidCube(0.94);
-
-          if(hx > 0.5) {
-            sticker(1, 0, 0, 0.85, 0.16, 0.13);
-          }
-          if(hx < -0.5) {
-            sticker(-1, 0, 0, 0.95, 0.45, 0.10);
-          }
-          if(hy > 0.5) {
-            sticker(0, 1, 0, 0.95, 0.95, 0.93);
-          }
-          if(hy < -0.5) {
-            sticker(0, -1, 0, 0.95, 0.83, 0.15);
-          }
-          if(hz > 0.5) {
-            sticker(0, 0, 1, 0.12, 0.68, 0.30);
-          }
-          if(hz < -0.5) {
-            sticker(0, 0, -1, 0.10, 0.36, 0.85);
-          }
-        glPopMatrix();
       }
     }
-  }
-glPopMatrix();
+  glPopMatrix();
 }

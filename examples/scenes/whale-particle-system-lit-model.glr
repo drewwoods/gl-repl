@@ -151,65 +151,65 @@ drawWhale(bhX, bhY, bhZ) {
   glPopMatrix();
 }
 display() {
-glTranslatef(0.0000f, 0.0000f, -6.5500f);   // @camera dist
-glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(-115.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -6.5500f);   // @camera dist
+  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(-115.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0000f, 0.0000f, 0.0000f);   // @camera pan
 
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_COLOR_MATERIAL);
-glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
-glEnable(GL_POINT_SMOOTH);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
+  glEnable(GL_POINT_SMOOTH);
 
-glColor4f(0.25, 0.45, 0.85, 0.46);
-glEnable(GL_BLEND);
-glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-glEnable(GL_DEPTH_TEST);
-glDepthFunc(GL_ALWAYS);
-glPointSize(10);
+  glColor4f(0.25, 0.45, 0.85, 0.46);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glEnable(GL_DEPTH_TEST);
+  glDepthFunc(GL_ALWAYS);
+  glPointSize(10);
 
-// Scene-looping trick: deliberately rewind the GLOBAL animation clock
-// every 2*emitDuration (~12s) so the spout replays on a loop. Heads-up
-// side effect -- this also resets t for replay and the Ctrl+T toggle,
-// since t is app-wide, not scene-local.
-if(t > 2*emitDuration) {
-  t = 0;
-}
-
-glBegin(GL_POINTS);
-  for(i, 0, waterDroplets) {
-    launchVelX = 3 * rand2(i,1);
-    launchVelY = 2 + 2 * rand(i, 2);
-    launchVelZ = 3 * rand2(i, 3);
-
-    computeLifespan(blowHoleY);
-    spawnDelay = 3 * rand(i,4);
-
-    if((t - spawnDelay) > 0 && ( t <= ceil(emitDuration/particleLife)*particleLife + spawnDelay)) {
-      particleAge = fmod(t - spawnDelay, particleLife);
-
-      computeDriftX(particleAge, blowHoleX);
-      computeVerticalMotion(particleAge, blowHoleY);
-      computeDriftZ(particleAge, blowHoleZ);
-
-      glVertex3f(particleX + 0.05, particleY, particleZ);
-    }
+  // Scene-looping trick: deliberately rewind the GLOBAL animation clock
+  // every 2*emitDuration (~12s) so the spout replays on a loop. Heads-up
+  // side effect -- this also resets t for replay and the Ctrl+T toggle,
+  // since t is app-wide, not scene-local.
+  if(t > 2*emitDuration) {
+    t = 0;
   }
-glEnd();
 
-glDepthFunc(GL_LESS);
+  glBegin(GL_POINTS);
+    for(i, 0, waterDroplets) {
+      launchVelX = 3 * rand2(i,1);
+      launchVelY = 2 + 2 * rand(i, 2);
+      launchVelZ = 3 * rand2(i, 3);
 
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_NORMALIZE);
-glDisable(GL_BLEND);
+      computeLifespan(blowHoleY);
+      spawnDelay = 3 * rand(i,4);
 
-glEnable(GL_LIGHT0);
-glEnable(GL_LIGHT1);
+      if((t - spawnDelay) > 0 && ( t <= ceil(emitDuration/particleLife)*particleLife + spawnDelay)) {
+        particleAge = fmod(t - spawnDelay, particleLife);
 
-glEnable(GL_LIGHTING);
+        computeDriftX(particleAge, blowHoleX);
+        computeVerticalMotion(particleAge, blowHoleY);
+        computeDriftZ(particleAge, blowHoleZ);
 
-drawWhale(blowHoleX, blowHoleY, blowHoleZ);
+        glVertex3f(particleX + 0.05, particleY, particleZ);
+      }
+    }
+  glEnd();
+
+  glDepthFunc(GL_LESS);
+
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_NORMALIZE);
+  glDisable(GL_BLEND);
+
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT1);
+
+  glEnable(GL_LIGHTING);
+
+  drawWhale(blowHoleX, blowHoleY, blowHoleZ);
 }

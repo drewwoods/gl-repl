@@ -52,43 +52,43 @@ drawElectron(tiltX, tiltZ, speed, phase, er, eg, eb) {
   glPopMatrix();
 }
 display() {
-glTranslatef(0.0000f, 0.0000f, -12.0000f);   // @camera dist
-glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -12.0000f);   // @camera dist
+  glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
 
-glClearColor(0.02, 0.02, 0.06, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
+  glClearColor(0.02, 0.02, 0.06, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
 
-// Slow global rotation
-glRotatef(t * 8.0, 0.0, 1.0, 0.0);
+  // Slow global rotation
+  glRotatef(t * 8.0, 0.0, 1.0, 0.0);
 
-// -- Nucleus (glowing sphere) --------------------------
-glPushMatrix();
-  // Emissive orange-yellow glow
-  glMaterialfv(GL_FRONT, GL_EMISSION, (GLfloat[]){0.9, 0.45, 0.1, 1});
-  glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){0.9, 0.5, 0.15, 1});
-  glMaterialfv(GL_FRONT, GL_AMBIENT, (GLfloat[]){0.3, 0.15, 0.05, 1});
-  glutSolidSphere(0.55, 24, 24);
-  // Reset emission
-  glMaterialfv(GL_FRONT, GL_EMISSION, (GLfloat[]){0, 0, 0, 1});
-glPopMatrix();
+  // -- Nucleus (glowing sphere) --------------------------
+  glPushMatrix();
+    // Emissive orange-yellow glow
+    glMaterialfv(GL_FRONT, GL_EMISSION, (GLfloat[]){0.9, 0.45, 0.1, 1});
+    glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){0.9, 0.5, 0.15, 1});
+    glMaterialfv(GL_FRONT, GL_AMBIENT, (GLfloat[]){0.3, 0.15, 0.05, 1});
+    glutSolidSphere(0.55, 24, 24);
+    // Reset emission
+    glMaterialfv(GL_FRONT, GL_EMISSION, (GLfloat[]){0, 0, 0, 1});
+  glPopMatrix();
 
-// -- Orbit 1: XY plane (blue) --------------------------
-drawRing(0.0, 0.0, 0.2, 0.5, 0.9);
-drawElectron(0.0, 0.0, 1.8, 0.0, 0.3, 0.6, 1.0);
-drawElectron(0.0, 0.0, 1.8, PI, 0.3, 0.6, 1.0);
+  // -- Orbit 1: XY plane (blue) --------------------------
+  drawRing(0.0, 0.0, 0.2, 0.5, 0.9);
+  drawElectron(0.0, 0.0, 1.8, 0.0, 0.3, 0.6, 1.0);
+  drawElectron(0.0, 0.0, 1.8, PI, 0.3, 0.6, 1.0);
 
-// -- Orbit 2: tilted ~60 deg from XY (cyan-green) -------
-drawRing(60.0, 30.0, 0.1, 0.8, 0.6);
-drawElectron(60.0, 30.0, 2.3, 0.5, 0.2, 0.9, 0.7);
+  // -- Orbit 2: tilted ~60 deg from XY (cyan-green) -------
+  drawRing(60.0, 30.0, 0.1, 0.8, 0.6);
+  drawElectron(60.0, 30.0, 2.3, 0.5, 0.2, 0.9, 0.7);
 
-// -- Orbit 3: tilted ~-55 deg the other way (magenta) ----
-drawRing(-55.0, -40.0, 0.7, 0.25, 0.8);
-drawElectron(-55.0, -40.0, 1.5, 1.2, 0.8, 0.3, 0.9);
-drawElectron(-55.0, -40.0, 1.5, 1.2 + PI, 0.8, 0.3, 0.9);
+  // -- Orbit 3: tilted ~-55 deg the other way (magenta) ----
+  drawRing(-55.0, -40.0, 0.7, 0.25, 0.8);
+  drawElectron(-55.0, -40.0, 1.5, 1.2, 0.8, 0.3, 0.9);
+  drawElectron(-55.0, -40.0, 1.5, 1.2 + PI, 0.8, 0.3, 0.9);
 }

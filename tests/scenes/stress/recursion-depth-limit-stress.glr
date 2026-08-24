@@ -10,33 +10,33 @@ static float b;
 func0(depth, sz, angle) {
   if(depth > 0) {
     glPushMatrix();
-    glRotatef(angle + t * 0.2f, 0.0f, 1.0f, 0.0f);
-    glTranslatef(sz, 0.0f, 0.0f);
+      glRotatef(angle + t * 0.2f, 0.0f, 1.0f, 0.0f);
+      glTranslatef(sz, 0.0f, 0.0f);
 
-    r = clamp(depth / 60.0f, 0.1f, 0.9f);
-    g = clamp(1.0f - depth / 60.0f, 0.1f, 0.9f);
-    b = clamp(sin(t + depth * 0.1f) * 0.5f + 0.5f, 0.2f, 0.8f);
+      r = clamp(depth / 60.0f, 0.1f, 0.9f);
+      g = clamp(1.0f - depth / 60.0f, 0.1f, 0.9f);
+      b = clamp(sin(t + depth * 0.1f) * 0.5f + 0.5f, 0.2f, 0.8f);
 
-    glColor3f(r, g, b);
-    glutSolidCube(sz * 0.8f);
+      glColor3f(r, g, b);
+      glutSolidCube(sz * 0.8f);
 
-    // Call itself recursively with modified parameters
-    func0(depth - 1, sz * 0.96f, angle + 6.0f);
+      // Call itself recursively with modified parameters
+      func0(depth - 1, sz * 0.96f, angle + 6.0f);
     glPopMatrix();
   }
 }
 display() {
 
-glTranslatef(0.0f, 0.0f, -12.00f);   // @camera dist
-glRotatef(25.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-glRotatef(15.0f * t, 0.0f, 1.0f, 0.0f);
+  glTranslatef(0.0f, 0.0f, -12.00f);   // @camera dist
+  glRotatef(25.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+  glRotatef(15.0f * t, 0.0f, 1.0f, 0.0f);
 
-glClearColor(0.04f, 0.04f, 0.06f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glClearColor(0.04f, 0.04f, 0.06f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-// Run recursive structure 60 levels deep (limit is 64)
-func0(60, 0.45f, 8.0f);
+  // Run recursive structure 60 levels deep (limit is 64)
+  func0(60, 0.45f, 8.0f);
 }

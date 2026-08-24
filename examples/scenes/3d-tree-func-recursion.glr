@@ -65,24 +65,24 @@ limb(depth, len, rad, seed) {
 }
 display() {
 
-glTranslatef(0.0000f, 0.0000f, -10.0000f);   // @camera dist
-glRotatef(8.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(24.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -3.1000f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -10.0000f);   // @camera dist
+  glRotatef(8.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(24.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -3.1000f, -0.0000f);   // @camera pan
 
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_NORMALIZE);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_LIGHT1);
-glEnable(GL_COLOR_MATERIAL);
-glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.25, 0.3, 0.3, 1});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 18);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_NORMALIZE);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT1);
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.25, 0.3, 0.3, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 18);
 
-glRotatef(sin(t*0.3)*4, 0, 0, 1);
-limb(depth, len, rad, randSeed);
+  glRotatef(sin(t*0.3)*4, 0, 0, 1);
+  limb(depth, len, rad, randSeed);
 }

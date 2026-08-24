@@ -332,110 +332,110 @@ drawRipples(origX, origZ, maxRadius, count, phase) {
 }
 display() {
 
-glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
-glRotatef(22.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(-35.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0000f, -0.4000f, 0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
+  glRotatef(22.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(-35.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0000f, -0.4000f, 0.0000f);   // @camera pan
 
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_NORMALIZE);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_LIGHT1);
-glEnable(GL_COLOR_MATERIAL);
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_NORMALIZE);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT1);
+  glEnable(GL_COLOR_MATERIAL);
 
 
-// --- 1. Water Pool Surface ---
-glEnable(GL_BLEND);
-glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-glDisable(GL_LIGHTING);
+  // --- 1. Water Pool Surface ---
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glDisable(GL_LIGHTING);
 
-glPushMatrix();
-  glTranslatef(0, 0, 0);
-  glBegin(GL_QUAD_STRIP);
-    for(i, 0, 37) {
-      u = i * (TAU / 36.0);
-      cu = cos(u);
-      su = sin(u);
-      glNormal3f(0, 1, 0);
-      glColor4f(0.15, 0.55, 1, 0.4);
-      glVertex3f(cu * 4.8, 0.0, su * 4.8);
-      glColor4f(0.1, 0.95, 0.85, 0.7);
-      glVertex3f(0, 0, 0);
-    }
-  glEnd();
-glPopMatrix();
+  glPushMatrix();
+    glTranslatef(0, 0, 0);
+    glBegin(GL_QUAD_STRIP);
+      for(i, 0, 37) {
+        u = i * (TAU / 36.0);
+        cu = cos(u);
+        su = sin(u);
+        glNormal3f(0, 1, 0);
+        glColor4f(0.15, 0.55, 1, 0.4);
+        glVertex3f(cu * 4.8, 0.0, su * 4.8);
+        glColor4f(0.1, 0.95, 0.85, 0.7);
+        glVertex3f(0, 0, 0);
+      }
+    glEnd();
+  glPopMatrix();
 
-// --- 2. Expanding Water Ripples ---
-drawRipples(0.2, 0.0, 3.8, 4, 0.0);
-drawRipples(-2.2, -1.4, 2.0, 3, 0.7);
+  // --- 2. Expanding Water Ripples ---
+  drawRipples(0.2, 0.0, 3.8, 4, 0.0);
+  drawRipples(-2.2, -1.4, 2.0, 3, 0.7);
 
-// --- 3. Ducks ---
-// Mother duck
-drawDuck(0.2, 0.0, 0.0, 1.0, 15.0 + 8.0 * sin(t * 0.8), 0.0);
+  // --- 3. Ducks ---
+  // Mother duck
+  drawDuck(0.2, 0.0, 0.0, 1.0, 15.0 + 8.0 * sin(t * 0.8), 0.0);
 
-// Baby duckling following behind
-drawDuck(-2.2, 0.0, -1.4, 0.48, 25.0 + 12.0 * sin(t * 0.8 + 1.2), 1.2);
+  // Baby duckling following behind
+  drawDuck(-2.2, 0.0, -1.4, 0.48, 25.0 + 12.0 * sin(t * 0.8 + 1.2), 1.2);
 
-// --- 4. Floating Soap Bubbles (Rise, Swell, and Pop) ---
-glEnable(GL_LIGHTING);
-glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.1, 0.2, 0.3, 1});
-glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.92, 0.95, 0.98, 1});
-glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.95, 0.95, 1, 1});
-glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 96);
+  // --- 4. Floating Soap Bubbles (Rise, Swell, and Pop) ---
+  glEnable(GL_LIGHTING);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){0.1, 0.2, 0.3, 1});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){0.92, 0.95, 0.98, 1});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.95, 0.95, 1, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 96);
 
-for(b, 0, 14) {
-  bubbleT = t * 0.60 + b * 1.35;
-  bubbleLife = fmod(bubbleT, 2.8);
-  bProg = bubbleLife / 2.8;
+  for(b, 0, 14) {
+    bubbleT = t * 0.60 + b * 1.35;
+    bubbleLife = fmod(bubbleT, 2.8);
+    bProg = bubbleLife / 2.8;
 
-  // Horizontal drifting path
-  bx = cos(b * 1.85) * (2.3 + 0.7 * sin(bubbleT * 0.6 + b));
-  bz = sin(b * 1.85) * (2.3 + 0.7 * cos(bubbleT * 0.4 + b));
-  by = bubbleLife * 0.95 + 0.05;
+    // Horizontal drifting path
+    bx = cos(b * 1.85) * (2.3 + 0.7 * sin(bubbleT * 0.6 + b));
+    bz = sin(b * 1.85) * (2.3 + 0.7 * cos(bubbleT * 0.4 + b));
+    by = bubbleLife * 0.95 + 0.05;
 
-  // Base bubble radius
-  bSize = 0.075 + 0.04 * sin(b * 2.7);
+    // Base bubble radius
+    bSize = 0.075 + 0.04 * sin(b * 2.7);
 
-  prop = bProg;
-  if(bProg < pop_trigger) {
-    // Floating & rising phase: gentle ease-in from waterline, steady float
-    bAlpha = 0.35 * smoothstep(0.0, 0.08, bProg);
-    bSize = bSize * (0.85 + 0.15 * bProg);
+    prop = bProg;
+    if(bProg < pop_trigger) {
+      // Floating & rising phase: gentle ease-in from waterline, steady float
+      bAlpha = 0.35 * smoothstep(0.0, 0.08, bProg);
+      bSize = bSize * (0.85 + 0.15 * bProg);
 
-    glPushMatrix();
-      glTranslatef(bx, by, bz);
-      glColor4f(0.92, 0.95, 0.98, bAlpha);
-      glutSolidSphere(bSize, 12, 12);
-    glPopMatrix();
-  } else {
-    // Explosive pop burst: sudden balloon expansion & rapid fade
-    popP = (bProg - pop_trigger) / pop_rate;
-    prop = popP;
-    bSize = bSize * (1.0 + pop_growth * sqrt(popP));
-    bAlpha = 0.35 * (1.0 - popP) * (1.0 - popP);
-
-    if(bAlpha > 0.005) {
-      // Expanding bubble film
       glPushMatrix();
         glTranslatef(bx, by, bz);
         glColor4f(0.92, 0.95, 0.98, bAlpha);
         glutSolidSphere(bSize, 12, 12);
       glPopMatrix();
+    } else {
+      // Explosive pop burst: sudden balloon expansion & rapid fade
+      popP = (bProg - pop_trigger) / pop_rate;
+      prop = popP;
+      bSize = bSize * (1.0 + pop_growth * sqrt(popP));
+      bAlpha = 0.35 * (1.0 - popP) * (1.0 - popP);
 
-      // Tiny pop spray droplets
-      for(d, 0, 4) {
+      if(bAlpha > 0.005) {
+        // Expanding bubble film
         glPushMatrix();
-          glTranslatef(bx + popP * 0.34 * cos(d * 1.57 + b), by + popP * 0.18 * sin(d * 2.1), bz + popP * 0.34 * sin(d * 1.57 + b));
-          glColor4f(0.92, 0.95, 0.98, bAlpha * 1.3);
-          glutSolidSphere(0.016 * (1.0 - popP), 6, 6);
+          glTranslatef(bx, by, bz);
+          glColor4f(0.92, 0.95, 0.98, bAlpha);
+          glutSolidSphere(bSize, 12, 12);
         glPopMatrix();
+
+        // Tiny pop spray droplets
+        for(d, 0, 4) {
+          glPushMatrix();
+            glTranslatef(bx + popP * 0.34 * cos(d * 1.57 + b), by + popP * 0.18 * sin(d * 2.1), bz + popP * 0.34 * sin(d * 1.57 + b));
+            glColor4f(0.92, 0.95, 0.98, bAlpha * 1.3);
+            glutSolidSphere(0.016 * (1.0 - popP), 6, 6);
+          glPopMatrix();
+        }
       }
     }
   }
-}
 
-glDisable(GL_BLEND);
+  glDisable(GL_BLEND);
 }

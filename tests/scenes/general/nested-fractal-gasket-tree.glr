@@ -27,19 +27,19 @@ drawBranch(depth, len) {
   }
 }
 display() {
-glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
-glRotatef(14.5000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(-1.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -8.0000f);   // @camera dist
+  glRotatef(14.5000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(-1.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-glClearColor(0.03, 0.04, 0.06, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glClearColor(0.03, 0.04, 0.06, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-sway = 8.0 * sin(t * 2.0);
+  sway = 8.0 * sin(t * 2.0);
 
-glPushMatrix();
-  glTranslatef(0, -2.2, 0);
-  drawBranch(5, 1.4);
-glPopMatrix();
+  glPushMatrix();
+    glTranslatef(0, -2.2, 0);
+    drawBranch(5, 1.4);
+  glPopMatrix();
 }

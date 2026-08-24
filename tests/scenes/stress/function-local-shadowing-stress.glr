@@ -15,9 +15,9 @@ func0(r) {
 
   for(i, 0, 3) {
     glPushMatrix();
-    glTranslatef(x + i * 0.6f, y, 0.0f);
-    glColor3f(0.9f - i * 0.2f, 0.3f + i * 0.2f, 0.5f);
-    glutSolidCube(0.4f);
+      glTranslatef(x + i * 0.6f, y, 0.0f);
+      glColor3f(0.9f - i * 0.2f, 0.3f + i * 0.2f, 0.5f);
+      glutSolidCube(0.4f);
     glPopMatrix();
   }
 }
@@ -33,39 +33,39 @@ func1(scale) {
 
   for(i, 0, 4) {
     glPushMatrix();
-    glTranslatef(-x, y + i * 0.8f, 0.0f);
-    // Call func0: its local 'x' and 'y' must NOT clobber func1's local 'x' or 'y'
-    func0(scale + i * 0.5f);
+      glTranslatef(-x, y + i * 0.8f, 0.0f);
+      // Call func0: its local 'x' and 'y' must NOT clobber func1's local 'x' or 'y'
+      func0(scale + i * 0.5f);
     glPopMatrix();
   }
 }
 display() {
 
-glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
-glRotatef(12.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-// Scene spin, deliberately body geometry and deliberately untagged: the
-// camera format carries literal poses only, and `spin` is the exported C's
-// g_angle hook, not a place to put an expression in t.
-glRotatef(20.0f * t, 0.0f, 1.0f, 0.0f);
+  glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
+  glRotatef(12.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+  // Scene spin, deliberately body geometry and deliberately untagged: the
+  // camera format carries literal poses only, and `spin` is the exported C's
+  // g_angle hook, not a place to put an expression in t.
+  glRotatef(20.0f * t, 0.0f, 1.0f, 0.0f);
 
-glClearColor(0.06f, 0.05f, 0.08f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glClearColor(0.06f, 0.05f, 0.08f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-// Initialize top-level globals
-x = 5.0f;
-y = 10.0f;
+  // Initialize top-level globals
+  x = 5.0f;
+  y = 10.0f;
 
-// Invoke func1 with argument
-func1(1.2f);
+  // Invoke func1 with argument
+  func1(1.2f);
 
-// Render geometry using global x and y to confirm they were unaffected by locals
-glPushMatrix();
-glTranslatef(0.0f, 2.0f, 0.0f);
-// Global x=5, y=10 scaled down for positioning
-glColor3f(0.2f, 0.9f, 0.9f);
-glutSolidSphere(0.1f * x, 16, 16);
-glPopMatrix();
+  // Render geometry using global x and y to confirm they were unaffected by locals
+  glPushMatrix();
+    glTranslatef(0.0f, 2.0f, 0.0f);
+    // Global x=5, y=10 scaled down for positioning
+    glColor3f(0.2f, 0.9f, 0.9f);
+    glutSolidSphere(0.1f * x, 16, 16);
+  glPopMatrix();
 }

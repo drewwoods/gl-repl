@@ -66,83 +66,83 @@ tentacle(angAt, attach, len, phase, amp, cr, cg, cb) {
   glEnd();
 }
 display() {
-glTranslatef(0.0000f, 0.0000f, -7.5000f);   // @camera dist
-glRotatef(4.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0000f, 0.7000f, 0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -7.5000f);   // @camera dist
+  glRotatef(4.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0000f, 0.7000f, 0.0000f);   // @camera pan
 
-// Everything glows: additive blend with depth WRITES off (reads stay on).
-// glDepthMask(GL_FALSE) is the classic translucency trick - without it the
-// bell's far side would z-fight its near side and the tentacles would
-// punch holes through the bell.
-glClearColor(0.015, 0.03, 0.07, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  // Everything glows: additive blend with depth WRITES off (reads stay on).
+  // glDepthMask(GL_FALSE) is the classic translucency trick - without it the
+  // bell's far side would z-fight its near side and the tentacles would
+  // punch holes through the bell.
+  glClearColor(0.015, 0.03, 0.07, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-glDisable(GL_LIGHTING);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_BLEND);
-glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-glEnable(GL_LINE_SMOOTH);
-glEnable(GL_POINT_SMOOTH);
-glDepthMask(GL_FALSE);
-pulse = sin(t*1.6);
-bellR = 1.5*(1 + 0.10*pulse);
-bellH = 1.1*(1 - 0.14*pulse);
+  glDisable(GL_LIGHTING);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glEnable(GL_LINE_SMOOTH);
+  glEnable(GL_POINT_SMOOTH);
+  glDepthMask(GL_FALSE);
+  pulse = sin(t*1.6);
+  bellR = 1.5*(1 + 0.10*pulse);
+  bellH = 1.1*(1 - 0.14*pulse);
 
-// marine snow: slow upward drift, wrapped with rem() so the field loops
-glPointSize(7);
-glBegin(GL_POINTS);
-  for(p, 0, marineSnow) {
-    glColor4f(0.55, 0.75, 0.95, 0.08 + 0.22*rand(p, 4));
-    // rise speed 0.15..0.5 per mote; rem() wraps y into [-3.2, 3.2]
-    glVertex3f(4.5*rand2(p, 0) + 0.2*sin(t*0.4 + p), rem(3.2*rand2(p, 1) + t*(0.15 + 0.35*rand(p, 3)), 6.4), 4.5*rand2(p, 2));
+  // marine snow: slow upward drift, wrapped with rem() so the field loops
+  glPointSize(7);
+  glBegin(GL_POINTS);
+    for(p, 0, marineSnow) {
+      glColor4f(0.55, 0.75, 0.95, 0.08 + 0.22*rand(p, 4));
+      // rise speed 0.15..0.5 per mote; rem() wraps y into [-3.2, 3.2]
+      glVertex3f(4.5*rand2(p, 0) + 0.2*sin(t*0.4 + p), rem(3.2*rand2(p, 1) + t*(0.15 + 0.35*rand(p, 3)), 6.4), 4.5*rand2(p, 2));
+    }
+  glEnd();
+
+  // gentle bob + tilt for the whole animal
+  glTranslatef(0.2*sin(t*0.4), 0.18*sin(t*0.5), 0);
+  glRotatef(8*sin(t*0.23), 0, 0, 1);
+  // segs/rings shadow the globals of the same name on purpose: the func takes
+  // what it needs as arguments, so it reads without looking outward.
+  bellStrips(segs, rings, bellR, bellH);
+
+  // scalloped frill hanging off the rim
+  rad = bellR*sin(PI*0.52);
+  topY = bellH*cos(PI*0.52);
+  glBegin(GL_TRIANGLE_STRIP);
+    for(j, 0, segs+1) {
+      ang = j*TAU/segs;
+      sway = -0.18 - 0.10*pulse + 0.10*sin(ang*9 + t*2.6);
+      glColor4f(0.45, 0.85, 1, 0.3);
+      glVertex3f(rad*cos(ang), topY, rad*sin(ang));
+      glColor4f(0.45, 0.85, 1, 0.03);
+      glVertex3f(rad*1.04*cos(ang), topY + sway, rad*1.04*sin(ang));
+    }
+  glEnd();
+  glLineWidth(1.6);
+  for(k, 0, tentacles) {
+    tentacle(k*TAU/tentacles + 0.2*rand2(k, 1), bellR*0.85, tentLen*(0.75 + 0.5*rand(k, 2)), rand(k, 3)*TAU, 0.3, 0.35, 0.75, 1.0);
   }
-glEnd();
-
-// gentle bob + tilt for the whole animal
-glTranslatef(0.2*sin(t*0.4), 0.18*sin(t*0.5), 0);
-glRotatef(8*sin(t*0.23), 0, 0, 1);
-// segs/rings shadow the globals of the same name on purpose: the func takes
-// what it needs as arguments, so it reads without looking outward.
-bellStrips(segs, rings, bellR, bellH);
-
-// scalloped frill hanging off the rim
-rad = bellR*sin(PI*0.52);
-topY = bellH*cos(PI*0.52);
-glBegin(GL_TRIANGLE_STRIP);
-  for(j, 0, segs+1) {
-    ang = j*TAU/segs;
-    sway = -0.18 - 0.10*pulse + 0.10*sin(ang*9 + t*2.6);
-    glColor4f(0.45, 0.85, 1, 0.3);
-    glVertex3f(rad*cos(ang), topY, rad*sin(ang));
-    glColor4f(0.45, 0.85, 1, 0.03);
-    glVertex3f(rad*1.04*cos(ang), topY + sway, rad*1.04*sin(ang));
+  // four thicker oral arms under the crown
+  glLineWidth(3.2);
+  for(k, 0, 4) {
+    tentacle(k*TAU/4 + 0.4, bellR*0.3, tentLen*1.2, k*1.7, 0.55, 1.0, 0.45, 0.75);
   }
-glEnd();
-glLineWidth(1.6);
-for(k, 0, tentacles) {
-  tentacle(k*TAU/tentacles + 0.2*rand2(k, 1), bellR*0.85, tentLen*(0.75 + 0.5*rand(k, 2)), rand(k, 3)*TAU, 0.3, 0.35, 0.75, 1.0);
-}
-// four thicker oral arms under the crown
-glLineWidth(3.2);
-for(k, 0, 4) {
-  tentacle(k*TAU/4 + 0.4, bellR*0.3, tentLen*1.2, k*1.7, 0.55, 1.0, 0.45, 0.75);
-}
-glLineWidth(1);
+  glLineWidth(1);
 
-// bioluminescent core: two stacked soft points
-glPointSize(30);
-glBegin(GL_POINTS);
-  glColor4f(1, 0.55, 0.75, 0.3);
-  glVertex3f(0, bellH*0.3, 0);
-glEnd();
-glPointSize(13);
-glBegin(GL_POINTS);
-  glColor4f(1, 0.8, 0.9, 0.55);
-  glVertex3f(0, bellH*0.32, 0);
-glEnd();
+  // bioluminescent core: two stacked soft points
+  glPointSize(30);
+  glBegin(GL_POINTS);
+    glColor4f(1, 0.55, 0.75, 0.3);
+    glVertex3f(0, bellH*0.3, 0);
+  glEnd();
+  glPointSize(13);
+  glBegin(GL_POINTS);
+    glColor4f(1, 0.8, 0.9, 0.55);
+    glVertex3f(0, bellH*0.32, 0);
+  glEnd();
 
-// leave shared GL state the way we found it
-glDepthMask(GL_TRUE);
-glDisable(GL_BLEND);
+  // leave shared GL state the way we found it
+  glDepthMask(GL_TRUE);
+  glDisable(GL_BLEND);
 }

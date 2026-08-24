@@ -16,27 +16,27 @@ polygon(radius, sides, phase) {
   glEnd();
 }
 display() {
-glTranslatef(0.0000f, 0.0000f, -4.0000f);   // @camera dist
-glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -4.0000f);   // @camera dist
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-// --- Render State -------------------
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_NORMALIZE);
+  // --- Render State -------------------
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_NORMALIZE);
 
-// --- Scene Geometry -----------------
-glPushMatrix();
-  glTranslatef(-2.4, 0, 0);
-  polygon(0.9, 3, t*0.4);
-glPopMatrix();
-glPushMatrix();
-  polygon(0.9, 6, -t*0.25);
-glPopMatrix();
-glPushMatrix();
-  glTranslatef(2.4, 0, 0);
-  polygon(0.9, 10, t*0.15);
-glPopMatrix();
+  // --- Scene Geometry -----------------
+  glPushMatrix();
+    glTranslatef(-2.4, 0, 0);
+    polygon(0.9, 3, t*0.4);
+  glPopMatrix();
+  glPushMatrix();
+    polygon(0.9, 6, -t*0.25);
+  glPopMatrix();
+  glPushMatrix();
+    glTranslatef(2.4, 0, 0);
+    polygon(0.9, 10, t*0.15);
+  glPopMatrix();
 }

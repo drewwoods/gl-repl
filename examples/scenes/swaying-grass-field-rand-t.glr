@@ -34,25 +34,25 @@ blade(seed, x0, z0, height, width, ang, ph, stiffness) {
   glEnd();
 }
 display() {
-glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
-glRotatef(5.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(32.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.9000f, -0.5000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
+  glRotatef(5.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(32.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.9000f, -0.5000f);   // @camera pan
 
-// --- Render State -------------------
-glClearColor(0.025, 0.055, 0.035, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  // --- Render State -------------------
+  glClearColor(0.025, 0.055, 0.035, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-// --- Scene Geometry -----------------
-for(p, 0, bladeCount) {
-  x = (rand(p, 0)*2 - 1)*field;
-  z = (rand(p, 1)*2 - 1)*field;
-  h = 0.28 + rand(p, 2)*0.72;
-  w = 0.018 + rand(p, 3)*0.026;
-  angle = rand(p, 4)*TAU;
-  phase = rand(p, 5)*TAU;
-  flex = 0.55 + rand(p, 6)*1.1;
-  blade(p, x, z, h, w, angle, phase, flex);
-}
+  // --- Scene Geometry -----------------
+  for(p, 0, bladeCount) {
+    x = (rand(p, 0)*2 - 1)*field;
+    z = (rand(p, 1)*2 - 1)*field;
+    h = 0.28 + rand(p, 2)*0.72;
+    w = 0.018 + rand(p, 3)*0.026;
+    angle = rand(p, 4)*TAU;
+    phase = rand(p, 5)*TAU;
+    flex = 0.55 + rand(p, 6)*1.1;
+    blade(p, x, z, h, w, angle, phase, flex);
+  }
 }

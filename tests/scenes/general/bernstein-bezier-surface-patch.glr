@@ -182,41 +182,41 @@ renderLattice(y11, y12, y21, y22) {
 }
 display() {
 
-// Camera pose
-glTranslatef(0.0000f, 0.0000f, -7.3449f);   // @camera dist
-glRotatef(14.0120f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(-0.5395f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+  // Camera pose
+  glTranslatef(0.0000f, 0.0000f, -7.3449f);   // @camera dist
+  glRotatef(14.0120f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(-0.5395f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-// Clear color and buffer initialization
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_LIGHT2);
-glEnable(GL_NORMALIZE);
-glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-glFrontFace(GL_CW);
+  // Clear color and buffer initialization
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT2);
+  glEnable(GL_NORMALIZE);
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+  glFrontFace(GL_CW);
 
-// Dynamic inner control point heights (gentle harmonic wave oscillation)
-y11 = 3 + 1.3 * sin(0.75 * t);
-y12 = 1.3 * cos(0.75 * t);
-y21 = 1.3 * cos(0.75 * t + 1.2);
-y22 = -3 + 1.3 * sin(0.75 * t + 1.2);
+  // Dynamic inner control point heights (gentle harmonic wave oscillation)
+  y11 = 3 + 1.3 * sin(0.75 * t);
+  y12 = 1.3 * cos(0.75 * t);
+  y21 = 1.3 * cos(0.75 * t + 1.2);
+  y22 = -3 + 1.3 * sin(0.75 * t + 1.2);
 
-// Two-sided material setup: Front = Cyan/Teal, Back = Electric Violet
-glMaterialfv(GL_FRONT, GL_AMBIENT, (GLfloat[]){0.05, 0.2, 0.25, 1});
-glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){0.1, 0.75, 0.85, 1});
-glMaterialfv(GL_FRONT, GL_SPECULAR, (GLfloat[]){0.9, 0.95, 1, 1});
-glMaterialf(GL_FRONT, GL_SHININESS, 64);
+  // Two-sided material setup: Front = Cyan/Teal, Back = Electric Violet
+  glMaterialfv(GL_FRONT, GL_AMBIENT, (GLfloat[]){0.05, 0.2, 0.25, 1});
+  glMaterialfv(GL_FRONT, GL_DIFFUSE, (GLfloat[]){0.1, 0.75, 0.85, 1});
+  glMaterialfv(GL_FRONT, GL_SPECULAR, (GLfloat[]){0.9, 0.95, 1, 1});
+  glMaterialf(GL_FRONT, GL_SHININESS, 64);
 
-glMaterialfv(GL_BACK, GL_AMBIENT, (GLfloat[]){0.2, 0.05, 0.25, 1});
-glMaterialfv(GL_BACK, GL_DIFFUSE, (GLfloat[]){0.65, 0.25, 0.9, 1});
-glMaterialfv(GL_BACK, GL_SPECULAR, (GLfloat[]){0.95, 0.7, 1, 1});
-glMaterialf(GL_BACK, GL_SHININESS, 32);
+  glMaterialfv(GL_BACK, GL_AMBIENT, (GLfloat[]){0.2, 0.05, 0.25, 1});
+  glMaterialfv(GL_BACK, GL_DIFFUSE, (GLfloat[]){0.65, 0.25, 0.9, 1});
+  glMaterialfv(GL_BACK, GL_SPECULAR, (GLfloat[]){0.95, 0.7, 1, 1});
+  glMaterialf(GL_BACK, GL_SHININESS, 32);
 
-// Render surface patch and control lattice
-renderPatch(y11, y12, y21, y22, u_steps, v_steps);
-renderLattice(y11, y12, y21, y22);
+  // Render surface patch and control lattice
+  renderPatch(y11, y12, y21, y22, u_steps, v_steps);
+  renderLattice(y11, y12, y21, y22);
 }

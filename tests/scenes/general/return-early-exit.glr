@@ -15,8 +15,8 @@ func0(k) {
     return;
   }
   glPushMatrix();
-  glTranslatef(k * 0.5 - 1.75, 0.75, 0);
-  glutSolidCube(0.32);
+    glTranslatef(k * 0.5 - 1.75, 0.75, 0);
+    glutSolidCube(0.32);
   glPopMatrix();
 }
 
@@ -28,52 +28,52 @@ func1(n) {
       return;
     }
     glPushMatrix();
-    glTranslatef(i * 0.45 - 1.2, -0.9, 0);
-    glutSolidSphere(0.15, 10, 8);
+      glTranslatef(i * 0.45 - 1.2, -0.9, 0);
+      glutSolidSphere(0.15, 10, 8);
     glPopMatrix();
   }
   glColor3f(1, 0.35, 0.2);
   glPushMatrix();
-  glTranslatef(1.6, -0.9, 0);
-  glutSolidCube(0.24);
+    glTranslatef(1.6, -0.9, 0);
+    glutSolidCube(0.24);
   glPopMatrix();
 }
 
 display() {
 
-glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
-glRotatef(14.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+  glTranslatef(0.0f, 0.0f, -8.00f);   // @camera dist
+  glRotatef(14.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
 
-glClearColor(0.05, 0.06, 0.09, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_COLOR_MATERIAL);
-glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glClearColor(0.05, 0.06, 0.09, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 
-span = 8;
-grow = floor(t * 2) + 1;
+  span = 8;
+  grow = floor(t * 2) + 1;
 
-glColor3f(0.45, 0.75, 1);
-for(k, 0, span) {
-  func0(k);
-}
+  glColor3f(0.45, 0.75, 1);
+  for(k, 0, span) {
+    func0(k);
+  }
 
-glColor3f(0.6, 0.9, 0.5);
-func1(grow);
+  glColor3f(0.6, 0.9, 0.5);
+  func1(grow);
 
-// Top-level return: everything below is dropped for the rest of the frame.
-if(t > 1.5) {
-  return;
-}
+  // Top-level return: everything below is dropped for the rest of the frame.
+  if(t > 1.5) {
+    return;
+  }
 
-glColor3f(1, 0.85, 0.3);
-glPushMatrix();
-glTranslatef(0, 1.75, 0);
-glRotatef(90, 1, 0, 0);
-glutSolidTorus(0.05, 0.45, 8, 20);
-glPopMatrix();
+  glColor3f(1, 0.85, 0.3);
+  glPushMatrix();
+    glTranslatef(0, 1.75, 0);
+    glRotatef(90, 1, 0, 0);
+    glutSolidTorus(0.05, 0.45, 8, 20);
+  glPopMatrix();
 }

@@ -6,15 +6,15 @@
 func1(depth, sz, rx) {
   if(depth > 0) {
     glPushMatrix();
-    glRotatef(rx, 1.0f, 0.0f, 0.0f);
-    glTranslatef(0.0f, sz, 0.0f);
+      glRotatef(rx, 1.0f, 0.0f, 0.0f);
+      glTranslatef(0.0f, sz, 0.0f);
 
-    // Draw cube node
-    glColor3f(0.9f - depth * 0.15f, 0.2f + depth * 0.1f, 0.4f);
-    glutSolidCube(sz * 0.8f);
+      // Draw cube node
+      glColor3f(0.9f - depth * 0.15f, 0.2f + depth * 0.1f, 0.4f);
+      glutSolidCube(sz * 0.8f);
 
-    // Call func2 with modified parameters
-    func2(depth - 1, sz * 0.85f, rx + 15.0f + sin(t) * 10.0f);
+      // Call func2 with modified parameters
+      func2(depth - 1, sz * 0.85f, rx + 15.0f + sin(t) * 10.0f);
     glPopMatrix();
   }
 }
@@ -23,36 +23,36 @@ func1(depth, sz, rx) {
 func2(depth, sz, ry) {
   if(depth > 0) {
     glPushMatrix();
-    glRotatef(ry, 0.0f, 1.0f, 0.0f);
-    glTranslatef(sz, 0.0f, 0.0f);
+      glRotatef(ry, 0.0f, 1.0f, 0.0f);
+      glTranslatef(sz, 0.0f, 0.0f);
 
-    // Draw sphere node
-    glColor3f(0.2f, 0.5f + depth * 0.1f, 0.9f - depth * 0.1f);
-    glutSolidSphere(sz * 0.5f, 12, 12);
+      // Draw sphere node
+      glColor3f(0.2f, 0.5f + depth * 0.1f, 0.9f - depth * 0.1f);
+      glutSolidSphere(sz * 0.5f, 12, 12);
 
-    // Call func1 with modified parameters
-    func1(depth - 1, sz * 0.85f, ry - 20.0f - cos(t) * 10.0f);
+      // Call func1 with modified parameters
+      func1(depth - 1, sz * 0.85f, ry - 20.0f - cos(t) * 10.0f);
     glPopMatrix();
   }
 }
 display() {
 
-// Camera config and body execution must be below all function definitions
-glTranslatef(0.0f, 0.0f, -11.00f);   // @camera dist
-glRotatef(25.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-glRotatef(20.0f * t, 0.0f, 1.0f, 0.0f);
+  // Camera config and body execution must be below all function definitions
+  glTranslatef(0.0f, 0.0f, -11.00f);   // @camera dist
+  glRotatef(25.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+  glRotatef(20.0f * t, 0.0f, 1.0f, 0.0f);
 
-glClearColor(0.04f, 0.04f, 0.06f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glClearColor(0.04f, 0.04f, 0.06f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-// Initiate 5-level deep mutual recursion chain from 3 different entry directions
-for(d, 0, 3) {
-  glPushMatrix();
-  glRotatef(d * 120.0f, 0.0f, 0.0f, 1.0f);
-  func1(5, 1.2f, 30.0f);
-  glPopMatrix();
-}
+  // Initiate 5-level deep mutual recursion chain from 3 different entry directions
+  for(d, 0, 3) {
+    glPushMatrix();
+      glRotatef(d * 120.0f, 0.0f, 0.0f, 1.0f);
+      func1(5, 1.2f, 30.0f);
+    glPopMatrix();
+  }
 }

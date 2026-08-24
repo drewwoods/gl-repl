@@ -19,66 +19,66 @@ static float tmp; // swap scratch
 static float x, h, s; // bar center x, bar height, palette mix
 static float cur; // bar index under the compare marker
 display() {
-glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
-glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-period = 225/rate + hold;
-cycle = floor(t/period);
-steps = fmod(t, period)*rate;
+  period = 225/rate + hold;
+  cycle = floor(t/period);
+  steps = fmod(t, period)*rate;
 
-// --- Render State -------------------
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_POINT_SMOOTH);
+  // --- Render State -------------------
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_POINT_SMOOTH);
 
-// --- Scene Geometry -----------------
+  // --- Scene Geometry -----------------
 
-// A fresh deterministic shuffle each cycle
-for(i, 0, 16) {
-  A[i] = rand(i, cycle);
-}
-// Pass p bubbles the largest unsorted value to the right
-for(p, 0, 15) {
-  for(j, 0, 15) {
-    if(p*15 + j < steps && A[j] > A[j+1]) {
-      tmp = A[j];
-      A[j] = A[j+1];
-      A[j+1] = tmp;
+  // A fresh deterministic shuffle each cycle
+  for(i, 0, 16) {
+    A[i] = rand(i, cycle);
+  }
+  // Pass p bubbles the largest unsorted value to the right
+  for(p, 0, 15) {
+    for(j, 0, 15) {
+      if(p*15 + j < steps && A[j] > A[j+1]) {
+        tmp = A[j];
+        A[j] = A[j+1];
+        A[j+1] = tmp;
+      }
     }
   }
-}
-// Bars: height and color both follow the value, so sorted reads as a
-// staircase with a smooth left-to-right gradient
-glBegin(GL_QUADS);
-  for(i, 0, 16) {
-    s = A[i];
-    glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
-    x = (i - 7.5)*0.42;
-    h = 0.3 + 2.4*s;
-    glVertex3f(x - 0.15, -1.5, 0);
-    glVertex3f(x + 0.15, -1.5, 0);
-    glVertex3f(x + 0.15, -1.5 + h, 0);
-    glVertex3f(x - 0.15, -1.5 + h, 0);
-  }
-glEnd();
-if(steps < 225) {
-  // Two dots mark the pair the sort is comparing right now
-  cur = fmod(floor(steps), 15);
-  glPointSize(7);
-  glColor3f(1, 0.85, 0.15);
-  glBegin(GL_POINTS);
-    glVertex3f((cur - 7.5)*0.42, -1.75, 0);
-    glVertex3f((cur - 6.5)*0.42, -1.75, 0);
+  // Bars: height and color both follow the value, so sorted reads as a
+  // staircase with a smooth left-to-right gradient
+  glBegin(GL_QUADS);
+    for(i, 0, 16) {
+      s = A[i];
+      glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
+      x = (i - 7.5)*0.42;
+      h = 0.3 + 2.4*s;
+      glVertex3f(x - 0.15, -1.5, 0);
+      glVertex3f(x + 0.15, -1.5, 0);
+      glVertex3f(x + 0.15, -1.5 + h, 0);
+      glVertex3f(x - 0.15, -1.5 + h, 0);
+    }
   glEnd();
-  glColor3f(0.92, 0.95, 0.98);
-  glRasterPos3f(-3.4, 1.7, 0);
-  label("pass %f of 15", floor(steps/15) + 1);
-} else {
-  glColor3f(0.92, 0.95, 0.98);
-  glRasterPos3f(-3.4, 1.7, 0);
-  label("sorted");
-}
+  if(steps < 225) {
+    // Two dots mark the pair the sort is comparing right now
+    cur = fmod(floor(steps), 15);
+    glPointSize(7);
+    glColor3f(1, 0.85, 0.15);
+    glBegin(GL_POINTS);
+      glVertex3f((cur - 7.5)*0.42, -1.75, 0);
+      glVertex3f((cur - 6.5)*0.42, -1.75, 0);
+    glEnd();
+    glColor3f(0.92, 0.95, 0.98);
+    glRasterPos3f(-3.4, 1.7, 0);
+    label("pass %f of 15", floor(steps/15) + 1);
+  } else {
+    glColor3f(0.92, 0.95, 0.98);
+    glRasterPos3f(-3.4, 1.7, 0);
+    label("sorted");
+  }
 }

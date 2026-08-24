@@ -581,7 +581,8 @@ The phase boundary is always explicit: all declarations and function
 definitions remain at file scope, then the required `display() { ... }`
 encloses the camera and ordinary body. The wrapper is format syntax, not an
 editor command, so loaders validate and consume it before feeding source rows
-into the document.
+into the document. On disk, camera and body rows use the same two-space
+display-body base as C; loaders consume the frame and re-derive that indent.
 
 Three properties are load-bearing and easy to break by accident:
 

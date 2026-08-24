@@ -10,9 +10,10 @@ asymmetry the app has is reproduced here: glu (tessellator) commands belong to
 the tessellator scope, not the GL vertex block, so glBegin depth is excluded
 from their indent (`repl_source_scope_view_cmd_tess_indent()`).
 
-Every scene carries an explicit `display() { ... }` wrapper, but body rows
-remain authored at column 0. The wrapper is format syntax, not an indentation
-level; loaders consume it and re-derive the in-memory body base.
+Every scene carries an explicit `display() { ... }` wrapper. The wrapper is
+format syntax consumed by loaders, but the authored file uses the same C-like
+two-space base indentation for camera and body rows that the loader re-derives
+in memory.
 """
 
 from __future__ import annotations
@@ -147,9 +148,9 @@ def format_content(content: str) -> str:
             formatted_lines.append("")
             continue
 
-        # The explicit scene frame is .glr syntax, not a source
-        # block: camera/body rows inside it remain column 0 on disk. Only the
-        # exact top-level spelling is recognized, matching doc_order.c.
+        # The explicit scene frame is .glr syntax rather than a document row,
+        # but it contributes one authored indentation level. Only the exact
+        # top-level spelling is recognized, matching doc_order.c.
         if (not in_block_comment and not in_display and
                 not any(depths) and stripped == "display() {"):
             formatted_lines.append(stripped)
@@ -174,7 +175,7 @@ def format_content(content: str) -> str:
         )
 
         if is_special_comment:
-            formatted_lines.append(stripped)
+            formatted_lines.append("  " * int(in_display) + stripped)
             continue
 
         # Scan line for indent structure
@@ -187,7 +188,7 @@ def format_content(content: str) -> str:
             depths[kind] = max(0, depths[kind] - unindents_before[kind])
 
         # Format and append - the sum of the depths this line participates in
-        level = depths[BRACE] + depths[TESS] + depths[MATRIX]
+        level = int(in_display) + depths[BRACE] + depths[TESS] + depths[MATRIX]
         if line_counts_begin_depth(stripped):
             level += depths[BEGIN]
         formatted_lines.append("  " * level + stripped)

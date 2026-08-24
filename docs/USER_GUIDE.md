@@ -1686,7 +1686,9 @@ modifying an example**. `--export-glr <path>` writes the same file from the
 command line, without opening a window. Phase order, the `@cfg` subset, and
 catalog authoring live in
 [ADVANCED_USAGE.md](ADVANCED_USAGE.md#authoring-an-example-catalog). For a
-file that carries *everything* back, use Save Scene.
+file that carries *everything* back, use Save Scene. The required `display()`
+frame uses ordinary C-like indentation: globals and helper functions remain at
+file scope, while camera and body rows are indented two spaces inside it.
 
 ### Mesh export (PLY)
 

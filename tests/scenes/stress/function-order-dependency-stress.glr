@@ -6,53 +6,53 @@
 
 func2(phase) {
   glPushMatrix();
-  glRotatef(phase * 40.0f, 0.0f, 1.0f, 0.0f);
+    glRotatef(phase * 40.0f, 0.0f, 1.0f, 0.0f);
 
-  // Call func1 (defined below)
-  func1(phase, 1.0f);
+    // Call func1 (defined below)
+    func1(phase, 1.0f);
 
-  // Call func0 directly (defined below)
-  func0(phase * 0.5f, 0.7f);
+    // Call func0 directly (defined below)
+    func0(phase * 0.5f, 0.7f);
 
   glPopMatrix();
 }
 
 func1(phase, scale) {
   glPushMatrix();
-  glTranslatef(sin(phase) * 2.0f, 0.0f, cos(phase) * 2.0f);
+    glTranslatef(sin(phase) * 2.0f, 0.0f, cos(phase) * 2.0f);
 
-  // Call func0 from within func1
-  func0(phase * 2.0f, scale * 0.8f);
+    // Call func0 from within func1
+    func0(phase * 2.0f, scale * 0.8f);
 
-  glColor3f(0.3f, 0.7f, 1.0f);
-  glutSolidCube(scale * 1.2f);
+    glColor3f(0.3f, 0.7f, 1.0f);
+    glutSolidCube(scale * 1.2f);
   glPopMatrix();
 }
 
 func0(angle, sz) {
   glPushMatrix();
-  glRotatef(angle * 50.0f, 1.0f, 0.5f, 0.0f);
-  glColor3f(1.0f, 0.4f, 0.2f);
-  glutSolidCube(sz);
+    glRotatef(angle * 50.0f, 1.0f, 0.5f, 0.0f);
+    glColor3f(1.0f, 0.4f, 0.2f);
+    glutSolidCube(sz);
   glPopMatrix();
 }
 display() {
 
-glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
-glRotatef(18.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
-glRotatef(30.0f * t, 0.0f, 1.0f, 0.0f);
+  glTranslatef(0.0f, 0.0f, -9.00f);   // @camera dist
+  glRotatef(18.0f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0f, 0.0f, 0.0f);   // @camera pan
+  glRotatef(30.0f * t, 0.0f, 1.0f, 0.0f);
 
-glClearColor(0.05f, 0.05f, 0.09f, 1.0f);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
+  glClearColor(0.05f, 0.05f, 0.09f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
 
-// Execute orchestrator function func2 across multiple animated passes
-for(k, 0, 4) {
-  glPushMatrix();
-  glTranslatef((k - 1.5f) * 2.2f, 0.0f, 0.0f);
-  func2(t + k * 0.8f);
-  glPopMatrix();
-}
+  // Execute orchestrator function func2 across multiple animated passes
+  for(k, 0, 4) {
+    glPushMatrix();
+      glTranslatef((k - 1.5f) * 2.2f, 0.0f, 0.0f);
+      func2(t + k * 0.8f);
+    glPopMatrix();
+  }
 }

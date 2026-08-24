@@ -27,71 +27,71 @@ maskWindow() {
   glPopMatrix();
 }
 display() {
-glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
-glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
+  glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 
-// --- Render State -------------------
-glClearColor(0.05, 0.06, 0.08, 1);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-glEnable(GL_DEPTH_TEST);
-glEnable(GL_LIGHTING);
-glEnable(GL_LIGHT0);
-glEnable(GL_NORMALIZE);
-glEnable(GL_COLOR_MATERIAL);
-glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-glEnable(GL_STENCIL_TEST);
+  // --- Render State -------------------
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_NORMALIZE);
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glEnable(GL_STENCIL_TEST);
 
-// --- Scene Geometry -----------------
-spin = t * 20;
+  // --- Scene Geometry -----------------
+  spin = t * 20;
 
-// --- Pass 1: stamp ---
-// Writes are off for color and depth, so the quad leaves no trace in
-// the frame. All it does is set stencil = 1 under its own footprint.
-// GL_ALWAYS means "never fail the comparison"; GL_REPLACE on the pass
-// branch is what actually writes ref (1) into the buffer.
-glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-glDepthMask(GL_FALSE);
-glStencilMask(0xFF); // decimal in; canonicalizes to 0xFF
-glStencilFunc(GL_ALWAYS, 1, 0xFF);
-glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-maskWindow();
+  // --- Pass 1: stamp ---
+  // Writes are off for color and depth, so the quad leaves no trace in
+  // the frame. All it does is set stencil = 1 under its own footprint.
+  // GL_ALWAYS means "never fail the comparison"; GL_REPLACE on the pass
+  // branch is what actually writes ref (1) into the buffer.
+  glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+  glDepthMask(GL_FALSE);
+  glStencilMask(0xFF); // decimal in; canonicalizes to 0xFF
+  glStencilFunc(GL_ALWAYS, 1, 0xFF);
+  glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+  maskWindow();
 
-// --- Pass 2: payload, clipped to the stamp ---
-// GL_EQUAL, 1 admits only the stamped pixels. glStencilMask(0) makes
-// this pass read-only against the stencil buffer, so the teapot cannot
-// smear the mask it is being cut by.
-glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-glDepthMask(GL_TRUE);
-glStencilMask(0x00);
-glStencilFunc(GL_EQUAL, 1, 0xFF);
-glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-glColor3f(0.1, 0.95, 0.85);
-glPushMatrix();
-  glRotatef(t * 35, 0, 1, 0);
-  glutSolidTeapot(0.85);
-glPopMatrix();
+  // --- Pass 2: payload, clipped to the stamp ---
+  // GL_EQUAL, 1 admits only the stamped pixels. glStencilMask(0) makes
+  // this pass read-only against the stencil buffer, so the teapot cannot
+  // smear the mask it is being cut by.
+  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+  glDepthMask(GL_TRUE);
+  glStencilMask(0x00);
+  glStencilFunc(GL_EQUAL, 1, 0xFF);
+  glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+  glColor3f(0.1, 0.95, 0.85);
+  glPushMatrix();
+    glRotatef(t * 35, 0, 1, 0);
+    glutSolidTeapot(0.85);
+  glPopMatrix();
 
-// --- Pass 3: show the window ---
-// Test off and depth off, so the outline always draws over everything -
-// including the part of the teapot the mask just removed.
-glDisable(GL_STENCIL_TEST);
-glDisable(GL_DEPTH_TEST);
-glDisable(GL_LIGHTING);
-glColor3f(1, 0.85, 0.15);
-glLineWidth(2);
-glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-maskWindow();
-glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-glLineWidth(1);
-glEnable(GL_LIGHTING);
-glEnable(GL_DEPTH_TEST);
+  // --- Pass 3: show the window ---
+  // Test off and depth off, so the outline always draws over everything -
+  // including the part of the teapot the mask just removed.
+  glDisable(GL_STENCIL_TEST);
+  glDisable(GL_DEPTH_TEST);
+  glDisable(GL_LIGHTING);
+  glColor3f(1, 0.85, 0.15);
+  glLineWidth(2);
+  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  maskWindow();
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  glLineWidth(1);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_DEPTH_TEST);
 
-// Things to try:
-//   - GL_EQUAL -> GL_NOTEQUAL in pass 2: the window becomes a hole.
-//   - GL_REPLACE -> GL_INCR in pass 1 and stamp twice from different
-//     angles; then GL_EQUAL, 2 in pass 2 keeps only the overlap.
-//   - drop glStencilMask(0) from pass 2 and watch the teapot chew
-//     through its own mask on the next frame.
+  // Things to try:
+  //   - GL_EQUAL -> GL_NOTEQUAL in pass 2: the window becomes a hole.
+  //   - GL_REPLACE -> GL_INCR in pass 1 and stamp twice from different
+  //     angles; then GL_EQUAL, 2 in pass 2 keeps only the overlap.
+  //   - drop glStencilMask(0) from pass 2 and watch the teapot chew
+  //     through its own mask on the next frame.
 }

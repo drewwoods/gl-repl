@@ -61,6 +61,12 @@ outstanding; three representative catalog scenes were migrated to exercise the
 real loader, and catalog/corpus gates are expected to reject the rest until the
 bulk migration lands.
 
+**Explicit-frame indentation implemented** - `.glr` now formats the camera and
+body one two-space level inside `display()`, matching the exported C shape and
+the in-memory document. The writer no longer strips the display base; the scene
+formatter applies it, and all 50 already-framed checked-in scenes were
+mechanically reformatted. The remaining 98 files still await wrapper insertion.
+
 **Previous completion verification (before the mandatory-frame follow-up)** -
 `make test-stubs` (86 binaries, 32,436 assertions),
 `make test-scenes` (3 binaries, 8,302 assertions),
@@ -79,20 +85,29 @@ formatting and state-ownership guards pass. The full catalog gates remain
 intentionally red: 98 of the 148 checked-in `.glr` files still await the
 separate mechanical wrapper insertion requested above.
 
+The 1m indentation follow-up adds two writer assertions to
+`test_repl_core_io` (555/555): comments and commands emitted inside `display()`
+both carry the two-space base. `check-formatted` covers all 50 already-framed
+scenes, and the built-in parity walk confirms every already-framed catalog
+scene remains byte-stable after load/save; its only remaining failures are the
+18 built-ins still missing the mandatory wrapper.
+
 ### Corrections found while implementing
 
 - **1g over-lists one site.** `tests/test_repl_code_panel_syntax.c:214`
   passes a string *literal* to `ui_repl_code_panel_generated_category()`,
   not `REPL_CODE_PANEL_SCRATCH_DECL_LINE`. Dropping the constant's two
   spaces does not touch it.
-- **1f is a byte-stability requirement, not a regeneration.** Working
+- **Before 1m, 1f was a byte-stability requirement, not a regeneration.** Working
   the arithmetic through: a function-body row goes in-memory 4 -> 2 while
   its strip goes 2 -> 0; headers and declarations go 2 -> 0 with the strip
   2 -> 0. On-disk `.glr` output is unchanged in every phase. So the test
   is `git diff --exit-code` over `examples/scenes/` after a save
   round-trip, and *without* 1f the same round-trip flattens function
   bodies. The checked-in files staying untouched during stage 1 proves
-  nothing on its own - nothing rewrote them.
+  nothing on its own - nothing rewrote them. The later explicit-frame
+  indentation follow-up deliberately supersedes that representation and
+  regenerates already-framed scenes once.
 - **The UI needs the boundary on the snapshot.** 1a caches `at` on
   `ReplSourceScopeView`, but `repl_code_panel.c` is pure over
   `UiRenderSnapshot` and never calls `repl_source_scope_*`. `at` reaches
@@ -186,10 +201,10 @@ observable rather than inferred), `--lint-scenes`
 every checked-in `.glr` that does not already carry one (`examples/scenes/`,
 `tests/scenes/**`). That migration is deliberately separate from this change.
 
-**Ordering against 1f.** 1f (strip the base indent per phase, not
-uniformly) has to land first or with this: body rows inside an explicit
-`display() {` are still written at column 0 on disk - the wrapper is
-structure, not indentation, and the loader re-derives indent either way.
+**Ordering against 1f.** The original implementation stripped the display base
+only from body rows so file-scope functions retained their nesting. Section 1m
+supersedes that on-disk representation: an explicit frame now contributes the
+same two-space base as C, and no phase is stripped.
 
 ## 1l. Non-focus C return type on user function headers (added 2026-08-24)
 
@@ -208,6 +223,28 @@ searching, and subtracts it from committed and active-input hits before a
 decoration to `source_prologue` rows. Coverage asserts exact text for committed
 and active rows plus a click on the synthetic prefix mapping to editor column
 zero.
+
+## 1m. C-like indentation inside `.glr` `display()` (added 2026-08-24)
+
+The explicit `.glr` frame is reflected in whitespace as well as grammar:
+
+- declarations and function definitions remain at file-scope indentation;
+- camera and ordinary body rows gain one two-space `display()` level;
+- nested body scopes retain their additional existing levels; and
+- the closing display brace remains at column zero.
+
+The editor document stores those bases for code rows, and generated camera rows
+already carry two spaces. A leading prose run can still live at column zero in
+the document while the phase writer attaches it to the first body command, so
+`repl_export_save_glr()` enforces a minimum two-space indent for camera/body
+output and otherwise writes rows verbatim. It never strips indentation. The
+loader still consumes the wrapper and calls `repl_reformat_program()`, so
+authored whitespace cannot accumulate on repeated load/save cycles.
+
+`scripts/format_scenes.py` treats the wrapper as one formatting level while
+continuing to exclude it from the document grammar. Existing files that already
+have a frame are reformatted in this change; inserting frames into the remaining
+legacy files stays the separate mechanical migration described in 1k.
 
 
 The work splits into **two projects**. Project 1 (the view) is
