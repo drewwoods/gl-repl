@@ -685,6 +685,7 @@ typedef struct {
     int input_len;
     int cursor_pos;
     int inserting;
+    EditorInsertScope insert_scope;
     char newline_buf[MAX_INPUT_LEN];
     int newline_len;
 } CommitAttemptState;
@@ -703,6 +704,7 @@ static void capture_commit_attempt_state(CommitAttemptState *s) {
     s->input_len = inp.input_len;
     s->cursor_pos = editor_cursor_pos();
     s->inserting = editor_insert_mode();
+    s->insert_scope = editor_insert_scope();
     memcpy(s->newline_buf, inp.pending_newline, sizeof(s->newline_buf));
     s->newline_len = inp.pending_newline_len;
 }
@@ -1156,6 +1158,16 @@ static CommitResult commit_before_navigation(void) {
         rejected_ttl = status->ttl;
         restore_commit_attempt_committed_state(before);
         editor_undo_ring_state_restore(&undo_before);
+        /* The ordinary navigation rollback deliberately reloads committed
+         * text, but the restricted file-scope slot promises to hold partial
+         * or rejected input in place. Re-assert its transient editing state
+         * after restoring the document snapshot. */
+        if (before->insert_scope == EDITOR_INSERT_FILE_SCOPE) {
+            editor_input_set_text(before->input);
+            editor_cursor_pos_set(before->cursor_pos);
+            editor_insert_mode_set(before->inserting);
+            editor_insert_scope_set(before->insert_scope);
+        }
         memcpy(status->text, rejected_status, sizeof(rejected_status));
         status->text[REPL_STATUS_TEXT_MAX - 1] = '\0';
         status->ttl = rejected_ttl;

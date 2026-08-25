@@ -1098,9 +1098,15 @@ static int route_code_insert_line_hit(const UiHit *hit) {
 /* UI_HIT_CODE_FILE_SCOPE_INSERT: file-scope insertion slot above display().
  * Routes through the editor transaction to activate the scoped slot. */
 static int route_code_file_scope_insert_hit(const UiHit *hit) {
-    (void)hit;
     color_picker_stop();
-    editor_input_enter_file_scope_slot();
+    /* Clicking the active input row is cursor positioning, not a navigation
+     * transition: re-entering would commit any valid text under the mouse. */
+    if (editor_insert_scope() != EDITOR_INSERT_FILE_SCOPE &&
+        !editor_input_enter_file_scope_slot()) {
+        route_code_click_epilog();
+        glr_ctrl_router_reset_code_panel_drag();
+        return 1;
+    }
     if (hit && hit->char_idx >= 0)
         editor_cursor_pos_set(hit->char_idx);
     route_code_click_epilog();

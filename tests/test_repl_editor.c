@@ -5163,7 +5163,32 @@ int main() {
         ASSERT_INT("file_scope reject comment: document count unchanged", repl_state_document_count(), 1);
         assert_status_contains("file_scope reject comment: status", "File scope accepts only");
 
-        /* 5. Early gate: Ctrl+X / Ctrl+V / Ctrl+/ / Ctrl+\ ignored in file-scope slot */
+        /* 5. Rejected navigation retains the active slot and partial input */
+        editor_input_set_text("not_a_declaration");
+        editor_cursor_pos_set(4);
+        editor_handle_special(GLUT_KEY_DOWN, 0, 0);
+        ASSERT_INT("file_scope reject nav: scope retained", editor_insert_scope(), EDITOR_INSERT_FILE_SCOPE);
+        ASSERT_INT("file_scope reject nav: insert mode retained", editor_insert_mode(), 1);
+        ASSERT_STR("file_scope reject nav: input retained", editor_state_input().input, "not_a_declaration");
+        ASSERT_INT("file_scope reject nav: cursor retained", editor_cursor_pos(), 4);
+        ASSERT_INT("file_scope reject nav: document unchanged", repl_state_document_count(), 1);
+
+        /* 6. Clicking within an active, valid declaration only moves the cursor */
+        editor_input_set_text("float click_guard");
+        {
+            UiHit hit;
+            memset(&hit, 0, sizeof(hit));
+            hit.kind = UI_HIT_CODE_FILE_SCOPE_INSERT;
+            hit.line_idx = repl_source_scope_display_body_start();
+            hit.char_idx = 6;
+            glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+        }
+        ASSERT_INT("file_scope active click: document unchanged", repl_state_document_count(), 1);
+        ASSERT_STR("file_scope active click: input retained", editor_state_input().input, "float click_guard");
+        ASSERT_INT("file_scope active click: cursor moved", editor_cursor_pos(), 6);
+        ASSERT_INT("file_scope active click: scope retained", editor_insert_scope(), EDITOR_INSERT_FILE_SCOPE);
+
+        /* 7. Early gate: Ctrl+X / Ctrl+V / Ctrl+/ / Ctrl+\ ignored in file-scope slot */
         {
             int saved_mods = g_mock_modifiers;
             g_mock_modifiers = GLUT_ACTIVE_CTRL;
@@ -5173,7 +5198,7 @@ int main() {
             g_mock_modifiers = saved_mods;
         }
 
-        /* 6. Valid float declaration commit via Enter */
+        /* 8. Valid float declaration commit via Enter */
         editor_input_set_text("float my_var;");
         editor_handle_key('\r', 0, 0);
         ASSERT_INT("file_scope decl: document count", repl_state_document_count(), 2);
@@ -5184,18 +5209,18 @@ int main() {
         ASSERT_INT("file_scope decl: edit line matches new body start", editor_state_edit_line(), 1);
         ASSERT_INT("file_scope decl: input cleared", editor_state_input().input_len, 0);
 
-        /* 7. Arrow Up moves to float decl line (display_body_start - 1) */
+        /* 9. Arrow Up moves to float decl line (display_body_start - 1) */
         editor_handle_special(GLUT_KEY_UP, 0, 0);
         ASSERT_INT("file_scope exit up: insert mode off", editor_insert_mode(), 0);
         ASSERT_INT("file_scope exit up: insert scope document", editor_insert_scope(), EDITOR_INSERT_DOCUMENT);
         ASSERT_INT("file_scope exit up: edit line at line 0", editor_state_edit_line(), 0);
 
-        /* 8. Arrow Down from line 0 enters file-scope insert slot */
+        /* 10. Arrow Down from line 0 enters file-scope insert slot */
         editor_handle_special(GLUT_KEY_DOWN, 0, 0);
         ASSERT_INT("file_scope enter from above: insert mode active", editor_insert_mode(), 1);
         ASSERT_INT("file_scope enter from above: insert scope file-scope", editor_insert_scope(), EDITOR_INSERT_FILE_SCOPE);
 
-        /* 9. Valid function definition commit in file-scope slot */
+        /* 11. Valid function definition commit in file-scope slot */
         editor_input_set_text("func0() {");
         editor_handle_key('\r', 0, 0);
         ASSERT_INT("file_scope func: document count", repl_state_document_count(), 4);
