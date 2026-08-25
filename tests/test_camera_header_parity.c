@@ -28,6 +28,7 @@
  * installed there is no pose to compare.
  */
 #include <dirent.h>
+#include <ctype.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,6 +43,7 @@
 #include "repl/export.h"
 #include "repl/host_effects.h"
 #include "repl/state.h"
+#include "repl/text_helpers.h"
 #include "source_document.h"
 #include "support/camera_bridge_stub.h"
 #include "support/scene_corpus.h"
@@ -147,30 +149,167 @@ static void parity_free_lines(char **lines) {
     free(lines);
 }
 
-static int parity_files_equal(const char *a_path, const char *b_path) {
-    FILE *a = fopen(a_path, "rb");
-    FILE *b = fopen(b_path, "rb");
-    unsigned char a_buf[4096];
-    unsigned char b_buf[4096];
-    int equal = 1;
+/* Read a text fixture whole so the stability comparison can normalize a
+ * numeric token without touching comments or changing the comparison's
+ * ordering/whitespace sensitivity. */
+static char *parity_read_file_text(const char *path, size_t *out_len) {
+    FILE *f = fopen(path, "rb");
+    long size;
+    char *text;
 
-    if (!a || !b) {
-        if (a) fclose(a);
-        if (b) fclose(b);
+    if (!f || fseek(f, 0, SEEK_END) != 0) {
+        if (f) fclose(f);
+        return NULL;
+    }
+    size = ftell(f);
+    if (size < 0 || fseek(f, 0, SEEK_SET) != 0) {
+        fclose(f);
+        return NULL;
+    }
+    text = (char *)malloc((size_t)size + 1);
+    if (!text) {
+        fclose(f);
+        return NULL;
+    }
+    if (fread(text, 1, (size_t)size, f) != (size_t)size) {
+        free(text);
+        fclose(f);
+        return NULL;
+    }
+    fclose(f);
+    text[size] = '\0';
+    if (out_len)
+        *out_len = (size_t)size;
+    return text;
+}
+
+/* The .glr writer emits the exact float32 spelling from parsed command
+ * values, so `1.0` can become `1` without changing the program. Normalize
+ * only decimal/exponent/suffixed numeric tokens in code; comments remain
+ * byte-for-byte significant, as do integer spellings and all whitespace. */
+static char *parity_canonicalize_numeric_literals(const char *src) {
+    size_t len, i, o;
+    size_t cap;
+    int line_comment = 0;
+    int block_comment = 0;
+    char *out;
+
+    if (!src)
+        return NULL;
+    len = strlen(src);
+    cap = len * 4 + 64;
+    out = (char *)malloc(cap);
+    if (!out)
+        return NULL;
+
+    for (i = 0, o = 0; i < len; ) {
+        char *end;
+        char value_text[REPL_SOURCE_FLOAT_TEXT_MAX];
+        float value;
+        int consumed;
+        int suffix_len = 0;
+        int has_float_syntax = 0;
+        size_t next;
+
+        if (line_comment) {
+            out[o++] = src[i];
+            if (src[i++] == '\n')
+                line_comment = 0;
+            continue;
+        }
+        if (block_comment) {
+            out[o++] = src[i];
+            if (src[i] == '*' && i + 1 < len && src[i + 1] == '/') {
+                out[o++] = src[++i];
+                block_comment = 0;
+            }
+            i++;
+            continue;
+        }
+        if (src[i] == '/' && i + 1 < len && src[i + 1] == '/') {
+            out[o++] = src[i++];
+            out[o++] = src[i++];
+            line_comment = 1;
+            continue;
+        }
+        if (src[i] == '/' && i + 1 < len && src[i + 1] == '*') {
+            out[o++] = src[i++];
+            out[o++] = src[i++];
+            block_comment = 1;
+            continue;
+        }
+
+        if (!isdigit((unsigned char)src[i]) &&
+            !(src[i] == '.' && i + 1 < len &&
+              isdigit((unsigned char)src[i + 1]))) {
+            out[o++] = src[i++];
+            continue;
+        }
+        if (i > 0 && (isalnum((unsigned char)src[i - 1]) ||
+                      src[i - 1] == '_')) {
+            out[o++] = src[i++];
+            continue;
+        }
+
+        end = NULL;
+        value = strtof(src + i, &end);
+        consumed = (int)(end - (src + i));
+        if (consumed <= 0) {
+            out[o++] = src[i++];
+            continue;
+        }
+        if (src[i + consumed] == 'f' || src[i + consumed] == 'F')
+            suffix_len = 1;
+        next = i + (size_t)consumed + (size_t)suffix_len;
+        if (next < len && (isalnum((unsigned char)src[next]) ||
+                           src[next] == '_')) {
+            out[o++] = src[i++];
+            continue;
+        }
+        for (size_t j = i; j < next; j++)
+            if (src[j] == '.' || src[j] == 'e' || src[j] == 'E' ||
+                src[j] == 'f' || src[j] == 'F')
+                has_float_syntax = 1;
+        if (!has_float_syntax) {
+            out[o++] = src[i++];
+            continue;
+        }
+
+        repl_format_source_float(value_text, sizeof(value_text), value);
+        {
+            size_t value_len = strlen(value_text);
+            if (o + value_len >= cap) {
+                free(out);
+                return NULL;
+            }
+            memcpy(out + o, value_text, value_len);
+            o += value_len;
+        }
+        i = next;
+    }
+    out[o] = '\0';
+    return out;
+}
+
+static int parity_files_equal(const char *a_path, const char *b_path) {
+    char *a_text = parity_read_file_text(a_path, NULL);
+    char *b_text = parity_read_file_text(b_path, NULL);
+    char *a_norm;
+    char *b_norm;
+    int equal;
+
+    if (!a_text || !b_text) {
+        free(a_text);
+        free(b_text);
         return 0;
     }
-    for (;;) {
-        size_t an = fread(a_buf, 1, sizeof(a_buf), a);
-        size_t bn = fread(b_buf, 1, sizeof(b_buf), b);
-        if (an != bn || memcmp(a_buf, b_buf, an) != 0) {
-            equal = 0;
-            break;
-        }
-        if (an < sizeof(a_buf))
-            break;
-    }
-    fclose(a);
-    fclose(b);
+    a_norm = parity_canonicalize_numeric_literals(a_text);
+    b_norm = parity_canonicalize_numeric_literals(b_text);
+    equal = a_norm && b_norm && strcmp(a_norm, b_norm) == 0;
+    free(a_text);
+    free(b_text);
+    free(a_norm);
+    free(b_norm);
     return equal;
 }
 
@@ -386,7 +525,8 @@ static void parity_check_file(const char *path, const char *name) {
         TEST_ASSERT_TRUE(&g_harness, label,
                          repl_export_save_glr(roundtrip,
                                               source_document_view()) != 0);
-        snprintf(label, sizeof(label), "%s: .glr re-save is byte-stable", name);
+        snprintf(label, sizeof(label),
+                 "%s: .glr re-save is stable modulo numeric spelling", name);
         TEST_ASSERT_TRUE(&g_harness, label,
                          parity_files_equal(path, roundtrip));
         snprintf(label, sizeof(label), "%s: .glr re-save has display frame",
