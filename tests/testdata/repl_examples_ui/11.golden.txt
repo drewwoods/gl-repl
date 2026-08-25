@@ -130,9 +130,13 @@ void display(void) {
   t0 = (fmod(t, period)) / period;
 
   // Bezier curve
-  glColor4f(0.92, 0.95, 0.98, 0.95);
   glBegin(GL_LINE_STRIP);
     for(u, 0, 1, 0.01) {
+      if(u < t0) {
+        glColor3f(0.95, 0.25, 1);
+      } else {
+        glColor4f(0.92, 0.95, 0.98, 0.25);
+      }
       bezier(u);
       glVertex2f(x, y);
     }
@@ -141,12 +145,13 @@ void display(void) {
   //
   // Guide lines
   //
+  glColor3f(0.55, 0.3, 1);
   glBegin(GL_POINTS);
     glVertex2f(ax, ay);
     glVertex2f(bx, by);
     glVertex2f(cx, cy);
     bezier(t0);
-    glColor3f(1, 0.35, 0.2);
+    glColor3f(0.95, 0.25, 1);
     glVertex2f(x, y);
   glEnd();
   glColor4f(0.55, 0.3, 1, 0.4);

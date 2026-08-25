@@ -2,81 +2,130 @@
 // @cfg backdrop = RENDER3D_BACKDROP_NEBULA
 // @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES
 // @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
+// @cfg variable_panel = 0
 // @cfg vertex_points = 0
 // @cfg vertex_outlines = 0
-static float c, a; // color/brightness mix in [0,1] (planet + ring bands); comet orbit angle
+static float c, a; // color/shading helpers
+static float stormLon; // dynamic storm drift angle
 
 // ===== Ringed gas giant under nebula skies =====
-// NOTE: stays well under the 8192 flattened-command budget --
-// the sphere loop costs stacks*(slices + 1)*10 flat commands.
+// Optimized spherical mesh + multi-tier rings with realistic planetary shadow.
 
-// banded gas giant: quad strips over latitude, bands swirled by t
+// Banded gas giant: differential zonal winds, turbulent shear, and great storm
 planet(rad, stacks, slices) {
-  // latA/latB = latitude angle at row i and i+1; cA/cB = cos(lat), shared by
-  // the normal and the vertex so each cosine is taken once, not three times.
-  // lon/cLon/sLon do the same for the per-column longitude angle.
-  float latA, latB, cA, cB, lon, cLon, sLon;
-  float y;
+  float latA, latB, cA, cB, yA, yB;
+  float lon, cLon, sLon, swirlA, swirlB;
+  float cA_val, cB_val, stormA, stormB, dLonA, dLonB;
+
   for(i, 0, stacks) {
+    latA = -PI/2 + PI*i/stacks;
+    latB = -PI/2 + PI*(i + 1)/stacks;
+    cA = cos(latA);
+    cB = cos(latB);
+    yA = sin(latA);
+    yB = sin(latB);
+
     glBegin(GL_QUAD_STRIP);
       for(j, 0, slices + 1) {
-        latA = -PI/2 + PI*i/stacks;
-        latB = -PI/2 + PI*(i + 1)/stacks;
         lon = j*TAU/slices;
-        cA = cos(latA);
-        cB = cos(latB);
         cLon = cos(lon);
         sLon = sin(lon);
-        y = sin(latA);
-        c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*lon + 0.6*t) + 0.4*t);
-        glColor3f(0.46 + 0.34*c, 0.30 + 0.16*c, 0.62 - 0.20*c);
-        glNormal3f(cA*cLon, y, cA*sLon);
-        glVertex3f(rad*cA*cLon, rad*y, rad*cA*sLon);
-        y = sin(latB);
-        c = 0.5 + 0.5*sin(9*y + 0.5*sin(3*lon + 0.6*t) + 0.4*t);
-        glColor3f(0.46 + 0.34*c, 0.30 + 0.16*c, 0.62 - 0.20*c);
-        glNormal3f(cB*cLon, y, cB*sLon);
-        glVertex3f(rad*cB*cLon, rad*y, rad*cB*sLon);
+
+        // Latitude-dependent differential rotation (equator faster, mid-latitudes counter)
+        swirlA = lon + (1.2 - 2.0*yA*yA)*0.35*t;
+        swirlB = lon + (1.2 - 2.0*yB*yB)*0.35*t;
+
+        // Multi-harmonic atmospheric banding + turbulence
+        cA_val = 0.5 + 0.35*sin(10*yA + 0.4*sin(4*swirlA)) + 0.15*sin(22*yA + 0.3*sin(6*swirlA));
+        cB_val = 0.5 + 0.35*sin(10*yB + 0.4*sin(4*swirlB)) + 0.15*sin(22*yB + 0.3*sin(6*swirlB));
+
+        // Great Storm Vortex in southern temperate zone (y ~ -0.32)
+        dLonA = rem(swirlA - stormLon + PI, TAU) - PI;
+        stormA = max(0, 1 - (dLonA*dLonA*5.0 + (yA + 0.32)*(yA + 0.32)*35.0));
+        dLonB = rem(swirlB - stormLon + PI, TAU) - PI;
+        stormB = max(0, 1 - (dLonB*dLonB*5.0 + (yB + 0.32)*(yB + 0.32)*35.0));
+
+        // Vertex A: royal violet poles, amber/coral bands, cyan storm eye
+        glColor3f(0.38 + 0.45*cA_val + 0.4*stormA, 0.22 + 0.32*cA_val - 0.1*stormA, 0.60 - 0.28*cA_val + 0.3*stormA);
+        glNormal3f(cA*cLon, yA, cA*sLon);
+        glVertex3f(rad*cA*cLon, rad*yA, rad*cA*sLon);
+
+        // Vertex B
+        glColor3f(0.38 + 0.45*cB_val + 0.4*stormB, 0.22 + 0.32*cB_val - 0.1*stormB, 0.60 - 0.28*cB_val + 0.3*stormB);
+        glNormal3f(cB*cLon, yB, cB*sLon);
+        glVertex3f(rad*cB*cLon, rad*yB, rad*cB*sLon);
       }
     glEnd();
   }
 }
 
-// moon on a tilted circular orbit; caller sets the color
-moon(orbit, rad, speed, tilt) {
+// Moon on a tilted circular orbit with colored material
+moon(orbit, rad, speed, tilt, r, gr, b) {
   glPushMatrix();
     glRotatef(tilt, 0, 0, 1);
     glRotatef(speed*t, 0, 1, 0);
     glTranslatef(orbit, 0, 0);
+    glColor3f(r, gr, b);
     glutSolidSphere(rad, 16, 12);
   glPopMatrix();
 }
 
-// translucent ring band: bright inner lip fading outward
-ring(inner, outer, fade) {
+// Concentric ring band with micro-grooves, radial gradients and planet shadow
+ring(inner, outer, baseR, baseG, baseB, alpha, segs) {
+  float ang, cAng, sAng, shade;
   glBegin(GL_QUAD_STRIP);
-    for(j, 0, 41) {
-      c = 0.75 + 0.25*sin(j*0.9);
-      glColor4f(0.70*c, 0.58*c, 0.88*c, fade);
-      glVertex3f(inner*cos(j*TAU/40), 0, inner*sin(j*TAU/40));
-      glColor4f(0.45*c, 0.50*c, 0.85*c, 0.25*fade);
-      glVertex3f(outer*cos(j*TAU/40), 0, outer*sin(j*TAU/40));
+    for(j, 0, segs + 1) {
+      ang = j*TAU/segs;
+      cAng = cos(ang);
+      sAng = sin(ang);
+
+      // Planet shadow cone: rings behind planet darken into shadow
+      shade = 0.25 + 0.75*smoothstep(-0.35, 0.25, cAng*0.7 + sAng*0.7);
+
+      // Radial striations & forward scattering shimmer
+      c = 0.82 + 0.18*sin(j*1.3 + inner*8);
+
+      glColor4f(baseR*c, baseG*c, baseB*c, alpha*shade);
+      glVertex3f(inner*cAng, 0, inner*sAng);
+
+      glColor4f(baseR*c*0.85, baseG*c*0.9, baseB*c*1.05, alpha*0.6*shade);
+      glVertex3f(outer*cAng, 0, outer*sAng);
     }
   glEnd();
 }
+
+// Atmospheric limb glow halo around the planet
+atmosphere(rad) {
+  float ang, cAng, sAng;
+  glBegin(GL_QUAD_STRIP);
+    for(j, 0, 37) {
+      ang = j*TAU/36;
+      cAng = cos(ang);
+      sAng = sin(ang);
+      glColor4f(0.25, 0.65, 1.0, 0.45);
+      glVertex3f(rad*cAng, rad*sAng, 0);
+      glColor4f(0.45, 0.25, 0.95, 0.0);
+      glVertex3f((rad + 0.22)*cAng, (rad + 0.22)*sAng, 0);
+    }
+  glEnd();
+}
+
 display() {
   glTranslatef(0.0000f, 0.0000f, -12.5000f);   // @camera dist
   glRotatef(16.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
   glRotatef(-30.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(0.0000f, -1.2000f, 0.0000f);   // @camera pan
 
+  stormLon = 0.15*t;
+
   glClearColor(0.04, 0.04, 0.1, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   glEnable(GL_COLOR_MATERIAL);
   glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.45, 0.45, 0.5, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 35);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_LIGHTING);
   glEnable(GL_LIGHT0);
@@ -87,42 +136,82 @@ display() {
   glPushMatrix();
     glTranslatef(0, 1.7, 0);
 
+    // Planet body
     glPushMatrix();
       glRotatef(-6*t, 0, 1, 0);
-      planet(1.55, 18, 18);
+      planet(1.55, 15, 18);
     glPopMatrix();
 
-    glColor3f(0.78, 0.72, 0.64);
-    moon(3.9, 0.22, 34, 9);
-    glColor3f(0.55, 0.66, 0.8);
-    moon(5.1, 0.16, -21, -14);
+    // Moons: 3 distinct worlds
+    moon(3.1, 0.07, 45, 26, 0.9, 0.85, 0.75); // Inner shepherd moon near the rings
+    moon(4.1, 0.22, 28, 10, 0.95, 0.65, 0.40); // Ochre volcanic moon
+    moon(5.4, 0.17, -19, -15, 0.45, 0.75, 0.95); // Azure icy moon
 
-    // translucent passes last: rings over the planet, then the comet
+    // Translucent passes: Atmosphere, Rings, Comet, Dust
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDepthMask(GL_FALSE);
+
+    // Ethereal atmospheric limb glow
     glPushMatrix();
-      glRotatef(26, 1, 0, 0.3);
-      ring(1.95, 2.45, 0.40);
-      ring(2.55, 3.05, 0.20);
+      glRotatef(30, 0, 1, 0);
+      glRotatef(-16, 1, 0, 0);
+      atmosphere(1.54);
     glPopMatrix();
 
-    // comet: bright head + tail fading along its eccentric orbit
+    // Multi-tier ring system tilted at 26 degrees
+    glPushMatrix();
+      glRotatef(26, 1, 0, 0.3);
+      // C Ring (inner crepe ring)
+      ring(1.82, 2.08, 0.55, 0.45, 0.75, 0.22, 36);
+      // B Ring (bright dense main ring with golden striations)
+      ring(2.12, 2.60, 0.85, 0.75, 0.65, 0.55, 42);
+      // A Ring (outer ring beyond Cassini Division)
+      ring(2.68, 3.05, 0.65, 0.68, 0.85, 0.35, 42);
+      // F Ring (narrow shepherd filament)
+      ring(3.12, 3.16, 0.75, 0.85, 1.00, 0.45, 36);
+    glPopMatrix();
+
+    // Comet: brilliant dual-tail (ion beam + sweeping dust fan)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending for comet glow
+
+    // Ion tail (electric azure straight beam)
     glBegin(GL_LINE_STRIP);
-      for(i, 0, 30) {
-        a = 0.7*t - 0.06*i;
-        glColor4f(0.55, 0.85, 1.0, 0.6*(1 - i/30));
-        glVertex3f(5.6*cos(a), 1.1*sin(2*a), 4.2*sin(a));
+      for(i, 0, 25) {
+        a = 0.7*t - 0.04*i;
+        glColor4f(0.2, 0.6, 1.0, 0.7*(1 - i/25));
+        glVertex3f(5.6*cos(a), 1.1*sin(2*a) + 0.02*i, 4.2*sin(a));
       }
     glEnd();
-    glPointSize(6);
+
+    // Dust tail (warm diffuse curved wake)
+    glBegin(GL_LINE_STRIP);
+      for(i, 0, 35) {
+        a = 0.7*t - 0.055*i;
+        glColor4f(0.9, 0.8, 0.6, 0.45*(1 - i/35)*(1 - i/35));
+        glVertex3f(5.6*cos(a) - 0.03*i, 1.1*sin(2*a) - 0.015*i, 4.2*sin(a));
+      }
+    glEnd();
+
+    // Comet Nucleus & Coma (multi-layer additive point glow)
+    glPointSize(18);
     glBegin(GL_POINTS);
-      glColor4f(0.85, 0.97, 1, 0.95);
+      glColor4f(0.3, 0.7, 1.0, 0.35);
+      glVertex3f(5.6*cos(0.7*t), 1.1*sin(1.4*t), 4.2*sin(0.7*t));
+    glEnd();
+    glPointSize(8);
+    glBegin(GL_POINTS);
+      glColor4f(0.8, 0.95, 1.0, 0.85);
+      glVertex3f(5.6*cos(0.7*t), 1.1*sin(1.4*t), 4.2*sin(0.7*t));
+    glEnd();
+    glPointSize(3);
+    glBegin(GL_POINTS);
+      glColor4f(1.0, 1.0, 1.0, 1.0);
       glVertex3f(5.6*cos(0.7*t), 1.1*sin(1.4*t), 4.2*sin(0.7*t));
     glEnd();
 
-    // leave shared GL state the way we found it
+    // Clean up GL state
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
   glPopMatrix();
