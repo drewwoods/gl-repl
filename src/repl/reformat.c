@@ -201,6 +201,14 @@ static void reformat_replace_cmd(ReplCommandStore *store,
  *
  * `at_before` is the boundary as it stood before the edit; the current
  * boundary is read from the live document. */
+/* Translate a post-change row index back to the pre-change document, undoing
+ * the insert first and then the optional leading delete - the reverse of the
+ * order apply performs them in.
+ *
+ * Returns -1 for a row the change itself introduced, which has no pre-image.
+ * That is NOT "leave it alone": the caller reconstructs the side such a row's
+ * text was composed against, because a row can invalidate its own base indent
+ * by moving the boundary. See the comment at the call site. */
 static int map_post_change_to_pre(int cmd_idx, const ReplCompiledChange *change) {
     if (!change)
         return cmd_idx;
@@ -253,10 +261,30 @@ void repl_reindent_after_change(int at_before, const ReplCompiledChange *change)
             continue;
 
         pre_idx = map_post_change_to_pre(cmd_idx, change);
-        if (pre_idx < 0)
-            continue;
-
-        was_body = pre_idx >= at_before;
+        if (pre_idx < 0) {
+            /* A newly inserted row has no pre-image, but it is NOT
+             * automatically correct: the commit composed its text against
+             * `at_before`, and its own insertion can move the boundary past
+             * it. `float radius;` typed below a comment-led scene lands at
+             * the declaration-prologue end - inside the body by the old
+             * boundary, so base indent 2 - and then pushes the boundary
+             * below itself, leaving it indented above `void display(void) {`.
+             *
+             * Reconstruct the side the composition assumed rather than
+             * skipping the row. Both the declaration
+             * (compile.c, repl_compile_float_decl) and the function header
+             * (commit.c, editor_compile_func_def) pick their base through
+             * repl_source_scope_view_base_indent_for_insert(), whose rule is
+             * `pos <= boundary -> 0`, applied to the change's insert position
+             * against the pre-change boundary. Mirror that exactly, including
+             * the deliberate comparison of an untranslated `change->pos`
+             * against the pre-delete `at_before` - the same coordinates the
+             * composition used. Every row of an INSERT_MANY shares one base,
+             * so one answer covers the whole block. */
+            was_body = change && change->pos > at_before;
+        } else {
+            was_body = pre_idx >= at_before;
+        }
         is_body  = cmd_idx >= at_after;
         if (was_body == is_body)
             continue;

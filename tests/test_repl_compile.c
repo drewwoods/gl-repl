@@ -1497,6 +1497,67 @@ static void test_func_def_hoists_before_display_clear_pair(void) {
                repl_source_scope_display_body_start(), 5);
 }
 
+/* A declaration can invalidate its own base indent: the commit composes the
+ * text against the boundary as it stands, and the insertion then moves the
+ * boundary below the new row. Here the leading comment run pushes the
+ * declaration to the prologue end (index 1), which is inside the body by the
+ * old boundary (0), so it is composed at base indent 2 - and the insert then
+ * puts the boundary at 2, leaving both the comment and the declaration above
+ * `void display(void) {` while still indented as body rows.
+ *
+ * repl_reindent_after_change() must fix BOTH. The comment has a pre-image and
+ * was always handled; the declaration is a newly inserted row and was skipped
+ * for want of one. */
+static void test_decl_reindents_itself_across_moved_boundary(void) {
+    glr_ctrl_reset_all();
+
+    editor_feed_line("// intro prose for the scene");
+    editor_feed_line("glClearColor(0.1, 0.1, 0.1, 1);");
+    editor_feed_line("glClear(GL_COLOR_BUFFER_BIT);");
+    ASSERT_INT("comment-led scene starts fully inside the body",
+               repl_source_scope_display_body_start(), 0);
+
+    editor_navigate_to_line(repl_state_document_count());
+    set_input("static float radius;");
+    ASSERT_INT("decl commit consumed", editor_try_commit_float_decl(), 1);
+
+    ASSERT_INT("boundary moved below both file-scope rows",
+               repl_source_scope_display_body_start(), 2);
+    ASSERT_STR("carried comment is re-indented to file scope",
+               editor_buffer_line(0), "// intro prose for the scene");
+    ASSERT_STR("the new declaration re-indents itself too",
+               editor_buffer_line(1), "static float radius;");
+    ASSERT_STR("body rows keep the display indent",
+               editor_buffer_line(2), "  glClearColor(0.1, 0.1, 0.1, 1);");
+    ASSERT_STR("trailing body row untouched",
+               editor_buffer_line(3), "  glClear(GL_COLOR_BUFFER_BIT);");
+}
+
+/* The negative twin: an insert that does NOT move the boundary past itself
+ * must not be shifted. A function definition composed at base 0 above the
+ * boundary stays at base 0 - if the newly-inserted-row rule over-fired, the
+ * header and closer would lose their indent or gain a spurious one. */
+static void test_func_def_insert_keeps_composed_indent(void) {
+    glr_ctrl_reset_all();
+
+    editor_feed_line("static float phase;");
+    editor_feed_line("// --- Render State ---");
+    editor_feed_line("glClearColor(0.05, 0.06, 0.08, 1);");
+    editor_feed_line("glClear(GL_COLOR_BUFFER_BIT);");
+
+    editor_navigate_to_line(repl_state_document_count());
+    set_input("moon() {");
+    ASSERT_INT("func def commit consumed",
+               editor_try_commit_block_structs(), 1);
+
+    ASSERT_STR("func header keeps file-scope indent",
+               editor_buffer_line(1), "moon() {");
+    ASSERT_STR("func closer keeps file-scope indent",
+               editor_buffer_line(2), "}");
+    ASSERT_STR("render-state comment stays a body row",
+               editor_buffer_line(3), "  // --- Render State ---");
+}
+
 /* The other side of that clamp: an ACTIVE tutorial keeps the historical
  * placement, below its injected clear prelude and therefore inside the
  * projected display(). The prelude rows are locked and the runner's row
@@ -2598,6 +2659,8 @@ int main(void) {
     test_func_def_after_blank_separated_decls();
     test_func_def_hoists_before_display_clear_pair();
     test_func_def_tutorial_keeps_clear_prelude_placement();
+    test_decl_reindents_itself_across_moved_boundary();
+    test_func_def_insert_keeps_composed_indent();
     test_func_def_resume_publish_consumed_by_close_brace();
     test_if_block_condition_eval_uses_context_predef();
     test_local_decl_inside_func();
