@@ -47,10 +47,12 @@ The whole program is what you'd type into the REPL; there is no other file.
 
 ### [Jellyfish](../examples/scenes/jellyfish-gldepthmask-translucency.glr)
 
-A breathing bell of triangle strips and a fan of swaying line-strip tentacles,
-drawn with additive blending and **depth writes off** - `glDepthMask(GL_FALSE)`,
-the classic translucency trick that stops the bell's far side from z-fighting
-its near side.
+A breathing bell of triangle strips, radial canals with a bioluminescent pulse
+running down them, four gonads read *through* the dome, and a fan of swaying
+line-strip tentacles - all in a water column of caustic light shafts and
+drifting marine snow. Every layer is additive with **depth writes off** -
+`glDepthMask(GL_FALSE)`, the classic translucency trick that stops the bell's
+far side from z-fighting its near side and lets the organs inside it show.
 
 <!-- images/showcase/jellyfish.png
      Shot: the translucent bell pulsing while the tentacles sway.
@@ -67,15 +69,15 @@ glEnable(GL_BLEND);  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 glEnable(GL_DEPTH_TEST);  glDepthMask(GL_FALSE);
 
 pulse = sin(t*1.6);  bellR = 1.5*(1 + 0.10*pulse);   // the bell breathes
-for(i, 0, rings) {                  // latitude strips, crown down to the rim
-  glBegin(GL_TRIANGLE_STRIP);
-  for(j, 0, segs+1) { /* ring vertices; alpha fades toward the edge */ }
-  glEnd();
-}
+glow  = rem(t*0.32, 1);             // pulse travelling crown -> rim
+
+bellStrips(segs, rings, bellR, bellH);   // latitude strips, alpha to the edge
+bellRibs(ribs, bellR, bellH);            // radial canals, bright where `glow` is
+gonads(4, bellR, bellH*0.34);            // organs you read THROUGH the dome
 
 tentacle(angAt, attach, len, phase, amp, cr, cg, cb) {
   glBegin(GL_LINE_STRIP);           // a swaying strand, alpha fading to the tip
-  for(s, 0, 14) { /* sway = f(t, phase, depth-along-strand) */ }
+  for(s, 0, 16) { /* sway = f(t, phase, depth-along-strand) */ }
   glEnd();
 }
 for(k, 0, tentacles) { tentacle(...); }
