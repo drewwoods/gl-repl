@@ -755,6 +755,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/load.c \
                      src/repl/normalize.c \
                      src/repl/parser.c \
+                     src/repl/program_bounds.c \
                      src/repl/program_query.c \
                      src/repl/reformat.c \
                      src/subsystems/replay/replay_annotations.c \
@@ -1017,6 +1018,9 @@ TEST_BINS += test_export_trace_parity
 # glTranslatef, so it needs the no-op GL stubs to run without a
 # real GL context.
 TEST_BINS += test_replay_walk
+# Scene-bounds walk: the software modelview stack plus the GLUT-solid
+# extents. Pure over a caller-supplied FlatProgramView, no GL.
+TEST_BINS += test_repl_program_bounds
 TEST_BINS += test_ui_panels
 TEST_BINS += test_ui_status_history
 TEST_BINS += test_edit_overlays

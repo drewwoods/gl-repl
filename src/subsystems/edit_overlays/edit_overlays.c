@@ -16,7 +16,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define NORMAL_FRAME_STACK_MAX 128
 #define NORMAL_FRAME_EPS 1e-8f
 
 static int vertex_outline_style_bold(const OverlayWalkCtx *ctx) {
@@ -108,71 +107,6 @@ static int mat4_invert(const float m[16], float out[16]) {
     return 1;
 }
 
-static void mat4_identity(float m[16]) {
-    for (int i = 0; i < 16; i++)
-        m[i] = 0.0f;
-    m[0] = m[5] = m[10] = m[15] = 1.0f;
-}
-
-static void mat4_copy(float dst[16], const float src[16]) {
-    memcpy(dst, src, 16 * sizeof(float));
-}
-
-static void mat4_post_mul(float m[16], const float rhs[16]) {
-    float tmp[16];
-    mat4_mul_col_major(m, rhs, tmp);
-    mat4_copy(m, tmp);
-}
-
-static void mat4_apply_translate(float m[16], float x, float y, float z) {
-    float t[16];
-    mat4_identity(t);
-    t[12] = x;
-    t[13] = y;
-    t[14] = z;
-    mat4_post_mul(m, t);
-}
-
-static void mat4_apply_scale(float m[16], float x, float y, float z) {
-    float s[16];
-    mat4_identity(s);
-    s[0] = x;
-    s[5] = y;
-    s[10] = z;
-    mat4_post_mul(m, s);
-}
-
-static void mat4_apply_rotate(float m[16], float angle_deg,
-                              float x, float y, float z) {
-    float axis_len = sqrtf(x * x + y * y + z * z);
-    float r[16];
-    float c, s, omc;
-
-    if (axis_len <= NORMAL_FRAME_EPS)
-        return;
-
-    x /= axis_len;
-    y /= axis_len;
-    z /= axis_len;
-
-    float angle = angle_deg * 0.01745329251994329577f;
-    c = cosf(angle);
-    s = sinf(angle);
-    omc = 1.0f - c;
-
-    mat4_identity(r);
-    r[0]  = x * x * omc + c;
-    r[1]  = y * x * omc + z * s;
-    r[2]  = x * z * omc - y * s;
-    r[4]  = x * y * omc - z * s;
-    r[5]  = y * y * omc + c;
-    r[6]  = y * z * omc + x * s;
-    r[8]  = x * z * omc + y * s;
-    r[9]  = y * z * omc - x * s;
-    r[10] = z * z * omc + c;
-    mat4_post_mul(m, r);
-}
-
 static int mat4_transform_normal_frame(const float model[16],
                                        const float normal[3],
                                        float out[3]) {
@@ -200,51 +134,25 @@ static int compute_normal_frame_args(const FlatProgramView *flat,
                                      int flat_idx,
                                      const float normal[3],
                                      float out[3]) {
-    float model[16];
-    float stack[NORMAL_FRAME_STACK_MAX][16];
-    int depth = 0;
+    Mat4Stack st;
 
     if (!flat || !flat->cmds || flat_idx < 0 || flat_idx > flat->cmd_count)
         return 0;
 
-    mat4_identity(model);
+    /* Software modelview tracking (repl/transform_utils.h) rather than the
+     * GL stack: this needs the matrix's value, and reading the GL stack
+     * back mid-frame is a synchronous glGetFloatv drain. */
+    mat4_stack_init(&st);
     for (int i = 0; i < flat_idx; i++) {
         const GLCmd *cmd = &flat->cmds[i];
         if (!cmd->valid)
             continue;
-
-        switch (cmd->type) {
-        case CMD_PUSH_MATRIX:
-            if (depth >= NORMAL_FRAME_STACK_MAX)
-                return 0;
-            mat4_copy(stack[depth], model);
-            depth++;
-            break;
-        case CMD_POP_MATRIX:
-            if (depth > 0) {
-                depth--;
-                mat4_copy(model, stack[depth]);
-            }
-            break;
-        case CMD_LOAD_IDENTITY:
-            mat4_identity(model);
-            break;
-        case CMD_TRANSLATE3F:
-            mat4_apply_translate(model, cmd->args[0], cmd->args[1], cmd->args[2]);
-            break;
-        case CMD_SCALEF:
-            mat4_apply_scale(model, cmd->args[0], cmd->args[1], cmd->args[2]);
-            break;
-        case CMD_ROTATEF:
-            mat4_apply_rotate(model, cmd->args[0], cmd->args[1],
-                              cmd->args[2], cmd->args[3]);
-            break;
-        default:
-            break;
-        }
+        mat4_stack_apply_cmd(&st, cmd);
     }
+    if (st.overflow)
+        return 0;
 
-    return mat4_transform_normal_frame(model, normal, out);
+    return mat4_transform_normal_frame(st.top, normal, out);
 }
 
 /* --- overlays that honor the program's clipping, culling and stencil ---
