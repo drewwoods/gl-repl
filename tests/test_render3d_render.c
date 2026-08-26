@@ -703,6 +703,112 @@ static void test_scene_backdrop_drones(void) {
     }
 }
 
+/* --- Fairies backdrop: a positional-attenuation rig ------------------
+ *
+ * The fairies exist to demonstrate point-light attenuation, so the two
+ * things worth pinning are exactly the two that make it a demonstration:
+ * no slot is ever a spotlight, and the falloff coefficients scale with the
+ * measured scene so the same curve applies at any size.
+ */
+static int trace_first_float3(const TraceLog *log, const char *prefix,
+                              float *out) {
+    size_t n = strlen(prefix);
+    for (int i = 0; i < log->n; i++) {
+        if (strncmp(log->lines[i], prefix, n) == 0) {
+            if (sscanf(log->lines[i] + n, "%f", out) == 1)
+                return 1;
+        }
+    }
+    return 0;
+}
+
+static void fairy_run_setup(Render3dFrameRenderContext *ctx,
+                            DroneBoundsProbe *probe, float half,
+                            TraceLog *log) {
+    memset(probe, 0, sizeof *probe);
+    probe->answer = 1;
+    for (int k = 0; k < 3; k++) {
+        probe->min[k] = -half;
+        probe->max[k] = half;
+    }
+    ctx->config.geometry_bounds_fn = drone_bounds_probe;
+    ctx->config.geometry_bounds_user_data = probe;
+    trace_begin();
+    render3d_backdrop_setup_lights(ctx);
+    trace_end(log);
+}
+
+static void test_scene_backdrop_fairies(void) {
+    printf("--- fairies backdrop attenuation rig ---\n");
+
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
+    DroneBoundsProbe probe;
+    TraceLog log;
+    char prefix[64];
+    float small_q = 0.0f, large_q = 0.0f;
+
+    ctx.config.backdrop_mode = RENDER3D_BACKDROP_FAIRIES;
+    /* Mid-visit: the resident is up, so its slot is fully configured. */
+    ctx.config.anim_time = 5.0f;
+
+    fairy_run_setup(&ctx, &probe, 1.0f, &log);
+
+    /* The design statement. A spotlight would make the falloff ambiguous -
+     * you could not tell the cone from the distance term - so no slot gets
+     * any GL_SPOT_* state at all. */
+    for (int i = 0; i < 8; i++) {
+        char label[80];
+        snprintf(prefix, sizeof prefix, "glLightf %u %u ",
+                 (unsigned)(GL_LIGHT0 + i), (unsigned)GL_SPOT_CUTOFF);
+        snprintf(label, sizeof label, "fairies: GL_LIGHT%d gets no spot cutoff", i);
+        ASSERT_TRUE(label, trace_count_prefix(&log, prefix) == 0);
+        snprintf(prefix, sizeof prefix, "glLightfv %u %u ",
+                 (unsigned)(GL_LIGHT0 + i), (unsigned)GL_SPOT_DIRECTION);
+        snprintf(label, sizeof label, "fairies: GL_LIGHT%d gets no spot direction", i);
+        ASSERT_TRUE(label, trace_count_prefix(&log, prefix) == 0);
+    }
+
+    /* The resident is positional - a directional light (w = 0) has no
+     * distance to attenuate over, which would make the whole rig inert. */
+    snprintf(prefix, sizeof prefix, "glLightfv %u %u ",
+             (unsigned)GL_LIGHT4, (unsigned)GL_POSITION);
+    ASSERT_TRUE("fairies: the resident has a position",
+                trace_count_prefix(&log, prefix) == 1);
+    {
+        float x, y, z, w;
+        int found = 0;
+        size_t n = strlen(prefix);
+        for (int i = 0; i < log.n && !found; i++)
+            if (strncmp(log.lines[i], prefix, n) == 0 &&
+                sscanf(log.lines[i] + n, "%f %f %f %f", &x, &y, &z, &w) == 4)
+                found = 1;
+        ASSERT_TRUE("fairies: the resident light is positional (w == 1)",
+                    found && w == 1.0f);
+    }
+
+    /* Falloff scales with the scene: ten times the radius is a hundredth
+     * of the quadratic coefficient, which is what keeps the visible curve
+     * identical on a 1-unit sketch and a 40-unit one. */
+    snprintf(prefix, sizeof prefix, "glLightf %u %u ",
+             (unsigned)GL_LIGHT4, (unsigned)GL_QUADRATIC_ATTENUATION);
+    ASSERT_TRUE("fairies: the resident attenuates quadratically",
+                trace_first_float3(&log, prefix, &small_q) && small_q > 0.0f);
+    fairy_run_setup(&ctx, &probe, 10.0f, &log);
+    ASSERT_TRUE("fairies: quadratic falloff scales with the scene",
+                trace_first_float3(&log, prefix, &large_q) &&
+                large_q > small_q / 110.0f && large_q < small_q / 90.0f);
+
+    /* And it still works with no hook at all - render3d_demo's case. */
+    ctx.config.geometry_bounds_fn = NULL;
+    ctx.config.geometry_bounds_user_data = NULL;
+    trace_begin();
+    render3d_backdrop_setup_lights(&ctx);
+    render3d_backdrop_render(&ctx);
+    trace_end(&log);
+    ASSERT_TRUE("fairies: no bounds hook still lights the resident",
+                trace_count_prefix(&log, prefix) == 1);
+}
+
 static void test_render3d_winding_and_gizmo(void) {
     printf("--- render3d winding view and camera glow ---\n");
 
@@ -1923,6 +2029,7 @@ int main(int argc, char **argv) {
     test_scene_axes_render();
     test_scene_backdrop_render();
     test_scene_backdrop_drones();
+    test_scene_backdrop_fairies();
     test_render3d_winding_and_gizmo();
     test_buffer_hooks();
     test_helpers_suspend_stencil_test();

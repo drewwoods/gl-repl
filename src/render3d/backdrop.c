@@ -140,12 +140,6 @@
  * pose functions are all smooth over. */
 #define DRONE_XFADE_FRAC     0.16f
 
-/* Scene scale. The fallback is used when no bounds hook is installed or it
- * reports nothing drawn; the floor keeps a degenerate (single-point) scene
- * from collapsing the whole rig onto the geometry. */
-#define DRONE_FALLBACK_RADIUS 2.5f
-#define DRONE_MIN_RADIUS      0.75f
-
 /* Path geometry, all in multiples of the scene radius. */
 #define DRONE_STRAFE_SPAN     5.0f  /* run length, entering and exiting offscreen */
 #define DRONE_STRAFE_LANE     0.42f /* lateral spacing within the formation */
@@ -200,6 +194,77 @@
 
 #define DRONE_GLOW_POINT_SIZE 7.0f
 #define DRONE_POOL_SEGS       28
+
+/* --- Fairies backdrop ---
+ *
+ * A quieter companion to the drone rig, and a demonstration piece: every
+ * fairy is a plain POSITIONAL light with quadratic attenuation and no spot
+ * cone at all. What lights your geometry is proximity and nothing else, so
+ * a fairy drifting in to look at a surface ramps it up from black and lets
+ * it fall away again - which is exactly what attenuation does and what a
+ * directional or spot light cannot show you.
+ *
+ * One resident fairy at a time comes in to inspect the scene: it arrives
+ * from outside, hops between a few points of interest just off the
+ * geometry's surface with a restless flutter, then leaves and the next
+ * visitor arrives in a different colour. Passers-by streak through on their
+ * own unrelated schedules - dimmer, never stopping, but carrying real light
+ * slots of their own, so a fly-past sweeps a highlight across the scene.
+ *
+ * Like the drones, every pose is a pure function of anim_time: no retained
+ * state, so replay and accumulation blur both stay correct.
+ */
+#define FAIRY_VISIT_SECS      13.0f  /* one resident visit, arrival to exit */
+#define FAIRY_ARRIVE_FRAC     0.16f  /* fly-in share of the visit */
+#define FAIRY_DEPART_FRAC     0.16f  /* fly-out share */
+#define FAIRY_HOPS            4      /* points of interest per visit */
+#define FAIRY_HOP_SETTLE      0.55f  /* share of a hop spent arrived, not moving */
+
+/* Where the resident holds station: just off the geometry's bounding
+ * sphere, close enough that the falloff is steep across the surface. */
+#define FAIRY_INSPECT_R       1.05f  /* x scene radius */
+#define FAIRY_ENTRY_R         5.0f   /* x scene radius, where a visit begins */
+/* How strongly points of interest skew toward the viewer. 0 is uniform over
+ * the sphere, which spends too much of every visit behind the geometry. */
+#define FAIRY_VIEW_BIAS       0.95f
+
+/* Flutter: a fairy never holds still. Two incommensurate frequencies per
+ * axis so the wander does not read as a circle. */
+#define FAIRY_FLUTTER_AMP     0.10f  /* x scene radius */
+#define FAIRY_FLUTTER_HZ_A    1.7f
+#define FAIRY_FLUTTER_HZ_B    2.9f
+
+/* Passers-by. Three slots on deliberately incommensurate periods, each
+ * lit only for the short window it is actually crossing, so they arrive at
+ * irregular intervals rather than on a visible beat. */
+#define FAIRY_PASSER_COUNT    3
+#define FAIRY_PASSER_ACTIVE   0.30f  /* share of its period a slot is crossing */
+#define FAIRY_PASSER_SPAN     6.0f   /* x scene radius, run length */
+#define FAIRY_PASSER_OFFSET   1.5f   /* x scene radius, closest approach */
+#define FAIRY_PASSER_BRIGHT   0.42f  /* light + glow, relative to the resident */
+
+/* Light rig. GL_LIGHT4 is the resident; 5..7 are the passers-by. No spot
+ * state is set at all - that is the point of this backdrop - so each stays
+ * at GL's default omnidirectional cutoff.
+ *
+ * Attenuation is referenced to the scene radius so the effect reads the
+ * same at any scale, and is deliberately much steeper than the drones':
+ * their job was to light the scene, this one's is to show falloff. */
+#define FAIRY_LIGHT_RESIDENT  GL_LIGHT4
+#define FAIRY_ATTEN_CONSTANT  0.28f
+#define FAIRY_ATTEN_LINEAR    0.55f
+#define FAIRY_ATTEN_QUADRATIC 2.40f
+#define FAIRY_DIFFUSE_SCALE   1.85f  /* the falloff eats most of this back */
+
+/* Body: a white-hot core point inside a wider coloured halo, plus a wake of
+ * fading sparks sampled from the fairy's own past positions. */
+#define FAIRY_CORE_POINT      5.0f
+#define FAIRY_HALO_POINT      17.0f
+#define FAIRY_HALO_ALPHA      0.42f
+#define FAIRY_WAKE_COUNT      9
+#define FAIRY_WAKE_DT         0.055f /* seconds between wake samples */
+#define FAIRY_WING_SEGS       10
+#define FAIRY_WING_R          0.055f /* x scene radius, the soft wing disc */
 
 static void render3d_backdrop_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -1234,19 +1299,32 @@ static const float k_drone_colors[DRONE_COUNT][3] = {
     { 0.78f, 0.62f, 1.00f },  /* dim violet */
 };
 
-/* The measured scene the rig arranges itself around. */
-typedef struct DroneScene {
+/* --- Shared helpers for the bounds-driven backdrops (drones, fairies) ---
+ *
+ * These are the pieces every backdrop that arranges itself AROUND the
+ * user's geometry needs: the measured extent, and a little vector algebra
+ * for aiming at it. Nothing above this point reads the bounds hook.
+ */
+
+/* Fallback extent, used when no bounds hook is installed (render3d_demo) or
+ * it reports nothing drawn. The minimum keeps a degenerate single-point
+ * scene from collapsing a rig onto the geometry. */
+#define BACKDROP_EXTENT_FALLBACK_R 2.5f
+#define BACKDROP_EXTENT_MIN_R      0.75f
+
+/* The measured scene a rig arranges itself around. */
+typedef struct BackdropExtent {
     float center[3];
     float radius;
-    float floor_y;   /* where the beam pools land */
-} DroneScene;
+    float floor_y;   /* under the geometry: where cast pools land */
+} BackdropExtent;
 
 typedef struct DronePose {
     float pos[3];
     float aim[3];    /* unit vector: where the drone is pointing */
 } DronePose;
 
-static void drone_vec_norm(float v[3]) {
+static void backdrop_vec_norm(float v[3]) {
     float len = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
     if (len < 1e-5f) {
         v[0] = 0.0f; v[1] = -1.0f; v[2] = 0.0f;
@@ -1255,10 +1333,10 @@ static void drone_vec_norm(float v[3]) {
     v[0] /= len; v[1] /= len; v[2] /= len;
 }
 
-/* Orthonormal frame around unit d, for the beam cone and the ground pool.
- * The seed axis is whichever cardinal d is least aligned with, so the
- * cross product never degenerates. */
-static void drone_frame(const float d[3], float t1[3], float t2[3]) {
+/* Orthonormal frame around unit d - for anything drawn as a disc or cone
+ * facing along a direction. The seed axis is whichever cardinal d is least
+ * aligned with, so the cross product never degenerates. */
+static void backdrop_frame(const float d[3], float t1[3], float t2[3]) {
     float seed[3] = { 0.0f, 1.0f, 0.0f };
     if (fabsf(d[1]) > 0.9f) {
         seed[0] = 1.0f; seed[1] = 0.0f;
@@ -1266,24 +1344,40 @@ static void drone_frame(const float d[3], float t1[3], float t2[3]) {
     t1[0] = seed[1] * d[2] - seed[2] * d[1];
     t1[1] = seed[2] * d[0] - seed[0] * d[2];
     t1[2] = seed[0] * d[1] - seed[1] * d[0];
-    drone_vec_norm(t1);
+    backdrop_vec_norm(t1);
     t2[0] = d[1] * t1[2] - d[2] * t1[1];
     t2[1] = d[2] * t1[0] - d[0] * t1[2];
     t2[2] = d[0] * t1[1] - d[1] * t1[0];
 }
 
-/* Resolve the scene the rig should frame. The bounds hook is optional in
+/* Unit vector from the scene toward the camera, derived from the caller's
+ * orbit angles rather than read back out of the modelview (a glGetFloatv is
+ * a pipeline drain). The horizontal look direction is (sin ry, 0, -cos ry)
+ * - the same convention grid.c's face-on weighting uses - tilted by rx and
+ * negated, since we want the direction the viewer is standing in. */
+static void backdrop_camera_dir(const Render3dFrameRenderContext *frame_ctx,
+                                float out[3]) {
+    float ry = frame_ctx->config.cam_ry * (float)M_PI / 180.0f;
+    float rx = frame_ctx->config.cam_rx * (float)M_PI / 180.0f;
+    float crx = cosf(rx);
+    out[0] = -sinf(ry) * crx;
+    out[1] =  sinf(rx);
+    out[2] =  cosf(ry) * crx;
+    backdrop_vec_norm(out);
+}
+
+/* Resolve the extent a rig should frame. The bounds hook is optional in
  * both directions - a caller may not install one (render3d_demo does not),
  * and an installed one reports 0 when there is nothing to measure - and
  * both cases land on the same fallback. */
-static void drone_resolve_scene(const Render3dFrameRenderContext *frame_ctx,
-                                DroneScene *out) {
+static void backdrop_resolve_extent(const Render3dFrameRenderContext *frame_ctx,
+                                    BackdropExtent *out) {
     float mn[3], mx[3];
     float half[3];
 
     out->center[0] = out->center[1] = out->center[2] = 0.0f;
-    out->radius = DRONE_FALLBACK_RADIUS;
-    out->floor_y = -DRONE_FALLBACK_RADIUS;
+    out->radius = BACKDROP_EXTENT_FALLBACK_R;
+    out->floor_y = -BACKDROP_EXTENT_FALLBACK_R;
 
     if (!frame_ctx->config.geometry_bounds_fn)
         return;
@@ -1297,10 +1391,10 @@ static void drone_resolve_scene(const Render3dFrameRenderContext *frame_ctx,
     }
     out->radius = sqrtf(half[0] * half[0] + half[1] * half[1] +
                         half[2] * half[2]);
-    if (out->radius < DRONE_MIN_RADIUS)
-        out->radius = DRONE_MIN_RADIUS;
-    /* The pool lands under the geometry, not on the grid plane: a scene
-     * built above or below y = 0 should still get its own floor. */
+    if (out->radius < BACKDROP_EXTENT_MIN_R)
+        out->radius = BACKDROP_EXTENT_MIN_R;
+    /* The floor sits under the geometry, not on the grid plane: a scene
+     * built above or below y = 0 should still get its own. */
     out->floor_y = mn[1] - out->radius * 0.05f;
 }
 
@@ -1308,7 +1402,7 @@ static void drone_resolve_scene(const Render3dFrameRenderContext *frame_ctx,
  * entering and leaving well outside it. `slot` turns the axis by a golden
  * angle each repetition so successive passes come from a new direction. */
 static void drone_pose_strafe(int i, float u, int slot,
-                              const DroneScene *sc, DronePose *out) {
+                              const BackdropExtent *sc, DronePose *out) {
     float ang = 2.39996323f * (float)slot;
     float dir[3]  = { cosf(ang), 0.0f, sinf(ang) };
     float side[3] = { -dir[2], 0.0f, dir[0] };
@@ -1328,13 +1422,13 @@ static void drone_pose_strafe(int i, float u, int slot,
      * geometry. */
     for (int k = 0; k < 3; k++)
         out->aim[k] = sc->center[k] - out->pos[k];
-    drone_vec_norm(out->aim);
+    backdrop_vec_norm(out->aim);
 }
 
 /* Phase 1 - orbit. Each drone rides its own tilted ring, evenly spaced in
  * phase, looking inward at the scene centre. */
 static void drone_pose_orbit(int i, float u, int slot,
-                             const DroneScene *sc, DronePose *out) {
+                             const BackdropExtent *sc, DronePose *out) {
     float theta = 2.0f * (float)M_PI *
                   (u * DRONE_ORBIT_TURNS + (float)i / (float)DRONE_COUNT);
     float tilt = 0.22f + 0.20f * (float)i;
@@ -1354,13 +1448,13 @@ static void drone_pose_orbit(int i, float u, int slot,
 
     for (int k = 0; k < 3; k++)
         out->aim[k] = sc->center[k] - out->pos[k];
-    drone_vec_norm(out->aim);
+    backdrop_vec_norm(out->aim);
 }
 
 /* Phase 2 - spotlight. The drones hold high stations and sweep their beams
  * across the scene: the phase the GL spotlight state exists for. */
 static void drone_pose_spot(int i, float u, int slot,
-                            const DroneScene *sc, DronePose *out) {
+                            const BackdropExtent *sc, DronePose *out) {
     float az = 2.0f * (float)M_PI * ((float)i / (float)DRONE_COUNT
                                      + 0.18f * u)
                + 0.9f * (float)slot;
@@ -1379,11 +1473,11 @@ static void drone_pose_spot(int i, float u, int slot,
     out->aim[0] = sc->center[0] + wx - out->pos[0];
     out->aim[1] = sc->center[1] - out->pos[1];
     out->aim[2] = sc->center[2] + wz - out->pos[2];
-    drone_vec_norm(out->aim);
+    backdrop_vec_norm(out->aim);
 }
 
 static void drone_pose_for_phase(int phase, int i, float u, int slot,
-                                 const DroneScene *sc, DronePose *out) {
+                                 const BackdropExtent *sc, DronePose *out) {
     switch (phase) {
     case 1:  drone_pose_orbit(i, u, slot, sc, out); break;
     case 2:  drone_pose_spot(i, u, slot, sc, out);  break;
@@ -1422,7 +1516,7 @@ static DronePhase drone_phase_at(float anim_time) {
  * evaluated at a slightly negative local time - which is exactly its own
  * start, continued backwards - so position and aim are continuous across
  * the seam. */
-static void drone_pose(const DronePhase *ph, int i, const DroneScene *sc,
+static void drone_pose(const DronePhase *ph, int i, const BackdropExtent *sc,
                        DronePose *out) {
     DronePose next;
 
@@ -1436,7 +1530,7 @@ static void drone_pose(const DronePhase *ph, int i, const DroneScene *sc,
         out->pos[k] += (next.pos[k] - out->pos[k]) * ph->blend;
         out->aim[k] += (next.aim[k] - out->aim[k]) * ph->blend;
     }
-    drone_vec_norm(out->aim);
+    backdrop_vec_norm(out->aim);
 }
 
 /* How much of the current blend is the spotlight phase: drives the beam
@@ -1454,14 +1548,14 @@ static float drone_spotness(const DronePhase *ph) {
  * lights have to be placed before the geometry they light, and the bodies
  * are drawn afterwards from the same function. */
 static void drone_setup_lights(const Render3dFrameRenderContext *frame_ctx) {
-    DroneScene sc;
+    BackdropExtent sc;
     DronePhase ph = drone_phase_at(frame_ctx->config.anim_time);
     float spotness = drone_spotness(&ph);
     float cutoff = DRONE_BEAM_WIDE_DEG +
                    (DRONE_BEAM_NARROW_DEG - DRONE_BEAM_WIDE_DEG) * spotness;
     float quad;
 
-    drone_resolve_scene(frame_ctx, &sc);
+    backdrop_resolve_extent(frame_ctx, &sc);
     /* Quadratic falloff referenced to the scene's own size, so a drone at
      * its orbit radius contributes the same amount whatever that radius
      * happens to be. */
@@ -1504,7 +1598,7 @@ static void drone_setup_lights(const Render3dFrameRenderContext *frame_ctx) {
 /* One drone hull: a hexagonal spindle along its aim vector. Drawn
  * unlit with a flat body colour and a brighter nose - it is a light
  * source, so shading it would read as wrong. */
-static void drone_draw_hull(const DronePose *pose, const DroneScene *sc,
+static void drone_draw_hull(const DronePose *pose, const BackdropExtent *sc,
                             const float col[3]) {
     float t1[3], t2[3];
     float nose[3], tail[3];
@@ -1512,7 +1606,7 @@ static void drone_draw_hull(const DronePose *pose, const DroneScene *sc,
     float len = DRONE_HULL_LEN * sc->radius;
     float waist = DRONE_HULL_WAIST * sc->radius;
 
-    drone_frame(pose->aim, t1, t2);
+    backdrop_frame(pose->aim, t1, t2);
     for (int k = 0; k < 3; k++) {
         nose[k] = pose->pos[k] + pose->aim[k] * len;
         tail[k] = pose->pos[k] - pose->aim[k] * len * 0.55f;
@@ -1547,7 +1641,7 @@ static void drone_draw_hull(const DronePose *pose, const DroneScene *sc,
 /* The lens: an additive point sprite at the nose. A point rather than a
  * quad because a point is inherently camera-facing - no billboard frame,
  * and no glGetFloatv(GL_MODELVIEW_MATRIX) read-back to build one. */
-static void drone_draw_lens(const DronePose *pose, const DroneScene *sc,
+static void drone_draw_lens(const DronePose *pose, const BackdropExtent *sc,
                             const float col[3], float alpha_scale) {
     float len = DRONE_HULL_LEN * sc->radius;
     glPointSize(DRONE_GLOW_POINT_SIZE);
@@ -1563,7 +1657,7 @@ static void drone_draw_lens(const DronePose *pose, const DroneScene *sc,
  * lens and transparent at the far rim. This is what actually reads as a
  * spotlight - GL's own spot term is evaluated per vertex, so on the coarse
  * geometry a typed scene usually has it contributes almost nothing. */
-static void drone_draw_beam(const DronePose *pose, const DroneScene *sc,
+static void drone_draw_beam(const DronePose *pose, const BackdropExtent *sc,
                             const float col[3], float spotness,
                             float alpha_scale) {
     float t1[3], t2[3];
@@ -1584,7 +1678,7 @@ static void drone_draw_beam(const DronePose *pose, const DroneScene *sc,
     reach = sqrtf(reach);
     rim = reach * tanf(half_rad);
 
-    drone_frame(pose->aim, t1, t2);
+    backdrop_frame(pose->aim, t1, t2);
     for (int k = 0; k < 3; k++)
         apex[k] = pose->pos[k] + pose->aim[k] * lens;
 
@@ -1605,7 +1699,7 @@ static void drone_draw_beam(const DronePose *pose, const DroneScene *sc,
 /* Where the beam meets the floor, as a soft disc. Skipped when the drone is
  * not pointing down at it, which is also when the ellipse would stretch to
  * the horizon. */
-static void drone_draw_pool(const DronePose *pose, const DroneScene *sc,
+static void drone_draw_pool(const DronePose *pose, const BackdropExtent *sc,
                             const float col[3], float spotness,
                             float alpha_scale) {
     float dist, r, cx, cz, cy;
@@ -1642,12 +1736,12 @@ static void drone_draw_pool(const DronePose *pose, const DroneScene *sc,
 }
 
 static void draw_drones(const Render3dFrameRenderContext *frame_ctx) {
-    DroneScene sc;
+    BackdropExtent sc;
     DronePhase ph = drone_phase_at(frame_ctx->config.anim_time);
     float spotness = drone_spotness(&ph);
     float alpha = frame_ctx->config.alpha_scale;
 
-    drone_resolve_scene(frame_ctx, &sc);
+    backdrop_resolve_extent(frame_ctx, &sc);
 
     render3d_backdrop_push_state();
     glDisable(GL_FOG);
@@ -1683,6 +1777,380 @@ static void draw_drones(const Render3dFrameRenderContext *frame_ctx) {
         drone_draw_beam(&pose, &sc, k_drone_colors[i], spotness, alpha);
         drone_draw_pool(&pose, &sc, k_drone_colors[i], spotness, alpha);
         drone_draw_lens(&pose, &sc, k_drone_colors[i], alpha);
+    }
+
+    render3d_backdrop_pop_state();
+}
+
+/* --- Fairies backdrop ------------------------------------------------- */
+
+/* Visitor colours, taken in turn so consecutive visits never repeat. The
+ * first is Navi's blue; the rest are the other lights you'd expect to meet.
+ * These are the HALO colours - the core is drawn washed toward white. */
+static const float k_fairy_colors[][3] = {
+    { 0.42f, 0.70f, 1.00f },  /* blue */
+    { 1.00f, 0.84f, 0.38f },  /* gold */
+    { 0.55f, 1.00f, 0.62f },  /* green */
+    { 1.00f, 0.52f, 0.78f },  /* rose */
+    { 0.72f, 0.58f, 1.00f },  /* violet */
+};
+#define FAIRY_COLOR_COUNT ((int)(sizeof(k_fairy_colors) / sizeof(k_fairy_colors[0])))
+
+/* Smooth 0..1 ramp. Used for every fade and every hop, so arrival, hop and
+ * departure all share one easing and none of them starts or stops abruptly. */
+static float fairy_smoothstep(float x) {
+    if (x <= 0.0f) return 0.0f;
+    if (x >= 1.0f) return 1.0f;
+    return x * x * (3.0f - 2.0f * x);
+}
+
+/* A point on the sphere of radius `r` about the extent's centre, chosen
+ * deterministically from `seed`. city_rng is a general bit-mixing hash
+ * despite the name - the cityscape just happens to be its first caller.
+ *
+ * `bias` skews the direction toward a unit vector (0 = uniform). Without it
+ * a visitor spends a good share of every visit inspecting the FAR side of
+ * the geometry, where it is occluded and the surface it lights faces away -
+ * seconds of an empty-looking frame. Skewing rather than clamping to the
+ * near hemisphere keeps it free to wander round the edges. */
+static void fairy_point_on_sphere(unsigned int seed, const BackdropExtent *ex,
+                                  float r, const float bias[3], float bias_amt,
+                                  float out[3]) {
+    float u = city_rng(seed) * 2.0f - 1.0f;          /* cos(polar) */
+    float phi = city_rng(seed + 1u) * 2.0f * (float)M_PI;
+    float s = sqrtf(1.0f - u * u);
+    float d[3];
+
+    d[0] = s * cosf(phi);
+    d[1] = u;
+    d[2] = s * sinf(phi);
+    if (bias) {
+        for (int k = 0; k < 3; k++)
+            d[k] += bias[k] * bias_amt;
+        backdrop_vec_norm(d);
+    }
+    for (int k = 0; k < 3; k++)
+        out[k] = ex->center[k] + r * d[k];
+}
+
+/* The restless part. Added to whatever station the fairy is holding, so it
+ * flutters both in transit and while inspecting. */
+static void fairy_flutter(float t, unsigned int seed, float amp,
+                          float out[3]) {
+    float p0 = city_rng(seed) * 6.2831853f;
+    float p1 = city_rng(seed + 1u) * 6.2831853f;
+    float p2 = city_rng(seed + 2u) * 6.2831853f;
+    out[0] = amp * (sinf(t * FAIRY_FLUTTER_HZ_A + p0) * 0.6f +
+                    sinf(t * FAIRY_FLUTTER_HZ_B + p1) * 0.4f);
+    out[1] = amp * (sinf(t * FAIRY_FLUTTER_HZ_B + p1) * 0.6f +
+                    cosf(t * FAIRY_FLUTTER_HZ_A + p2) * 0.4f);
+    out[2] = amp * (cosf(t * FAIRY_FLUTTER_HZ_A + p2) * 0.6f +
+                    sinf(t * FAIRY_FLUTTER_HZ_B + p0) * 0.4f);
+}
+
+/* One fairy, resolved at a moment in time. `bright` folds in every fade -
+ * arrival, departure, and a passer's window - and scales both the light and
+ * the drawn body, so the two can never disagree. */
+typedef struct FairyState {
+    float pos[3];
+    float color[3];
+    float bright;   /* 0 = absent */
+} FairyState;
+
+/* The resident visitor at time `t`. Arrival eases in from a point well
+ * outside the scene, the middle of the visit hops between points of
+ * interest just off the surface, and departure eases back out - each hop
+ * and each end sharing one easing curve so the motion never snaps. */
+static void fairy_resident_at(float t, const BackdropExtent *ex,
+                              const float view[3], FairyState *out) {
+    float cycles, slot_f, u;
+    int slot;
+    unsigned int seed;
+    float station[3], flut[3];
+    float entry[3];
+
+    if (t < 0.0f)
+        t = 0.0f;
+    cycles = t / FAIRY_VISIT_SECS;
+    slot_f = floorf(cycles);
+    slot = (int)slot_f;
+    u = cycles - slot_f;
+    seed = (unsigned int)slot * 977u + 12289u;
+
+    for (int k = 0; k < 3; k++)
+        out->color[k] = k_fairy_colors[slot % FAIRY_COLOR_COUNT][k];
+
+    /* Hop between points of interest. The fairy spends most of each hop
+     * arrived and inspecting, and the rest travelling to the next one. */
+    {
+        float hop_span = 1.0f / (float)FAIRY_HOPS;
+        float hop_f = u / hop_span;
+        int hop = (int)hop_f;
+        float hu = hop_f - (float)hop;
+        float move = fairy_smoothstep((hu - FAIRY_HOP_SETTLE) /
+                                      (1.0f - FAIRY_HOP_SETTLE));
+        float a[3], b[3];
+        if (hop >= FAIRY_HOPS)
+            hop = FAIRY_HOPS - 1;
+        fairy_point_on_sphere(seed + (unsigned int)hop * 7u, ex,
+                              ex->radius * FAIRY_INSPECT_R,
+                              view, FAIRY_VIEW_BIAS, a);
+        fairy_point_on_sphere(seed + (unsigned int)(hop + 1) * 7u, ex,
+                              ex->radius * FAIRY_INSPECT_R,
+                              view, FAIRY_VIEW_BIAS, b);
+        for (int k = 0; k < 3; k++)
+            station[k] = a[k] + (b[k] - a[k]) * move;
+    }
+
+    /* Arrival and departure interpolate between the station and a far
+     * entry point, so the fairy really flies in rather than fading up on
+     * the spot. */
+    fairy_point_on_sphere(seed + 101u, ex, ex->radius * FAIRY_ENTRY_R,
+                          view, FAIRY_VIEW_BIAS * 0.5f, entry);
+    if (u < FAIRY_ARRIVE_FRAC) {
+        float s = fairy_smoothstep(u / FAIRY_ARRIVE_FRAC);
+        for (int k = 0; k < 3; k++)
+            station[k] = entry[k] + (station[k] - entry[k]) * s;
+        out->bright = s;
+    } else if (u > 1.0f - FAIRY_DEPART_FRAC) {
+        float s = fairy_smoothstep((1.0f - u) / FAIRY_DEPART_FRAC);
+        for (int k = 0; k < 3; k++)
+            station[k] = entry[k] + (station[k] - entry[k]) * s;
+        out->bright = s;
+    } else {
+        out->bright = 1.0f;
+    }
+
+    fairy_flutter(t, seed + 211u, ex->radius * FAIRY_FLUTTER_AMP, flut);
+    for (int k = 0; k < 3; k++)
+        out->pos[k] = station[k] + flut[k];
+}
+
+/* Passer-by `i` at time `t`, or bright = 0 when this slot is between runs.
+ * Each slot has its own period, and the periods are deliberately
+ * incommensurate so the three never fall into a visible rhythm. */
+static void fairy_passer_at(float t, int i, const BackdropExtent *ex,
+                            const float view[3], FairyState *out) {
+    static const float k_periods[FAIRY_PASSER_COUNT] = { 7.3f, 11.7f, 17.1f };
+    float period = k_periods[i];
+    float cycles, slot_f, u;
+    int slot;
+    unsigned int seed;
+    float from[3], to[3], flut[3];
+    float fade;
+
+    out->bright = 0.0f;
+    if (t < 0.0f)
+        t = 0.0f;
+    cycles = t / period;
+    slot_f = floorf(cycles);
+    slot = (int)slot_f;
+    u = cycles - slot_f;
+    if (u > FAIRY_PASSER_ACTIVE)
+        return;                       /* between runs: this slot is dark */
+    u /= FAIRY_PASSER_ACTIVE;         /* 0..1 across the run */
+
+    seed = (unsigned int)slot * 613u + (unsigned int)i * 31397u;
+    for (int k = 0; k < 3; k++)
+        out->color[k] = k_fairy_colors[(slot + i) % FAIRY_COLOR_COUNT][k];
+
+    /* A straight run between two far points, displaced so it passes beside
+     * the geometry rather than through it. */
+    fairy_point_on_sphere(seed, ex,
+                          ex->radius * FAIRY_PASSER_SPAN * 0.5f,
+                          view, FAIRY_VIEW_BIAS * 0.5f, from);
+    fairy_point_on_sphere(seed + 53u, ex,
+                          ex->radius * FAIRY_PASSER_SPAN * 0.5f,
+                          view, FAIRY_VIEW_BIAS * 0.5f, to);
+    for (int k = 0; k < 3; k++)
+        to[k] = ex->center[k] * 2.0f - to[k];   /* mirror: a crossing, not a hop */
+
+    for (int k = 0; k < 3; k++)
+        out->pos[k] = from[k] + (to[k] - from[k]) * u;
+    {
+        float off[3];
+        fairy_point_on_sphere(seed + 97u, ex,
+                              ex->radius * FAIRY_PASSER_OFFSET,
+                              view, FAIRY_VIEW_BIAS * 0.5f, off);
+        for (int k = 0; k < 3; k++)
+            out->pos[k] += (off[k] - ex->center[k]);
+    }
+
+    fairy_flutter(t, seed + 7u, ex->radius * FAIRY_FLUTTER_AMP * 0.5f, flut);
+    for (int k = 0; k < 3; k++)
+        out->pos[k] += flut[k];
+
+    /* Fade in and out at the ends of the run so a passer never pops into
+     * or out of existence mid-frame - a hard-edged light appearing is far
+     * more noticeable than the motion it was meant to suggest. */
+    fade = fairy_smoothstep(u / 0.18f) *
+           fairy_smoothstep((1.0f - u) / 0.18f);
+    out->bright = fade * FAIRY_PASSER_BRIGHT;
+}
+
+/* Configure one fairy's light slot. Positional, attenuated, and pointedly
+ * NOT a spotlight: no GL_SPOT_* state is set anywhere in this backdrop, so
+ * every slot keeps GL's default omnidirectional cutoff and distance is the
+ * only thing shaping what it lights. */
+static void fairy_apply_light(GLenum id, const FairyState *f, float radius) {
+    GLfloat pos[4];
+    GLfloat diffuse[4], ambient[4], specular[4];
+    float k = f->bright * FAIRY_DIFFUSE_SCALE;
+
+    if (f->bright <= 0.0f) {
+        glDisable(id);
+        return;
+    }
+
+    pos[0] = f->pos[0]; pos[1] = f->pos[1]; pos[2] = f->pos[2];
+    pos[3] = 1.0f;   /* positional - a directional light has no falloff */
+
+    for (int c = 0; c < 3; c++) {
+        diffuse[c]  = f->color[c] * k;
+        ambient[c]  = f->color[c] * 0.015f * f->bright;
+        specular[c] = f->color[c] * k;
+    }
+    diffuse[3] = ambient[3] = specular[3] = 1.0f;
+
+    glLightfv(id, GL_POSITION, pos);
+    glLightfv(id, GL_DIFFUSE, diffuse);
+    glLightfv(id, GL_AMBIENT, ambient);
+    glLightfv(id, GL_SPECULAR, specular);
+    /* The demonstration: 1 / (c + l*d + q*d^2), with the distance terms
+     * scaled by the scene so the same curve applies at any size. */
+    glLightf(id, GL_CONSTANT_ATTENUATION, FAIRY_ATTEN_CONSTANT);
+    glLightf(id, GL_LINEAR_ATTENUATION, FAIRY_ATTEN_LINEAR / radius);
+    glLightf(id, GL_QUADRATIC_ATTENUATION,
+             FAIRY_ATTEN_QUADRATIC / (radius * radius));
+    glEnable(id);
+}
+
+static void fairy_setup_lights(const Render3dFrameRenderContext *frame_ctx) {
+    BackdropExtent ex;
+    FairyState f;
+    float view[3];
+    float t = frame_ctx->config.anim_time;
+
+    backdrop_resolve_extent(frame_ctx, &ex);
+    backdrop_camera_dir(frame_ctx, view);
+
+    fairy_resident_at(t, &ex, view, &f);
+    fairy_apply_light(FAIRY_LIGHT_RESIDENT, &f, ex.radius);
+
+    for (int i = 0; i < FAIRY_PASSER_COUNT; i++) {
+        fairy_passer_at(t, i, &ex, view, &f);
+        fairy_apply_light((GLenum)(FAIRY_LIGHT_RESIDENT + 1 + i), &f, ex.radius);
+    }
+}
+
+/* One fairy body: a soft wing disc, a coloured halo point, and a white-hot
+ * core point inside it. The two points are camera-facing for free, which is
+ * why they are points and not billboarded quads. */
+static void fairy_draw_body(const FairyState *f, const BackdropExtent *ex,
+                            float alpha_scale, float scale) {
+    float a = f->bright * alpha_scale;
+    float t1[3], t2[3];
+    float up[3] = { 0.0f, 1.0f, 0.0f };
+    float wr = ex->radius * FAIRY_WING_R * scale;
+
+    if (a <= 0.0f)
+        return;
+
+    /* Wing disc: a soft round bloom the points sit inside, so the fairy
+     * still reads as having size when it is close to the camera and the
+     * fixed-size point sprites stop growing. */
+    backdrop_frame(up, t1, t2);
+    glBegin(GL_TRIANGLE_FAN);
+    glColor4f(f->color[0], f->color[1], f->color[2], 0.22f * a);
+    glVertex3fv(f->pos);
+    glColor4f(f->color[0], f->color[1], f->color[2], 0.0f);
+    for (int s = 0; s <= FAIRY_WING_SEGS; s++) {
+        float ang = (float)s / (float)FAIRY_WING_SEGS * 2.0f * (float)M_PI;
+        float ca = cosf(ang) * wr, sa = sinf(ang) * wr;
+        glVertex3f(f->pos[0] + t1[0] * ca + t2[0] * sa,
+                   f->pos[1] + t1[1] * ca + t2[1] * sa,
+                   f->pos[2] + t1[2] * ca + t2[2] * sa);
+    }
+    glEnd();
+
+    glPointSize(FAIRY_HALO_POINT * scale);
+    glBegin(GL_POINTS);
+    glColor4f(f->color[0], f->color[1], f->color[2], FAIRY_HALO_ALPHA * a);
+    glVertex3fv(f->pos);
+    glEnd();
+
+    /* Core washed toward white: a light source photographs as white in the
+     * middle whatever colour it casts. */
+    glPointSize(FAIRY_CORE_POINT * scale);
+    glBegin(GL_POINTS);
+    glColor4f(0.55f + f->color[0] * 0.45f,
+              0.55f + f->color[1] * 0.45f,
+              0.55f + f->color[2] * 0.45f, a);
+    glVertex3fv(f->pos);
+    glEnd();
+}
+
+/* The wake: the fairy's own position a few sample intervals ago, drawn
+ * smaller and fainter each step back. Free to compute because the pose is a
+ * pure function of time - there is no history to keep, we just ask where it
+ * WAS. */
+static void fairy_draw_wake(float t, int passer_idx, const BackdropExtent *ex,
+                            const float view[3], float alpha_scale) {
+    for (int k = 1; k <= FAIRY_WAKE_COUNT; k++) {
+        float back = t - (float)k * FAIRY_WAKE_DT;
+        float decay = 1.0f - (float)k / (float)(FAIRY_WAKE_COUNT + 1);
+        FairyState f;
+
+        if (back < 0.0f)
+            return;
+        if (passer_idx < 0)
+            fairy_resident_at(back, ex, view, &f);
+        else
+            fairy_passer_at(back, passer_idx, ex, view, &f);
+
+        f.bright *= decay * decay * 0.55f;
+        fairy_draw_body(&f, ex, alpha_scale, decay * 0.8f);
+    }
+}
+
+static void draw_fairies(const Render3dFrameRenderContext *frame_ctx) {
+    BackdropExtent ex;
+    FairyState f;
+    float view[3];
+    float t = frame_ctx->config.anim_time;
+    float alpha = frame_ctx->config.alpha_scale;
+
+    backdrop_resolve_extent(frame_ctx, &ex);
+    backdrop_camera_dir(frame_ctx, view);
+
+    render3d_backdrop_push_state();
+    glDisable(GL_LIGHTING);
+    glDisable(GL_TEXTURE_2D);
+    glDisable(GL_FOG);
+    /* Depth-tested so a fairy behind the geometry is hidden by it - the
+     * inspection reads as circling the object, not floating over a picture
+     * of it - but writing no depth, so the glows stack additively. */
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    glEnable(GL_POINT_SMOOTH);
+    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
+    if (frame_ctx->config.point_parameter_supported &&
+        frame_ctx->config.point_parameter_proc)
+        frame_ctx->config.point_parameter_proc(GL_POINT_DISTANCE_ATTENUATION,
+                                               (GLfloat[]){1, 0, 0});
+
+    /* Wakes first, so a fairy's own body always draws over its trail. */
+    fairy_draw_wake(t, -1, &ex, view, alpha);
+    for (int i = 0; i < FAIRY_PASSER_COUNT; i++)
+        fairy_draw_wake(t, i, &ex, view, alpha);
+
+    fairy_resident_at(t, &ex, view, &f);
+    fairy_draw_body(&f, &ex, alpha, 1.0f);
+    for (int i = 0; i < FAIRY_PASSER_COUNT; i++) {
+        fairy_passer_at(t, i, &ex, view, &f);
+        fairy_draw_body(&f, &ex, alpha, 0.8f);
     }
 
     render3d_backdrop_pop_state();
@@ -1820,6 +2288,10 @@ void render3d_backdrop_setup_lights(const Render3dFrameRenderContext *frame_ctx)
     case RENDER3D_BACKDROP_DRONES:
         drone_setup_lights(frame_ctx);
         break;
+    /* Positional, attenuated, no spot cone - see the fairy block. */
+    case RENDER3D_BACKDROP_FAIRIES:
+        fairy_setup_lights(frame_ctx);
+        break;
     default:
         break;
     }
@@ -1888,6 +2360,9 @@ void render3d_backdrop_render(const Render3dFrameRenderContext *frame_ctx) {
         break;
     case RENDER3D_BACKDROP_DRONES:
         draw_drones(frame_ctx);
+        break;
+    case RENDER3D_BACKDROP_FAIRIES:
+        draw_fairies(frame_ctx);
         break;
     case RENDER3D_BACKDROP_OFF:
     default:

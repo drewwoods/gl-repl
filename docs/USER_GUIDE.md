@@ -1424,7 +1424,8 @@ The primordial cube enjoying the view:
 ![Backdrops: Polar Day+Snow, Nebula, Sunset, Aurora](images/backdrops.png)
 
 **F5** cycles the scene backdrop: Off *(default)*, Cityscape, Stars,
-City+Stars, Sunset, Aurora, Nebula, Polar Day, Polar Day+Snow, Drones.
+City+Stars, Sunset, Aurora, Nebula, Polar Day, Polar Day+Snow, Drones,
+Fairies.
 
 **Drones** is the one backdrop whose lights move. Four scanner drones patrol
 your geometry through a repeating three-phase cycle - a linear pass, an
@@ -1439,6 +1440,22 @@ fixed radius about the origin.
 > so on coarse geometry (a `glutSolidCube` has eight) the lighting term
 > alone would be nearly invisible - subdivide your surfaces if you want the
 > beams to actually rake across them.
+
+**Fairies** is the quiet one, and a demonstration piece. Every fairy is a
+plain *positional* light with quadratic attenuation and no spot cone at all,
+so what lights your geometry is proximity and nothing else - a visitor
+drifting in to look at a surface ramps it up out of black and lets it fall
+away again. One resident at a time arrives from outside, hops between points
+of interest just off the surface, and leaves; the next comes in a different
+colour. Passers-by streak through on their own unrelated schedules, dimmer
+and never stopping, but carrying real light slots of their own, so a
+fly-past sweeps a highlight across the scene.
+
+> [!TIP]
+> Fairies are the backdrop to reach for when you want to *see*
+> `GL_QUADRATIC_ATTENUATION` rather than reason about it. Both bounds-driven
+> backdrops scale themselves to whatever you have drawn, so the falloff
+> looks the same on a half-unit sketch and a forty-unit model.
 
 Some backdrops enable a hidden companion grid. Nebula selects Star Chart;
 see [Advanced Usage](ADVANCED_USAGE.md#cfg-backdropgrid-pairing) for the
