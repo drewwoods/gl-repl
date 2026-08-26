@@ -222,7 +222,12 @@
 
 /* Where the resident holds station: just off the geometry's bounding
  * sphere, close enough that the falloff is steep across the surface. */
-#define FAIRY_INSPECT_R       1.05f  /* x scene radius */
+/* Station radius, in scene radii. 1.0 is the corner of the measured box, and
+ * the flutter is applied on all three axes independently, so it can displace
+ * by as much as FAIRY_FLUTTER_AMP * sqrt(3) - this has to clear 1.0 by more
+ * than that or the flutter alone parks a hovering fairy inside a boxy
+ * scene's corner. A time sweep measures the worst case; keep it above 1.0. */
+#define FAIRY_INSPECT_R       1.24f
 #define FAIRY_ENTRY_R         5.0f   /* x scene radius, where a visit begins */
 /* How strongly points of interest skew toward the viewer. 0 is uniform over
  * the sphere, which spends too much of every visit behind the geometry. */
@@ -249,7 +254,12 @@
  * AVOID_WIDTH is how far up- and downstream the veer extends, in those same
  * avoidance radii - larger is a longer, lazier curve. */
 #define FAIRY_AVOID_R         1.20f
-#define FAIRY_AVOID_WIDTH     1.30f
+/* Must be at least sqrt(2) for the peak of the veer to be the run's
+ * closest approach. Below that, d(along)^2 = along^2 + veer(along)^2 has
+ * its minimum off-centre and the run dips nearer the geometry on either
+ * side of the crossing than it does at the crossing itself - a sweep found
+ * 1.93 radii where the profile promised 2.08. */
+#define FAIRY_AVOID_WIDTH     1.65f
 /* Radians of run-to-run variation in which way the veer goes, about the
  * screen-plane escape direction. Half a radian either side keeps it clearly
  * visible while stopping every pass from looking like the last. */
@@ -1826,24 +1836,50 @@ static float fairy_smoothstep(float x) {
  * the geometry, where it is occluded and the surface it lights faces away -
  * seconds of an empty-looking frame. Skewing rather than clamping to the
  * near hemisphere keeps it free to wander round the edges. */
-static void fairy_point_on_sphere(unsigned int seed, const BackdropExtent *ex,
-                                  float r, const float bias[3], float bias_amt,
-                                  float out[3]) {
+static void fairy_dir_from_seed(unsigned int seed, const float bias[3],
+                                float bias_amt, float out[3]) {
     float u = city_rng(seed) * 2.0f - 1.0f;          /* cos(polar) */
     float phi = city_rng(seed + 1u) * 2.0f * (float)M_PI;
     float s = sqrtf(1.0f - u * u);
-    float d[3];
 
-    d[0] = s * cosf(phi);
-    d[1] = u;
-    d[2] = s * sinf(phi);
+    out[0] = s * cosf(phi);
+    out[1] = u;
+    out[2] = s * sinf(phi);
     if (bias) {
         for (int k = 0; k < 3; k++)
-            d[k] += bias[k] * bias_amt;
-        backdrop_vec_norm(d);
+            out[k] += bias[k] * bias_amt;
     }
+    backdrop_vec_norm(out);
+}
+
+/* The same point, resolved onto the sphere of radius `r` about the centre. */
+static void fairy_point_on_sphere(unsigned int seed, const BackdropExtent *ex,
+                                  float r, const float bias[3], float bias_amt,
+                                  float out[3]) {
+    float d[3];
+    fairy_dir_from_seed(seed, bias, bias_amt, d);
     for (int k = 0; k < 3; k++)
         out[k] = ex->center[k] + r * d[k];
+}
+
+/* Interpolate between two directions ON the sphere rather than through it.
+ *
+ * This is the difference between a fairy arcing around the geometry to its
+ * next vantage point and one cutting the chord - and a chord between two
+ * points on the inspect sphere passes arbitrarily close to the centre as
+ * they approach opposite sides. A time sweep over the linear version found
+ * it inside a unit sphere for a good fraction of every visit.
+ *
+ * Normalized lerp, not slerp: the angular rate is slightly non-uniform,
+ * which is invisible under the flutter, and it costs a normalize instead of
+ * two trig calls. Exactly antipodal inputs have no defined arc between them
+ * either way; backdrop_vec_norm's fallback keeps the result finite, and the
+ * view bias makes the case vanishingly rare. */
+static void fairy_dir_lerp(const float a[3], const float b[3], float s,
+                           float out[3]) {
+    for (int k = 0; k < 3; k++)
+        out[k] = a[k] + (b[k] - a[k]) * s;
+    backdrop_vec_norm(out);
 }
 
 /* The restless part. Added to whatever station the fairy is holding, so it
@@ -1880,7 +1916,8 @@ static void fairy_resident_at(float t, const BackdropExtent *ex,
     int slot;
     unsigned int seed;
     float station[3], flut[3];
-    float entry[3];
+    float dir[3], entry[3];
+    float radius;
 
     if (t < 0.0f)
         t = 0.0f;
@@ -1893,8 +1930,10 @@ static void fairy_resident_at(float t, const BackdropExtent *ex,
     for (int k = 0; k < 3; k++)
         out->color[k] = k_fairy_colors[slot % FAIRY_COLOR_COUNT][k];
 
-    /* Hop between points of interest. The fairy spends most of each hop
-     * arrived and inspecting, and the rest travelling to the next one. */
+    /* The whole visit is expressed as a DIRECTION from the centre plus a
+     * RADIUS, and every interpolation happens in those two separately. That
+     * is what keeps the fairy outside the geometry at all times: a straight
+     * line between two stations is a chord, and a chord cuts through. */
     {
         float hop_span = 1.0f / (float)FAIRY_HOPS;
         float hop_f = u / hop_span;
@@ -1905,34 +1944,37 @@ static void fairy_resident_at(float t, const BackdropExtent *ex,
         float a[3], b[3];
         if (hop >= FAIRY_HOPS)
             hop = FAIRY_HOPS - 1;
-        fairy_point_on_sphere(seed + (unsigned int)hop * 7u, ex,
-                              ex->radius * FAIRY_INSPECT_R,
-                              view, FAIRY_VIEW_BIAS, a);
-        fairy_point_on_sphere(seed + (unsigned int)(hop + 1) * 7u, ex,
-                              ex->radius * FAIRY_INSPECT_R,
-                              view, FAIRY_VIEW_BIAS, b);
-        for (int k = 0; k < 3; k++)
-            station[k] = a[k] + (b[k] - a[k]) * move;
+        fairy_dir_from_seed(seed + (unsigned int)hop * 7u,
+                            view, FAIRY_VIEW_BIAS, a);
+        fairy_dir_from_seed(seed + (unsigned int)(hop + 1) * 7u,
+                            view, FAIRY_VIEW_BIAS, b);
+        fairy_dir_lerp(a, b, move, dir);
+        radius = ex->radius * FAIRY_INSPECT_R;
     }
 
-    /* Arrival and departure interpolate between the station and a far
-     * entry point, so the fairy really flies in rather than fading up on
-     * the spot. */
-    fairy_point_on_sphere(seed + 101u, ex, ex->radius * FAIRY_ENTRY_R,
-                          view, FAIRY_VIEW_BIAS * 0.5f, entry);
-    if (u < FAIRY_ARRIVE_FRAC) {
-        float s = fairy_smoothstep(u / FAIRY_ARRIVE_FRAC);
-        for (int k = 0; k < 3; k++)
-            station[k] = entry[k] + (station[k] - entry[k]) * s;
+    /* Arrival and departure swing round from a far entry bearing while
+     * descending to the inspect radius - a spiral in rather than a straight
+     * run at the geometry, for the same chord reason. */
+    fairy_dir_from_seed(seed + 101u, view, FAIRY_VIEW_BIAS * 0.5f, entry);
+    {
+        float s = 1.0f;
+        if (u < FAIRY_ARRIVE_FRAC)
+            s = fairy_smoothstep(u / FAIRY_ARRIVE_FRAC);
+        else if (u > 1.0f - FAIRY_DEPART_FRAC)
+            s = fairy_smoothstep((1.0f - u) / FAIRY_DEPART_FRAC);
+        if (s < 1.0f) {
+            float swung[3];
+            fairy_dir_lerp(entry, dir, s, swung);
+            for (int k = 0; k < 3; k++)
+                dir[k] = swung[k];
+            radius = ex->radius * (FAIRY_ENTRY_R +
+                                   (FAIRY_INSPECT_R - FAIRY_ENTRY_R) * s);
+        }
         out->bright = s;
-    } else if (u > 1.0f - FAIRY_DEPART_FRAC) {
-        float s = fairy_smoothstep((1.0f - u) / FAIRY_DEPART_FRAC);
-        for (int k = 0; k < 3; k++)
-            station[k] = entry[k] + (station[k] - entry[k]) * s;
-        out->bright = s;
-    } else {
-        out->bright = 1.0f;
     }
+
+    for (int k = 0; k < 3; k++)
+        station[k] = ex->center[k] + dir[k] * radius;
 
     fairy_flutter(t, seed + 211u, ex->radius * FAIRY_FLUTTER_AMP, flut);
     for (int k = 0; k < 3; k++)

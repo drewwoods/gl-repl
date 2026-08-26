@@ -20,6 +20,7 @@
 #include "repl/transform_utils.h"
 #include "support/test_harness.h"
 
+#include <stdio.h>
 #include <string.h>
 
 static TestHarness g_h = TEST_HARNESS_INIT;
@@ -268,6 +269,65 @@ static void test_glut_solid_extents(void) {
               -1.7625f, -0.7875f, -1.7625f, 1.7625f, 0.7875f, 1.7625f);
 }
 
+/* The invariant every consumer placing something around a solid depends on:
+ * the reported box CONTAINS the solid. A box that came back even slightly
+ * under the radius would let a caller compute a clearance that is really an
+ * intersection - which is exactly the failure mode a fairy or drone flying
+ * "just outside" the scene would show up as. Checked across radii and under
+ * a scale, since scale is where an off-by-a-factor would hide. */
+static void test_sphere_box_always_contains_the_sphere(void) {
+    static const float radii[] = { 0.001f, 0.25f, 1.0f, 7.5f, 1000.0f };
+    static const float scales[] = { 1.0f, 0.125f, 3.0f };
+
+    for (int ri = 0; ri < (int)(sizeof radii / sizeof radii[0]); ri++) {
+        for (int si = 0; si < (int)(sizeof scales / sizeof scales[0]); si++) {
+            GLCmd cmds[2];
+            ReplSceneBounds b;
+            float r = radii[ri] * scales[si];
+            char label[128];
+            int n = 0;
+
+            if (scales[si] != 1.0f)
+                cmds[n++] = cmd(CMD_SCALEF, scales[si], scales[si], scales[si], 0);
+            cmds[n++] = cmd(CMD_GLUT_SPHERE, radii[ri], 16, 12, 0);
+
+            b = repl_program_bounds(view_of(cmds, n), n);
+            snprintf(label, sizeof label,
+                     "sphere(%g) scaled %g: bounds are valid",
+                     (double)radii[ri], (double)scales[si]);
+            AT(label, b.valid);
+            if (!b.valid)
+                continue;
+            for (int k = 0; k < 3; k++) {
+                /* >= r, not == r: an over-estimate is safe, an under-estimate
+                 * is the bug. The tolerance is one part in 10^5 of r so a
+                 * float rounding at 1000.0f does not read as a failure. */
+                float tol = r * 1e-5f;
+                snprintf(label, sizeof label,
+                         "sphere(%g) scaled %g: axis %d reaches -r",
+                         (double)radii[ri], (double)scales[si], k);
+                AT(label, b.min[k] <= -r + tol);
+                snprintf(label, sizeof label,
+                         "sphere(%g) scaled %g: axis %d reaches +r",
+                         (double)radii[ri], (double)scales[si], k);
+                AT(label, b.max[k] >= r - tol);
+            }
+            snprintf(label, sizeof label,
+                     "sphere(%g) scaled %g: radius covers the sphere",
+                     (double)radii[ri], (double)scales[si]);
+            AT(label, repl_scene_bounds_radius(&b) >= r);
+        }
+    }
+
+    /* A negative radius is a user typo, not a mirrored sphere: freeglut
+     * draws the same shape, so the box must too rather than inverting. */
+    {
+        GLCmd c = cmd(CMD_GLUT_SPHERE, -2.0f, 16, 12, 0);
+        ReplSceneBounds b = repl_program_bounds(view_of(&c, 1), 1);
+        check_box("sphere(-2)", &b, -2.0f, -2.0f, -2.0f, 2.0f, 2.0f, 2.0f);
+    }
+}
+
 static void test_solid_and_vertices_share_one_box(void) {
     GLCmd cmds[4];
     ReplSceneBounds b;
@@ -390,6 +450,7 @@ int main(void) {
     test_load_identity_resets();
     test_mult_matrix_is_applied();
     test_glut_solid_extents();
+    test_sphere_box_always_contains_the_sphere();
     test_solid_and_vertices_share_one_box();
     test_tess_vertices_count_inside_a_polygon();
     test_empty_and_geometryless_programs_are_invalid();

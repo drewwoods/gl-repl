@@ -809,6 +809,79 @@ static void test_scene_backdrop_fairies(void) {
                 trace_count_prefix(&log, prefix) == 1);
 }
 
+/* --- Fairies: nothing ever flies inside the geometry ------------------
+ *
+ * The standing invariant for a rig that arranges itself around the user's
+ * scene. It is checked here rather than reasoned about because the way it
+ * broke was not visible in a still frame: hop-to-hop motion interpolated
+ * linearly between two stations on the inspect sphere, and a straight line
+ * between two points on a sphere is a chord - a time sweep found the
+ * resident inside a unit sphere for a good fraction of every visit while
+ * individual frames looked fine.
+ *
+ * Every light position the backdrop publishes is measured against the
+ * bounding sphere of the reported box, which is the tightest bound that
+ * holds for any shape the box could contain.
+ */
+static void test_scene_backdrop_fairies_clearance(void) {
+    printf("--- fairies keep clear of the geometry ---\n");
+
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
+    DroneBoundsProbe probe;
+    TraceLog log;
+    /* A box of half-extent 1 on every axis: its bounding sphere - the corner
+     * distance, and the radius the rig scales off - is sqrt(3). */
+    const float corner = 1.7320508f;
+    float worst = 1e9f;
+    float worst_t = 0.0f;
+    int samples = 0;
+
+    ctx.config.backdrop_mode = RENDER3D_BACKDROP_FAIRIES;
+    memset(&probe, 0, sizeof probe);
+    probe.answer = 1;
+    for (int k = 0; k < 3; k++) { probe.min[k] = -1.0f; probe.max[k] = 1.0f; }
+    ctx.config.geometry_bounds_fn = drone_bounds_probe;
+    ctx.config.geometry_bounds_user_data = &probe;
+
+    /* 40 s at frame cadence: three full resident visits, and several runs of
+     * each passer (their periods are 7.3 / 11.7 / 17.1 s). */
+    for (int step = 0; step < 1200; step++) {
+        char prefix[64];
+        float t = (float)step / 30.0f;
+        ctx.config.anim_time = t;
+
+        trace_begin();
+        render3d_backdrop_setup_lights(&ctx);
+        trace_end(&log);
+
+        for (int slot = 4; slot < 8; slot++) {
+            size_t n;
+            snprintf(prefix, sizeof prefix, "glLightfv %u %u ",
+                     (unsigned)(GL_LIGHT0 + slot), (unsigned)GL_POSITION);
+            n = strlen(prefix);
+            for (int i = 0; i < log.n; i++) {
+                float x, y, z, w, d;
+                if (strncmp(log.lines[i], prefix, n) != 0)
+                    continue;
+                if (sscanf(log.lines[i] + n, "%f %f %f %f", &x, &y, &z, &w) != 4)
+                    continue;
+                d = sqrtf(x * x + y * y + z * z);
+                samples++;
+                if (d < worst) { worst = d; worst_t = t; }
+            }
+        }
+    }
+
+    ASSERT_TRUE("fairies: the sweep actually saw lights", samples > 500);
+    if (worst < corner)
+        printf("    closest approach %.4f (%.3f x corner) at t=%.2f\n",
+               (double)worst, (double)(worst / corner), (double)worst_t);
+    /* Deliberately the bare invariant rather than the tuned margin: the
+     * constants are free to move, flying inside the scene is not. */
+    ASSERT_TRUE("fairies: no light ever enters the scene's bounding sphere",
+                worst >= corner);
+}
+
 static void test_render3d_winding_and_gizmo(void) {
     printf("--- render3d winding view and camera glow ---\n");
 
@@ -2030,6 +2103,7 @@ int main(int argc, char **argv) {
     test_scene_backdrop_render();
     test_scene_backdrop_drones();
     test_scene_backdrop_fairies();
+    test_scene_backdrop_fairies_clearance();
     test_render3d_winding_and_gizmo();
     test_buffer_hooks();
     test_helpers_suspend_stencil_test();
