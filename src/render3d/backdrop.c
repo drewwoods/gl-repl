@@ -152,11 +152,13 @@
 #define DRONE_ORBIT_TURNS     1.25f /* revolutions per orbit phase */
 #define DRONE_SPOT_DIST       2.40f /* station distance during the spot phase */
 
-/* Hull: a hexagonal spindle (ring of 6 at the waist, a point fore and aft).
- * Small, and sized off the scene so it stays visible without dominating. */
+/* Hull: a wireframe hexagonal spindle cage with sensor collar, waist
+ * equator, aft thruster ring, and outrigger stabilizer fins. Sized off
+ * the scene so it stays readable in the light's own colour. */
 #define DRONE_HULL_SIDES      6
-#define DRONE_HULL_LEN        0.13f   /* x scene radius, lens to waist */
-#define DRONE_HULL_WAIST      0.045f
+#define DRONE_HULL_LEN        0.14f   /* x scene radius, lens to waist */
+#define DRONE_HULL_WAIST      0.048f
+#define DRONE_LINE_WIDTH      1.4f
 
 /* Beam cone: length as a fraction of the distance to the aim point, and
  * its half-angle in the narrow (spot phase) and wide (transit) states.
@@ -1621,47 +1623,116 @@ static void drone_setup_lights(const Render3dFrameRenderContext *frame_ctx) {
     }
 }
 
-/* One drone hull: a hexagonal spindle along its aim vector. Drawn
- * unlit with a flat body colour and a brighter nose - it is a light
- * source, so shading it would read as wrong. */
+/* One wireframe drone hull: a hexagonal spindle cage with sensor collar,
+ * waist equator, aft thruster ring, and outrigger stabilizer fins, drawn in
+ * the light's own colour. */
 static void drone_draw_hull(const DronePose *pose, const BackdropExtent *sc,
-                            const float col[3]) {
+                            const float col[3], float alpha_scale) {
     float t1[3], t2[3];
     float nose[3], tail[3];
-    float ring[DRONE_HULL_SIDES][3];
+    float collar[DRONE_HULL_SIDES][3];
+    float waist_ring[DRONE_HULL_SIDES][3];
+    float aft_ring[DRONE_HULL_SIDES][3];
+    float fins[DRONE_HULL_SIDES][3];
     float len = DRONE_HULL_LEN * sc->radius;
     float waist = DRONE_HULL_WAIST * sc->radius;
 
     backdrop_frame(pose->aim, t1, t2);
+
     for (int k = 0; k < 3; k++) {
         nose[k] = pose->pos[k] + pose->aim[k] * len;
-        tail[k] = pose->pos[k] - pose->aim[k] * len * 0.55f;
-    }
-    for (int s = 0; s < DRONE_HULL_SIDES; s++) {
-        float a = (float)s / (float)DRONE_HULL_SIDES * 2.0f * (float)M_PI;
-        float ca = cosf(a) * waist, sa = sinf(a) * waist;
-        for (int k = 0; k < 3; k++)
-            ring[s][k] = pose->pos[k] + t1[k] * ca + t2[k] * sa;
+        tail[k] = pose->pos[k] - pose->aim[k] * (len * 0.60f);
     }
 
-    glBegin(GL_TRIANGLES);
     for (int s = 0; s < DRONE_HULL_SIDES; s++) {
-        const float *a = ring[s];
-        const float *b = ring[(s + 1) % DRONE_HULL_SIDES];
-        /* Nose cap, bright. */
-        glColor4f(col[0], col[1], col[2], 1.0f);
+        float a = (float)s / (float)DRONE_HULL_SIDES * 2.0f * (float)M_PI;
+        float ca = cosf(a), sa = sinf(a);
+        float r_collar = waist * 0.52f;
+        float r_waist  = waist;
+        float r_aft    = waist * 0.55f;
+        float r_fin    = waist * 1.45f;
+
+        for (int k = 0; k < 3; k++) {
+            collar[s][k] = pose->pos[k] + pose->aim[k] * (len * 0.40f) +
+                           t1[k] * (ca * r_collar) + t2[k] * (sa * r_collar);
+            waist_ring[s][k] = pose->pos[k] +
+                               t1[k] * (ca * r_waist) + t2[k] * (sa * r_waist);
+            aft_ring[s][k] = pose->pos[k] - pose->aim[k] * (len * 0.28f) +
+                             t1[k] * (ca * r_aft) + t2[k] * (sa * r_aft);
+            fins[s][k] = pose->pos[k] - pose->aim[k] * (len * 0.15f) +
+                         t1[k] * (ca * r_fin) + t2[k] * (sa * r_fin);
+        }
+    }
+
+    glLineWidth(DRONE_LINE_WIDTH);
+
+    /* Main longitudinal ribs (nose -> collar -> waist -> aft -> tail) */
+    glColor4f(col[0], col[1], col[2], 0.90f * alpha_scale);
+    glBegin(GL_LINES);
+    for (int s = 0; s < DRONE_HULL_SIDES; s++) {
         glVertex3fv(nose);
-        glColor4f(col[0] * 0.45f, col[1] * 0.45f, col[2] * 0.45f, 1.0f);
-        glVertex3fv(a);
-        glVertex3fv(b);
-        /* Tail cap, dark - the silhouette stays readable against a bright
-         * backdrop without the hull looking like a lamp from behind. */
-        glColor4f(col[0] * 0.16f, col[1] * 0.16f, col[2] * 0.16f, 1.0f);
+        glVertex3fv(collar[s]);
+
+        glVertex3fv(collar[s]);
+        glVertex3fv(waist_ring[s]);
+
+        glVertex3fv(waist_ring[s]);
+        glVertex3fv(aft_ring[s]);
+
+        glVertex3fv(aft_ring[s]);
         glVertex3fv(tail);
-        glVertex3fv(b);
-        glVertex3fv(a);
     }
     glEnd();
+
+    /* Circumferential rings (sensor collar, waist equator, thruster) */
+    glColor4f(col[0], col[1], col[2], 0.72f * alpha_scale);
+    glBegin(GL_LINE_LOOP);
+    for (int s = 0; s < DRONE_HULL_SIDES; s++)
+        glVertex3fv(collar[s]);
+    glEnd();
+
+    glBegin(GL_LINE_LOOP);
+    for (int s = 0; s < DRONE_HULL_SIDES; s++)
+        glVertex3fv(waist_ring[s]);
+    glEnd();
+
+    glBegin(GL_LINE_LOOP);
+    for (int s = 0; s < DRONE_HULL_SIDES; s++)
+        glVertex3fv(aft_ring[s]);
+    glEnd();
+
+    /* Outrigger stabilizer fins (3 fins on alternating vertices 0, 2, 4) */
+    glColor4f(col[0], col[1], col[2], 0.65f * alpha_scale);
+    glBegin(GL_LINES);
+    for (int s = 0; s < DRONE_HULL_SIDES; s += 2) {
+        glVertex3fv(waist_ring[s]);
+        glVertex3fv(fins[s]);
+
+        glVertex3fv(fins[s]);
+        glVertex3fv(aft_ring[s]);
+
+        glVertex3fv(fins[s]);
+        glVertex3fv(tail);
+    }
+    glEnd();
+
+    /* Internal core spokes / gyro cross-bracing */
+    glColor4f(col[0] * 0.7f, col[1] * 0.7f, col[2] * 0.7f, 0.40f * alpha_scale);
+    glBegin(GL_LINES);
+    for (int s = 0; s < 3; s++) {
+        glVertex3fv(waist_ring[s]);
+        glVertex3fv(waist_ring[s + 3]);
+    }
+    /* Core spine segment */
+    glVertex3f(pose->pos[0] + pose->aim[0] * (len * 0.20f),
+               pose->pos[1] + pose->aim[1] * (len * 0.20f),
+               pose->pos[2] + pose->aim[2] * (len * 0.20f));
+    glVertex3f(pose->pos[0] - pose->aim[0] * (len * 0.20f),
+               pose->pos[1] - pose->aim[1] * (len * 0.20f),
+               pose->pos[2] - pose->aim[2] * (len * 0.20f));
+    glEnd();
+
+    glLineWidth(1.0f);
 }
 
 /* The lens: an additive point sprite at the nose. A point rather than a
@@ -1781,27 +1852,21 @@ static void draw_drones(const Render3dFrameRenderContext *frame_ctx) {
         frame_ctx->config.point_parameter_proc(GL_POINT_DISTANCE_ATTENUATION,
                                                (GLfloat[]){1, 0, 0});
 
-    /* Hulls are opaque and depth-tested so the scene can occlude a drone
-     * passing behind it. */
+    /* Hulls, beams, and pools are wireframe/additive and depth-tested so
+     * foreground geometry occludes drones behind it. */
     glDisable(GL_LIGHTING);
     glDisable(GL_TEXTURE_2D);
     glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_TRUE);
-    for (int i = 0; i < DRONE_COUNT; i++) {
-        DronePose pose;
-        drone_pose(&ph, i, &sc, &pose);
-        drone_draw_hull(&pose, &sc, k_drone_colors[i]);
-    }
-
-    /* Everything glowing composites additively and writes no depth, so
-     * beams cross each other and the pools stack where they overlap. */
+    glDepthMask(GL_FALSE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-    glDepthMask(GL_FALSE);
+    glEnable(GL_LINE_SMOOTH);
     glEnable(GL_POINT_SMOOTH);
+
     for (int i = 0; i < DRONE_COUNT; i++) {
         DronePose pose;
         drone_pose(&ph, i, &sc, &pose);
+        drone_draw_hull(&pose, &sc, k_drone_colors[i], alpha);
         drone_draw_beam(&pose, &sc, k_drone_colors[i], spotness, alpha);
         drone_draw_pool(&pose, &sc, k_drone_colors[i], spotness, alpha);
         drone_draw_lens(&pose, &sc, k_drone_colors[i], alpha);
