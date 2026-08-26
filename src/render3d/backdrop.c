@@ -240,7 +240,20 @@
 #define FAIRY_PASSER_COUNT    3
 #define FAIRY_PASSER_ACTIVE   0.30f  /* share of its period a slot is crossing */
 #define FAIRY_PASSER_SPAN     6.0f   /* x scene radius, run length */
-#define FAIRY_PASSER_OFFSET   1.5f   /* x scene radius, closest approach */
+/* A passer aims straight at the centre and veers off around the geometry,
+ * the way a streamline bends round an obstacle in a wind tunnel. A run that
+ * merely went somewhere near the scene read as decoration; one that comes
+ * AT it and gets out of the way reads as noticing it.
+ *
+ * AVOID_R is the closest approach at the peak of the veer, in scene radii.
+ * AVOID_WIDTH is how far up- and downstream the veer extends, in those same
+ * avoidance radii - larger is a longer, lazier curve. */
+#define FAIRY_AVOID_R         1.20f
+#define FAIRY_AVOID_WIDTH     1.30f
+/* Radians of run-to-run variation in which way the veer goes, about the
+ * screen-plane escape direction. Half a radian either side keeps it clearly
+ * visible while stopping every pass from looking like the last. */
+#define FAIRY_AVOID_SKEW      1.00f
 #define FAIRY_PASSER_BRIGHT   0.42f  /* light + glow, relative to the resident */
 
 /* Light rig. GL_LIGHT4 is the resident; 5..7 are the passers-by. No spot
@@ -1936,7 +1949,7 @@ static void fairy_passer_at(float t, int i, const BackdropExtent *ex,
     float cycles, slot_f, u;
     int slot;
     unsigned int seed;
-    float from[3], to[3], flut[3];
+    float from[3], to[3], dir[3], flut[3];
     float fade;
 
     out->bright = 0.0f;
@@ -1954,26 +1967,79 @@ static void fairy_passer_at(float t, int i, const BackdropExtent *ex,
     for (int k = 0; k < 3; k++)
         out->color[k] = k_fairy_colors[(slot + i) % FAIRY_COLOR_COUNT][k];
 
-    /* A straight run between two far points, displaced so it passes beside
-     * the geometry rather than through it. */
+    /* The run is aimed dead at the centre: `to` is `from` mirrored through
+     * it, so undeflected the fairy would fly straight into the geometry. */
     fairy_point_on_sphere(seed, ex,
                           ex->radius * FAIRY_PASSER_SPAN * 0.5f,
                           view, FAIRY_VIEW_BIAS * 0.5f, from);
-    fairy_point_on_sphere(seed + 53u, ex,
-                          ex->radius * FAIRY_PASSER_SPAN * 0.5f,
-                          view, FAIRY_VIEW_BIAS * 0.5f, to);
-    for (int k = 0; k < 3; k++)
-        to[k] = ex->center[k] * 2.0f - to[k];   /* mirror: a crossing, not a hop */
+    for (int k = 0; k < 3; k++) {
+        to[k] = ex->center[k] * 2.0f - from[k];
+        dir[k] = to[k] - from[k];
+        out->pos[k] = from[k] + dir[k] * u;
+    }
+    backdrop_vec_norm(dir);
 
-    for (int k = 0; k < 3; k++)
-        out->pos[k] = from[k] + (to[k] - from[k]) * u;
+    /* The veer. `along` is signed distance past the closest approach, so
+     * the deflection peaks as the fairy draws level with the centre and
+     * falls off symmetrically either side - which is the shape a streamline
+     * actually has. It is applied along one seeded perpendicular per run
+     * rather than radially outward: a run aimed exactly at the centre has
+     * no radial direction to push along there, and every neighbouring one
+     * has a nearly opposite one, so a radial push would snap through 180
+     * degrees at the crossing. Choosing the escape side up front is both
+     * well-defined everywhere and what something avoiding an obstacle
+     * does - it picks a way round and commits.
+     *
+     * 1/(1+x^2) rather than a compactly supported bump: it is smooth
+     * everywhere with no seams to place, and by the ends of the run it has
+     * decayed to a few percent of the offset, well under the flutter. */
     {
-        float off[3];
-        fairy_point_on_sphere(seed + 97u, ex,
-                              ex->radius * FAIRY_PASSER_OFFSET,
-                              view, FAIRY_VIEW_BIAS * 0.5f, off);
+        float side[3], perp[3], t1[3], t2[3];
+        float avoid = ex->radius * FAIRY_AVOID_R;
+        float along = 0.0f;
+        float x, veer, len, ang, ca, sa;
+
         for (int k = 0; k < 3; k++)
-            out->pos[k] += (off[k] - ex->center[k]);
+            along += (out->pos[k] - ex->center[k]) * dir[k];
+        x = along / (avoid * FAIRY_AVOID_WIDTH);
+        veer = avoid / (1.0f + x * x);
+
+        /* Escape into the screen plane: cross(view, dir) is perpendicular
+         * to the travel direction AND to the line of sight, so the veer is
+         * the component the viewer can actually see. A perpendicular picked
+         * at random is just as valid in world space, but half the time it
+         * points nearly along the view axis - the fairy clears the geometry
+         * in 3D and still reads as flying straight through it, which is the
+         * whole thing this is here to avoid. */
+        side[0] = view[1] * dir[2] - view[2] * dir[1];
+        side[1] = view[2] * dir[0] - view[0] * dir[2];
+        side[2] = view[0] * dir[1] - view[1] * dir[0];
+        len = sqrtf(side[0] * side[0] + side[1] * side[1] + side[2] * side[2]);
+        if (len < 0.20f) {
+            /* Travel nearly along the line of sight: there is no screen-plane
+             * direction to prefer (every veer is equally foreshortened), so
+             * any perpendicular will do. */
+            backdrop_frame(dir, t1, t2);
+            for (int k = 0; k < 3; k++)
+                side[k] = t1[k];
+        } else {
+            for (int k = 0; k < 3; k++)
+                side[k] /= len;
+        }
+
+        /* Which way round, and how squarely, varies per run - held constant
+         * for the whole run, because something avoiding an obstacle picks a
+         * way past and commits to it. */
+        ang = (city_rng(seed + 131u) - 0.5f) * FAIRY_AVOID_SKEW;
+        if (city_rng(seed + 137u) < 0.5f)
+            ang += (float)M_PI;
+        ca = cosf(ang);
+        sa = sinf(ang);
+        perp[0] = dir[1] * side[2] - dir[2] * side[1];
+        perp[1] = dir[2] * side[0] - dir[0] * side[2];
+        perp[2] = dir[0] * side[1] - dir[1] * side[0];
+        for (int k = 0; k < 3; k++)
+            out->pos[k] += (side[k] * ca + perp[k] * sa) * veer;
     }
 
     fairy_flutter(t, seed + 7u, ex->radius * FAIRY_FLUTTER_AMP * 0.5f, flut);
