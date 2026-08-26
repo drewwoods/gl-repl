@@ -33,6 +33,7 @@
 static const ProfSectionInfo k_sections[PROF_SECTION_COUNT] = {
     [PROF_RENDER3D]                          = { "Render 3D",       0, 0 },
     [PROF_RENDER3D_SETUP]                    = { "setup",           1, 0 },
+    [PROF_GEOMETRY_BOUNDS]                   = { "geometry bounds", 1, 0 },
     [PROF_RENDER3D_ACCUM_EFFECT]             = { "accum effect",    1, 0 },
     [PROF_RENDER3D_FILL]                     = { "fill",            1, 0 },
     [PROF_RENDER3D_FADE]                     = { "fade batches",    1, 0 },

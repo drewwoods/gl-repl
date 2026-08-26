@@ -1405,6 +1405,22 @@ static int geometry_bounds_adapter(void *user_data,
                                 float out_min[3], float out_max[3]) {
     (void)user_data;
 
+    /* Its own row rather than a silent rider on whichever render3d phase
+     * happened to pull first: this is a walk over the whole flat program,
+     * and unattributed per-frame work inside someone else's bracket shows
+     * up only as that bracket's remainder. The span covers every pull, not
+     * just the one that misses the memo, so the row reports what answering
+     * bounds queries costs this frame rather than what one of them did.
+     *
+     * prof_accum_end, not prof_end, because this section lives in the
+     * PROF_RENDER3D_SETUP..PROF_RENDER3D_LAST index range that the frame
+     * sweeps with prof_accum_reset / prof_accum_commit. A plain prof_end
+     * publishes immediately and the frame's commit then overwrites it with
+     * the (never accumulated) zero - the row reads stale forever, which is
+     * exactly what it did until a test asked whether it had sampled.
+     * Accumulating also sums the pulls, which is what the row should say. */
+    prof_begin(PROF_GEOMETRY_BOUNDS);
+
     if (!g_scene_bounds.measured) {
         FlatProgramView flat = repl_state_flat_program_view();
         ReplSceneBounds b = repl_program_bounds(flat, flat.cmd_count);
@@ -1427,12 +1443,15 @@ static int geometry_bounds_adapter(void *user_data,
         }
     }
 
-    if (!g_scene_bounds.valid || !g_scene_bounds.smooth_valid)
+    if (!g_scene_bounds.valid || !g_scene_bounds.smooth_valid) {
+        prof_accum_end(PROF_GEOMETRY_BOUNDS);
         return 0;
+    }
     for (int k = 0; k < 3; k++) {
         out_min[k] = g_scene_bounds.min[k];
         out_max[k] = g_scene_bounds.max[k];
     }
+    prof_accum_end(PROF_GEOMETRY_BOUNDS);
     return 1;
 }
 

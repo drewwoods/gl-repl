@@ -1330,6 +1330,53 @@ static void test_prof_nesting_guard(void) {
     prof_test_reset();
 }
 
+/* The geometry-bounds walk's own row.
+ *
+ * It is the one section whose bracket lives in a callback the caller pulls
+ * rather than in a phase the frame always runs, so both halves of that are
+ * worth pinning: a frame in which no helper asks must leave the row stale
+ * (that is the whole reason the bounds are a hook and not a config field),
+ * and a frame in which one does must still nest cleanly - the row claims
+ * PROF_RENDER3D as its parent precisely because no narrower bracket is open
+ * at every site a helper might ask from. */
+static void test_prof_geometry_bounds_row(void) {
+    printf("--- imrepl_ctrl geometry-bounds profile row ---\n");
+
+    prepare_display_fixture();
+    glr_ctrl_display_frame();
+
+    /* Backdrop Off: nothing pulls, so the walk never runs. */
+    glr_state_presentation_mut()->backdrop_mode = RENDER3D_BACKDROP_OFF;
+    prof_test_reset();
+    glr_prof_install_nesting_guard();
+    glr_ctrl_display_frame();
+    ASSERT_INT("no bounds row when no helper asks for bounds",
+               prof_section_sampled_this_frame(PROF_GEOMETRY_BOUNDS), 0);
+
+    /* A bounds-driven backdrop must not disturb the nesting. The row's own
+     * sampling is NOT asserted here, and the line below records why: this
+     * fixture's frame does not reach render3d's inner phases at all (`setup`
+     * is unsampled too, and it is unconditional in a real pass), so a
+     * sampling assertion would be vacuous rather than strict. If this
+     * expectation ever flips, the fixture has gained a real render3d pass -
+     * assert the bounds row alongside it at that point. What keeps the row
+     * honest meanwhile is check-prof-accum-range, which pins the mistake
+     * that made it read stale in the first place. */
+    glr_state_presentation_mut()->backdrop_mode = RENDER3D_BACKDROP_FAIRIES;
+    prof_test_reset();
+    glr_prof_install_nesting_guard();
+    glr_ctrl_display_frame();
+    ASSERT_INT("a frame that measures the scene still nests cleanly",
+               prof_nesting_violations(), 0);
+    ASSERT_INT("the fixture does not run render3d's inner phases",
+               prof_section_sampled_this_frame(PROF_RENDER3D_SETUP), 0);
+    ASSERT_INT("the bounds row sits beside the render3d phases, not under one",
+               prof_section_info(PROF_GEOMETRY_BOUNDS).depth, 1);
+
+    glr_state_presentation_mut()->backdrop_mode = RENDER3D_BACKDROP_OFF;
+    prof_test_reset();
+}
+
 /* The guard over a real frame, which is what the synthetic cases above cannot
  * check: every catalog parent claimed by the depth column has to be open across
  * its children in the frame the controller actually runs. The 2D UI band is the
@@ -8425,6 +8472,7 @@ int main(void) {
     test_frame_spans_host_stages();
     test_prof_nesting_guard();
     test_prof_nesting_guard_over_a_display_frame();
+    test_prof_geometry_bounds_row();
     test_summary_row_metadata();
     test_variable_panel_motion_routes_through_compile_and_coalesces_undo();
     test_variable_panel_shift_left_drag_uses_fine_scale();

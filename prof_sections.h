@@ -31,6 +31,20 @@
 typedef enum {
     PROF_RENDER3D = 0,  /* render3d_draw_scene() + the host chrome-strip clear */
     PROF_RENDER3D_SETUP,     /* projection/camera/lights/material setup */
+    /* The scene-bounds walk behind Render3dRenderConfig.geometry_bounds_fn.
+     * Pure CPU (repl_program_bounds over the whole flat program), memoized
+     * per frame, and only paid when a helper actually pulls - so it reads
+     * "--" for every backdrop that does not want bounds.
+     *
+     * Depth 1, a sibling of the ordered phases rather than a child of
+     * `setup`, even though setup is where today's two backdrops trigger it.
+     * The pull site belongs to the caller: a helper is free to ask in the
+     * pass setup phase, when it places lights, or later when it draws. Only
+     * PROF_RENDER3D is open for certain across all of those, and the
+     * nesting guard checks a parent really is open at both ends - so
+     * claiming `setup` as the parent would be a claim this code cannot
+     * keep. (PROF_BUFFER_VIZ_DEPTH sits at depth 1 for the same reason.) */
+    PROF_GEOMETRY_BOUNDS,
     PROF_RENDER3D_ACCUM_EFFECT, /* accumulation load/add/resolve + blur subframe prep */
     PROF_RENDER3D_FILL,      /* execute_commands() main fill pass */
     PROF_RENDER3D_FADE,      /* replay fade batches pass */

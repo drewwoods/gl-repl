@@ -2292,6 +2292,9 @@ check-state-ownership: ## Run state-ownership contract checks (new + tightened e
 check-prof-sections-instrumented: ## Hard guard: every prof_sections.h catalog row has a prof_begin() site (no zombie profiler rows).
 	@bash scripts/check/check-prof-sections-instrumented.sh
 
+check-prof-accum-range: ## Hard guard: render3d-range prof sections close with prof_accum_end(), not prof_end().
+	@bash scripts/check/check-prof-accum-range.sh
+
 check-public-api-usage: ## Scan public API declarations for unused functions (informational).
 	@bash scripts/check/check-unused-apis.sh
 

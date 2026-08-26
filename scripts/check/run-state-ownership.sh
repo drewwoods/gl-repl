@@ -373,6 +373,10 @@ check_prof_sections_instrumented() {
     bash scripts/check/check-prof-sections-instrumented.sh
 }
 
+check_prof_accum_range() {
+    bash scripts/check/check-prof-accum-range.sh
+}
+
 check_keymap_no_dup() {
     bash scripts/keymap.sh check
 }
@@ -539,6 +543,7 @@ else
     # start until most of the fast checks have already finished, so they end
     # up running alone at the tail and their latency isn't hidden by anything.
     run_check check-prof-sections-instrumented check_prof_sections_instrumented
+    run_check check-prof-accum-range check_prof_accum_range
     run_check check-module-prefixes check_module_prefixes
     run_check check-controller-boundaries check_controller_boundaries
     run_check check-render3d-no-repl-state-mut check_render3d_no_repl_state_mut
