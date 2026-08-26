@@ -86,6 +86,18 @@ static int trace_count_line(const TraceLog *log, const char *exact) {
     return count;
 }
 
+static int trace_count_prefix(const TraceLog *log, const char *prefix) {
+    int count = 0;
+    size_t n;
+    if (!log || !prefix)
+        return 0;
+    n = strlen(prefix);
+    for (int i = 0; i < log->n; i++)
+        if (strncmp(log->lines[i], prefix, n) == 0)
+            count++;
+    return count;
+}
+
 static int trace_find_after(const TraceLog *log, int start, const char *exact) {
     if (!log || !exact)
         return -1;
@@ -563,6 +575,132 @@ static void test_scene_backdrop_render(void) {
     }
 
     ASSERT_TRUE("render3d_backdrop_render and setup_lights did not crash for all modes", 1);
+}
+
+/* --- Drones backdrop: the geometry-bounds hook contract --------------
+ *
+ * The drone rig is the only backdrop that reads
+ * Render3dRenderConfig.geometry_bounds_fn, and the hook is optional in both
+ * directions. What is pinned here is that the backdrop PULLS - it asks, and
+ * copes with either answer - rather than requiring a caller to have
+ * measured anything, because render3d_demo installs no hook at all.
+ */
+typedef struct DroneBoundsProbe {
+    int   calls;
+    int   answer;        /* what the hook returns */
+    float min[3], max[3];
+} DroneBoundsProbe;
+
+static int drone_bounds_probe(void *user_data,
+                              float out_min[3], float out_max[3]) {
+    DroneBoundsProbe *p = (DroneBoundsProbe *)user_data;
+    p->calls++;
+    if (!p->answer)
+        return 0;
+    for (int k = 0; k < 3; k++) {
+        out_min[k] = p->min[k];
+        out_max[k] = p->max[k];
+    }
+    return 1;
+}
+
+/* Distance of the GL_LIGHT4 position from `center`, read back out of the
+ * stub trace. The stub logs glLightfv as "glLightfv <light> <pname>" with
+ * the values on the same line. */
+static int drone_light4_distance(const TraceLog *log, const float center[3],
+                                 float *out_dist) {
+    char prefix[64];
+    snprintf(prefix, sizeof prefix, "glLightfv %u %u ",
+             (unsigned)GL_LIGHT4, (unsigned)GL_POSITION);
+    for (int i = 0; i < log->n; i++) {
+        if (strncmp(log->lines[i], prefix, strlen(prefix)) == 0) {
+            float x, y, z, w;
+            if (sscanf(log->lines[i] + strlen(prefix), "%f %f %f %f",
+                       &x, &y, &z, &w) == 4) {
+                float dx = x - center[0], dy = y - center[1], dz = z - center[2];
+                *out_dist = sqrtf(dx * dx + dy * dy + dz * dz);
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+static void test_scene_backdrop_drones(void) {
+    printf("--- drones backdrop bounds hook ---\n");
+
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
+    DroneBoundsProbe probe;
+    TraceLog log;
+    float small_d = 0.0f, large_d = 0.0f;
+    float origin[3] = { 0.0f, 0.0f, 0.0f };
+
+    ctx.config.backdrop_mode = RENDER3D_BACKDROP_DRONES;
+    ctx.config.anim_time = 3.0f;
+
+    /* No hook at all - render3d_demo's case. The rig must still place its
+     * lights, from its own fallback scale. */
+    ctx.config.geometry_bounds_fn = NULL;
+    ctx.config.geometry_bounds_user_data = NULL;
+    trace_begin();
+    render3d_backdrop_setup_lights(&ctx);
+    render3d_backdrop_render(&ctx);
+    trace_end(&log);
+    ASSERT_TRUE("drones: no bounds hook still enables GL_LIGHT4",
+                trace_count_prefix(&log, "glLightfv 16388 4611") > 0);
+
+    /* A hook that reports nothing measurable is the same case. */
+    memset(&probe, 0, sizeof probe);
+    probe.answer = 0;
+    ctx.config.geometry_bounds_fn = drone_bounds_probe;
+    ctx.config.geometry_bounds_user_data = &probe;
+    trace_begin();
+    render3d_backdrop_setup_lights(&ctx);
+    render3d_backdrop_render(&ctx);
+    trace_end(&log);
+    ASSERT_TRUE("drones: the backdrop asks for bounds", probe.calls > 0);
+    ASSERT_TRUE("drones: an unmeasurable scene still enables GL_LIGHT4",
+                trace_count_prefix(&log, "glLightfv 16388 4611") > 0);
+
+    /* All four slots above the user's own GL_LIGHT0..3 get spot state, and
+     * none of the user's slots are touched. */
+    memset(&probe, 0, sizeof probe);
+    probe.answer = 1;
+    for (int k = 0; k < 3; k++) { probe.min[k] = -1.0f; probe.max[k] = 1.0f; }
+    trace_begin();
+    render3d_backdrop_setup_lights(&ctx);
+    trace_end(&log);
+    for (int i = 0; i < 4; i++) {
+        char label[64], prefix[64];
+        snprintf(prefix, sizeof prefix, "glLightf %u %u ",
+                 (unsigned)(GL_LIGHT4 + i), (unsigned)GL_SPOT_CUTOFF);
+        snprintf(label, sizeof label, "drones: GL_LIGHT%d gets a spot cutoff", 4 + i);
+        ASSERT_TRUE(label, trace_count_prefix(&log, prefix) == 1);
+    }
+    for (int i = 0; i < 4; i++) {
+        char label[64], prefix[64];
+        snprintf(prefix, sizeof prefix, "glLightfv %u ", (unsigned)(GL_LIGHT0 + i));
+        snprintf(label, sizeof label, "drones: user slot GL_LIGHT%d untouched", i);
+        ASSERT_TRUE(label, trace_count_prefix(&log, prefix) == 0);
+    }
+    ASSERT_TRUE("drones: bounds measured once per setup pass", probe.calls == 1);
+
+    /* The rig scales with the scene: a box ten times larger puts the lights
+     * ten times further out. This is the whole reason the hook exists - a
+     * fixed rig would sit inside the large scene and miss the small one. */
+    if (drone_light4_distance(&log, origin, &small_d)) {
+        memset(&probe, 0, sizeof probe);
+        probe.answer = 1;
+        for (int k = 0; k < 3; k++) { probe.min[k] = -10.0f; probe.max[k] = 10.0f; }
+        trace_begin();
+        render3d_backdrop_setup_lights(&ctx);
+        trace_end(&log);
+        ASSERT_TRUE("drones: light distance tracks scene size",
+                    drone_light4_distance(&log, origin, &large_d) &&
+                    large_d > small_d * 9.0f && large_d < small_d * 11.0f);
+    } else {
+        ASSERT_TRUE("drones: GL_LIGHT4 position found in trace", 0);
+    }
 }
 
 static void test_render3d_winding_and_gizmo(void) {
@@ -1784,6 +1922,7 @@ int main(int argc, char **argv) {
     test_scene_grid_render();
     test_scene_axes_render();
     test_scene_backdrop_render();
+    test_scene_backdrop_drones();
     test_render3d_winding_and_gizmo();
     test_buffer_hooks();
     test_helpers_suspend_stencil_test();

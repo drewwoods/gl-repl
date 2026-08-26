@@ -1424,7 +1424,21 @@ The primordial cube enjoying the view:
 ![Backdrops: Polar Day+Snow, Nebula, Sunset, Aurora](images/backdrops.png)
 
 **F5** cycles the scene backdrop: Off *(default)*, Cityscape, Stars,
-City+Stars, Sunset, Aurora, Nebula, Polar Day, Polar Day+Snow.
+City+Stars, Sunset, Aurora, Nebula, Polar Day, Polar Day+Snow, Drones.
+
+**Drones** is the one backdrop whose lights move. Four scanner drones patrol
+your geometry through a repeating three-phase cycle - a linear pass, an
+orbit, and a held spotlight sweep - each carrying a coloured light. The rig
+measures your scene and scales itself to fit, so it frames a half-unit
+sketch and a forty-unit one alike; with nothing drawn yet it falls back to a
+fixed radius about the origin.
+
+> [!NOTE]
+> The drones' beams are drawn geometry as well as real
+> `GL_SPOT_*` lights. Fixed-function spotlights are evaluated per *vertex*,
+> so on coarse geometry (a `glutSolidCube` has eight) the lighting term
+> alone would be nearly invisible - subdivide your surfaces if you want the
+> beams to actually rake across them.
 
 Some backdrops enable a hidden companion grid. Nebula selects Star Chart;
 see [Advanced Usage](ADVANCED_USAGE.md#cfg-backdropgrid-pairing) for the

@@ -117,6 +117,90 @@
 #define SNOW_BAND_CUT_SMALL 0.55f
 #define SNOW_BAND_CUT_MED   0.85f
 
+/* --- Drones backdrop ---
+ *
+ * Four scanner drones patrol the user's geometry on GL_LIGHT4..7 - the
+ * only backdrop whose lights move. Everything about the rig is derived
+ * from the scene's world-space bounds (Render3dRenderConfig.geometry_bounds_fn),
+ * so the drones frame a 0.5-unit scene and a 40-unit one alike; with no
+ * bounds available they fall back to a fixed radius about the origin.
+ *
+ * The patrol is a fixed cycle of three phases - a linear pass, an orbit,
+ * and a held spotlight sweep - and the phase decides the flight path only.
+ * Pose is a pure function of anim_time (no retained state), which is what
+ * keeps it correct under replay and under accumulation blur, where the
+ * same frame is rendered several times at sub-step times.
+ */
+#define DRONE_COUNT          4      /* GL_LIGHT4..7: the slots above the user's */
+#define DRONE_PHASE_COUNT    3
+#define DRONE_PHASE_SECS     9.0f
+/* Fraction of a phase spent cross-fading into the next one. Both poses are
+ * evaluated and lerped across the seam, so no drone ever teleports; the
+ * incoming phase is asked for a slightly negative local time, which its
+ * pose functions are all smooth over. */
+#define DRONE_XFADE_FRAC     0.16f
+
+/* Scene scale. The fallback is used when no bounds hook is installed or it
+ * reports nothing drawn; the floor keeps a degenerate (single-point) scene
+ * from collapsing the whole rig onto the geometry. */
+#define DRONE_FALLBACK_RADIUS 2.5f
+#define DRONE_MIN_RADIUS      0.75f
+
+/* Path geometry, all in multiples of the scene radius. */
+#define DRONE_STRAFE_SPAN     5.0f  /* run length, entering and exiting offscreen */
+#define DRONE_STRAFE_LANE     0.42f /* lateral spacing within the formation */
+/* The formation flies PAST the scene, not through it: the run is displaced
+ * sideways and upward by these many scene radii so no drone ever ends up
+ * inside the geometry at mid-pass. */
+#define DRONE_STRAFE_STANDOFF 1.40f
+#define DRONE_STRAFE_RISE     0.55f
+#define DRONE_ORBIT_RADIUS    1.75f
+#define DRONE_ORBIT_TURNS     1.25f /* revolutions per orbit phase */
+#define DRONE_SPOT_DIST       2.40f /* station distance during the spot phase */
+
+/* Hull: a hexagonal spindle (ring of 6 at the waist, a point fore and aft).
+ * Small, and sized off the scene so it stays visible without dominating. */
+#define DRONE_HULL_SIDES      6
+#define DRONE_HULL_LEN        0.13f   /* x scene radius, lens to waist */
+#define DRONE_HULL_WAIST      0.045f
+
+/* Beam cone: length as a fraction of the distance to the aim point, and
+ * its half-angle in the narrow (spot phase) and wide (transit) states.
+ * These match the GL spotlight cutoffs below so the drawn cone and the lit
+ * pool agree. */
+#define DRONE_BEAM_SEGS       18
+#define DRONE_BEAM_NARROW_DEG 9.0f
+#define DRONE_BEAM_WIDE_DEG   15.0f
+#define DRONE_BEAM_ALPHA      0.10f  /* peak alpha at the lens, spot phase */
+#define DRONE_BEAM_TRANSIT_A  0.022f /* ... and while merely in transit */
+/* The pool is the beam's footprint, so its radius follows from the same
+ * angle - but a beam cast from a shallow angle would smear an ellipse to
+ * the horizon, so it is capped at a multiple of the scene radius. */
+#define DRONE_POOL_MAX_R      2.0f
+
+/* Fixed-function spotlights are evaluated per VERTEX, so on the coarse
+ * geometry a REPL scene usually has (a glutSolidCube is eight vertices) the
+ * cutoff itself is nearly invisible. The drawn cone above is what actually
+ * reads as a spotlight; these keep the lighting consistent with it rather
+ * than carrying the effect alone. Cutoff is lerped between the two, never
+ * through 180 - that value is GL's "not a spotlight" sentinel and would
+ * pop. */
+#define DRONE_SPOT_EXPONENT   6.0f
+
+/* Attenuation is quadratic in distance, so the coefficient has to scale
+ * with the scene or a drone lights a unit scene to white and a 50-unit one
+ * not at all. Referenced to the scene radius and tuned so a drone at its
+ * spot-phase station (DRONE_SPOT_DIST radii out) still delivers most of its
+ * diffuse colour, and one on a close orbit pass reads as brighter. */
+#define DRONE_ATTEN_CONSTANT  0.55f
+#define DRONE_ATTEN_QUADRATIC 0.16f
+/* Diffuse headroom. A drone on a close orbit pass would otherwise clip the
+ * surface it sweeps to flat white before the falloff has any range left. */
+#define DRONE_DIFFUSE_SCALE   0.80f
+
+#define DRONE_GLOW_POINT_SIZE 7.0f
+#define DRONE_POOL_SEGS       28
+
 static void render3d_backdrop_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
 }
@@ -1138,6 +1222,472 @@ static void draw_snowfall(
     backdrop_end_sky_point_state();
 }
 
+/* --- Drones backdrop -------------------------------------------------- */
+
+/* Per-drone body/light colour. Three cool scanners and one warm one, so a
+ * scene lit by the rig picks up a temperature difference as they move
+ * rather than a uniform wash. */
+static const float k_drone_colors[DRONE_COUNT][3] = {
+    { 0.62f, 0.84f, 1.00f },  /* cold white-blue */
+    { 1.00f, 0.66f, 0.30f },  /* sodium amber */
+    { 0.45f, 0.95f, 0.88f },  /* pale cyan */
+    { 0.78f, 0.62f, 1.00f },  /* dim violet */
+};
+
+/* The measured scene the rig arranges itself around. */
+typedef struct DroneScene {
+    float center[3];
+    float radius;
+    float floor_y;   /* where the beam pools land */
+} DroneScene;
+
+typedef struct DronePose {
+    float pos[3];
+    float aim[3];    /* unit vector: where the drone is pointing */
+} DronePose;
+
+static void drone_vec_norm(float v[3]) {
+    float len = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    if (len < 1e-5f) {
+        v[0] = 0.0f; v[1] = -1.0f; v[2] = 0.0f;
+        return;
+    }
+    v[0] /= len; v[1] /= len; v[2] /= len;
+}
+
+/* Orthonormal frame around unit d, for the beam cone and the ground pool.
+ * The seed axis is whichever cardinal d is least aligned with, so the
+ * cross product never degenerates. */
+static void drone_frame(const float d[3], float t1[3], float t2[3]) {
+    float seed[3] = { 0.0f, 1.0f, 0.0f };
+    if (fabsf(d[1]) > 0.9f) {
+        seed[0] = 1.0f; seed[1] = 0.0f;
+    }
+    t1[0] = seed[1] * d[2] - seed[2] * d[1];
+    t1[1] = seed[2] * d[0] - seed[0] * d[2];
+    t1[2] = seed[0] * d[1] - seed[1] * d[0];
+    drone_vec_norm(t1);
+    t2[0] = d[1] * t1[2] - d[2] * t1[1];
+    t2[1] = d[2] * t1[0] - d[0] * t1[2];
+    t2[2] = d[0] * t1[1] - d[1] * t1[0];
+}
+
+/* Resolve the scene the rig should frame. The bounds hook is optional in
+ * both directions - a caller may not install one (render3d_demo does not),
+ * and an installed one reports 0 when there is nothing to measure - and
+ * both cases land on the same fallback. */
+static void drone_resolve_scene(const Render3dFrameRenderContext *frame_ctx,
+                                DroneScene *out) {
+    float mn[3], mx[3];
+    float half[3];
+
+    out->center[0] = out->center[1] = out->center[2] = 0.0f;
+    out->radius = DRONE_FALLBACK_RADIUS;
+    out->floor_y = -DRONE_FALLBACK_RADIUS;
+
+    if (!frame_ctx->config.geometry_bounds_fn)
+        return;
+    if (!frame_ctx->config.geometry_bounds_fn(
+            frame_ctx->config.geometry_bounds_user_data, mn, mx))
+        return;
+
+    for (int k = 0; k < 3; k++) {
+        out->center[k] = (mn[k] + mx[k]) * 0.5f;
+        half[k] = (mx[k] - mn[k]) * 0.5f;
+    }
+    out->radius = sqrtf(half[0] * half[0] + half[1] * half[1] +
+                        half[2] * half[2]);
+    if (out->radius < DRONE_MIN_RADIUS)
+        out->radius = DRONE_MIN_RADIUS;
+    /* The pool lands under the geometry, not on the grid plane: a scene
+     * built above or below y = 0 should still get its own floor. */
+    out->floor_y = mn[1] - out->radius * 0.05f;
+}
+
+/* Phase 0 - transit. The formation crosses the scene along one axis,
+ * entering and leaving well outside it. `slot` turns the axis by a golden
+ * angle each repetition so successive passes come from a new direction. */
+static void drone_pose_strafe(int i, float u, int slot,
+                              const DroneScene *sc, DronePose *out) {
+    float ang = 2.39996323f * (float)slot;
+    float dir[3]  = { cosf(ang), 0.0f, sinf(ang) };
+    float side[3] = { -dir[2], 0.0f, dir[0] };
+    float rank = (float)i - (DRONE_COUNT - 1) * 0.5f;
+    float lane = (DRONE_STRAFE_STANDOFF + rank * DRONE_STRAFE_LANE) * sc->radius;
+    /* Staggered along the run so they stream past rather than abreast. */
+    float along = (u - 0.5f) * DRONE_STRAFE_SPAN * sc->radius
+                  - rank * 0.30f * sc->radius;
+    float rise = (DRONE_STRAFE_RISE + 0.14f * (float)(i & 1)) * sc->radius;
+
+    for (int k = 0; k < 3; k++)
+        out->pos[k] = sc->center[k] + dir[k] * along + side[k] * lane;
+    out->pos[1] += rise;
+
+    /* Tracking the scene as they pass rather than staring straight ahead -
+     * a pass that lit nothing would be the one phase with no effect on the
+     * geometry. */
+    for (int k = 0; k < 3; k++)
+        out->aim[k] = sc->center[k] - out->pos[k];
+    drone_vec_norm(out->aim);
+}
+
+/* Phase 1 - orbit. Each drone rides its own tilted ring, evenly spaced in
+ * phase, looking inward at the scene centre. */
+static void drone_pose_orbit(int i, float u, int slot,
+                             const DroneScene *sc, DronePose *out) {
+    float theta = 2.0f * (float)M_PI *
+                  (u * DRONE_ORBIT_TURNS + (float)i / (float)DRONE_COUNT);
+    float tilt = 0.22f + 0.20f * (float)i;
+    float r = DRONE_ORBIT_RADIUS * sc->radius;
+    float ct = cosf(theta), st = sinf(theta);
+    /* Ring in XZ, tipped about the X axis so the four planes cross. */
+    float x = r * ct;
+    float y = r * st * sinf(tilt);
+    float z = r * st * cosf(tilt);
+    /* Alternate the direction of travel per repetition. */
+    if (slot & 1)
+        z = -z;
+
+    out->pos[0] = sc->center[0] + x;
+    out->pos[1] = sc->center[1] + y;
+    out->pos[2] = sc->center[2] + z;
+
+    for (int k = 0; k < 3; k++)
+        out->aim[k] = sc->center[k] - out->pos[k];
+    drone_vec_norm(out->aim);
+}
+
+/* Phase 2 - spotlight. The drones hold high stations and sweep their beams
+ * across the scene: the phase the GL spotlight state exists for. */
+static void drone_pose_spot(int i, float u, int slot,
+                            const DroneScene *sc, DronePose *out) {
+    float az = 2.0f * (float)M_PI * ((float)i / (float)DRONE_COUNT
+                                     + 0.18f * u)
+               + 0.9f * (float)slot;
+    float elev = 0.62f + 0.10f * sinf(2.0f * (float)M_PI * u + (float)i);
+    float d = DRONE_SPOT_DIST * sc->radius;
+    float ce = cosf(elev), se = sinf(elev);
+    /* Each beam wanders over its own lissajous inside the scene box, so
+     * the four sweeps cross instead of converging on one bright point. */
+    float wx = 0.45f * sc->radius * sinf(1.7f * u * 2.0f * (float)M_PI + (float)i * 1.3f);
+    float wz = 0.45f * sc->radius * cosf(1.1f * u * 2.0f * (float)M_PI + (float)i * 2.1f);
+
+    out->pos[0] = sc->center[0] + d * ce * cosf(az);
+    out->pos[1] = sc->center[1] + d * se;
+    out->pos[2] = sc->center[2] + d * ce * sinf(az);
+
+    out->aim[0] = sc->center[0] + wx - out->pos[0];
+    out->aim[1] = sc->center[1] - out->pos[1];
+    out->aim[2] = sc->center[2] + wz - out->pos[2];
+    drone_vec_norm(out->aim);
+}
+
+static void drone_pose_for_phase(int phase, int i, float u, int slot,
+                                 const DroneScene *sc, DronePose *out) {
+    switch (phase) {
+    case 1:  drone_pose_orbit(i, u, slot, sc, out); break;
+    case 2:  drone_pose_spot(i, u, slot, sc, out);  break;
+    default: drone_pose_strafe(i, u, slot, sc, out); break;
+    }
+}
+
+/* Where in the patrol cycle `anim_time` falls: the active phase, its local
+ * progress, and how far the cross-fade into the next phase has run
+ * (blend == 0 outside the seam). */
+typedef struct DronePhase {
+    int   phase;
+    int   slot;
+    float u;
+    float blend;   /* 0..1 toward (phase + 1) % DRONE_PHASE_COUNT */
+} DronePhase;
+
+static DronePhase drone_phase_at(float anim_time) {
+    DronePhase p;
+    float tt = (anim_time > 0.0f) ? anim_time : 0.0f;
+    float cycles = tt / DRONE_PHASE_SECS;
+    float slot_f = floorf(cycles);
+
+    p.slot = (int)slot_f;
+    p.u = cycles - slot_f;
+    p.phase = p.slot % DRONE_PHASE_COUNT;
+    p.blend = 0.0f;
+    if (p.u > 1.0f - DRONE_XFADE_FRAC) {
+        float s = (p.u - (1.0f - DRONE_XFADE_FRAC)) / DRONE_XFADE_FRAC;
+        p.blend = s * s * (3.0f - 2.0f * s);   /* smoothstep */
+    }
+    return p;
+}
+
+/* Full pose for drone `i`, cross-fade resolved. The incoming phase is
+ * evaluated at a slightly negative local time - which is exactly its own
+ * start, continued backwards - so position and aim are continuous across
+ * the seam. */
+static void drone_pose(const DronePhase *ph, int i, const DroneScene *sc,
+                       DronePose *out) {
+    DronePose next;
+
+    drone_pose_for_phase(ph->phase, i, ph->u, ph->slot, sc, out);
+    if (ph->blend <= 0.0f)
+        return;
+
+    drone_pose_for_phase((ph->phase + 1) % DRONE_PHASE_COUNT, i,
+                         ph->u - 1.0f, ph->slot + 1, sc, &next);
+    for (int k = 0; k < 3; k++) {
+        out->pos[k] += (next.pos[k] - out->pos[k]) * ph->blend;
+        out->aim[k] += (next.aim[k] - out->aim[k]) * ph->blend;
+    }
+    drone_vec_norm(out->aim);
+}
+
+/* How much of the current blend is the spotlight phase: drives the beam
+ * cone's width and brightness and the GL spot cutoff together, so the drawn
+ * cone and the lit falloff never disagree. */
+static float drone_spotness(const DronePhase *ph) {
+    float here = (ph->phase == 2) ? 1.0f : 0.0f;
+    float there = (((ph->phase + 1) % DRONE_PHASE_COUNT) == 2) ? 1.0f : 0.0f;
+    return here + (there - here) * ph->blend;
+}
+
+/* Configure GL_LIGHT4..7 as the four drones. Runs in the pass setup phase,
+ * BEFORE user geometry, which is the whole reason the pose is a function of
+ * time rather than something the render pass computes and stashes: the
+ * lights have to be placed before the geometry they light, and the bodies
+ * are drawn afterwards from the same function. */
+static void drone_setup_lights(const Render3dFrameRenderContext *frame_ctx) {
+    DroneScene sc;
+    DronePhase ph = drone_phase_at(frame_ctx->config.anim_time);
+    float spotness = drone_spotness(&ph);
+    float cutoff = DRONE_BEAM_WIDE_DEG +
+                   (DRONE_BEAM_NARROW_DEG - DRONE_BEAM_WIDE_DEG) * spotness;
+    float quad;
+
+    drone_resolve_scene(frame_ctx, &sc);
+    /* Quadratic falloff referenced to the scene's own size, so a drone at
+     * its orbit radius contributes the same amount whatever that radius
+     * happens to be. */
+    quad = DRONE_ATTEN_QUADRATIC / (sc.radius * sc.radius);
+
+    for (int i = 0; i < DRONE_COUNT; i++) {
+        DronePose pose;
+        GLenum id = (GLenum)(GL_LIGHT4 + i);
+        GLfloat pos[4];
+        GLfloat dir[3];
+        GLfloat diffuse[4], ambient[4], specular[4];
+
+        drone_pose(&ph, i, &sc, &pose);
+
+        pos[0] = pose.pos[0]; pos[1] = pose.pos[1]; pos[2] = pose.pos[2];
+        pos[3] = 1.0f;        /* positional: attenuation and spot need it */
+        dir[0] = pose.aim[0]; dir[1] = pose.aim[1]; dir[2] = pose.aim[2];
+
+        for (int k = 0; k < 3; k++) {
+            diffuse[k]  = k_drone_colors[i][k] * DRONE_DIFFUSE_SCALE;
+            ambient[k]  = k_drone_colors[i][k] * 0.02f;
+            specular[k] = k_drone_colors[i][k];
+        }
+        diffuse[3] = ambient[3] = specular[3] = 1.0f;
+
+        glLightfv(id, GL_POSITION, pos);
+        glLightfv(id, GL_DIFFUSE, diffuse);
+        glLightfv(id, GL_AMBIENT, ambient);
+        glLightfv(id, GL_SPECULAR, specular);
+        glLightfv(id, GL_SPOT_DIRECTION, dir);
+        glLightf(id, GL_SPOT_CUTOFF, cutoff);
+        glLightf(id, GL_SPOT_EXPONENT, DRONE_SPOT_EXPONENT);
+        glLightf(id, GL_CONSTANT_ATTENUATION, DRONE_ATTEN_CONSTANT);
+        glLightf(id, GL_LINEAR_ATTENUATION, 0.0f);
+        glLightf(id, GL_QUADRATIC_ATTENUATION, quad);
+        glEnable(id);
+    }
+}
+
+/* One drone hull: a hexagonal spindle along its aim vector. Drawn
+ * unlit with a flat body colour and a brighter nose - it is a light
+ * source, so shading it would read as wrong. */
+static void drone_draw_hull(const DronePose *pose, const DroneScene *sc,
+                            const float col[3]) {
+    float t1[3], t2[3];
+    float nose[3], tail[3];
+    float ring[DRONE_HULL_SIDES][3];
+    float len = DRONE_HULL_LEN * sc->radius;
+    float waist = DRONE_HULL_WAIST * sc->radius;
+
+    drone_frame(pose->aim, t1, t2);
+    for (int k = 0; k < 3; k++) {
+        nose[k] = pose->pos[k] + pose->aim[k] * len;
+        tail[k] = pose->pos[k] - pose->aim[k] * len * 0.55f;
+    }
+    for (int s = 0; s < DRONE_HULL_SIDES; s++) {
+        float a = (float)s / (float)DRONE_HULL_SIDES * 2.0f * (float)M_PI;
+        float ca = cosf(a) * waist, sa = sinf(a) * waist;
+        for (int k = 0; k < 3; k++)
+            ring[s][k] = pose->pos[k] + t1[k] * ca + t2[k] * sa;
+    }
+
+    glBegin(GL_TRIANGLES);
+    for (int s = 0; s < DRONE_HULL_SIDES; s++) {
+        const float *a = ring[s];
+        const float *b = ring[(s + 1) % DRONE_HULL_SIDES];
+        /* Nose cap, bright. */
+        glColor4f(col[0], col[1], col[2], 1.0f);
+        glVertex3fv(nose);
+        glColor4f(col[0] * 0.45f, col[1] * 0.45f, col[2] * 0.45f, 1.0f);
+        glVertex3fv(a);
+        glVertex3fv(b);
+        /* Tail cap, dark - the silhouette stays readable against a bright
+         * backdrop without the hull looking like a lamp from behind. */
+        glColor4f(col[0] * 0.16f, col[1] * 0.16f, col[2] * 0.16f, 1.0f);
+        glVertex3fv(tail);
+        glVertex3fv(b);
+        glVertex3fv(a);
+    }
+    glEnd();
+}
+
+/* The lens: an additive point sprite at the nose. A point rather than a
+ * quad because a point is inherently camera-facing - no billboard frame,
+ * and no glGetFloatv(GL_MODELVIEW_MATRIX) read-back to build one. */
+static void drone_draw_lens(const DronePose *pose, const DroneScene *sc,
+                            const float col[3], float alpha_scale) {
+    float len = DRONE_HULL_LEN * sc->radius;
+    glPointSize(DRONE_GLOW_POINT_SIZE);
+    glBegin(GL_POINTS);
+    glColor4f(col[0], col[1], col[2], alpha_scale);
+    glVertex3f(pose->pos[0] + pose->aim[0] * len,
+               pose->pos[1] + pose->aim[1] * len,
+               pose->pos[2] + pose->aim[2] * len);
+    glEnd();
+}
+
+/* The visible beam: an open cone from the lens along the aim, bright at the
+ * lens and transparent at the far rim. This is what actually reads as a
+ * spotlight - GL's own spot term is evaluated per vertex, so on the coarse
+ * geometry a typed scene usually has it contributes almost nothing. */
+static void drone_draw_beam(const DronePose *pose, const DroneScene *sc,
+                            const float col[3], float spotness,
+                            float alpha_scale) {
+    float t1[3], t2[3];
+    float apex[3];
+    float half_deg = DRONE_BEAM_WIDE_DEG +
+                     (DRONE_BEAM_NARROW_DEG - DRONE_BEAM_WIDE_DEG) * spotness;
+    float half_rad = half_deg * (float)M_PI / 180.0f;
+    float peak = DRONE_BEAM_TRANSIT_A +
+                 (DRONE_BEAM_ALPHA - DRONE_BEAM_TRANSIT_A) * spotness;
+    float reach = 0.0f;
+    float rim;
+    float lens = DRONE_HULL_LEN * sc->radius;
+
+    for (int k = 0; k < 3; k++) {
+        float d = sc->center[k] - pose->pos[k];
+        reach += d * d;
+    }
+    reach = sqrtf(reach);
+    rim = reach * tanf(half_rad);
+
+    drone_frame(pose->aim, t1, t2);
+    for (int k = 0; k < 3; k++)
+        apex[k] = pose->pos[k] + pose->aim[k] * lens;
+
+    glBegin(GL_TRIANGLE_FAN);
+    glColor4f(col[0], col[1], col[2], peak * alpha_scale);
+    glVertex3fv(apex);
+    glColor4f(col[0], col[1], col[2], 0.0f);
+    for (int s = 0; s <= DRONE_BEAM_SEGS; s++) {
+        float a = (float)s / (float)DRONE_BEAM_SEGS * 2.0f * (float)M_PI;
+        float ca = cosf(a) * rim, sa = sinf(a) * rim;
+        glVertex3f(apex[0] + pose->aim[0] * reach + t1[0] * ca + t2[0] * sa,
+                   apex[1] + pose->aim[1] * reach + t1[1] * ca + t2[1] * sa,
+                   apex[2] + pose->aim[2] * reach + t1[2] * ca + t2[2] * sa);
+    }
+    glEnd();
+}
+
+/* Where the beam meets the floor, as a soft disc. Skipped when the drone is
+ * not pointing down at it, which is also when the ellipse would stretch to
+ * the horizon. */
+static void drone_draw_pool(const DronePose *pose, const DroneScene *sc,
+                            const float col[3], float spotness,
+                            float alpha_scale) {
+    float dist, r, cx, cz, cy;
+    float fade;
+
+    /* A beam angled along the floor rather than down at it produces an
+     * ellipse stretching away to the horizon; skip it entirely. */
+    if (pose->aim[1] > -0.45f)
+        return;
+    dist = (sc->floor_y - pose->pos[1]) / pose->aim[1];
+    if (dist <= 0.0f)
+        return;
+
+    cx = pose->pos[0] + pose->aim[0] * dist;
+    cz = pose->pos[2] + pose->aim[2] * dist;
+    cy = sc->floor_y;
+    r = dist * tanf((DRONE_BEAM_WIDE_DEG +
+                     (DRONE_BEAM_NARROW_DEG - DRONE_BEAM_WIDE_DEG) * spotness)
+                    * (float)M_PI / 180.0f);
+    if (r > DRONE_POOL_MAX_R * sc->radius)
+        r = DRONE_POOL_MAX_R * sc->radius;
+    /* A pool cast from far away is dimmer, matching the beam's own falloff. */
+    fade = sc->radius / (sc->radius + dist);
+
+    glBegin(GL_TRIANGLE_FAN);
+    glColor4f(col[0], col[1], col[2], 0.22f * fade * alpha_scale);
+    glVertex3f(cx, cy, cz);
+    glColor4f(col[0], col[1], col[2], 0.0f);
+    for (int s = 0; s <= DRONE_POOL_SEGS; s++) {
+        float a = (float)s / (float)DRONE_POOL_SEGS * 2.0f * (float)M_PI;
+        glVertex3f(cx + cosf(a) * r, cy, cz + sinf(a) * r);
+    }
+    glEnd();
+}
+
+static void draw_drones(const Render3dFrameRenderContext *frame_ctx) {
+    DroneScene sc;
+    DronePhase ph = drone_phase_at(frame_ctx->config.anim_time);
+    float spotness = drone_spotness(&ph);
+    float alpha = frame_ctx->config.alpha_scale;
+
+    drone_resolve_scene(frame_ctx, &sc);
+
+    render3d_backdrop_push_state();
+    glDisable(GL_FOG);
+    /* The lens sprites are sized in pixels, so neutralize any point
+     * distance attenuation the user's program left set - otherwise a scene
+     * that uses glPointParameterfv silently resizes the drones' eyes. */
+    if (frame_ctx->config.point_parameter_supported &&
+        frame_ctx->config.point_parameter_proc)
+        frame_ctx->config.point_parameter_proc(GL_POINT_DISTANCE_ATTENUATION,
+                                               (GLfloat[]){1, 0, 0});
+
+    /* Hulls are opaque and depth-tested so the scene can occlude a drone
+     * passing behind it. */
+    glDisable(GL_LIGHTING);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
+    for (int i = 0; i < DRONE_COUNT; i++) {
+        DronePose pose;
+        drone_pose(&ph, i, &sc, &pose);
+        drone_draw_hull(&pose, &sc, k_drone_colors[i]);
+    }
+
+    /* Everything glowing composites additively and writes no depth, so
+     * beams cross each other and the pools stack where they overlap. */
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_POINT_SMOOTH);
+    for (int i = 0; i < DRONE_COUNT; i++) {
+        DronePose pose;
+        drone_pose(&ph, i, &sc, &pose);
+        drone_draw_beam(&pose, &sc, k_drone_colors[i], spotness, alpha);
+        drone_draw_pool(&pose, &sc, k_drone_colors[i], spotness, alpha);
+        drone_draw_lens(&pose, &sc, k_drone_colors[i], alpha);
+    }
+
+    render3d_backdrop_pop_state();
+}
+
 /* Sunset environment lights, one row per slot: world-space position
  * (w=0 => directional), then diffuse / ambient / specular. Slots live
  * on GL_LIGHT4..6 - above the caller's user-facing GL_LIGHT0..3 range -
@@ -1265,6 +1815,11 @@ void render3d_backdrop_setup_lights(const Render3dFrameRenderContext *frame_ctx)
             k_polar_day_lights,
             (int)(sizeof(k_polar_day_lights) / sizeof(k_polar_day_lights[0])));
         break;
+    /* The one moving rig: positions come from the patrol pose rather than
+     * a table, and it is the only backdrop that sets spot state. */
+    case RENDER3D_BACKDROP_DRONES:
+        drone_setup_lights(frame_ctx);
+        break;
     default:
         break;
     }
@@ -1330,6 +1885,9 @@ void render3d_backdrop_render(const Render3dFrameRenderContext *frame_ctx) {
         draw_snowfall(frame_ctx->config.anim_time,
                       frame_ctx->config.point_parameter_supported,
                       frame_ctx->config.point_parameter_proc);
+        break;
+    case RENDER3D_BACKDROP_DRONES:
+        draw_drones(frame_ctx);
         break;
     case RENDER3D_BACKDROP_OFF:
     default:

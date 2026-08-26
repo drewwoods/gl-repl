@@ -633,7 +633,7 @@ backdrop mode, grid and axes theme settings, background colors, and pass
 hooks (`post_fill_fn`, `post_overlays_fn`, `post_resolve_overlays_fn`, buffer viz hooks).
 
 Render3d-local accumulation jitter does not live in the config. Derived
-per-pass data belongs in [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L368), for example camera world position,
+per-pass data belongs in [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L394), for example camera world position,
 camera orientation basis, and other values that helper renderers should share.
 
 ## Render3d Layer
@@ -1610,7 +1610,7 @@ include `ui_*` headers.
 
 ### Render3d state access
 
-Target rule: `render3d_*` files consume [`Render3dRenderConfig`](../src/render3d/render_types.h#L139), [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L368),
+Target rule: `render3d_*` files consume [`Render3dRenderConfig`](../src/render3d/render_types.h#L139), [`Render3dFrameRenderContext`](../src/render3d/render_types.h#L394),
 or explicit snapshot structs. They should not call `repl_state_*` directly.
 
 `check-state-boundaries` enforces the current audited boundary.

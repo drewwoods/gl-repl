@@ -203,6 +203,12 @@ static int g_gl_stub_fail_read_pixels = 0;
 #define GL_DIFFUSE 0x1201
 #define GL_SPECULAR 0x1202
 #define GL_POSITION 0x1203
+#define GL_SPOT_DIRECTION 0x1204
+#define GL_SPOT_EXPONENT 0x1205
+#define GL_SPOT_CUTOFF 0x1206
+#define GL_CONSTANT_ATTENUATION 0x1207
+#define GL_LINEAR_ATTENUATION 0x1208
+#define GL_QUADRATIC_ATTENUATION 0x1209
 #define GL_EMISSION 0x1600
 #define GL_SHININESS 0x1601
 #define GL_AMBIENT_AND_DIFFUSE 0x1602
@@ -442,6 +448,7 @@ static inline int gl_stub_paramv_len(GLenum pname) {
     case GL_LIGHT_MODEL_TWO_SIDE:
         return 1;
     case GL_POINT_DISTANCE_ATTENUATION:
+    case GL_SPOT_DIRECTION:
         return 3;
     default:
         return 4;
@@ -450,6 +457,7 @@ static inline int gl_stub_paramv_len(GLenum pname) {
 
 static inline void glHint(GLenum target, GLenum mode) { GL_STUB_TRACE_LINE("glHint %u %u\n", (unsigned)target, (unsigned)mode); gl_stub_tick(GL_STUB_glHint); }
 static inline GLboolean glIsEnabled(GLenum cap) { GL_STUB_TRACE_LINE("glIsEnabled %u\n", (unsigned)cap); gl_stub_tick(GL_STUB_glIsEnabled); return GL_FALSE; }
+static inline void glLightf(GLenum light, GLenum pname, GLfloat param) { GL_STUB_TRACE_LINE("glLightf %u %u %g\n", (unsigned)light, (unsigned)pname, (double)param); gl_stub_tick(GL_STUB_glLightf); }
 static inline void glLightfv(GLenum light, GLenum pname, const GLfloat *params) { GL_STUB_TRACE_LINE("glLightfv %u %u", (unsigned)light, (unsigned)pname); gl_stub_trace_floats(params, gl_stub_paramv_len(pname)); GL_STUB_TRACE_LINE("\n"); gl_stub_tick(GL_STUB_glLightfv); }
 static inline void glLightModelfv(GLenum pname, const GLfloat *params) { GL_STUB_TRACE_LINE("glLightModelfv %u", (unsigned)pname); gl_stub_trace_floats(params, gl_stub_paramv_len(pname)); GL_STUB_TRACE_LINE("\n"); gl_stub_tick(GL_STUB_glLightModelfv); }
 static inline void glLightModeli(GLenum pname, GLint param) { GL_STUB_TRACE_LINE("glLightModeli %u %d\n", (unsigned)pname, (int)param); gl_stub_tick(GL_STUB_glLightModeli); }

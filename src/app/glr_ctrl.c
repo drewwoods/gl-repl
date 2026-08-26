@@ -56,6 +56,7 @@
 #include "repl/bootstrap.h"
 #include <string.h>
 #include "repl/host_effects.h"
+#include "repl/program_bounds.h"
 #include "repl/program_query.h"
 #include "repl/scenes.h"
 #include "source_document.h"
@@ -1349,6 +1350,92 @@ static void glr_ctrl_dump_gl_state(const char *phase) {
     }
 }
 
+/* --- Scene-bounds hook (Render3dRenderConfig.geometry_bounds_fn) ---------
+ *
+ * A helper that arranges itself around the user's geometry - today the
+ * drone backdrop - pulls the scene's world-space box through here. The
+ * measurement is repl_program_bounds(), a walk over the whole flat
+ * program, so two things are the controller's job rather than the
+ * subsystem's:
+ *
+ *  - Memoize. The backdrop asks twice per frame (once placing its lights
+ *    in the pass setup phase, once drawing the bodies) and accumulation
+ *    re-runs the pass per sample, so the pull count per frame is neither
+ *    one nor fixed. The per-frame reset below collapses all of it to one
+ *    walk; a frame in which nothing asks costs nothing at all, which is
+ *    the point of making this a hook rather than a config field.
+ *  - Damp. An animated scene reflattens every frame, so the raw box moves
+ *    every frame too, and a single vertex swinging wide would yank the
+ *    whole rig outward. The published box eases toward the measurement,
+ *    and snaps instead when there is nothing to ease from - the first
+ *    frame that drew anything, or the first after a document replacement,
+ *    where easing would slide the rig across from the previous scene.
+ *
+ * Measured over the FULL program, deliberately not the replay-clamped
+ * prefix: while scrubbing, a box that shrank command by command would have
+ * the drones swarm inward as the user drags.
+ */
+#define SCENE_BOUNDS_EASE 0.12f   /* fraction of the gap closed per frame */
+
+static struct {
+    int   measured;      /* a walk has already run this frame */
+    int   valid;         /* ... and it succeeded */
+    int   smooth_valid;  /* the eased box has something to ease from */
+    float min[3], max[3];
+} g_scene_bounds;
+
+/* Called once per frame from glr_ctrl_build_scene_config, before any helper
+ * can pull. Drops the eased box on a wholesale document replacement so the
+ * next measurement snaps; `undo_generation` is the same signal the assign
+ * plot uses to notice one. */
+static void glr_ctrl_scene_bounds_frame_reset(void) {
+    static unsigned int s_last_generation;
+    static int s_have_generation;
+    unsigned int generation = editor_undo_generation();
+
+    if (!s_have_generation || generation != s_last_generation) {
+        s_last_generation = generation;
+        s_have_generation = 1;
+        g_scene_bounds.smooth_valid = 0;
+    }
+    g_scene_bounds.measured = 0;
+}
+
+static int geometry_bounds_adapter(void *user_data,
+                                float out_min[3], float out_max[3]) {
+    (void)user_data;
+
+    if (!g_scene_bounds.measured) {
+        FlatProgramView flat = repl_state_flat_program_view();
+        ReplSceneBounds b = repl_program_bounds(flat, flat.cmd_count);
+
+        g_scene_bounds.measured = 1;
+        g_scene_bounds.valid = b.valid;
+        if (b.valid && !g_scene_bounds.smooth_valid) {
+            for (int k = 0; k < 3; k++) {
+                g_scene_bounds.min[k] = b.min[k];
+                g_scene_bounds.max[k] = b.max[k];
+            }
+            g_scene_bounds.smooth_valid = 1;
+        } else if (b.valid) {
+            for (int k = 0; k < 3; k++) {
+                g_scene_bounds.min[k] +=
+                    (b.min[k] - g_scene_bounds.min[k]) * SCENE_BOUNDS_EASE;
+                g_scene_bounds.max[k] +=
+                    (b.max[k] - g_scene_bounds.max[k]) * SCENE_BOUNDS_EASE;
+            }
+        }
+    }
+
+    if (!g_scene_bounds.valid || !g_scene_bounds.smooth_valid)
+        return 0;
+    for (int k = 0; k < 3; k++) {
+        out_min[k] = g_scene_bounds.min[k];
+        out_max[k] = g_scene_bounds.max[k];
+    }
+    return 1;
+}
+
 static void scene_execute_adapter(const Render3dExecuteContext *ctx,
                                   void *user_data) {
     (void)user_data;
@@ -1792,6 +1879,13 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
     /* --- Execute hook --- */
     config->execute_fn = scene_execute_adapter;
     config->execute_user_data = NULL;
+
+    /* --- Scene-bounds hook ---
+     * Always installed; it is a pull, so a frame in which no helper asks
+     * costs nothing. */
+    glr_ctrl_scene_bounds_frame_reset();
+    config->geometry_bounds_fn = geometry_bounds_adapter;
+    config->geometry_bounds_user_data = NULL;
 
     /* --- Post-fill hook (replay-fade overlay) ---
      * Wired up further below after the fade state is built; left NULL when

@@ -80,6 +80,7 @@ extern "C" {
     X(glFinish)                        \
     X(glHint)                          \
     X(glIsEnabled)                     \
+    X(glLightf)                        \
     X(glLightfv)                       \
     X(glLightModelfv)                  \
     X(glLightModeli)                   \

@@ -141,6 +141,32 @@ typedef struct Render3dRenderConfig {
     Render3dExecuteProgramFn execute_fn;          /* NULL = no geometry */
     void                 *execute_user_data;
 
+    /* --- Optional scene-bounds query ---
+     * Answers "where is the user's geometry, and how big is it?" in world
+     * space. A helper that has to place something AROUND the scene - today
+     * the drone backdrop's flight paths, light falloff and spotlight aim -
+     * calls this; every other helper ignores it.
+     *
+     * A hook rather than a plain min/max field for two reasons. Measuring
+     * the scene is not free (the caller walks its whole program), and only
+     * some backdrops in some frames want the answer, so pulling it keeps
+     * the cost off every other frame. And a caller with no program to
+     * measure - render3d_demo, which links no REPL at all - leaves it NULL
+     * rather than being obliged to invent a box.
+     *
+     * Returns 1 having filled out_min/out_max, or 0 when the scene cannot
+     * be measured (nothing drawn yet, degenerate geometry). Callers must
+     * treat NULL and a 0 return identically: fall back to a fixed scale.
+     * May be invoked more than once per frame - the backdrop asks in the
+     * pass setup phase, when it places its lights, and again when it draws
+     * the bodies - so an expensive implementation should memoize per frame.
+     */
+    /* clang-format off - keep on one line so the flat-view pointer guard
+     * skips this function pointer (it ignores lines containing "(*"). */
+    int (*geometry_bounds_fn)(void *user_data, float out_min[3], float out_max[3]);
+    /* clang-format on */
+    void *geometry_bounds_user_data;
+
     /* --- Optional post-fill hook ---
      * Invoked once per pass between the main user-geometry fill and the
      * scene helpers (grid / axes / backdrop / overlays). A caller may install

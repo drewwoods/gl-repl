@@ -84,7 +84,8 @@ typedef enum {
     X(AURORA, "Aurora")        \
     X(NEBULA, "Nebula")        \
     X(POLAR_DAY, "Polar Day")  \
-    X(POLAR_DAY_SNOW, "Polar Day+Snow")
+    X(POLAR_DAY_SNOW, "Polar Day+Snow") \
+    X(DRONES, "Drones")
 
 #define RENDER3D_BACKDROP_ENUM_ENTRY(name, str) RENDER3D_BACKDROP_##name,
 #define RENDER3D_BACKDROP_NAME_ENTRY(name, str) [RENDER3D_BACKDROP_##name] = str,
