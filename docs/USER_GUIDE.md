@@ -521,6 +521,7 @@ The complete command list is below; worked techniques live in
     `GL_LINE_SMOOTH`, `GL_POINT_SMOOTH`, `GL_BLEND`, `GL_CULL_FACE`, `GL_FOG`,
     `GL_LINE_STIPPLE`, `GL_MULTISAMPLE`, `GL_STENCIL_TEST`,
     `GL_POLYGON_OFFSET_FILL`, `GL_POLYGON_OFFSET_LINE`, `GL_POLYGON_OFFSET_POINT`,
+    `GL_POLYGON_SMOOTH`,
     `GL_LIGHT0`..`GL_LIGHT3`, `GL_CLIP_PLANE0`..`GL_CLIP_PLANE5`
 - [`glShadeModel(MODE)`](https://docs.gl/gl2/glShadeModel)
 - [`glPointSize(size)`](https://docs.gl/gl2/glPointSize), [`glLineWidth(width)`](https://docs.gl/gl2/glLineWidth)

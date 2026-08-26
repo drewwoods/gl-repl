@@ -70,6 +70,7 @@ static unsigned cap_group_bit(GLenum cap) {
     case GL_POLYGON_OFFSET_FILL:
     case GL_POLYGON_OFFSET_LINE:
     case GL_POLYGON_OFFSET_POINT:
+    case GL_POLYGON_SMOOTH:
         return GL_POLYGON_BIT;
     case GL_DEPTH_TEST:
         return GL_DEPTH_BUFFER_BIT;

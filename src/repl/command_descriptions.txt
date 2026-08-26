@@ -371,6 +371,11 @@ title = GL_POLYGON_OFFSET_POINT
 Applies the glPolygonOffset depth shift to polygons rasterized in GL_POINT mode, the point-mode counterpart of the fill and line variants.
 pushAttrib: GL_POLYGON_BIT | GL_ENABLE_BIT
 
+[capability GL_POLYGON_SMOOTH]
+title = GL_POLYGON_SMOOTH
+Requests antialiased polygon-edge coverage. It is commonly combined with blending, and the exact quality depends on the OpenGL implementation.
+pushAttrib: GL_POLYGON_BIT | GL_ENABLE_BIT
+
 [capability GL_POINT_SMOOTH]
 title = GL_POINT_SMOOTH
 Requests antialiased point coverage instead of square aliased points. The exact shape and quality depend on the OpenGL implementation.

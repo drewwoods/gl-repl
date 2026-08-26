@@ -179,6 +179,7 @@ static int g_gl_stub_fail_read_pixels = 0;
 #define GL_POLYGON_OFFSET_FILL 0x8037
 #define GL_POLYGON_OFFSET_LINE 0x2A02
 #define GL_POLYGON_OFFSET_POINT 0x2A01
+#define GL_POLYGON_SMOOTH 0x0B41
 #define GL_SCISSOR_TEST 0x0C11
 #define GL_STENCIL_TEST 0x0B90
 #define GL_TEXTURE_2D 0x0DE1

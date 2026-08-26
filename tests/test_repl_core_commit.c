@@ -2356,6 +2356,7 @@ int main(void) {
         editor_feed_line("glStencilFunc(GL_EQUAL, 1, 0xFF);");
         editor_feed_line("glClearStencil(3);");
         editor_feed_line("glEnable(GL_STENCIL_TEST);");
+        editor_feed_line("glEnable(GL_POLYGON_SMOOTH);");
         const GLCmd *cmds = repl_state_document_cmds();
         ASSERT_TRUE("bits_for_cmd glColor3f = CURRENT",
                     repl_attrib_bits_for_cmd(&cmds[0]) == GL_CURRENT_BIT);
@@ -2384,6 +2385,9 @@ int main(void) {
         ASSERT_TRUE("bits_for_cmd glEnable(GL_STENCIL_TEST) = ENABLE|STENCIL_BUFFER",
                     repl_attrib_bits_for_cmd(&cmds[11]) ==
                         (GL_ENABLE_BIT | GL_STENCIL_BUFFER_BIT));
+        ASSERT_TRUE("bits_for_cmd glEnable(GL_POLYGON_SMOOTH) = ENABLE|POLYGON",
+                    repl_attrib_bits_for_cmd(&cmds[12]) ==
+                        (GL_ENABLE_BIT | GL_POLYGON_BIT));
         ASSERT_TRUE("bit_index round-trips CURRENT",
                     repl_attrib_bit_index(GL_CURRENT_BIT) == 0);
         ASSERT_TRUE("bit_index rejects a non-bit", repl_attrib_bit_index(0x1234) == -1);

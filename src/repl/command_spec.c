@@ -48,6 +48,7 @@ static const ReplEnumEntry k_enable_caps[] = {
     { "GL_POLYGON_OFFSET_FILL",  GL_POLYGON_OFFSET_FILL  },
     { "GL_POLYGON_OFFSET_LINE",  GL_POLYGON_OFFSET_LINE  },
     { "GL_POLYGON_OFFSET_POINT", GL_POLYGON_OFFSET_POINT },
+    { "GL_POLYGON_SMOOTH",       GL_POLYGON_SMOOTH       },
     { "GL_STENCIL_TEST",         GL_STENCIL_TEST         },
     { NULL,                      0                       }
 };
@@ -332,7 +333,7 @@ static const ReplFuncCompletion k_func_completions[] = {
         "Enable a GL capability\n"
         "GL_BLEND, GL_CLIP_PLANE0..GL_CLIP_PLANE5, GL_COLOR_MATERIAL\n"
         "GL_CULL_FACE, GL_DEPTH_TEST, GL_FOG, GL_LIGHTING, GL_LIGHT0..GL_LIGHT3\n"
-        "GL_LINE_SMOOTH, GL_LINE_STIPPLE, GL_MULTISAMPLE, GL_NORMALIZE, GL_POINT_SMOOTH, GL_STENCIL_TEST",
+        "GL_LINE_SMOOTH, GL_LINE_STIPPLE, GL_MULTISAMPLE, GL_NORMALIZE, GL_POINT_SMOOTH, GL_POLYGON_SMOOTH, GL_STENCIL_TEST",
         REPL_HELP_GROUP_STATE },
     { "glDisable(",          "glDisable(cap)",                                           1, { "cap" },
         "Disable a GL capability (same caps as glEnable)", REPL_HELP_GROUP_STATE },

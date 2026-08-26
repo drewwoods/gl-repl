@@ -640,12 +640,12 @@ int main() {
                    editor_state_input().input, "glPushAttrib(GL_TRANSFORM_BIT)");
     }
 
-    /* 10. Large match lists: glEnable (25) & broad "gl" prefix (>= 60) */
+    /* 10. Large match lists: glEnable (26) & broad "gl" prefix (>= 60) */
     {
         glr_ctrl_reset_all(); declare_test_vars();
         set_input_text("glEnable(GL_");
         editor_completion_update();
-        ASSERT_INT("glEnable(GL_ offers all 25 capabilities", g_ac_count, 25);
+        ASSERT_INT("glEnable(GL_ offers all 26 capabilities", g_ac_count, 26);
 
         set_input_text("gl");
         editor_completion_update();
