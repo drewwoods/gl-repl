@@ -160,26 +160,29 @@
 
 /* Beam cone: length as a fraction of the distance to the aim point, and
  * its half-angle in the narrow (spot phase) and wide (transit) states.
- * These match the GL spotlight cutoffs below so the drawn cone and the lit
- * pool agree. */
+ * The drawn cone and floor pool visualize the beam footprint directly. */
 #define DRONE_BEAM_SEGS       18
 #define DRONE_BEAM_NARROW_DEG 9.0f
 #define DRONE_BEAM_WIDE_DEG   15.0f
-#define DRONE_BEAM_ALPHA      0.10f  /* peak alpha at the lens, spot phase */
-#define DRONE_BEAM_TRANSIT_A  0.022f /* ... and while merely in transit */
+#define DRONE_BEAM_ALPHA      0.038f /* peak alpha at the lens, spot phase */
+#define DRONE_BEAM_TRANSIT_A  0.015f /* ... and while merely in transit */
 /* The pool is the beam's footprint, so its radius follows from the same
  * angle - but a beam cast from a shallow angle would smear an ellipse to
  * the horizon, so it is capped at a multiple of the scene radius. */
 #define DRONE_POOL_MAX_R      2.0f
+#define DRONE_POOL_ALPHA      0.08f  /* peak alpha at the floor pool center, spot phase */
+#define DRONE_POOL_TRANSIT_A  0.025f /* ... and while merely in transit */
 
-/* Fixed-function spotlights are evaluated per VERTEX, so on the coarse
- * geometry a REPL scene usually has (a glutSolidCube is eight vertices) the
- * cutoff itself is nearly invisible. The drawn cone above is what actually
- * reads as a spotlight; these keep the lighting consistent with it rather
- * than carrying the effect alone. Cutoff is lerped between the two, never
- * through 180 - that value is GL's "not a spotlight" sentinel and would
- * pop. */
-#define DRONE_SPOT_EXPONENT   6.0f
+/* Fixed-function spotlights are evaluated per VERTEX. To prevent sudden
+ * vertex lighting cutoffs (especially when the drones zoom out and sweep
+ * coarse geometry), GL_SPOT_CUTOFF is relaxed to a wide cone (DRONE_SPOT_CUTOFF_DEG)
+ * while high spot exponents provide the smooth falloff: the exponential decay
+ * drops naturally to near-zero long before reaching the hard cutoff boundary.
+ * The exponent is lerped between wide/transit (45.0) and narrow/spot (120.0)
+ * matching the drawn beam's visual footprint. */
+#define DRONE_SPOT_CUTOFF_DEG 60.0f
+#define DRONE_SPOT_EXP_WIDE   45.0f  /* spot exponent in wide / transit phase */
+#define DRONE_SPOT_EXP_SPOT   120.0f /* spot exponent in narrow / spot phase */
 
 /* Attenuation is quadratic in distance, so the coefficient has to scale
  * with the scene or a drone lights a unit scene to white and a 50-unit one
@@ -1574,8 +1577,8 @@ static void drone_setup_lights(const Render3dFrameRenderContext *frame_ctx) {
     BackdropExtent sc;
     DronePhase ph = drone_phase_at(frame_ctx->config.anim_time);
     float spotness = drone_spotness(&ph);
-    float cutoff = DRONE_BEAM_WIDE_DEG +
-                   (DRONE_BEAM_NARROW_DEG - DRONE_BEAM_WIDE_DEG) * spotness;
+    float spot_exp = DRONE_SPOT_EXP_WIDE +
+                     (DRONE_SPOT_EXP_SPOT - DRONE_SPOT_EXP_WIDE) * spotness;
     float quad;
 
     backdrop_resolve_extent(frame_ctx, &sc);
@@ -1609,8 +1612,8 @@ static void drone_setup_lights(const Render3dFrameRenderContext *frame_ctx) {
         glLightfv(id, GL_AMBIENT, ambient);
         glLightfv(id, GL_SPECULAR, specular);
         glLightfv(id, GL_SPOT_DIRECTION, dir);
-        glLightf(id, GL_SPOT_CUTOFF, cutoff);
-        glLightf(id, GL_SPOT_EXPONENT, DRONE_SPOT_EXPONENT);
+        glLightf(id, GL_SPOT_CUTOFF, DRONE_SPOT_CUTOFF_DEG);
+        glLightf(id, GL_SPOT_EXPONENT, spot_exp);
         glLightf(id, GL_CONSTANT_ATTENUATION, DRONE_ATTEN_CONSTANT);
         glLightf(id, GL_LINEAR_ATTENUATION, 0.0f);
         glLightf(id, GL_QUADRATIC_ATTENUATION, quad);
@@ -1746,9 +1749,11 @@ static void drone_draw_pool(const DronePose *pose, const BackdropExtent *sc,
         r = DRONE_POOL_MAX_R * sc->radius;
     /* A pool cast from far away is dimmer, matching the beam's own falloff. */
     fade = sc->radius / (sc->radius + dist);
+    float peak_a = DRONE_POOL_TRANSIT_A +
+                   (DRONE_POOL_ALPHA - DRONE_POOL_TRANSIT_A) * spotness;
 
     glBegin(GL_TRIANGLE_FAN);
-    glColor4f(col[0], col[1], col[2], 0.22f * fade * alpha_scale);
+    glColor4f(col[0], col[1], col[2], peak_a * fade * alpha_scale);
     glVertex3f(cx, cy, cz);
     glColor4f(col[0], col[1], col[2], 0.0f);
     for (int s = 0; s <= DRONE_POOL_SEGS; s++) {
