@@ -22,7 +22,8 @@ static int key_is_claimed_shift_ctrl_alias(int key, int mods) {
 static int key_implies_ctrl(int key, int mods) {
     if (key_is_claimed_shift_ctrl_alias(key, mods))
         return 1;
-    if (key == KEY_CTRL_BACKSLASH || key == KEY_CTRL_DASH)
+    if (key == KEY_CTRL_BACKSLASH || key == KEY_CTRL_RBRACKET ||
+        key == KEY_CTRL_DASH)
         return 1;
     if (key < 1 || key > 26)
         return 0;
@@ -81,6 +82,8 @@ static const char *base_key_name(int key, int mods, int is_special,
 
     if (key_is_claimed_shift_ctrl_alias(key, mods))
         return "H";
+    if (key == KEY_CTRL_LBRACKET && (mods & GLUT_ACTIVE_CTRL))
+        return "[";
     if (key == KEY_ESC)
         return "Escape";
     if (key == KEY_BACKSPACE)
@@ -95,6 +98,8 @@ static const char *base_key_name(int key, int mods, int is_special,
         return "Space";
     if (key == KEY_CTRL_BACKSLASH)
         return "\\";
+    if (key == KEY_CTRL_RBRACKET)
+        return "]";
     if (key == KEY_CTRL_DASH)
         return "-";
     if (key >= 1 && key <= 26) {

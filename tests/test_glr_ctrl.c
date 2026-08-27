@@ -30,6 +30,7 @@
 #include "repl/cfg_baseline.h"  /* scene-local roster bags via the cfg bridge */
 #include "app/glr_actions.h"    /* glr_actions_install_export_cfg_bridge */
 #include "editor/input.h"
+#include "editor/navigation_history.h"
 #include "editor/search.h"
 #include "keys.h"
 #include "app/glr_prof.h"    /* glr_prof_section_is_gpu (summary-row policy) */
@@ -7517,6 +7518,72 @@ static void test_ctrl_click_go_to_func_def(void) {
     ASSERT_INT("rejected edit keeps cursor on dirty line 0", editor_state_edit_line(), 0);
     ASSERT_INT("autocomplete cleared on commit rejection", editor_state_autocomplete()->match_count, 0);
     editor_load_line_to_input(0); /* restore clean line */
+
+    /* 13. Ctrl+[ / Ctrl+] walk the successful jump history and restore
+     * both the clicked source column and the definition destination. */
+    editor_navigation_history_clear();
+    g_simulated_mods = GLUT_ACTIVE_CTRL;
+    int history_call_line = -1;
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        const GLCmd *cmd = &repl_state_document_cmds()[i];
+        if (cmd->valid && cmd->type == CMD_CALL && (int)cmd->args[0] == 0) {
+            history_call_line = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("history fixture retains func0 callsite", history_call_line >= 0);
+    hit.line_idx = history_call_line; hit.char_idx = 2;
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("history setup ctrl-click consumed", consumed, 1);
+    int history_def_line = repl_source_scope_find_func_def_line(0);
+    int history_def_char = editor_cursor_pos();
+    ASSERT_INT("history setup lands on func0 definition",
+               editor_state_edit_line(), history_def_line);
+
+    glr_ctrl_keyboard(KEY_CTRL_LBRACKET, 0, 0);
+    ASSERT_INT("Ctrl+[ returns to callsite line",
+               editor_state_edit_line(), history_call_line);
+    ASSERT_INT("Ctrl+[ returns to clicked column", editor_cursor_pos(), 2);
+    ASSERT_INT("Ctrl+[ arms scroll follow", editor_scroll_follow_cursor(), 1);
+
+    glr_ctrl_keyboard(KEY_CTRL_RBRACKET, 0, 0);
+    ASSERT_INT("Ctrl+] returns to definition line",
+               editor_state_edit_line(), history_def_line);
+    ASSERT_INT("Ctrl+] restores definition column",
+               editor_cursor_pos(), history_def_char);
+
+    /* Cocoa delivers Cmd+[ / Cmd+] as printable bracket bytes with SUPER,
+     * unlike the ASCII control bytes delivered for the Ctrl chords. */
+    g_simulated_mods = GLUT_ACTIVE_SUPER;
+    glr_ctrl_keyboard('[', 0, 0);
+    ASSERT_INT("Cmd+[ returns to callsite line",
+               editor_state_edit_line(), history_call_line);
+    ASSERT_INT("Cmd+[ returns to clicked column", editor_cursor_pos(), 2);
+    glr_ctrl_keyboard(']', 0, 0);
+    ASSERT_INT("Cmd+] returns to definition line",
+               editor_state_edit_line(), history_def_line);
+    ASSERT_INT("Cmd+] restores definition column",
+               editor_cursor_pos(), history_def_char);
+
+    /* Escape shares byte 27 with Ctrl+[, so the modifier is the
+     * discriminator. Plain Escape must retain its ordinary editor action. */
+    g_simulated_mods = 0;
+    editor_input_set_text("temporary input");
+    glr_ctrl_keyboard(KEY_ESC, 0, 0);
+    ASSERT_INT("plain Escape still clears input", editor_input_len(), 0);
+
+    /* Every scene/workspace replacement calls this semantic boundary. It
+     * must make both directions inert before the replacement reuses line
+     * indices for another document. */
+    editor_undo_note_wholesale_replacement();
+    g_simulated_mods = GLUT_ACTIVE_CTRL;
+    int line_after_clear = editor_state_edit_line();
+    glr_ctrl_keyboard(KEY_CTRL_LBRACKET, 0, 0);
+    ASSERT_INT("scene replacement clears back history",
+               editor_state_edit_line(), line_after_clear);
+    glr_ctrl_keyboard(KEY_CTRL_RBRACKET, 0, 0);
+    ASSERT_INT("scene replacement clears forward history",
+               editor_state_edit_line(), line_after_clear);
 
     g_simulated_mods = 0;
     glr_ctrl_router_set_double_click_clock_for_test(NULL);

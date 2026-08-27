@@ -57,6 +57,8 @@
                               code focus - hidden session toggle, see
                               the g_cfg_items[] note in glr_actions.c) */
 #define KEY_CTRL_K    11   /* jump replay PC to cursor line (Ctrl+K) */
+#define KEY_CTRL_LBRACKET 27 /* Ctrl+[; byte aliases Escape, distinguish by modifier */
+#define KEY_CTRL_RBRACKET 29 /* Ctrl+] */
 
 /* Visualization and overlays */
 #define KEY_CTRL_G    7    /* toggle wireframe (Ctrl+G; byte 7 = BEL, no

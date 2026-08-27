@@ -2039,6 +2039,7 @@ For shortcut-maintenance details, reserved control-key aliases, and the
 | Ctrl+B | Cycle code panel layout |
 | Ctrl+Shift+H | Cycle syntax highlight |
 | Ctrl+click / Cmd+click a `funcN` name | Go to that function's definition - from a call, an expression, or a mention in a comment |
+| Ctrl+[ / Ctrl+] (`Cmd+[` / `Cmd+]` on macOS) | Go back / forward through definition jumps. History clears when the source changes or another scene/workspace is loaded |
 | Right-click GL command | Show a short description of that command |
 | Right-click `var = expr;` | Toggle the [assignment value plot](#plotting-an-assignments-values) for that row |
 | Shift+right-click `var = expr;` | Add (or remove) that row as an extra series on the open plot |

@@ -2770,6 +2770,16 @@ static void test_keymap_binding_to_string(void) {
                                         KM_KEY(GLR_ESCAPE),
                                         KM_MODS(GLR_ESCAPE), 0),
                "Escape");
+    ASSERT_STR("format navigation back",
+               keymap_binding_to_string(buf, (int)sizeof(buf),
+                                        KM_KEY(GLR_NAV_BACK),
+                                        KM_MODS(GLR_NAV_BACK), 0),
+               "Ctrl+[");
+    ASSERT_STR("format navigation forward",
+               keymap_binding_to_string(buf, (int)sizeof(buf),
+                                        KM_KEY(GLR_NAV_FORWARD),
+                                        KM_MODS(GLR_NAV_FORWARD), 0),
+               "Ctrl+]");
 
     /* Modifier combinations */
     ASSERT_STR("format Alt letter",

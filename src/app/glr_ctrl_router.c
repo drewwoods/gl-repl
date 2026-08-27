@@ -41,6 +41,7 @@
 #include "editor/inline_file_prompt.h"
 #include "editor/inline_rename.h"
 #include "editor/input.h"
+#include "editor/navigation_history.h"
 #include "editor/replace.h"
 #include "editor/search.h"
 #include "editor/state.h"
@@ -964,7 +965,14 @@ static int route_func_def_click_hit(const UiHit *hit) {
         return 1;
     }
 
-    editor_navigate_to_line(target);
+    {
+        EditorNavigationLocation source = { hit->line_idx, hit->char_idx };
+        EditorNavigationLocation destination;
+        editor_navigate_to_line(target);
+        destination.line_idx = editor_state_edit_line();
+        destination.char_idx = editor_cursor_pos();
+        editor_navigation_history_record_jump(source, destination);
+    }
     editor_scroll_follow_cursor_set(1);
     route_code_click_epilog();
     glr_ctrl_router_reset_code_panel_drag();
@@ -2476,9 +2484,10 @@ static void keyboard_dispatch(unsigned char key, int x, int y) {
 static void keyboard_input(unsigned char key, int x, int y) {
     glr_audio_on_user_gesture();
 
-    /* macOS Cmd+letter normalization happens before any dispatch so
-     * the controller-owned cfg-shortcut chain (Cmd+B / Cmd+S / Cmd+T
-     * etc.) compares against the control-character form (KEY_CTRL_*).
+    /* macOS Cmd shortcut normalization happens before any dispatch so
+     * the controller-owned cfg-shortcut chain (Cmd+B / Cmd+S / Cmd+T)
+     * and editor navigation (Cmd+[ / Cmd+]) compare against the shared
+     * control-character form (KEY_CTRL_*).
      * Without this, Cmd+B arrives here as 'b' (0x62), the chain looks
      * for KEY_CTRL_B (0x02) in g_cfg_items[].key_code, and the
      * shortcut silently misses. */

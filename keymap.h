@@ -154,6 +154,8 @@
 #define GLR_REFORMAT         KEY_CTRL_BACKSLASH, 0
 #define GLR_SEARCH           KEY_CTRL_F, 0     /* pairs w/ Code focus (Ctrl+Shift+F) */
 #define GLR_REPLAY_JUMP      KEY_CTRL_K, 0     /* jump replay PC to cursor */
+#define GLR_NAV_BACK         KEY_CTRL_LBRACKET, GLUT_ACTIVE_CTRL
+#define GLR_NAV_FORWARD      KEY_CTRL_RBRACKET, 0
 
 /* Not registered as a binding pair: Accum passes is a multi-key gesture
  * ('='/'+' up, '-'/Ctrl+- down), so it stays inline in

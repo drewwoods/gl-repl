@@ -102,14 +102,14 @@ void editor_input_set_code_panel_layout_provider(EditorCodePanelLayoutProvider p
  * freeglut for being called pre-init. */
 void editor_input_enable_glut_modifier_reads(void);
 
-/* macOS Cmd+letter translation. On freeglut's Cocoa backend, Cmd+letter is
- * delivered as the raw letter byte (e.g. 'b' = 0x62) rather than the
- * control-character that real Ctrl+letter produces (e.g. KEY_CTRL_B
- * = 0x02). Callers that dispatch on the control-character form must
- * translate before their lookup or they'll miss the shortcut.
+/* macOS Cmd shortcut translation. On freeglut's Cocoa backend, Cmd+letter
+ * and Cmd+bracket are delivered as printable bytes rather than the control-
+ * character bytes that the matching Ctrl chords produce. Callers that
+ * dispatch on the control-character form must translate before their lookup
+ * or they'll miss the shortcut.
  *
  * Returns the translated key when SUPER is held and the input is a
- * letter; otherwise returns key unchanged. The controller calls this
+ * supported Cmd alias; otherwise returns key unchanged. The controller calls this
  * at the top of its keyboard route so every downstream handler
  * (cfg-shortcut chain, replay, save, editor) sees the already-
  * translated form. */

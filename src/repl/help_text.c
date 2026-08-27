@@ -411,6 +411,10 @@ const ReplHelpContent *repl_help_text_build(void) {
     nk = key_emit(nk, "  Click + drag (gutter)\tSelect lines (line-range)");
     nk = key_emit(nk, "  Double-click         \tSelect the word under the cursor");
     nk = key_emit(nk, "  Ctrl+Click / Cmd+Click\tGo to function definition (call site or comment)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_NAV_BACK), KM_MODS(GLR_NAV_BACK), 0, "",
+                          "Go back after a definition jump (Cmd+[ on macOS)");
+    nk = key_emit_binding(nk, "", KM_KEY(GLR_NAV_FORWARD), KM_MODS(GLR_NAV_FORWARD), 0, "",
+                          "Go forward after a definition jump (Cmd+] on macOS)");
     nk = key_emit(nk, "  Right-click blank row\tInspect current vs default OpenGL state");
     nk = key_emit(nk, "  Caret on ( ) or { }  \tHighlights the matching bracket");
     nk = key_emit(nk, "  Caret inside ( )      \tHighlights text inside the enclosing parentheses");

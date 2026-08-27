@@ -9,6 +9,7 @@
 #include "undo.h"
 
 #include "input.h"
+#include "navigation_history.h"
 #include "repl/command_store.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -213,6 +214,7 @@ void editor_undo_clear(void) {
 
 void editor_undo_note_wholesale_replacement(void) {
     editor_undo_clear();
+    editor_navigation_history_clear();
     g_undo_generation++;
 }
 
@@ -247,6 +249,7 @@ void editor_undo_push_snapshot(void) {
      * post-promotion state so Undo rewinds to the unedited reference still
      * visible in the Scene menu. */
     repl_promote_transient_if_needed();
+    editor_navigation_history_clear();
 
     editor_undo_snapshot_save(&g_undo_buf[g_undo_head]);
     g_undo_head = (g_undo_head + 1) % REPL_UNDO_DEPTH;
@@ -275,6 +278,7 @@ void editor_undo_pop_snapshot(void) {
         }
     }
     color_picker_stop();
+    editor_navigation_history_clear();
     editor_undo_snapshot_save(&g_redo_buf[g_redo_head]);
     g_redo_head = (g_redo_head + 1) % REPL_UNDO_DEPTH;
     if (g_redo_count < REPL_UNDO_DEPTH)
@@ -308,6 +312,7 @@ void editor_undo_do_redo(void) {
         }
     }
     color_picker_stop();
+    editor_navigation_history_clear();
     editor_undo_snapshot_save(&g_undo_buf[g_undo_head]);
     g_undo_head = (g_undo_head + 1) % REPL_UNDO_DEPTH;
     if (g_undo_count < REPL_UNDO_DEPTH)

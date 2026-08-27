@@ -42,6 +42,7 @@
 #include "inline_file_prompt.h"
 #include "inline_rename.h"
 #include "input.h"
+#include "navigation_history.h"
 #include "repl/load.h"
 #include "reformat.h"
 #include "search.h"
@@ -174,14 +175,19 @@ void editor_input_enable_glut_modifier_reads(void) {
 }
 
 unsigned char editor_input_normalize_super_to_ctrl(unsigned char key) {
-    /* Alpha check first so non-letter keys never read modifiers - that
-     * read goes through glutGetModifiers() in production, which aborts
-     * pre-init. The controller calls this at the top of its keyboard
-     * route, before the cfg-shortcut chain that compares against
-     * KEY_CTRL_* constants (= 1..26). Without the translation, Cmd+B
-     * would arrive as 'b' (0x62) and miss KEY_CTRL_B (0x02). */
-    if (((key >= 'a' && key <= 'z') || (key >= 'A' && key <= 'Z')) &&
+    /* Check only key shapes that have a Cmd alias before reading modifiers -
+     * that read goes through glutGetModifiers() in production, which aborts
+     * pre-init. Cocoa delivers Cmd+letter and Cmd+bracket as printable bytes,
+     * while the shared shortcut routes compare against ASCII control bytes. */
+    int is_alpha = ((key >= 'a' && key <= 'z') ||
+                    (key >= 'A' && key <= 'Z'));
+    int is_nav_bracket = (key == '[' || key == ']');
+    if ((is_alpha || is_nav_bracket) &&
         (editor_input_active_modifiers() & GLUT_ACTIVE_SUPER)) {
+        if (key == '[')
+            return KEY_CTRL_LBRACKET;
+        if (key == ']')
+            return KEY_CTRL_RBRACKET;
         return (unsigned char)(key & 0x1F);
     }
     return key;
@@ -201,8 +207,8 @@ int editor_input_active_modifiers(void) {
      * alias so every existing GLUT_ACTIVE_CTRL check fires on macOS
      * Cmd shortcuts (Cmd+/ for comment toggle, mouse-modifier checks,
      * etc.). The SUPER bit stays visible so keyboard_func can do the
-     * letter -> control-char translation specifically for Cmd+letter
-     * combos without disturbing the real-Ctrl path. */
+     * printable -> control-char translation for supported Cmd shortcuts
+     * without disturbing the real-Ctrl path. */
     if (mods & GLUT_ACTIVE_SUPER)
         mods |= GLUT_ACTIVE_CTRL;
     return mods;
@@ -1344,6 +1350,35 @@ static int handle_escape_key_route(unsigned char key) {
     return 0;
 }
 
+static int handle_navigation_history_key_route(unsigned char key) {
+    int direction;
+    EditorNavigationLocation location;
+
+    if (keymap_event_is(key, GLR_NAV_BACK))
+        direction = -1;
+    else if (keymap_event_is(key, GLR_NAV_FORWARD))
+        direction = 1;
+    else
+        return 0;
+
+    if (!editor_navigation_history_can_step(direction)) {
+        repl_set_status(direction < 0 ? "No older jump" : "No newer jump");
+        return 1;
+    }
+    if (!editor_input_commit_before_navigation())
+        return 1;
+    if (!editor_navigation_history_step(direction, &location))
+        return 1;
+
+    editor_selection_clear_line_range();
+    editor_navigate_to_line(location.line_idx);
+    editor_cursor_pos_set(location.char_idx);
+    editor_scroll_follow_cursor_set(1);
+    editor_completion_clear();
+    editor_request_redraw();
+    return 1;
+}
+
 static int handle_cursor_endpoint_key_route(unsigned char key) {
     if (keymap_event_is(key, GLR_LINE_START)) {
         editor_cursor_pos_set(0);
@@ -1879,6 +1914,7 @@ static void keyboard_func(unsigned char key, int x, int y) {
     restore_hidden_code_panel_for_key(key);
 
     if (editor_search_handle_key(key))       return;
+    if (handle_navigation_history_key_route(key)) return;
     if (handle_escape_key_route(key))       return;
     if (handle_cursor_endpoint_key_route(key)) return;
     if (handle_undo_redo_key_route(key))    return;
