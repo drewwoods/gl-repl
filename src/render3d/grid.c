@@ -2063,7 +2063,7 @@ static void graphplane_lines(const GridDrawContext *ctx, int iaxis, int jaxis, i
 static void graphplane_labels(int haxis, int vaxis, int kaxis,
                               float ch, float cv, float Lh, float Lv, float major,
                               const float right[3], const float up[3],
-                              float scale, float alpha) {
+                              float scale, float alpha, float px_world) {
     int h0 = (int)ceilf((ch - Lh) / major), h1 = (int)floorf((ch + Lh) / major);
     int v0 = (int)ceilf((cv - Lv) / major), v1 = (int)floorf((cv + Lv) / major);
     if (h1 - h0 > 120) h1 = h0 + 120;               /* runaway guard */
@@ -2077,41 +2077,52 @@ static void graphplane_labels(int haxis, int vaxis, int kaxis,
      * and out smoothly instead of popping them. */
     float band = major * 1.6f;
 
+    /* Insets off the screen edges: anchored in screen pixels so they don't migrate
+     * across the view when zoomed in. */
+    float h_nudge = fminf(major * 0.10f, 12.0f * px_world);
+    float v_nudge_r = fminf(major * 0.14f, 14.0f * px_world);
+    float v_nudge_u = fminf(major * 0.12f, 4.0f * px_world);
+    float corner_clear = fmaxf(major * 1.8f, 65.0f * px_world);
+
     for (int s = h0; s <= h1; s++) {                /* h-values along the bottom */
-        float c = s * major;
+        float c = (float)s * major;
+        double val = (double)s * (double)major;
+        if (fabs(val) < 1e-9) val = 0.0;
         float ef = gp_smoothstep(0.0f, band, Lh - fabsf(c - ch));
         /* Fade (rather than hard-skip) the h-labels approaching the left-edge
          * v-label column, so the two tracks don't collide in the corner AND a
          * value zooming past the column slides in smoothly instead of popping
          * the instant it clears a hard cutoff. */
-        float cf = gp_smoothstep(0.0f, major * 2.0f, fabsf(c - left_h));
+        float cf = gp_smoothstep(0.0f, corner_clear, fabsf(c - left_h));
         float a = alpha * ef * cf;
         if (a <= 0.004f) continue;
         glColor4f(0.90f, 0.93f, 0.98f, a);
-        char b[16];
-        snprintf(b, sizeof b, "%g", (double)c);
+        char b[32];
+        snprintf(b, sizeof b, "%g", val);
         float tw = grid_stroke_text_width(scale, b);
         float p[3] = { 0, 0, 0 };
         p[haxis] = c; p[vaxis] = bottom_v;
         /* centre on the gridline, lift a touch inward off the bottom edge */
-        float q0 = p[0] - right[0] * tw * 0.5f + up[0] * major * 0.10f;
-        float q1 = p[1] - right[1] * tw * 0.5f + up[1] * major * 0.10f;
-        float q2 = p[2] - right[2] * tw * 0.5f + up[2] * major * 0.10f;
+        float q0 = p[0] - right[0] * tw * 0.5f + up[0] * h_nudge;
+        float q1 = p[1] - right[1] * tw * 0.5f + up[1] * h_nudge;
+        float q2 = p[2] - right[2] * tw * 0.5f + up[2] * h_nudge;
         grid_stroke_text_billboard(q0, q1, q2, scale, right, up, b);
     }
     for (int s = v0; s <= v1; s++) {                /* v-values down the left */
-        float c = s * major;
+        float c = (float)s * major;
+        double val = (double)s * (double)major;
+        if (fabs(val) < 1e-9) val = 0.0;
         float ef = gp_smoothstep(0.0f, band, Lv - fabsf(c - cv));
         if (ef <= 0.0f) continue;
         glColor4f(0.90f, 0.93f, 0.98f, alpha * ef);
-        char b[16];
-        snprintf(b, sizeof b, "%g", (double)c);
+        char b[32];
+        snprintf(b, sizeof b, "%g", val);
         float p[3] = { 0, 0, 0 };
         p[vaxis] = c; p[haxis] = left_h;
         /* nudge inward off the left edge, vertically centre on the gridline */
-        float q0 = p[0] + right[0] * major * 0.14f - up[0] * major * 0.12f;
-        float q1 = p[1] + right[1] * major * 0.14f - up[1] * major * 0.12f;
-        float q2 = p[2] + right[2] * major * 0.14f - up[2] * major * 0.12f;
+        float q0 = p[0] + right[0] * v_nudge_r - up[0] * v_nudge_u;
+        float q1 = p[1] + right[1] * v_nudge_r - up[1] * v_nudge_u;
+        float q2 = p[2] + right[2] * v_nudge_r - up[2] * v_nudge_u;
         grid_stroke_text_billboard(q0, q1, q2, scale, right, up, b);
     }
     (void)kaxis;
@@ -2135,18 +2146,39 @@ static void render3d_grid_render_graphplanes_theme(const Render3dRenderConfig *c
     if (R > 80.0f) R = 80.0f;
 
     /* Visible world half-extents at the origin's depth, from the perspective
-     * projection (half = cam_dist / |proj[diag]|). Labels live at these edges
-     * - clamped to the grid extent - so both axes stay on screen at any zoom.
-     * Clamp guards the ortho / degenerate case (this is a 3D theme). */
+     * projection (half = cam_dist / |proj[diag]|) or ortho projection. Labels
+     * live at these edges - clamped to the grid extent - so both axes stay on
+     * screen at any zoom. */
     GLfloat pm[16];
     glGetFloatv(GL_PROJECTION_MATRIX, pm);
+    int is_ortho = fabsf(pm[15] - 1.0f) < 1e-3f && fabsf(pm[11]) < 1e-3f;
     float dist = config->cam_dist > 0.5f ? config->cam_dist : 6.0f;
-    float vh = (fabsf(pm[5]) > 1e-4f) ? dist / fabsf(pm[5]) : 4.0f;
-    float vw = (fabsf(pm[0]) > 1e-4f) ? dist / fabsf(pm[0]) : 6.0f;
-    if (vh < 0.5f || vh > 400.0f) vh = 4.0f;
-    if (vw < 0.5f || vw > 600.0f) vw = 6.0f;
+    float vh, vw;
+    if (is_ortho && fabsf(pm[0]) > 1e-9f && fabsf(pm[5]) > 1e-9f) {
+        vh = 1.0f / fabsf(pm[5]);
+        vw = 1.0f / fabsf(pm[0]);
+    } else {
+        vh = (fabsf(pm[5]) > 1e-4f) ? dist / fabsf(pm[5]) : 4.0f;
+        vw = (fabsf(pm[0]) > 1e-4f) ? dist / fabsf(pm[0]) : 6.0f;
+    }
+    if (vh < 0.05f || vh > 400.0f) vh = 4.0f;
+    if (vw < 0.05f || vw > 600.0f) vw = 6.0f;
     float Lh = fminf(R, vw * 0.86f);      /* horizontal label extent / edge */
     float Lv = fminf(R, vh * 0.80f);      /* vertical   label extent / edge */
+
+    float vh_px = (config->render3d_h > 0) ? (float)config->render3d_h : 600.0f;
+    float px_world = (2.0f * vh) / vh_px;
+    if (!(px_world > 1e-7f)) px_world = 8.0f / 600.0f;
+
+    /* Cell spacing: coarsens (2x, 5x, 10x...) when zoomed out, and subdivides
+     * into clean decimal sub-units (0.5, 0.2, 0.1, 0.05...) when zoomed in,
+     * maintaining a readable ~40-120px cell spacing. */
+    float px_per_cell = major * vh_px / (2.0f * vh);
+    if (px_per_cell < 34.0f && px_per_cell > 1e-3f) {
+        major *= grid_nice_step_mul(34.0f / px_per_cell);
+    } else if (px_per_cell > 120.0f) {
+        major /= grid_nice_step_mul(px_per_cell / 120.0f);
+    }
 
     /* Billboard basis: world-space screen-right and screen-up for this pose. */
     float right[3] = { cry, 0.0f, sry };
@@ -2170,19 +2202,22 @@ static void render3d_grid_render_graphplanes_theme(const Render3dRenderConfig *c
     const float THRESH = 0.50f;
     const float FULL   = 0.985f;
     float ta_base = fminf(grid_ctx->xn_alpha * grid_ctx->grid_brightness, 1.0f);
-    float lblscale = fminf(0.0040f, fmaxf(0.0022f, major * 0.0036f));
+    float nominal_lbl = fminf(0.0040f, fmaxf(0.0022f, major * 0.0036f));
+    float max_lbl = (22.0f / 119.05f) * px_world;
+    float lblscale = (major < 1.0f || is_ortho) ? max_lbl : fminf(nominal_lbl, max_lbl);
+
     /* Camera focus per world axis - labels centre on it so pan stays correct. */
     float foc[3] = { config->cam_tx, config->cam_ty, config->cam_tz };
     glLineWidth(1.4f);
     if (xy_w > zy_w && xy_w > xz_w && xy_w > THRESH) {           /* XY: x,y */
         graphplane_labels(0, 1, 2, foc[0], foc[1], Lh, Lv, major, right, up,
-                          lblscale, ta_base * gp_smoothstep(THRESH, FULL, xy_w));
+                          lblscale, ta_base * gp_smoothstep(THRESH, FULL, xy_w), px_world);
     } else if (zy_w > xz_w && zy_w > THRESH) {                   /* ZY: z,y */
         graphplane_labels(2, 1, 0, foc[2], foc[1], Lh, Lv, major, right, up,
-                          lblscale, ta_base * gp_smoothstep(THRESH, FULL, zy_w));
+                          lblscale, ta_base * gp_smoothstep(THRESH, FULL, zy_w), px_world);
     } else if (xz_w > THRESH) {                                  /* XZ: x,z */
         graphplane_labels(0, 2, 1, foc[0], foc[2], Lh, Lv, major, right, up,
-                          lblscale, ta_base * gp_smoothstep(THRESH, FULL, xz_w));
+                          lblscale, ta_base * gp_smoothstep(THRESH, FULL, xz_w), px_world);
     }
     glLineWidth(1.0f);
 }
