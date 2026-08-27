@@ -7154,6 +7154,45 @@ static void test_color_picker_materialfv(void) {
     color_picker_stop();
 }
 
+/* Function-body commands carry a broad has_vars marker so flattening can
+ * re-evaluate each call frame. A literal color in that body is nevertheless
+ * safe for the picker to rewrite; only colors whose own arguments reference
+ * locals/predefs should be read-only. */
+static void test_color_picker_literal_function_body(void) {
+    float r = 0, g = 0, b = 0, a = 0;
+    int has_alpha = 0;
+    const UiTransformerList *transformers;
+    int found_literal = 0;
+
+    printf("--- imrepl_ctrl color picker literal function body ---\n");
+    prepare_display_fixture();
+    glr_color_picker_install_host();
+    glr_ctrl_reset_all();
+
+    editor_feed_line("func0(a, b, c) {");
+    editor_feed_line("  glColor3f(0.92, 0.95, 0.98);");
+    editor_feed_line("  glColor3f(a, b, c);");
+    editor_feed_line("}");
+
+    ASSERT_INT("literal function color is pickable",
+               color_picker_read_cmd_color(1, &r, &g, &b, &a, &has_alpha), 1);
+    ASSERT_TRUE("literal function color reads its RGB values",
+                r == 0.92f && g == 0.95f && b == 0.98f && a == 1.0f);
+    ASSERT_INT("dynamic function color stays read-only",
+               color_picker_can_edit_cmd(2), 0);
+
+    glr_ctrl_display_frame();
+    transformers = editor_state_transformers();
+    for (int i = 0; transformers && i < transformers->count; i++) {
+        if (transformers->items[i].line_idx == 1) {
+            found_literal = 1;
+            break;
+        }
+    }
+    ASSERT_INT("literal function color publishes an inline swatch",
+               found_literal, 1);
+}
+
 static void test_func_nav_special_beats_replay_and_help(void) {
     printf("--- imrepl_ctrl Ctrl+Up/Down function nav beats replay/help ---\n");
     float speed_before;
@@ -8649,6 +8688,7 @@ int main(void) {
     test_export_light_bridge_reads_app_state();
     test_mouse_routing_and_hit_testing();
     test_color_picker_materialfv();
+    test_color_picker_literal_function_body();
     test_special_key_shortcuts();
     test_func_nav_special_beats_replay_and_help();
     test_ctrl_click_go_to_func_def();

@@ -20,6 +20,8 @@
 #include "repl/host_effects.h"    /* repl_set_status */
 #include "repl/parser.h"          /* repl_parser_parse_command_ctx */
 #include "repl/state_views.h"     /* repl_state_document_count / _cmd_at */
+#include "repl/visible_vars.h"     /* collect_visible_vars */
+#include "source_document.h"      /* source_text_line */
 #include "ui/app/layout.h"        /* ui_layout_code_panel_rect */
 #include "ui/app/state.h"         /* ui_state_viewport */
 
@@ -35,10 +37,51 @@ static const GLCmd *cp_cmd_at(int cmd_idx) {
     return repl_state_document_cmd_at(cmd_idx);
 }
 
+/* A source command inside a function is normalized with has_vars=1 so the
+ * flatten pass can re-evaluate it for each call frame. That flag is broader
+ * than the color picker's editability rule: a literal glColor3f in a helper
+ * is still safe to rewrite, while glColor3f(r, g, b) must stay read-only.
+ * Re-parse the source line in its lexical scope to recover the narrower
+ * per-argument answer. */
+static int glr_cp_cmd_has_dynamic_color_args(int cmd_idx,
+                                              const GLCmd *cmd) {
+    SourceTextView text;
+    ReplCompileContext scope;
+    ReplParseContext parse_ctx;
+    ReplParsedLine parsed;
+    ExprVar visible_vars[MAX_EXPR_VARS];
+    const char *line;
+    int visible_count;
+
+    if (!cmd || !cmd->has_vars)
+        return 0;
+
+    text = source_document_view();
+    line = source_text_line(text, cmd_idx);
+    if (!line || !line[0])
+        return 1; /* Conservative when the source text is unavailable. */
+
+    scope = repl_compile_context_from_live(cmd_idx);
+    visible_count = collect_visible_vars_in(
+        scope.text, scope.document_cmds, scope.document_count, cmd_idx,
+        visible_vars, MAX_EXPR_VARS, NULL, NULL);
+    memset(&parse_ctx, 0, sizeof(parse_ctx));
+    parse_ctx.source_line_idx = cmd_idx;
+    parse_ctx.vars = visible_count > 0 ? visible_vars : NULL;
+    parse_ctx.num_vars = visible_count;
+    parse_ctx.strict_refs = 1;
+    parse_ctx.func_aliases = scope.func_aliases;
+    parse_ctx.source_scope = &scope.source_scope;
+
+    if (!repl_parser_parse_command_ctx(line, &parsed, &parse_ctx))
+        return 1; /* Do not expose a swatch for a line we cannot validate. */
+    return parsed.cmd.has_vars;
+}
+
 static int glr_cp_read_color(int cmd_idx, float *r, float *g, float *b, float *a,
                              int *has_alpha, float *value_max) {
     const GLCmd *cmd = cp_cmd_at(cmd_idx);
-    if (!cmd || !cmd->valid || cmd->has_vars)
+    if (!cmd || !cmd->valid || glr_cp_cmd_has_dynamic_color_args(cmd_idx, cmd))
         return 0;
     if (cmd->type == CMD_MATERIALFV) {
         /* face/pname occupy args[0..1]; the RGBA values land at args[2..5].
