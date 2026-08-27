@@ -55,6 +55,7 @@ Line numbers are the code panel's own (1-based); below 1 is refused.
 | `GLR_VIEW_TOGGLE_AT=<t1,t2,…>` | 2D/3D swatch transition; implies tick-per-frame |
 | `GLR_POINTER_SCRIPT=<file>` | scripted pointer/keyboard + cursor overlay |
 | `GLR_NO_SPLASH=1` | suppress the startup splash |
+| `GLR_NO_INPUT=1` | window ignores real keyboard/mouse - **use on every windowed capture** (the window takes focus, so terminal keystrokes would otherwise edit the document). Scripted input still works. |
 
 Other env: `GLR_NO_POINT_PARAMETER=1` (force the no-`glPointParameterfv`
 fallback path - runtime-gated, no build flag), `GLR_NO_GPU_PROF=1`,
@@ -106,6 +107,9 @@ targets. The same engine powers the in-app **Tours** menu: `tours/*.pointer` +
 - **Vertex outlines default ON** and pollute reference shots - disable them.
 - Theme fades need ~12 s to settle; eased example cameras need ~240 frames.
 - Prefer `GLR_TICK_PER_FRAME=1` for anything that must be reproducible.
+- Set `GLR_NO_INPUT=1` on any windowed (non-OSMesa) capture. The window
+  pops up focused, so keystrokes intended for the terminal land in the editor
+  and silently rewrite the document mid-capture.
 
 ## Startup diagnostics
 

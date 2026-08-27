@@ -160,6 +160,7 @@ A value below 1 is refused with a note on stderr rather than acted on.
 | `GLR_VIEW_TOGGLE_AT` | Comma-separated capture-clock seconds. | Toggles 2D/3D view mode at deterministic times while recording. |
 | `GLR_POINTER_SCRIPT` | Path to a pointer script; implies `GLR_TICK_PER_FRAME`. | Drives scripted synthetic mouse/keyboard input (menu glides, clicks, highlight rings) with a visible cursor overlay - the video-capture hook behind `scripts/record-video.sh`. Grammar in [`src/app/glr_pointer_script.h`](../src/app/glr_pointer_script.h). |
 | `GLR_NO_SPLASH` | Any non-empty value. | Skips the startup splash banner (captures that should not open on the splash band). |
+| `GLR_NO_INPUT` | Any value other than `0`; default off. | Makes the window ignore real keyboard and mouse events. A windowed capture takes focus, so anything typed at the launching terminal - or a stray click, or the pointer merely crossing the window - lands in the editor and corrupts the shot. Scripted input is unaffected: `GLR_TYPE_KEYS` and `GLR_POINTER_SCRIPT` drive `glr_ctrl_scripted_*`, not the gated GLUT callbacks. |
 | `GLR_NO_POINT_PARAMETER` | Any non-empty value. | Forces the no-`glPointParameterfv` fallback path even on capable hardware. |
 | `GLR_NO_GPU_PROF` | Any non-empty value. | Disables GPU timer-query profiling; the profile panel GPU column reads `--`. |
 | `GLR_DETAILED_PROF` | Any non-empty value; same as `--detailed-prof`. | Enables the finer init-trace phases and first-two-frame timing triples. |

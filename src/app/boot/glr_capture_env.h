@@ -42,6 +42,22 @@ void glr_capture_env_apply(const char *time_arg);
  * before rendering, so the posed state is in the frame that renders. */
 void glr_capture_env_frame_hook(void);
 
+/* Non-zero when GLR_NO_INPUT is set to anything but "0": the window ignores
+ * real keyboard and mouse events for the run.
+ *
+ * A capture run raises a real window that takes focus, so anything typed at
+ * the launching terminal - or a stray click, or the pointer merely crossing
+ * the window - lands in the editor and corrupts the shot. The states posed by
+ * the rest of this file are worth nothing if the document can drift out from
+ * under them mid-capture.
+ *
+ * This gates the six GLUT input callbacks in gl_repl.c and nothing else, so
+ * the deliberate input paths are unaffected: GLR_TYPE_KEYS and
+ * GLR_POINTER_SCRIPT both drive glr_ctrl_scripted_*, never the callbacks.
+ * Read on first use and cached, so it is order-independent with respect to
+ * glr_capture_env_apply(). */
+int glr_capture_env_input_locked(void);
+
 #ifdef __cplusplus
 }
 #endif

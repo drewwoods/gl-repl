@@ -189,29 +189,43 @@ static void reshape_func(int w, int h) {
     glr_ctrl_reshape(w, h);
 }
 
+/* Real keyboard/mouse events all pass through here, and all six drop the
+ * event under GLR_NO_INPUT. A capture run raises a focused window, so a
+ * keystroke meant for the launching terminal - or a stray click, or the
+ * pointer crossing the window - would otherwise edit the document being
+ * photographed. Gated here rather than by skipping glutKeyboardFunc() and
+ * friends, so the set stays greppable and freeglut keeps a handler for every
+ * event it wants to deliver. Scripted input (GLR_TYPE_KEYS,
+ * GLR_POINTER_SCRIPT) enters via glr_ctrl_scripted_* and is unaffected. */
 static void keyboard_func(unsigned char key, int x, int y) {
+    if (glr_capture_env_input_locked()) return;
     splash_skip(); /* any keypress dismisses the startup banner */
     glr_ctrl_keyboard(key, x, y);
 }
 
 static void special_func(int key, int x, int y) {
+    if (glr_capture_env_input_locked()) return;
     glr_ctrl_special(key, x, y);
 }
 
 static void mouse_func(int button, int state, int x, int y) {
+    if (glr_capture_env_input_locked()) return;
     glr_ctrl_mouse(button, state, x, y);
 }
 
 static void motion_func(int x, int y) {
+    if (glr_capture_env_input_locked()) return;
     glr_ctrl_motion(x, y);
 }
 
 static void passive_motion_func(int x, int y) {
+    if (glr_capture_env_input_locked()) return;
     glr_ctrl_passive_motion(x, y);
 }
 
 #ifndef USE_GLUT
 static void mousewheel_func(int wheel, int direction, int x, int y) {
+    if (glr_capture_env_input_locked()) return;
     glr_ctrl_mousewheel(wheel, direction, x, y);
 }
 

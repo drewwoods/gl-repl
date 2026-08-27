@@ -19,6 +19,20 @@
 #include <stdlib.h>                 /* getenv, atoi, atof, strtof */
 #include <string.h>                 /* strchr, strcmp */
 
+/* GLR_NO_INPUT: see the header for why a capture run wants its window deaf.
+ * Cached on first call - the value cannot change mid-run, and caching makes
+ * the six callback sites free to ask on every event. -1 = not yet resolved. */
+int glr_capture_env_input_locked(void) {
+    static int locked = -1;
+    if (locked < 0) {
+        const char *s = getenv("GLR_NO_INPUT");
+        locked = (s && *s && strcmp(s, "0") != 0) ? 1 : 0;
+        if (locked)
+            fprintf(stderr, "gl-repl: GLR_NO_INPUT - ignoring keyboard/mouse\n");
+    }
+    return locked;
+}
+
 /* Every GLR_* hook that names a source row spells it the way the code panel's
  * gutter does: 1-based, so what a reader sees beside the line is what the
  * script sets. The controller entry points stay 0-based document indices, and
@@ -323,6 +337,12 @@ void glr_capture_env_frame_hook(void) {
 }
 
 void glr_capture_env_apply(const char *time_arg) {
+    /* Resolve GLR_NO_INPUT here purely so the run announces the lock in its
+     * startup trace. The gate itself is lazy and self-caching, and no input
+     * event can reach a callback before the main loop; without this call a
+     * capture that never got a stray event would leave no record that its
+     * window was deaf. */
+    (void)glr_capture_env_input_locked();
     /* Initial animation time: --time SECS wins over GLR_TIME. Applied after
      * any example load (which resets t to 0) so the override sticks. Lets a
      * headless capture start the animation from a later point in its
