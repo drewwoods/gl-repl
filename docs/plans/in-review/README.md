@@ -11,3 +11,6 @@ or to `../active/` if implementation begins immediately.
     fully specified, no open decisions; Project 2 (making the order
     total across commit, import, paste and tutorials) is gated on a
     tutorial decision.
+- [Lua Scene Extensions](lua-scene-extensions.md)
+  - workspace-scoped Lua scene calls with focused GL access, next-frame
+    outputs, interactive panels, and required standalone-C export hooks.
