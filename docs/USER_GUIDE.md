@@ -1421,11 +1421,10 @@ Gizmo, Ruler, Arrow, Fountain.
 ### Backdrops
 
 The primordial cube enjoying the view:
-![Backdrops: Polar Day+Snow, Nebula, Sunset, Aurora](images/backdrops.png)
+![Backdrops: Polar Day, Nebula, Sunset, Aurora](images/backdrops.png)
 
-**F5** cycles the scene backdrop: Off *(default)*, Cityscape, Stars,
-City+Stars, Sunset, Aurora, Nebula, Polar Day, Polar Day+Snow, Drones,
-Fairies.
+**F5** cycles the scene backdrop: Off *(default)*, Stars, City+Stars,
+Sunset, Aurora, Nebula, Polar Day, Drones, Fairies.
 
 **Drones** is the one backdrop whose lights move. Four scanner drones patrol
 your geometry through a repeating three-phase cycle - a linear pass, an

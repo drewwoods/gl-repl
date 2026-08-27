@@ -986,7 +986,7 @@ which choice it selects:
 |---|---|
 | `grid` | `GRID_THEME_OFF` `_CLASSIC` `_FOG` `_TRON` `_EMBER` `_FAINT` `_FOCUS` `_OCEAN` `_XZRULER` `_PLANES` `_RADAR` `_AURORA` `_SYNTHWAVE` `_FROZEN` `_SOIL` `_STARCHART` |
 | `axes` | `AXES_THEME_OFF` `_CLASSIC` `_PULSE` `_NEON` `_COMPASS` `_GIZMO` `_RULER` |
-| `backdrop` | `RENDER3D_BACKDROP_OFF` `_CITYSCAPE` `_STARS` `_CITY_AND_STARS` `_SUNSET` `_AURORA` `_NEBULA` `_POLAR_DAY` `_POLAR_DAY_SNOW` `_DRONES` `_FAIRIES` |
+| `backdrop` | `RENDER3D_BACKDROP_OFF` `_STARS` `_CITY_AND_STARS` `_SUNSET` `_AURORA` `_NEBULA` `_POLAR_DAY` `_DRONES` `_FAIRIES` |
 | `light_theme` | `LIGHT_THEME_DEFAULT` `_HEADLIGHT` `_SOLAR` `_STUDIO` `_NEON` |
 | `grid_extent` | `GRID_EXTENT_CLOSE` `_MID` `_FAR` |
 | `grid_major` | `GRID_MAJOR_1` `_2` `_5` `_10` (the major-tick spacing) |
@@ -1051,7 +1051,7 @@ To configure pairings, edit the defaults macro:
 #define GLR_BACKDROP_GRID_PAIR_DEFAULTS {                                  \
     { .backdrop = RENDER3D_BACKDROP_AURORA,         .grid = GRID_THEME_AURORA }, \
     { .backdrop = RENDER3D_BACKDROP_SUNSET,         .grid = GRID_THEME_SYNTHWAVE }, \
-    { .backdrop = RENDER3D_BACKDROP_POLAR_DAY_SNOW, .grid = GRID_THEME_FROZEN }, \
+    { .backdrop = RENDER3D_BACKDROP_POLAR_DAY, .grid = GRID_THEME_FROZEN }, \
     { .backdrop = RENDER3D_BACKDROP_NEBULA,         .grid = GRID_THEME_STARCHART }, \
 }
 ```

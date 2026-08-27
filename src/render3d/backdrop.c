@@ -2749,7 +2749,6 @@ void render3d_backdrop_setup_lights(const Render3dFrameRenderContext *frame_ctx)
             (int)(sizeof(k_nebula_lights) / sizeof(k_nebula_lights[0])));
         break;
     case RENDER3D_BACKDROP_POLAR_DAY:
-    case RENDER3D_BACKDROP_POLAR_DAY_SNOW:
         backdrop_apply_env_lights(
             k_polar_day_lights,
             (int)(sizeof(k_polar_day_lights) / sizeof(k_polar_day_lights[0])));
@@ -2770,10 +2769,6 @@ void render3d_backdrop_setup_lights(const Render3dFrameRenderContext *frame_ctx)
 
 void render3d_backdrop_render(const Render3dFrameRenderContext *frame_ctx) {
     switch (frame_ctx->config.backdrop_mode) {
-    case RENDER3D_BACKDROP_CITYSCAPE:
-        draw_cityscape(frame_ctx->config.anim_time,
-                       frame_ctx->config.nv_fog_distance_supported);
-        break;
     case RENDER3D_BACKDROP_STARS:
         draw_starry_sky(frame_ctx->config.anim_time,
                         frame_ctx->config.point_parameter_supported,
@@ -2812,13 +2807,6 @@ void render3d_backdrop_render(const Render3dFrameRenderContext *frame_ctx) {
         break;
     }
     case RENDER3D_BACKDROP_POLAR_DAY:
-        backdrop_begin_sky_point_state(
-            frame_ctx->config.point_parameter_supported,
-            frame_ctx->config.point_parameter_proc);
-        draw_polar_sky_dome();
-        backdrop_end_sky_point_state();
-        break;
-    case RENDER3D_BACKDROP_POLAR_DAY_SNOW:
         /* Dome first so the flakes composite over the sky. */
         backdrop_begin_sky_point_state(
             frame_ctx->config.point_parameter_supported,

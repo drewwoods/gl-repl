@@ -2084,7 +2084,7 @@ fi
 
 if want backdrops; then
     backdrops=(
-        "POLAR_DAY_SNOW"
+        "POLAR_DAY"
         "NEBULA flat"
         "SUNSET flat"
         "AURORA flat"

@@ -1756,7 +1756,10 @@ static void test_nv_fog_distance_radial_optin(void) {
 
     {
         Render3dFrameRenderContext ctx = make_test_frame_ctx();
-        ctx.config.backdrop_mode = RENDER3D_BACKDROP_CITYSCAPE;
+        /* City+Stars is the only backdrop that draws the city now. Its
+         * starfield pass touches fog with glDisable, never glFogi, so the
+         * set-and-restore pair below still counts the city's alone. */
+        ctx.config.backdrop_mode = RENDER3D_BACKDROP_CITY_AND_STARS;
 
         ctx.config.nv_fog_distance_supported = 0;
         gl_stub_counts_reset();

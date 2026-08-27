@@ -2243,8 +2243,13 @@ int main(int argc, char **argv) {
                     glr_state_presentation().wireframe == 1);
         ASSERT_TRUE("partial cfg labels applied",
                     glr_state_presentation().show_vertex_labels == 0);
+        /* The scene above spells the backdrop as a bare integer on purpose
+         * (the numeric @cfg path); name the mode it lands on here so a
+         * reordered enum fails loudly instead of silently asserting a
+         * different backdrop. */
         ASSERT_TRUE("partial cfg backdrop applied",
-                    glr_state_presentation().backdrop_mode == 1);
+                    glr_state_presentation().backdrop_mode ==
+                    RENDER3D_BACKDROP_STARS);
         ASSERT_TRUE("partial cfg grid reset default",
                     glr_state_presentation().grid_theme == CFG_DEFAULT_GRID_THEME);
         ASSERT_TRUE("partial cfg grid major reset default",
