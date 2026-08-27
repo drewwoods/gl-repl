@@ -286,12 +286,12 @@
 /* Body: a white-hot core point inside a wider coloured halo, plus a wake of
  * fading sparks sampled from the fairy's own past positions. */
 #define FAIRY_CORE_POINT      5.0f
-#define FAIRY_HALO_POINT      17.0f
-#define FAIRY_HALO_ALPHA      0.42f
+#define FAIRY_HALO_POINT      18.0f
+#define FAIRY_HALO_ALPHA      0.44f
 #define FAIRY_WAKE_COUNT      9
 #define FAIRY_WAKE_DT         0.055f /* seconds between wake samples */
 #define FAIRY_WING_SEGS       10
-#define FAIRY_WING_R          0.055f /* x scene radius, the soft wing disc */
+#define FAIRY_WING_R          0.085f /* x scene radius, the soft wing disc */
 
 /* Clip-plane slots to clear. Six is GL's guaranteed minimum and the whole
  * set the REPL's GL_CLIP_PLANEn enum table exposes, so it is every plane a
@@ -1375,6 +1375,10 @@ typedef struct DronePose {
     float aim[3];    /* unit vector: where the drone is pointing */
 } DronePose;
 
+static float backdrop_vec_len(const float v[3]) {
+    return sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+}
+
 static void backdrop_vec_norm(float v[3]) {
     float len = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
     if (len < 1e-5f) {
@@ -1700,115 +1704,92 @@ static void drone_setup_lights(const Render3dFrameRenderContext *frame_ctx) {
     }
 }
 
-/* One wireframe drone hull: a hexagonal spindle cage with sensor collar,
- * waist equator, aft thruster ring, and outrigger stabilizer fins, drawn in
- * the light's own colour. */
-static void drone_draw_hull(const DronePose *pose, const BackdropExtent *sc,
+/* One drone hull: a quadrotor, the shape that reads as a drone on sight
+ * at the twenty-odd pixels one of these actually occupies. The rotor
+ * deck is framed off WORLD UP rather than off the aim, so the craft hangs
+ * level and only the gimbal stalk swings toward the target - a camera
+ * craft, not a dart that happens to point somewhere. It is then banked
+ * partway toward the aim, which is both what a real quadcopter does and
+ * what keeps the rotors reading as discs instead of collapsing to bars
+ * when the camera is near their plane. */
+#define DRONE_QUAD_BANK 0.42f   /* share of the aim mixed into the deck normal */
+
+static void drone_hull_quad(const DronePose *pose, const BackdropExtent *sc,
                             const float col[3], float alpha_scale) {
-    float t1[3], t2[3];
-    float nose[3], tail[3];
-    float collar[DRONE_HULL_SIDES][3];
-    float waist_ring[DRONE_HULL_SIDES][3];
-    float aft_ring[DRONE_HULL_SIDES][3];
-    float fins[DRONE_HULL_SIDES][3];
     float len = DRONE_HULL_LEN * sc->radius;
-    float waist = DRONE_HULL_WAIST * sc->radius;
+    float arm = len * 1.15f;
+    float rot_r = len * 0.50f;
+    float post = len * 0.22f;
+    float body = len * 0.30f;
+    float up[3], ax[3], az[3];
+    float hub[4][3];
+    float lens[3];
 
-    backdrop_frame(pose->aim, t1, t2);
+    /* Deck normal: world up banked toward the aim. */
+    up[0] = -pose->aim[0] * DRONE_QUAD_BANK;
+    up[1] = 1.0f - pose->aim[1] * DRONE_QUAD_BANK;
+    up[2] = -pose->aim[2] * DRONE_QUAD_BANK;
+    backdrop_vec_norm(up);
+    backdrop_frame(up, ax, az);
 
-    for (int k = 0; k < 3; k++) {
-        nose[k] = pose->pos[k] + pose->aim[k] * len;
-        tail[k] = pose->pos[k] - pose->aim[k] * (len * 0.60f);
+    for (int s = 0; s < 4; s++) {
+        float a = ((float)s + 0.5f) / 4.0f * 2.0f * (float)M_PI;
+        float ca = cosf(a) * arm, sa = sinf(a) * arm;
+        for (int k = 0; k < 3; k++)
+            hub[s][k] = pose->pos[k] + ax[k] * ca + az[k] * sa;
     }
+    for (int k = 0; k < 3; k++)
+        lens[k] = pose->pos[k] + pose->aim[k] * (len * 0.75f);
 
-    for (int s = 0; s < DRONE_HULL_SIDES; s++) {
-        float a = (float)s / (float)DRONE_HULL_SIDES * 2.0f * (float)M_PI;
-        float ca = cosf(a), sa = sinf(a);
-        float r_collar = waist * 0.52f;
-        float r_waist  = waist;
-        float r_aft    = waist * 0.55f;
-        float r_fin    = waist * 1.45f;
+    /* Arms out to the rotor hubs, motor posts standing off each hub, and
+     * the gimbal stalk down to the lens. */
+    glLineWidth(DRONE_LINE_WIDTH + 0.5f);
+    glColor4f(col[0], col[1], col[2], 0.95f * alpha_scale);
+    glBegin(GL_LINES);
+    for (int s = 0; s < 4; s++) {
+        glVertex3fv(pose->pos);
+        glVertex3fv(hub[s]);
+        glVertex3f(hub[s][0] - up[0] * post * 0.5f,
+                   hub[s][1] - up[1] * post * 0.5f,
+                   hub[s][2] - up[2] * post * 0.5f);
+        glVertex3f(hub[s][0] + up[0] * post,
+                   hub[s][1] + up[1] * post,
+                   hub[s][2] + up[2] * post);
+    }
+    glVertex3fv(pose->pos);
+    glVertex3fv(lens);
+    glEnd();
 
-        for (int k = 0; k < 3; k++) {
-            collar[s][k] = pose->pos[k] + pose->aim[k] * (len * 0.40f) +
-                           t1[k] * (ca * r_collar) + t2[k] * (sa * r_collar);
-            waist_ring[s][k] = pose->pos[k] +
-                               t1[k] * (ca * r_waist) + t2[k] * (sa * r_waist);
-            aft_ring[s][k] = pose->pos[k] - pose->aim[k] * (len * 0.28f) +
-                             t1[k] * (ca * r_aft) + t2[k] * (sa * r_aft);
-            fins[s][k] = pose->pos[k] - pose->aim[k] * (len * 0.15f) +
-                         t1[k] * (ca * r_fin) + t2[k] * (sa * r_fin);
+    /* Body plate: a small diamond around the hub, in the deck plane. */
+    glColor4f(col[0], col[1], col[2], 0.70f * alpha_scale);
+    glBegin(GL_LINE_LOOP);
+    for (int s = 0; s < 4; s++) {
+        float a = (float)s / 4.0f * 2.0f * (float)M_PI;
+        float ca = cosf(a) * body, sa = sinf(a) * body;
+        glVertex3f(pose->pos[0] + ax[0] * ca + az[0] * sa,
+                   pose->pos[1] + ax[1] * ca + az[1] * sa,
+                   pose->pos[2] + ax[2] * ca + az[2] * sa);
+    }
+    glEnd();
+
+    /* Rotor discs, at the top of each motor post. Dim - they read as
+     * motion, and holding them back keeps the additive blend from washing
+     * the four colours toward a common white. */
+    glColor4f(col[0], col[1], col[2], 0.30f * alpha_scale);
+    for (int s = 0; s < 4; s++) {
+        float c[3];
+        for (int k = 0; k < 3; k++)
+            c[k] = hub[s][k] + up[k] * post;
+        glBegin(GL_LINE_LOOP);
+        for (int q = 0; q < 12; q++) {
+            float a = (float)q / 12.0f * 2.0f * (float)M_PI;
+            float ca = cosf(a) * rot_r, sa = sinf(a) * rot_r;
+            glVertex3f(c[0] + ax[0] * ca + az[0] * sa,
+                       c[1] + ax[1] * ca + az[1] * sa,
+                       c[2] + ax[2] * ca + az[2] * sa);
         }
+        glEnd();
     }
-
-    glLineWidth(DRONE_LINE_WIDTH);
-
-    /* Main longitudinal ribs (nose -> collar -> waist -> aft -> tail) */
-    glColor4f(col[0], col[1], col[2], 0.90f * alpha_scale);
-    glBegin(GL_LINES);
-    for (int s = 0; s < DRONE_HULL_SIDES; s++) {
-        glVertex3fv(nose);
-        glVertex3fv(collar[s]);
-
-        glVertex3fv(collar[s]);
-        glVertex3fv(waist_ring[s]);
-
-        glVertex3fv(waist_ring[s]);
-        glVertex3fv(aft_ring[s]);
-
-        glVertex3fv(aft_ring[s]);
-        glVertex3fv(tail);
-    }
-    glEnd();
-
-    /* Circumferential rings (sensor collar, waist equator, thruster) */
-    glColor4f(col[0], col[1], col[2], 0.72f * alpha_scale);
-    glBegin(GL_LINE_LOOP);
-    for (int s = 0; s < DRONE_HULL_SIDES; s++)
-        glVertex3fv(collar[s]);
-    glEnd();
-
-    glBegin(GL_LINE_LOOP);
-    for (int s = 0; s < DRONE_HULL_SIDES; s++)
-        glVertex3fv(waist_ring[s]);
-    glEnd();
-
-    glBegin(GL_LINE_LOOP);
-    for (int s = 0; s < DRONE_HULL_SIDES; s++)
-        glVertex3fv(aft_ring[s]);
-    glEnd();
-
-    /* Outrigger stabilizer fins (3 fins on alternating vertices 0, 2, 4) */
-    glColor4f(col[0], col[1], col[2], 0.65f * alpha_scale);
-    glBegin(GL_LINES);
-    for (int s = 0; s < DRONE_HULL_SIDES; s += 2) {
-        glVertex3fv(waist_ring[s]);
-        glVertex3fv(fins[s]);
-
-        glVertex3fv(fins[s]);
-        glVertex3fv(aft_ring[s]);
-
-        glVertex3fv(fins[s]);
-        glVertex3fv(tail);
-    }
-    glEnd();
-
-    /* Internal core spokes / gyro cross-bracing */
-    glColor4f(col[0] * 0.7f, col[1] * 0.7f, col[2] * 0.7f, 0.40f * alpha_scale);
-    glBegin(GL_LINES);
-    for (int s = 0; s < 3; s++) {
-        glVertex3fv(waist_ring[s]);
-        glVertex3fv(waist_ring[s + 3]);
-    }
-    /* Core spine segment */
-    glVertex3f(pose->pos[0] + pose->aim[0] * (len * 0.20f),
-               pose->pos[1] + pose->aim[1] * (len * 0.20f),
-               pose->pos[2] + pose->aim[2] * (len * 0.20f));
-    glVertex3f(pose->pos[0] - pose->aim[0] * (len * 0.20f),
-               pose->pos[1] - pose->aim[1] * (len * 0.20f),
-               pose->pos[2] - pose->aim[2] * (len * 0.20f));
-    glEnd();
-
     glLineWidth(1.0f);
 }
 
@@ -1944,7 +1925,7 @@ static void draw_drones(const Render3dFrameRenderContext *frame_ctx) {
     for (int i = 0; i < DRONE_COUNT; i++) {
         DronePose pose;
         drone_pose(&ph, i, &sc, &pose);
-        drone_draw_hull(&pose, &sc, k_drone_colors[i], alpha);
+        drone_hull_quad(&pose, &sc, k_drone_colors[i], alpha);
         drone_draw_beam(&pose, &sc, k_drone_colors[i], spotness, alpha);
         drone_draw_pool(&pose, &sc, k_drone_colors[i], spotness, alpha);
         drone_draw_lens(&pose, &sc, k_drone_colors[i], alpha);
@@ -2299,14 +2280,180 @@ static void fairy_setup_lights(const Render3dFrameRenderContext *frame_ctx) {
     }
 }
 
+/* --- Fairy body, trail and dust --------------------------------------- */
+
+#define FAIRY_RIBBON_STEPS   22     /* trail samples - a smear, not beads */
+#define FAIRY_RIBBON_DT      0.022f
+#define FAIRY_RIBBON_W       0.022f /* x scene radius, width at the body */
+#define FAIRY_DUST_COUNT     12
+#define FAIRY_DUST_DT        0.045f
+#define FAIRY_DUST_FALL      0.490f /* x scene radius per sec^2, dust sink */
+#define FAIRY_WING_BEAT_HZ   11.0f
+
+static void fairy_sample_at(float t, int passer_idx, const BackdropExtent *ex,
+                            const float view[3], FairyState *out) {
+    if (passer_idx < 0)
+        fairy_resident_at(t, ex, view, out);
+    else
+        fairy_passer_at(t, passer_idx, ex, view, out);
+}
+
+/* The trail: one continuous camera-facing ribbon through the fairy's own
+ * past positions, tapering in width and alpha. Replaces the beaded point
+ * wake - at speed those samples separate into a dotted line, which reads as
+ * a string of markers rather than as motion. Free to compute for the same
+ * reason the old wake was: the pose is a pure function of time, so there is
+ * no history to keep. */
+static void fairy_draw_ribbon(float t, int passer_idx, const BackdropExtent *ex,
+                              const float view[3], float alpha_scale) {
+    FairyState prev;
+    float half = ex->radius * FAIRY_RIBBON_W;
+    int started = 0;
+
+    fairy_sample_at(t, passer_idx, ex, view, &prev);
+    if (prev.bright <= 0.0f)
+        return;
+
+    glBegin(GL_TRIANGLE_STRIP);
+    for (int k = 0; k <= FAIRY_RIBBON_STEPS; k++) {
+        float back = t - (float)k * FAIRY_RIBBON_DT;
+        float decay = 1.0f - (float)k / (float)(FAIRY_RIBBON_STEPS + 1);
+        FairyState f;
+        float seg[3], side[3], w;
+
+        if (back < 0.0f)
+            break;
+        fairy_sample_at(back, passer_idx, ex, view, &f);
+        if (f.bright <= 0.0f)
+            break;
+
+        /* Ribbon width runs across the trail AND across the view, so the
+         * strip is edge-on to nothing. */
+        for (int i = 0; i < 3; i++)
+            seg[i] = prev.pos[i] - f.pos[i];
+        side[0] = seg[1] * view[2] - seg[2] * view[1];
+        side[1] = seg[2] * view[0] - seg[0] * view[2];
+        side[2] = seg[0] * view[1] - seg[1] * view[0];
+        if (backdrop_vec_len(side) < 1e-6f) {
+            if (started) break;
+            continue;
+        }
+        backdrop_vec_norm(side);
+
+        w = half * decay * sqrtf(decay);
+        glColor4f(f.color[0], f.color[1], f.color[2],
+                  0.42f * decay * decay * decay * f.bright * alpha_scale);
+        glVertex3f(f.pos[0] + side[0] * w, f.pos[1] + side[1] * w,
+                   f.pos[2] + side[2] * w);
+        glVertex3f(f.pos[0] - side[0] * w, f.pos[1] - side[1] * w,
+                   f.pos[2] - side[2] * w);
+        started = 1;
+        prev = f;
+    }
+    glEnd();
+}
+
+/* The wings: two beating discs either side of the body, drawn in the
+ * plane facing the camera so they are never edge-on. The beat is a pure
+ * function of time like everything else here, and the two wings are driven
+ * in antiphase so the pair flickers rather than pulsing as one blob. */
+static void fairy_draw_wings(const FairyState *f, const BackdropExtent *ex,
+                             const float view[3], float t, unsigned int seed,
+                             float alpha_scale, float scale) {
+    float side[3], upv[3];
+    float wr = ex->radius * FAIRY_WING_R * 1.05f * scale;
+    float phase = t * FAIRY_WING_BEAT_HZ * 2.0f * (float)M_PI +
+                  (float)(seed % 97) * 0.13f;
+    const float up_hint[3] = { 0.0f, 1.0f, 0.0f };
+
+    /* Screen-plane axes: across the view, and up within it. */
+    side[0] = up_hint[1] * view[2] - up_hint[2] * view[1];
+    side[1] = up_hint[2] * view[0] - up_hint[0] * view[2];
+    side[2] = up_hint[0] * view[1] - up_hint[1] * view[0];
+    if (backdrop_vec_len(side) < 1e-6f)
+        return;
+    backdrop_vec_norm(side);
+    upv[0] = view[1] * side[2] - view[2] * side[1];
+    upv[1] = view[2] * side[0] - view[0] * side[2];
+    upv[2] = view[0] * side[1] - view[1] * side[0];
+    backdrop_vec_norm(upv);
+
+    for (int wing = 0; wing < 2; wing++) {
+        float dir = wing ? 1.0f : -1.0f;
+        /* Foreshortening of a beating wing: |cos| of its own phase. */
+        float beat = fabsf(cosf(phase + (wing ? (float)M_PI * 0.5f : 0.0f)));
+        float sx = wr * (0.35f + 0.65f * beat);
+        float sy = wr * 1.05f;
+        float cx[3];
+
+        for (int k = 0; k < 3; k++)
+            cx[k] = f->pos[k] + side[k] * dir * sx * 0.85f + upv[k] * wr * 0.25f;
+
+        glBegin(GL_TRIANGLE_FAN);
+        glColor4f(f->color[0], f->color[1], f->color[2],
+                  0.20f * f->bright * alpha_scale);
+        glVertex3fv(cx);
+        glColor4f(f->color[0], f->color[1], f->color[2], 0.0f);
+        for (int s = 0; s <= 12; s++) {
+            float a = (float)s / 12.0f * 2.0f * (float)M_PI;
+            float ca = cosf(a) * sx, sa = sinf(a) * sy;
+            glVertex3f(cx[0] + side[0] * ca + upv[0] * sa,
+                       cx[1] + side[1] * ca + upv[1] * sa,
+                       cx[2] + side[2] * ca + upv[2] * sa);
+        }
+        glEnd();
+    }
+}
+
+/* The dust: motes shed from the trail at fixed intervals,
+ * each drifting downward and fading over its own age - so the fairy leaves
+ * something behind that the ribbon does not, and a hovering one still has
+ * visible activity around it. */
+static void fairy_draw_dust(float t, int passer_idx, const BackdropExtent *ex,
+                            const float view[3], float alpha_scale) {
+    glPointSize(3.5f);
+    glBegin(GL_POINTS);
+    for (int k = 1; k <= FAIRY_DUST_COUNT; k++) {
+        float age = (float)k * FAIRY_DUST_DT;
+        float back = t - age;
+        float decay = 1.0f - (float)k / (float)(FAIRY_DUST_COUNT + 1);
+        FairyState f;
+        float jx, jz;
+
+        if (back < 0.0f)
+            break;
+        fairy_sample_at(back, passer_idx, ex, view, &f);
+        if (f.bright <= 0.0f)
+            continue;
+
+        /* Deterministic per-mote drift, in a cone that WIDENS with age -
+         * a mote sitting on the trail reads as a dot on a streamer, so
+         * each one has to walk away from where it was shed. */
+        {
+            float spread = ex->radius * 0.390f * age;
+            jx = sinf((float)k * 12.9898f) * spread;
+            jz = sinf((float)k * 78.233f) * spread;
+        }
+
+        glColor4f(0.30f + f.color[0] * 0.70f, 0.30f + f.color[1] * 0.70f,
+                  0.30f + f.color[2] * 0.70f,
+                  0.55f * decay * decay * f.bright * alpha_scale);
+        glVertex3f(f.pos[0] + jx,
+                   f.pos[1] - ex->radius * FAIRY_DUST_FALL * age * age +
+                       sinf((float)k * 43.17f) * ex->radius * 0.02f,
+                   f.pos[2] + jz);
+    }
+    glEnd();
+}
+
 /* One fairy body: a soft wing disc, a coloured halo point, and a white-hot
  * core point inside it. The two points are camera-facing for free, which is
  * why they are points and not billboarded quads. */
 static void fairy_draw_body(const FairyState *f, const BackdropExtent *ex,
-                            float alpha_scale, float scale) {
+                            const float view[3], float alpha_scale,
+                            float scale) {
     float a = f->bright * alpha_scale;
     float t1[3], t2[3];
-    float up[3] = { 0.0f, 1.0f, 0.0f };
     float wr = ex->radius * FAIRY_WING_R * scale;
 
     if (a <= 0.0f)
@@ -2315,9 +2462,9 @@ static void fairy_draw_body(const FairyState *f, const BackdropExtent *ex,
     /* Wing disc: a soft round bloom the points sit inside, so the fairy
      * still reads as having size when it is close to the camera and the
      * fixed-size point sprites stop growing. */
-    backdrop_frame(up, t1, t2);
+    backdrop_frame(view, t1, t2);
     glBegin(GL_TRIANGLE_FAN);
-    glColor4f(f->color[0], f->color[1], f->color[2], 0.22f * a);
+    glColor4f(f->color[0], f->color[1], f->color[2], 0.30f * a);
     glVertex3fv(f->pos);
     glColor4f(f->color[0], f->color[1], f->color[2], 0.0f);
     for (int s = 0; s <= FAIRY_WING_SEGS; s++) {
@@ -2344,29 +2491,6 @@ static void fairy_draw_body(const FairyState *f, const BackdropExtent *ex,
               0.55f + f->color[2] * 0.45f, a);
     glVertex3fv(f->pos);
     glEnd();
-}
-
-/* The wake: the fairy's own position a few sample intervals ago, drawn
- * smaller and fainter each step back. Free to compute because the pose is a
- * pure function of time - there is no history to keep, we just ask where it
- * WAS. */
-static void fairy_draw_wake(float t, int passer_idx, const BackdropExtent *ex,
-                            const float view[3], float alpha_scale) {
-    for (int k = 1; k <= FAIRY_WAKE_COUNT; k++) {
-        float back = t - (float)k * FAIRY_WAKE_DT;
-        float decay = 1.0f - (float)k / (float)(FAIRY_WAKE_COUNT + 1);
-        FairyState f;
-
-        if (back < 0.0f)
-            return;
-        if (passer_idx < 0)
-            fairy_resident_at(back, ex, view, &f);
-        else
-            fairy_passer_at(back, passer_idx, ex, view, &f);
-
-        f.bright *= decay * decay * 0.55f;
-        fairy_draw_body(&f, ex, alpha_scale, decay * 0.8f);
-    }
 }
 
 static void draw_fairies(const Render3dFrameRenderContext *frame_ctx) {
@@ -2398,16 +2522,20 @@ static void draw_fairies(const Render3dFrameRenderContext *frame_ctx) {
         frame_ctx->config.point_parameter_proc(GL_POINT_DISTANCE_ATTENUATION,
                                                (GLfloat[]){1, 0, 0});
 
-    /* Wakes first, so a fairy's own body always draws over its trail. */
-    fairy_draw_wake(t, -1, &ex, view, alpha);
-    for (int i = 0; i < FAIRY_PASSER_COUNT; i++)
-        fairy_draw_wake(t, i, &ex, view, alpha);
+    /* Trails first, so a fairy's own body always draws over what it left. */
+    for (int i = -1; i < FAIRY_PASSER_COUNT; i++) {
+        fairy_draw_ribbon(t, i, &ex, view, alpha);
+        fairy_draw_dust(t, i, &ex, view, alpha);
+    }
 
     fairy_resident_at(t, &ex, view, &f);
-    fairy_draw_body(&f, &ex, alpha, 1.0f);
+    fairy_draw_wings(&f, &ex, view, t, 11u, alpha, 1.0f);
+    fairy_draw_body(&f, &ex, view, alpha, 1.0f);
     for (int i = 0; i < FAIRY_PASSER_COUNT; i++) {
         fairy_passer_at(t, i, &ex, view, &f);
-        fairy_draw_body(&f, &ex, alpha, 0.8f);
+        fairy_draw_wings(&f, &ex, view, t, (unsigned int)(i * 31 + 7),
+                         alpha, 0.8f);
+        fairy_draw_body(&f, &ex, view, alpha, 0.8f);
     }
 
     render3d_backdrop_pop_state();
