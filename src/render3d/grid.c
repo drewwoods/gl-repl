@@ -1695,14 +1695,14 @@ int render3d_grid_theme_uses_fog(Render3dGridTheme grid_theme) {
 }
 
 /* ===========================================================================
- * 2D-oriented grid themes (Sketchbook + Neon Graph)
+ * 2D-oriented grid theme (Sketchbook)
  *
- * These draw their graticule in the XY plane (z = GRID_2D_Z, just behind the
- * z=0 scene geometry) instead of the XZ ground plane, so they read as a flat,
- * front-facing grid in the 2D ortho view (camera looking down -Z). In 3D they
- * render as a vertical wall at z=0 - acceptable until grids are filtered by
- * view mode. Both use the shared scene accent palette and route line alpha through
- * grid_color() so the show/hide transition fade still applies. Custom themes:
+ * This draws its graticule in the XY plane (z = GRID_2D_Z, just behind the
+ * z=0 scene geometry) instead of the XZ ground plane, so it reads as a flat,
+ * front-facing grid in the 2D ortho view (camera looking down -Z). In 3D it
+ * renders as a vertical wall at z=0 - acceptable until grids are filtered by
+ * view mode. It uses the shared scene accent palette and routes line alpha through
+ * grid_color() so the show/hide transition fade still applies. Custom theme:
  * no GridThemeSpec entry, so render3d_grid_theme_uses_edge_fade() is false and
  * the radial edge-fade machinery is skipped.
  * ========================================================================= */
@@ -1928,63 +1928,7 @@ static void render3d_grid_render_sketch_theme(const Render3dRenderConfig *config
     glLineWidth(1.0f);
 }
 
-/* Neon Graph: a glowing graph-paper grid in the XY plane - faint azure minor
- * lines, brighter violet majors, an additive bloom pass, glowing nodes at the
- * major intersections, and a pulsing coral origin cross. Clean, no text. */
-static void render3d_grid_render_neon_theme(const GridDrawContext *grid_ctx) {
-    const float major     = grid_ctx->major;
-    const float major_tol = grid_ctx->major_tol;
-    const float step      = grid_ctx->step;
-    const float t         = grid_ctx->anim_time;
-    /* Bound the drawn box so FAR extent doesn't emit thousands of lines. */
-    const float ext = fminf(grid_ctx->extent, 9.0f);
 
-    /* Two passes: solid core, then an additive bloom on top. */
-    for (int pass = 0; pass < 2; pass++) {
-        int glow = (pass == 1);
-        glBlendFunc(GL_SRC_ALPHA, glow ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA);
-        glLineWidth(glow ? 3.4f : 1.3f);
-        glBegin(GL_LINES);
-        for (float v = -ext; v <= ext + GRID_LOOP_EPSILON; v += step) {
-            if (fabsf(v) < GRID_ORIGIN_SKIP_EPSILON) continue;
-            int is_major = grid_is_major_line(v, major, major_tol);
-            float a = (is_major ? 0.50f : 0.13f) * (glow ? 0.30f : 1.0f);
-            if (is_major) grid_color(grid_ctx, 0.50f, 0.55f, 0.96f, a);  /* violet */
-            else          grid_color(grid_ctx, 0.30f, 0.62f, 0.92f, a);  /* azure  */
-            glVertex3f(-ext, v, GRID_2D_Z); glVertex3f(ext, v, GRID_2D_Z);
-            glVertex3f(v, -ext, GRID_2D_Z); glVertex3f(v, ext, GRID_2D_Z);
-        }
-        glEnd();
-    }
-
-    /* Glowing nodes at the major intersections (additive). */
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-    glEnable(GL_POINT_SMOOTH);
-    glPointSize(3.2f);
-    glBegin(GL_POINTS);
-    for (float vx = -ext; vx <= ext + GRID_LOOP_EPSILON; vx += major)
-        for (float vy = -ext; vy <= ext + GRID_LOOP_EPSILON; vy += major) {
-            grid_color(grid_ctx, 0.58f, 0.82f, 0.99f, 0.55f);
-            glVertex3f(vx, vy, GRID_2D_Z);
-        }
-    glEnd();
-
-    /* Pulsing origin cross: coral core + additive bloom. */
-    float pulse = 0.62f + 0.18f * sinf(t);
-    for (int pass = 0; pass < 2; pass++) {
-        int glow = (pass == 1);
-        glBlendFunc(GL_SRC_ALPHA, glow ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA);
-        glLineWidth(glow ? 5.0f : 2.0f);
-        glBegin(GL_LINES);
-        grid_color(grid_ctx, 0.98f, 0.56f, 0.36f, (glow ? 0.16f : 0.72f) * pulse);
-        glVertex3f(-ext, 0, GRID_2D_Z); glVertex3f(ext, 0, GRID_2D_Z);
-        glVertex3f(0, -ext, GRID_2D_Z); glVertex3f(0, ext, GRID_2D_Z);
-        glEnd();
-    }
-
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glLineWidth(1.0f);
-}
 
 /* ===========================================================================
  * Graph Planes: an adaptive-planes 3D grid with coordinate labels
@@ -2700,10 +2644,6 @@ static void grid_dispatch_theme(const Render3dFrameRenderContext *frame_ctx,
 
     case GRID_THEME_SKETCH:
         render3d_grid_render_sketch_theme(config, grid_ctx);
-        break;
-
-    case GRID_THEME_NEON:
-        render3d_grid_render_neon_theme(grid_ctx);
         break;
 
     case GRID_THEME_GRAPHPLANES:

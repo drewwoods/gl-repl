@@ -743,7 +743,7 @@ with - keep this current when adding a theme):
 | Fog | Fog by design (EXP2 to clear color) |
 | Radar | Opts into NV distance fog for its rings (covered by `test_nv_fog_distance_radial_optin`) |
 | Tilled Field | Opaque depth-written terrain - no translucent-line stacking |
-| Sketchbook, Neon Graph | Own alpha fade (`grid_color` xn_alpha); XY-plane 2D themes, not on the radial path |
+| Sketchbook | Own alpha fade (`grid_color` xn_alpha); XY-plane 2D theme, not on the radial path |
 | Graph Planes | Own alpha fade (`grid_color` xn_alpha) + per-plane camera-orientation weight; 3D adaptive labelled planes |
 | Checkerboard | Own alpha fade (`grid_color_surface` xn_alpha) on the lit cell fill; its per-cell labels additionally ramp alpha to zero by camera distance and are hard-culled at that same radius. No fog of its own - deliberately alpha, so far strokes dissolve into the square under them rather than toward the sky color |
 
@@ -754,19 +754,20 @@ to the clear color when a backdrop is on; converting Radar (fade its
 rings by radius - a natural radial fit) and gating the residual
 clear-color fog on `backdrop == OFF` would close the gap.
 
-#### 2D grid themes (Sketchbook + Neon Graph)
+#### 2D grid theme (Sketchbook)
 
-`Sketchbook` and `Neon Graph` are purpose-built for the **2D ortho view**.
+`Sketchbook` is purpose-built for the **2D ortho view**.
 Unlike every other theme - which draws its graticule in the XZ ground
-plane - these draw in the **XY plane** at `z = GRID_2D_Z` (just behind the
-z=0 user geometry), so they read as a flat, front-facing grid when the
-camera looks down -Z. In 3D they render as a vertical wall at z=0;
-filtering theme availability by view mode is a deliberate later step (the
-look was the first goal). Both use the shared scene accent palette, route line
-alpha through `grid_color()` (so the show/hide fade still applies), and
-carry no [`GridThemeSpec`](../src/render3d/grid.c#L153), so [`render3d_grid_theme_uses_edge_fade()`](../src/render3d/grid.h#L55) is
-false and the radial edge-fade machinery is skipped. They live as custom
-arms in `grid_dispatch_theme` in [`src/render3d/grid.c`](../src/render3d/grid.c).
+plane - this draws in the **XY plane** at `z = GRID_2D_Z` (just behind the
+z=0 user geometry), so it reads as a flat, front-facing grid when the
+camera looks down -Z. In 3D it renders as a vertical wall spanning
+`[-extent, extent]`; filtering theme availability by view mode is a
+deliberate later step (the look was the first goal). It uses the shared scene
+accent palette, routes line alpha through `grid_color()` (so the show/hide
+fade still applies), and carries no [`GridThemeSpec`](../src/render3d/grid.c#L153),
+so [`render3d_grid_theme_uses_edge_fade()`](../src/render3d/grid.h#L55) is false
+and the radial edge-fade machinery is skipped. It lives as a custom arm in
+`grid_dispatch_theme` in [`src/render3d/grid.c`](../src/render3d/grid.c).
 
 - **Sketchbook** is a hand-drawn coordinate graph: each cell line is a
   multi-segment `GL_LINE_STRIP` offset by a frame-stable `grid_sketch_wobble()`
@@ -777,10 +778,8 @@ arms in `grid_dispatch_theme` in [`src/render3d/grid.c`](../src/render3d/grid.c)
   up with the gridlines. It fits the live view by reading the visible
   world half-extents straight off the ortho `GL_PROJECTION` matrix
   (`half = 1/|proj[diag]|`), centred on the camera pan, clamped so the 3D
-  fallback can't explode the loop counts.
-- **Neon Graph** is a glowing graph-paper grid: faint azure minors,
-  brighter violet majors, an additive bloom pass, glowing nodes at the
-  major intersections, and a pulsing coral origin cross. No text.
+  fallback can't explode the loop counts. Subdivides into clean decimal
+  sub-units on zoom-in.
 
 A third theme, **Graph Planes**, is the **3D** counterpart - an
 adaptive-planes coordinate graph. It draws three bounded grid planes (XY

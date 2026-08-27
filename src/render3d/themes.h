@@ -44,7 +44,6 @@ typedef enum Render3dPostFilterMode {
     X(STARCHART, "Star Chart") \
     X(PLANES, "Adaptive Planes") \
     X(SKETCH, "Sketchbook")  \
-    X(NEON, "Neon Graph")    \
     X(GRAPHPLANES, "Graph Planes") \
     X(CHECKER, "Checkerboard")
 

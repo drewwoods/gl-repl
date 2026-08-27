@@ -1393,9 +1393,9 @@ of it changes nothing about the commands in the code panel.
 
 ![Grid themes: Sketchbook, Radar, Adaptive Planes, Ocean](images/grid-themes.png)
 
-Thirteen directly-selectable grid themes (**F2**): Off, Classic, Tron, Ember,
+Twelve directly-selectable grid themes (**F2**): Off, Classic, Tron, Ember,
 Ocean, XZ Ruler *(default)*, Adaptive Planes, Radar, Tilled Field, Sketchbook,
-Neon Graph, Graph Planes, Checkerboard. Checkerboard is the odd one out: a
+Graph Planes, Checkerboard. Checkerboard is the odd one out: a
 translucent solid floor lit by the scene's own lights rather than a line
 drawing, with each cell labelled with its `x,z` coordinate - the labels fade
 into the background with distance and stop entirely past a camera-relative
