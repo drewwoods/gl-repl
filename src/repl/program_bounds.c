@@ -36,7 +36,28 @@ typedef struct BoundsAccum {
     int   any;
 } BoundsAccum;
 
+/* A non-finite point contributes nothing rather than poisoning the box.
+ *
+ * The evaluator is total, so a user expression can produce a NaN or an
+ * infinity (1/0 does) and hand it to a vertex. Dropping just that point
+ * leaves the rest of the scene measurable, which is what a consumer wants -
+ * one bad vertex should not cost a backdrop the whole box and send it to a
+ * fallback scale.
+ *
+ * Filtering here rather than checking the finished box is what makes the two
+ * poisons behave alike. NaN was already being dropped, but by accident: it
+ * compares false against both bounds, so it silently failed to widen them -
+ * except as the FIRST point, where it seeded min and max directly and the
+ * box came back malformed. An infinity had the opposite problem, comparing
+ * perfectly well and widening the box to unbounded size, which a consumer
+ * scaling itself to the scene turns into an infinite radius. */
+static int point_is_finite(const float p[3]) {
+    return isfinite(p[0]) && isfinite(p[1]) && isfinite(p[2]);
+}
+
 static void accum_point(BoundsAccum *acc, const float p[3]) {
+    if (!point_is_finite(p))
+        return;
     if (!acc->any) {
         for (int i = 0; i < 3; i++)
             acc->min[i] = acc->max[i] = p[i];
@@ -72,14 +93,6 @@ static void accum_local_box(BoundsAccum *acc, const float m[16],
                           (i & 2) ? hi[1] : lo[1],
                           (i & 4) ? hi[2] : lo[2]);
     }
-}
-
-static void accum_symmetric_box(BoundsAccum *acc, const float m[16],
-                                float hx, float hy, float hz) {
-    float lo[3], hi[3];
-    lo[0] = -hx; lo[1] = -hy; lo[2] = -hz;
-    hi[0] =  hx; hi[1] =  hy; hi[2] =  hz;
-    accum_local_box(acc, m, lo, hi);
 }
 
 /* Local box of one GLUT solid, or 0 if `cmd` is not one. */
@@ -212,10 +225,12 @@ ReplSceneBounds repl_program_bounds(FlatProgramView program, int cmd_count) {
     if (!acc.any || st.overflow)
         return out;
 
-    /* A NaN anywhere (a user expression divided by zero) makes every
-     * comparison above false, so the box can come back malformed. Check
-     * before publishing, and leave min/max zeroed if it did. */
+    /* Belt and braces: accum_point already refuses non-finite input, so
+     * reaching here with a malformed box would mean a new contributor
+     * bypassed it. Cheap enough to keep as the last word. */
     for (int i = 0; i < 3; i++) {
+        if (!isfinite(acc.min[i]) || !isfinite(acc.max[i]))
+            return out;
         if (!(acc.min[i] <= acc.max[i]))
             return out;
     }

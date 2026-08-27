@@ -143,9 +143,9 @@ typedef struct Render3dRenderConfig {
 
     /* --- Optional scene-bounds query ---
      * Answers "where is the user's geometry, and how big is it?" in world
-     * space. A helper that has to place something AROUND the scene - today
-     * the drone backdrop's flight paths, light falloff and spotlight aim -
-     * calls this; every other helper ignores it.
+     * space. A helper that has to place something AROUND the scene - the
+     * drone and fairy backdrops' flight paths, light falloff and spotlight
+     * aim - calls this; every other helper ignores it.
      *
      * A hook rather than a plain min/max field for two reasons. Measuring
      * the scene is not free (the caller walks its whole program), and only
@@ -157,9 +157,10 @@ typedef struct Render3dRenderConfig {
      * Returns 1 having filled out_min/out_max, or 0 when the scene cannot
      * be measured (nothing drawn yet, degenerate geometry). Callers must
      * treat NULL and a 0 return identically: fall back to a fixed scale.
-     * May be invoked more than once per frame - the backdrop asks in the
-     * pass setup phase, when it places its lights, and again when it draws
-     * the bodies - so an expensive implementation should memoize per frame.
+     * May be invoked more than once per frame - a backdrop asks in the pass
+     * setup phase, when it places its lights, and again when it draws the
+     * bodies, and accumulation repeats the pass - so an expensive
+     * implementation should memoize per frame.
      */
     /* clang-format off - keep on one line so the flat-view pointer guard
      * skips this function pointer (it ignores lines containing "(*"). */

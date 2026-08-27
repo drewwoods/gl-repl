@@ -1330,6 +1330,98 @@ static void test_prof_nesting_guard(void) {
     prof_test_reset();
 }
 
+/* --- The controller's geometry-bounds policy --------------------------
+ *
+ * geometry_bounds_adapter() is where the hook's cost and stability live, and
+ * all three of its rules are invisible from the outside: measure at most
+ * once per frame however many times a helper pulls, ease the published box
+ * toward the measurement so an animated scene does not jerk the rig around,
+ * and SNAP instead of easing when the document was replaced wholesale. This
+ * file includes glr_ctrl.c as a translation unit, so the adapter and its
+ * state are reachable directly - which is the only way to observe any of it.
+ */
+static void bounds_probe_reset_frame(void) {
+    /* What glr_ctrl_build_scene_config does once per frame. */
+    glr_ctrl_scene_bounds_frame_reset();
+}
+
+static void test_geometry_bounds_controller_policy(void) {
+    printf("--- imrepl_ctrl geometry-bounds policy ---\n");
+
+    float mn[3], mx[3];
+    float first_max_x;
+
+    prepare_display_fixture();
+    /* A box the walk can actually measure: one triangle out at x = 10. */
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(10, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
+    repl_refresh_flat_program(editor_state_edit_line());
+
+    /* --- one walk per frame, however many pulls --- */
+    bounds_probe_reset_frame();
+    ASSERT_INT("first pull measures the scene",
+               geometry_bounds_adapter(NULL, mn, mx), 1);
+    ASSERT_FLOAT("the measured box reaches the far vertex", mx[0], 10.0f);
+    first_max_x = mx[0];
+
+    /* Move the geometry, but do NOT reset the frame: the memo must answer
+     * from the same walk rather than re-measuring mid-frame, which is what
+     * keeps a backdrop's lights and its bodies agreeing with each other. */
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(40, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
+    repl_refresh_flat_program(editor_state_edit_line());
+    ASSERT_INT("a second pull still answers", geometry_bounds_adapter(NULL, mn, mx), 1);
+    ASSERT_FLOAT("the second pull is memoized, not re-measured", mx[0], first_max_x);
+
+    /* --- ease, not snap, once a box is established --- */
+    bounds_probe_reset_frame();
+    geometry_bounds_adapter(NULL, mn, mx);
+    ASSERT_TRUE("a grown scene eases toward the new box, not onto it",
+                mx[0] > first_max_x && mx[0] < 20.0f);
+    {
+        /* And keeps closing the gap frame after frame. */
+        float prev = mx[0];
+        for (int i = 0; i < 40; i++) {
+            bounds_probe_reset_frame();
+            geometry_bounds_adapter(NULL, mn, mx);
+            ASSERT_TRUE("the ease is monotone toward the measurement",
+                        mx[0] >= prev - 1e-4f);
+            prev = mx[0];
+        }
+        ASSERT_TRUE("the ease converges on the measurement", prev > 39.0f);
+    }
+
+    /* --- snap on a wholesale document replacement ---
+     * Easing across a scene switch would slide the rig over from wherever
+     * the previous scene sat; editor_undo_generation() is the signal that a
+     * replacement happened, and the next measurement must land outright. */
+    editor_undo_clear();          /* bumps the generation, as a load does */
+    prepare_display_fixture();
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glVertex3f(3, 0, 0);");
+    editor_feed_line("glVertex3f(0, 1, 0);");
+    editor_feed_line("glEnd();");
+    repl_refresh_flat_program(editor_state_edit_line());
+    bounds_probe_reset_frame();
+    ASSERT_INT("the replaced document measures", geometry_bounds_adapter(NULL, mn, mx), 1);
+    ASSERT_FLOAT("a replaced document snaps rather than easing in", mx[0], 3.0f);
+
+    /* --- an unmeasurable scene reports nothing rather than a stale box --- */
+    prepare_display_fixture();
+    editor_undo_clear();
+    repl_refresh_flat_program(editor_state_edit_line());
+    bounds_probe_reset_frame();
+    ASSERT_INT("a scene with no geometry reports unmeasurable",
+               geometry_bounds_adapter(NULL, mn, mx), 0);
+}
+
 /* The geometry-bounds walk's own row.
  *
  * It is the one section whose bracket lives in a callback the caller pulls
@@ -8472,6 +8564,7 @@ int main(void) {
     test_frame_spans_host_stages();
     test_prof_nesting_guard();
     test_prof_nesting_guard_over_a_display_frame();
+    test_geometry_bounds_controller_policy();
     test_prof_geometry_bounds_row();
     test_summary_row_metadata();
     test_variable_panel_motion_routes_through_compile_and_coalesces_undo();

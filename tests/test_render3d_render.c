@@ -632,6 +632,7 @@ static void test_scene_backdrop_drones(void) {
     Render3dFrameRenderContext ctx = make_test_frame_ctx();
     DroneBoundsProbe probe;
     TraceLog log;
+    char prefix[64];
     float small_d = 0.0f, large_d = 0.0f;
     float origin[3] = { 0.0f, 0.0f, 0.0f };
 
@@ -646,8 +647,10 @@ static void test_scene_backdrop_drones(void) {
     render3d_backdrop_setup_lights(&ctx);
     render3d_backdrop_render(&ctx);
     trace_end(&log);
+    snprintf(prefix, sizeof prefix, "glLightfv %u %u ",
+             (unsigned)GL_LIGHT4, (unsigned)GL_POSITION);
     ASSERT_TRUE("drones: no bounds hook still enables GL_LIGHT4",
-                trace_count_prefix(&log, "glLightfv 16388 4611") > 0);
+                trace_count_prefix(&log, prefix) > 0);
 
     /* A hook that reports nothing measurable is the same case. */
     memset(&probe, 0, sizeof probe);
@@ -660,7 +663,7 @@ static void test_scene_backdrop_drones(void) {
     trace_end(&log);
     ASSERT_TRUE("drones: the backdrop asks for bounds", probe.calls > 0);
     ASSERT_TRUE("drones: an unmeasurable scene still enables GL_LIGHT4",
-                trace_count_prefix(&log, "glLightfv 16388 4611") > 0);
+                trace_count_prefix(&log, prefix) > 0);
 
     /* All four slots above the user's own GL_LIGHT0..3 get spot state, and
      * none of the user's slots are touched. */
@@ -823,35 +826,22 @@ static void test_scene_backdrop_fairies(void) {
  * bounding sphere of the reported box, which is the tightest bound that
  * holds for any shape the box could contain.
  */
-static void test_scene_backdrop_fairies_clearance(void) {
-    printf("--- fairies keep clear of the geometry ---\n");
-
-    Render3dFrameRenderContext ctx = make_test_frame_ctx();
-    DroneBoundsProbe probe;
+/* Shared by both bounds-driven backdrops: sweep time, read every light
+ * position the backdrop publishes out of the stub trace, and return the
+ * closest any of them came to the centre of a box of half-extent 1. */
+static float backdrop_worst_light_distance(Render3dFrameRenderContext *ctx,
+                                           float step_secs, int steps,
+                                           int *out_samples) {
     TraceLog log;
-    /* A box of half-extent 1 on every axis: its bounding sphere - the corner
-     * distance, and the radius the rig scales off - is sqrt(3). */
-    const float corner = 1.7320508f;
     float worst = 1e9f;
-    float worst_t = 0.0f;
     int samples = 0;
 
-    ctx.config.backdrop_mode = RENDER3D_BACKDROP_FAIRIES;
-    memset(&probe, 0, sizeof probe);
-    probe.answer = 1;
-    for (int k = 0; k < 3; k++) { probe.min[k] = -1.0f; probe.max[k] = 1.0f; }
-    ctx.config.geometry_bounds_fn = drone_bounds_probe;
-    ctx.config.geometry_bounds_user_data = &probe;
-
-    /* 40 s at frame cadence: three full resident visits, and several runs of
-     * each passer (their periods are 7.3 / 11.7 / 17.1 s). */
-    for (int step = 0; step < 1200; step++) {
+    for (int step = 0; step < steps; step++) {
         char prefix[64];
-        float t = (float)step / 30.0f;
-        ctx.config.anim_time = t;
+        ctx->config.anim_time = (float)step * step_secs;
 
         trace_begin();
-        render3d_backdrop_setup_lights(&ctx);
+        render3d_backdrop_setup_lights(ctx);
         trace_end(&log);
 
         for (int slot = 4; slot < 8; slot++) {
@@ -867,15 +857,77 @@ static void test_scene_backdrop_fairies_clearance(void) {
                     continue;
                 d = sqrtf(x * x + y * y + z * z);
                 samples++;
-                if (d < worst) { worst = d; worst_t = t; }
+                if (d < worst)
+                    worst = d;
             }
         }
     }
+    if (out_samples)
+        *out_samples = samples;
+    return worst;
+}
+
+/* The drones' twin of the fairy clearance sweep. It has its own bug to
+ * remember: the phase cross-fade lerped between the outgoing and incoming
+ * poses, which are routinely on opposite sides of the scene, so the blend
+ * cut a chord straight through - 0.10 of the scene radius at the worst
+ * sample, while both endpoint poses were comfortably outside. The strafe
+ * formation's inner lane was independently too close. Neither was visible
+ * in a still frame. */
+static void test_scene_backdrop_drones_clearance(void) {
+    printf("--- drones keep clear of the geometry ---\n");
+
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
+    DroneBoundsProbe probe;
+    const float corner = 1.7320508f;
+    float worst;
+    int samples = 0;
+
+    ctx.config.backdrop_mode = RENDER3D_BACKDROP_DRONES;
+    memset(&probe, 0, sizeof probe);
+    probe.answer = 1;
+    for (int k = 0; k < 3; k++) { probe.min[k] = -1.0f; probe.max[k] = 1.0f; }
+    ctx.config.geometry_bounds_fn = drone_bounds_probe;
+    ctx.config.geometry_bounds_user_data = &probe;
+
+    /* 60 s covers two full three-phase patrol cycles, so every phase and
+     * every seam between them is swept. */
+    worst = backdrop_worst_light_distance(&ctx, 1.0f / 30.0f, 1800, &samples);
+
+    ASSERT_TRUE("drones: the sweep actually saw lights", samples > 500);
+    if (worst < corner)
+        printf("    closest approach %.4f (%.3f x corner)\n",
+               (double)worst, (double)(worst / corner));
+    ASSERT_TRUE("drones: no light ever enters the scene's bounding sphere",
+                worst >= corner);
+}
+
+static void test_scene_backdrop_fairies_clearance(void) {
+    printf("--- fairies keep clear of the geometry ---\n");
+
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
+    DroneBoundsProbe probe;
+    /* A box of half-extent 1 on every axis: its bounding sphere - the corner
+     * distance, and the radius the rig scales off - is sqrt(3). */
+    const float corner = 1.7320508f;
+    float worst;
+    int samples = 0;
+
+    ctx.config.backdrop_mode = RENDER3D_BACKDROP_FAIRIES;
+    memset(&probe, 0, sizeof probe);
+    probe.answer = 1;
+    for (int k = 0; k < 3; k++) { probe.min[k] = -1.0f; probe.max[k] = 1.0f; }
+    ctx.config.geometry_bounds_fn = drone_bounds_probe;
+    ctx.config.geometry_bounds_user_data = &probe;
+
+    /* 40 s at frame cadence: three full resident visits, and several runs of
+     * each passer (their periods are 7.3 / 11.7 / 17.1 s). */
+    worst = backdrop_worst_light_distance(&ctx, 1.0f / 30.0f, 1200, &samples);
 
     ASSERT_TRUE("fairies: the sweep actually saw lights", samples > 500);
     if (worst < corner)
-        printf("    closest approach %.4f (%.3f x corner) at t=%.2f\n",
-               (double)worst, (double)(worst / corner), (double)worst_t);
+        printf("    closest approach %.4f (%.3f x corner)\n",
+               (double)worst, (double)(worst / corner));
     /* Deliberately the bare invariant rather than the tuned margin: the
      * constants are free to move, flying inside the scene is not. */
     ASSERT_TRUE("fairies: no light ever enters the scene's bounding sphere",
@@ -2104,6 +2156,7 @@ int main(int argc, char **argv) {
     test_scene_backdrop_drones();
     test_scene_backdrop_fairies();
     test_scene_backdrop_fairies_clearance();
+    test_scene_backdrop_drones_clearance();
     test_render3d_winding_and_gizmo();
     test_buffer_hooks();
     test_helpers_suspend_stencil_test();

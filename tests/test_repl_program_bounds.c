@@ -20,6 +20,7 @@
 #include "repl/transform_utils.h"
 #include "support/test_harness.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -378,6 +379,77 @@ static void test_empty_and_geometryless_programs_are_invalid(void) {
     AT("no geometry: max is left zeroed", b.max[0] == 0.0f);
 }
 
+/* The evaluator is total, so a user expression can hand the walk a NaN or an
+ * infinity (1/0 does). Neither may reach the published box: an infinite box
+ * compares perfectly well and would be published as valid but unbounded,
+ * which a consumer scaling itself to the scene turns into an infinite radius
+ * and an off-world light. The poisoned VERTEX is dropped rather than the
+ * whole walk failing, so the rest of the scene still frames. */
+static void test_non_finite_vertices_are_dropped(void) {
+    static const float poison[] = { (float)(1.0 / 0.0), (float)(-1.0 / 0.0),
+                                    (float)(0.0 / 0.0) };
+    static const char *names[] = { "+inf", "-inf", "NaN" };
+
+    for (int p = 0; p < 3; p++) {
+        for (int axis = 0; axis < 3; axis++) {
+            GLCmd cmds[5];
+            ReplSceneBounds b;
+            char label[112];
+
+            /* Poisoned vertex first, so the case that used to seed min/max
+             * directly from it is the one under test. */
+            cmds[0] = cmd(CMD_BEGIN, 0, 0, 0, 0);
+            cmds[1] = cmd(CMD_VERTEX3F, 5.0f, 5.0f, 5.0f, 0);
+            cmds[1].args[axis] = poison[p];
+            cmds[2] = cmd(CMD_VERTEX3F, 0.0f, 0.0f, 0.0f, 0);
+            cmds[3] = cmd(CMD_VERTEX3F, 2.0f, 2.0f, 2.0f, 0);
+            cmds[4] = cmd(CMD_END, 0, 0, 0, 0);
+
+            b = repl_program_bounds(view_of(cmds, 5), 5);
+            snprintf(label, sizeof label,
+                     "a %s vertex on axis %d leaves the rest measurable",
+                     names[p], axis);
+            AT(label, b.valid);
+            if (!b.valid)
+                continue;
+            for (int k = 0; k < 3; k++) {
+                snprintf(label, sizeof label,
+                         "a %s vertex on axis %d does not widen axis %d",
+                         names[p], axis, k);
+                AT(label, b.min[k] == 0.0f && b.max[k] == 2.0f);
+            }
+            snprintf(label, sizeof label,
+                     "a %s vertex on axis %d leaves a finite radius",
+                     names[p], axis);
+            AT(label, isfinite(repl_scene_bounds_radius(&b)));
+        }
+    }
+
+    /* A scene that is ENTIRELY non-finite has nothing left to measure. */
+    {
+        GLCmd cmds[3];
+        ReplSceneBounds b;
+        cmds[0] = cmd(CMD_BEGIN, 0, 0, 0, 0);
+        cmds[1] = cmd(CMD_VERTEX3F, (float)(1.0 / 0.0), 0.0f, 0.0f, 0);
+        cmds[2] = cmd(CMD_END, 0, 0, 0, 0);
+        b = repl_program_bounds(view_of(cmds, 3), 3);
+        AT("a scene of nothing but poisoned vertices is unmeasurable", !b.valid);
+    }
+
+    /* An infinite transform poisons every corner of a solid it scales, and
+     * must not produce an unbounded box either. */
+    {
+        GLCmd cmds[2];
+        ReplSceneBounds b;
+        cmds[0] = cmd(CMD_SCALEF, (float)(1.0 / 0.0), 1.0f, 1.0f, 0);
+        cmds[1] = cmd(CMD_GLUT_SPHERE, 1.0f, 16, 12, 0);
+        b = repl_program_bounds(view_of(cmds, 2), 2);
+        AT("an infinite scale yields no measurable box", !b.valid);
+        AT("an infinite scale leaves the box zeroed",
+           b.min[0] == 0.0f && b.max[0] == 0.0f);
+    }
+}
+
 static void test_count_is_clamped_to_the_view(void) {
     GLCmd cmds[3];
     ReplSceneBounds b;
@@ -454,6 +526,7 @@ int main(void) {
     test_solid_and_vertices_share_one_box();
     test_tess_vertices_count_inside_a_polygon();
     test_empty_and_geometryless_programs_are_invalid();
+    test_non_finite_vertices_are_dropped();
     test_count_is_clamped_to_the_view();
     test_stack_overflow_reports_invalid();
     test_center_and_radius();

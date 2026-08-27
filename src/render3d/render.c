@@ -747,6 +747,14 @@ static void render3d_pass_winding(const Render3dRenderConfig *config) {
     glDisable(GL_LIGHT1);
     glDisable(GL_LIGHT2);
     glDisable(GL_LIGHT3);
+    /* Backdrop-owned slots too. The user's program cannot reach GL_LIGHT4+,
+     * but a backdrop with lights of its own has already enabled them in the
+     * pass setup phase, and a moving coloured rig (drones, fairies) would
+     * tint the two winding colours this view exists to distinguish. */
+    glDisable(GL_LIGHT4);
+    glDisable(GL_LIGHT5);
+    glDisable(GL_LIGHT6);
+    glDisable(GL_LIGHT7);
 
     glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, front_rgba);
     glMaterialfv(GL_BACK,  GL_AMBIENT_AND_DIFFUSE, back_rgba);

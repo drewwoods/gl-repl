@@ -119,17 +119,16 @@
 
 /* --- Drones backdrop ---
  *
- * Four scanner drones patrol the user's geometry on GL_LIGHT4..7 - the
- * only backdrop whose lights move. Everything about the rig is derived
- * from the scene's world-space bounds (Render3dRenderConfig.geometry_bounds_fn),
- * so the drones frame a 0.5-unit scene and a 40-unit one alike; with no
- * bounds available they fall back to a fixed radius about the origin.
+ * Four scanner drones patrol the user's geometry on GL_LIGHT4..7 - the only
+ * backdrop whose lights move. Everything about the rig is expressed in scene
+ * radii (Render3dRenderConfig.geometry_bounds_fn), so it frames a 0.5-unit
+ * scene and a 40-unit one alike; with no bounds available it falls back to a
+ * fixed radius about the origin.
  *
- * The patrol is a fixed cycle of three phases - a linear pass, an orbit,
- * and a held spotlight sweep - and the phase decides the flight path only.
- * Pose is a pure function of anim_time (no retained state), which is what
- * keeps it correct under replay and under accumulation blur, where the
- * same frame is rendered several times at sub-step times.
+ * Pose is a pure function of anim_time with no retained state. That is what
+ * keeps it correct under replay and under accumulation blur, both of which
+ * render the same frame several times at sub-step times - a rig that
+ * integrated its own position would drift apart from itself between samples.
  */
 #define DRONE_COUNT          4      /* GL_LIGHT4..7: the slots above the user's */
 #define DRONE_PHASE_COUNT    3
@@ -146,7 +145,12 @@
 /* The formation flies PAST the scene, not through it: the run is displaced
  * sideways and upward by these many scene radii so no drone ever ends up
  * inside the geometry at mid-pass. */
-#define DRONE_STRAFE_STANDOFF 1.40f
+/* The INNER lane is the one that matters: with the formation spread over
+ * +-1.5 ranks, the closest lane sits at STANDOFF - 1.5*LANE, and that plus
+ * the rise has to clear 1.0 (the corner of the measured box). At 1.40 it did
+ * not - the inner drone passed at 0.95 radii, inside a scene that fills its
+ * own bounding sphere. */
+#define DRONE_STRAFE_STANDOFF 1.85f
 #define DRONE_STRAFE_RISE     0.55f
 #define DRONE_ORBIT_RADIUS    1.75f
 #define DRONE_ORBIT_TURNS     1.25f /* revolutions per orbit phase */
@@ -202,22 +206,17 @@
 
 /* --- Fairies backdrop ---
  *
- * A quieter companion to the drone rig, and a demonstration piece: every
- * fairy is a plain POSITIONAL light with quadratic attenuation and no spot
- * cone at all. What lights your geometry is proximity and nothing else, so
- * a fairy drifting in to look at a surface ramps it up from black and lets
- * it fall away again - which is exactly what attenuation does and what a
- * directional or spot light cannot show you.
+ * A demonstration piece: every fairy is a plain POSITIONAL light with
+ * quadratic attenuation and no spot cone anywhere in this backdrop, so
+ * proximity alone shapes what gets lit. With a cone in play you cannot tell
+ * the falloff from the cutoff, which is the whole thing this is here to show.
  *
- * One resident fairy at a time comes in to inspect the scene: it arrives
- * from outside, hops between a few points of interest just off the
- * geometry's surface with a restless flutter, then leaves and the next
- * visitor arrives in a different colour. Passers-by streak through on their
- * own unrelated schedules - dimmer, never stopping, but carrying real light
- * slots of their own, so a fly-past sweeps a highlight across the scene.
- *
- * Like the drones, every pose is a pure function of anim_time: no retained
- * state, so replay and accumulation blur both stay correct.
+ * One resident at a time arrives from outside, hops between points of
+ * interest just off the surface, and leaves; the next comes in a different
+ * colour. Passers-by cross on their own schedules - dimmer, never stopping,
+ * but carrying real light slots, so a fly-past sweeps a highlight across the
+ * scene. Poses are pure functions of anim_time, as the drones' are and for
+ * the same reason.
  */
 #define FAIRY_VISIT_SECS      13.0f  /* one resident visit, arrival to exit */
 #define FAIRY_ARRIVE_FRAC     0.16f  /* fly-in share of the visit */
@@ -294,8 +293,32 @@
 #define FAIRY_WING_SEGS       10
 #define FAIRY_WING_R          0.055f /* x scene radius, the soft wing disc */
 
+/* Clip-plane slots to clear. Six is GL's guaranteed minimum and the whole
+ * set the REPL's GL_CLIP_PLANEn enum table exposes, so it is every plane a
+ * user program can possibly have enabled. */
+#define BACKDROP_CLIP_PLANE_SLOTS 6
+
 static void render3d_backdrop_push_state(void) {
     glPushAttrib(GL_ALL_ATTRIB_BITS);
+}
+
+/* Backdrop geometry is not the user's geometry, and must not inherit the
+ * state the user's program left set.
+ *
+ * The helper passes run inside the frame's outer glPushAttrib, so whatever
+ * the program last established is still live when a backdrop draws: a scene
+ * that enabled GL_CULL_FACE renders every one of our fans one-sided (a beam
+ * cone seen from the culled side vanishes), and one that set up a clip plane
+ * clips our volumes against a plane meant for its own model. Neither is a
+ * choice the scene made about the backdrop.
+ *
+ * Only the enables are cleared - the planes' equations stay put, and the
+ * backdrop's own glPushAttrib bracket restores everything for the overlays,
+ * which DO deliberately replay the program's clip/cull state. */
+static void backdrop_clear_user_volume_state(void) {
+    glDisable(GL_CULL_FACE);
+    for (int i = 0; i < BACKDROP_CLIP_PLANE_SLOTS; i++)
+        glDisable((GLenum)(GL_CLIP_PLANE0 + i));
 }
 
 static void render3d_backdrop_pop_state(void) {
@@ -1378,19 +1401,46 @@ static void backdrop_frame(const float d[3], float t1[3], float t2[3]) {
     t2[2] = d[0] * t1[1] - d[1] * t1[0];
 }
 
-/* Unit vector from the scene toward the camera, derived from the caller's
- * orbit angles rather than read back out of the modelview (a glGetFloatv is
- * a pipeline drain). The horizontal look direction is (sin ry, 0, -cos ry)
- * - the same convention grid.c's face-on weighting uses - tilted by rx and
- * negated, since we want the direction the viewer is standing in. */
+/* Unit vector from the measured scene toward the camera.
+ *
+ * Derived from the caller's camera fields rather than read back out of the
+ * modelview, because a glGetFloatv is a pipeline drain. The controller's
+ * modelview is T(0,0,-dist) . Rx . Ry . T(-pan), so the eye sits at
+ * pan + Ry(-ry).Rx(-rx).(0,0,dist); the horizontal term matches the
+ * (sin ry, 0, -cos ry) look direction grid.c's face-on weighting uses.
+ *
+ * The subtraction of the extent centre is the part that is easy to leave
+ * out and wrong to: the orbit target is where the CAMERA pivots, not where
+ * the geometry is. Pan the view away from a scene and the two directions
+ * diverge, so a consumer biasing toward "the camera" would bias toward the
+ * pivot instead and pick the wrong side of the object. Falls back to the
+ * orbit bearing when the eye coincides with the centre, which has no
+ * defined direction. */
 static void backdrop_camera_dir(const Render3dFrameRenderContext *frame_ctx,
-                                float out[3]) {
-    float ry = frame_ctx->config.cam_ry * (float)M_PI / 180.0f;
-    float rx = frame_ctx->config.cam_rx * (float)M_PI / 180.0f;
+                                const BackdropExtent *ex, float out[3]) {
+    const Render3dRenderConfig *cfg = &frame_ctx->config;
+    float ry = cfg->cam_ry * (float)M_PI / 180.0f;
+    float rx = cfg->cam_rx * (float)M_PI / 180.0f;
     float crx = cosf(rx);
-    out[0] = -sinf(ry) * crx;
-    out[1] =  sinf(rx);
-    out[2] =  cosf(ry) * crx;
+    float bearing[3];
+    float eye[3];
+    float len;
+
+    bearing[0] = -sinf(ry) * crx;
+    bearing[1] =  sinf(rx);
+    bearing[2] =  cosf(ry) * crx;
+
+    eye[0] = cfg->cam_tx + bearing[0] * cfg->cam_dist;
+    eye[1] = cfg->cam_ty + bearing[1] * cfg->cam_dist;
+    eye[2] = cfg->cam_tz + bearing[2] * cfg->cam_dist;
+
+    for (int k = 0; k < 3; k++)
+        out[k] = eye[k] - ex->center[k];
+    len = sqrtf(out[0] * out[0] + out[1] * out[1] + out[2] * out[2]);
+    if (len < 1e-4f) {
+        for (int k = 0; k < 3; k++)
+            out[k] = bearing[k];
+    }
     backdrop_vec_norm(out);
 }
 
@@ -1547,6 +1597,8 @@ static DronePhase drone_phase_at(float anim_time) {
 static void drone_pose(const DronePhase *ph, int i, const BackdropExtent *sc,
                        DronePose *out) {
     DronePose next;
+    float da[3], db[3], blended[3];
+    float ra, rb;
 
     drone_pose_for_phase(ph->phase, i, ph->u, ph->slot, sc, out);
     if (ph->blend <= 0.0f)
@@ -1554,10 +1606,35 @@ static void drone_pose(const DronePhase *ph, int i, const BackdropExtent *sc,
 
     drone_pose_for_phase((ph->phase + 1) % DRONE_PHASE_COUNT, i,
                          ph->u - 1.0f, ph->slot + 1, sc, &next);
+
+    /* Blend the two poses in POLAR form about the scene - bearing and
+     * distance interpolated separately - rather than lerping the positions.
+     * Straight-line interpolation between two points either side of the
+     * geometry is a chord through it, and the outgoing and incoming phases
+     * are routinely on opposite sides: a sweep found a drone at 0.10 of the
+     * scene radius mid-cross-fade, deep inside the object, while each
+     * endpoint pose was comfortably clear. In polar form the blend can
+     * never be nearer than the closer of the two endpoints. */
     for (int k = 0; k < 3; k++) {
-        out->pos[k] += (next.pos[k] - out->pos[k]) * ph->blend;
-        out->aim[k] += (next.aim[k] - out->aim[k]) * ph->blend;
+        da[k] = out->pos[k] - sc->center[k];
+        db[k] = next.pos[k] - sc->center[k];
     }
+    ra = sqrtf(da[0] * da[0] + da[1] * da[1] + da[2] * da[2]);
+    rb = sqrtf(db[0] * db[0] + db[1] * db[1] + db[2] * db[2]);
+    backdrop_vec_norm(da);
+    backdrop_vec_norm(db);
+    for (int k = 0; k < 3; k++)
+        blended[k] = da[k] + (db[k] - da[k]) * ph->blend;
+    backdrop_vec_norm(blended);
+
+    {
+        float r = ra + (rb - ra) * ph->blend;
+        for (int k = 0; k < 3; k++)
+            out->pos[k] = sc->center[k] + blended[k] * r;
+    }
+
+    for (int k = 0; k < 3; k++)
+        out->aim[k] += (next.aim[k] - out->aim[k]) * ph->blend;
     backdrop_vec_norm(out->aim);
 }
 
@@ -1843,6 +1920,7 @@ static void draw_drones(const Render3dFrameRenderContext *frame_ctx) {
     backdrop_resolve_extent(frame_ctx, &sc);
 
     render3d_backdrop_push_state();
+    backdrop_clear_user_volume_state();
     glDisable(GL_FOG);
     /* The lens sprites are sized in pixels, so neutralize any point
      * distance attenuation the user's program left set - otherwise a scene
@@ -2210,7 +2288,7 @@ static void fairy_setup_lights(const Render3dFrameRenderContext *frame_ctx) {
     float t = frame_ctx->config.anim_time;
 
     backdrop_resolve_extent(frame_ctx, &ex);
-    backdrop_camera_dir(frame_ctx, view);
+    backdrop_camera_dir(frame_ctx, &ex, view);
 
     fairy_resident_at(t, &ex, view, &f);
     fairy_apply_light(FAIRY_LIGHT_RESIDENT, &f, ex.radius);
@@ -2299,9 +2377,10 @@ static void draw_fairies(const Render3dFrameRenderContext *frame_ctx) {
     float alpha = frame_ctx->config.alpha_scale;
 
     backdrop_resolve_extent(frame_ctx, &ex);
-    backdrop_camera_dir(frame_ctx, view);
+    backdrop_camera_dir(frame_ctx, &ex, view);
 
     render3d_backdrop_push_state();
+    backdrop_clear_user_volume_state();
     glDisable(GL_LIGHTING);
     glDisable(GL_TEXTURE_2D);
     glDisable(GL_FOG);

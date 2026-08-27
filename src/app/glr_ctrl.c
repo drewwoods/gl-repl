@@ -1374,6 +1374,13 @@ static void glr_ctrl_dump_gl_state(const char *phase) {
  * Measured over the FULL program, deliberately not the replay-clamped
  * prefix: while scrubbing, a box that shrank command by command would have
  * the drones swarm inward as the user drags.
+ *
+ * Measured once per FRAME, not once per accumulation sample, and time blur
+ * re-baking the geometry per sub-step does not change that. The shutter
+ * spans a single frame's dt, so the motion a per-sample walk would catch is
+ * far smaller than the ease above deliberately lags by - and a rig that
+ * re-framed itself between samples would blur against a moving reference,
+ * which is worse than one anchored to a slightly old box.
  */
 #define SCENE_BOUNDS_EASE 0.12f   /* fraction of the gap closed per frame */
 
@@ -1405,20 +1412,16 @@ static int geometry_bounds_adapter(void *user_data,
                                 float out_min[3], float out_max[3]) {
     (void)user_data;
 
-    /* Its own row rather than a silent rider on whichever render3d phase
-     * happened to pull first: this is a walk over the whole flat program,
-     * and unattributed per-frame work inside someone else's bracket shows
-     * up only as that bracket's remainder. The span covers every pull, not
-     * just the one that misses the memo, so the row reports what answering
-     * bounds queries costs this frame rather than what one of them did.
+    /* Its own row: this is a walk over the whole flat program, and
+     * unattributed per-frame work inside someone else's bracket shows up
+     * only as that bracket's remainder. The span covers every pull, not just
+     * the one that misses the memo, so the row reports what answering bounds
+     * queries costs this frame.
      *
-     * prof_accum_end, not prof_end, because this section lives in the
-     * PROF_RENDER3D_SETUP..PROF_RENDER3D_LAST index range that the frame
-     * sweeps with prof_accum_reset / prof_accum_commit. A plain prof_end
-     * publishes immediately and the frame's commit then overwrites it with
-     * the (never accumulated) zero - the row reads stale forever, which is
-     * exactly what it did until a test asked whether it had sampled.
-     * Accumulating also sums the pulls, which is what the row should say. */
+     * prof_accum_end, not prof_end - this section is inside the range the
+     * frame sweeps with prof_accum_reset / prof_accum_commit, and a plain
+     * prof_end publishes a value the commit then overwrites with an empty
+     * accumulator. Enforced by check-prof-accum-range. */
     prof_begin(PROF_GEOMETRY_BOUNDS);
 
     if (!g_scene_bounds.measured) {

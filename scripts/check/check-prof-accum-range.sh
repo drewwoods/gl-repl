@@ -15,9 +15,9 @@
 # which is a legitimate state for half the rows in this range (the backdrop
 # is off, the fade ring is empty), so nothing about the panel gives it away.
 #
-# PROF_GEOMETRY_BOUNDS shipped with this bug. The range membership is what
-# makes it a trap: the section is instrumented in src/app, far from the
-# render3d files whose neighbouring sections would have shown the idiom.
+# The range membership is what makes it a trap: a section can be instrumented
+# anywhere in the tree, far from the render3d files whose neighbours would
+# have shown the right idiom.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
