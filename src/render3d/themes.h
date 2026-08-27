@@ -78,7 +78,7 @@ typedef enum {
 #define RENDER3D_BACKDROP_LIST(X) \
     X(OFF, "Off")              \
     X(STARS, "Stars")          \
-    X(CITY_AND_STARS, "City+Stars") \
+    X(CITYSCAPE, "Cityscape")  \
     X(SUNSET, "Sunset")        \
     X(AURORA, "Aurora")        \
     X(NEBULA, "Nebula")        \

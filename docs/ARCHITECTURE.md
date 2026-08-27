@@ -2039,7 +2039,7 @@ snapshot for the panel, special-case in the consumers.
   `render3d/`/`app/` headers or call `render3d_*`/`glr_*`; it pulls
   app/render3d-derived values only through controller-installed bridges
   ([`ReplExportProjectionBridge`](../src/repl/export.h#L133), [`ReplExportCameraBridge`](../src/repl/export.h#L93),
-  [`ReplConfigBridge`](../src/repl/cfg_baseline.h#L49)). Complements `check-gl-boundaries` (which already
+  [`ReplConfigBridge`](../src/repl/cfg_baseline.h#L50)). Complements `check-gl-boundaries` (which already
   bars GL *calls* in the REPL pipeline) and `check-repl-export-no-ui-layout`.
 
 #### 2D Orthographic Scale (GL_FEEDBACK probe + zoom)

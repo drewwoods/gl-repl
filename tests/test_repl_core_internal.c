@@ -1846,7 +1846,7 @@ int main() {
 
         /* REPL_CFG_VALUE_MAX = 40, so a 44-char value is 4 over the
          * limit. The width was bumped from 16 to 32 to fit symbolic
-         * enum names like "RENDER3D_BACKDROP_CITY_AND_STARS", and then to 40. */
+         * enum names like "OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE", and then to 40. */
         char long_value[64];
         memset(long_value, 'v', sizeof(long_value) - 1);
         long_value[44] = '\0';

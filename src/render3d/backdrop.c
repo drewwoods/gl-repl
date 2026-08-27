@@ -1119,7 +1119,7 @@ static void draw_aurora(float anim_time, float alpha_scale, float extent) {
  * families (magenta, indigo, teal), each slowly pulsing and drifting
  * along the band; a handful of bright flare stars with diffraction
  * spikes anchor the composition. The base starfield is composed on
- * top by the dispatch (same pattern as CITY_AND_STARS). */
+ * top by the dispatch (same pattern as CITYSCAPE). */
 
 /* Orthonormal band frame: e3 is the band pole (the band's great
  * circle is the plane normal to it), e1/e2 span that plane. Constants
@@ -2774,7 +2774,7 @@ void render3d_backdrop_render(const Render3dFrameRenderContext *frame_ctx) {
                         frame_ctx->config.point_parameter_supported,
                         frame_ctx->config.point_parameter_proc);
         break;
-    case RENDER3D_BACKDROP_CITY_AND_STARS:
+    case RENDER3D_BACKDROP_CITYSCAPE:
         /* Stars first so city geometry writes depth over them. */
         draw_starry_sky(frame_ctx->config.anim_time,
                         frame_ctx->config.point_parameter_supported,

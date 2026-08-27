@@ -11,8 +11,9 @@
 
 #define REPL_CFG_KEY_MAX     24
 /* 40 bytes: holds a 32-bit decimal int ("-2147483648" = 12) and any
- * enum value name from src/render3d/themes.h. The longest current symbol
- * is "RENDER3D_BACKDROP_CITY_AND_STARS" (32 chars + null = 33). A
+ * enum value name from the cfg symbol tables. The longest current symbol
+ * is "OVERLAY_VERTEX_LABEL_INDEX_WORLD_FINE" (37 chars + null = 38) - the
+ * backdrop name this used to cite was never the longest of them. A
  * STATIC_ASSERT in cfg_baseline.c pins this against the int-decimal
  * lower bound; the enum-name upper bound is informational, not
  * enforced at the REPL layer (the bridge is the only TU that needs

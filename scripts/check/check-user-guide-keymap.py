@@ -88,9 +88,10 @@ FORBIDDEN_PATTERNS: list[tuple[str, str]] = [
     ("nonexistent standalone Snowfall backdrop",
      "Polar Day, Snowfall, Polar Day+Snow"),
     # The city and the polar sky each shipped as a bare and an embellished
-    # mode; the bare ones were dropped and the surviving snow mode took the
-    # plain "Polar Day" name. These catch prose still offering the old set.
-    ("removed standalone Cityscape backdrop", "Cityscape"),
+    # mode; the bare ones were dropped and each survivor took the plain name.
+    # "Cityscape" and "Polar Day" are therefore live names again - only the
+    # compound spellings are stale.
+    ("removed City+Stars backdrop name", "City+Stars"),
     ("removed Polar Day+Snow backdrop name", "Polar Day+Snow"),
     ("stale AA status 2x", "AA 2x"),
     ("stale AA default passes", "2 passes"),
