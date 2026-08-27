@@ -440,6 +440,11 @@ void glr_ctrl_close_help(void) {
 }
 
 int glr_ctrl_router_handle_escape_key(unsigned char key) {
+    /* Ctrl+[ shares Escape's byte value. Navigation owns the modified form
+     * even while a soft overlay is open; hard modals have already had their
+     * opportunity to consume the event in router_modal_capture(). */
+    if (keymap_event_is(key, GLR_NAV_BACK))
+        return 0;
     if (!keymap_event_is(key, GLR_ESCAPE))
         return 0;
     if (color_picker_active_line() >= 0) {
@@ -950,6 +955,13 @@ static int route_func_def_click_hit(const UiHit *hit) {
     if (target < 0 && !pending_input_defines_func(fn))
         return 0;
 
+    /* Preserve enough pre-commit geometry to translate the clicked source
+     * row if committing an insert shifts it down. This mirrors the remap in
+     * editor_navigate_to_line(). */
+    int source_line = hit->line_idx;
+    int inserted_at = editor_state_edit_line();
+    int doc_before = repl_state_document_count();
+
     /* From here the click is ours whichever way the commit goes, so every
      * exit below leaves the same state: epilog + drag disarmed. */
     if (!editor_input_commit_before_navigation()) {
@@ -965,10 +977,13 @@ static int route_func_def_click_hit(const UiHit *hit) {
         return 1;
     }
 
+    if (repl_state_document_count() > doc_before && source_line >= inserted_at)
+        source_line++;
+
     {
-        EditorNavigationLocation source = { hit->line_idx, hit->char_idx };
+        EditorNavigationLocation source = { source_line, hit->char_idx };
         EditorNavigationLocation destination;
-        editor_navigate_to_line(target);
+        editor_input_navigate_after_commit(target);
         destination.line_idx = editor_state_edit_line();
         destination.char_idx = editor_cursor_pos();
         editor_navigation_history_record_jump(source, destination);

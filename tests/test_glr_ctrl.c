@@ -7378,12 +7378,22 @@ static void test_ctrl_click_go_to_func_def(void) {
     editor_load_line_to_input(3);
     editor_input_set_text("func3() {");
     ASSERT_TRUE("rename edit is pending", editor_input_has_uncommitted_change());
-    hit.line_idx = 10; hit.char_idx = 3; /* my_star(); callsite at line 10 */
+    int my_star_call_line = -1;
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        const GLCmd *cmd = &repl_state_document_cmds()[i];
+        if (cmd->valid && cmd->type == CMD_CALL && (int)cmd->args[0] == 1) {
+            my_star_call_line = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("rename fixture retains my_star callsite", my_star_call_line >= 0);
+    hit.line_idx = my_star_call_line; hit.char_idx = 3;
     consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
     ASSERT_INT("ctrl-click with removed definition consumed", consumed, 1);
     ASSERT_INT("my_star slot 1 no longer exists post-commit", repl_source_scope_find_func_def_line(1), -1);
     ASSERT_TRUE("func3 slot 3 created post-commit", repl_source_scope_find_func_def_line(3) >= 0);
-    ASSERT_INT("cursor advances to func3 body line 4", editor_state_edit_line(), 4);
+    ASSERT_INT("cursor advances to func3 body",
+               editor_state_edit_line(), repl_source_scope_find_func_def_line(3) + 1);
     editor_load_line_to_input(editor_state_edit_line());
 
     /* 10. Undefined function does NOT commit pending edit when clicked on same row */
@@ -7512,7 +7522,17 @@ static void test_ctrl_click_go_to_func_def(void) {
     EditorAutocompleteState *ac = editor_state_autocomplete_mut();
     ac->match_count = 3;
     glr_ctrl_router_reset_code_panel_drag();
-    hit.line_idx = 10; hit.char_idx = 2; /* func0(); callsite at line 10 */
+    int func0_call_line = -1;
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        const GLCmd *cmd = &repl_state_document_cmds()[i];
+        if (cmd->valid && cmd->type == CMD_CALL && (int)cmd->args[0] == 0) {
+            func0_call_line = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("rejected-edit fixture retains func0 callsite",
+                func0_call_line >= 0);
+    hit.line_idx = func0_call_line; hit.char_idx = 2;
     consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
     ASSERT_INT("rejected edit consumes event", consumed, 1);
     ASSERT_INT("rejected edit keeps cursor on dirty line 0", editor_state_edit_line(), 0);
@@ -7521,17 +7541,17 @@ static void test_ctrl_click_go_to_func_def(void) {
 
     /* 13. Ctrl+[ / Ctrl+] walk the successful jump history and restore
      * both the clicked source column and the definition destination. */
+    glr_ctrl_reset_all();
+    editor_feed_line("func0() {");
+    editor_feed_line("  glColor3f(1, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("func0();");
+    editor_insert_mode_set(0);
+    editor_state_edit_line_set(3);
+    editor_load_line_to_input(3);
     editor_navigation_history_clear();
     g_simulated_mods = GLUT_ACTIVE_CTRL;
-    int history_call_line = -1;
-    for (int i = 0; i < repl_state_document_count(); i++) {
-        const GLCmd *cmd = &repl_state_document_cmds()[i];
-        if (cmd->valid && cmd->type == CMD_CALL && (int)cmd->args[0] == 0) {
-            history_call_line = i;
-            break;
-        }
-    }
-    ASSERT_TRUE("history fixture retains func0 callsite", history_call_line >= 0);
+    int history_call_line = 3;
     hit.line_idx = history_call_line; hit.char_idx = 2;
     consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
     ASSERT_INT("history setup ctrl-click consumed", consumed, 1);
@@ -7552,6 +7572,25 @@ static void test_ctrl_click_go_to_func_def(void) {
     ASSERT_INT("Ctrl+] restores definition column",
                editor_cursor_pos(), history_def_char);
 
+    /* Soft overlays must not steal Ctrl+[ through its byte alias with Esc. */
+    ui_state_help_mut()->visible = 1;
+    glr_ctrl_keyboard(KEY_CTRL_LBRACKET, 0, 0);
+    ASSERT_INT("Ctrl+[ with help open returns to callsite",
+               editor_state_edit_line(), history_call_line);
+    ASSERT_TRUE("Ctrl+[ navigation does not act as Escape on help",
+                ui_state_help().visible);
+    glr_ctrl_keyboard(KEY_CTRL_RBRACKET, 0, 0);
+    ui_state_help_mut()->visible = 0;
+
+    color_picker_start(1, 300);
+    ASSERT_TRUE("history Escape-alias fixture opens picker",
+                color_picker_active_line() >= 0);
+    glr_ctrl_keyboard(KEY_CTRL_LBRACKET, 0, 0);
+    ASSERT_INT("Ctrl+[ with picker open returns to callsite",
+               editor_state_edit_line(), history_call_line);
+    color_picker_stop();
+    glr_ctrl_keyboard(KEY_CTRL_RBRACKET, 0, 0);
+
     /* Cocoa delivers Cmd+[ / Cmd+] as printable bracket bytes with SUPER,
      * unlike the ASCII control bytes delivered for the Ctrl chords. */
     g_simulated_mods = GLUT_ACTIVE_SUPER;
@@ -7564,6 +7603,52 @@ static void test_ctrl_click_go_to_func_def(void) {
                editor_state_edit_line(), history_def_line);
     ASSERT_INT("Cmd+] restores definition column",
                editor_cursor_pos(), history_def_char);
+
+    /* Committing an inserted row before the clicked callsite shifts that
+     * source down. Back must use the post-commit row, not the UiHit index
+     * captured before the insertion. */
+    glr_ctrl_reset_all();
+    editor_feed_line("func0() {");
+    editor_feed_line("  glColor3f(1, 0, 0);");
+    editor_feed_line("}");
+    editor_feed_line("func0();");
+    editor_navigation_history_clear();
+    g_simulated_mods = GLUT_ACTIVE_CTRL;
+    history_call_line = 3;
+    int insert_line = 2;
+    editor_insert_mode_set(0);
+    editor_state_edit_line_set(insert_line);
+    editor_load_line_to_input(insert_line);
+    int count_before_insert_jump = repl_state_document_count();
+    editor_insert_mode_set(1);
+    editor_input_set_text("glColor3f(0.25, 0.25, 0.25)");
+    hit.line_idx = history_call_line; hit.char_idx = 2;
+    consumed = glr_ctrl_router_handle_code_panel_hit(hit, 0, 0);
+    ASSERT_INT("insert-then-click jump consumed", consumed, 1);
+    ASSERT_INT("insert-then-click committed one row",
+               repl_state_document_count(), count_before_insert_jump + 1);
+    glr_ctrl_keyboard(KEY_CTRL_LBRACKET, 0, 0);
+    ASSERT_INT("Back remaps callsite after pending insert",
+               editor_state_edit_line(), history_call_line + 1);
+    ASSERT_INT("Back remapped row is still func0 call",
+               repl_state_document_cmds()[editor_state_edit_line()].type,
+               CMD_CALL);
+
+    /* A pending overwrite is allowed to commit before navigation, but that
+     * mutation invalidates line-index history. Report the resulting empty
+     * history instead of silently consuming the key. */
+    glr_ctrl_keyboard(KEY_CTRL_RBRACKET, 0, 0);
+    editor_navigate_to_line(history_call_line + 1);
+    {
+        char pending[MAX_INPUT_LEN];
+        snprintf(pending, sizeof(pending), "%s // changed", editor_input_text());
+        editor_input_set_text(pending);
+    }
+    ASSERT_TRUE("pending Back fixture has uncommitted input",
+                editor_input_has_uncommitted_change());
+    glr_ctrl_keyboard(KEY_CTRL_LBRACKET, 0, 0);
+    ASSERT_STR("pending-edit Back reports invalidated history",
+               ui_state_status_mut()->text, "No older jump");
 
     /* Escape shares byte 27 with Ctrl+[, so the modifier is the
      * discriminator. Plain Escape must retain its ordinary editor action. */

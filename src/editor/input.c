@@ -1190,6 +1190,11 @@ int editor_input_commit_before_navigation(void) {
     return commit_before_navigation() != COMMIT_REJECTED;
 }
 
+void editor_input_navigate_after_commit(int target) {
+    target = normalize_navigation_target(target);
+    navigate_to_line_raw_resolved(target);
+}
+
 void editor_navigate_to_line(int target) {
     target = normalize_navigation_target(target);
     if (target == editor_state_edit_line() && !editor_insert_mode())
@@ -1328,7 +1333,8 @@ static void restore_hidden_code_panel_for_key(unsigned char key) {
 
 
 static int handle_escape_key_route(unsigned char key) {
-    if (key == KEY_ESC) {
+    if (!keymap_event_is(key, GLR_NAV_BACK) &&
+        keymap_event_is(key, GLR_ESCAPE)) {
         /* Escape drops transient state. The input-selection anchor is
          * one such state - clear it alongside whatever specific branch
          * fires below, so Esc is the universal "dismiss" key for both
@@ -1367,6 +1373,10 @@ static int handle_navigation_history_key_route(unsigned char key) {
     }
     if (!editor_input_commit_before_navigation())
         return 1;
+    if (!editor_navigation_history_can_step(direction)) {
+        repl_set_status(direction < 0 ? "No older jump" : "No newer jump");
+        return 1;
+    }
     if (!editor_navigation_history_step(direction, &location))
         return 1;
 

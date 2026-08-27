@@ -151,6 +151,11 @@ void editor_navigate_to_line(int target);
  * rejected (with error status published). */
 int editor_input_commit_before_navigation(void);
 
+/* Navigate without running the navigation commit a second time. Reserved for
+ * routes that have just called editor_input_commit_before_navigation(); the
+ * ordinary editor_navigate_to_line() remains the safe default elsewhere. */
+void editor_input_navigate_after_commit(int target);
+
 /* Rename-capture predicate. The inline rename overlay is a hard modal:
  * when active, every keystroke must land in the rename buffer ahead of
  * the controller-side router. glr_ctrl_keyboard / _special invoke

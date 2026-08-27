@@ -416,7 +416,7 @@ execute-time re-eval.
 
 - **Interactive `;` key**: the input buffer does **not** contain the `;` -
   handlers must accept input without a trailing `;`.
-- **Bulk line feeding**: [`editor_feed_line()`](src/editor/input.h#L205)
+- **Bulk line feeding**: [`editor_feed_line()`](src/editor/input.h#L210)
   (clipboard paste, tests, editor-side loaders) and
   [`repl_load_apply_line()`](src/repl/load.h#L78) (file import, catalog load,
   replace - the pipeline TUs' twin) both receive the full line *including* `;`.
@@ -424,7 +424,7 @@ execute-time re-eval.
   `editor_feed_line()` runs `editor_try_commit_any()`, while
   `repl_load_apply_line()` runs `repl_compile_dispatch()`. Adding a structured
   form to one wrapper does not add it to the other.
-- Enter may or may not have `;`. [`editor_load_line_to_input()`](src/editor/input.h#L198) strips the
+- Enter may or may not have `;`. [`editor_load_line_to_input()`](src/editor/input.h#L203) strips the
   trailing `;`, so re-committing an existing line takes the no-semicolon
   path - handlers checking for `;` must also accept end-of-string.
 
