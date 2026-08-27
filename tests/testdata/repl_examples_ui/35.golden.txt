@@ -9,12 +9,12 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_STARCHART */
+/* @cfg grid = GRID_THEME_OCEAN */
 /* @cfg grid_major = GRID_MAJOR_1 */
-/* @cfg grid_extent = GRID_EXTENT_FAR */
+/* @cfg grid_extent = GRID_EXTENT_MID */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
 /* @cfg axes = AXES_THEME_OFF */
-/* @cfg backdrop = RENDER3D_BACKDROP_NEBULA */
+/* @cfg backdrop = RENDER3D_BACKDROP_OFF */
 /* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg light_indicators = 0 */
 /* @cfg view_mode = RENDER3D_VIEW_3D */
@@ -27,7 +27,7 @@
 /* @cfg call_depth_tint = 0 */
 /* @cfg auto_normals = REPL_AUTONORMAL_OFF */
 /* @cfg overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES */
-/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
 /* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_AT_VERTEX */
 /* @cfg vertex_points = 0 */
 /* @cfg vertex_outlines = 0 */
@@ -35,7 +35,7 @@
 /* @cfg normal_vectors = 0 */
 /* @cfg polygon_highlight = 1 */
 /* @cfg transform_guides = 2 */
-/* @cfg variable_panel = 0 */
+/* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
 /* @cfg memory_profile = 0 */
 /* @cfg code_panel = 1 */
@@ -89,109 +89,151 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
 }
 float A[16], B[16], C[16];
 --- source_prologue ---
-static float c, a; // color/shading helpers
-static float stormLon; // dynamic storm drift angle
+static float launchVelX, launchVelY, launchVelZ;
+static float currentVelY;
+static float particleLife, particleAge;
+static float dragDecay = 0.9;
+static float gravityY = -3.5;
+static float dragRate = 10;
+static float particleX, particleY, particleZ;
+static float floorY = 0;
+static float spawnDelay;
+static float emitDuration = 6; // spout emission window (s); the clock loops at 2x this @tune
+static float speed = 0.5;
+static float detail = 30;
+static float blowHoleX = 0.95, blowHoleY = 0.71, blowHoleZ;
+static float waterDroplets = 250; // @tune
 
-// ===== Ringed gas giant under nebula skies =====
-// Optimized spherical mesh + multi-tier rings with realistic planetary shadow.
-
-// Banded gas giant: differential zonal winds, turbulent shear, and great storm
-void planet(rad, stacks, slices) {
-  float latA, latB, cA, cB, yA, yB;
-  float lon, cLon, sLon, swirlA, swirlB;
-  float cA_val, cB_val, stormA, stormB, dLonA, dLonB;
-
-  for(i, 0, stacks) {
-    latA = -PI/2 + PI*i/stacks;
-    latB = -PI/2 + PI*(i + 1)/stacks;
-    cA = cos(latA);
-    cB = cos(latB);
-    yA = sin(latA);
-    yB = sin(latB);
-
-    glBegin(GL_QUAD_STRIP);
-      for(j, 0, slices + 1) {
-        lon = j*TAU/slices;
-        cLon = cos(lon);
-        sLon = sin(lon);
-
-        // Latitude-dependent differential rotation (equator faster, mid-latitudes counter)
-        swirlA = lon + (1.2 - 2.0*yA*yA)*0.35*t;
-        swirlB = lon + (1.2 - 2.0*yB*yB)*0.35*t;
-
-        // Multi-harmonic atmospheric banding + turbulence
-        cA_val = 0.5 + 0.35*sin(10*yA + 0.4*sin(4*swirlA)) + 0.15*sin(22*yA + 0.3*sin(6*swirlA));
-        cB_val = 0.5 + 0.35*sin(10*yB + 0.4*sin(4*swirlB)) + 0.15*sin(22*yB + 0.3*sin(6*swirlB));
-
-        // Great Storm Vortex in southern temperate zone (y ~ -0.32)
-        dLonA = rem(swirlA - stormLon + PI, TAU) - PI;
-        stormA = max(0, 1 - (dLonA*dLonA*5.0 + (yA + 0.32)*(yA + 0.32)*35.0));
-        dLonB = rem(swirlB - stormLon + PI, TAU) - PI;
-        stormB = max(0, 1 - (dLonB*dLonB*5.0 + (yB + 0.32)*(yB + 0.32)*35.0));
-
-        // Vertex A: royal violet poles, amber/coral bands, cyan storm eye
-        glColor3f(0.38 + 0.45*cA_val + 0.4*stormA, 0.22 + 0.32*cA_val - 0.1*stormA, 0.60 - 0.28*cA_val + 0.3*stormA);
-        glNormal3f(cA*cLon, yA, cA*sLon);
-        glVertex3f(rad*cA*cLon, rad*yA, rad*cA*sLon);
-
-        // Vertex B
-        glColor3f(0.38 + 0.45*cB_val + 0.4*stormB, 0.22 + 0.32*cB_val - 0.1*stormB, 0.60 - 0.28*cB_val + 0.3*stormB);
-        glNormal3f(cB*cLon, yB, cB*sLon);
-        glVertex3f(rad*cB*cLon, rad*yB, rad*cB*sLon);
-      }
-    glEnd();
-  }
+void computeVerticalMotion(ageSeconds, launchY) {
+  // Velocity is linear in age: currentVelY = gravityY*ageSeconds + launchVelY.
+  // Position is its integral:
+  //   (gravityY/2)*ageSeconds^2 + launchVelY*ageSeconds + launchY
+  // currentVelY is computed for illustration (the velocity term above);
+  // only particleY is read by the caller.
+  currentVelY = launchVelY + gravityY*ageSeconds;
+  particleY = launchY + gravityY/2 * ageSeconds * ageSeconds + launchVelY * ageSeconds;
 }
 
-// Moon on a tilted circular orbit with colored material
-void moon(orbit, rad, speed, tilt, r, gr, b) {
+void computeLifespan(launchY) {
+  // Solve particleY(age) = floorY for age: how long the particle takes to fall
+  // from launchY to the floor. particleY is the projectile
+  //   (gravityY/2)*age^2 + launchVelY*age + (launchY - floorY) = 0
+  // a quadratic with a = gravityY/2, b = launchVelY, c = launchY - floorY, so
+  //   age = (-b - sqrt(b^2 - 4ac)) / 2a
+  // Substituting a = gravityY/2: 4ac = 2*gravityY*c and 2a = gravityY.
+  particleLife = (-launchVelY - sqrt(launchVelY*launchVelY - 2 * gravityY*(launchY - floorY))) / gravityY;
+}
+
+void computeDriftX(ageSeconds, launchX) {
+  // Integral over [0, age] of the decaying horizontal velocity
+  //   velX(s) = launchVelX * dragDecay^(dragRate*s)
+  particleX = launchX + (launchVelX * pow(dragDecay, ageSeconds*dragRate) - launchVelX) / (dragRate*ln(dragDecay));
+}
+
+void computeDriftZ(ageSeconds, launchZ) {
+  // Integral over [0, age] of the decaying horizontal velocity
+  //   velZ(s) = launchVelZ * dragDecay^(dragRate*s)
+  particleZ = launchZ + (launchVelZ * pow(dragDecay, ageSeconds*dragRate) - launchVelZ) / (dragRate*ln(dragDecay));
+}
+
+// bhX/bhY/bhZ: blowhole position in the whale's local frame (the globals
+// blowHoleX/Y/Z, passed in -- named apart so they don't shadow).
+// flukeAng/finAng are function-scoped locals: plain `float` inside the
+// body, rebuilt every call, invisible to the rest of the scene. `detail`
+// stays a global on purpose -- it is a scrubbable knob whose value has to
+// survive between frames for the clamp below to hold it, not a temporary.
+void drawWhale(bhX, bhY, bhZ) {
+  float flukeAng, finAng;
+  flukeAng = sin(speed*t*TAU)* 30;
+  finAng = cos(speed*t*TAU)* 5;
+  detail = max(12, floor(detail));
+
+  // Shiny wet whale
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.2, 0.2, 0.2, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 100);
+
+  // Main body: elongated ellipsoid, dark blue-grey on top
+  glColor3f(0.24, 0.3, 0.4);
+
   glPushMatrix();
-    glRotatef(tilt, 0, 0, 1);
-    glRotatef(speed*t, 0, 1, 0);
-    glTranslatef(orbit, 0, 0);
-    glColor3f(r, gr, b);
-    glutSolidSphere(rad, 16, 12);
+    glScalef(2, 0.85, 1.05);
+    glutSolidSphere(1, detail, detail);
   glPopMatrix();
-}
 
-// Concentric ring band with micro-grooves, radial gradients and planet shadow
-void ring(inner, outer, baseR, baseG, baseB, alpha, segs) {
-  float ang, cAng, sAng, shade;
-  glBegin(GL_QUAD_STRIP);
-    for(j, 0, segs + 1) {
-      ang = j*TAU/segs;
-      cAng = cos(ang);
-      sAng = sin(ang);
+  // Belly: lighter, sits just under the body so it shows the underside
+  glColor3f(0.72, 0.76, 0.78);
+  glPushMatrix();
+    glTranslatef(0.05, -0.42, 0);
+    glScalef(1.65, 0.45, 0.75);
+    glutSolidSphere(1, detail, detail);
+  glPopMatrix();
 
-      // Planet shadow cone: rings behind planet darken into shadow
-      shade = 0.25 + 0.75*smoothstep(-0.35, 0.25, cAng*0.7 + sAng*0.7);
+  glColor3f(0.24, 0.3, 0.4);
+  glPushMatrix(); // begin tail
+    glTranslatef(-1.85, -0.2, 0);
+    glRotatef(flukeAng/2, 0, 0, 1);
 
-      // Radial striations & forward scattering shimmer
-      c = 0.82 + 0.18*sin(j*1.3 + inner*8);
+    // Tail peduncle (narrow part before the flukes)
+    glPushMatrix();
+      glScalef(0.75, 0.3, 0.4);
+      glutSolidSphere(1, detail, detail);
+    glPopMatrix();
 
-      glColor4f(baseR*c, baseG*c, baseB*c, alpha*shade);
-      glVertex3f(inner*cAng, 0, inner*sAng);
+    // Tail flukes -- two flat lobes, animated with flukeAng
+    glPushMatrix();
+      glTranslatef(-0.65, 0, 0);
+      glRotatef(flukeAng, 0, 0, 1);
+      glPushMatrix();
+        glTranslatef(-0.1, 0, 0.55);
+        glRotatef(15, 0, 1, 0);
+        glScalef(0.35, 0.06, 0.65);
+        glutSolidSphere(1, detail, detail); // right fluke
+      glPopMatrix();
+      glPushMatrix();
+        glTranslatef(-0.1, 0, -0.55);
+        glRotatef(-15, 0, 1, 0);
+        glScalef(0.35, 0.06, 0.65);
+        glutSolidSphere(1, detail, detail); // left fluke
+      glPopMatrix();
+    glPopMatrix(); // end flukes
+  glPopMatrix(); // end tail
 
-      glColor4f(baseR*c*0.85, baseG*c*0.9, baseB*c*1.05, alpha*0.6*shade);
-      glVertex3f(outer*cAng, 0, outer*sAng);
-    }
-  glEnd();
-}
+  // Pectoral fins
+  glPushMatrix();
+    glRotatef(finAng, 0, 0, 1);
+    glRotatef(finAng/4, 0, 1, 0);
 
-// Atmospheric limb glow halo around the planet
-void atmosphere(rad) {
-  float ang, cAng, sAng;
-  glBegin(GL_QUAD_STRIP);
-    for(j, 0, 37) {
-      ang = j*TAU/36;
-      cAng = cos(ang);
-      sAng = sin(ang);
-      glColor4f(0.25, 0.65, 1, 0.45);
-      glVertex3f(rad*cAng, rad*sAng, 0);
-      glColor4f(0.45, 0.25, 0.95, 0);
-      glVertex3f((rad + 0.22)*cAng, (rad + 0.22)*sAng, 0);
-    }
-  glEnd();
+    glPushMatrix();
+      glTranslatef(0.45, -0.25, 1);
+      glRotatef(25, 0, 1, 0);
+      glScalef(0.4, 0.08, 0.45);
+      glutSolidSphere(1, 14, 10); // right pectoral fin
+    glPopMatrix();
+
+    glPushMatrix();
+      glTranslatef(0.45, -0.25, -1);
+      glScalef(0.4, 0.08, 0.45);
+      glutSolidSphere(1, 14, 10); // left pectoral fin
+    glPopMatrix();
+  glPopMatrix(); // end fins
+
+  // Eyes
+  glDisable(GL_LIGHTING);
+  glColor3f(0.04, 0.04, 0.04);
+  glPushMatrix();
+    glTranslatef(1.45, 0.18, 0.63);
+    glutSolidSphere(0.07, 10, 8);
+    glTranslatef(0, 0, -1.26);
+    glutSolidSphere(0.07, 10, 8);
+  glPopMatrix();
+
+  // Blowhole
+  glColor3f(0.08, 0.08, 0.12);
+  glPushMatrix();
+    glTranslatef(bhX, bhY, bhZ);
+    glScalef(0.15, 0.04, 0.1);
+    glutSolidSphere(1, 10, 8);
+  glPopMatrix();
 }
 --- display_header ---
 void display(void) {
@@ -199,112 +241,69 @@ void display(void) {
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -12.5000f);   // @camera dist
-  glRotatef(16.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(-30.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -1.2000f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -6.5500f);   // @camera dist
+  glRotatef(20.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(-115.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
 --- source ---
 
-
-  stormLon = 0.15*t;
-
-  glClearColor(0.04, 0.04, 0.1, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
   glEnable(GL_COLOR_MATERIAL);
   glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.45, 0.45, 0.5, 1});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 35);
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_LIGHTING);
-  glEnable(GL_LIGHT0);
-  glEnable(GL_NORMALIZE);
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
   glEnable(GL_POINT_SMOOTH);
-  glShadeModel(GL_SMOOTH);
 
-  glPushMatrix();
-    glTranslatef(0, 1.7, 0);
+  glColor4f(0.25, 0.45, 0.85, 0.46);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glEnable(GL_DEPTH_TEST);
+  glDepthFunc(GL_ALWAYS);
+  glPointSize(10);
 
-    // Planet body
-    glPushMatrix();
-      glRotatef(-6*t, 0, 1, 0);
-      planet(1.55, 15, 18);
-    glPopMatrix();
+  // Scene-looping trick: deliberately rewind the GLOBAL animation clock
+  // every 2*emitDuration (~12s) so the spout replays on a loop. Heads-up
+  // side effect -- this also resets t for replay and the Ctrl+T toggle,
+  // since t is app-wide, not scene-local.
+  if(t > 2*emitDuration) {
+    t = 0;
+  }
 
-    // Moons: 3 distinct worlds
-    moon(3.1, 0.07, 45, 26, 0.9, 0.85, 0.75); // Inner shepherd moon near the rings
-    moon(4.1, 0.22, 28, 10, 0.95, 0.65, 0.40); // Ochre volcanic moon
-    moon(5.4, 0.17, -19, -15, 0.45, 0.75, 0.95); // Azure icy moon
+  glBegin(GL_POINTS);
+    for(i, 0, waterDroplets) {
+      launchVelX = 3 * rand2(i,1);
+      launchVelY = 2 + 2 * rand(i, 2);
+      launchVelZ = 3 * rand2(i, 3);
 
-    // Translucent passes: Atmosphere, Rings, Comet, Dust
-    glDisable(GL_LIGHTING);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDepthMask(GL_FALSE);
+      computeLifespan(blowHoleY);
+      spawnDelay = 3 * rand(i,4);
 
-    // Ethereal atmospheric limb glow
-    glPushMatrix();
-      glRotatef(30, 0, 1, 0);
-      glRotatef(-16, 1, 0, 0);
-      atmosphere(1.54);
-    glPopMatrix();
+      if((t - spawnDelay) > 0 && ( t <= ceil(emitDuration/particleLife)*particleLife + spawnDelay)) {
+        particleAge = fmod(t - spawnDelay, particleLife);
 
-    // Multi-tier ring system tilted at 26 degrees
-    glPushMatrix();
-      glRotatef(26, 1, 0, 0.3);
-      // C Ring (inner crepe ring)
-      ring(1.82, 2.08, 0.55, 0.45, 0.75, 0.22, 36);
-      // B Ring (bright dense main ring with golden striations)
-      ring(2.12, 2.60, 0.85, 0.75, 0.65, 0.55, 42);
-      // A Ring (outer ring beyond Cassini Division)
-      ring(2.68, 3.05, 0.65, 0.68, 0.85, 0.35, 42);
-      // F Ring (narrow shepherd filament)
-      ring(3.12, 3.16, 0.75, 0.85, 1.00, 0.45, 36);
-    glPopMatrix();
+        computeDriftX(particleAge, blowHoleX);
+        computeVerticalMotion(particleAge, blowHoleY);
+        computeDriftZ(particleAge, blowHoleZ);
 
-    // Comet: brilliant dual-tail (ion beam + sweeping dust fan)
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending for comet glow
-
-    // Ion tail (electric azure straight beam)
-    glBegin(GL_LINE_STRIP);
-      for(i, 0, 25) {
-        a = 0.7*t - 0.04*i;
-        glColor4f(0.2, 0.6, 1.0, 0.7*(1 - i/25));
-        glVertex3f(5.6*cos(a), 1.1*sin(2*a) + 0.02*i, 4.2*sin(a));
+        glVertex3f(particleX + 0.05, particleY, particleZ);
       }
-    glEnd();
+    }
+  glEnd();
 
-    // Dust tail (warm diffuse curved wake)
-    glBegin(GL_LINE_STRIP);
-      for(i, 0, 35) {
-        a = 0.7*t - 0.055*i;
-        glColor4f(0.9, 0.8, 0.6, 0.45*(1 - i/35)*(1 - i/35));
-        glVertex3f(5.6*cos(a) - 0.03*i, 1.1*sin(2*a) - 0.015*i, 4.2*sin(a));
-      }
-    glEnd();
+  glDepthFunc(GL_LESS);
 
-    // Comet Nucleus & Coma (multi-layer additive point glow)
-    glPointSize(18);
-    glBegin(GL_POINTS);
-      glColor4f(0.3, 0.7, 1, 0.35);
-      glVertex3f(5.6*cos(0.7*t), 1.1*sin(1.4*t), 4.2*sin(0.7*t));
-    glEnd();
-    glPointSize(8);
-    glBegin(GL_POINTS);
-      glColor4f(0.8, 0.95, 1, 0.85);
-      glVertex3f(5.6*cos(0.7*t), 1.1*sin(1.4*t), 4.2*sin(0.7*t));
-    glEnd();
-    glPointSize(3);
-    glBegin(GL_POINTS);
-      glColor4f(1, 1, 1, 1);
-      glVertex3f(5.6*cos(0.7*t), 1.1*sin(1.4*t), 4.2*sin(0.7*t));
-    glEnd();
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_NORMALIZE);
+  glDisable(GL_BLEND);
 
-    // Clean up GL state
-    glDepthMask(GL_TRUE);
-    glDisable(GL_BLEND);
-  glPopMatrix();
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT1);
+
+  glEnable(GL_LIGHTING);
+
+  drawWhale(blowHoleX, blowHoleY, blowHoleZ);
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);

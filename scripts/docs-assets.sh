@@ -142,6 +142,7 @@ GIF_ASSETS=(
     sc-conditional-colors sc-sierpinski-carpet sc-sierpinski-sponge
     sc-whale sc-stress-test sc-lantern-festival sc-aurora-observatory
     sc-planar-shadows sc-fog-ring-tunnel sc-pulse-bars sc-stencil-mask
+    sc-material-recipes
     sc-feature-time
 )
 
@@ -2693,6 +2694,14 @@ fi
 if want sc-stencil-mask; then
     clip "$SHOW/stencil-mask" 200 2 20 560 \
         --example "Stencil mask window (glStencilOp)"
+fi
+# Materials gallery. --time 5 + WARM_EXAMPLE's 3.0s of clock puts the kept
+# frames at t=8..12, so the scene's 20s key-light cycle drops the key at the
+# midpoint of the clip: lit half first, then only ambient and the emissive
+# materials. Wider than the 560 default -- it is three rows of captioned solids.
+if want sc-material-recipes; then
+    clip "$SHOW/material-recipes" 240 2 20 720 \
+        --example "Material recipes (glMaterialfv)" --time 5
 fi
 
 # "Beyond the still image" — interactive features. feature-time is a real

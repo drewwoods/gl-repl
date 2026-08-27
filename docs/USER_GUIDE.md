@@ -166,7 +166,7 @@ for you. That is the same rule the [exported C](#exporting--importing) follows.
 
 ## Built-in Examples
 
-**F12** cycles forward through the 40 built-in examples, then any saved
+**F12** cycles forward through the 41 built-in examples, then any saved
 scenes, wrapping to the start; **Shift+F12** cycles backward. The Scene menu
 lists them grouped by tag. `./gl-repl --list-examples` prints the compiled-in
 set.

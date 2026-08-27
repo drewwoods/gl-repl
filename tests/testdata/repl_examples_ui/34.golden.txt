@@ -9,13 +9,13 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_CHECKER */
+/* @cfg grid = GRID_THEME_OFF */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
-/* @cfg grid_brightness = GRID_BRIGHTNESS_BOLD */
+/* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
 /* @cfg axes = AXES_THEME_OFF */
-/* @cfg backdrop = RENDER3D_BACKDROP_CITYSCAPE */
-/* @cfg light_theme = LIGHT_THEME_HEADLIGHT */
+/* @cfg backdrop = RENDER3D_BACKDROP_OFF */
+/* @cfg light_theme = LIGHT_THEME_DEFAULT */
 /* @cfg light_indicators = 0 */
 /* @cfg view_mode = RENDER3D_VIEW_3D */
 /* @cfg projection = PROJ_PERSPECTIVE */
@@ -27,7 +27,7 @@
 /* @cfg call_depth_tint = 0 */
 /* @cfg auto_normals = REPL_AUTONORMAL_OFF */
 /* @cfg overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE */
-/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF */
 /* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED */
 /* @cfg vertex_points = 0 */
 /* @cfg vertex_outlines = 0 */
@@ -89,166 +89,358 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
 }
 float A[16], B[16], C[16];
 --- source_prologue ---
-static float spinRate = 0.06; // revolutions per second
-static float seats = 8;
-static float bulbs = 28;
-static float glow; // bulb-chase brightness, shared by the deck rim and both bulb rings
+static float bright = 1; // @tune @config overall lantern intensity
+static float spread = 13; // @tune horizontal scatter of the flock and its glints
+static float rise = 0.55; // @tune @config ascent speed
+static float lanterns = 22; // @tune @config number of lanterns in the flock
+static float riverLights = 12; // @tune number of floating river lanterns
 
-void drawSeat(ang) {
-  float bob, sel; // this seat's bob height and color index -- private to one call
-  glPushMatrix();
-    glRotatef(ang, 0, 1, 0);
-    glTranslatef(2, 0, 0);
+// Dusk gradient backdrop: warm afterglow at the horizon, ink at zenith,
+// framed by two atmospheric mountain silhouette ridges in deep twilight ink.
+void sky() {
+  float low, mid, hx, hy;
+  low = 0.36;
+  mid = 0.24;
 
-    // Brass pole, deck to canopy
-    glColor3f(0.72, 0.58, 0.28);
-    glPushMatrix();
-      glTranslatef(0, 1, 0);
-      glScalef(0.05, 2, 0.05);
-      glutSolidCube(1);
-    glPopMatrix();
+  // 1. Deep dusk sky backdrop
+  glBegin(GL_QUADS);
+    // Horizon warm glow
+    glColor4f(1.0 * low, 0.35 * low, 0.2 * low, 1);
+    glVertex3f(-170, 0, -58);
+    glVertex3f(170, 0, -58);
+    glColor4f(0.55 * mid, 0.3 * mid, 1.0 * mid, 1);
+    glVertex3f(170, 9, -58);
+    glVertex3f(-170, 9, -58);
 
-    // Teapot seat: bobs with a per-seat phase, faces the travel direction
-    bob = 0.2 * sin(t*TAU*0.7 + ang*PI/180);
-    // Cycle 3 seat colors by index. ang = seat*360/seats, so ang*seats/360
-    // is the integer seat number; fmod(.,3) picks the color. (Writing it as
-    // ang/45 would silently couple to seats == 8.) A real if/else-if chain
-    // partitions sel completely -- the earlier three independent ifs left
-    // sel exactly 0.5 or 1.5 falling through with no color set at all.
-    sel = fmod(ang*seats/360, 3);
-    if(sel < 0.5) {
-      glColor3f(0.85, 0.22, 0.25);
-    } else if(sel < 1.5) {
-      glColor3f(0.2, 0.6, 0.62);
-    } else {
-      glColor3f(0.9, 0.7, 0.25);
+    // Mid-to-high sky: violet to deep canvas ink
+    glColor4f(0.55 * mid, 0.3 * mid, 1.0 * mid, 1);
+    glVertex3f(-170, 9, -58);
+    glVertex3f(170, 9, -58);
+    glColor4f(0.05, 0.06, 0.08, 1);
+    glVertex3f(170, 65, -58);
+    glVertex3f(-170, 65, -58);
+  glEnd();
+
+  // 2. Distant mountain silhouette layers (soft misty ridges framing horizon)
+  // Far misty mountain ridge
+  glBegin(GL_TRIANGLE_STRIP);
+    for(k, 0, 18) {
+      hx = -170 + 340 * k / 17;
+      hy = 3.6 + 2.2 * sin(0.045 * hx + 1.2) + 1.1 * cos(0.09 * hx);
+      glColor4f(0.16 * mid, 0.1 * mid, 0.28 * mid, 1);
+      glVertex3f(hx, hy, -56);
+      glColor4f(0.3 * low, 0.12 * low, 0.1 * low, 1);
+      glVertex3f(hx, 0, -56);
     }
-    glPushMatrix();
-      glTranslatef(0, 0.55 + bob, 0);
-      glRotatef(90, 0, 1, 0);
-      glFrontFace(GL_CW); // Teapots have front face's reversed for some reason
-      glutSolidTeapot(0.38);
-      glFrontFace(GL_CCW);
-    glPopMatrix();
+  glEnd();
+
+  // Near darker ridge
+  glBegin(GL_TRIANGLE_STRIP);
+    for(k, 0, 18) {
+      hx = -170 + 340 * k / 17;
+      hy = 1.8 + 1.4 * sin(0.06 * hx + 3.2) + 0.7 * sin(0.12 * hx + 0.4);
+      glColor4f(0.2 * low, 0.22 * low, 0.3 * low, 1);
+      glVertex3f(hx, hy, -55);
+      glColor4f(0.05, 0.06, 0.08, 1);
+      glVertex3f(hx, 0, -55);
+    }
+  glEnd();
+}
+
+// Crescent moon with glowing atmospheric corona halo.
+void moon() {
+  float ma;
+  glPushMatrix();
+    glTranslatef(-22, 28, -52);
+
+    // Glowing corona halo
+    glPointSize(54);
+    glBegin(GL_POINTS);
+      glColor4f(0.92, 0.95, 0.98, 0.08);
+      glVertex3f(0, 0, 0);
+    glEnd();
+    glPointSize(28);
+    glBegin(GL_POINTS);
+      glColor4f(1, 0.85, 0.15, 0.18);
+      glVertex3f(0, 0, 0);
+    glEnd();
+
+    // Crescent arc
+    glLineWidth(2);
+    glBegin(GL_LINE_STRIP);
+      for(k, 0, 15) {
+        ma = -1.2 + 2.4 * k / 14;
+        glColor4f(0.92, 0.95, 0.98, 0.9);
+        glVertex3f(1.6 * cos(ma), 1.6 * sin(ma), 0);
+      }
+    glEnd();
+    glLineWidth(1);
   glPopMatrix();
+}
+
+// Stars twinkle out of phase; they dissolve into the bright horizon.
+void stars() {
+  float sy, tw;
+  glPointSize(5);
+  glBegin(GL_POINTS);
+    for(k, 0, 80) {
+      sy = 4 + 46 * rand(42, k);
+      tw = 0.55 + 0.45 * sin(2.3 * t + 6.28 * rand(43, k));
+      glColor4f(0.92, 0.95, 0.98, 0.8 * tw * smoothstep(4, 12, sy));
+      glVertex3f(150 * rand2(41, k), sy, -54);
+    }
+  glEnd();
+}
+
+// Translucent water: near edge stays clear so reflections read through,
+// the far edge mirrors the sunset with specular ripple streaks.
+void water() {
+  float far, rz, rx, rw, ro;
+  far = 0.32;
+  glBegin(GL_QUADS);
+    glColor4f(1.0 * far, 0.35 * far, 0.2 * far, 0.95);
+    glVertex3f(-160, 0, -55);
+    glVertex3f(160, 0, -55);
+    glColor4f(0.05, 0.06, 0.08, 0.55);
+    glVertex3f(160, 0, 14);
+    glVertex3f(-160, 0, 14);
+  glEnd();
+
+  // Subtle water ripple streaks (gentle horizontal specular lines)
+  glLineWidth(1);
+  glBegin(GL_LINES);
+    for(k, 0, 14) {
+      rz = -2 - 2.6 * k;
+      rx = 14 * sin(0.35 * t + 0.9 * k);
+      rw = 6 + 5 * sin(0.25 * t + 1.3 * k);
+      ro = 0.15 + 0.1 * sin(1.4 * t + 0.8 * k);
+      glColor4f(1.0, 0.85, 0.15, ro * (1 - smoothstep(-45, -2, rz)));
+      glVertex3f(rx - rw, 0.02, rz);
+      glVertex3f(rx + rw, 0.02, rz);
+    }
+  glEnd();
+}
+
+// Sparse firelight glints: pow() gates the sine so each spark spends
+// most of its cycle dark, then flashes.
+void glints() {
+  float gx, gz, gp, ga;
+  glPointSize(6);
+  glBegin(GL_POINTS);
+    for(k, 0, lanterns * 2) {
+      gx = 1.33 * spread * rand2(51, k);
+      gz = 0 - 3 - 26 * rand(52, k);
+      gp = TAU * rand(53, k);
+      ga = pow(0.5 + 0.5 * sin(1.8 * t + gp), 6);
+      glColor4f(1.0, 0.85, 0.15, 0.85 * ga);
+      glVertex3f(gx + 0.3 * sin(0.9 * t + gp), 0.04, gz);
+    }
+  glEnd();
+}
+
+// Floating river lanterns (candle boats) drifting gently on the water.
+void river_lanterns() {
+  float rx, rz, rph, rglow, rsz, pax;
+  for(k, 0, riverLights) {
+    rph = TAU * rand(71, k);
+    rx = 1.05 * spread * rand2(72, k) + 0.4 * sin(0.35 * t + rph);
+    rz = -2 - 16 * rand(73, k) + 0.3 * cos(0.28 * t + rph);
+    rglow = bright * (0.75 + 0.25 * sin(4.5 * t + 4 * rph));
+    rsz = 0.35 + 0.2 * rand(74, k);
+
+    glPushMatrix();
+      glTranslatef(rx, 0.03, rz);
+      glScalef(rsz, rsz, rsz);
+
+      // Lotus petal boat base (warm dark amber)
+      glBegin(GL_TRIANGLE_FAN);
+        glColor4f(0.55 * rglow, 0.22 * rglow, 0.1 * rglow, 0.85);
+        glVertex3f(0, -0.04, 0);
+        glColor4f(0.85 * rglow, 0.4 * rglow, 0.15 * rglow, 0.7);
+        for(j, 0, 6) {
+          pax = TAU * j / 5;
+          glVertex3f(0.5 * cos(pax), 0.1, 0.5 * sin(pax));
+        }
+      glEnd();
+
+      // Flame core & water reflection glow
+      glPointSize(8);
+      glBegin(GL_POINTS);
+        glColor4f(1.0 * rglow, 0.95 * rglow, 0.6 * rglow, 0.95);
+        glVertex3f(0, 0.16, 0);
+      glEnd();
+
+      glPointSize(22);
+      glBegin(GL_POINTS);
+        glColor4f(1.0 * rglow, 0.6 * rglow, 0.15 * rglow, 0.25);
+        glVertex3f(0, 0.05, 0);
+      glEnd();
+    glPopMatrix();
+  }
+}
+
+// Sky lantern: curved paper canopy, bamboo collar, white-hot flame core,
+// and breathing atmospheric bloom halo.
+void lantern(px, py, pz, s, glow) {
+  float ax, ca, sa;
+  glPushMatrix();
+    glTranslatef(px, py, pz);
+    glScalef(s, s, s);
+    // Multi-axis swaying wobble
+    glRotatef(12 * sin(0.85 * t + px + pz), 1, 0, 0.2);
+    glRotatef(7 * cos(0.65 * t + 0.7 * px), 0, 0, 1);
+
+    // 1. Upper dome canopy (translucent coral paper)
+    glBegin(GL_TRIANGLE_FAN);
+      glColor4f(0.6 * glow, 0.22 * glow, 0.12 * glow, 0.92);
+      glVertex3f(0, 1.48, 0);
+      glColor4f(glow, 0.45 * glow, 0.2 * glow, 0.92);
+      for(k, 0, 7) {
+        ax = TAU * k / 6;
+        glVertex3f(0.62 * cos(ax), 0.95, 0.62 * sin(ax));
+      }
+    glEnd();
+
+    // 2. Cylindrical lantern body (tapering gently to collar)
+    glBegin(GL_QUAD_STRIP);
+      for(k, 0, 7) {
+        ax = TAU * k / 6;
+        ca = cos(ax);
+        sa = sin(ax);
+        glColor4f(glow, 0.45 * glow, 0.2 * glow, 0.92);
+        glVertex3f(0.62 * ca, 0.95, 0.62 * sa);
+        glColor4f(glow, 0.85 * glow, 0.25 * glow, 0.96);
+        glVertex3f(0.46 * ca, 0.08, 0.46 * sa);
+      }
+    glEnd();
+
+    // 3. Bamboo base collar rim
+    glColor4f(0.35 * glow, 0.14 * glow, 0.07 * glow, 0.85);
+    glPointSize(5);
+    glBegin(GL_POINTS);
+      glVertex3f(0, 0.08, 0);
+    glEnd();
+
+    // 4. White-hot inner candle flame
+    glPointSize(8);
+    glBegin(GL_POINTS);
+      glColor4f(glow, 0.95 * glow, 0.7 * glow, 0.95);
+      glVertex3f(0, 0.24, 0);
+    glEnd();
+
+    // 5. Soft atmospheric bloom halo
+    glPointSize(34);
+    glBegin(GL_POINTS);
+      glColor4f(0.95 * glow, 0.35 * glow, 0.16 * glow, 0.26);
+      glVertex3f(0, 0.6, 0);
+    glEnd();
+  glPopMatrix();
+}
+
+// Distant rising ember flock (tiny glowing particles ascending into the high sky).
+void distant_flock() {
+  float ex, ey, ez, ep, eg;
+  glPointSize(5);
+  glBegin(GL_POINTS);
+    for(k, 0, 36) {
+      ep = TAU * rand(81, k);
+      ey = fmod(rise * 0.45 * t + 32 * rand(82, k), 32);
+      ex = 1.35 * spread * rand2(83, k) + sin(0.25 * t + ep);
+      ez = -10 - 24 * rand(84, k);
+      eg = bright * smoothstep(0, 2.5, ey) * (1 - smoothstep(26, 32, ey));
+      glColor4f(1.0, 0.7 * eg, 0.2 * eg, 0.8 * eg);
+      glVertex3f(ex, ey + 0.2, ez);
+    }
+  glEnd();
+}
+
+// Per-lantern flight: seeded phase/speed/size with 16-unit rise wrap.
+void launch(i, mirror) {
+  float ph, spd, riseT, ypos, cyc, xpos, zpos;
+  float fade, flick, dim, sz, g;
+  ph = TAU * rand(11, i);
+  spd = rise * (0.7 + 0.6 * rand(12, i));
+  riseT = spd * t + 16 * rand(13, i);
+  ypos = fmod(riseT, 16);
+  cyc = floor(riseT / 16);
+  xpos = spread * rand2(21, i + 9 * cyc) + 0.95 * sin(0.3 * t + ph);
+  zpos = 0 - 4 - 22 * rand(22, i + 9 * cyc) + 0.75 * cos(0.22 * t + ph);
+  fade = smoothstep(0, 2.2, ypos) * (1 - smoothstep(12, 16, ypos));
+  flick = 0.84 + 0.16 * sin(5.2 * t + 6 * ph);
+  dim = 1 - 0.55 * smoothstep(5, 28, 0 - zpos);
+  sz = 0.52 + 0.38 * rand(23, i);
+  g = bright * fade * flick * dim;
+
+  if(mirror > 0.5) {
+    glPushMatrix();
+      // Squashed, rippled reflection in the water
+      glScalef(1.1, -0.65, 1.1);
+      lantern(xpos + 0.25 * sin(1.8 * t + 0.8 * zpos), ypos + 0.35, zpos, sz, 0.45 * g);
+    glPopMatrix();
+  } else {
+    lantern(xpos, ypos + 0.35, zpos, sz, g);
+  }
 }
 --- display_header ---
 void display(void) {
   glLoadIdentity();
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
-  // Eye-space light positions, set before the camera transform.
-  glLightfv(GL_LIGHT0, GL_POSITION, repl_glfloat4(0, 0, -1, 1));
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
-  glRotatef(10.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(24.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -1.2000f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -24.0000f);   // @camera dist
+  glRotatef(6.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -5.0000f, -0.0000f);   // @camera pan
 --- header_post ---
 --- source ---
 
+
+  // Keep config sensible
+  rise = clamp(rise, 0.1, 2.0);
+  bright = clamp(bright, 0.1, 10.0);
+  lanterns = max(0, round(lanterns));
+  riverLights = max(0, round(riverLights));
+
+  // Lantern Festival - night sky.
+  // Paper lanterns rise off dark water into a dusk sky: additive glow,
+  // wobbling reflections under a translucent water plane, floating river
+  // lanterns, distant mountain ridges, twinkling stars, and firelight glints.
+
+  glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glEnable(GL_COLOR_MATERIAL);
-  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1});
-  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
-
   glEnable(GL_DEPTH_TEST);
-  glEnable(GL_NORMALIZE);
-  glEnable(GL_LIGHTING);
-  glEnable(GL_LIGHT0);
-  glEnable(GL_LIGHT1);
+  glDisable(GL_LIGHTING);
+  glEnable(GL_BLEND);
+  glEnable(GL_POINT_SMOOTH);
+  glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, (GLfloat[]){0.3, 0, 0.004});
 
-  glPushMatrix();
-    glRotatef(t * spinRate * 360, 0, 1, 0);
+  sky();
+  moon();
+  stars();
 
-    // Deck: triangle-fan disc, rim swept by the bulb chase phase
-    // (i*TAU*4/bulbs ~= the bulbs' i*0.9 step, but closes the loop exactly)
-    glDisable(GL_LIGHTING);
-    glBegin(GL_TRIANGLE_FAN);
-      glColor3f(0.2, 0.12, 0.06);
-      glVertex3f(0, 0, 0);
-      for(i, 0, bulbs + 1) {
-        glow = 0.6 + 0.4 * sin(6*t + i*TAU*4/bulbs);
-        glColor3f(0.45, 0.07 + 0.31*glow, 0.16*glow);
-        glVertex3f(2.6*cos(i*TAU/bulbs), 0, 2.6*sin(i*TAU/bulbs));
-      }
-    glEnd();
-    glEnable(GL_LIGHTING);
-
-    // Center column
-    glColor3f(0.72, 0.58, 0.28);
-    glPushMatrix();
-      glTranslatef(0, 1, 0);
-      glScalef(0.16, 2, 0.16);
-      glutSolidCube(1);
-    glPopMatrix();
-
-    // Striped canopy: three stacked squashed spheres + gold finial
-    glColor3f(0.78, 0.16, 0.2);
-    glPushMatrix();
-      glTranslatef(0, 2, 0);
-      glScalef(2.9, 0.6, 2.9);
-      glutSolidSphere(1, 36, 18);
-    glPopMatrix();
-    glColor3f(0.92, 0.88, 0.8);
-    glPushMatrix();
-      glTranslatef(0, 2.22, 0);
-      glScalef(2.1, 0.5, 2.1);
-      glutSolidSphere(1, 32, 16);
-    glPopMatrix();
-    glColor3f(0.78, 0.16, 0.2);
-    glPushMatrix();
-      glTranslatef(0, 2.46, 0);
-      glScalef(1.3, 0.42, 1.3);
-      glutSolidSphere(1, 28, 14);
-    glPopMatrix();
-    glColor3f(0.95, 0.78, 0.3);
-    glPushMatrix();
-      glTranslatef(0, 2.95, 0);
-      glutSolidSphere(0.12, 16, 12);
-    glPopMatrix();
-
-    // Gold rim ring at the canopy edge -- mounts the bulb chase
-    glColor3f(0.72, 0.58, 0.28);
-    glPushMatrix();
-      glTranslatef(0, 1.75, 0);
-      glRotatef(90, 1, 0, 0);
-      glutSolidTorus(0.05, 2.7, 12, 48);
-    glPopMatrix();
-
-    for(i, 0, seats) {
-      drawSeat(i * 360 / seats);
-    }
-
-    // Fairground bulbs: additive points chasing around both rims
-    glDisable(GL_LIGHTING);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-    glEnable(GL_POINT_SMOOTH);
-    glDepthMask(GL_FALSE);
-    glPointSize(26);
-    glBegin(GL_POINTS);
-      for(i, 0, bulbs) {
-        glow = 0.6 + 0.4 * sin(6*t - i*0.9);
-        glColor4f(1, 0.15 + 0.7*glow, 0.35*glow, glow);
-        glVertex3f(2.84*cos(i*TAU/bulbs), 1.78, 2.84*sin(i*TAU/bulbs));
-      }
-    glEnd();
-    glBegin(GL_POINTS);
-      for(i, 0, bulbs) {
-        glow = 0.6 + 0.4 * sin(6*t + i*0.9);
-        glColor4f(1, 0.15 + 0.7*glow, 0.35*glow, glow);
-        glVertex3f(2.66*cos(i*TAU/bulbs + 0.11), 0.06, 2.66*sin(i*TAU/bulbs + 0.11));
-      }
-    glEnd();
-    glDepthMask(GL_TRUE);
-  glPopMatrix();
-
-  if(t > 5 && t < 10) {
-    console("Eerie...");
+  // 1. Reflected lanterns under water plane
+  glDepthMask(GL_FALSE);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  for(i, 0, lanterns) {
+    launch(i, 1);
   }
+
+  // 2. Translucent water surface
+  glDepthMask(GL_TRUE);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  water();
+
+  // 3. Floating water lanterns, distant flock, sparks and real ascending sky flock
+  glDepthMask(GL_FALSE);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glints();
+  river_lanterns();
+  distant_flock();
+
+  for(i, 0, lanterns) {
+    launch(i, 0);
+  }
+  glDepthMask(GL_TRUE);
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);

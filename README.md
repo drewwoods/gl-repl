@@ -61,7 +61,7 @@ glEnd();
 
 <sub>**[Read the User Guide →](docs/USER_GUIDE.md)** - every feature, with screenshots. Start here.</sub>
 
-<sub>These three are from the [showcase](docs/SHOWCASE.md): 40 built-in scenes, each a screenful of typed GL.</sub>
+<sub>These three are from the [showcase](docs/SHOWCASE.md): 41 built-in scenes, each a screenful of typed GL.</sub>
 
 </div>
 
@@ -77,7 +77,7 @@ glEnd();
 make gl-repl
 
 ./gl-repl                  # fresh session - type GL commands, ; after each
-./gl-repl --example "Torus knot"  # or start from a built-in (F12 cycles all 40)
+./gl-repl --example "Torus knot"  # or start from a built-in (F12 cycles all 41)
 ./gl-repl output.c         # reload a saved session
 printf 'glutSolidCube(1);\n' | ./gl-repl -  # load a snippet from stdin
 ```

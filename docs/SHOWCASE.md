@@ -477,6 +477,25 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 </tr>
 </table>
 
+### Lighting & materials
+
+<table>
+<tr>
+<td width="33%" align="center">
+
+<!-- images/showcase/material-recipes.png
+     scripts/docs-assets.sh sc-material-recipes -->
+<img src="images/showcase/material-recipes.png" alt="Animation: three rows of GLUT solids showing material recipes as the key light cycles off" width="100%">
+
+**[Material recipes](../examples/scenes/material-color-effects.glr)**
+<br><sub>`glMaterialfv` channel by channel, then five finished materials - watch the key light go out</sub>
+
+</td>
+<td width="33%"></td>
+<td width="33%"></td>
+</tr>
+</table>
+
 ### Stencil masking
 
 <table>
