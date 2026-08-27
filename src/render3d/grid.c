@@ -1725,7 +1725,8 @@ static float grid_sketch_wobble(float u, float v, float seed) {
  * perpendicular wobble tapers to zero at both ends (sin envelope) so adjacent
  * strokes still meet at the cell corners. */
 static void grid_sketch_stroke(float ax, float ay, float bx, float by,
-                               int segs, float seed) {
+                               int segs, float seed, float wobble_scale,
+                               float wobble_freq) {
     float dx = bx - ax, dy = by - ay;
     float len = sqrtf(dx * dx + dy * dy);
     float nx = (len > 1e-5f) ? -dy / len : 0.0f;
@@ -1735,15 +1736,15 @@ static void grid_sketch_stroke(float ax, float ay, float bx, float by,
         float u = (float)k / (float)segs;
         float px = ax + dx * u, py = ay + dy * u;
         float env = sinf(u * (float)M_PI);                 /* 0 at ends, 1 mid */
-        float w = grid_sketch_wobble(u * len, ax + ay, seed) * env;
+        float w = grid_sketch_wobble(u * len * wobble_freq, (ax + ay) * wobble_freq, seed)
+                  * env * wobble_scale;
         glVertex3f(px + nx * w, py + ny * w, GRID_2D_Z);
     }
     glEnd();
 }
 
 /* GLUT stroke (line) glyphs anchored at (x,y) in the XY plane, `scale` world
- * units per font unit. Matches the inked aesthetic (and scales with the sheet
- * on zoom, unlike the fixed-pixel bitmap font). Color + line width are the
+ * units per font unit. Matches the inked aesthetic. Color + line width are the
  * caller's. */
 static void grid_stroke_text(float x, float y, float scale, const char *str) {
     glPushMatrix();
@@ -1762,7 +1763,7 @@ static float grid_stroke_text_width(float scale, const char *str) {
 }
 
 /* Smallest "nice" multiplier (1, 2, 5, 10, 20, 50, ...) that is >= ratio. Used
- * to thin the Sketchbook labels to a legible interval when zoomed out. */
+ * to coarsen or subdivide Sketchbook and Checkerboard grid steps. */
 static float grid_nice_step_mul(float ratio) {
     if (!(ratio > 1.0f)) return 1.0f;
     float p = 1.0f;
@@ -1776,60 +1777,84 @@ static float grid_nice_step_mul(float ratio) {
 
 /* Sketchbook: a hand-drawn coordinate graph that fills the 2D ortho view -
  * wobbly ink cell lines snapped to real world coordinates, each labelled with
- * its value (labels thin to a nice stride when zoomed out). */
+ * its value (subdivides into sub-1 unit decimal ticks when zoomed in). In 3D
+ * mode it renders as a vertical wall spanning [-extent, extent]. */
 static void render3d_grid_render_sketch_theme(const Render3dRenderConfig *config,
                                               const GridDrawContext *grid_ctx) {
     /* Hand-drawn coordinate graph: wobbly ink cell lines snapped to real
-     * world coordinates (multiples of the grid `major` step), labelled with
-     * their actual value so the labels line up with the gridlines.
+     * world coordinates (multiples/subdivisions of the grid `major` step),
+     * labelled with their actual value so the labels line up with the gridlines.
      *
      * Fit to the live ortho view: in the 2D ortho projection glOrtho's matrix
      * gives the visible world half-extents exactly (half = 1/|proj[diag]|) at
-     * ANY zoom, so they must NOT be clamped to a small band - that snapped the
-     * grid to a fixed box once zoomed out far enough. Only the non-ortho (3D
-     * wall) / degenerate case falls back to a fixed size. The view is centred
-     * on the camera pan (cam_tx, cam_ty). */
+     * ANY zoom. In 3D perspective mode it renders as a vertical wall spanning
+     * [-extent, extent] in XY, honouring the Grid extent setting. */
     GLfloat pm[16];
     glGetFloatv(GL_PROJECTION_MATRIX, pm);
     int is_ortho = fabsf(pm[15] - 1.0f) < 1e-3f && fabsf(pm[11]) < 1e-3f;
     float half_w, half_h;
+    float vx0, vx1, vy0, vy1;
+    float vh_px = (config->render3d_h > 0) ? (float)config->render3d_h : 600.0f;
+
     if (is_ortho && fabsf(pm[0]) > 1e-9f && fabsf(pm[5]) > 1e-9f) {
         half_w = 1.0f / fabsf(pm[0]);
         half_h = 1.0f / fabsf(pm[5]);
+        if (!(half_h > 0.05f && half_h < 1.0e5f)) half_h = 4.0f;
+        if (!(half_w > 0.05f && half_w < 1.0e5f)) half_w = half_h * 1.4f;
+        float cx = config->cam_tx, cy = config->cam_ty;
+        vx0 = cx - half_w; vx1 = cx + half_w;
+        vy0 = cy - half_h; vy1 = cy + half_h;
     } else {
-        half_h = 4.0f; half_w = 5.6f;
+        /* 3D perspective wall: span [-extent, extent] centred at origin,
+         * honouring the Grid extent setting. */
+        float ext = grid_ctx->extent;
+        if (ext < 2.0f) ext = 2.0f;
+        if (ext > 80.0f) ext = 80.0f;
+        vx0 = -ext; vx1 = ext;
+        vy0 = -ext; vy1 = ext;
+        float dist = config->cam_dist > 0.5f ? config->cam_dist : 6.0f;
+        half_h = (fabsf(pm[5]) > 1e-4f) ? dist / fabsf(pm[5]) : 4.0f;
+        half_w = (fabsf(pm[0]) > 1e-4f) ? dist / fabsf(pm[0]) : 5.6f;
+        if (half_h < 0.5f || half_h > 400.0f) half_h = 4.0f;
+        if (half_w < 0.5f || half_w > 600.0f) half_w = 5.6f;
     }
-    if (!(half_h > 0.05f && half_h < 1.0e5f)) half_h = 4.0f;
-    if (!(half_w > 0.05f && half_w < 1.0e5f)) half_w = half_h * 1.4f;
-    float cx = config->cam_tx, cy = config->cam_ty;
 
     float cell = grid_ctx->major;
     if (cell < 0.25f) cell = 0.25f;
 
-    /* Coarsen the cell to a nice multiple of `major` (1/2/5/10...) as the view
-     * grows, so the grid keeps a clean, legible step (and the labels stay
-     * readable, and the work stays bounded) instead of crowding to a fine mesh
-     * when zoomed out. At the nominal zoom the multiplier is 1 (unchanged). */
-    {
-        float vh_px = (config->render3d_h > 0) ? (float)config->render3d_h : 600.0f;
-        float px_per_cell = cell * vh_px / (2.0f * half_h);
-        if (px_per_cell > 1e-3f)
-            cell *= grid_nice_step_mul(34.0f / px_per_cell);
+    /* Cell spacing: coarsens (2x, 5x, 10x...) when zoomed out, and subdivides
+     * into clean decimal sub-units (0.5, 0.2, 0.1, 0.05...) when zoomed in (2D mode),
+     * maintaining a readable ~40-120px cell spacing. */
+    float px_per_cell = cell * vh_px / (2.0f * half_h);
+    if (px_per_cell < 34.0f && px_per_cell > 1e-3f) {
+        cell *= grid_nice_step_mul(34.0f / px_per_cell);
+    } else if (px_per_cell > 120.0f && is_ortho) {
+        cell /= grid_nice_step_mul(px_per_cell / 120.0f);
     }
 
-    /* Visible world bounds, centred on the camera pan. The line spans run the
-     * full view edge-to-edge so the graph fills the screen. Cap the drawn span
-     * so an extreme zoom-out can't emit an unbounded number of strokes. */
-    float vx0 = cx - half_w, vx1 = cx + half_w;
-    float vy0 = cy - half_h, vy1 = cy + half_h;
+    /* Cap the drawn span so an extreme zoom-out can't emit an unbounded number of strokes. */
     const float MAX_HALF = 300.0f * cell;
-    if (half_w > MAX_HALF) { vx0 = cx - MAX_HALF; vx1 = cx + MAX_HALF; }
-    if (half_h > MAX_HALF) { vy0 = cy - MAX_HALF; vy1 = cy + MAX_HALF; }
-    float left  = ceilf(vx0 / cell) * cell;
-    float right = floorf(vx1 / cell) * cell;
-    float bot   = ceilf(vy0 / cell) * cell;
-    float top   = floorf(vy1 / cell) * cell;
-    if (right < left - 1e-3f || top < bot - 1e-3f) return;
+    if (half_w > MAX_HALF && is_ortho) {
+        float cx = config->cam_tx;
+        vx0 = cx - MAX_HALF; vx1 = cx + MAX_HALF;
+    }
+    if (half_h > MAX_HALF && is_ortho) {
+        float cy = config->cam_ty;
+        vy0 = cy - MAX_HALF; vy1 = cy + MAX_HALF;
+    }
+
+    int i_left  = (int)ceilf(vx0 / cell);
+    int i_right = (int)floorf(vx1 / cell);
+    int i_bot   = (int)ceilf(vy0 / cell);
+    int i_top   = (int)floorf(vy1 / cell);
+    if (i_right < i_left || i_top < i_bot) return;
+    if (i_right - i_left > 400) i_right = i_left + 400;
+    if (i_top - i_bot > 400) i_top = i_bot + 400;
+
+    /* Scale wobble amplitude and spatial frequency proportionally with sub-unit cell size
+     * so strokes look consistently hand-inked on screen without distorting cell geometry. */
+    float wobble_scale = fminf(1.0f, cell);
+    float wobble_freq  = (cell < 1.0f && cell > 1e-5f) ? (1.0f / cell) : 1.0f;
 
     const float ink_r = 0.74f, ink_g = 0.80f, ink_g2 = 0.92f;
     int vsegs = (int)((vy1 - vy0) / cell * 3.0f) + 3;
@@ -1838,51 +1863,67 @@ static void render3d_grid_render_sketch_theme(const Render3dRenderConfig *config
     if (hsegs > 240) hsegs = 240;
 
     /* Vertical cell lines (bold + faint pass); the x=0 axis line is heavier. */
-    for (float x = left; x <= right + 1e-3f; x += cell) {
-        int axis = (fabsf(x) < cell * 0.25f);
+    for (int i = i_left; i <= i_right; i++) {
+        float x = (float)i * cell;
+        int axis = (i == 0);
         for (int s = 0; s < 2; s++) {
             grid_color(grid_ctx, ink_r, ink_g, ink_g2,
                        s == 0 ? (axis ? 0.85f : 0.50f) : 0.16f);
             glLineWidth(s == 0 ? (axis ? 2.1f : 1.4f) : 0.9f);
-            grid_sketch_stroke(x, vy0, x, vy1, vsegs, x * 4.3f + s * 31.7f);
+            grid_sketch_stroke(x, vy0, x, vy1, vsegs,
+                               (float)i * 4.3f + (float)s * 31.7f,
+                               wobble_scale, wobble_freq);
         }
     }
     /* Horizontal cell lines; the y=0 axis line is heavier. */
-    for (float y = bot; y <= top + 1e-3f; y += cell) {
-        int axis = (fabsf(y) < cell * 0.25f);
+    for (int j = i_bot; j <= i_top; j++) {
+        float y = (float)j * cell;
+        int axis = (j == 0);
         for (int s = 0; s < 2; s++) {
             grid_color(grid_ctx, ink_r, ink_g, ink_g2,
                        s == 0 ? (axis ? 0.85f : 0.50f) : 0.16f);
             glLineWidth(s == 0 ? (axis ? 2.1f : 1.4f) : 0.9f);
-            grid_sketch_stroke(vx0, y, vx1, y, hsegs, y * 5.1f + s * 23.3f + 100.0f);
+            grid_sketch_stroke(vx0, y, vx1, y, hsegs,
+                               (float)j * 5.1f + (float)s * 23.3f + 100.0f,
+                               wobble_scale, wobble_freq);
         }
     }
 
     /* Coordinate labels: x values along the bottom of the view, y values down
-     * the left of the view - each centred on its (coarsened) gridline so it
-     * lines up with the value. Inset just enough that the glyphs don't clip. */
+     * the left of the view - each centred on its gridline so it lines up with the value.
+     * Sized for the hand-drawn sketch look, with font scale and insets capped on zoom-in
+     * so numbers stay readable (~22px max screen height) and pinned to margins. */
+    float px_world = (2.0f * half_h) / vh_px;
+    if (!(px_world > 1e-7f)) px_world = 8.0f / 600.0f;
     float ta = fminf(grid_ctx->xn_alpha * grid_ctx->grid_brightness, 1.0f);
-    float lbl = fminf(0.0036f, fmaxf(0.0020f, cell * 0.0034f));   /* ~0.3 world units */
-    float xlbl_y = vy0 + cell * 0.38f;          /* just above the bottom edge */
-    float ylbl_x = vx0 + cell * 0.12f;          /* just right of the left edge */
+    float nominal_lbl = fminf(0.0036f, fmaxf(0.0020f, cell * 0.0034f));
+    float max_lbl = (22.0f / 119.05f) * px_world;
+    float lbl = (cell < 1.0f) ? max_lbl : fminf(nominal_lbl, max_lbl);
+    float xlbl_y = vy0 + 12.0f * px_world;
+    float ylbl_x = vx0 + 14.0f * px_world;
+    float y_offset = 4.0f * px_world;
+    float xlbl_start = vx0 + 65.0f * px_world;
 
     glLineWidth(1.3f);
     glColor4f(0.86f, 0.90f, 0.97f, ta);
-    /* Start the x labels one cell in from the left edge so the leftmost one
-     * never lands on top of the y-axis label column in the bottom-left corner. */
-    float xlbl_start = vx0 + cell * 1.05f;
-    for (float x = left; x <= right + 1e-3f; x += cell) {
-        if (x < xlbl_start) continue;           /* clear the y-label column */
-        if (fabsf(x) < cell * 0.25f) continue;  /* skip 0 (shared with y-axis) */
-        char b[16];
-        snprintf(b, sizeof b, "%g", (double)x);
+    for (int i = i_left; i <= i_right; i++) {
+        if (i == 0) continue;                       /* skip 0 (shared with y-axis) */
+        float x = (float)i * cell;
+        double val = (double)i * (double)cell;
+        if (fabs(val) < 1e-9) val = 0.0;
+        char b[32];
+        snprintf(b, sizeof b, "%g", val);
         float tw = grid_stroke_text_width(lbl, b);
+        if (x - tw * 0.5f < xlbl_start) continue;   /* clear the y-label column */
         grid_stroke_text(x - tw * 0.5f, xlbl_y, lbl, b);
     }
-    for (float y = bot; y <= top + 1e-3f; y += cell) {
-        char b[16];
-        snprintf(b, sizeof b, "%g", (double)y);
-        grid_stroke_text(ylbl_x, y + cell * 0.10f, lbl, b);
+    for (int j = i_bot; j <= i_top; j++) {
+        float y = (float)j * cell;
+        double val = (double)j * (double)cell;
+        if (fabs(val) < 1e-9) val = 0.0;
+        char b[32];
+        snprintf(b, sizeof b, "%g", val);
+        grid_stroke_text(ylbl_x, y + y_offset, lbl, b);
     }
     glLineWidth(1.0f);
 }
