@@ -73,12 +73,22 @@
 #define STAR_BAND_CUT_LARGE 0.94f
 
 /* Lowest elevation a star may occupy, as a polar angle from the zenith.
- * Just past 90deg, so a level camera sees the field run into the horizon
- * with no visible edge, while a camera tilted down finds no stars
- * littered across the ground plane. The old 0.80*PI span put a third of
- * the field up to 54deg *below* the horizon, where the grid's
- * translucent lines let it show through. */
-#define STAR_PHI_MAX      (0.53f * (float)M_PI)
+ * The starfield comes in two spans, because its callers disagree about
+ * whether the world has a floor:
+ *
+ * HORIZON - Cityscape, which stands on the grid plane. Just past 90deg,
+ *   so a level camera sees the field run into the horizon with no
+ *   visible edge, while a camera tilted down finds no stars littered
+ *   across the ground. (The original 0.80*PI span put a third of the
+ *   field up to 54deg *below* the horizon, where the grid's translucent
+ *   lines let it show through.)
+ *
+ * FULL - Stars and Nebula, which are the space backdrops: planet and
+ *   orrery scenes are viewed from every angle and have no ground, so a
+ *   hemisphere of sky above an empty void is the wrong picture. The
+ *   scatter closes over the whole sphere. */
+#define STAR_PHI_HORIZON  (0.53f * (float)M_PI)
+#define STAR_PHI_FULL     ((float)M_PI)
 
 /* Per-band alpha scale, applied on top of the twinkle term. Size alone
  * gave a flat field - a 1.5px star and a 4.5px star both landed near
@@ -756,12 +766,26 @@ static void backdrop_end_sky_point_state(void) {
     render3d_backdrop_pop_state();
 }
 
+/* phi_max is the span from STAR_PHI_* above: how far down from the zenith
+ * the scatter reaches. */
 static void draw_starry_sky(
     float anim_time,
+    float phi_max,
     int point_parameter_supported,
     void (APIENTRY *point_parameter_proc)(GLenum pname, const GLfloat *params)) {
     backdrop_begin_sky_point_state(point_parameter_supported,
                                    point_parameter_proc);
+
+    /* Scale the count with the span so the two spans render at the same
+     * stars-per-steradian instead of stretching one fixed count thinner
+     * over the larger one - the full sphere is nearly twice the solid
+     * angle of the horizon-capped dome, which as a flat count would read
+     * as a conspicuously emptier sky. (1 - cos(phi)) is the span's solid
+     * angle over 2*pi; the ratio against the horizon span is what keeps
+     * STAR_COUNT meaning what it always did. */
+    const float span = 1.0f - cosf(phi_max);
+    const int star_count =
+        (int)(STAR_COUNT * span / (1.0f - cosf(STAR_PHI_HORIZON)));
 
     /* Four point-size bands; cumulative cutoffs are the STAR_BAND_CUT_*
      * above, and band_alpha dims with size so the field carries a
@@ -773,10 +797,10 @@ static void draw_starry_sky(
     };
     const int band_cuts[5] = {
         0,
-        (int)(STAR_COUNT * STAR_BAND_CUT_SMALL),
-        (int)(STAR_COUNT * STAR_BAND_CUT_MED),
-        (int)(STAR_COUNT * STAR_BAND_CUT_LARGE),
-        STAR_COUNT,
+        (int)(star_count * STAR_BAND_CUT_SMALL),
+        (int)(star_count * STAR_BAND_CUT_MED),
+        (int)(star_count * STAR_BAND_CUT_LARGE),
+        star_count,
     };
 
     for (int bi = 0; bi < 4; bi++) {
@@ -787,14 +811,14 @@ static void draw_starry_sky(
             unsigned int base = (unsigned int)(i * STAR_RNG_STRIDE + STAR_RNG_SEED);
 
             /* Spherical coords: theta all-around, phi from the zenith down
-             * to STAR_PHI_MAX. Sampling *cos(phi)* uniformly - not phi -
-             * is what makes the scatter area-uniform over the dome. Linear
+             * to phi_max. Sampling *cos(phi)* uniformly - not phi - is
+             * what makes the scatter area-uniform over the sphere. Linear
              * phi crowds the pole, which showed up as a dense knot of
              * stars straight overhead thinning out toward the horizon.
-             * sin(phi) is non-negative across the whole span, so the
-             * sqrt form of the identity is exact here. */
+             * sin(phi) is non-negative for phi in [0, pi], so the sqrt
+             * form of the identity is exact across either span. */
             float theta = city_rng(base + 1u) * 2.0f * (float)M_PI;
-            float cp = 1.0f - city_rng(base + 2u) * (1.0f - cosf(STAR_PHI_MAX));
+            float cp = 1.0f - city_rng(base + 2u) * span;
             float sp = sqrtf(1.0f - cp * cp);
 
             float sx = sp * cosf(theta) * STAR_SKY_RADIUS;
@@ -1192,9 +1216,14 @@ static void nebula_draw_clouds(float anim_time) {
                       * NEBULA_BAND_SPREAD;
         float d[3];
         nebula_band_dir(theta, phi_off, d);
-        /* Skip puffs sunk below the horizon: the grid floor owns that
-         * half of the view, and the dome dips only slightly under it. */
-        if (d[1] < -0.05f) continue;
+        /* No horizon clip: the band is a great circle and Nebula is a
+         * space backdrop, used for planet and orrery scenes that are
+         * viewed from every angle. Clipping the lower half assumed a
+         * grid floor owned that part of the view - true of a scene
+         * standing on the ground, wrong of one floating in it, and it
+         * left the band simply stopping in mid-sky from below. The
+         * puffs are already uniform in theta over the full circle, so
+         * dropping the test restores the band rather than crowding it. */
 
         float radius = NEBULA_SKY_RADIUS * (0.10f + city_rng(base + 5u) * 0.16f);
 
@@ -1227,7 +1256,8 @@ static void nebula_draw_flares(float anim_time) {
         float phi_off = (city_rng(base + 2u) - 0.5f) * NEBULA_BAND_SPREAD;
         float d[3];
         nebula_band_dir(theta, phi_off, d);
-        if (d[1] < 0.12f) continue;   /* keep flares clear of the floor */
+        /* Flares follow the band all the way round for the same reason
+         * the puffs do - see nebula_draw_clouds. */
 
         float t1[3], t2[3];
         nebula_tangent_frame(d, t1, t2);
@@ -2770,13 +2800,15 @@ void render3d_backdrop_setup_lights(const Render3dFrameRenderContext *frame_ctx)
 void render3d_backdrop_render(const Render3dFrameRenderContext *frame_ctx) {
     switch (frame_ctx->config.backdrop_mode) {
     case RENDER3D_BACKDROP_STARS:
-        draw_starry_sky(frame_ctx->config.anim_time,
+        draw_starry_sky(frame_ctx->config.anim_time, STAR_PHI_FULL,
                         frame_ctx->config.point_parameter_supported,
                         frame_ctx->config.point_parameter_proc);
         break;
     case RENDER3D_BACKDROP_CITYSCAPE:
-        /* Stars first so city geometry writes depth over them. */
-        draw_starry_sky(frame_ctx->config.anim_time,
+        /* Stars first so city geometry writes depth over them, and
+         * capped at the horizon - this is the one starfield with a
+         * ground plane under it. */
+        draw_starry_sky(frame_ctx->config.anim_time, STAR_PHI_HORIZON,
                         frame_ctx->config.point_parameter_supported,
                         frame_ctx->config.point_parameter_proc);
         draw_cityscape(frame_ctx->config.anim_time,
@@ -2793,7 +2825,7 @@ void render3d_backdrop_render(const Render3dFrameRenderContext *frame_ctx) {
         draw_nebula(frame_ctx->config.anim_time,
                     frame_ctx->config.point_parameter_supported,
                     frame_ctx->config.point_parameter_proc);
-        draw_starry_sky(frame_ctx->config.anim_time,
+        draw_starry_sky(frame_ctx->config.anim_time, STAR_PHI_FULL,
                         frame_ctx->config.point_parameter_supported,
                         frame_ctx->config.point_parameter_proc);
         break;
