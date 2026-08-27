@@ -33,6 +33,27 @@
 #define CITY_FOG_START_FRAC 0.60f
 #define CITY_FOG_END_FRAC   1.45f
 
+/* Vertical value ramp applied down every facade, as multipliers on the
+ * building's base color at the ring's tallest point (top) and at street
+ * level (bottom). Flat-valued boxes read as one paper cut-out wall: 300
+ * buildings all at the same value give the eye nothing to separate the
+ * near rank from the far one. Lifting the base (the city's own glow
+ * pooling at street level) and dropping the tops toward the sky value
+ * turns each box into a silhouette that overlaps its neighbours legibly,
+ * with no extra geometry - the five face quads already carry per-vertex
+ * color. The ramp is keyed to absolute height, not to each box, so a
+ * tier-2 setback continues its tier-1 gradient instead of restarting it. */
+#define CITY_RAMP_BOTTOM   1.55f
+#define CITY_RAMP_TOP      0.42f
+/* Height at which the ramp reaches CITY_RAMP_TOP, and clamps past it.
+ * Keyed to the tallest *tier-1* box (H_MIN + H_RANGE) rather than to the
+ * tallest box-plus-setback: heights are uniform over that range, so
+ * spanning the full stack would leave the short-to-median buildings -
+ * which is most of the ring - sitting in the ramp's flat bottom third
+ * and still reading as cut-outs. Setbacks clamp at the dark end, which
+ * is where a tower top wants to be anyway. */
+#define CITY_RAMP_HEIGHT   (CITY_BLDG_H_MIN + CITY_BLDG_H_RANGE)
+
 /* Building footprint/height = MIN + rng[0,1] * RANGE (world units). */
 #define CITY_BLDG_W_MIN   0.9f
 #define CITY_BLDG_W_RANGE 1.8f
@@ -50,6 +71,24 @@
 #define STAR_BAND_CUT_SMALL 0.57f
 #define STAR_BAND_CUT_MED   0.80f
 #define STAR_BAND_CUT_LARGE 0.94f
+
+/* Lowest elevation a star may occupy, as a polar angle from the zenith.
+ * Just past 90deg, so a level camera sees the field run into the horizon
+ * with no visible edge, while a camera tilted down finds no stars
+ * littered across the ground plane. The old 0.80*PI span put a third of
+ * the field up to 54deg *below* the horizon, where the grid's
+ * translucent lines let it show through. */
+#define STAR_PHI_MAX      (0.53f * (float)M_PI)
+
+/* Per-band alpha scale, applied on top of the twinkle term. Size alone
+ * gave a flat field - a 1.5px star and a 4.5px star both landed near
+ * opaque, so the sky read as even noise. Dimming with size restores a
+ * magnitude distribution: the many small stars sit back, the few large
+ * ones carry the sparkle. */
+#define STAR_BAND_ALPHA_SMALL  0.40f
+#define STAR_BAND_ALPHA_MED    0.60f
+#define STAR_BAND_ALPHA_LARGE  0.80f
+#define STAR_BAND_ALPHA_BRIGHT 1.00f
 
 /* --- Sunset backdrop --- */
 
@@ -378,39 +417,65 @@ static CityBoxCorners city_box_corners(float cx, float cz,
     };
 }
 
+/* CITY_RAMP_BOTTOM..CITY_RAMP_TOP as a function of absolute height,
+ * clamped past CITY_RAMP_HEIGHT so an unusually tall setback does not
+ * run the ramp negative. */
+static float city_height_ramp(float y) {
+    float f = y / CITY_RAMP_HEIGHT;
+    if (f < 0.0f) f = 0.0f;
+    if (f > 1.0f) f = 1.0f;
+    return CITY_RAMP_BOTTOM + (CITY_RAMP_TOP - CITY_RAMP_BOTTOM) * f;
+}
+
 /* One five-quad box (inner / outer / 2 sides / roof). bd_r,g,b is the
  * base color (per-building deterministic + night-factor modulated);
  * the five faces multiply the base by per-face tints to fake lighting
- * without enabling GL_LIGHTING. */
+ * without enabling GL_LIGHTING, and by the height ramp above so each
+ * facade darkens toward its roof. The roof takes the top of the ramp
+ * flat - it is a horizontal surface, so a gradient across it would read
+ * as a crease rather than as height. */
 static void draw_building_box(const CityBoxCorners *c,
                               float y_base, float y_top,
                               float bd_r, float bd_g, float bd_b) {
+    float ramp_b = city_height_ramp(y_base);
+    float ramp_t = city_height_ramp(y_top);
+
+#define CITY_FACE_COLOR(ramp, tr, tg, tb) \
+    glColor3f(bd_r * (tr) * (ramp), bd_g * (tg) * (ramp), bd_b * (tb) * (ramp))
+
     glBegin(GL_QUADS);
 
     /* Inner face (camera-side) */
-    glColor3f(bd_r * 1.25f, bd_g * 1.25f, bd_b * 1.45f);
+    CITY_FACE_COLOR(ramp_b, 1.25f, 1.25f, 1.45f);
     glVertex3f(c->irx, y_base, c->irz); glVertex3f(c->ilx, y_base, c->ilz);
+    CITY_FACE_COLOR(ramp_t, 1.25f, 1.25f, 1.45f);
     glVertex3f(c->ilx, y_top,  c->ilz); glVertex3f(c->irx, y_top,  c->irz);
 
     /* Outer face */
-    glColor3f(bd_r * 0.55f, bd_g * 0.55f, bd_b * 0.60f);
+    CITY_FACE_COLOR(ramp_b, 0.55f, 0.55f, 0.60f);
     glVertex3f(c->olx, y_base, c->olz); glVertex3f(c->orx, y_base, c->orz);
+    CITY_FACE_COLOR(ramp_t, 0.55f, 0.55f, 0.60f);
     glVertex3f(c->orx, y_top,  c->orz); glVertex3f(c->olx, y_top,  c->olz);
 
     /* Side faces */
-    glColor3f(bd_r * 0.80f, bd_g * 0.80f, bd_b * 0.90f);
+    CITY_FACE_COLOR(ramp_b, 0.80f, 0.80f, 0.90f);
     glVertex3f(c->ilx, y_base, c->ilz); glVertex3f(c->olx, y_base, c->olz);
+    CITY_FACE_COLOR(ramp_t, 0.80f, 0.80f, 0.90f);
     glVertex3f(c->olx, y_top,  c->olz); glVertex3f(c->ilx, y_top,  c->ilz);
 
+    CITY_FACE_COLOR(ramp_b, 0.80f, 0.80f, 0.90f);
     glVertex3f(c->orx, y_base, c->orz); glVertex3f(c->irx, y_base, c->irz);
+    CITY_FACE_COLOR(ramp_t, 0.80f, 0.80f, 0.90f);
     glVertex3f(c->irx, y_top,  c->irz); glVertex3f(c->orx, y_top,  c->orz);
 
     /* Roof */
-    glColor3f(bd_r * 0.50f, bd_g * 0.50f, bd_b * 0.55f);
+    CITY_FACE_COLOR(ramp_t, 0.50f, 0.50f, 0.55f);
     glVertex3f(c->ilx, y_top,  c->ilz); glVertex3f(c->olx, y_top,  c->olz);
     glVertex3f(c->orx, y_top,  c->orz); glVertex3f(c->irx, y_top,  c->irz);
 
     glEnd();
+
+#undef CITY_FACE_COLOR
 }
 
 /* Per-building inputs the window grid needs. */
@@ -698,8 +763,14 @@ static void draw_starry_sky(
     backdrop_begin_sky_point_state(point_parameter_supported,
                                    point_parameter_proc);
 
-    /* Four point-size bands; cumulative cutoffs are the STAR_BAND_CUT_* above. */
+    /* Four point-size bands; cumulative cutoffs are the STAR_BAND_CUT_*
+     * above, and band_alpha dims with size so the field carries a
+     * magnitude spread rather than one uniform brightness. */
     static const float band_sizes[4] = { 1.5f, 2.0f, 3.0f, 4.5f };
+    static const float band_alpha[4] = {
+        STAR_BAND_ALPHA_SMALL, STAR_BAND_ALPHA_MED,
+        STAR_BAND_ALPHA_LARGE, STAR_BAND_ALPHA_BRIGHT,
+    };
     const int band_cuts[5] = {
         0,
         (int)(STAR_COUNT * STAR_BAND_CUT_SMALL),
@@ -715,49 +786,64 @@ static void draw_starry_sky(
         for (int i = band_cuts[bi]; i < band_cuts[bi + 1]; i++) {
             unsigned int base = (unsigned int)(i * STAR_RNG_STRIDE + STAR_RNG_SEED);
 
-            /* Spherical coords: theta all-around, phi mostly above horizon */
+            /* Spherical coords: theta all-around, phi from the zenith down
+             * to STAR_PHI_MAX. Sampling *cos(phi)* uniformly - not phi -
+             * is what makes the scatter area-uniform over the dome. Linear
+             * phi crowds the pole, which showed up as a dense knot of
+             * stars straight overhead thinning out toward the horizon.
+             * sin(phi) is non-negative across the whole span, so the
+             * sqrt form of the identity is exact here. */
             float theta = city_rng(base + 1u) * 2.0f * (float)M_PI;
-            float phi   = city_rng(base + 2u) * 0.80f * (float)M_PI;
-            float sp = sinf(phi), cp = cosf(phi);
+            float cp = 1.0f - city_rng(base + 2u) * (1.0f - cosf(STAR_PHI_MAX));
+            float sp = sqrtf(1.0f - cp * cp);
 
             float sx = sp * cosf(theta) * STAR_SKY_RADIUS;
             float sy = cp * STAR_SKY_RADIUS;
             float sz = sp * sinf(theta) * STAR_SKY_RADIUS;
 
-            /* Retro-80s palette: off-white, neon blue, purple/violet */
+            /* Same three retro-80s hue families as the city windows, but
+             * carrying far less chroma and weighted toward the off-white:
+             * the windows are the thing meant to read as neon, and a sky
+             * of equally saturated blue and magenta competed with them -
+             * and with the user's geometry - as confetti rather than
+             * settling behind both. Hue survives; saturation does not. */
             float color_roll = city_rng(base + 3u);
             float sr, sg, sb;
-            if (color_roll < 0.45f) {
+            if (color_roll < 0.64f) {
                 float w = city_rng(base + 10u);
                 sr = 0.88f + w * 0.10f;
                 sg = 0.88f + w * 0.06f;
                 sb = 0.94f + w * 0.04f;
-            } else if (color_roll < 0.75f) {
+            } else if (color_roll < 0.85f) {
                 float b = city_rng(base + 11u);
-                sr = 0.22f + b * 0.18f;
-                sg = 0.52f + b * 0.22f;
+                sr = 0.60f + b * 0.14f;
+                sg = 0.74f + b * 0.12f;
                 sb = 1.0f;
             } else {
                 float p = city_rng(base + 12u);
-                sr = 0.52f + p * 0.22f;
-                sg = 0.12f + p * 0.14f;
-                sb = 0.88f + p * 0.10f;
+                sr = 0.80f + p * 0.12f;
+                sg = 0.62f + p * 0.12f;
+                sb = 0.96f + p * 0.04f;
             }
 
-            /* ~35% blink slowly; the rest have a faint atmospheric shimmer */
+            /* ~35% twinkle slowly; the rest have a faint atmospheric
+             * shimmer. The twinkle swing is deliberately shallower than a
+             * real one - a star crossing most of its alpha range draws the
+             * eye off the scene, which is the opposite of a backdrop's
+             * job. */
             float alpha;
             float blink_roll = city_rng(base + 4u);
             if (blink_roll > 0.65f) {
                 float phase = city_rng(base + 5u) * 2.0f * (float)M_PI;
                 float speed = 0.05f + city_rng(base + 6u) * 0.28f;
                 float blink = 0.5f + 0.5f * sinf(anim_time * speed * 2.0f * (float)M_PI + phase);
-                alpha = 0.38f + 0.62f * blink;
+                alpha = 0.60f + 0.40f * blink;
             } else {
                 float phase = city_rng(base + 5u) * 2.0f * (float)M_PI;
-                alpha = 0.82f + 0.10f * sinf(anim_time * 2.7f + phase);
+                alpha = 0.86f + 0.08f * sinf(anim_time * 2.7f + phase);
             }
 
-            glColor4f(sr, sg, sb, alpha);
+            glColor4f(sr, sg, sb, alpha * band_alpha[bi]);
             glVertex3f(sx, sy, sz);
         }
 
