@@ -2401,9 +2401,10 @@ static void fairy_setup_lights(const Render3dFrameRenderContext *frame_ctx) {
 #define FAIRY_RIBBON_STEPS   22     /* trail samples - a smear, not beads */
 #define FAIRY_RIBBON_DT      0.022f
 #define FAIRY_RIBBON_W       0.022f /* x scene radius, width at the body */
-#define FAIRY_DUST_COUNT     12
-#define FAIRY_DUST_DT        0.045f
-#define FAIRY_DUST_FALL      0.490f /* x scene radius per sec^2, dust sink */
+#define FAIRY_DUST_COUNT     24
+#define FAIRY_DUST_DT        0.028f
+#define FAIRY_DUST_FALL_VEL  0.085f /* x scene radius per sec, gentle sink */
+#define FAIRY_DUST_FALL_ACC  0.035f /* x scene radius per sec^2 */
 #define FAIRY_WING_BEAT_HZ   11.0f
 
 static void fairy_sample_at(float t, int passer_idx, const BackdropExtent *ex,
@@ -2412,6 +2413,24 @@ static void fairy_sample_at(float t, int passer_idx, const BackdropExtent *ex,
         fairy_resident_at(t, ex, view, out);
     else
         fairy_passer_at(t, passer_idx, ex, view, out);
+}
+
+static float fairy_speed_at(float t, int passer_idx, const BackdropExtent *ex,
+                            const float view[3]) {
+    FairyState f0, f1;
+    float dt = 0.04f;
+    float dx, dy, dz;
+    float t0 = (t > dt * 0.5f) ? (t - dt * 0.5f) : 0.0f;
+    float t1 = t0 + dt;
+    fairy_sample_at(t0, passer_idx, ex, view, &f0);
+    fairy_sample_at(t1, passer_idx, ex, view, &f1);
+    if (f0.bright <= 0.0f || f1.bright <= 0.0f)
+        return 0.0f;
+    dx = f1.pos[0] - f0.pos[0];
+    dy = f1.pos[1] - f0.pos[1];
+    dz = f1.pos[2] - f0.pos[2];
+    return sqrtf(dx * dx + dy * dy + dz * dz) /
+           (dt * (ex->radius > 1e-4f ? ex->radius : 1.0f));
 }
 
 /* The trail: one continuous camera-facing ribbon through the fairy's own
@@ -2521,42 +2540,78 @@ static void fairy_draw_wings(const FairyState *f, const BackdropExtent *ex,
     }
 }
 
-/* The dust: motes shed from the trail at fixed intervals,
+/* The dust: motes shed from the trail at discrete intervals in world space,
  * each drifting downward and fading over its own age - so the fairy leaves
- * something behind that the ribbon does not, and a hovering one still has
- * visible activity around it. */
+ * a gentle sparkling dust trail in the air behind it. Emission rate is a function
+ * of the fairy's speed (fast flight sheds a dense wake of dust, hovering sheds
+ * a sparse, gentle cascade of floating motes). */
 static void fairy_draw_dust(float t, int passer_idx, const BackdropExtent *ex,
                             const float view[3], float alpha_scale) {
-    glPointSize(3.5f);
-    glBegin(GL_POINTS);
-    for (int k = 1; k <= FAIRY_DUST_COUNT; k++) {
-        float age = (float)k * FAIRY_DUST_DT;
-        float back = t - age;
-        float decay = 1.0f - (float)k / (float)(FAIRY_DUST_COUNT + 1);
-        FairyState f;
-        float jx, jz;
+    float dt = FAIRY_DUST_DT;
+    float max_age = (float)FAIRY_DUST_COUNT * dt;
+    float step_f;
+    int cur_step;
+    float phase;
 
-        if (back < 0.0f)
+    if (t < 0.0f)
+        return;
+
+    step_f = floorf(t / dt);
+    cur_step = (int)step_f;
+    phase = t - step_f * dt;
+
+    glPointSize(2.8f);
+    glBegin(GL_POINTS);
+    for (int k = 0; k < FAIRY_DUST_COUNT; k++) {
+        int mote_id = cur_step - k;
+        float t_emit = (float)mote_id * dt;
+        float age = phase + (float)k * dt;
+        float decay = 1.0f - age / max_age;
+        FairyState f;
+        unsigned int seed;
+        float speed, speed_norm, emission_prob;
+        float ang, spread_rate, spread, jx, jz;
+        float fall, sway_ph, sway, shimmer;
+
+        if (t_emit < 0.0f || decay <= 0.0f)
             break;
-        fairy_sample_at(back, passer_idx, ex, view, &f);
+
+        fairy_sample_at(t_emit, passer_idx, ex, view, &f);
         if (f.bright <= 0.0f)
             continue;
 
-        /* Deterministic per-mote drift, in a cone that WIDENS with age -
-         * a mote sitting on the trail reads as a dot on a streamer, so
-         * each one has to walk away from where it was shed. */
-        {
-            float spread = ex->radius * 0.390f * age;
-            jx = sinf((float)k * 12.9898f) * spread;
-            jz = sinf((float)k * 78.233f) * spread;
-        }
+        seed = (unsigned int)mote_id * 2654435761u + (unsigned int)(passer_idx + 2) * 1013904223u;
 
-        glColor4f(0.30f + f.color[0] * 0.70f, 0.30f + f.color[1] * 0.70f,
-                  0.30f + f.color[2] * 0.70f,
-                  0.55f * decay * decay * f.bright * alpha_scale);
+        /* Emission rate scales with fairy speed: fast motion sheds a dense
+         * trail, while a hovering fairy sheds only occasional sparse motes. */
+        speed = fairy_speed_at(t_emit, passer_idx, ex, view);
+        speed_norm = (speed - 0.20f) / 1.40f;
+        if (speed_norm < 0.0f) speed_norm = 0.0f;
+        if (speed_norm > 1.0f) speed_norm = 1.0f;
+        emission_prob = 0.18f + 0.82f * fairy_smoothstep(speed_norm);
+
+        if (city_rng(seed + 7u) > emission_prob)
+            continue;
+
+        /* Gentle lateral drift and air-current sway */
+        ang = city_rng(seed) * 2.0f * (float)M_PI;
+        spread_rate = 0.16f + city_rng(seed + 1u) * 0.16f;
+        spread = ex->radius * spread_rate * age;
+        jx = cosf(ang) * spread;
+        jz = sinf(ang) * spread;
+
+        /* Gentle sinking with soft buoyancy sway (floating dust motes) */
+        fall = ex->radius * (FAIRY_DUST_FALL_VEL * age + FAIRY_DUST_FALL_ACC * age * age);
+        sway_ph = city_rng(seed + 2u) * 2.0f * (float)M_PI;
+        sway = sinf(age * 3.5f + sway_ph) * ex->radius * 0.025f;
+        shimmer = 0.88f + 0.12f * sinf(age * 7.0f + sway_ph);
+
+        glColor4f(0.40f + f.color[0] * 0.60f,
+                  0.40f + f.color[1] * 0.60f,
+                  0.40f + f.color[2] * 0.60f,
+                  0.48f * decay * decay * shimmer * f.bright * alpha_scale * (0.6f + 0.4f * emission_prob));
         glVertex3f(f.pos[0] + jx,
-                   f.pos[1] - ex->radius * FAIRY_DUST_FALL * age * age +
-                       sinf((float)k * 43.17f) * ex->radius * 0.02f,
+                   f.pos[1] - fall + sway,
                    f.pos[2] + jz);
     }
     glEnd();

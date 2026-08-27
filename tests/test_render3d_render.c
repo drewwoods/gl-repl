@@ -812,6 +812,49 @@ static void test_scene_backdrop_fairies(void) {
                 trace_count_prefix(&log, prefix) == 1);
 }
 
+static int count_resident_dust_motes(const TraceLog *log) {
+    int count = 0;
+    int in_dust = 0;
+    for (int i = 0; i < log->n; i++) {
+        if (strncmp(log->lines[i], "glPointSize 2.8", 15) == 0) {
+            in_dust = 1;
+        } else if (in_dust && strcmp(log->lines[i], "glEnd") == 0) {
+            break; /* First dust block is the resident fairy */
+        } else if (in_dust && strncmp(log->lines[i], "glVertex3f", 10) == 0) {
+            count++;
+        }
+    }
+    return count;
+}
+
+static void test_scene_backdrop_fairies_dust(void) {
+    printf("--- fairies backdrop dust shedding ---\n");
+
+    Render3dFrameRenderContext ctx = make_test_frame_ctx();
+    TraceLog log_hover, log_moving;
+    int pts_hover = 0, pts_moving = 0;
+
+    ctx.config.backdrop_mode = RENDER3D_BACKDROP_FAIRIES;
+
+    /* Hovering inspection moment (low speed): sparse gentle dust */
+    ctx.config.anim_time = 2.200f;
+    trace_begin();
+    render3d_backdrop_render(&ctx);
+    trace_end(&log_hover);
+    pts_hover = count_resident_dust_motes(&log_hover);
+
+    /* Fast hop transition moment (high speed): dense dust wake */
+    ctx.config.anim_time = 2.900f;
+    trace_begin();
+    render3d_backdrop_render(&ctx);
+    trace_end(&log_moving);
+    pts_moving = count_resident_dust_motes(&log_moving);
+
+    ASSERT_TRUE("fairies: renders dust motes while hovering", pts_hover > 0);
+    ASSERT_TRUE("fairies: renders dust motes while moving", pts_moving > 0);
+    ASSERT_TRUE("fairies: fast flight sheds more dust than hovering", pts_moving > pts_hover);
+}
+
 /* --- Fairies: nothing ever flies inside the geometry ------------------
  *
  * The standing invariant for a rig that arranges itself around the user's
@@ -2158,6 +2201,7 @@ int main(int argc, char **argv) {
     test_scene_backdrop_render();
     test_scene_backdrop_drones();
     test_scene_backdrop_fairies();
+    test_scene_backdrop_fairies_dust();
     test_scene_backdrop_fairies_clearance();
     test_scene_backdrop_drones_clearance();
     test_render3d_winding_and_gizmo();
