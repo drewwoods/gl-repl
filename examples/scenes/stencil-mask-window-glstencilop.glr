@@ -12,17 +12,19 @@
 // you can tell where the window is - there is no stencil viewer yet, so
 // comment it out and the mask becomes guesswork. That is the point.
 static float spin; // @tune  mask rotation, degrees
+static float size = 0.75; // @tune  regular-polygon radius
+static float sides = 4; // @tune  number of polygon sides
 
-// The window. Drawn twice - once as a stamp, once as an outline - so it
-// lives in a func and both passes are guaranteed to agree.
+
+// The window is a tunable regular polygon. Drawn twice - once as a stamp,
+// once as an outline - so both passes are guaranteed to use the same footprint.
 maskWindow() {
   glPushMatrix();
     glRotatef(spin, 0, 0, 1);
-    glBegin(GL_QUADS);
-      glVertex3f(-0.75, -0.75, 0);
-      glVertex3f(0.75, -0.75, 0);
-      glVertex3f(0.75, 0.75, 0);
-      glVertex3f(-0.75, 0.75, 0);
+    glBegin(GL_POLYGON);
+      for(i, 0, sides) {
+        glVertex2f(size * cos(i * TAU/sides), size * sin(i * TAU/sides));
+      }
     glEnd();
   glPopMatrix();
 }
@@ -47,13 +49,13 @@ display() {
   spin = t * 20;
 
   // --- Pass 1: stamp ---
-  // Writes are off for color and depth, so the quad leaves no trace in
+  // Writes are off for color and depth, so the polygon leaves no trace in
   // the frame. All it does is set stencil = 1 under its own footprint.
   // GL_ALWAYS means "never fail the comparison"; GL_REPLACE on the pass
   // branch is what actually writes ref (1) into the buffer.
   glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
   glDepthMask(GL_FALSE);
-  glStencilMask(0xFF); // decimal in; canonicalizes to 0xFF
+  glStencilMask(0xFF); // full 8-bit stencil write mask
   glStencilFunc(GL_ALWAYS, 1, 0xFF);
   glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
   maskWindow();
