@@ -1532,6 +1532,16 @@ both blocks. The exported program carries the same lines.
 - **Post FX Effect** - the selected operation: Chromatic aberration, Vignette,
   Scanlines, or Film grain.
 
+If the frame rate stays well below what the display can do for a couple of
+seconds **and** one of those settings is above its shipped default, a warning
+appears at the left of the code-panel status strip: `! 38 fps  Accum Blur 16x`
+in amber, with **`[off]`** (step that setting back - accum passes to 1, Post FX
+off, or line smooth off) and **`[x]`** (hide the warning for this combination
+until the setting set changes). Hover the readout for the exact fix. The
+warning does not fire for a heavy scene that is already on defaults, and the
+app never changes a setting you did not ask it to. Tours and capture runs
+suppress it so it cannot bake into screenshots.
+
 ---
 
 ## Replay

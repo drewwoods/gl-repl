@@ -50,6 +50,7 @@
 #include "app/glr_modal.h"
 #include "app/glr_workspaces.h"
 #include "app/glr_config.h"
+#include "app/glr_perf_hint.h"
 #include "app/glr_camera.h"
 #include "app/glr_camera_export.h"
 #include "app/glr_debug.h"
@@ -1697,6 +1698,16 @@ static void route_right_press(int x, int y) {
     case UI_HIT_CODE_AA_PASSES_STATUS:
         route_code_cfg_cycle_hit(GLR_CONFIG_ACCUM_PASSES, -1);
         return;
+    case UI_HIT_CODE_PERF_HINT:
+        return;  /* inert: tooltip only */
+    case UI_HIT_CODE_PERF_HINT_FIX:
+        glr_ctrl_perf_hint_apply_fix();
+        editor_request_redraw();
+        return;
+    case UI_HIT_CODE_PERF_HINT_DISMISS:
+        glr_perf_hint_dismiss();
+        editor_request_redraw();
+        return;
     case UI_HIT_CODE_VERTEX_LABELS_STATUS:
         route_code_cfg_cycle_hit(GLR_CONFIG_VERTEX_LABELS, -1);
         return;
@@ -2219,6 +2230,16 @@ int glr_ctrl_router_handle_code_panel_hit(UiHit hit, int x, int y) {
         consumed = route_code_cfg_cycle_hit(GLR_CONFIG_ACCUM_EFFECT, +1); break;
     case UI_HIT_CODE_AA_PASSES_STATUS:
         consumed = route_code_cfg_cycle_hit(GLR_CONFIG_ACCUM_PASSES, +1); break;
+    case UI_HIT_CODE_PERF_HINT:
+        consumed = 1; break;  /* inert: tooltip only */
+    case UI_HIT_CODE_PERF_HINT_FIX:
+        glr_ctrl_perf_hint_apply_fix();
+        editor_request_redraw();
+        consumed = 1; break;
+    case UI_HIT_CODE_PERF_HINT_DISMISS:
+        glr_perf_hint_dismiss();
+        editor_request_redraw();
+        consumed = 1; break;
     case UI_HIT_CODE_VERTEX_LABELS_STATUS:
         consumed = route_code_cfg_cycle_hit(GLR_CONFIG_VERTEX_LABELS, +1); break;
     case UI_HIT_CODE_OVERLAY_SCOPE_STATUS:

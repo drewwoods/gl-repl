@@ -8,6 +8,7 @@
 
 #include "app/glr_actions.h"        /* glr_action_toggle_view_mode / _help_tab_next */
 #include "app/glr_ctrl.h"           /* glr_ctrl_* capture entry points */
+#include "app/glr_perf_hint.h"      /* capture-session suppression latch */
 #include "app/glr_pointer_script.h" /* glr_pointer_script_load_env / _active */
 #include "app/boot/splash.h"             /* splash_skip */
 #include "app/glr_config.h"         /* accum-effect state lookup */
@@ -445,4 +446,16 @@ void glr_capture_env_apply(const char *time_arg) {
      * here, after the file/example load, so it beats both the renderer verdict
      * and any `@cfg syntax_highlight` the captured scene carries. */
     cfg_apply_state_env("GLR_SYNTAX_HIGHLIGHT", GLR_CONFIG_SYNTAX_HIGHLIGHT);
+
+    /* Latch the perf-hint capture-session bit only when a backend capture
+     * variable is present. Posing-only knobs (GLR_ACCUM_PASSES and friends)
+     * are not capture proof; a still docs-assets.sh run sets
+     * FREEGLUT_CAPTURE_FILE and later SIGUSR1 without a pointer script. */
+    {
+        const char *frames = getenv("FREEGLUT_CAPTURE_FRAMES");
+        const char *stream = getenv("FREEGLUT_CAPTURE_STREAM");
+        const char *file = getenv("FREEGLUT_CAPTURE_FILE");
+        if ((frames && *frames) || (stream && *stream) || (file && *file))
+            glr_perf_hint_set_capture_session(1);
+    }
 }

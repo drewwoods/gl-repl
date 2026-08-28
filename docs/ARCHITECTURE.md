@@ -178,9 +178,9 @@ is checked every frame by the guard described in
 **The profiled frame is the display callback, and the application owns it.**
 The FPS cadence is wider: it is the interval from one callback start to the
 next. The three
-[`glr_frame_begin()`](../src/app/glr_ctrl.h#L282) /
-[`glr_frame_work_end()`](../src/app/glr_ctrl.h#L283) /
-[`glr_frame_ended()`](../src/app/glr_ctrl.h#L284) calls bracket `gl_repl.c`'s
+[`glr_frame_begin()`](../src/app/glr_ctrl.h#L288) /
+[`glr_frame_work_end()`](../src/app/glr_ctrl.h#L289) /
+[`glr_frame_ended()`](../src/app/glr_ctrl.h#L290) calls bracket `gl_repl.c`'s
 callback and also own the staleness/FPS tick, the GPU query-slot rotation and
 the capture-mode simulation tick. They carry the plain `glr_` prefix rather
 than `glr_ctrl_` because the controller is one stage inside a frame, not the
@@ -942,14 +942,14 @@ Responsibilities:
 * profile HUD
 * status banners and other screen-space overlays
 
-UI renderers draw from a single per-frame [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L91) (defined in
+UI renderers draw from a single per-frame [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L92) (defined in
 [`src/ui/app/snapshot.h`](../src/ui/app/snapshot.h)) that the controller builds once via
-[`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L142) and passes to every `ui_*_render*()`
+[`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L148) and passes to every `ui_*_render*()`
 entry point. Render code does not call `repl_state_*()` directly. The
 `check-ui-no-repl-state-read` Makefile guard enforces the snapshot-shaped
 signature for audited renderers.
 
-[`UiRenderSnapshot`](../src/ui/app/snapshot.h#L91) carries:
+[`UiRenderSnapshot`](../src/ui/app/snapshot.h#L92) carries:
 
 * by-value value-type slices (code_panel, replay, search, autocomplete,
   status, …) - small structs cheap to copy. Scene-presentation policy
@@ -1412,7 +1412,7 @@ Runtime shape:
   whole-app baseline (`GlrTourSnapshot`, [`src/app/glr_tour_snapshot.c`](../src/app/glr_tour_snapshot.c))
   is captured on the first frame after `start_tour` (deferred so the Tours-menu
   close path is part of the baseline). Left-Arrow restores that baseline, calls
-  [`glr_ctrl_after_tour_restore()`](../src/app/glr_ctrl.h#L106) to re-sync derived chrome + export strings,
+  [`glr_ctrl_after_tour_restore()`](../src/app/glr_ctrl.h#L112) to re-sync derived chrome + export strings,
   then fast-executes the prefix `[0, target)` via `ps_finish_event_immediate`
   (≤ 32 events per rendered frame; a `shell:` DOM click yields one browser
   turn). The baseline is derived-state-free: the flat program, renderer
@@ -1972,14 +1972,14 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L139) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L303) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L309) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame - here a 2D/3D switch would let row-count see one
 `gluPerspective(...)` line while render emits two `glOrtho(...)` lines,
 skewing scroll-follow and row hit mapping. "Deterministic within a
 frame" is *not* sufficient - the inputs themselves change mid-frame at
-the render3d-render boundary. This is just [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L91)'s existing
+the render3d-render boundary. This is just [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L92)'s existing
 contract ("UI render code reads only from the snapshot") restated for
 the case where the value is computed rather than copied.
 
@@ -1999,7 +1999,7 @@ stored as a unique sentinel constant
 Per the rule above:
 
 * **Code panel (per frame):** the controller resolves the block once in
-  [`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L142) into
+  [`glr_ctrl_build_ui_snapshot()`](../src/app/glr_ctrl.h#L148) into
   `UiRenderSnapshot.reshape_proj_lines/_count`; both panel passes read
   that frozen copy and never touch the resolver. This is the canonical
   shape - UI reads the snapshot only (the symmetric counterpart of

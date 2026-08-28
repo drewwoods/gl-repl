@@ -23,7 +23,7 @@
 #include <stdio.h>
 #include <string.h>
 
-/* 19 live items today. Room to grow; STATIC_ASSERT guards the table. */
+/* 22 live items today. Room to grow; STATIC_ASSERT guards the table. */
 #define STATUSBAR_ITEM_MAX 24
 #define STATUSBAR_SEP_W    16
 /* Shared by Overlay scope / Vertex labels / Polygon highlight. Only the
@@ -61,8 +61,10 @@ typedef struct {
 typedef struct {
     int  eligible;
     int  active;        /* accent vs muted; cmds uses this as "not overflow" */
+    int  warn;          /* draw in UI_TOK_STATUS_WARN over state color */
     int  width;         /* text width; ignored when has_keycap */
     char text[64];
+    char tooltip[48];   /* empty = use item->tooltip */
 } StatusbarPrepared;
 
 typedef void (*StatusbarPrepareFn)(const StatusbarSlot *, StatusbarPrepared *);
@@ -245,6 +247,8 @@ static void prepare_aa(const StatusbarSlot *slot, StatusbarPrepared *p) {
     p->eligible = snap->render.use_accum ? 1 : 0;
     p->active = snap->render.accum_effect != RENDER3D_ACCUM_EFFECT_OFF &&
                 snap->render.accum_passes > 1;
+    p->warn = snap->perf_hint_active &&
+              snap->perf_hint_culprit == GLR_PERF_CULPRIT_ACCUM;
     p->width = 0;
     p->text[0] = '\0';
     if (!p->eligible)
@@ -272,6 +276,8 @@ static void prepare_aa_passes(const StatusbarSlot *slot, StatusbarPrepared *p) {
 
     p->eligible = snap->render.use_accum ? 1 : 0;
     p->active = snap->render.accum_passes > 1;
+    p->warn = snap->perf_hint_active &&
+              snap->perf_hint_culprit == GLR_PERF_CULPRIT_ACCUM;
     p->width = 0;
     p->text[0] = '\0';
     if (!p->eligible)
@@ -406,6 +412,95 @@ static void draw_unbal(const StatusbarSlot *slot, const StatusbarPrepared *p,
     draw_text_at(slot, p->text, x, UI_TOK_STATUS_WARN);
 }
 
+static void prepare_perf(const StatusbarSlot *slot, StatusbarPrepared *p) {
+    const UiRenderSnapshot *snap = slot->snap;
+    const char *effect;
+    char body[40];
+
+    p->eligible = snap->perf_hint_active;
+    p->active = 1;
+    p->warn = 1;
+    p->width = 0;
+    p->text[0] = '\0';
+    p->tooltip[0] = '\0';
+    if (!p->eligible)
+        return;
+
+    body[0] = '\0';
+    switch (snap->perf_hint_culprit) {
+    case GLR_PERF_CULPRIT_ACCUM:
+        switch (snap->render.accum_effect) {
+        case RENDER3D_ACCUM_EFFECT_AA:          effect = "AA";   break;
+        case RENDER3D_ACCUM_EFFECT_BLUR:        effect = "Blur"; break;
+        case RENDER3D_ACCUM_EFFECT_BLUR_CAMERA: effect = "Cam";  break;
+        case RENDER3D_ACCUM_EFFECT_OFF:
+        default:                                effect = "noAA"; break;
+        }
+        snprintf(body, sizeof body, "Accum %s %dx", effect,
+                 snap->render.accum_passes > 0 ? snap->render.accum_passes : 1);
+        snprintf(p->tooltip, sizeof p->tooltip, "Accum passes -> 1");
+        break;
+    case GLR_PERF_CULPRIT_POST_FX_FRAME:
+        snprintf(body, sizeof body, "Post FX Frame");
+        snprintf(p->tooltip, sizeof p->tooltip, "Post FX -> Off");
+        break;
+    case GLR_PERF_CULPRIT_POST_FX_VIEW:
+        snprintf(body, sizeof body, "Post FX View");
+        snprintf(p->tooltip, sizeof p->tooltip, "Post FX -> Off");
+        break;
+    case GLR_PERF_CULPRIT_LINE_SMOOTH:
+        snprintf(body, sizeof body, "Line smooth");
+        snprintf(p->tooltip, sizeof p->tooltip, "Line smooth -> Off");
+        break;
+    case GLR_PERF_CULPRIT_NONE:
+    case GLR_PERF_CULPRIT_COUNT:
+        break;
+    }
+
+    if (snap->perf_hint_culprit_count > 1)
+        snprintf(p->text, sizeof p->text, "! %d fps  %s +%d more",
+                 snap->perf_hint_fps, body,
+                 snap->perf_hint_culprit_count - 1);
+    else
+        snprintf(p->text, sizeof p->text, "! %d fps  %s",
+                 snap->perf_hint_fps, body);
+    prepare_text_len(p);
+}
+
+static void prepare_perf_fix(const StatusbarSlot *slot, StatusbarPrepared *p) {
+    p->eligible = slot->snap->perf_hint_active;
+    p->active = 1;
+    p->width = 0;
+    p->text[0] = '\0';
+    if (!p->eligible)
+        return;
+    snprintf(p->text, sizeof p->text, "[off]");
+    prepare_text_len(p);
+}
+
+static void prepare_perf_dismiss(const StatusbarSlot *slot, StatusbarPrepared *p) {
+    p->eligible = slot->snap->perf_hint_active;
+    p->active = 1;
+    p->width = 0;
+    p->text[0] = '\0';
+    if (!p->eligible)
+        return;
+    snprintf(p->text, sizeof p->text, "[x]");
+    prepare_text_len(p);
+}
+
+static void draw_perf(const StatusbarSlot *slot, const StatusbarPrepared *p,
+                      int x, int y, int w, int h) {
+    (void)y; (void)w; (void)h;
+    draw_text_at(slot, p->text, x, UI_TOK_STATUS_WARN);
+}
+
+static void draw_perf_chip(const StatusbarSlot *slot, const StatusbarPrepared *p,
+                           int x, int y, int w, int h) {
+    (void)y; (void)w; (void)h;
+    gl2d_chip_action((float)x, (float)slot->text_y, p->text);
+}
+
 static void draw_cost(const StatusbarSlot *slot, const StatusbarPrepared *p,
                       int x, int y, int w, int h) {
     (void)y; (void)w; (void)h;
@@ -415,7 +510,10 @@ static void draw_cost(const StatusbarSlot *slot, const StatusbarPrepared *p,
 static void draw_state_text(const StatusbarSlot *slot, const StatusbarPrepared *p,
                             int x, int y, int w, int h) {
     (void)y; (void)w; (void)h;
-    statusbar_state_color(p->active);
+    if (p->warn)
+        ui_clr(UI_TOK_STATUS_WARN);
+    else
+        statusbar_state_color(p->active);
     gl2d_draw_string((float)x, (float)slot->text_y, p->text, FONT_SMALL);
 }
 
@@ -856,10 +954,35 @@ static void draw_help_icon(const StatusbarSlot *slot, const StatusbarPrepared *p
  * KM_MODS. is_special=1 for GLUT_KEY_* (F1/F7/F8); Redo is Shift.
  */
 static const StatusbarItem k_statusbar_items[] = {
-    /* Left: document stats. Never culled; overflow is scissored. */
+    /* Left: perf-hint warning first so it outranks document stats under
+     * scissor, then document stats. Never culled; overflow is scissored. */
     {
         .align = STATUSBAR_ALIGN_LEFT,
         .gap_before = STATUSBAR_GAP_NONE,
+        .hit = UI_HIT_CODE_PERF_HINT,
+        .tooltip = "Expensive setting is costing frames",
+        .prepare = prepare_perf,
+        .draw = draw_perf,
+    },
+    {
+        .align = STATUSBAR_ALIGN_LEFT,
+        .gap_before = STATUSBAR_GAP_PACK,
+        .hit = UI_HIT_CODE_PERF_HINT_FIX,
+        .tooltip = "Step the named setting back",
+        .prepare = prepare_perf_fix,
+        .draw = draw_perf_chip,
+    },
+    {
+        .align = STATUSBAR_ALIGN_LEFT,
+        .gap_before = STATUSBAR_GAP_PAIR,
+        .hit = UI_HIT_CODE_PERF_HINT_DISMISS,
+        .tooltip = "Hide this warning",
+        .prepare = prepare_perf_dismiss,
+        .draw = draw_perf_chip,
+    },
+    {
+        .align = STATUSBAR_ALIGN_LEFT,
+        .gap_before = STATUSBAR_GAP_SEP,
         .prepare = prepare_cmds,
         .draw = draw_cmds,
     },
@@ -1329,11 +1452,11 @@ static void statusbar_draw_tooltip(const UiRenderSnapshot *snap,
     if (hover_idx < 0)
         return;
     item = &k_statusbar_items[hover_idx];
-    if (!item->tooltip)
+    if (L->items[hover_idx].prep.tooltip[0] != '\0')
+        snprintf(text, sizeof text, "%s", L->items[hover_idx].prep.tooltip);
+    else if (!item->tooltip)
         return;
-
-    /* key_code == 0 is the label-only form (Clear all, Accum passes). */
-    if (item->key_code != 0) {
+    else if (item->key_code != 0) {
         char shortcut[KEYMAP_SHORTCUT_LABEL_MAX];
         keymap_binding_to_string(shortcut, (int)sizeof shortcut,
                                  item->key_code, item->modifiers,

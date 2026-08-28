@@ -28,6 +28,8 @@
 #include "app/boot/glr_capture_env.h"
 #include "app/glr_ctrl.h"
 #include "app/glr_config.h"
+#include "app/glr_perf_hint.h"
+#include "render3d/render_types.h"
 #include "editor/state.h"
 #include "editor/input.h"   /* editor_feed_line */
 #include "editor/help_session.h"
@@ -66,6 +68,9 @@ static void clear_capture_env(void) {
     unsetenv("GLR_OPEN_COLOR_PICKER");
     unsetenv("GLR_OPEN_GL_STATE");
     unsetenv("GLR_OPEN_HELP");
+    unsetenv("FREEGLUT_CAPTURE_FRAMES");
+    unsetenv("FREEGLUT_CAPTURE_STREAM");
+    unsetenv("FREEGLUT_CAPTURE_FILE");
 }
 
 /* GLR_CONFIG_ACCUM_PASSES holds a position on the accum-pass ladder, not the
@@ -339,6 +344,57 @@ static void test_type_keys_hook(void) {
                 strcmp(editor_input_text(), "xyz") == 0);
 }
 
+static int hint_trips_on_slow_accum(void) {
+    GlrPerfHintInputs in;
+    double dt = 1000000.0 / 20.0;
+    double acc;
+
+    memset(&in, 0, sizeof in);
+    in.use_accum = 1;
+    in.accum_effect = RENDER3D_ACCUM_EFFECT_BLUR;
+    in.accum_passes = 16;
+    for (acc = 0.0; acc < GLR_PERF_HINT_WARMUP_US + GLR_PERF_HINT_TRIP_US + dt;
+         acc += dt)
+        glr_perf_hint_tick(20.0, dt, &in);
+    return glr_perf_hint_view().active;
+}
+
+static void test_capture_session_not_latched_by_posing(void) {
+    glr_perf_hint_reset_for_test();
+    clear_capture_env();
+    glr_capture_env_apply(NULL);
+    ASSERT_INT("bare apply does not latch capture-session suppression",
+               hint_trips_on_slow_accum(), 1);
+
+    glr_perf_hint_reset_for_test();
+    clear_capture_env();
+    setenv("GLR_ACCUM_PASSES", "16", 1);
+    glr_capture_env_apply(NULL);
+    ASSERT_INT("GLR_ACCUM_PASSES posing does not latch capture-session",
+               hint_trips_on_slow_accum(), 1);
+}
+
+static void test_capture_session_latched_by_backend_vars(void) {
+    static const char *const vars[] = {
+        "FREEGLUT_CAPTURE_FRAMES",
+        "FREEGLUT_CAPTURE_STREAM",
+        "FREEGLUT_CAPTURE_FILE",
+    };
+    int i;
+
+    for (i = 0; i < 3; i++) {
+        char label[80];
+
+        glr_perf_hint_reset_for_test();
+        clear_capture_env();
+        setenv(vars[i], "1", 1);
+        glr_capture_env_apply(NULL);
+        snprintf(label, sizeof label, "%s latches capture-session suppression",
+                 vars[i]);
+        ASSERT_INT(label, hint_trips_on_slow_accum(), 0);
+    }
+}
+
 int main(void) {
     /* GL-free REPL bootstrap: same path the --dump-* CLI flags use. */
     glr_ctrl_bootstrap_repl(NULL);
@@ -370,6 +426,9 @@ int main(void) {
     test_no_splash_hook();
     test_tick_per_frame_hook();
     test_type_keys_hook();
+
+    test_capture_session_not_latched_by_posing();
+    test_capture_session_latched_by_backend_vars();
 
     clear_capture_env();
     return test_harness_report(&g_harness, "glr_capture_env");

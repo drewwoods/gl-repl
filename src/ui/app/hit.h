@@ -23,6 +23,9 @@ typedef enum {
     UI_HIT_CODE_FOCUS_TOGGLE,
     UI_HIT_CODE_AA_STATUS,   /* statusbar "AA"/"Blur"/"Cam"/"noAA" effect readout */
     UI_HIT_CODE_AA_PASSES_STATUS, /* statusbar "1x"..."16x" passes readout */
+    UI_HIT_CODE_PERF_HINT,        /* statusbar fps-cost readout; inert */
+    UI_HIT_CODE_PERF_HINT_FIX,    /* statusbar "[off]" - step the named setting back */
+    UI_HIT_CODE_PERF_HINT_DISMISS, /* statusbar "[x]" - hide for this culprit set */
     UI_HIT_CODE_VERTEX_LABELS_STATUS, /* statusbar "VL off"/etc. readout */
     UI_HIT_CODE_OVERLAY_SCOPE_STATUS, /* statusbar "OS last"/etc. readout */
     UI_HIT_CODE_POLY_HIGHLIGHT_STATUS, /* statusbar "PH on"/etc. readout */

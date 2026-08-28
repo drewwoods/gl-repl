@@ -92,6 +92,12 @@ int glr_ctrl_apply_tag_defaults(int example_idx,
  * instead of the REPL-only repl_state_reset_program. */
 void glr_ctrl_reset_all(void);
 
+/* Step the named expensive setting back toward its shipped default (accum
+ * passes -> 1, Post FX -> Off, line smooth -> Off) and re-arm the
+ * watchdog so the next-ranked culprit is measured against the same
+ * clean ceiling. */
+void glr_ctrl_perf_hint_apply_fix(void);
+
 /* Drop camera / menu / picker / code-panel-drag transient state in
  * addition to the editor commit transients. Called from
  * glr_ctrl_reset_all() and from controller paths that switch examples /

@@ -14,9 +14,3 @@ or to `../active/` if implementation begins immediately.
 - [Lua Scene Extensions](lua-scene-extensions.md)
   - workspace-scoped Lua scene calls with focused GL access, next-frame
     outputs, interactive panels, and required standalone-C export hooks.
-- [Perf hint: warn when an expensive setting is costing frames](warn-when-expensive-setting-is-costing-frames.md)
-  - a code-panel status-strip readout that names the non-default setting
-    (accum passes, Post FX, line smooth) costing frames and offers a
-    one-click step back, gated on a display-relative threshold sustained
-    for 2 s. Session-scoped dismiss, no `GlrConfigKey`; suppressed during
-    tours and capture runs. MSAA is deliberately out of the first cut.

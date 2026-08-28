@@ -39,7 +39,7 @@ editor** built from the reusable half of this module only. It links
 generic text panel from `src/ui/core` - and drives them with its *own* input
 dispatcher ([`tools/editor_demo/input.c`](../../tools/editor_demo/input.c)) and its *own* File menu
 ([`tools/editor_demo/menu.c`](../../tools/editor_demo/menu.c)). It must not link `src/ui/app`: the REPL
-code-panel adapter, menu bar, [`UiRenderSnapshot`](../ui/app/snapshot.h#L91), [`UiState`](../ui/app/state.h#L20), and app chrome are
+code-panel adapter, menu bar, [`UiRenderSnapshot`](../ui/app/snapshot.h#L92), [`UiState`](../ui/app/state.h#L20), and app chrome are
 part of the full app composition, not the generic editor proof.
 
 ```bash

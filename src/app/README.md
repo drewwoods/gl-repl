@@ -57,21 +57,21 @@ would replace.
 That independence is intentional documentation, not just a build
 optimization. A demo should stay `src/app`-free unless a new exception is
 explicitly justified in its object-list comment and local docs. Pulling in
-`glr_ctrl`, `glr_actions`, `glr_config`, or [`UiRenderSnapshot`](../ui/app/snapshot.h#L91) to make a demo
+`glr_ctrl`, `glr_actions`, `glr_config`, or [`UiRenderSnapshot`](../ui/app/snapshot.h#L92) to make a demo
 easier usually means the owner module is missing a smaller contract or view
 type.
 
 ## In the REPL app
 
 Inside the full app this is **layer 0** of the ownership map. Per frame,
-[`glr_ctrl_display_frame()`](glr_ctrl.h#L303):
+[`glr_ctrl_display_frame()`](glr_ctrl.h#L309):
 
 1. rebuilds autonormals / the flat program if dirty, and prepares replay /
    export / camera strings;
 2. builds a [`Render3dRenderConfig`](../render3d/render_types.h#L139) from REPL runtime state + view state and calls
    [`glr_camera_load_modelview()`](glr_camera.h#L165) then [`render3d_draw_scene()`](../render3d/render.h#L139) (with the
    owned [`Render3dState`](../render3d/render.h#L101), once per frame; the renderer owns its accumulation-jitter loop);
-3. builds a [`UiRenderSnapshot`](../ui/app/snapshot.h#L91) and fans it out to the `ui_*_render`
+3. builds a [`UiRenderSnapshot`](../ui/app/snapshot.h#L92) and fans it out to the `ui_*_render`
    functions.
 
 On input, the physical `glr_ctrl_keyboard` / `_mouse` family first arbitrates

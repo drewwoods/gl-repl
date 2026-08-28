@@ -85,7 +85,7 @@ The text-document model driven by a *different* controller: this window is
 demo's own dispatcher ([`input.c`](editor_demo/input.c)) and File menu
 ([`menu.c`](editor_demo/menu.c)) - which is what makes `src/editor/input.c` the
 REPL editor's controller rather than the model's. It links `src/ui/core` but
-never `src/ui/app`: no [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L91), no
+never `src/ui/app`: no [`UiRenderSnapshot`](../src/ui/app/snapshot.h#L92), no
 menu bar, no app chrome.
 
 `src/app` is the one module with no demo, by design - it is what the four

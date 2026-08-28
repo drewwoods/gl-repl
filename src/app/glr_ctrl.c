@@ -88,6 +88,7 @@
 #include "ui/subsystems/tour_hud.h"
 #include "ui/subsystems/tour_presence.h"
 #include "app/glr_pointer_script.h"   /* glr_pointer_script_tour_view */
+#include "app/glr_perf_hint.h"
 #include "app/glr_tours.h"            /* glr_tours_start */
 #include "render3d/postprocess_filter.h" /* Render3dPostFilterMode, mode_name */
 #include "render3d/render.h"
@@ -2592,6 +2593,14 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
         glr_ctrl_fill_unbalanced_warning(snap, unbalanced,
                                           snap->unbalanced_count);
     }
+    {
+        GlrPerfHintView hint = glr_perf_hint_view();
+
+        snap->perf_hint_active = hint.active;
+        snap->perf_hint_fps = hint.fps;
+        snap->perf_hint_culprit = hint.culprit;
+        snap->perf_hint_culprit_count = hint.culprit_count;
+    }
     snap->search         = *editor_state_search();
     snap->autocomplete   = *editor_state_autocomplete();
     snap->pointer        = ui_state_pointer();
@@ -3131,6 +3140,21 @@ void glr_frame_begin(void) {
                 wait_us = 0.0;
             prof_section_record_us(PROF_FRAME_WAIT, wait_us);
         }
+    }
+    {
+        GlrRenderState rs = glr_state_render();
+        GlrPresentationState ps = glr_state_presentation();
+        GlrPerfHintInputs in;
+
+        memset(&in, 0, sizeof in);
+        in.use_accum = rs.use_accum;
+        in.accum_effect = rs.accum_effect;
+        in.accum_passes = rs.accum_passes;
+        in.line_smooth_enabled = rs.line_smooth_enabled;
+        in.post_fx_scope = ps.post_fx_scope;
+        in.pointer_script_active = glr_pointer_script_active();
+        glr_perf_hint_tick(prof_fps_current(), prof_frame_interval_last_us(),
+                           &in);
     }
     memprof_frame_tick();
     /* Dial GPU timer-query capture to what the profile panel can show this
@@ -4574,6 +4598,32 @@ static void glr_ctrl_install_app_services(void) {
     glr_ctrl_seed_overlay_xn();
 }
 
+void glr_ctrl_perf_hint_apply_fix(void) {
+    GlrPerfHintView v = glr_perf_hint_view();
+
+    switch ((GlrPerfCulprit)v.culprit) {
+    case GLR_PERF_CULPRIT_ACCUM:
+        /* Ladder index 0 is 1x - glr_config_set takes the cycle index, not
+         * the sample count. That is the shipped default the watchdog uses. */
+        glr_config_set(GLR_CONFIG_ACCUM_PASSES, 0);
+        repl_set_status("Accum passes -> 1");
+        break;
+    case GLR_PERF_CULPRIT_POST_FX_FRAME:
+    case GLR_PERF_CULPRIT_POST_FX_VIEW:
+        glr_config_set(GLR_CONFIG_POST_FX_SCOPE, GLR_POST_FX_SCOPE_OFF);
+        repl_set_status("Post FX -> Off");
+        break;
+    case GLR_PERF_CULPRIT_LINE_SMOOTH:
+        glr_config_set(GLR_CONFIG_LINE_SMOOTH, 0);
+        repl_set_status("Line smooth -> Off");
+        break;
+    case GLR_PERF_CULPRIT_NONE:
+    case GLR_PERF_CULPRIT_COUNT:
+        break;
+    }
+    glr_perf_hint_reset();
+}
+
 /* Full-world reset entry point. Clears REPL, editor, UI, and all peer subsystems. */
 void glr_ctrl_reset_all(void) {
     editor_undo_note_wholesale_replacement();
@@ -4585,6 +4635,7 @@ void glr_ctrl_reset_all(void) {
     /* Reset presentation, rendering, and camera defaults. */
     glr_state_presentation_reset_defaults();
     glr_state_render_reset_defaults();
+    glr_perf_hint_reset();
     /* Seed the app-state light slots with the active theme's
      * positions / colors. The render3d module owns the theme presets;
      * the controller wires them into GlrRenderState so the merge in

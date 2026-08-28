@@ -182,6 +182,165 @@ static void test_statusbar_command_count_overflow_color(void) {
                overflow_primary_count_color, 0);
 }
 
+static int statusbar_trace_count_color_then_raster(const char *color) {
+    FILE *trace = fopen(STATUSBAR_TRACE_PATH, "r");
+    char previous[128] = "";
+    char line[128];
+    int count = 0;
+
+    if (!trace)
+        return 0;
+    while (fgets(line, sizeof(line), trace)) {
+        size_t len = strlen(line);
+        if (len > 0 && line[len - 1] == '\n')
+            line[len - 1] = '\0';
+        if (strcmp(previous, color) == 0 &&
+            strncmp(line, "glRasterPos2f", 13) == 0)
+            count++;
+        snprintf(previous, sizeof previous, "%s", line);
+    }
+    fclose(trace);
+    return count;
+}
+
+static int statusbar_chip_well_count(void) {
+    FILE *trace = fopen(STATUSBAR_TRACE_PATH, "r");
+    char line[128];
+    int wells = 0;
+
+    if (!trace)
+        return 0;
+    while (fgets(line, sizeof(line), trace)) {
+        float x0, y0, x1, y1;
+        if (sscanf(line, "glRectf %f %f %f %f", &x0, &y0, &x1, &y1) != 4)
+            continue;
+        (void)x0;
+        (void)x1;
+        {
+            float dh = (y1 - y0) - (float)GL2D_CHIP_H;
+            if (dh < 0.0f)
+                dh = -dh;
+            if (dh < 0.5f)
+                wells++;
+        }
+    }
+    fclose(trace);
+    return wells;
+}
+
+static void fill_perf_hint_snap(UiRenderSnapshot *snap, int active) {
+    snap->perf_hint_active = active;
+    snap->perf_hint_fps = 38;
+    snap->perf_hint_culprit = GLR_PERF_CULPRIT_ACCUM;
+    snap->perf_hint_culprit_count = 1;
+    snap->render.use_accum = 1;
+    snap->render.accum_effect = RENDER3D_ACCUM_EFFECT_BLUR;
+    snap->render.accum_passes = 8;
+}
+
+static void scan_statusbar_hits(const UiRenderSnapshot *snap, int cp_x, int cp_w,
+                                int status_my,
+                                int *saw_hint, int *saw_fix, int *saw_dismiss) {
+    int mx;
+    UiHit h;
+
+    *saw_hint = *saw_fix = *saw_dismiss = 0;
+    for (mx = cp_x; mx < cp_x + cp_w; mx++) {
+        h = ui_repl_code_panel_hit_test(snap, mx, status_my);
+        if (h.kind == UI_HIT_CODE_PERF_HINT)
+            *saw_hint = 1;
+        if (h.kind == UI_HIT_CODE_PERF_HINT_FIX)
+            *saw_fix = 1;
+        if (h.kind == UI_HIT_CODE_PERF_HINT_DISMISS)
+            *saw_dismiss = 1;
+    }
+}
+
+static void test_statusbar_perf_hint(void) {
+    UiRenderSnapshot snap;
+    int cp_x, cp_y, cp_w;
+    int status_my;
+    int saw_hint, saw_fix, saw_dismiss;
+    int warn_text;
+    int accent_text;
+    char warn_color[64];
+    char accent_color[64];
+    const float *wc = ui_rgba(UI_TOK_STATUS_WARN);
+    const float *ac = ui_rgba(UI_TOK_ACCENT);
+
+    snprintf(warn_color, sizeof warn_color, "glColor4f %g %g %g %g",
+             (double)wc[0], (double)wc[1], (double)wc[2], (double)wc[3]);
+    snprintf(accent_color, sizeof accent_color, "glColor4f %g %g %g %g",
+             (double)ac[0], (double)ac[1], (double)ac[2], (double)ac[3]);
+
+    printf("Testing statusbar perf hint...\n");
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(1600, 600);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+    ui_state_code_panel_mut()->panel_frac = 0.45f;
+    make_test_ui_snapshot(&snap);
+    fill_perf_hint_snap(&snap, 1);
+    ui_repl_code_panel_invalidate_row_cache_for_test();
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, NULL);
+    status_my = snap.viewport.window_h - (cp_y + STATUSBAR_H / 2);
+
+    scan_statusbar_hits(&snap, cp_x, cp_w, status_my,
+                        &saw_hint, &saw_fix, &saw_dismiss);
+    ASSERT_TRUE("readout hit kind at 1600", saw_hint);
+    ASSERT_TRUE("[off] hit kind at 1600", saw_fix);
+    ASSERT_TRUE("[x] hit kind at 1600", saw_dismiss);
+
+    /* 800x300 left layout, 0.45 frac -> 360 px panel. */
+    ui_state_viewport_set_size(800, 300);
+    glr_ctrl_sync_ui_chrome();
+    make_test_ui_snapshot(&snap);
+    fill_perf_hint_snap(&snap, 1);
+    ui_repl_code_panel_invalidate_row_cache_for_test();
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, NULL);
+    status_my = snap.viewport.window_h - (cp_y + STATUSBAR_H / 2);
+    ASSERT_INT("narrow layout panel is 360 px", cp_w, 360);
+    scan_statusbar_hits(&snap, cp_x, cp_w, status_my,
+                        &saw_hint, &saw_fix, &saw_dismiss);
+    ASSERT_TRUE("readout hittable at 360 px", saw_hint);
+    ASSERT_TRUE("[off] hittable at 360 px", saw_fix);
+    ASSERT_TRUE("[x] hittable at 360 px", saw_dismiss);
+
+    /* Wide enough that the LEFT warning does not cull the center AA chips. */
+    ui_state_viewport_set_size(2000, 400);
+    glr_ctrl_sync_ui_chrome();
+    ui_state_code_panel_mut()->panel_frac = 0.5f;
+    make_test_ui_snapshot(&snap);
+    fill_perf_hint_snap(&snap, 1);
+    ui_repl_code_panel_invalidate_row_cache_for_test();
+    ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, NULL);
+    status_my = snap.viewport.window_h - (cp_y + STATUSBAR_H / 2);
+    gl_stub_trace_open(STATUSBAR_TRACE_PATH);
+    ui_repl_code_panel_render_with_chrome(&snap, NULL);
+    gl_stub_trace_close();
+    warn_text = statusbar_trace_count_color_then_raster(warn_color);
+    ASSERT_TRUE("readout and AA emit STATUS_WARN", warn_text >= 2);
+    ASSERT_INT("action chips draw no well", statusbar_chip_well_count(), 0);
+
+    fill_perf_hint_snap(&snap, 0);
+    snap.perf_hint_culprit = GLR_PERF_CULPRIT_NONE;
+    ui_repl_code_panel_invalidate_row_cache_for_test();
+    gl_stub_trace_open(STATUSBAR_TRACE_PATH);
+    ui_repl_code_panel_render_with_chrome(&snap, NULL);
+    gl_stub_trace_close();
+    warn_text = statusbar_trace_count_color_then_raster(warn_color);
+    accent_text = statusbar_trace_count_color_then_raster(accent_color);
+    ASSERT_INT("no STATUS_WARN text when the hint is off", warn_text, 0);
+    ASSERT_TRUE("AA readout uses state color when the hint is off",
+                accent_text > 0);
+
+    scan_statusbar_hits(&snap, cp_x, cp_w, status_my,
+                        &saw_hint, &saw_fix, &saw_dismiss);
+    ASSERT_INT("inactive hint draws no readout", saw_hint, 0);
+    ASSERT_INT("inactive hint draws no [off]", saw_fix, 0);
+    ASSERT_INT("inactive hint draws no [x]", saw_dismiss, 0);
+}
+
 static void build_test_code_panel_layout(UiReplCodePanelLayout *layout,
                                          int cp_w, int text_x, int cp_h) {
     UiRenderSnapshot snap;
@@ -2553,6 +2712,7 @@ int main(void) {
     test_ui_panels_hit_test_trailing_blank_row_kind();
     test_ui_panels_hit_test_virtual_row_routes_to_source();
     test_statusbar_command_count_overflow_color();
+    test_statusbar_perf_hint();
     test_vertex2f_gutter_labels();
     test_vertex_gutter_labels_follow_cursor_begin_block();
     test_auto_normal_rows_are_labelled_and_dimmed();

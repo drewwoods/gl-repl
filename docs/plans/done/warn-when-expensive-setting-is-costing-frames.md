@@ -1,5 +1,8 @@
 # Perf hint: warn when an expensive setting is costing frames
 
+**Status: complete** (2026-08-28) - watchdog, status-strip readout, capture
+suppression, and tests as specified. MSAA remains out of the first cut.
+
 ## Context
 
 gl-repl ships settings that are cheap to switch on and expensive to run: the

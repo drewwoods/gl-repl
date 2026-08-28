@@ -27,6 +27,7 @@
 #include "subsystems/replay/replay_state.h"
 #include "subsystems/replay/replay_annotations.h"
 #include "app/glr_pointer_script.h"          /* GlrTourPlaybackView */
+#include "app/glr_perf_hint.h"               /* GlrPerfCulprit */
 #include "ui/subsystems/variable_panel.h"   /* UiVariable / UiVariableList */
 #include "ui/support/assign_plot.h"        /* AssignPlotView / title cap */
 #include "ui/support/console.h"            /* ConsoleView */
@@ -186,6 +187,13 @@ typedef struct UiRenderSnapshot {
      * multiple commands the controller fills the legacy "%d unbalanced"
      * form. Empty when unbalanced_count is zero. */
     char                        unbalanced_warning[32];
+    /* Perf-hint status-strip readout. Flat ints; the UI composes the
+     * label from culprit + snap->render so a pass-count change cannot
+     * leave a stale "8x" on screen. */
+    int                         perf_hint_active;
+    int                         perf_hint_fps;
+    int                         perf_hint_culprit;        /* GlrPerfCulprit */
+    int                         perf_hint_culprit_count;
     float                       anim_time;
 
     /* User scenes */

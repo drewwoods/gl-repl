@@ -993,6 +993,7 @@ TEST_BINS = \
 	test_tutorial_runner \
 	test_glr_camera \
 	test_glr_capture_env \
+	test_glr_perf_hint \
 	test_glr_cli \
 	test_glr_init_trace \
 	test_glr_tour_snapshot \
