@@ -476,6 +476,41 @@ static void test_dismiss_post_fx_effect_change_rearms(void) {
     ASSERT_INT("changing Post FX effect re-arms at the same scope", v.active, 1);
 }
 
+/* A dismiss that expires through sustained recovery must not leave the
+ * release accumulator latched at >= TRIP_US. If it does, the next trip
+ * clears on its first recovered frame instead of on 2 s of recovery -
+ * the single-frame blink the hysteresis exists to prevent. */
+static void test_release_hysteresis_after_dismiss_expiry(void) {
+    GlrPerfHintInputs in = in_accum(8, RENDER3D_ACCUM_EFFECT_BLUR);
+    GlrPerfHintView v;
+    int i;
+
+    glr_perf_hint_reset_for_test();
+    warmup_clean_at(60.0);
+    tick_for(20.0, &in, GLR_PERF_HINT_TRIP_US + dt_for_fps(20.0));
+    ASSERT_INT("setup: tripped before dismiss", glr_perf_hint_view().active, 1);
+
+    glr_perf_hint_dismiss();
+    tick_for(56.0, &in, GLR_PERF_HINT_TRIP_US + 10.0 * dt_for_fps(56.0));
+
+    /* Re-trip one tick at a time and stop the instant it comes up, so the
+     * next tick is the first recovered frame after the trip. Ticking past
+     * it would hide the bug: a slow tick while active zeroes the release
+     * accumulator on its way through. */
+    for (i = 0; i < 1000 && !glr_perf_hint_view().active; i++)
+        glr_perf_hint_tick(20.0, dt_for_fps(20.0), &in);
+    ASSERT_INT("re-trips after the dismiss expired",
+               glr_perf_hint_view().active, 1);
+
+    glr_perf_hint_tick(56.0, dt_for_fps(56.0), &in);
+    v = glr_perf_hint_view();
+    ASSERT_INT("one recovered frame does not clear the re-trip", v.active, 1);
+
+    tick_for(56.0, &in, GLR_PERF_HINT_TRIP_US + dt_for_fps(56.0));
+    v = glr_perf_hint_view();
+    ASSERT_INT("2 s of recovery clears the re-trip", v.active, 0);
+}
+
 static void test_empty_mask_clears_immediately(void) {
     GlrPerfHintInputs accum = in_accum(8, RENDER3D_ACCUM_EFFECT_BLUR);
     GlrPerfHintInputs clean = in_clean();
@@ -563,6 +598,7 @@ int main(void) {
     test_line_smooth_culprit();
     test_dismiss_and_rearm();
     test_dismiss_post_fx_effect_change_rearms();
+    test_release_hysteresis_after_dismiss_expiry();
     test_empty_mask_clears_immediately();
     test_pointer_script_suppression();
     test_capture_session_latch();

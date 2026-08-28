@@ -1698,15 +1698,13 @@ static void route_right_press(int x, int y) {
     case UI_HIT_CODE_AA_PASSES_STATUS:
         route_code_cfg_cycle_hit(GLR_CONFIG_ACCUM_PASSES, -1);
         return;
+    /* Right-press means "cycle backward" on every other statusbar row.
+     * The readout has nothing to cycle and the two chips are one-shot
+     * actions, so all three are inert here - a stray right-click in the
+     * strip must not change a setting. Left-press owns them. */
     case UI_HIT_CODE_PERF_HINT:
-        return;  /* inert: tooltip only */
     case UI_HIT_CODE_PERF_HINT_FIX:
-        glr_ctrl_perf_hint_apply_fix();
-        editor_request_redraw();
-        return;
     case UI_HIT_CODE_PERF_HINT_DISMISS:
-        glr_perf_hint_dismiss();
-        editor_request_redraw();
         return;
     case UI_HIT_CODE_VERTEX_LABELS_STATUS:
         route_code_cfg_cycle_hit(GLR_CONFIG_VERTEX_LABELS, -1);

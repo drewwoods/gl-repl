@@ -165,8 +165,14 @@ void glr_perf_hint_tick(double fps, double dt_us, const GlrPerfHintInputs *in) {
             inst = 1000000.0 / dt_us;
             if (fps > release && inst > release) {
                 g.release_acc_us += dt_us;
-                if (g.release_acc_us >= GLR_PERF_HINT_TRIP_US)
+                if (g.release_acc_us >= GLR_PERF_HINT_TRIP_US) {
                     g.dismissed = 0;
+                    /* Every other exit from a debounce accumulator zeroes
+                     * it. Leaving this one latched at >= TRIP_US would let
+                     * the next trip clear on its first recovered frame
+                     * instead of on 2 s of sustained recovery. */
+                    g.release_acc_us = 0.0;
+                }
             } else {
                 g.release_acc_us = 0.0;
             }

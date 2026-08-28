@@ -166,8 +166,11 @@ If either cadence is at or above `trip`, the trip accumulator returns to zero.
 
 After a trip, clear after 2 s sustained with the instantaneous cadence and EMA
 both above `release`; any tick that fails that pair resets the release
-accumulator. **An empty mask clears immediately** and resets both
-debounce accumulators: the user may turn a setting off through its ordinary
+accumulator. Every exit from a debounce accumulator zeroes it — including the
+dismiss expiring through recovery, which otherwise leaves `release` latched at
+the full window and lets the *next* trip clear on its first recovered frame.
+**An empty mask clears immediately** and resets both debounce accumulators:
+the user may turn a setting off through its ordinary
 Config/statusbar control rather than the hint's `[off]`, and an active hint must
 never render a stale `culprit == NONE` or an "Accum noAA 1x" label.
 
@@ -318,7 +321,9 @@ Chip labels carry their own brackets — `gl2d_chip_action`'s contract
 (`src/ui/core/gl_2d.h:272`), matching assign-plot's `"[x]"` / `"[reset]"`. Hit
 width is measured on the bracketed form. Both chips are one-shots, so both are
 **action** chips per the documented grammar; a verb-labelled chip must not
-carry a mode.
+carry a mode. All three rows are inert on **right**-press: right-press means
+"cycle backward" everywhere else in the strip, the readout has nothing to
+cycle, and a one-shot action must not fire from a stray right-click.
 
 The readout needs its own hit kind rather than `UI_HIT_NONE`:
 `statusbar_hover_idx()` (`:1252`) skips `UI_HIT_NONE` rows outright, and
@@ -397,6 +402,9 @@ interval pairs (16.7 ms at 60 FPS, 200 ms at 5 FPS, and so on):
   `culprit_count == 2`
 - dismiss hides it; the same mask stays hidden; changing the mask re-arms;
   `glr_perf_hint_reset()` re-arms
+- **release hysteresis survives a dismiss**: after a dismiss expires through
+  recovery, a re-trip taken one tick at a time (so the next tick is the first
+  recovered frame) still needs 2 s of recovery to clear, not one fast frame
 - changing the mask to empty clears `active` and both debounce accumulators in
   that tick, without waiting for release hysteresis
 - **suppression, both sources independently**: `pointer_script_active = 1`
