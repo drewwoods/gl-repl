@@ -976,7 +976,7 @@ static const StatusbarItem k_statusbar_items[] = {
         .align = STATUSBAR_ALIGN_LEFT,
         .gap_before = STATUSBAR_GAP_PAIR,
         .hit = UI_HIT_CODE_PERF_HINT_DISMISS,
-        .tooltip = "Hide this warning",
+        .tooltip = "Hide until this setting changes or FPS recovers",
         .prepare = prepare_perf_dismiss,
         .draw = draw_perf_chip,
     },

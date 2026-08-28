@@ -55,7 +55,7 @@ typedef struct {                /* snapshot-safe flat view */
 void            glr_perf_hint_tick(double fps, double dt_us,
                                    const GlrPerfHintInputs *in);
 GlrPerfHintView glr_perf_hint_view(void);
-void            glr_perf_hint_dismiss(void);  /* session dismiss, this culprit set */
+void            glr_perf_hint_dismiss(void);  /* hide until this config changes or FPS recovers */
 void            glr_perf_hint_reset(void);    /* re-arm + clear debounce; keep ceiling/latches */
 void            glr_perf_hint_set_capture_session(int capturing);
 /* Zero every static, including the clean ceiling and the capture-session

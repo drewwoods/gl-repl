@@ -26,7 +26,9 @@ typedef struct {
     int    culprit;
     int    culprit_count;
     int    mask;
-    int    dismissed_mask;
+    int    dismissed;                 /* [x]: hide this configuration */
+    GlrPerfHintInputs last_in;        /* last tick's bag, for dismiss */
+    GlrPerfHintInputs dismissed_in;   /* configuration [x] hid */
     int    capture_session;
     double warmup_us;
     double trip_acc_us;
@@ -78,6 +80,15 @@ static int mask_count(int mask) {
     return n;
 }
 
+static int dismiss_inputs_equal(const GlrPerfHintInputs *a,
+                                const GlrPerfHintInputs *b) {
+    return a->use_accum == b->use_accum &&
+           a->accum_effect == b->accum_effect &&
+           a->accum_passes == b->accum_passes &&
+           a->line_smooth_enabled == b->line_smooth_enabled &&
+           a->post_fx_scope == b->post_fx_scope;
+}
+
 static void apply_mask(int mask) {
     g.mask = mask;
     g.culprit = highest_culprit(mask);
@@ -86,9 +97,8 @@ static void apply_mask(int mask) {
         g.active = 0;
         g.trip_acc_us = 0.0;
         g.release_acc_us = 0.0;
+        g.dismissed = 0;
     }
-    if (g.dismissed_mask != 0 && mask != g.dismissed_mask)
-        g.dismissed_mask = 0;
 }
 
 static void trip_thresholds(double *trip, double *release) {
@@ -108,6 +118,8 @@ void glr_perf_hint_tick(double fps, double dt_us, const GlrPerfHintInputs *in) {
     int suppressed = g.capture_session || (in && in->pointer_script_active);
     double trip, release, inst;
 
+    if (in)
+        g.last_in = *in;
     apply_mask(mask);
 
     if (suppressed) {
@@ -139,9 +151,27 @@ void glr_perf_hint_tick(double fps, double dt_us, const GlrPerfHintInputs *in) {
     if (mask == 0)
         return;
 
-    if (g.dismissed_mask != 0 && mask == g.dismissed_mask) {
-        g.active = 0;
-        return;
+    /* [x] hides this exact configuration while it stays slow. Changing a
+     * blamed setting (16x -> 8x, Blur -> AA, ...) re-arms immediately;
+     * recovering above the release floor for TRIP_US expires the dismiss
+     * so a later slowdown can warn again. */
+    if (g.dismissed) {
+        if (!in || !dismiss_inputs_equal(&g.dismissed_in, in)) {
+            g.dismissed = 0;
+            g.release_acc_us = 0.0;
+        } else {
+            trip_thresholds(&trip, &release);
+            inst = 1000000.0 / dt_us;
+            if (fps > release && inst > release) {
+                g.release_acc_us += dt_us;
+                if (g.release_acc_us >= GLR_PERF_HINT_TRIP_US)
+                    g.dismissed = 0;
+            } else {
+                g.release_acc_us = 0.0;
+            }
+            g.active = 0;
+            return;
+        }
     }
 
     trip_thresholds(&trip, &release);
@@ -180,7 +210,8 @@ GlrPerfHintView glr_perf_hint_view(void) {
 }
 
 void glr_perf_hint_dismiss(void) {
-    g.dismissed_mask = g.mask;
+    g.dismissed = 1;
+    g.dismissed_in = g.last_in;
     g.active = 0;
     g.trip_acc_us = 0.0;
     g.release_acc_us = 0.0;
@@ -192,7 +223,7 @@ void glr_perf_hint_reset(void) {
     g.trip_acc_us = 0.0;
     g.release_acc_us = 0.0;
     g.warmup_us = 0.0;
-    g.dismissed_mask = 0;
+    g.dismissed = 0;
 }
 
 void glr_perf_hint_set_capture_session(int capturing) {

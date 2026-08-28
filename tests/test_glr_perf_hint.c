@@ -387,6 +387,8 @@ static void test_line_smooth_culprit(void) {
 static void test_dismiss_and_rearm(void) {
     GlrPerfHintInputs accum = in_accum(8, RENDER3D_ACCUM_EFFECT_AA);
     GlrPerfHintInputs both;
+    GlrPerfHintInputs steeper;
+    GlrPerfHintInputs clean = in_clean();
     GlrPerfHintView v;
 
     glr_perf_hint_reset_for_test();
@@ -400,20 +402,56 @@ static void test_dismiss_and_rearm(void) {
 
     tick_for(20.0, &accum, GLR_PERF_HINT_TRIP_US + dt_for_fps(20.0));
     v = glr_perf_hint_view();
-    ASSERT_INT("same mask stays hidden", v.active, 0);
+    ASSERT_INT("same configuration stays hidden while still slow", v.active, 0);
 
     both = accum;
     both.line_smooth_enabled = 1;
     tick_for(20.0, &both, GLR_PERF_HINT_TRIP_US + dt_for_fps(20.0));
     v = glr_perf_hint_view();
-    ASSERT_INT("changing the mask re-arms", v.active, 1);
+    ASSERT_INT("adding another culprit re-arms", v.active, 1);
 
     glr_perf_hint_dismiss();
     glr_perf_hint_reset();
     warmup_clean_at(60.0);
     tick_for(20.0, &both, GLR_PERF_HINT_TRIP_US + dt_for_fps(20.0));
     v = glr_perf_hint_view();
-    ASSERT_INT("reset re-arms a dismissed mask", v.active, 1);
+    ASSERT_INT("reset re-arms a dismissed configuration", v.active, 1);
+
+    /* Changing the blamed value (8x -> 16x) is a new configuration. */
+    glr_perf_hint_reset_for_test();
+    warmup_clean_at(60.0);
+    tick_for(20.0, &accum, GLR_PERF_HINT_TRIP_US + dt_for_fps(20.0));
+    glr_perf_hint_dismiss();
+    steeper = in_accum(16, RENDER3D_ACCUM_EFFECT_AA);
+    tick_for(20.0, &steeper, GLR_PERF_HINT_TRIP_US + dt_for_fps(20.0));
+    v = glr_perf_hint_view();
+    ASSERT_INT("changing accum passes re-arms", v.active, 1);
+
+    /* Off then on again: empty mask expires dismiss. */
+    glr_perf_hint_reset_for_test();
+    warmup_clean_at(60.0);
+    tick_for(20.0, &accum, GLR_PERF_HINT_TRIP_US + dt_for_fps(20.0));
+    glr_perf_hint_dismiss();
+    glr_perf_hint_tick(20.0, dt_for_fps(20.0), &clean);
+    tick_for(20.0, &accum, GLR_PERF_HINT_TRIP_US + dt_for_fps(20.0));
+    v = glr_perf_hint_view();
+    ASSERT_INT("turning the setting off then on re-arms", v.active, 1);
+
+    /* Recovered FPS expires dismiss so a later slowdown can warn again. */
+    glr_perf_hint_reset_for_test();
+    warmup_clean_at(60.0);
+    tick_for(20.0, &accum, GLR_PERF_HINT_TRIP_US + dt_for_fps(20.0));
+    glr_perf_hint_dismiss();
+    tick_for(52.0, &accum, GLR_PERF_HINT_TRIP_US + dt_for_fps(52.0));
+    v = glr_perf_hint_view();
+    ASSERT_INT("52 fps does not expire dismiss (below release)", v.active, 0);
+    tick_for(56.0, &accum, GLR_PERF_HINT_TRIP_US + 10.0 * dt_for_fps(56.0));
+    v = glr_perf_hint_view();
+    ASSERT_INT("recovered FPS expires dismiss without showing the hint",
+               v.active, 0);
+    tick_for(20.0, &accum, GLR_PERF_HINT_TRIP_US + dt_for_fps(20.0));
+    v = glr_perf_hint_view();
+    ASSERT_INT("a later slowdown after recovery warns again", v.active, 1);
 }
 
 static void test_empty_mask_clears_immediately(void) {
