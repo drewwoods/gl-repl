@@ -62,7 +62,7 @@ void            glr_perf_hint_tick(double fps, double dt_us,
                                    const GlrPerfHintInputs *in);
 GlrPerfHintView glr_perf_hint_view(void);
 void            glr_perf_hint_dismiss(void);  /* session dismiss, this culprit set */
-void            glr_perf_hint_reset(void);    /* re-arm, clear debounce + ceiling */
+void            glr_perf_hint_reset(void);    /* re-arm + clear debounce; keep ceiling/latches */
 void            glr_perf_hint_set_capture_session(int capturing);
 ```
 
@@ -93,7 +93,7 @@ needs its own story, and it starts by storing the queried sample count in
 `GlrRenderState` and requiring `samples > 1`.
 
 The accum gate matches `prepare_aa`'s `active` test
-(`src/ui/app/repl_code_panel_statusbar.c:241`) and the blur-hook early-out
+(`src/ui/app/repl_code_panel_statusbar.c:246-247`) and the blur-hook early-out
 (`glr_ctrl.c:3043-3055`), and it respects `accum_bits == 0`: `glr_ctrl_set_accum()`
 (`glr_ctrl.c:5068`) forces `use_accum = 0` on a context with no accumulation
 buffer, so an unpatched gl4es web build is never blamed for a setting that is
@@ -112,10 +112,14 @@ highest-ranked bit set; `culprit_count` lets the readout say "+1 more".
 
 #### Threshold — relative to the cadence this display can actually reach
 
-An absolute 50 fps floor is wrong on a 30 Hz panel, a throttled browser tab, or
-any host that never offers 60. The watchdog therefore tracks a **ceiling**: the
-highest smoothed fps seen since the last `glr_perf_hint_reset()`. The effective
-thresholds are
+An absolute 50 fps floor is wrong on a 30 Hz panel or any host that never offers
+60. The watchdog therefore tracks a **clean ceiling**: the highest smoothed FPS
+seen on a valid frame while the culprit mask is empty. Frames with an expensive
+setting active can consume that baseline, but can never lower or establish it;
+otherwise a session loaded with Blur 16x at 35 FPS would learn 35 as "healthy"
+and set a trip point of 28 that it can never cross.
+
+Once a clean ceiling exists, the effective thresholds are
 
 ```
 trip    = min(GLR_PERF_HINT_FPS_TRIP  (50), ceiling * GLR_PERF_HINT_TRIP_FRAC  (0.80))
@@ -127,30 +131,57 @@ On a 60 Hz host the ceiling is 60 and the floor is the familiar 48–50. On a
 slow display never warns. The hysteresis gap (trip < release) is what stops the
 readout blinking for a scene parked exactly on the threshold.
 
+If the process starts with a non-empty mask (a saved `@cfg`, for example) and
+has not observed even one clean frame, it falls back to the absolute 50/55
+thresholds. There is no display-cadence evidence from which to derive a relative
+floor in that state; treating the already-slow loaded setting as its own healthy
+baseline would guarantee silence. The first later empty-mask frame begins
+learning the real display ceiling.
+
 Nothing trips during a `GLR_PERF_HINT_WARMUP_US` (3 s) warm-up, which both lets
-the ceiling establish itself and swallows the startup hitch.
+the ceiling establish itself when clean frames are available and swallows the
+startup hitch. `glr_perf_hint_reset()` restarts warm-up and clears the trip /
+release accumulators and dismissed mask, but deliberately preserves the clean
+ceiling and the capture-session latch. In particular, `[off]` must not erase the
+baseline needed to assess the next-ranked culprit.
 
 #### Trip, and what does not count as slowness
 
-Accumulate `dt_us` while `fps < trip` and the mask is non-empty; trip once the
-accumulator passes `GLR_PERF_HINT_TRIP_US` (2 s), and clear after the same 2 s
-sustained above `release`. Accumulating elapsed time rather than counting frames
-matters: 120 frames at 40 fps is 3 s, not 2 s.
+A tick with `dt_us <= 0` or `fps <= 0` is initialization/no sample: it may
+refresh the current culprit mask, but it neither divides by the interval nor
+advances warm-up, ceiling learning, or a debounce accumulator. This is the
+ordinary first `glr_frame_begin()`, before two profiler ticks exist.
 
-Two discontinuity rules, because `dt_us` is the raw start-to-start callback
-interval and a restored minimized window, a resumed debugger, or a
-backgrounded browser tab can hand over one interval of many seconds:
+Accumulate `dt_us` while the mask is non-empty and **both** the smoothed `fps`
+and this tick's instantaneous cadence (`1e6 / dt_us`) are below `trip`. Trip
+once the accumulator passes `GLR_PERF_HINT_TRIP_US` (2 s). Requiring the last
+interval too means a recovered 16.7 ms frame zeros the slow accumulator even
+while `prof_fps_current()`'s EMA still reads low. Accumulating elapsed time
+rather than counting frames matters: 120 frames at 40 fps is 3 s, not 2 s.
+If either cadence is at or above `trip`, the trip accumulator returns to zero.
 
-- **Clamp.** Each tick contributes at most `GLR_PERF_HINT_DT_CLAMP_US` (100 ms),
-  so no single interval can trip the hint on its own.
-- **Discard.** A raw interval *above* that clamp is a discontinuity, not
-  sustained slowness: it zeroes the accumulator and the ceiling's most recent
-  sample rather than adding to either.
+After a trip, clear after 2 s sustained with the instantaneous cadence and EMA
+both above `release`; any tick that fails that pair resets the release
+accumulator. **An empty mask clears immediately** and resets both
+debounce accumulators: the user may turn a setting off through its ordinary
+Config/statusbar control rather than the hint's `[off]`, and an active hint must
+never render a stale `culprit == NONE` or an "Accum noAA 1x" label.
+
+`dt_us` is the raw start-to-start callback interval, so a restored minimized
+window, resumed debugger, or backgrounded browser tab can hand over one interval
+of many seconds. A raw interval above
+`GLR_PERF_HINT_DISCONTINUITY_US` (500 ms) is treated as a suspension: ignore it
+for ceiling learning and zero both debounce accumulators. Valid slow frames are
+otherwise accumulated at their real duration — a sustained 5 FPS render has
+200 ms intervals and must trip after about 2 s, not be mistaken for ten separate
+pauses. Because every accepted interval is at most 500 ms and the trip requires
+2 s, no single callback can trip the hint.
 
 The `fps` input is `prof_fps_current()`, whose EMA (`PROF_FPS_EMA_ALPHA` 0.08)
-lags a recovery. The clamp plus the release hysteresis bound how long that lag
-can hold the readout up; the unit test pins the case (1 s at 10 fps followed by
-60 fps must never trip).
+lags a recovery. The instantaneous-cadence gate plus release hysteresis bound
+how long that lag can hold the readout up; the unit test pins the case (1.7 s
+of low EMA/slow intervals followed by recovered 16.7 ms intervals must never
+trip, even while the supplied EMA remains temporarily below the floor).
 
 #### Dismiss and suppression
 
@@ -174,6 +205,22 @@ bake the amber readout into screenshots:
   raise accum passes. (boot → controller is the allowed direction under
   `check-app-boot-band`.)
 
+  `glr_capture_env_apply()` does **not** imply capture by itself; it runs on
+  every boot. It latches the bit only when at least one backend capture variable
+  is non-empty: `FREEGLUT_CAPTURE_FRAMES`, `FREEGLUT_CAPTURE_STREAM`, or
+  `FREEGLUT_CAPTURE_FILE`. The last one is required for the one-shot
+  `scripts/docs-assets.sh` path, which sets a filename prefix and later sends
+  `SIGUSR1` without record mode. `GLR_ACCUM_PASSES`, `GLR_NO_INPUT`, and the
+  other posing variables are not capture proof on their own. A bare later
+  `SIGUSR1` with no capture environment cannot be predicted at bootstrap and is
+  deliberately outside this latch.
+
+While either source is active, a tick forces `active = 0`, clears both debounce
+accumulators, restarts warm-up, and does not learn a ceiling. Thus a tour cannot
+quietly accrue two seconds of slow frames and reveal the warning on the first
+unsuppressed frame after it ends. The capture-session bit remains latched for
+the process; `glr_perf_hint_reset()` does not clear it.
+
 Constants live in `glr_perf_hint.h`, not `config.h` — they are this module's
 policy and nothing else reads them.
 
@@ -187,7 +234,7 @@ policy and nothing else reads them.
   `glr_pointer_script_active()`.
 - **Snapshot** — four flat `int` fields on `UiRenderSnapshot`
   (`src/ui/app/snapshot.h`), filled in `glr_ctrl_build_ui_snapshot()`
-  (`glr_ctrl.c:2539`) beside the existing `unbalanced_*` block (`:2183-2188`
+  (`glr_ctrl.c:2539`) beside the existing `unbalanced_*` block (`:183-188`
   in the struct, filled at `:2570`), which is the precedent for a
   controller-derived warning:
 
@@ -210,8 +257,10 @@ policy and nothing else reads them.
 - **Fix action** — `glr_ctrl_perf_hint_apply_fix()` maps the culprit to a single
   `glr_config_set()`, then posts a `repl_set_status()` naming what it changed
   (so it lands in the message-history ring) and calls `glr_perf_hint_reset()` so
-  the watchdog re-measures rather than instantly re-tripping on the next-ranked
-  culprit.
+  the watchdog restarts its debounce rather than instantly re-tripping on the
+  next-ranked culprit. Reset preserves the clean ceiling, so the remaining
+  setting is measured against the same known-good cadence rather than learning
+  its own degraded rate as healthy.
 
   | culprit | fix |
   |---|---|
@@ -238,14 +287,19 @@ policy and nothing else reads them.
 
 ### 3. Status strip — `src/ui/app/repl_code_panel_statusbar.c`
 
-Three new rows appended to the **LEFT** cluster of `k_statusbar_items[]`
-(`:858`), directly after `cost` and beside `unbal` — the strip's other warning.
+Three new rows inserted at the **head of the LEFT** cluster of
+`k_statusbar_items[]` (`:858`), before document stats. The strip solver never
+culls LEFT rows, but it does scissor the cluster at the panel edge; putting the
+warning first makes lower-priority stats disappear before the readout or its
+actions in a narrow layout.
 `ALIGN_LEFT` is what actually means never-culled: `statusbar_highest_cull()`
 (`:1075`) skips non-CENTER items entirely, whereas its `best_rank = -1` seed
 means a *center* `cull_rank = 0` row is still selected (`0 > -1`) and the three
 rows would drop one at a time in table order — the readout first, orphaning
-`[off] [x]` with nothing explaining them. Left-cluster overflow is scissored,
-never culled, which is the behaviour the warning needs. The file's own rule is
+`[off] [x]` with nothing explaining them. At the supported narrow-layout test
+width (360 px), all three warning rows must remain visible and hittable; below
+the width of the warning itself, ordinary scissor clipping is unavoidable.
+The file's own rule is
 "one row + prepare (and draw)"; `prepare_unbal` / `draw_unbal` (`:208` / `:403`)
 are the existing `UI_TOK_STATUS_WARN` template.
 
@@ -288,11 +342,12 @@ Three new `UiHitKind` values in `src/ui/app/hit.h` beside `UI_HIT_CODE_AA_STATUS
 | `src/app/glr_ctrl.c` | tick in `glr_frame_begin` (`:3100`), snapshot fill (`:2570`), `glr_ctrl_perf_hint_apply_fix()`, reset in `glr_ctrl_reset_all` (`:4563`) |
 | `src/app/glr_ctrl.h` | declare the fix entry point |
 | `src/app/glr_ctrl_router.c` | three hit arms (one inert) |
-| `src/app/boot/glr_capture_env.c` | latch `glr_perf_hint_set_capture_session(1)` for capture runs |
+| `src/app/boot/glr_capture_env.c` | latch capture suppression only when a `FREEGLUT_CAPTURE_*` session variable is present |
 | `src/ui/app/snapshot.h` | four flat `int` fields |
 | `src/ui/app/hit.h` | three `UiHitKind` values |
 | `src/ui/app/repl_code_panel_statusbar.c` | three LEFT-cluster rows + prepares/draws, `StatusbarPrepared.warn` |
 | `tests/test_glr_perf_hint.c` | **new** |
+| `tests/test_glr_capture_env.c` | capture-session predicate: record, stream, and one-shot prefix |
 | `tests/test_ui.c` | dedicated perf-hint statusbar case (hit kinds + amber trace) |
 | `Makefile` | `TEST_BINS += test_glr_perf_hint` (sources are wildcarded, no other edit) |
 | `docs/MODULES.md` | one row for the new controller-band module |
@@ -304,20 +359,31 @@ Three new `UiHitKind` values in `src/ui/app/hit.h` beside `UI_HIT_CODE_AA_STATUS
 ## Tests
 
 `tests/test_glr_perf_hint.c` — pure, no GL, driven entirely through
-`glr_perf_hint_tick(fps, dt_us, &in)` with a helper that feeds N seconds of
-16.7 ms ticks at a given fps:
+`glr_perf_hint_tick(fps, dt_us, &in)` with helpers that feed consistent FPS /
+interval pairs (16.7 ms at 60 FPS, 200 ms at 5 FPS, and so on):
 
 - empty mask never trips, however slow
 - MSAA-only state is not representable — the input struct has no MSAA field
   (the exclusion is structural, not a runtime branch)
-- warm-up: nothing trips inside the first 3 s
+- warm-up: nothing trips inside the first 3 s; clean 60 FPS frames establish a
+  60 FPS ceiling during it
+- first profiler tick (`fps == 0`, `dt_us == 0`) is ignored safely
 - trips just past 2 s of sub-threshold time, not before
-- hysteresis: after tripping, 52 fps keeps the hint up; 56 fps for 2 s clears it
+- hysteresis: **after clean warm-up at 60 FPS**, 52 FPS keeps a tripped hint up;
+  56 FPS for 2 s clears it
 - **display-relative threshold**: a run whose ceiling never exceeds 30 fps does
   not trip at 28 fps, but does at 20 fps
-- **discontinuity**: one 5 s `dt_us` tick does not trip on its own (clamp), and
-  zeroes the accumulator (discard)
-- **hitch recovery**: 1 s at 10 fps followed by 60 fps must never trip
+- **ceiling admission**: non-empty-mask frames cannot establish or raise the
+  ceiling; when no clean sample exists, an already-loaded 35 FPS Accum setting
+  is judged against the absolute fallback and trips
+- **ceiling retention**: `glr_perf_hint_reset()` and an `[off]`/next-culprit
+  sequence preserve the clean ceiling
+- **discontinuity**: one 5 s `dt_us` tick does not trip, update the ceiling, or
+  contribute to either debounce accumulator
+- **very slow but valid**: consistent 5 FPS / 200 ms ticks are not discarded and
+  trip after about 2 s
+- **hitch recovery**: after 1.7 s of slow intervals, recovered 16.7 ms intervals
+  reset the trip accumulator even while the supplied smoothed FPS remains low
 - accum: `use_accum == 0` (web / no accum buffer) is not blamed; `accum_passes == 1`
   is not blamed; `accum_effect == OFF` is not blamed
 - post FX: `FRAME` and `VIEW_3D` are distinct culprits and `FRAME` outranks
@@ -326,10 +392,19 @@ Three new `UiHitKind` values in `src/ui/app/hit.h` beside `UI_HIT_CODE_AA_STATUS
   `culprit_count == 2`
 - dismiss hides it; the same mask stays hidden; changing the mask re-arms;
   `glr_perf_hint_reset()` re-arms
+- changing the mask to empty clears `active` and both debounce accumulators in
+  that tick, without waiting for release hysteresis
 - **suppression, both sources independently**: `pointer_script_active = 1`
   forces inactive; and — the regression this guards —
   `glr_perf_hint_set_capture_session(1)` **followed by many ticks with
   `pointer_script_active = 0`** stays inactive throughout
+- ending pointer-script suppression starts a fresh warm-up; slow frames accrued
+  during the script cannot make the hint appear immediately afterward
+
+`tests/test_glr_capture_env.c` — clear and set the three backend capture
+variables independently. Each of `FREEGLUT_CAPTURE_FRAMES`,
+`FREEGLUT_CAPTURE_STREAM`, and `FREEGLUT_CAPTURE_FILE` latches capture-session
+suppression; a bare `glr_capture_env_apply()` and posing-only variables do not.
 
 `tests/test_ui.c` — the existing 700 px hit-kind sweep (`:969-1026`) only sees
 rows that are eligible by default, and the perf rows are eligible only while
@@ -338,6 +413,8 @@ case that sets the `perf_hint_*` snapshot fields by hand first:
 
 - hit-test at the readout / `[off]` / `[x]` rects returns
   `UI_HIT_CODE_PERF_HINT`, `_FIX`, `_DISMISS`
+- repeat the hit test at the existing 360 px narrow-layout width and assert all
+  three warning rows remain visible/hittable at the head of the LEFT cluster
 - GL-stub trace (`statusbar_trace_count_pair`, `:104`) asserts the readout emits
   `UI_TOK_STATUS_WARN`'s `glColor4f`, and that the AA readout switches from
   `statusbar_state_color` to the warn hue when accum is the culprit
@@ -374,8 +451,8 @@ slow frame:
 ./gl-repl --example torus
 # baseline: fresh session, defaults -> no readout, ever (this is the MSAA case)
 # Config > Rendering: Accum effect = Blur, Accum passes = 16
-# wait ~2 s -> "! NN fps  Accum Blur 16x  [off] [x]" at the end of the LEFT
-#              cluster, beside the unbalanced slot; AA/passes readouts amber
+# wait ~2 s -> "! NN fps  Accum Blur 16x  [off] [x]" at the head of the LEFT
+#              cluster; AA/passes readouts amber
 # hover the readout -> tooltip names the fix
 # click [off]  -> passes drop to 1, status message confirms, readout clears
 # click [x]    -> readout hides, stays hidden until the setting set changes
