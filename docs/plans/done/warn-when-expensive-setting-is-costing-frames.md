@@ -51,6 +51,7 @@ typedef struct {
     int accum_passes;           /* resolved ladder step */
     int line_smooth_enabled;
     int post_fx_scope;          /* GLR_POST_FX_SCOPE_* */
+    int post_fx_effect;         /* GLR_POST_FX_EFFECT_* */
     int pointer_script_active;  /* tour or scripted capture is driving input */
 } GlrPerfHintInputs;
 
@@ -188,10 +189,11 @@ trip, even while the supplied EMA remains temporarily below the floor).
 
 #### Dismiss and suppression
 
-**Dismiss** records the mask that was dismissed. The hint re-arms when the mask
-changes (the user turns something else on) or on `glr_perf_hint_reset()`.
-Session-scoped and mouse-only — no `GlrConfigKey`, so no `@cfg` slug and no
-golden churn, the precedent the assign-plot chips set.
+**Dismiss** records the exact blamed configuration that was dismissed. The hint
+re-arms when its accumulation passes/effect, Post FX scope/effect, or line
+smoothing state changes, after sustained FPS recovery, or on
+`glr_perf_hint_reset()`. Session-scoped and mouse-only — no `GlrConfigKey`, so
+no `@cfg` slug and no golden churn, the precedent the assign-plot chips set.
 
 **Suppression has two independent sources, OR'd inside the module**, and no
 single overwriteable flag — a per-frame poll writing 0 over a boot-time 1 would

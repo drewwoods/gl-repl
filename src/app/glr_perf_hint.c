@@ -86,7 +86,8 @@ static int dismiss_inputs_equal(const GlrPerfHintInputs *a,
            a->accum_effect == b->accum_effect &&
            a->accum_passes == b->accum_passes &&
            a->line_smooth_enabled == b->line_smooth_enabled &&
-           a->post_fx_scope == b->post_fx_scope;
+           a->post_fx_scope == b->post_fx_scope &&
+           a->post_fx_effect == b->post_fx_effect;
 }
 
 static void apply_mask(int mask) {
@@ -188,8 +189,11 @@ void glr_perf_hint_tick(double fps, double dt_us, const GlrPerfHintInputs *in) {
     } else {
         if (fps > release && inst > release) {
             g.release_acc_us += dt_us;
-            if (g.release_acc_us >= GLR_PERF_HINT_TRIP_US)
+            if (g.release_acc_us >= GLR_PERF_HINT_TRIP_US) {
                 g.active = 0;
+                g.trip_acc_us = 0.0;
+                g.release_acc_us = 0.0;
+            }
         } else {
             g.release_acc_us = 0.0;
         }

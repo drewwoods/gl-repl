@@ -42,6 +42,7 @@ typedef struct {
     int accum_passes;           /* resolved ladder step */
     int line_smooth_enabled;
     int post_fx_scope;          /* GLR_POST_FX_SCOPE_* */
+    int post_fx_effect;         /* GLR_POST_FX_EFFECT_* */
     int pointer_script_active;  /* tour or scripted capture is driving input */
 } GlrPerfHintInputs;
 

@@ -3152,6 +3152,7 @@ void glr_frame_begin(void) {
         in.accum_passes = rs.accum_passes;
         in.line_smooth_enabled = rs.line_smooth_enabled;
         in.post_fx_scope = ps.post_fx_scope;
+        in.post_fx_effect = ps.post_fx_effect;
         in.pointer_script_active = glr_pointer_script_active();
         glr_perf_hint_tick(prof_fps_current(), prof_frame_interval_last_us(),
                            &in);

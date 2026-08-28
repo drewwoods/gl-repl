@@ -42,6 +42,7 @@ static GlrPerfHintInputs in_post_fx(int scope) {
     GlrPerfHintInputs in = in_clean();
 
     in.post_fx_scope = scope;
+    in.post_fx_effect = GLR_POST_FX_EFFECT_CHROMATIC_ABERRATION;
     return in;
 }
 
@@ -142,6 +143,10 @@ static void test_hysteresis_after_60_ceiling(void) {
     tick_for(56.0, &in, GLR_PERF_HINT_TRIP_US + dt_for_fps(56.0));
     v = glr_perf_hint_view();
     ASSERT_INT("56 fps for 2 s clears it", v.active, 0);
+
+    glr_perf_hint_tick(20.0, dt_for_fps(20.0), &in);
+    v = glr_perf_hint_view();
+    ASSERT_INT("one slow frame after recovery does not retrip", v.active, 0);
 }
 
 static void test_display_relative_threshold(void) {
@@ -454,6 +459,23 @@ static void test_dismiss_and_rearm(void) {
     ASSERT_INT("a later slowdown after recovery warns again", v.active, 1);
 }
 
+static void test_dismiss_post_fx_effect_change_rearms(void) {
+    GlrPerfHintInputs in = in_post_fx(GLR_POST_FX_SCOPE_FRAME);
+    GlrPerfHintView v;
+
+    glr_perf_hint_reset_for_test();
+    warmup_clean_at(60.0);
+    tick_for(20.0, &in, GLR_PERF_HINT_TRIP_US + dt_for_fps(20.0));
+    ASSERT_INT("setup: Post FX active before dismiss",
+               glr_perf_hint_view().active, 1);
+
+    glr_perf_hint_dismiss();
+    in.post_fx_effect = GLR_POST_FX_EFFECT_VIGNETTE;
+    tick_for(20.0, &in, GLR_PERF_HINT_TRIP_US + dt_for_fps(20.0));
+    v = glr_perf_hint_view();
+    ASSERT_INT("changing Post FX effect re-arms at the same scope", v.active, 1);
+}
+
 static void test_empty_mask_clears_immediately(void) {
     GlrPerfHintInputs accum = in_accum(8, RENDER3D_ACCUM_EFFECT_BLUR);
     GlrPerfHintInputs clean = in_clean();
@@ -540,6 +562,7 @@ int main(void) {
     test_post_fx_and_ranking();
     test_line_smooth_culprit();
     test_dismiss_and_rearm();
+    test_dismiss_post_fx_effect_change_rearms();
     test_empty_mask_clears_immediately();
     test_pointer_script_suppression();
     test_capture_session_latch();
