@@ -1061,10 +1061,13 @@ static ReplCompileResult parse_float_name_list(const char *input,
         snprintf(parsed->decl_comment, sizeof(parsed->decl_comment), " %s", p);
 
     /* @tune / @config / @bool drive the variable panel, which is keyed on
-     * predef slots. A local has none, so the tag would be silently inert. */
-    if (local_mode && (strstr(parsed->decl_comment, "@tune") ||
-                       strstr(parsed->decl_comment, "@config") ||
-                       strstr(parsed->decl_comment, "@bool")))
+     * predef slots. A local has none, so the tag would be silently inert.
+     * Use the same whole-token predicates as the collectors/exporter: a
+     * lookalike such as @boolean is ordinary comment text. */
+    if (local_mode &&
+        (repl_eval_line_has_tune_tag(input ? input : "") ||
+         repl_eval_line_has_config_tag(input ? input : "") ||
+         repl_eval_line_has_bool_tag(input ? input : "")))
         return compile_set_err(err, err_size,
             "@tune/@config/@bool require a global declaration - "
             "use 'static float'");

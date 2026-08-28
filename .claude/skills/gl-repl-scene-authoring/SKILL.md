@@ -92,7 +92,7 @@ may shadow a global or be shadowed by a loop iterator, innermost-first.
 Decl-line tags: `// @tune` (tunable knob badge + exported-C controls),
 `// @config` (keeps a source-assigned var bright in the panel), `// @bool`
 (two-state toggle: panel checkbox that clicks between 1 and 0, `[x]`/`[ ]` in
-an exported knob's HUD whose key pair sets rather than steps - the variable
+an exported knob's HUD whose first-column key toggles rather than steps - the variable
 stays a float, "on" is `> 0.5`); all three round-trip via `@declare`, combine
 freely, and need a panel row, so all three require `static float`.
 

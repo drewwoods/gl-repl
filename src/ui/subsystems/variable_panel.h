@@ -47,10 +47,11 @@ typedef struct {
     char         name[UI_VARIABLE_NAME_MAX];
     const float *value;
     int          tuned;   /* 1 if @tune-tagged (exported as a keyboard knob) */
-    int          is_bool; /* 1 if @bool-tagged: the row draws a checkbox
-                           * instead of a value + slider, and a click writes
-                           * 1 or 0 rather than starting a scrub. The variable
-                           * is still a float; "on" is value > 0.5 */
+    int          is_bool; /* 1 if @bool-tagged: the row draws a checkbox and
+                           * YES/NO value instead of a numeric slider value,
+                           * and a click writes 1 or 0 rather than starting a
+                           * scrub. The variable is still a float; "on" is
+                           * value > 0.5 */
     int          written; /* 1 if source contains CMD_VAR_ASSIGN writing it
                            * (rendered dimmed as program state); suppressed
                            * for vars on a `// @config` decl line */

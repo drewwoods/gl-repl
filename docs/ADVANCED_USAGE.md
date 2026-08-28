@@ -1220,15 +1220,15 @@ if(showVolume > 0.5) {
 Dragging a slider to pick between two values is the wrong control for that.
 Tagging the declaration `// @bool` says so:
 
-- **In the variable panel** the row draws a checkbox instead of a value and
-  slider, and the value column reads `[x]` / `[ ]`. Clicking the row toggles
+- **In the variable panel** the row draws a checkbox in place of the numeric
+  slider, and the value column reads `YES` / `NO`. Clicking the row toggles
   it - one press writes 1 or 0 to both the live value and the declaration,
   and there is no scrub. Right-click does the same thing: a flip has no
   coarse version.
 - **In exported C**, a knob that is also `@tune`-tagged renders in the HUD as
-  `q/a  showVolume [x]` rather than a number, and its key pair *sets* rather
-  than steps - the up key writes `1.0f`, the down key `0.0f`. Shift/Ctrl step
-  scaling does not apply.
+  `q  showVolume [x]` rather than a number. It uses only the first-column key
+  as a toggle; the paired lower key is omitted. The HUD keeps `[x]` / `[ ]` as
+  its state indicator, and Shift/Ctrl step scaling does not apply.
 
 The variable stays an ordinary `float` throughout: `@bool` is presentation,
 not a type. "On" is the same `> 0.5` test the scene writes itself, so a value

@@ -1021,8 +1021,8 @@ Row brightness distinguishes knobs from storage:
 - The [`// @tune`](#tunable-variables--tune) accent is separate from
   brightness. `t` only dims if your source explicitly assigns `t = ...;`.
 - A [`// @bool`](ADVANCED_USAGE.md#toggle-variables--bool) row draws a
-  checkbox instead of a value and slider, and a click toggles it between 1
-  and 0 rather than starting a scrub.
+  checkbox in place of the numeric slider, shows `YES` or `NO`, and a click
+  toggles it between 1 and 0 rather than starting a scrub.
 
 Slider edits are undoable and go through the normal commit pipeline; when a
 declaration exists, dragging rewrites its initializer.
@@ -1787,6 +1787,10 @@ Knobs are assigned in declaration order:
 | 7 | `u` | `j` |
 | 8 | `i` | `k` |
 | 9 | `o` | `l` |
+
+For a `@tune @bool` variable, the HUD uses only the first-column key as a
+toggle and omits the paired lower key; its HUD state indicator remains
+`[x]` / `[ ]`. Numeric knobs keep the raise/lower pairs shown above.
 
 Only the first 9 tagged variables get keyboard controls. If more are tagged,
 the export keeps the first 9 and writes a note in the generated C.

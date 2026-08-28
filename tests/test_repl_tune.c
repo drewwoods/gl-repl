@@ -452,9 +452,9 @@ static void test_bool_tag_predicate(void) {
                 !repl_eval_line_has_bool_tag("float b = 1; // @tune"));
 }
 
-/* A `@tune @bool` knob renders as a checkbox and its key pair writes 1/0.
- * The stepped knob alongside it pins that the two forms coexist in one
- * generated file. */
+/* A `@tune @bool` knob renders as a checkbox and its first-column key toggles
+ * 1/0. The stepped knob alongside it pins that the two forms coexist in
+ * one generated file. */
 static void test_bool_knob_export_and_roundtrip(void) {
     const char *path = "/tmp/repl_bool_knob.c";
     const char *log  = "/tmp/repl_bool_knob.log";
@@ -481,14 +481,15 @@ static void test_bool_knob_export_and_roundtrip(void) {
     ASSERT_TRUE("bool export readable", c != NULL);
 
     ASSERT_TRUE("bool knob HUD draws a checkbox",
-                contains(c, "hud_text(8.0f, text_y, \"q/a  showVolume [%s]\", "
+                contains(c, "hud_text(8.0f, text_y, \"q  showVolume [%s]\", "
                             "showVolume > 0.5f ? \"x\" : \" \");"));
     ASSERT_TRUE("bool knob is not printed as a number",
                 !contains(c, "showVolume = %.4g"));
-    ASSERT_TRUE("bool knob up key sets it",
-                contains(c, "if (normalized_key == 'q') showVolume = 1.0f;"));
-    ASSERT_TRUE("bool knob down key clears it",
-                contains(c, "if (normalized_key == 'a') showVolume = 0.0f;"));
+    ASSERT_TRUE("bool knob has one toggle key",
+                contains(c, "if (normalized_key == 'q') showVolume = "
+                            "(showVolume > 0.5f) ? 0.0f : 1.0f;"));
+    ASSERT_TRUE("bool knob has no paired key",
+                !contains(c, "if (normalized_key == 'a') showVolume"));
     ASSERT_TRUE("bool knob takes no step scale",
                 !contains(c, "showVolume += tuning_step"));
     /* The stepped knob alongside it keeps the numeric form. */
@@ -547,8 +548,11 @@ static void test_bool_only_knobs_omit_step_helpers(void) {
     ASSERT_TRUE("no swatch-step mirror", !contains(c, "tuning_step"));
     ASSERT_TRUE("no step scale local", !contains(c, "step_scale"));
     ASSERT_TRUE("key decode still emitted", contains(c, "normalized_key"));
-    ASSERT_TRUE("second knob keeps its key pair",
-                contains(c, "if (normalized_key == 'w') showEdges = 1.0f;"));
+    ASSERT_TRUE("second bool knob has one toggle key",
+                contains(c, "if (normalized_key == 'w') showEdges = "
+                            "(showEdges > 0.5f) ? 0.0f : 1.0f;"));
+    ASSERT_TRUE("bool-only knobs have no paired key",
+                !contains(c, "normalized_key == 'a'"));
     free(c);
 
     ASSERT_INT("bool-only knob file compiles against stubs",

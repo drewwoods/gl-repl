@@ -795,6 +795,68 @@ static void test_variable_panel(void) {
     ASSERT_GL_CALLS("var panel visible -> draws text", GL_STUB_glRasterPos2f, 2);
     ASSERT_GL_CALLS("var panel visible -> calls glColor4f", GL_STUB_glColor4f, 1);
 
+    {
+        float bool_value = 1.0f;
+        UiVariable bool_var = {
+            .name = "flag",
+            .value = &bool_value,
+            .tuned = 0,
+            .is_bool = 1,
+            .written = 0
+        };
+        UiVariablePanelView bool_view = {
+            .visible = 1,
+            .window_w = 800,
+            .window_h = 600,
+            .panel_x = 100,
+            .panel_y = 100,
+            .vars = &bool_var,
+            .var_count = 1,
+            .drag_active_var = -1,
+            .drag_coarse = 0,
+            .collapsed = 0,
+            .time_row = -1,
+            .time_playing = 0
+        };
+        AcTraceString text[8];
+        int n;
+        int found_bracket;
+        int found_label;
+
+        gl_stub_trace_open("build/test_variable_panel_bool_yes.txt");
+        ui_variable_panel_render(&bool_view);
+        gl_stub_trace_close();
+        n = capture_ac_trace_strings(
+            "build/test_variable_panel_bool_yes.txt", text, 8);
+        found_label = 0;
+        found_bracket = 0;
+        for (int i = 0; i < n; i++) {
+            if (strstr(text[i].text, "YES") != NULL)
+                found_label = 1;
+            if (strstr(text[i].text, "[x]") != NULL)
+                found_bracket = 1;
+        }
+        ASSERT_TRUE("bool panel displays YES", found_label);
+        ASSERT_TRUE("bool panel omits [x]", !found_bracket);
+
+        bool_value = 0.0f;
+        gl_stub_trace_open("build/test_variable_panel_bool_no.txt");
+        ui_variable_panel_render(&bool_view);
+        gl_stub_trace_close();
+        n = capture_ac_trace_strings(
+            "build/test_variable_panel_bool_no.txt", text, 8);
+        found_label = 0;
+        found_bracket = 0;
+        for (int i = 0; i < n; i++) {
+            if (strstr(text[i].text, "NO") != NULL)
+                found_label = 1;
+            if (strstr(text[i].text, "[ ]") != NULL)
+                found_bracket = 1;
+        }
+        ASSERT_TRUE("bool panel displays NO", found_label);
+        ASSERT_TRUE("bool panel omits [ ]", !found_bracket);
+    }
+
     /* Test hit testing */
     int row = -1;
     ui_state_viewport_set_size(800, 600);

@@ -473,8 +473,9 @@ static void emit_export_display_geometry(FILE *f,
     }
 }
 
-/* QWERTY column pairs: knob i raises with k_tune_up_keys[i], lowers with
- * k_tune_down_keys[i]. Index-aligned; length REPL_TUNE_MAX_KNOBS. */
+/* QWERTY columns: numeric knob i raises with k_tune_up_keys[i] and lowers
+ * with k_tune_down_keys[i]; a bool knob uses only k_tune_up_keys[i] as its
+ * toggle key. Index-aligned; length REPL_TUNE_MAX_KNOBS. */
 static const char k_tune_up_keys[]   = "qwertyuio";
 static const char k_tune_down_keys[] = "asdfghjkl";
 
@@ -569,12 +570,12 @@ void write_tune_helpers(FILE *f, const ExportNeeds *needs,
         if (needs->tune_is_bool[i])
             fprintf(f,
                 "\n"
-                "  %s(8.0f, %s, \"%c/%c  %s [%%s]\", %s > 0.5f ? \"x\" : \" \");\n"
+                "  %s(8.0f, %s, \"%c  %s [%%s]\", %s > 0.5f ? \"x\" : \" \");\n"
                 "  %s -= 16.0f;\n",
                 names->hud_text,
                 names->overlay_text_y,
-                k_tune_up_keys[i], k_tune_down_keys[i],
-                needs->tune_names[i], needs->tune_names[i],
+                k_tune_up_keys[i], needs->tune_names[i],
+                needs->tune_names[i],
                 names->overlay_text_y);
         else
             fprintf(f,
@@ -647,15 +648,13 @@ static void emit_tune_keyboard_handlers(FILE *f, const ExportNeeds *needs,
             names->tune_step_scale);
     for (int i = 0; i < needs->tune_count; i++) {
         const char *v = needs->tune_names[i];
-        /* A `@bool` knob has two states, not a range: the up key sets it,
-         * the down key clears it. The step scale (Shift/Ctrl) is meaningless
-         * here and is deliberately not applied. */
+        /* A `@bool` knob has two states, not a range: its first-column key
+         * toggles it. The step scale (Shift/Ctrl) is meaningless here and
+         * is deliberately not applied. */
         if (needs->tune_is_bool[i])
             fprintf(f,
-                "  if (%s == '%c') %s = 1.0f;\n"
-                "  if (%s == '%c') %s = 0.0f;\n",
-                names->tune_normalized_key, k_tune_up_keys[i], v,
-                names->tune_normalized_key, k_tune_down_keys[i], v);
+                "  if (%s == '%c') %s = (%s > 0.5f) ? 0.0f : 1.0f;\n",
+                names->tune_normalized_key, k_tune_up_keys[i], v, v);
         else
             fprintf(f,
                 "  if (%s == '%c') %s += %s(%s) * %s;\n"

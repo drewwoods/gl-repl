@@ -398,14 +398,14 @@ void ui_variable_panel_render(const UiVariablePanelView *view) {
         glColor3fv(var->written ? k_var_name_written : k_var_name);
         gl2d_draw_string((float)label_x, (float)text_y, truncate_var_name(var->name, VAR_NAME_MAX_CHARS), FONT_SMALL);
 
-        /* Value. A `@bool` row shows the state the exported HUD shows -
-         * `[x]`/`[ ]` - rather than 1.000/0.000, so the two presentations of
-         * the same variable read alike. */
+        /* Value. A `@bool` row shows a readable two-state label rather than
+         * 1.000/0.000. The checkbox remains the visual affordance, while the
+         * value column says exactly what state the row is in. */
         char valstr[16];
         if (var->is_bool)
             snprintf(valstr, sizeof(valstr), "%*s",
                      VAR_VALUE_FMT_WIDTH,
-                     ui_variable_bool_on(var) ? "[x]" : "[ ]");
+                     ui_variable_bool_on(var) ? "YES" : "NO");
         else
             snprintf(valstr, sizeof(valstr), "%*.*f", VAR_VALUE_FMT_WIDTH, VAR_VALUE_FMT_PREC, (double)val);
         glColor3fv(var->written ? k_var_value_written : k_var_value);

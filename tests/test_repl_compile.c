@@ -1809,7 +1809,8 @@ static void test_local_decl_rejects_initializer(void) {
                 strstr(err, "cannot have an initializer") != NULL);
 }
 
-/* @tune / @config need a variable-panel slot, which a local does not have. */
+/* @tune / @config / @bool need a variable-panel slot, which a local does not
+ * have. */
 static void test_local_decl_rejects_tune_tag(void) {
     char err[REPL_STATUS_TEXT_MAX];
 
@@ -1817,6 +1818,22 @@ static void test_local_decl_rejects_tune_tag(void) {
     ASSERT_INT("@tune on a local is rejected",
                commit_decl_at("float u; // @tune", 1, err, sizeof(err)), 0);
     ASSERT_TRUE("@tune diagnostic points at static float",
+                strstr(err, "static float") != NULL);
+}
+
+/* The local-only guard must agree with the tag predicates: a lookalike such as
+ * @boolean is just comment text and must not trigger the @bool diagnostic. */
+static void test_local_decl_tag_is_whole_token(void) {
+    char err[REPL_STATUS_TEXT_MAX];
+
+    seed_one_func();
+    ASSERT_INT("@boolean on a local is accepted as ordinary comment text",
+               commit_decl_at("float u; // @boolean", 1, err, sizeof(err)), 1);
+
+    seed_one_func();
+    ASSERT_INT("@bool on a local is rejected",
+               commit_decl_at("float u; // @bool", 1, err, sizeof(err)), 0);
+    ASSERT_TRUE("@bool diagnostic points at static float",
                 strstr(err, "static float") != NULL);
 }
 
@@ -2667,6 +2684,7 @@ int main(void) {
     test_static_keyword_selects_global_from_inside_func();
     test_local_decl_rejects_initializer();
     test_local_decl_rejects_tune_tag();
+    test_local_decl_tag_is_whole_token();
     test_local_decl_rejects_same_scope_redefinition();
     test_local_decl_allows_shadowing_outer_scopes();
     test_local_decl_hoists_from_nested_block();
