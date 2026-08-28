@@ -23,7 +23,9 @@
 #include "repl/compile.h"
 #include "repl/eval.h"
 #include "repl/host_effects.h"
+#include "repl/program_query.h"
 #include "repl/state_views.h"
+#include "source_document.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -47,6 +49,79 @@ void glr_variable_panel_install_value_source(void) {
     variable_panel_install_value_source(&g_glr_var_value_source);
 }
 
+
+int glr_variable_panel_row_is_bool(int row) {
+    ReplPredefView predef = repl_eval_predef_view();
+    const char *bool_names[MAX_PREDEF_VARS];
+    int bool_count;
+
+    if (row < 0 || row >= predef.count)
+        return 0;
+    bool_count = repl_collect_bool_vars(repl_state_document_cmds(),
+                                        repl_state_document_count(),
+                                        source_document_view(), bool_names,
+                                        MAX_PREDEF_VARS, NULL);
+    for (int i = 0; i < bool_count; i++)
+        if (strcmp(bool_names[i], predef.vars[row].name) == 0)
+            return 1;
+    return 0;
+}
+
+/* Apply `value` to `name` live and then write it into the declaration row.
+ * A toggle is a single press with no release to settle on, so both writes
+ * happen here - unlike a drag, where motion is live-only and release
+ * persists. `capture_undo` covers the whole gesture via the first write. */
+static void glr_variable_panel_write_value_now(const char *name, float value) {
+    ReplCompiledChange compiled;
+    ReplCompileContext ctx;
+    char err[REPL_STATUS_TEXT_MAX] = "";
+
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ctx.insert_mode = editor_insert_mode();
+    if (repl_compile_set_predef_value_live(name, value, &ctx, &compiled,
+                                           err, sizeof(err)) != REPL_COMPILE_OK) {
+        repl_set_status_error(err[0] ? err : "Variable update failed");
+        return;
+    }
+    if (!editor_commit_apply_external_change(&compiled, /*capture_undo=*/1,
+                                             /*publish_status=*/0)) {
+        repl_set_status_error("Command buffer full!");
+        return;
+    }
+
+    ctx = repl_compile_context_from_live(editor_state_edit_line());
+    ctx.insert_mode = editor_insert_mode();
+    if (repl_compile_persist_predef_value(name, value, &ctx, &compiled,
+                                          err, sizeof(err)) != REPL_COMPILE_OK) {
+        repl_set_status_error(err[0] ? err : "Variable update failed");
+        return;
+    }
+    if (compiled.kind == REPL_COMPILED_NO_CHANGE)
+        return;   /* no declaration row to rewrite */
+    /* On failure the already-applied live value stands; Undo still restores
+     * the pre-toggle snapshot. */
+    if (!editor_commit_apply_external_change(&compiled, /*capture_undo=*/0,
+                                             /*publish_status=*/0)) {
+        repl_set_status_error("Command buffer full!");
+        return;
+    }
+    if (compiled.pos == editor_state_edit_line())
+        editor_load_line_to_input(compiled.pos);
+}
+
+void glr_variable_panel_toggle_bool_row(int row) {
+    ReplPredefView predef = repl_eval_predef_view();
+    char name[REPL_PREDEF_NAME_MAX];
+    float next;
+
+    if (!glr_variable_panel_row_is_bool(row))
+        return;
+    /* Copied: the writes below re-enter the compile pipeline, and the name
+     * must outlive whatever it does to the predef table. */
+    snprintf(name, sizeof(name), "%s", predef.vars[row].name);
+    next = (predef.vars[row].value > 0.5f) ? 0.0f : 1.0f;
+    glr_variable_panel_write_value_now(name, next);
+}
 
 void glr_variable_panel_apply_value_change(
         const VariablePanelValueChange *value_change) {

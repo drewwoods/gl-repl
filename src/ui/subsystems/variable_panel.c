@@ -47,12 +47,22 @@ static float ui_variable_value(const UiVariable *var) {
     return (var && var->value) ? *var->value : 0.0f;
 }
 
+/* A `@bool` row's two states. The variable is an ordinary float, so "on" is
+ * the same `> 0.5` test a scene writes in its own `if` - anything else the
+ * program leaves in the slot reads as off rather than as a third state. */
+static int ui_variable_bool_on(const UiVariable *var) {
+    return ui_variable_value(var) > 0.5f;
+}
+
 /* Compute a shared logarithmic display scale from all variable absolute values.
  * All sliders use the same scale so their handles are normalized relative to
  * each other (a var at 100 shows near the extreme, one at 0.01 still visible). */
 static float var_panel_log_scale(const UiVariable *vars, int count) {
     float max_abs = 0.1f;   /* minimum display range */
     for (int i = 0; i < count; i++) {
+        /* Checkbox rows draw no handle, so their 0/1 must not pull the scale
+         * the real sliders share. */
+        if (vars[i].is_bool) continue;
         float av = fabsf(ui_variable_value(&vars[i]));
         if (av > max_abs) max_abs = av;
     }
@@ -116,6 +126,12 @@ static float val_to_slider_t(float val, float scale) {
 #define VAR_TICK_PAD_BOTTOM 5        /* bottom padding of center tick */
 #define VAR_HANDLE_PAD_TOP 4         /* top padding of handle from row bounds */
 #define VAR_HANDLE_PAD_BOTTOM 4      /* bottom padding of handle from row bounds */
+/* `@bool` rows replace the track/tick/handle trio with a checkbox: a square
+ * box drawn at the track's left edge, filled when the value reads on. Sized
+ * off the handle so it lines up with the slider column above and below it. */
+#define VAR_CHECKBOX_SIZE 10         /* outer edge of the checkbox square */
+#define VAR_CHECKBOX_BORDER 1        /* box outline thickness */
+#define VAR_CHECKBOX_FILL_INSET 3    /* inset of the "checked" fill from the box */
 #define VAR_NAME_MAX_PIXELS ((VAR_PANEL_W) / (VAR_NAME_COL_WIDTH_DENOM))
 #define VAR_NAME_MAX_CHARS  ((VAR_NAME_MAX_PIXELS) / (FONT_SMALL_W))
 /* Collapse chip: right-aligned "[-]"/"[+]" in the title bar, mirroring the
@@ -382,11 +398,44 @@ void ui_variable_panel_render(const UiVariablePanelView *view) {
         glColor3fv(var->written ? k_var_name_written : k_var_name);
         gl2d_draw_string((float)label_x, (float)text_y, truncate_var_name(var->name, VAR_NAME_MAX_CHARS), FONT_SMALL);
 
-        /* Value */
+        /* Value. A `@bool` row shows the state the exported HUD shows -
+         * `[x]`/`[ ]` - rather than 1.000/0.000, so the two presentations of
+         * the same variable read alike. */
         char valstr[16];
-        snprintf(valstr, sizeof(valstr), "%*.*f", VAR_VALUE_FMT_WIDTH, VAR_VALUE_FMT_PREC, (double)val);
+        if (var->is_bool)
+            snprintf(valstr, sizeof(valstr), "%*s",
+                     VAR_VALUE_FMT_WIDTH,
+                     ui_variable_bool_on(var) ? "[x]" : "[ ]");
+        else
+            snprintf(valstr, sizeof(valstr), "%*.*f", VAR_VALUE_FMT_WIDTH, VAR_VALUE_FMT_PREC, (double)val);
         glColor3fv(var->written ? k_var_value_written : k_var_value);
         gl2d_draw_string((float)val_x, (float)text_y, valstr, FONT_SMALL);
+
+        /* A checkbox replaces the whole slider column: a two-state variable
+         * has no range to scrub, and drawing a track for it would invite the
+         * drag the router refuses. */
+        if (var->is_bool) {
+            float bx = (float)track_x;
+            float by = (float)row_y + (float)(VAR_ROW_H - VAR_CHECKBOX_SIZE) * 0.5f;
+            float bs = (float)VAR_CHECKBOX_SIZE;
+            float bd = (float)VAR_CHECKBOX_BORDER;
+            const float *box = var->written ? k_var_handle_written
+                                            : k_var_handle_idle;
+            /* Outline drawn as four filled edges - gl2d keeps the panel on
+             * GL_QUADS/glRectf fills, so no line width state is touched. */
+            glColor4fv(box);
+            glRectf(bx, by, bx + bs, by + bd);
+            glRectf(bx, by + bs - bd, bx + bs, by + bs);
+            glRectf(bx, by, bx + bd, by + bs);
+            glRectf(bx + bs - bd, by, bx + bs, by + bs);
+            if (ui_variable_bool_on(var)) {
+                float in = (float)VAR_CHECKBOX_FILL_INSET;
+                glColor4fv(var->written ? k_var_handle_written
+                                        : k_var_handle_linear);
+                glRectf(bx + in, by + in, bx + bs - in, by + bs - in);
+            }
+            continue;
+        }
 
         /* Slider track */
         ui_clr_a(UI_TOK_MENU_LABEL_ACTIVE_BG, 0.90f);

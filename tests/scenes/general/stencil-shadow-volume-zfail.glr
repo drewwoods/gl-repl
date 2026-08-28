@@ -6,7 +6,7 @@
 // @cfg vertex_outlines = 0
 static float h = 1; // occluder half-size @tune
 static float ext = 10; // silhouette extrusion length, in edge-to-light units @tune
-static float showVolume = 1; // draw the extruded hull itself @tune
+static float showVolume = 1; // draw the extruded hull itself @tune @bool
 static float lx, ly, lz; // virtual point light, world space
 static float ox, oy, oz; // the same light in the occluder's own frame
 static float spin, ca, sa;

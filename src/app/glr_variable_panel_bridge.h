@@ -22,6 +22,17 @@ void glr_variable_panel_install_value_source(void);
 void glr_variable_panel_apply_value_change(
         const VariablePanelValueChange *value_change);
 
+/* 1 if declared-variable `row` sits on a `// @bool`-tagged declaration, so
+ * the panel presents it as a checkbox and a press toggles it instead of
+ * starting a scrub. Row indices are the eval table's, matching the panel's
+ * row order. */
+int glr_variable_panel_row_is_bool(int row);
+
+/* Flip a `@bool` row between 1 and 0: applies the live value and rewrites the
+ * declaration in one press, since there is no release to settle on. Pushes the
+ * gesture's single undo snapshot. No-op for a row that is not bool-tagged. */
+void glr_variable_panel_toggle_bool_row(int row);
+
 /* On release: write the settled value back into the variable's declaration
  * row, once. A drag with no motion, or a variable with no declaration row,
  * does no work. */

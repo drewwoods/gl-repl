@@ -1528,6 +1528,10 @@ int repl_eval_line_has_config_tag(const char *line) {
     return line_comment_has_tag(line, "@config", 7);
 }
 
+int repl_eval_line_has_bool_tag(const char *line) {
+    return line_comment_has_tag(line, "@bool", 5);
+}
+
 int repl_eval_line_has_plot_tag(const char *line) {
     return line_comment_has_tag(line, "@plot", 5);
 }

@@ -435,6 +435,126 @@ static void test_generated_names_do_not_shadow_tuned_vars(void) {
                compile_generated_file(path, log), 0);
 }
 
+/* ---- @bool toggles ---------------------------------------------------- */
+
+static void test_bool_tag_predicate(void) {
+    ASSERT_TRUE("bare @bool matches",
+                repl_eval_line_has_bool_tag("float b = 1; // @bool"));
+    ASSERT_TRUE("@bool alongside @tune matches",
+                repl_eval_line_has_bool_tag("float b = 1; // @tune @bool"));
+    ASSERT_TRUE("@bool with trailing text matches",
+                repl_eval_line_has_bool_tag("float b = 1; // @bool draw hull"));
+    ASSERT_TRUE("no comment -> no bool match",
+                !repl_eval_line_has_bool_tag("float b = 1;"));
+    ASSERT_TRUE("@boolean does NOT match (whole token)",
+                !repl_eval_line_has_bool_tag("float b = 1; // @boolean"));
+    ASSERT_TRUE("@tune line is not @bool",
+                !repl_eval_line_has_bool_tag("float b = 1; // @tune"));
+}
+
+/* A `@tune @bool` knob renders as a checkbox and its key pair writes 1/0.
+ * The stepped knob alongside it pins that the two forms coexist in one
+ * generated file. */
+static void test_bool_knob_export_and_roundtrip(void) {
+    const char *path = "/tmp/repl_bool_knob.c";
+    const char *log  = "/tmp/repl_bool_knob.log";
+    reset_repl();
+    editor_feed_line("float showVolume = 1; // @tune @bool");
+    editor_feed_line("float amp = 1.5; // @tune");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(amp, showVolume, 0);");
+    editor_feed_line("glEnd();");
+
+    const char *names[MAX_PREDEF_VARS];
+    int total = -1;
+    int n = repl_collect_bool_vars(repl_state_document_cmds(),
+                                   repl_state_document_count(),
+                                   source_document_view(), names,
+                                   MAX_PREDEF_VARS, &total);
+    ASSERT_INT("bool collector count", n, 1);
+    ASSERT_INT("bool collector total", total, 1);
+    if (n == 1)
+        ASSERT_TRUE("bool var is showVolume", strcmp(names[0], "showVolume") == 0);
+
+    repl_export_save_output(path, source_document_view(), NULL);
+    char *c = read_file(path);
+    ASSERT_TRUE("bool export readable", c != NULL);
+
+    ASSERT_TRUE("bool knob HUD draws a checkbox",
+                contains(c, "hud_text(8.0f, text_y, \"q/a  showVolume [%s]\", "
+                            "showVolume > 0.5f ? \"x\" : \" \");"));
+    ASSERT_TRUE("bool knob is not printed as a number",
+                !contains(c, "showVolume = %.4g"));
+    ASSERT_TRUE("bool knob up key sets it",
+                contains(c, "if (normalized_key == 'q') showVolume = 1.0f;"));
+    ASSERT_TRUE("bool knob down key clears it",
+                contains(c, "if (normalized_key == 'a') showVolume = 0.0f;"));
+    ASSERT_TRUE("bool knob takes no step scale",
+                !contains(c, "showVolume += tuning_step"));
+    /* The stepped knob alongside it keeps the numeric form. */
+    ASSERT_TRUE("stepped knob still numeric",
+                contains(c, "hud_text(8.0f, text_y, \"w/s  amp = %.4g\", (double)amp);"));
+    ASSERT_TRUE("stepped knob still steps",
+                contains(c, "if (normalized_key == 'w') amp += tuning_step(amp) * step_scale;"));
+    ASSERT_TRUE("mixed knob set keeps the step helper", contains(c, "tuning_step"));
+    ASSERT_TRUE("round-trip marker carries both tags",
+                contains(c, "@declare showVolume @tune @bool"));
+    free(c);
+
+    ASSERT_INT("bool knob file compiles against stubs",
+               compile_generated_file(path, log), 0);
+
+    /* Reimport: the tag must land back on the decl line, since the panel,
+     * the router's toggle and re-export all read it from there. */
+    reset_repl();
+    ASSERT_INT("bool import ok", repl_export_load_from_file(path, NULL), 1);
+    total = -1;
+    n = repl_collect_bool_vars(repl_state_document_cmds(),
+                               repl_state_document_count(),
+                               source_document_view(), names,
+                               MAX_PREDEF_VARS, &total);
+    ASSERT_INT("bool tag survives round-trip", n, 1);
+
+    int both_tags = 0;
+    SourceTextView v = source_document_view();
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        const char *line = source_text_line(v, i);
+        if (repl_state_document_cmds()[i].type == CMD_VAR_DECLARE &&
+            repl_eval_line_has_tune_tag(line) &&
+            repl_eval_line_has_bool_tag(line))
+            both_tags = 1;
+    }
+    ASSERT_TRUE("reimported decl keeps @tune and @bool", both_tags);
+}
+
+/* An all-`@bool` knob set has nothing to step, so the swatch-step mirror and
+ * the Shift/Ctrl scale must not be emitted - unused, they would warn in the
+ * generated file. */
+static void test_bool_only_knobs_omit_step_helpers(void) {
+    const char *path = "/tmp/repl_bool_only.c";
+    const char *log  = "/tmp/repl_bool_only.log";
+    reset_repl();
+    editor_feed_line("float showVolume = 1; // @tune @bool");
+    editor_feed_line("float showEdges = 0; // @tune @bool");
+    editor_feed_line("glBegin(GL_TRIANGLES);");
+    editor_feed_line("glVertex3f(showVolume, showEdges, 0);");
+    editor_feed_line("glEnd();");
+    repl_export_save_output(path, source_document_view(), NULL);
+
+    char *c = read_file(path);
+    ASSERT_TRUE("bool-only export readable", c != NULL);
+    ASSERT_TRUE("HUD still emitted", contains(c, "draw_tuning_overlay"));
+    ASSERT_TRUE("no swatch-step mirror", !contains(c, "tuning_step"));
+    ASSERT_TRUE("no step scale local", !contains(c, "step_scale"));
+    ASSERT_TRUE("key decode still emitted", contains(c, "normalized_key"));
+    ASSERT_TRUE("second knob keeps its key pair",
+                contains(c, "if (normalized_key == 'w') showEdges = 1.0f;"));
+    free(c);
+
+    ASSERT_INT("bool-only knob file compiles against stubs",
+               compile_generated_file(path, log), 0);
+}
+
 /* Compile the generated knob file against the GL stub headers with the
  * project's load-bearing failure mode so a missing generated include /
  * implicit declaration fails loudly. */
@@ -464,6 +584,9 @@ int main(void) {
     test_config_tag_roundtrip();
     test_key_assignment_and_cap();
     test_generated_names_do_not_shadow_tuned_vars();
+    test_bool_tag_predicate();
+    test_bool_knob_export_and_roundtrip();
+    test_bool_only_knobs_omit_step_helpers();
     test_compile_gate();
     return test_harness_report(&g_harness, "test_repl_tune");
 }

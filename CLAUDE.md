@@ -554,7 +554,7 @@ only (`check-repl-export-via-bridge`).
 **The exported expression must evaluate in float, like the evaluator.** C
 promotes on any `double` it sees, and the evaluator (`eval_term` /
 `eval_additive`, all `float`) rounds after every operation instead - so
-[`repl_eval_expr_to_c()`](src/repl/eval.h#L511) lowers `PI`/`TAU`/`e` through
+[`repl_eval_expr_to_c()`](src/repl/eval.h#L519) lowers `PI`/`TAU`/`e` through
 `(float)` casts and suffixes fractional literals (`1.2` → `1.2f`). Integers
 stay bare: C converts an int operand without promoting the expression, which
 is also what keeps `A[2]` and `0xFF` intact. Canonical REPL text carries no
@@ -831,5 +831,5 @@ of them; they live in the `MAX_EXPR_VARS` = 32 per-call scope array instead).
 Scratch arrays `A`/`B`/`C[16]` are fixed globals - those names, plus `t`, `PI`,
 `TAU`, `float`, `var`, reject a declaration.
 
-Decl tags `// @tune` / `// @config`, budgets, and authoring gotchas: skill
+Decl tags `// @tune` / `// @config` / `// @bool`, budgets, and authoring gotchas: skill
 `gl-repl-scene-authoring`.

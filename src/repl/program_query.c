@@ -75,6 +75,12 @@ int repl_collect_config_vars(const GLCmd *cmds, int count, SourceTextView text,
                                out, max, total_out);
 }
 
+int repl_collect_bool_vars(const GLCmd *cmds, int count, SourceTextView text,
+                           const char **out, int max, int *total_out) {
+    return collect_tagged_vars(cmds, count, text, repl_eval_line_has_bool_tag,
+                               out, max, total_out);
+}
+
 int repl_mark_written_var_slots(const GLCmd *cmds, int count,
                                 int *written_slots, int written_count) {
     int unique = 0;

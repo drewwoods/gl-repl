@@ -264,6 +264,25 @@ ExportNeeds export_collect_needs(void) {
         repl_state_document_cmds(), repl_state_document_count(),
         export_source_text_view(), needs.tune_names, REPL_TUNE_MAX_KNOBS,
         &needs.tune_total);
+    /* Which of those knobs are `// @bool` toggles. Collected as a separate
+     * name set and matched by name (rather than threaded through the shared
+     * collector) because the two tags are independent: a var may be @bool
+     * without @tune, and the knob order is the @tune walk's. */
+    {
+        const char *bool_names[MAX_PREDEF_VARS];
+        int bool_count = repl_collect_bool_vars(
+            repl_state_document_cmds(), repl_state_document_count(),
+            export_source_text_view(), bool_names, MAX_PREDEF_VARS, NULL);
+        for (int i = 0; i < needs.tune_count; i++) {
+            needs.tune_is_bool[i] = 0;
+            for (int b = 0; b < bool_count; b++) {
+                if (strcmp(bool_names[b], needs.tune_names[i]) == 0) {
+                    needs.tune_is_bool[i] = 1;
+                    break;
+                }
+            }
+        }
+    }
 
     return needs;
 }
@@ -464,6 +483,16 @@ STATIC_ASSERT(sizeof(k_tune_up_keys) - 1 == REPL_TUNE_MAX_KNOBS,
 STATIC_ASSERT(sizeof(k_tune_down_keys) - 1 == REPL_TUNE_MAX_KNOBS,
               tune_down_key_count);
 
+/* 1 if any knob is a stepped number. All-`@bool` knob sets need neither the
+ * swatch-step mirror nor the Shift/Ctrl step scale, and emitting them unused
+ * would trip -Wunused-function / -Wunused-variable in the exported file. */
+static int tune_has_stepped_knob(const ExportNeeds *needs) {
+    for (int i = 0; i < needs->tune_count; i++)
+        if (!needs->tune_is_bool[i])
+            return 1;
+    return 0;
+}
+
 /* Prologue: window-size globals (captured in reshape, read by the HUD),
  * the swatch-step mirror, a formatted HUD-text helper, and the HUD draw pass.
  * Emitted only when at least one variable is @tune-tagged. */
@@ -477,14 +506,20 @@ void write_tune_helpers(FILE *f, const ExportNeeds *needs,
         "\n/* @tune knobs: keyboard-adjustable variables + overlay, generated because\n"
         " * one or more `float` decls carried a `// @tune` tag. */\n"
         "static int %s = 800;\n"
-        "static int %s = 600;\n"
+        "static int %s = 600;\n",
+        names->tuning_window_width,
+        names->tuning_window_height);
+    if (tune_has_stepped_knob(needs))
+        fprintf(f,
         "\n/* Mirror of repl_eval_swatch_step() (src/repl/eval.c); pinned by the\n"
         " * swatch-parity test in tests/test_repl_tune.c so it cannot drift. */\n"
         "static float %s(float value) {\n"
         "  float magnitude = fabsf(value);\n"
         "  float exponent = (magnitude < 10.0f) ? 0.0f : floorf(log10f(magnitude));\n"
         "  return 0.05f * powf(10.0f, exponent);\n"
-        "}\n"
+        "}\n",
+        names->tuning_step);
+    fprintf(f,
         "\n/* Draw formatted bitmap text in screen-space HUD coordinates. */\n"
         "static void %s(float x, float y, const char *fmt, ...) {\n"
         "  const char *ch;\n"
@@ -518,9 +553,6 @@ void write_tune_helpers(FILE *f, const ExportNeeds *needs,
         "  glDisable(GL_DEPTH_TEST);\n"
         "  glColor3f(1.0f, 1.0f, 1.0f);\n"
         "\n",
-        names->tuning_window_width,
-        names->tuning_window_height,
-        names->tuning_step,
         names->hud_text,
         names->draw_tuning_overlay,
         names->overlay_width,
@@ -532,15 +564,28 @@ void write_tune_helpers(FILE *f, const ExportNeeds *needs,
         names->overlay_width,
         names->overlay_height);
     for (int i = 0; i < needs->tune_count; i++) {
-        fprintf(f,
-            "\n"
-            "  %s(8.0f, %s, \"%c/%c  %s = %%.4g\", (double)%s);\n"
-            "  %s -= 16.0f;\n",
-            names->hud_text,
-            names->overlay_text_y,
-            k_tune_up_keys[i], k_tune_down_keys[i],
-            needs->tune_names[i], needs->tune_names[i],
-            names->overlay_text_y);
+        /* A `@bool` knob reads as a checkbox: the variable is still a float,
+         * so "on" is the same > 0.5 test the scene's own `if` uses. */
+        if (needs->tune_is_bool[i])
+            fprintf(f,
+                "\n"
+                "  %s(8.0f, %s, \"%c/%c  %s [%%s]\", %s > 0.5f ? \"x\" : \" \");\n"
+                "  %s -= 16.0f;\n",
+                names->hud_text,
+                names->overlay_text_y,
+                k_tune_up_keys[i], k_tune_down_keys[i],
+                needs->tune_names[i], needs->tune_names[i],
+                names->overlay_text_y);
+        else
+            fprintf(f,
+                "\n"
+                "  %s(8.0f, %s, \"%c/%c  %s = %%.4g\", (double)%s);\n"
+                "  %s -= 16.0f;\n",
+                names->hud_text,
+                names->overlay_text_y,
+                k_tune_up_keys[i], k_tune_down_keys[i],
+                needs->tune_names[i], needs->tune_names[i],
+                names->overlay_text_y);
     }
     fprintf(f,
         "  glPopAttrib();\n"
@@ -556,17 +601,17 @@ void write_tune_helpers(FILE *f, const ExportNeeds *needs,
  * uppercase and Ctrl control-codes back to the base letter) and apply the
  * swatch step, Shift = fine and Ctrl = coarse - mirroring the in-app numeric
  * swatch and variable-panel adjustment multipliers. */
-static void emit_tune_keyboard_decls(FILE *f,
+static void emit_tune_keyboard_decls(FILE *f, const ExportNeeds *needs,
                                      const ExportGeneratedNames *names) {
     fprintf(f,
         "  int %s = glutGetModifiers();\n"
-        "  unsigned char %s = %s;\n"
-        "  float %s = 1.0f;\n"
-        "\n",
+        "  unsigned char %s = %s;\n",
         names->tune_modifiers,
         names->tune_normalized_key,
-        names->keyboard_key,
-        names->tune_step_scale);
+        names->keyboard_key);
+    if (tune_has_stepped_knob(needs))
+        fprintf(f, "  float %s = 1.0f;\n", names->tune_step_scale);
+    fprintf(f, "\n");
 }
 
 static void emit_tune_keyboard_handlers(FILE *f, const ExportNeeds *needs,
@@ -577,13 +622,6 @@ static void emit_tune_keyboard_handlers(FILE *f, const ExportNeeds *needs,
         "  } else if (%s >= 'A' && %s <= 'Z') {\n"
         "    %s = (unsigned char)(%s + ('a' - 'A'));\n"
         "  }\n"
-        "\n"
-        "  if (%s & GLUT_ACTIVE_SHIFT)\n"
-        "    %s *= "
-            REPL_EXPORT_STRINGIFY(GLR_ADJUST_FINE_SCALE) ";\n"
-        "  if (%s & GLUT_ACTIVE_CTRL)\n"
-        "    %s *= "
-            REPL_EXPORT_STRINGIFY(GLR_ADJUST_COARSE_SCALE) ";\n"
         "\n",
         names->tune_modifiers,
         names->tune_normalized_key,
@@ -593,20 +631,39 @@ static void emit_tune_keyboard_handlers(FILE *f, const ExportNeeds *needs,
         names->tune_normalized_key,
         names->tune_normalized_key,
         names->tune_normalized_key,
-        names->tune_normalized_key,
-        names->tune_modifiers,
-        names->tune_step_scale,
-        names->tune_modifiers,
-        names->tune_step_scale);
+        names->tune_normalized_key);
+    if (tune_has_stepped_knob(needs))
+        fprintf(f,
+            "  if (%s & GLUT_ACTIVE_SHIFT)\n"
+            "    %s *= "
+                REPL_EXPORT_STRINGIFY(GLR_ADJUST_FINE_SCALE) ";\n"
+            "  if (%s & GLUT_ACTIVE_CTRL)\n"
+            "    %s *= "
+                REPL_EXPORT_STRINGIFY(GLR_ADJUST_COARSE_SCALE) ";\n"
+            "\n",
+            names->tune_modifiers,
+            names->tune_step_scale,
+            names->tune_modifiers,
+            names->tune_step_scale);
     for (int i = 0; i < needs->tune_count; i++) {
         const char *v = needs->tune_names[i];
-        fprintf(f,
-            "  if (%s == '%c') %s += %s(%s) * %s;\n"
-            "  if (%s == '%c') %s -= %s(%s) * %s;\n",
-            names->tune_normalized_key, k_tune_up_keys[i],
-            v, names->tuning_step, v, names->tune_step_scale,
-            names->tune_normalized_key, k_tune_down_keys[i],
-            v, names->tuning_step, v, names->tune_step_scale);
+        /* A `@bool` knob has two states, not a range: the up key sets it,
+         * the down key clears it. The step scale (Shift/Ctrl) is meaningless
+         * here and is deliberately not applied. */
+        if (needs->tune_is_bool[i])
+            fprintf(f,
+                "  if (%s == '%c') %s = 1.0f;\n"
+                "  if (%s == '%c') %s = 0.0f;\n",
+                names->tune_normalized_key, k_tune_up_keys[i], v,
+                names->tune_normalized_key, k_tune_down_keys[i], v);
+        else
+            fprintf(f,
+                "  if (%s == '%c') %s += %s(%s) * %s;\n"
+                "  if (%s == '%c') %s -= %s(%s) * %s;\n",
+                names->tune_normalized_key, k_tune_up_keys[i],
+                v, names->tuning_step, v, names->tune_step_scale,
+                names->tune_normalized_key, k_tune_down_keys[i],
+                v, names->tuning_step, v, names->tune_step_scale);
     }
 }
 
@@ -649,7 +706,7 @@ static void emit_export_display_tail(FILE *f, const ExportNeeds *needs,
         names->keyboard_mouse_x,
         names->keyboard_mouse_y);
     if (knobs > 0)
-        emit_tune_keyboard_decls(f, names);
+        emit_tune_keyboard_decls(f, needs, names);
     fprintf(f,
         "  (void)%s;\n"
         "  (void)%s;\n",

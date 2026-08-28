@@ -32,6 +32,14 @@ int repl_collect_tuned_vars(const GLCmd *cmds, int count, SourceTextView text,
 int repl_collect_config_vars(const GLCmd *cmds, int count, SourceTextView text,
                              const char **out, int max, int *total_out);
 
+/* Same walk for the `// @bool` tag: names of every variable declared on a
+ * bool-tagged decl line. A bool-tagged var is presented as a two-state
+ * toggle (panel checkbox, `[x]`/`[ ]` in an exported knob's HUD) while
+ * remaining an ordinary float. Contract identical to
+ * repl_collect_tuned_vars. */
+int repl_collect_bool_vars(const GLCmd *cmds, int count, SourceTextView text,
+                           const char **out, int max, int *total_out);
+
 /* Mark predef-variable slots that are written by committed `name = expr;`
  * commands. `written_slots[0..written_count)` is cleared first; each
  * CMD_VAR_ASSIGN with a valid current var_idx sets one slot. Returns the

@@ -72,6 +72,7 @@ static UiVariablePanelView demo_build_view(void) {
         snprintf(rows[i].name, sizeof(rows[i].name), "%s", g_vars[i].name);
         rows[i].value = &g_vars[i].value;
         rows[i].tuned = 0;
+        rows[i].is_bool = 0;
         rows[i].written = 0;
     }
     UiVariablePanelView v;

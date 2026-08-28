@@ -524,6 +524,14 @@ int glr_ctrl_router_handle_variable_panel_drag_begin(int button, int state, int 
         return 0;
     if (replay_active())
         replay_stop();
+    /* A `@bool` row has two states, not a range: the press is the whole
+     * gesture, so it toggles here and no drag is armed. Both buttons do the
+     * same thing - there is no coarse version of a flip. */
+    if (glr_variable_panel_row_is_bool(row_idx)) {
+        glr_variable_panel_toggle_bool_row(row_idx);
+        editor_request_redraw();
+        return 1;
+    }
     int coarse = (button == GLUT_RIGHT_BUTTON) ? 1 : 0;
     variable_panel_handle_drag_begin(row_idx, coarse, x);
     editor_request_redraw();

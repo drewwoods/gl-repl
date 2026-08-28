@@ -889,8 +889,8 @@ blade(x0, z0, height) {
   or another local of the same body. Shadowing a program-wide variable is
   fine; a loop iterator may shadow a local for the length of its loop.
   Parameters and loop iterators stay read-only.
-- `// @tune` and `// @config` need a variable-panel row, so they require a
-  program-wide declaration (`static float`).
+- `// @tune`, `// @config` and `// @bool` need a variable-panel row, so they
+  require a program-wide declaration (`static float`).
 - Capacity is `params + locals + deepest loop nesting <= 32`.
 
 A local is not a return value. When the caller needs a result, keep that one
@@ -953,6 +953,9 @@ A trailing comment on a `float` declaration can also carry a tag:
 - `// @config` marks it as a parameter the program assigns on purpose, which
   keeps its variable-panel row bright instead of dimmed - see [Config
   Variables](ADVANCED_USAGE.md#config-variables--config).
+- `// @bool` presents it as a two-state toggle - a checkbox in the variable
+  panel, `[x]`/`[ ]` in an exported knob's HUD - see [Toggle
+  Variables](ADVANCED_USAGE.md#toggle-variables--bool).
 
 ---
 
@@ -1017,6 +1020,9 @@ Row brightness distinguishes knobs from storage:
   declaration keeps a row bright even though the program assigns it.
 - The [`// @tune`](#tunable-variables--tune) accent is separate from
   brightness. `t` only dims if your source explicitly assigns `t = ...;`.
+- A [`// @bool`](ADVANCED_USAGE.md#toggle-variables--bool) row draws a
+  checkbox instead of a value and slider, and a click toggles it between 1
+  and 0 rather than starting a scrub.
 
 Slider edits are undoable and go through the normal commit pipeline; when a
 declaration exists, dragging rewrites its initializer.

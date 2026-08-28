@@ -697,7 +697,7 @@ static int import_try_stash_predef_decl(ImportState *s, const char *line) {
 }
 
 /* 1 if `s` carries the whole-token `tag` (a trailing tag the exporter
- * appends to a `// @declare` marker - `@tune` / `@config`), else 0. Bounded
+ * appends to a `// @declare` marker - `@tune` / `@config` / `@bool`), else 0. Bounded
  * by whitespace/end so it never matches a name like `@tuned`. */
 static int declare_args_have_tag(const char *s, const char *tag,
                                  size_t tag_len) {
@@ -833,24 +833,26 @@ static int parse_snippet_declare(const char *args, ImportState *s) {
             repl_eval_undeclare_predef_var(newly_declared[i]);
         return 0;
     }
-    /* Re-attach the @tune / @config tags so the reconstructed decl line is
-     * the in-app source of truth (badge, panel dimming, and re-export all
-     * read the trailing comment). */
+    /* Re-attach the @tune / @config / @bool tags so the reconstructed decl
+     * line is the in-app source of truth (badge, panel dimming, checkbox
+     * presentation, and re-export all read the trailing comment). */
     {
         int has_tune = declare_args_have_tag(args, "@tune", 5);
         int has_config = declare_args_have_tag(args, "@config", 7);
+        int has_bool = declare_args_have_tag(args, "@bool", 5);
         off = repl_append_clamped(decl_line, sizeof(decl_line), off, &truncated,
                                   ";");
         /* Last append: the offset is not carried further, only `truncated`. */
-        if (has_tune || has_config)
+        if (has_tune || has_config || has_bool)
             repl_append_clamped(decl_line, sizeof(decl_line), off,
-                                &truncated, " //%s%s",
+                                &truncated, " //%s%s%s",
                                 has_tune ? " @tune" : "",
-                                has_config ? " @config" : "");
+                                has_config ? " @config" : "",
+                                has_bool ? " @bool" : "");
     }
 
     /* A clipped row is unusable: a dropped name stays registered in the predef
-     * table while vanishing from the document, and a dropped @tune/@config tag
+     * table while vanishing from the document, and a dropped tag
      * silently changes what the variable panel shows. Roll the registrations
      * back and drop the directive, mirroring the insert-failure paths below. */
     if (truncated) {

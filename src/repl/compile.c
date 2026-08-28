@@ -1060,12 +1060,14 @@ static ReplCompileResult parse_float_name_list(const char *input,
     if (p[0] == '/' && p[1] == '/')
         snprintf(parsed->decl_comment, sizeof(parsed->decl_comment), " %s", p);
 
-    /* @tune / @config drive the variable panel, which is keyed on predef
-     * slots. A local has none, so the tag would be silently inert. */
+    /* @tune / @config / @bool drive the variable panel, which is keyed on
+     * predef slots. A local has none, so the tag would be silently inert. */
     if (local_mode && (strstr(parsed->decl_comment, "@tune") ||
-                       strstr(parsed->decl_comment, "@config")))
+                       strstr(parsed->decl_comment, "@config") ||
+                       strstr(parsed->decl_comment, "@bool")))
         return compile_set_err(err, err_size,
-            "@tune/@config require a global declaration - use 'static float'");
+            "@tune/@config/@bool require a global declaration - "
+            "use 'static float'");
 
     return REPL_COMPILE_OK;
 }

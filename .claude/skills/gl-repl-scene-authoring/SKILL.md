@@ -80,7 +80,7 @@ wherever it is typed. Plain `float x;` is a global at top level and a
 **function-scoped local** inside a function body - fresh per call (so recursion
 is safe), zero on entry, no initializer allowed (`float x = 1;` in a body is
 rejected - assign on the next line), no predef slot, no variable-panel row, and
-therefore no `@tune`/`@config`. Declare temporaries this way by default; keep a
+therefore no `@tune`/`@config`/`@bool`. Declare temporaries this way by default; keep a
 global only for a value the *caller* reads back or a knob you want to scrub.
 Locals hoist to the top of their function body (from any nesting depth) exactly
 as top-level decls hoist to the document top - in both cases *below* any
@@ -90,8 +90,11 @@ collide with a parameter or another local of the same body (redefinition), but
 may shadow a global or be shadowed by a loop iterator, innermost-first.
 
 Decl-line tags: `// @tune` (tunable knob badge + exported-C controls),
-`// @config` (keeps a source-assigned var bright in the panel); both round-trip
-via `@declare`. Both need a panel row, so both require `static float`.
+`// @config` (keeps a source-assigned var bright in the panel), `// @bool`
+(two-state toggle: panel checkbox that clicks between 1 and 0, `[x]`/`[ ]` in
+an exported knob's HUD whose key pair sets rather than steps - the variable
+stays a float, "on" is `> 0.5`); all three round-trip via `@declare`, combine
+freely, and need a panel row, so all three require `static float`.
 
 Scratch arrays `A`/`B`/`C[16]`: fixed globals, indices truncated with `(int)`,
 must stay 0..15. No local arrays.

@@ -224,6 +224,7 @@ static void rebuild_variable_rows(void) {
             g_time_row = g_row_count;
         g_rows[g_row_count].value = &g_predef_vars_mut[idx].value;
         g_rows[g_row_count].tuned = 0;
+        g_rows[g_row_count].is_bool = 0;
         g_rows[g_row_count].written = 0;
         g_row_count++;
     }

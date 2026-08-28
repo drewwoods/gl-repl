@@ -391,13 +391,15 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
         for (int di = 0; di < cmd->payload.decl.count; di++) {
             fprintf(f, " %s", cmd->payload.decl.names[di]);
         }
-        /* Round-trip the @tune / @config tags: import re-attaches them to the
-         * reconstructed decl line. Import's name loop stops at `@`, so the
-         * trailing tokens detach cleanly. */
+        /* Round-trip the @tune / @config / @bool tags: import re-attaches them
+         * to the reconstructed decl line. Import's name loop stops at `@`, so
+         * the trailing tokens detach cleanly. */
         if (repl_eval_line_has_tune_tag(source_text))
             fprintf(f, " @tune");
         if (repl_eval_line_has_config_tag(source_text))
             fprintf(f, " @config");
+        if (repl_eval_line_has_bool_tag(source_text))
+            fprintf(f, " @bool");
         fprintf(f, " */\n");
         break;
     }

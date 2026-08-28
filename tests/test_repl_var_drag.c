@@ -1,4 +1,6 @@
 #include "app/glr_ctrl.h"
+#include "app/glr_variable_panel_bridge.h"
+#include "source_document.h"
 #include "subsystems/variable_panel/variable_panel_drag.h"
 #include "subsystems/variable_panel/variable_panel_state.h"
 #include "repl/state.h"
@@ -195,6 +197,83 @@ static void test_sequential_drags_reanchor_to_new_start_value(void) {
                  change.value, 15.0f, 1e-5f);
 }
 
+/* ---- @bool rows: press-to-toggle instead of scrub ---------------------- */
+
+/* Find the document row declaring `name` and return its source text. */
+static const char *decl_line_for(const char *name) {
+    SourceTextView v = source_document_view();
+    for (int i = 0; i < repl_state_document_count(); i++) {
+        const GLCmd *cmd = &repl_state_document_cmds()[i];
+        if (cmd->type != CMD_VAR_DECLARE) continue;
+        for (int n = 0; n < cmd->payload.decl.count; n++)
+            if (strcmp(cmd->payload.decl.names[n], name) == 0)
+                return source_text_line(v, i);
+    }
+    return NULL;
+}
+
+static void test_bool_row_toggles_instead_of_dragging(void) {
+    int bool_row, plain_row;
+    const char *line;
+
+    glr_ctrl_reset_all();
+    repl_eval_init_predef_vars();
+    editor_feed_line("static float showVolume = 1; // @tune @bool");
+    editor_feed_line("static float amp = 1.5; // @tune");
+
+    bool_row = repl_eval_find_predef_var_idx("showVolume");
+    plain_row = repl_eval_find_predef_var_idx("amp");
+    ASSERT_TRUE("showVolume declared", bool_row >= 0);
+    ASSERT_TRUE("amp declared", plain_row >= 0);
+    if (bool_row < 0 || plain_row < 0)
+        return;
+
+    ASSERT_INT("bool-tagged row is classified bool",
+               glr_variable_panel_row_is_bool(bool_row), 1);
+    ASSERT_INT("untagged row is not bool",
+               glr_variable_panel_row_is_bool(plain_row), 0);
+    ASSERT_INT("out-of-range row is not bool",
+               glr_variable_panel_row_is_bool(MAX_PREDEF_VARS), 0);
+
+    /* On -> off: both the live value and the declaration must move, since a
+     * press is the whole gesture and there is no release to settle on. */
+    glr_variable_panel_toggle_bool_row(bool_row);
+    ASSERT_FLOAT("toggle clears an on row",
+                 repl_eval_predef_view().vars[bool_row].value, 0.0f, 1e-6f);
+    line = decl_line_for("showVolume");
+    ASSERT_TRUE("declaration rewritten to 0",
+                line && strstr(line, "= 0;") != NULL);
+    ASSERT_TRUE("declaration keeps its tags",
+                line && strstr(line, "@tune @bool") != NULL);
+
+    glr_variable_panel_toggle_bool_row(bool_row);
+    ASSERT_FLOAT("toggle sets an off row",
+                 repl_eval_predef_view().vars[bool_row].value, 1.0f, 1e-6f);
+
+    /* A non-bool row is left alone: its value is the slider's business. */
+    glr_variable_panel_toggle_bool_row(plain_row);
+    ASSERT_FLOAT("toggle is a no-op on a plain row",
+                 repl_eval_predef_view().vars[plain_row].value, 1.5f, 1e-6f);
+}
+
+/* Anything that is not exactly 1 or 0 still reads as a two-state value: "on"
+ * is the same `> 0.5` test the scene writes, so a mid-range value toggles to
+ * off rather than being treated as a third state. */
+static void test_bool_toggle_normalizes_off_scale_values(void) {
+    int row;
+
+    glr_ctrl_reset_all();
+    repl_eval_init_predef_vars();
+    editor_feed_line("static float flag = 0.75; // @bool");
+    row = repl_eval_find_predef_var_idx("flag");
+    ASSERT_TRUE("flag declared", row >= 0);
+    if (row < 0) return;
+
+    glr_variable_panel_toggle_bool_row(row);
+    ASSERT_FLOAT("0.75 reads on, so it toggles to 0",
+                 repl_eval_predef_view().vars[row].value, 0.0f, 1e-6f);
+}
+
 int main(void) {
     variable_panel_install_value_source(&g_test_value_source);
     test_inactive_queries();
@@ -207,6 +286,8 @@ int main(void) {
     test_reset_clears_drag_state_and_undo_flag();
     test_request_uses_dragged_variable_name();
     test_sequential_drags_reanchor_to_new_start_value();
+    test_bool_row_toggles_instead_of_dragging();
+    test_bool_toggle_normalizes_off_scale_values();
 
     printf("test_repl_var_drag: %d/%d tests passed\n", g_harness.passed, g_harness.run);
     return (g_harness.passed == g_harness.run) ? 0 : 1;

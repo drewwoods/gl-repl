@@ -864,6 +864,7 @@ metadata that round-trips on reload:
 | `// @declare name` | Reconstructs a `float name;` declaration on import. |
 | `// @tune` | Marks a variable as a tunable knob in the exported program - see [User Guide → Tunable Variables](USER_GUIDE.md#tunable-variables--tune). |
 | `// @config` | Marks an assigned variable as config so the variable panel doesn't dim it (bounds-keeping writes like clamps) - see [Config Variables](#config-variables--config) below. |
+| `// @bool` | Presents a variable as a two-state toggle: a checkbox in the variable panel, `[x]`/`[ ]` in an exported knob's HUD - see [Toggle Variables](#toggle-variables--bool) below. |
 | `// @plot` | On an assignment row: opens the [assignment value plot](USER_GUIDE.md#plotting-an-assignments-values) on that row when the document loads. Tag up to four rows to overlay them. |
 | `// @camera <role>` | Tags a transform row as camera state. Five roles: `dist`, `rx`, `ry`, `spin`, `pan`. |
 
@@ -1203,6 +1204,43 @@ export/import round trips via a marker on the exported `@declare` comment.
 The two tags are independent and can be combined (`// @tune @config`):
 `@tune` adds the exported-knob badge and keyboard controls, `@config` only
 affects panel brightness inside gl-repl.
+
+## Toggle Variables (`// @bool`)
+
+Some variables are switches, not dials - `showVolume`, `wireframe`, a debug
+overlay's on/off. The REPL has one numeric type, so a scene writes them as a
+float and tests them with `> 0.5`:
+
+```c
+static float showVolume = 1; // draw the extruded hull itself @tune @bool
+...
+if(showVolume > 0.5) {
+```
+
+Dragging a slider to pick between two values is the wrong control for that.
+Tagging the declaration `// @bool` says so:
+
+- **In the variable panel** the row draws a checkbox instead of a value and
+  slider, and the value column reads `[x]` / `[ ]`. Clicking the row toggles
+  it - one press writes 1 or 0 to both the live value and the declaration,
+  and there is no scrub. Right-click does the same thing: a flip has no
+  coarse version.
+- **In exported C**, a knob that is also `@tune`-tagged renders in the HUD as
+  `q/a  showVolume [x]` rather than a number, and its key pair *sets* rather
+  than steps - the up key writes `1.0f`, the down key `0.0f`. Shift/Ctrl step
+  scaling does not apply.
+
+The variable stays an ordinary `float` throughout: `@bool` is presentation,
+not a type. "On" is the same `> 0.5` test the scene writes itself, so a value
+the program leaves at 0.3 reads as off rather than as a third state.
+
+Like `// @tune` and `// @config`, the tag is a bare trailing comment token
+(whole-token match - `// @boolean` does not count), it applies to every name
+on the declaration line, extra comment text is fine, and it survives
+export/import round trips via a marker on the exported `@declare` comment.
+All three tags are independent and can be combined. `@bool` on its own gives
+the panel checkbox with no exported knob; a local (`float x;` inside a
+function body) is rejected, since a local has no variable-panel row.
 
 ## Music & assets
 

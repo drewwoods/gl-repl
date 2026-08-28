@@ -476,6 +476,14 @@ int repl_eval_line_has_tune_tag(const char *line);
  * 0. Token-bounded like `@tune`. Pure string predicate. */
 int repl_eval_line_has_config_tag(const char *line);
 
+/* 1 if `line`'s trailing comment carries a whole-token `@bool` marker (the
+ * tag that presents a float decl as a two-state toggle: the variable panel
+ * draws a checkbox instead of a slider and clicking it writes 1 or 0, and an
+ * exported knob renders `[x]`/`[ ]` instead of a number). The variable stays
+ * an ordinary float - `@bool` is presentation, not a type. Token-bounded like
+ * `@tune`. Pure string predicate. */
+int repl_eval_line_has_bool_tag(const char *line);
+
 /* 1 if `line`'s trailing comment carries a whole-token `@plot` marker (the
  * tag that opens the assignment value plot on that row when a document is
  * loaded), else 0. Token-bounded like `@tune`. Pure string predicate - the

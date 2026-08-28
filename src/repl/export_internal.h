@@ -64,6 +64,10 @@ typedef struct ExportNeeds {
     int tune_count;
     int tune_total;
     const char *tune_names[REPL_TUNE_MAX_KNOBS];
+    /* Index-aligned with tune_names: 1 when that knob's declaration also
+     * carried `// @bool`, so the knob is a two-state toggle (`[x]`/`[ ]` in
+     * the HUD, keys write 1/0) rather than a stepped number. */
+    int tune_is_bool[REPL_TUNE_MAX_KNOBS];
 } ExportNeeds;
 
 enum {
