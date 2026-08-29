@@ -119,29 +119,32 @@ if [ "$AUTO" = "1" ]; then
     fi
 
     if [ "$(state_get consent)" != "yes" ]; then
-        # Never block a non-interactive build (CI, piped output) on input.
-        # The controlling terminal - not stdin - is what decides: `make` with
-        # stdin redirected is still a human at a keyboard, while CI has no
-        # /dev/tty at all. Skip quietly and leave consent unrecorded, so a
-        # later interactive build still gets to ask.
-        # `-r /dev/tty` is not the test: the node can be present and readable
-        # while opening it fails with ENXIO (no controlling terminal - a
-        # daemonized or detached build). Only an actual open settles it.
-        if ! { exec 3<>/dev/tty; } 2>/dev/null; then
-            echo "fetch-music: skipping music download (not a terminal; run 'make fetch-music')" >&2
+        # Prompt only when the build's own standard streams are attached to a
+        # terminal and this process group owns that terminal's foreground.
+        # Bear keeps the streams attached but runs make in a background process
+        # group; reading there stops the shell with SIGTTIN. Other wrappers or
+        # shell redirection can replace a stream instead. Leave consent
+        # unrecorded so a later ordinary interactive build can still ask.
+        process_group=""
+        foreground_group=""
+        if [ -t 0 ] && [ -t 1 ] && [ -t 2 ]; then
+            process_group=$(ps -o pgid= -p "$$" 2>/dev/null | tr -d ' ')
+            foreground_group=$(ps -o tpgid= -p "$$" 2>/dev/null | tr -d ' ')
+        fi
+        if [ -z "$process_group" ] \
+           || [ "$process_group" != "$foreground_group" ]; then
+            echo "fetch-music: skipping music download (non-interactive build; run 'make fetch-music')" >&2
             exit 0
         fi
-        printf 'Download the optional gl-repl music pack (~94 MB) from release %s? [Y/n] ' "$TAG" >&3
+        printf 'Download the optional gl-repl music pack (~94 MB) from release %s? [Y/n] ' "$TAG" >&2
         reply=""
-        if ! read -r reply <&3; then
+        if ! read -r reply; then
             # EOF, not an answer. Enter (empty line, read succeeds) means yes;
             # nobody there to press it must not be read as consent.
-            echo "" >&3
-            exec 3>&-
+            echo "" >&2
             echo "fetch-music: no answer — skipping the music pack this build." >&2
             exit 0
         fi
-        exec 3>&-
         case "$reply" in
             [Nn]*)
                 state_put no "$(manifest_of "$DEST")" "$(track_count "$DEST")"

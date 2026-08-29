@@ -1569,14 +1569,22 @@ $(SAMPLE_BIN): $(SAMPLE_OBJS) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
 	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(SAMPLE_OBJS) $(GL_LDFLAGS) $(EXTRA_LDFLAGS) -o $@
 
-gl-repl: internal-music-auto $(SAMPLE_BIN) ## Build the main gl-repl binary using release flags by default.
-	ln -sfn $(SAMPLE_BIN) $@
+# Keep the terminal prompt outside the parallel build graph. Making the hook
+# and $(SAMPLE_BIN) ordinary siblings lets `make -j` start generators and
+# compilers while the question is still waiting for input, burying the prompt
+# in their output. The recursive make starts only after the hook completes and
+# inherits the caller's jobserver, flags, and command-line variable overrides.
+gl-repl: internal-music-auto ## Build the main gl-repl binary using release flags by default.
+	+@$(MAKE) internal-gl-repl
+
+internal-gl-repl: $(SAMPLE_BIN)
+	ln -sfn $(SAMPLE_BIN) gl-repl
 
 COMPILE_REPORT_SAMPLE_SUMMARY := $(COMPILE_REPORT_DIR)/sample-summary
 $(COMPILE_REPORT_SAMPLE_SUMMARY): $(SAMPLE_BIN)
 	@bash scripts/compile-report.sh summary "$(COMPILE_REPORT_DIR)"
 	@touch $@
-gl-repl: $(COMPILE_REPORT_SAMPLE_SUMMARY)
+internal-gl-repl: $(COMPILE_REPORT_SAMPLE_SUMMARY)
 
 # gl-repl-unchained -- the same app with the capacity ceilings lifted, for
 # EXPERIMENTATION ONLY. It exists because machine-generated documents (a

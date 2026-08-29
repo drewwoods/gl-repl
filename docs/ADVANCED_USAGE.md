@@ -1282,7 +1282,7 @@ fail a build:
 |---|---|
 | You answer `n` | Remembered; you are never asked again |
 | Pack already installed for that tag | Skipped without touching the network |
-| No controlling terminal (CI, a piped build) | Skipped with a one-line note on stderr, and *not* remembered - a later interactive build still asks |
+| Any standard stream is not a terminal, or the build is not the foreground terminal job (CI, Bear/another wrapper, redirection) | Skipped with a one-line note on stderr, and *not* remembered - a later ordinary interactive build still asks |
 | `NO_MUSIC=1` | Skipped, no prompt |
 | Download fails (offline, rate-limited) | Warns and continues; the build still succeeds |
 
