@@ -1,38 +1,62 @@
 # Editing Basics - File > New Scene, then type a spinning triangle ringed
 # by a torus, committing each line with `;` - the same keystrokes a user
-# would make.
+# would make. Along the way: code focus, cursor-driven overlays,
+# autocomplete, and the right-click GL-state inspector.
 #
-# Points are symbolic targets (grammar: src/app/glr_pointer_script.h).
+# Points are symbolic targets (grammar: src/app/glr_pointer_script.h),
+# resolved against the live layout at fire time. `code:<n>` is a document
+# row, 1-based; the panel gutter shows it one higher because row 1 of the
+# gutter is the generated `void display(void) {`.
+#
+# The caption band anchors at scene:0.25,0.76 - inside the scene viewport,
+# above the status bar, and clear of the variable panel's right column.
 
 move scene:0.55,0.30
-echo bitmap scene:0.25,0.76 24 3.0 Let's build a scene from scratch.
+echo bitmap scene:0.25,0.76 24 3.2 Let's build a scene from scratch.
+pause 2.6
+
+# A brand-new scene (File > New Scene natively, the shell's New button on web)
 #ifdef __EMSCRIPTEN__
 glide shell:new 0.8             # browser shell's New button
 click shell:new
 glide scene:0.55,0.30 0.6       # bring the tour cursor back into the canvas
 #else
-glide menu:file 0.8          # the File menu
+glide menu:file 0.8             # the File menu
 click
-glide item:new_scene 0.5     # New Scene row
+glide item:new_scene 0.5        # New Scene row
 click
 #endif
+chord ctrl+shift c              # recenter the camera
 
-# recenter camera
-chord ctrl+shift c
-
-echo bitmap scene:0.20,0.20 24 3.4 A new scene seeds the GL boilerplate.
-glide code:3 0.2
+echo bitmap scene:0.25,0.76 24 3.6 A new scene seeds the GL boilerplate.
+glide code:3 0.4
 ring  code:1 0.3
 ring  code:2 0.3
 ring  code:3 0.3
 ring  code:4 0.3
 ring  code:5 0.3
 ring  code:6 0.3
+pause 1.2
 
 # @checkpoint after-new-scene
-echo bitmap scene:0.15,0.20 24 3.4 Type a command; the ; key commits it.
 
-# ctrl+j - enter
+# Code focus - the panel shows your lines only; turning it off reveals the
+# generated C that the scene exports as. Ctrl+Shift+F, or the "focus" keycap
+# in the status bar.
+echo bitmap scene:0.25,0.76 24 3.6 Those six lines are all the panel shows.
+pause 3.0
+echo bitmap scene:0.25,0.76 24 3.6 Ctrl+Shift+F turns code focus off.
+chord ctrl+shift f              # follow-scroll keeps your rows in view
+pause 3.4
+echo bitmap scene:0.25,0.76 18 5.5 Camera, lights and the display() frame wrap those rows -\nthis is the C the scene exports as, generated for you.
+pause 5.5
+echo bitmap scene:0.25,0.76 24 3.4 Ctrl+Shift+F again - back to just your code.
+chord ctrl+shift f
+pause 3.0
+
+echo bitmap scene:0.25,0.76 24 3.4 Type a command; the ; key commits it.
+
+# A comment line, then the spin - \cj is Enter
 key \cj
 key@20 // Let's create a rotating triangle surrounded by a torus
 key ;
@@ -40,37 +64,42 @@ key ;
 key@10 glRotatef(
 pause 0.2
 key@5 t * 40, 0, 1, 0);
-echo bitmap scene:0.20,0.20 18 8.0 The cursor position also triggers overlays, with the cursor on the\n glRotatef line the effect on the geomtry is revealed in the scene
+
+# The cursor row drives the overlays: park it on glRotatef and the scene
+# shows what that transform is doing.
+echo bitmap scene:0.25,0.76 18 8.0 The cursor position also drives the overlays: with the cursor\non the glRotatef line, its effect on the geometry is revealed.
 skey up
 glide code:9 0.5
 ring code:9 1.5
 glide scene:0.5,0.5 1.0
 ring scene:0.5,0.5 1.5
 pause 3.0
-
 skey down
+
 key@10 glBegin(GL_TRIANGLES)
 key ;
 
 # @checkpoint before-geometry
+
 key@10 glColor3f(1, 0.4, 0.4)
 key ;
 
-echo bitmap scene:0.20,0.20 18 4.0 Overlays also act as a guide as the vertex is specified\n-
+# The vertex overlay narrows as each coordinate is typed: plane, line, point.
+echo bitmap scene:0.25,0.76 24 4.0 Overlays also guide you as a vertex is specified:
 key@10 glVertex3f(-1,
-echo bitmap scene:0.20,0.20 18 4.0 Overlays also act as a guide as the vertex is specified\n- 2 DOF produces the plane x = - 1)
+echo bitmap scene:0.25,0.76 24 4.0 Overlays also guide you as a vertex is specified:\n2 degrees of freedom left - the plane x = -1.
 ring scene:0.5,0.5 2.0
 pause 2.0
 key@10 -0.7,
-echo bitmap scene:0.20,0.20 18 4.0 Overlays also act as a guide as the vertex is specified\n- 1 DOF produces the line x = - 1, y = -0.7)
+echo bitmap scene:0.25,0.76 24 4.0 Overlays also guide you as a vertex is specified:\n1 degree of freedom left - the line x = -1, y = -0.7.
 pause 4.0
 key@10 0)
-echo bitmap scene:0.20,0.20 18 4.0 Overlays also act as a guide as the vertex is specified\n- 0 DOF produces the point (-1, 0.7, 0)
-pause 5.0
-key@10 ;
+echo bitmap scene:0.25,0.76 24 4.0 Overlays also guide you as a vertex is specified:\n0 degrees of freedom left - the point (-1, -0.7, 0).
+pause 4.0
+key ;
 
-echo bitmap scene:0.20,0.20 18 4.0 Let's finish the other two points of the triangle
-key@20 glColor3f(0.4, 1, 0.4);
+echo bitmap scene:0.25,0.76 24 3.6 Now the other two corners of the triangle.
+key@20 glColor3f(0.4, 1, 0.4)
 key ;
 key@20 glVertex3f(1, -0.7, 0)
 key ;
@@ -80,11 +109,13 @@ key@20 glVertex3f(0, 1.1, 0)
 key ;
 key@20 glEnd()
 key ;
-echo bitmap scene:0.20,0.20 18 4.0 There a beautiful triangle
-pause 4.0
+echo bitmap scene:0.25,0.76 24 3.4 One triangle, three colors, spinning.
+pause 3.4
 
-echo bitmap scene:0.20,0.20 18 3.6 The gray ghost is autocomplete (Tab).
 # @checkpoint before-torus
+
+# Autocomplete: type a prefix, let the ghost show the rest.
+echo bitmap scene:0.25,0.76 24 3.6 The gray ghost is autocomplete (Tab).
 key \cj
 key@20 glutSolidT
 pause 2.6                       # let the autocomplete ghost linger
@@ -92,21 +123,25 @@ key@20 orus(0.25, 1.4, 16, 32)
 key ;
 skey up
 
-echo bitmap scene:0.20,0.20 18 5.6 The torus picks up the last glColor, as shown in the gutter
+echo bitmap scene:0.25,0.76 24 5.0 The torus inherits the last glColor,\nas the gutter swatch shows.
 glide code:15 1.0
-ring code:15 1.0
-echo bitmap scene:0.20,0.20 18 5.6 You can also see the transformations affecting it
+ring code:15 1.5
+pause 2.5
+echo bitmap scene:0.25,0.76 24 4.0 It inherits the transforms above it too.
 glide code:9 1.0
-ring code:9 1.0
+ring code:9 1.5
+pause 2.5
 
-echo bitmap scene:0.20,0.76 18 5.6 You can also see the gl state at a point (rightclick)
+# @checkpoint before-gl-state
+
+# Right-click a blank row for the GL state at that point in the program.
+echo bitmap scene:0.25,0.76 24 5.0 Right-click a blank row to read the GL state\nat that point in the program.
 glide code:18 1.0
 rightclick
-pause 4.0
-
-echo bitmap scene:0.20,0.76 18 5.6 And compare current GL state to a previous point (shitf + rightclick)
+pause 4.5
+echo bitmap scene:0.25,0.76 24 5.0 Shift + right-click a second blank row to compare\nthe two points instead of the GL defaults.
 glide code:7 1.0
 rightclick shift
+pause 5.0
 
-pause 4.0
-echo bitmap scene:0.25,0.76 24 3.6 Tour finished - it's all yours!
+echo bitmap scene:0.25,0.76 24 4.0 Tour finished - it's all yours!\nEscape takes control now.
