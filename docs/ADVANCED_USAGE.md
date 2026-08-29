@@ -1262,7 +1262,61 @@ it into your per-user music folder with:
 ```bash
 scripts/fetch-music.sh             # downloads the pack into the user music folder
 scripts/fetch-music.sh --dir ./assets   # or anywhere else
+make fetch-music                   # the same, into MUSIC_DEST (default ./assets)
+make fetch-music MUSIC_TAG=assets-v2    # a different release
 ```
+
+### The build-time prompt
+
+`make gl-repl` offers to pull the pack the first time, defaulting to yes:
+
+```
+Download the optional gl-repl music pack (~94 MB) from release assets-v1? [Y/n]
+```
+
+The music is not part of the program, so this hook is written to be
+unnoticeable rather than helpful-but-intrusive - it can neither stall nor
+fail a build:
+
+| Situation | What happens |
+|---|---|
+| You answer `n` | Remembered; you are never asked again |
+| Pack already installed for that tag | Skipped without touching the network |
+| No controlling terminal (CI, a piped build) | Skipped with a one-line note on stderr, and *not* remembered - a later interactive build still asks |
+| `NO_MUSIC=1` | Skipped, no prompt |
+| Download fails (offline, rate-limited) | Warns and continues; the build still succeeds |
+
+The answer and the identity of the installed pack live in `.music.ini` at the
+repo root (gitignored):
+
+```ini
+consent = yes
+tag = assets-v1
+tracks = 18
+manifest = 8c96...        # sha256 of the sorted track list
+```
+
+`tag` + `manifest` together are what "already downloaded" means. The check is
+deliberately **local-only** - it never asks GitHub what the release holds, so
+a build that is already up to date costs no network at all. What that buys and
+what it gives up:
+
+- A track deleted, renamed, or added *on your disk* changes the manifest, so
+  the next build re-fetches (`--skip-existing`, so only the missing files
+  move).
+- A release **re-uploaded under the same tag** is invisible: the local
+  manifest still matches, and the pack stays as it is. Release tags are
+  treated as immutable - publish a new pack as `assets-v2` rather than
+  editing `assets-v1`, and point at it with `MUSIC_TAG`.
+
+To force a re-check either way, change the tag or drop the cache:
+
+```bash
+make music-forget                  # or: scripts/fetch-music.sh --forget
+```
+
+`make fetch-music` ignores all of this - it always contacts the release, and
+a failure there is a real error.
 
 `./gl-repl --no-audio` starts silent. See *Music Asset Resolution* in
 [`ARCHITECTURE.md`](ARCHITECTURE.md) for precedence details.

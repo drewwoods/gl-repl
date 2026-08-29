@@ -1553,7 +1553,7 @@ $(SAMPLE_BIN): $(SAMPLE_OBJS) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
 	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(SAMPLE_OBJS) $(GL_LDFLAGS) $(EXTRA_LDFLAGS) -o $@
 
-gl-repl: $(SAMPLE_BIN) ## Build the main gl-repl binary using release flags by default.
+gl-repl: internal-music-auto $(SAMPLE_BIN) ## Build the main gl-repl binary using release flags by default.
 	ln -sfn $(SAMPLE_BIN) $@
 
 COMPILE_REPORT_SAMPLE_SUMMARY := $(COMPILE_REPORT_DIR)/sample-summary
@@ -1767,9 +1767,27 @@ release-config: ## Edit + save the release build plan (.release.ini) via the arr
 # (MUSIC_DEST, default assets/). Pull from a specific release with MUSIC_TAG=...
 # (scripts/fetch-music.sh defaults to the assets-v1 asset release otherwise).
 #? MUSIC_DEST: directory `make fetch-music` unpacks the music pack into (default assets).
+#? MUSIC_TAG: release tag the music pack is pulled from (default assets-v1).
+#? NO_MUSIC: set to 1 to skip the automatic music fetch that `make gl-repl` runs.
 MUSIC_DEST ?= assets
+MUSIC_FETCH = bash scripts/fetch-music.sh --dir "$(MUSIC_DEST)" $(if $(MUSIC_TAG),--tag "$(MUSIC_TAG)",)
+
 fetch-music: ## Download the music pack from the GitHub release into MUSIC_DEST (default assets/).
-	bash scripts/fetch-music.sh --dir "$(MUSIC_DEST)" $(if $(MUSIC_TAG),--tag "$(MUSIC_TAG)",)
+	$(MUSIC_FETCH)
+
+# Build hook: `make gl-repl` offers to pull the optional music pack. The pack
+# is not part of the program, so this must never be able to fail or stall a
+# build - --auto asks once on a terminal, remembers a "no" in .music.ini,
+# short-circuits when that tag's tracks are already on disk, notes and moves on
+# when there is no terminal (CI), and swallows every download failure.
+# NO_MUSIC=1 opts out without answering; `make fetch-music` always fetches.
+# internal-* because it is a hook, not something to type (the naming escape
+# hatch check-make-target-documented offers for undocumented targets).
+internal-music-auto:
+	@NO_MUSIC="$(NO_MUSIC)" $(MUSIC_FETCH) --auto || true
+
+music-forget: ## Forget the cached music-pack answer, so the next build asks again.
+	@bash scripts/fetch-music.sh --forget
 
 # Standalone demo binary that drives the render3d module with a teapot callback.
 # Proves the src/render3d/ subtree links cleanly without the editor/UI/controller code.
@@ -3551,7 +3569,8 @@ LEGACY_TARGETS := \
 	analyze audit-editor-ownership config-list coverage \
 	callgraph-files callgraph-graphviz callgraph-html callgraph-profile \
 	callgraph-static callgraph-static-entry \
-	debug distclean extract fetch-music find-trailing-whitespace gl-tests \
+	debug distclean extract fetch-music internal-music-auto music-forget \
+	find-trailing-whitespace gl-tests \
 	icon-cube icon-cube-strong icon-regen keymap-list lines lines-test \
 	palette-list rebuild-golden render3d-hot-lib require-emcc unicode-count
 

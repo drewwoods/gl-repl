@@ -65,3 +65,6 @@ recovery.c
 # Recorded videos (regenerate via scripts/record-video.sh) — large files
 # stay out of the repo.
 /docs/images/*.mp4
+
+# Music-pack consent + installed-pack stamp (scripts/fetch-music.sh).
+/.music.ini
