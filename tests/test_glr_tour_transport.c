@@ -23,6 +23,8 @@
 #include "ui/app/state.h"
 #include "ui/subsystems/tour_hud.h" /* tour_hud_panel_width (clamp guard) */
 #include "repl/state_owners.h"
+#include "app/glr_state.h"    /* presentation/render state, CFG_DEFAULT_* via glr_defaults.h */
+#include "editor/input.h"      /* editor_feed_line (document survives the reset) */
 #include "gl_includes.h"           /* GLUT_KEY_LEFT / GLUT_KEY_RIGHT / buttons */
 
 #include "support/test_harness.h"
@@ -949,6 +951,88 @@ static void test_view_event_ensures_3d_and_reconstructs(void) {
                glr_ctrl_view_transition_active(), 0);
 }
 
+/* `reset presentation` is the tour preamble's "known screen" line. The
+ * divergence it exists to fix is the settings an example load does NOT reset:
+ * a previous tour (or the user) can leave code focus off, a buffer
+ * visualization on, or syntax highlighting changed, and the next tour then
+ * narrates a screen that is not there. Pinned here across all three classes -
+ * a scene-local key, a session-inspection key, and code focus, which has no
+ * GlrConfigKey and so is unreachable from a `cfg` line at all. */
+static void test_reset_presentation_restores_defaults(void) {
+    const char *lines[] = {
+        "reset presentation",
+        "move scene:0.5,0.5"
+    };
+    int accum_bits_before;
+
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(1200, 800);
+    ui_state_pointer_set(100, 100, -1);
+
+    /* A screen the previous tour could plausibly have left behind. Each value
+     * is derived from its own default, never written as a literal, so the test
+     * keeps meaning what it says if a shipped default moves. */
+    glr_config_set(GLR_CONFIG_VERTEX_LABELS, CFG_DEFAULT_VERTEX_LABELS + 1);
+    glr_config_set(GLR_CONFIG_DEPTH_VIZ, CFG_DEFAULT_DEPTH_VIZ + 1);
+    if (glr_state_presentation().code_focus == CFG_DEFAULT_CODE_FOCUS)
+        glr_ctrl_toggle_code_focus();
+    editor_feed_line("glVertex3f(1, 2, 3);");
+    accum_bits_before = glr_state_render().accum_bits;
+
+    ASSERT_TRUE("fixture diverged from defaults",
+                glr_config_get(GLR_CONFIG_VERTEX_LABELS) !=
+                    CFG_DEFAULT_VERTEX_LABELS &&
+                glr_config_get(GLR_CONFIG_DEPTH_VIZ) != CFG_DEFAULT_DEPTH_VIZ &&
+                glr_state_presentation().code_focus != CFG_DEFAULT_CODE_FOCUS);
+
+    glr_pointer_script_start_tour("Test Tour", "test.pointer", lines, 2);
+    frames(2);   /* baseline; reset event fires */
+
+    ASSERT_INT("scene-local key back to default",
+               glr_config_get(GLR_CONFIG_VERTEX_LABELS),
+               CFG_DEFAULT_VERTEX_LABELS);
+    ASSERT_INT("session-inspection key back to default",
+               glr_config_get(GLR_CONFIG_DEPTH_VIZ), CFG_DEFAULT_DEPTH_VIZ);
+    ASSERT_INT("code focus back to default (no slug reaches it)",
+               glr_state_presentation().code_focus, CFG_DEFAULT_CODE_FOCUS);
+
+    /* A tour resets how the app looks, never what the user wrote - and the
+     * render defaults record the buffer depths as "not probed", so resetting
+     * them would tell accum and stencil they are unavailable. */
+    ASSERT_INT("document survives the reset",
+               repl_state_document_count(), 1);
+    ASSERT_INT("GL-init accum probe survives the reset",
+               glr_state_render().accum_bits, accum_bits_before);
+
+    ASSERT_TRUE("reset event reaches Done", run_until_state(GLR_TOUR_DONE, 20));
+
+    /* Ordinary reversible event: the prefix replay re-runs it. */
+    glr_config_set(GLR_CONFIG_DEPTH_VIZ, CFG_DEFAULT_DEPTH_VIZ + 1);
+    glr_pointer_script_handle_tour_special(GLUT_KEY_LEFT);
+    ASSERT_TRUE("reset-event backstep settles",
+                run_until_state(GLR_TOUR_PAUSED, 20));
+    ASSERT_INT("reconstructed prefix re-applies the reset",
+               glr_config_get(GLR_CONFIG_DEPTH_VIZ), CFG_DEFAULT_DEPTH_VIZ);
+}
+
+/* The subject is required and closed. A bare `reset` must not become an alias
+ * for whatever subject is added next. */
+static void test_reset_subject_required(void) {
+    const char *bare[]    = { "reset" };
+    const char *unknown[] = { "reset camera" };
+    const char *extra[]   = { "reset presentation now" };
+
+    glr_ctrl_reset_all();
+    ASSERT_INT("bare reset is rejected",
+               glr_pointer_script_start_tour("T", "f", bare, 1), 0);
+    ASSERT_INT("unknown reset subject is rejected",
+               glr_pointer_script_start_tour("T", "f", unknown, 1), 0);
+    ASSERT_INT("trailing token after the subject is rejected",
+               glr_pointer_script_start_tour("T", "f", extra, 1), 0);
+    ASSERT_INT("no tour active after a rejected reset",
+               glr_pointer_script_tour_view().active, 0);
+}
+
 /* The HUD panel width is the scene width minus margins, NEVER forced to a
  * minimum that would push it past a narrow scene (the overflow bug). This is
  * the render path's actual width function; feedback can't see off-window
@@ -1156,6 +1240,8 @@ int main(void) {
     test_space_restart_from_done();
     test_speed_persists_through_done_restart();
     test_timestamped_tour_rejected();
+    test_reset_presentation_restores_defaults();
+    test_reset_subject_required();
     test_platform_conditionals();
     test_comments_blanks_and_source_line();
     test_checkpoints_seek_and_pause();

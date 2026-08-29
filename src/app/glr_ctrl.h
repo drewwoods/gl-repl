@@ -92,6 +92,14 @@ int glr_ctrl_apply_tag_defaults(int example_idx,
  * instead of the REPL-only repl_state_reset_program. */
 void glr_ctrl_reset_all(void);
 
+/* Reset the whole presentation roster (scene-local subset + the session
+ * inspection and interface settings a scene does not own, code focus
+ * included) to its defaults, leaving the document and GlrRenderState
+ * alone. The pointer script's `reset presentation` verb, so a tour's
+ * narration describes the screen it claims to. Rationale, and why render
+ * state is excluded, at the definition in glr_ctrl.c. */
+void glr_ctrl_reset_presentation_defaults(void);
+
 /* Step the named expensive setting back toward its shipped default (accum
  * passes -> 1, Post FX -> Off, line smooth -> Off) and re-arm the
  * watchdog so the next-ranked culprit is measured against the same

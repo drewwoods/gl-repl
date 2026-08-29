@@ -3929,6 +3929,41 @@ static void glr_ctrl_reset_example_chrome(int example_idx) {
                              glr_state_presentation().light_theme);
 }
 
+/* Reset the WHOLE presentation roster to its defaults - the scene-local
+ * subset above plus the settings a scene deliberately does not own:
+ * the session-inspection views (depth / stencil viz, call-depth tint,
+ * winding, Post FX) and the interface settings (code panel layout, wrap,
+ * syntax highlight, paren match/scope, and code focus, which has no
+ * GlrConfigKey at all and so is unreachable from a `cfg` slug).
+ *
+ * The one caller is the pointer script's `reset presentation` verb: a tour
+ * narrates presentation state ("the panel shows only your code"), and
+ * whatever the previous tour or the user left behind would otherwise make
+ * that narration describe the wrong screen. Deliberately NOT a full
+ * glr_ctrl_reset_all(): a tour resets how the app looks, never the user's
+ * document.
+ *
+ * GlrRenderState is out of scope on purpose. Its defaults carry
+ * accum_bits / stencil_bits = -1 ("not probed"), so
+ * glr_state_render_reset_defaults() would discard the GL-init probe and
+ * leave the accumulation and stencil features believing they are
+ * unavailable. No tour narrates MSAA, line smoothing or accum anyway.
+ *
+ * The state write is pure storage (it bypasses glr_config_set's side
+ * effects), so it takes the same follow-ups as the example reset: re-seed
+ * the light slots from the theme it landed on, mirror the new flags into
+ * the UI snapshot, and make the two peer writes that live outside
+ * GlrPresentationState. */
+void glr_ctrl_reset_presentation_defaults(void) {
+    glr_state_presentation_reset_defaults();
+    glr_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
+    variable_panel_set_visible(CFG_DEFAULT_VARIABLE_PANEL);
+    render3d_lights_apply_theme(glr_state_render_mut()->lights,
+                             glr_state_presentation().light_theme);
+    glr_ctrl_sync_ui_chrome();
+    editor_scroll_follow_cursor_set(1);
+}
+
 /* Tutorial variant of the chrome reset. Examples deliberately inherit the
  * camera and (via the shared defaults) the FAR grid and the vertex
  * decorations; a tutorial should not. It opens a fresh transient scene

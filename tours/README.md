@@ -224,6 +224,7 @@ an unintended interaction.
 | View mode | `view 3d` or `view 2d` | Idempotently selects a view mode. If a change is needed, autoplay waits for the normal animated transition to settle. |
 | Scroll | `scroll <row>` or `scroll code:<target>` | Scrolls the code panel to the specified top row (e.g. `scroll 0`), or so that the code target is visible. |
 | Config | `cfg <slug> <value>` | Sets a configuration setting by stable slug and symbolic (or integer) value. |
+| Reset | `reset presentation` | Returns every presentation setting to its default. See below. |
 | Text | `key <text>` | Sends every character through the normal keyboard handler immediately. |
 | Paced text | `key@<chars-per-second> <text>` | Types the payload on the frame clock, one character at a time. The next untimed step waits for it. |
 | Special key | `skey <name>` | Sends a special GLUT key. See the names below. |
@@ -274,6 +275,36 @@ A line is rejected at load (failing a recording, stopping a tour) when: the
 has no shortcut meaning - type it with `key`); a modifier name is unknown,
 empty, or repeated (`ctrl++shift`, `ctrl+ctrl`); or extra tokens follow the key
 (only a trailing `#` comment is allowed).
+
+### Presentation reset (`reset presentation`)
+
+A tour narrates what is on the screen - "the panel shows only your code",
+"vertex labels number each point" - and it inherits whatever the previous tour,
+or the user, left behind. `reset presentation` returns the whole presentation
+roster to its defaults so the narration describes the screen it claims to:
+
+```text
+reset presentation
+```
+
+It covers more than `cfg` can. Alongside the scene-local settings that an
+example load already resets, it returns the session-inspection views (depth and
+stencil visualization, call-depth tint, winding, Post FX) and the interface
+settings (code panel layout, wrap, syntax highlight, paren match and scope).
+That includes **code focus**, which has no configuration slug at all - it is a
+hidden Ctrl+Shift+F shortcut - and so cannot be set by a `cfg` line.
+
+It deliberately does not touch two things. The **document** is not a
+presentation setting: a tour resets how the app looks, never what the user
+wrote. And **render state** (MSAA, line smoothing, point attenuation,
+accumulation) is excluded because its defaults record the accumulation and
+stencil buffer depths as "not probed", so resetting them would discard the
+GL-init probe; no tour narrates those settings anyway.
+
+Put it in the tour's preamble, before the first caption that describes the
+screen. It is an ordinary reversible event, so backstep reconstructs it like
+any other. It resets and does not restore: exiting a tour keeps the defaults it
+landed on, exactly as a `cfg` line in a tour keeps the value it set.
 
 ### Configuration settings (`cfg`)
 

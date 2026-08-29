@@ -4,6 +4,8 @@
 #
 # Points are symbolic targets (grammar: src/app/glr_pointer_script.h).
 
+reset presentation             # a known screen, whatever the last tour left
+
 move scene:0.55,0.30
 echo bitmap scene:0.25,0.76 24 3.2 Overlays highlight code geometry and inspect vertices.
 pause 2.5

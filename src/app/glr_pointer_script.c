@@ -111,6 +111,7 @@ typedef enum {
     PS_WHEEL,
     PS_VIEW,
     PS_CFG,
+    PS_RESET,
     PS_SCROLL,
     PS_KEY,
     PS_SKEY,
@@ -752,6 +753,22 @@ static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
         snprintf(ev->slug, sizeof(ev->slug), "%s", slug);
         snprintf(ev->value_str, sizeof(ev->value_str), "%s", val);
         return 1;
+    }
+    if (strcmp(verb, "reset") == 0) {
+        /* One subject only today. It is spelled out rather than left implicit
+         * so a later `reset camera` / `reset document` cannot silently change
+         * what an existing script's bare `reset` meant. */
+        char subject[16];
+        int nread = 0;
+        ev->verb = PS_RESET;
+        if (sscanf(args, "%15s%n", subject, &nread) != 1)
+            return -1;
+        const char *rest = args + nread;
+        while (*rest == ' ' || *rest == '\t' || *rest == '\n' || *rest == '\r')
+            rest++;
+        if (*rest != '\0' && *rest != '#')
+            return -1;
+        return strcmp(subject, "presentation") == 0 ? 1 : -1;
     }
     if (strcmp(verb, "scroll") == 0) {
         int val = 0;
@@ -1438,6 +1455,9 @@ static void ps_fire(const PsEvent *ev) {
     case PS_CFG:
         repl_cfg_set_text(ev->slug, ev->value_str);
         break;
+    case PS_RESET:
+        glr_ctrl_reset_presentation_defaults();
+        break;
     case PS_SCROLL:
         if (ev->target[0] && strncmp(ev->target, "code:", 5) == 0) {
             int mx, my;
@@ -1712,6 +1732,9 @@ static void ps_finish_event_immediate(const PsEvent *ev, int allow_overlays) {
         break;
     case PS_CFG:
         repl_cfg_set_text(ev->slug, ev->value_str);
+        break;
+    case PS_RESET:
+        glr_ctrl_reset_presentation_defaults();
         break;
     case PS_SCROLL:
         if (ev->target[0] && strncmp(ev->target, "code:", 5) == 0) {

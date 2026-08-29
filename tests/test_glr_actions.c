@@ -1135,6 +1135,24 @@ static void test_tour_prereq_free_scenes(void) {
     glr_pointer_script_stop();
 }
 
+/* Two separate ceilings, because one number cannot mean both things.
+ *
+ * TOUR_HANG_GUARD_FRAMES only bounds the loop so a script that never
+ * completes fails instead of spinning forever; it is not a statement about
+ * how long a tour should be, and nothing should be tuned against it.
+ *
+ * TOUR_LENGTH_BUDGET_FRAMES is the editorial ceiling: two minutes of
+ * unattended narration is already a lot to ask of a reader, and a tour that
+ * grows past it wants trimming rather than a bigger constant. Measured
+ * lengths when this was written: Camera & Views 23s, Start Here 40s,
+ * Overlays & Scope 59s, Getting Help 62s, Editing Basics 94s.
+ *
+ * These were one 5000-frame constant, which put the hang guard at 83s -
+ * inside the plausible-length band, so growing a tour past it reported an
+ * infinite hang. */
+#define TOUR_HANG_GUARD_FRAMES     20000   /* ~5.5 min: a stuck script    */
+#define TOUR_LENGTH_BUDGET_FRAMES   7200   /* 2 min: an overlong tour     */
+
 static void test_all_catalog_tours_playback_to_completion(void) {
     int n = glr_tours_count();
     for (int t = 0; t < n; t++) {
@@ -1142,7 +1160,7 @@ static void test_all_catalog_tours_playback_to_completion(void) {
         glr_ctrl_reshape(1200, 800);
         ASSERT_INT("start catalog tour",
                    glr_action_menu_item_activate(GLR_MENU_TOURS, t), 1);
-        int max_frames = 6000;
+        int max_frames = TOUR_HANG_GUARD_FRAMES;
         int frames = 0;
         while (glr_pointer_script_tour_active() && frames++ < max_frames) {
             glr_pointer_script_frame();
@@ -1156,6 +1174,8 @@ static void test_all_catalog_tours_playback_to_completion(void) {
         }
         ASSERT_TRUE("tour completed frames without infinite hang",
                     frames < max_frames);
+        ASSERT_TRUE("tour fits the authored length budget",
+                    frames <= TOUR_LENGTH_BUDGET_FRAMES);
         ASSERT_TRUE("tour did not fail with missing target",
                     strcmp(g_last_status, "Tour stopped (target not found)") != 0);
         ASSERT_TRUE("tour did not fail with unavailable target",

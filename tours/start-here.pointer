@@ -9,6 +9,8 @@
 # status bar, and (at <= 40 caption chars) clear of the variable panel's
 # right-hand column.
 
+reset presentation             # a known screen, whatever the last tour left
+
 move scene:0.55,0.30
 echo bitmap scene:0.25,0.76 24 3.2 Welcome! This tour drives gl-repl.
 pause 2.5

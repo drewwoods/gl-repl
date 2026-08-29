@@ -7,6 +7,8 @@
 # row is on screen - so the ordering below is load-bearing: open the overlay
 # before aiming at a tab, and commit the command before right-clicking it.
 
+reset presentation             # a known screen, whatever the last tour left
+
 move scene:0.55,0.30
 echo bitmap scene:0.25,0.76 24 3.4 Stuck? Help is always one key away.
 pause 3.4

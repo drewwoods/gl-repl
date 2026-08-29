@@ -4,6 +4,8 @@
 # Points are symbolic targets (grammar: src/app/glr_pointer_script.h).
 
 view 3d
+reset presentation             # a known screen, whatever the last tour left
+
 move scene:0.58,0.30
 echo bitmap scene:0.25,0.76 24 3.2 Drag anywhere in the scene to orbit.
 down scene:0.58,0.30
