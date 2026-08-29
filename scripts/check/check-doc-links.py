@@ -87,6 +87,77 @@ def split_target(target: str) -> tuple[str, str]:
     return path_part, anchor
 
 
+MARKDOWN_ESCAPED_PUNCTUATION_RE = re.compile(
+    r"\\([!\"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])"
+)
+
+
+def decode_link_path(path: str) -> str:
+    """Decode URL escapes and Markdown backslash escapes in a link path."""
+    return MARKDOWN_ESCAPED_PUNCTUATION_RE.sub(r"\1", unquote(path))
+
+
+def find_ancestor_link_target(
+    source_file: Path, target_path: Path, root: Path
+) -> Path | None:
+    """Find a missing link target by trying the source dir and its parents.
+
+    Markdown links are normally relative to the document, but some generated
+    or moved README variants carry paths that were written relative to the
+    repository root. Repair those links by trying the source directory first,
+    then each parent through (and including) the repository root. Never search
+    above the repository root or accept a target outside it.
+    """
+    source_dir = source_file.parent.resolve()
+    root = root.resolve()
+    try:
+        source_dir.relative_to(root)
+    except ValueError:
+        return None
+
+    candidate_dir = source_dir
+    while True:
+        candidate = (candidate_dir / target_path).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            pass
+        else:
+            if candidate.exists():
+                return candidate
+
+        if candidate_dir == root:
+            return None
+        candidate_dir = candidate_dir.parent
+
+
+def rewrite_link_destination(raw: str, new_path: str) -> str:
+    """Replace only a Markdown link's destination path, preserving anchors/titles."""
+    leading_len = len(raw) - len(raw.lstrip())
+    trailing_len = len(raw) - len(raw.rstrip())
+    leading = raw[:leading_len]
+    trailing = raw[len(raw) - trailing_len :] if trailing_len else ""
+    core_end = len(raw) - trailing_len if trailing_len else len(raw)
+    core = raw[leading_len:core_end]
+
+    if core.startswith("<"):
+        close = core.find(">", 1)
+        if close < 0:
+            return raw
+        destination = core[1:close]
+        _, anchor = split_target(destination)
+        replacement = "<" + new_path + (f"#{anchor}" if anchor else "") + ">"
+        return leading + replacement + core[close + 1 :] + trailing
+
+    parts = core.split(None, 1)
+    destination = parts[0]
+    _, anchor = split_target(destination)
+    replacement = new_path + (f"#{anchor}" if anchor else "")
+    if len(parts) == 2:
+        replacement += " " + parts[1]
+    return leading + replacement + trailing
+
+
 def is_typedef_anchor_ok(lines: list[str], line_idx: int, label: str) -> bool:
     if not TYPE_NAME_RE.match(label):
         return False
@@ -221,6 +292,8 @@ def validate_file(
     strip: bool = False,
     repoint: bool = False,
     repointed: list[str] | None = None,
+    rewrite_paths: bool = False,
+    rewritten_paths: list[str] | None = None,
 ) -> int:
     link_count = 0
     try:
@@ -270,6 +343,38 @@ def validate_file(
                 continue
 
             target_path_raw, anchor = split_target(target)
+            # Same-document heading anchors are intentionally ignored; heading
+            # validation is a separate problem from file/line-link validation.
+            if not target_path_raw and not anchor.startswith("L"):
+                continue
+
+            link_count += 1
+            target_path = Path(decode_link_path(target_path_raw)) if target_path_raw else path
+            if not target_path.is_absolute():
+                target_path = (path.parent / target_path).resolve()
+
+            if rewrite_paths and target_path_raw and not target_path.exists():
+                ancestor_target = find_ancestor_link_target(
+                    path,
+                    Path(decode_link_path(target_path_raw)),
+                    root,
+                )
+                if ancestor_target is not None:
+                    new_path = os.path.relpath(ancestor_target, path.parent).replace("\\", "/")
+                    start, end = match.span()
+                    new_dest = rewrite_link_destination(match.group(3), new_path)
+                    current_line = (
+                        current_line[:start]
+                        + f"{match.group(1)}[{match.group(2)}]({new_dest})"
+                        + current_line[end:]
+                    )
+                    modified = True
+                    if rewritten_paths is not None:
+                        rewritten_paths.append(
+                            f"{path}:{line_no}: {target_path_raw} -> {new_path}"
+                        )
+                    continue
+
             if target_path_raw.endswith((".c", ".h")):
                 try:
                     is_in_docs = "docs" in path.relative_to(root).parts
@@ -283,16 +388,6 @@ def validate_file(
                         current_line = current_line[:start] + match.group(2) + current_line[end:]
                         modified = True
                     continue
-
-            # Same-document heading anchors are intentionally ignored; heading
-            # validation is a separate problem from file/line-link validation.
-            if not target_path_raw and not anchor.startswith("L"):
-                continue
-
-            link_count += 1
-            target_path = Path(unquote(target_path_raw)) if target_path_raw else path
-            if not target_path.is_absolute():
-                target_path = (path.parent / target_path).resolve()
 
             err = None
             if not target_path.exists():
@@ -337,7 +432,7 @@ def validate_file(
 
         new_lines.append(current_line)
 
-    if (strip or repoint) and modified:
+    if (strip or repoint or rewrite_paths) and modified:
         new_content = "\n".join(new_lines)
         if content.endswith("\n"):
             new_content += "\n"
@@ -364,6 +459,12 @@ def main(argv: list[str]) -> int:
         "resolve are still reported.",
     )
     parser.add_argument(
+        "--rewrite-paths",
+        action="store_true",
+        help="Repair missing local link paths in place by searching from the "
+        "Markdown file's directory through each parent up to the repository root.",
+    )
+    parser.add_argument(
         "files",
         nargs="*",
         help="Files to validate.",
@@ -379,6 +480,7 @@ def main(argv: list[str]) -> int:
 
     errors: list[str] = []
     repointed: list[str] = []
+    rewritten_paths: list[str] = []
     link_count = 0
     for path in files:
         if not path.exists():
@@ -393,6 +495,8 @@ def main(argv: list[str]) -> int:
             strip=args.strip,
             repoint=args.repoint,
             repointed=repointed,
+            rewrite_paths=args.rewrite_paths,
+            rewritten_paths=rewritten_paths,
         )
 
     if repointed:
@@ -403,6 +507,11 @@ def main(argv: list[str]) -> int:
             except (ValueError, OSError):
                 display = entry
             print(f"      {display}")
+
+    if rewritten_paths:
+        print(f"    rewrote {len(rewritten_paths)} repo-relative link path(s):")
+        for entry in rewritten_paths:
+            print(f"      {entry}")
 
     if errors:
         print("    ERROR: invalid Markdown links:", file=sys.stderr)

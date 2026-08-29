@@ -2,21 +2,24 @@
 # Repair broken Markdown doc links, touching as little as possible.
 #
 # Repair order, narrowest first:
-#   1. --repoint: rewrite drifted line anchors in place. This is what nearly
+#   1. --rewrite-paths: rewrite root-relative paths from each Markdown file's
+#      directory. If that fails, search each parent directory through the repo
+#      root. This repairs README variants that retain root-relative paths.
+#   2. --repoint: rewrite drifted line anchors in place. This is what nearly
 #      every failure is — an edit inserted lines above the target — and it
 #      keeps the link, so nothing has to be re-derived afterwards.
-#   2. --strip: for what repointing cannot resolve (the label is gone, the
+#   3. --strip: for what repointing cannot resolve (the label is gone, the
 #      file moved), drop the destination and leave the label.
-#   3. link-doc-identifiers --write --only, scoped to JUST the exact
-#      file:line pairs stripped in step 2, to re-link those labels against
+#   4. link-doc-identifiers --write --only, scoped to JUST the exact
+#      file:line pairs stripped in step 3, to re-link those labels against
 #      the current tree.
 #
-# Step 3 is deliberately not run repo-wide, or even file-wide: a plain
+# Step 4 is deliberately not run repo-wide, or even file-wide: a plain
 # `link-doc-identifiers --write <file>` links *every* bare identifier it
 # recognizes in that file, so scoping only by filename still buries a
 # two-line anchor repair under however many other pre-existing, never-linked
 # identifiers happen to live in the same doc. `--only path:line[,line...]`
-# restricts the scan to the exact lines step 2 just stripped, so nothing
+# restricts the scan to the exact lines step 3 just stripped, so nothing
 # else in the file changes.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -30,6 +33,17 @@ fi
 
 if [ "$check_status" -ne 1 ]; then
     exit "$check_status"
+fi
+
+echo "    fix-doc-links: rewriting missing link paths..."
+
+if python3 scripts/check/check-doc-links.py --rewrite-paths "$@"; then
+    :
+else
+    rewrite_status=$?
+    if [ "$rewrite_status" -ne 1 ]; then
+        exit "$rewrite_status"
+    fi
 fi
 
 echo "    fix-doc-links: repointing drifted line anchors..."
