@@ -92,8 +92,33 @@ re-vendor needed.
 | Script | Purpose |
 |---|---|
 | `scripts/docs-assets.sh` | regenerates `docs/images/`; deterministic frame-based settling |
-| `scripts/record-gif.sh` | GIF capture |
-| `scripts/record-video.sh` | video capture |
+| `scripts/record-video.sh` | capture (native window); `--script`, `--tour`, `--lossless` |
+| `scripts/convert-video.sh` | encode a capture to gif / apng / mp4 / webm |
+| `scripts/record-gif.sh` | OSMesa-only GIF capture - **broken on macOS** (below) |
+
+**`record-gif.sh` does not run on macOS any more.** It only drives an OSMesa
+binary, and Homebrew's `mesa` ships no `libOSMesa*`, so
+`make gl-repl FREEGLUT_OSMESA=1` has nothing to link. Use the native pair.
+
+Recording a built-in tour, which is the two-step shape for anything long:
+
+```bash
+# 1. capture, losslessly, with duration headroom (a tour is completion-driven,
+#    so its length is not knowable from the file)
+scripts/record-video.sh --tour "Editing Basics" --duration 90 --lossless --out tour
+
+# 2. encode as many cuts as needed from that one master
+scripts/convert-video.sh --in tour.mkv --format gif --scale 900 --fps 15 \
+    --colors 128 --duration 69.5 --out tour
+```
+
+`--tour` and `--script` are **different run kinds**: `--script` renders only
+the pointer and captions, `--tour` adds the presence layer (title card,
+breathing border, `Tour | <name> | Esc exit` HUD). Pick `--tour` when the
+guided-tour experience is the subject.
+
+GIF beats APNG on anything long: at matched palette settings APNG is
+pixel-identical and ~20% larger, and `--truecolor` APNG costs ~20x.
 
 Scripted interaction uses `GLR_POINTER_SCRIPT` pointer scripts with symbolic
 targets. The same engine powers the in-app **Tours** menu: `tours/*.pointer` +

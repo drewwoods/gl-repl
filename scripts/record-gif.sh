@@ -4,6 +4,17 @@
 #
 #   scripts/record-gif.sh [options]
 #
+# NOTE (macOS): this script needs an OSMesa build, and Homebrew's mesa no
+# longer ships libOSMesa, so `make gl-repl FREEGLUT_OSMESA=1` has nothing to
+# link against. Record natively instead:
+#
+#   scripts/record-video.sh --example 2 --duration 3 --lossless --out ring
+#   scripts/convert-video.sh --in ring.mkv --format gif --fps 50 --out ring
+#
+# That pair does everything this script does plus APNG and WebM. This script
+# is still fine wherever OSMesa exists (Linux), and --bin takes any OSMesa
+# build you have.
+#
 # Drives a FREEGLUT_OSMESA build of gl-repl with the backend record mode
 # (FREEGLUT_CAPTURE_FRAMES): it renders with no window and writes every frame to
 # a numbered PPM, exiting after exactly N frames. ffmpeg then assembles those

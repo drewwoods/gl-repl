@@ -22,6 +22,8 @@
 #
 # Options:
 #   --script <file>     Pointer script driving mouse/keyboard input
+#   --tour <name|i>     Built-in guided tour to play instead (--list-tours)
+#   --tour-stop <id>    With --tour, fast-forward to a @checkpoint and pause
 #   --example <name|i>  Built-in example to start on
 #   --duration <secs>   Clip length in seconds            (default: 10)
 #   --fps <n>           Output frames/sec                 (default: 60)
@@ -33,26 +35,57 @@
 #   --music-seek <secs> Start offset into the music track (default: 0) -
 #                       scrub past an intro to the part you want under the
 #                       video
-#
-# A pointer script can carry its own soundtrack choice in header comments,
-# so a tour is self-contained (CLI flags still override):
-#
-#   # music: assets/Beta Waves.mp3
-#   # music-seek: 24.5
 #   --scale <width>     Scale output to this width (even height forced)
 #   --colorspace <cs>   Color tagging: srgb (default) or p3 (Display P3;
 #                       matches how the un-color-managed app looks on a
 #                       wide-gamut Mac display)
+#   --lossless          Write an FFV1 .mkv master instead of the .mp4: no
+#                       chroma subsampling, no quantization, silent. This is
+#                       the source scripts/convert-video.sh wants - deriving a
+#                       GIF palette from 4:2:0 H.264 bakes its color bleed
+#                       into the palette. Implies --no-music.
+#   --allow-input       Let the window take real keyboard/mouse (default: it
+#                       is deaf - see GLR_NO_INPUT below)
 #   --out <base>        Output base name                  (default: out -> out.mp4)
 #   --bin <path>        gl-repl binary    (default: build/release/gl-repl)
 #   --splash            Keep the startup splash banner (default: skipped)
 #   -h, --help          This help
+#
+# --script vs --tour: both drive the same pointer engine over the same
+# tours/*.pointer files, but they are different run kinds and do NOT look
+# alike on film. --script is the env-capture kind (GLR_POINTER_SCRIPT): it
+# renders the pointer and its captions and nothing else. --tour is a
+# controlled tour: it adds the presence layer the app shows a real user - the
+# title card, the breathing accent border, and the "Tour | <name> | Esc exit"
+# HUD. Record a tour with --tour when the point is to show the app's own
+# guided-tour experience; use --script to film a scripted demo without it.
+#
+# A --script pointer file can carry its own soundtrack choice in header
+# comments, so a scripted demo is self-contained (CLI flags still override):
+#
+#   # music: assets/Beta Waves.mp3
+#   # music-seek: 24.5
+#
+# --tour does not read those: the tour is named, not passed as a path, and no
+# tours/*.pointer carries a music header today. A tour takes the default track
+# (or --music / --no-music).
+#
+# The recording window is deaf by default (GLR_NO_INPUT=1). It opens focused,
+# so without that a keystroke meant for the terminal lands in the editor and
+# silently rewrites the document mid-take. Scripted and tour input is
+# synthetic and reaches the controller directly, so it is unaffected.
+#
+# Tours are completion-driven, not timestamped, so a tour has no duration you
+# can read off the file - give --duration generous headroom and trim in
+# convert-video.sh (--start / --duration).
 #
 # Requires: ffmpeg, and a native gl-repl build (make gl-repl).
 
 set -euo pipefail
 
 script=""
+tour=""
+tour_stop=""
 example=""
 duration="10"
 fps="60"
@@ -66,6 +99,8 @@ colorspace="srgb"
 out="out"
 bin="build/release/gl-repl"
 splash=0
+lossless=0
+allow_input=0
 
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 
@@ -74,6 +109,8 @@ need_val() { [ "$#" -ge 2 ] || { echo "record-video: option '$1' requires a valu
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--script)     need_val "$@"; script="$2"; shift 2;;
+		--tour)       need_val "$@"; tour="$2"; shift 2;;
+		--tour-stop)  need_val "$@"; tour_stop="$2"; shift 2;;
 		--example)    need_val "$@"; example="$2"; shift 2;;
 		--duration)   need_val "$@"; duration="$2"; shift 2;;
 		--fps)        need_val "$@"; fps="$2"; shift 2;;
@@ -87,6 +124,8 @@ while [ $# -gt 0 ]; do
 		--out)        need_val "$@"; out="$2"; shift 2;;
 		--bin)        need_val "$@"; bin="$2"; shift 2;;
 		--splash)     splash=1; shift;;
+		--lossless)   lossless=1; shift;;
+		--allow-input) allow_input=1; shift;;
 		-h|--help)    usage; exit 0;;
 		*) echo "record-video: unknown option '$1' (try --help)" >&2; exit 2;;
 	esac
@@ -113,10 +152,28 @@ command -v ffmpeg >/dev/null 2>&1 || {
 	echo "record-video: gl-repl binary not found at '$bin' (build it: make gl-repl)" >&2
 	exit 1
 }
+# --script and --tour drive the same pointer engine from different entry
+# points (env capture vs controlled tour) and the app runs only one of them;
+# taking both would silently honor one and drop the other.
+[ -z "$script" ] || [ -z "$tour" ] || {
+	echo "record-video: --script and --tour are mutually exclusive" >&2
+	echo "            --tour plays a built-in tour with its presence layer;" >&2
+	echo "            --script replays a pointer file without it." >&2
+	exit 2
+}
 [ -z "$script" ] || [ -r "$script" ] || {
 	echo "record-video: pointer script '$script' not readable" >&2
 	exit 1
 }
+[ -z "$tour_stop" ] || [ -n "$tour" ] || {
+	echo "record-video: --tour-stop needs --tour" >&2
+	exit 2
+}
+# A conversion master is video-only: convert-video.sh reads frames, and an
+# audio track muxed here would be dropped there anyway.
+if [ "$lossless" = 1 ]; then
+	no_music=1
+fi
 
 # Music defaults, weakest first: pointer-script header directives
 # ("# music: <file>" / "# music-seek: <secs>"), then the bundled sample
@@ -148,7 +205,7 @@ trap cleanup EXIT
 fifo="$tmp/frames.ppm"
 mkfifo "$fifo"
 
-echo "record-video: duration=${duration}s fps=$fps frames=$frames window=$window${script:+ script=$script}${music:+ music=$music}"
+echo "record-video: duration=${duration}s fps=$fps frames=$frames window=$window${script:+ script=$script}${tour:+ tour=$tour}${music:+ music=$music}"
 
 # Color handling. The captured PPM frames are display-referred RGB (the app
 # is not color-managed), so the colorspace is declared at encode time:
@@ -176,11 +233,25 @@ else
 	vf="scale=trunc(iw/2)*2:trunc(ih/2)*2:${csp},format=yuv420p,${tag}"
 fi
 
+# Lossless master: no RGB->YCbCr conversion and no color tagging at all, so
+# the frames stay exactly what the app drew. Scaling still applies when asked
+# (lanczos), and FFV1 takes rgb24 straight through as gbrp.
+if [ -n "$scale" ]; then
+	ll_vf="scale=${scale}:-2:flags=lanczos"
+else
+	ll_vf="null"
+fi
+
 # Encoder first (blocks reading the fifo until the app writes frame 1).
 # Music, when present, fades out over the clip's last 1.5 s; -shortest pins
 # the audio to the video length.
 ffpid=""
-if [ -n "$music" ]; then
+if [ "$lossless" = 1 ]; then
+	ffmpeg -y -loglevel error \
+		-f image2pipe -vcodec ppm -framerate "$fps" -i "$fifo" \
+		-vf "$ll_vf" -c:v ffv1 -level 3 -g 1 "$out.mkv" &
+	ffpid=$!
+elif [ -n "$music" ]; then
 	fade_start="$(awk "BEGIN{ s = $duration - 1.5; if (s < 0) s = 0; printf \"%.2f\", s }")"
 	ffmpeg -y -loglevel error \
 		-f image2pipe -vcodec ppm -framerate "$fps" -i "$fifo" \
@@ -210,11 +281,18 @@ run_fail() {
 # point it at an OSMesa build, where the probe would otherwise drop the accum
 # passes a scene header asked for.
 set -- --no-audio --accum --window "$window"
-[ -n "$example" ] && set -- "$@" --example "$example"
-[ -n "$t0" ]      && set -- "$@" --time "$t0"
+[ -n "$example" ]   && set -- "$@" --example "$example"
+[ -n "$tour" ]      && set -- "$@" --tour "$tour"
+[ -n "$tour_stop" ] && set -- "$@" --tour-stop "$tour_stop"
+[ -n "$t0" ]        && set -- "$@" --time "$t0"
+# GLR_NO_INPUT: the capture window opens focused, so a keystroke aimed at the
+# terminal would otherwise land in the editor and rewrite the document
+# mid-take. Synthetic script/tour input reaches the controller directly and is
+# unaffected. --allow-input opts out for hand-driven takes.
 env GLR_TICK_PER_FRAME=1 \
 	${script:+GLR_POINTER_SCRIPT="$script"} \
 	$([ "$splash" = 1 ] || echo GLR_NO_SPLASH=1) \
+	$([ "$allow_input" = 1 ] || echo GLR_NO_INPUT=1) \
 	FREEGLUT_CAPTURE_STREAM="$fifo" FREEGLUT_CAPTURE_FRAMES="$frames" \
 	"$bin" "$@" >"$tmp/run.log" 2>&1 || run_fail
 
@@ -222,4 +300,8 @@ wait "$ffpid" || {
 	echo "record-video: ffmpeg failed" >&2
 	exit 1
 }
-echo "record-video: wrote $out.mp4"
+if [ "$lossless" = 1 ]; then
+	echo "record-video: wrote $out.mkv (FFV1 master - convert with scripts/convert-video.sh)"
+else
+	echo "record-video: wrote $out.mp4"
+fi

@@ -343,6 +343,15 @@ GLR_EDIT_LINE=5 ./build/release-osmesa/gl-repl scene.c --no-audio &
 rendered frame to a numbered PPM and exits after N frames.
 `scripts/record-gif.sh` wraps that and assembles the output via `ffmpeg`:
 
+> **macOS: `record-gif.sh` needs a build you can no longer make here.** It
+> drives an OSMesa binary, and Homebrew's `mesa` ships no `libOSMesa*` any
+> more, so `make gl-repl FREEGLUT_OSMESA=1` has nothing to link against.
+> Record natively instead: `scripts/record-video.sh --lossless` to capture and
+> [`scripts/convert-video.sh`](#converting-a-recording-convert-videosh) to
+> encode. That pair covers everything `record-gif.sh` does, plus APNG and
+> WebM. `record-gif.sh` still works wherever OSMesa is available (Linux), and
+> `--bin` points it at any OSMesa build you do have.
+
 ```bash
 make gl-repl FREEGLUT_OSMESA=1
 scripts/record-gif.sh --example "Animated ring (for + t)" --duration 3 --out ring        # ring.gif + ring.mp4
@@ -377,6 +386,20 @@ scripts/record-video.sh --script scripts/video/menu-tour.pointer \
     --example "gl-repl logo" --duration 36 --out menu-tour     # -> menu-tour.mp4
 ```
 
+`--tour <name|idx>` films a **built-in guided tour** instead. It is not the
+same picture as `--script` on the same `tours/*.pointer` file: `--script` is
+the env-capture run kind and renders only the pointer and its captions, while
+`--tour` is a controlled tour and brings the presence layer a real user sees -
+the title card, the breathing accent border, and the `Tour | <name> | Esc exit`
+HUD. Use `--tour` when the app's own guided experience is the subject.
+
+```bash
+scripts/record-video.sh --tour "Editing Basics" --duration 90 --lossless --out tour
+```
+
+Tours are completion-driven rather than timestamped, so no duration can be
+read off the file: give `--duration` headroom and trim when converting.
+
 - **No intermediate frame dumps.** Frames stream from the app straight into
   `ffmpeg` through a fifo (`FREEGLUT_CAPTURE_STREAM`), so encoding starts on
   frame 1 and nothing raw lands on disk. Recorded videos stay out of the
@@ -384,6 +407,13 @@ scripts/record-video.sh --script scripts/video/menu-tour.pointer \
 - **Native backend by default** (same rationale as `docs-assets.sh`): real
   GPU colors and MSAA; a window opens for the duration of the recording.
   Point `--bin` at an OSMesa build for fully headless capture.
+- **The window is deaf** (`GLR_NO_INPUT=1`). It opens focused, so otherwise a
+  keystroke meant for the terminal lands in the editor and silently rewrites
+  the document mid-take. Script and tour input is synthetic and reaches the
+  controller directly, so it is unaffected. `--allow-input` opts out.
+- **`--lossless` writes an FFV1 `.mkv` master** instead of the `.mp4`: no
+  chroma subsampling, no quantization, silent. That is the input
+  `convert-video.sh` wants, and it lets one capture feed any number of cuts.
 - **Music** is muxed at encode time (`--music`, `--music-seek` to scrub into
   the track, fade-out over the last 1.5 s; default `assets/sample.mp3`). A
   pointer script can pin its own soundtrack with `# music:` / `# music-seek:`
@@ -409,6 +439,57 @@ scripts/record-video.sh --script scripts/video/menu-tour.pointer \
   [`src/app/glr_pointer_script.h`](../src/app/glr_pointer_script.h).
 - A malformed script line fails the run with a file:line message rather than
   silently recording the wrong interaction.
+
+### Converting a recording (`convert-video.sh`)
+
+`record-video.sh` captures; `scripts/convert-video.sh` re-encodes what it
+captured into whatever a page needs - GIF, APNG, MP4 or WebM - with frame
+rate, resolution, color depth and dithering exposed as flags:
+
+```bash
+# capture once, losslessly, with headroom
+scripts/record-video.sh --tour "Editing Basics" --duration 90 --lossless --out tour
+
+# then cut as many encodes as you like from that one master
+scripts/convert-video.sh --in tour.mkv --format gif  --scale 900 --fps 15 \
+    --colors 128 --duration 69.5 --out tour
+scripts/convert-video.sh --in tour.mkv --format apng --scale 900 --fps 15 --truecolor --out tour
+scripts/convert-video.sh --in tour.mkv --format mp4  --scale 1200 --out tour
+```
+
+- **Feed it the `--lossless` master.** A palette derived from 4:2:0 H.264
+  inherits that codec's chroma bleed, and thin UI text and colored code is
+  exactly the content that shows it.
+- **Palette formats run two passes.** `palettegen` reads the whole clip and
+  picks one global palette (`stats_mode=diff` weights it toward what actually
+  changes, which is what a mostly-static UI wants); `paletteuse` then maps
+  frames onto it with `diff_mode=rectangle`, so each written frame covers only
+  the changed region. Both passes see the same `fps`/`scale` chain - a
+  mismatch would derive the palette from different pixels than it is applied
+  to, so the script builds that chain once and uses it twice.
+- **`--colors` (2..256) and `--dither` are the quality/size dial.**
+  `--dither bayer:<0-5>` trades pattern coarseness for compressibility - a
+  higher scale is noisier but smaller; `sierra2_4a` and `floyd_steinberg` look
+  better on gradients and compress worse; `none` is smallest and bands.
+- **`--colors`/`--dither`/`--truecolor` are rejected for `mp4`/`webm`** rather
+  than silently ignored, since they mean nothing there.
+
+**GIF or APNG?** APNG's only real advantage is 24-bit color, and on animated
+content it costs roughly 20x the bytes: its per-frame zlib cannot exploit a
+shared palette the way GIF's LZW does, and inter-frame diffing wins nothing
+when most of the frame repaints. At matched palette settings APNG output is
+pixel-identical to the GIF and about 20% larger. Measured on the 69.5 s
+Editing Basics tour at 900x600 / 15 fps:
+
+| Encoding | Size |
+|---|---|
+| GIF, 128 colors | 18.1 MiB |
+| GIF, 256 colors | 22.7 MiB |
+| APNG, `pal8`, same 128 colors | 21.8 MiB |
+| APNG, `--truecolor` | 362 MiB |
+
+So: GIF for anything long, APNG `--truecolor` only for short clips where
+gradient banding is unacceptable, MP4/WebM when the page can host a video.
 
 ### Documentation media
 

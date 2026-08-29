@@ -104,19 +104,29 @@ gitignored, survives `make clean`).
   for capture on Linux - system freeglut has no capture hooks, so SIGUSR1 /
   `FREEGLUT_CAPTURE_*` and the docs-media scripts silently produce nothing.
   Separate `build/*-fgvendor/` objdir; needs cmake + X11/GL dev headers.
-- **Headless OSMesa**: `make gl-repl FREEGLUT_OSMESA=1` (after
-  `brew install mesa mesa-glu`) renders with no window - for headless
-  geometry/feedback tests and captures. Separate `build-osmesa/` dirs, so
-  Cocoa and OSMesa builds coexist. Compatibility GL only.
+- **Headless OSMesa**: `make gl-repl FREEGLUT_OSMESA=1` renders with no window
+  - for headless geometry/feedback tests and captures. Separate `build-osmesa/`
+  dirs, so Cocoa and OSMesa builds coexist. Compatibility GL only.
+  **Not buildable on macOS any more**: Homebrew's `mesa` ships no `libOSMesa*`,
+  so there is nothing to link (Linux distro packages still work). Capture
+  natively instead - see the recording scripts below.
 - **Capture/recording**: `kill -USR1 <pid>` writes a PPM frame (native +
   OSMesa); `FREEGLUT_CAPTURE_FRAMES=N` records N frames then exits;
   `FREEGLUT_CAPTURE_STREAM` pipes frames to ffmpeg. Scripts:
   `scripts/docs-assets.sh` (regenerates `docs/images/`; deterministic
-  frame-based settling), `scripts/record-gif.sh`, `scripts/record-video.sh`
-  (scripted interaction via `GLR_POINTER_SCRIPT` pointer scripts with
-  symbolic targets - same engine powers the in-app **Tours** menu:
-  `tours/*.pointer` + `tours/catalog.ini`, compiled by
-  `scripts/gen_tours.py`, validated by `make check-tours-catalog`).
+  frame-based settling); `scripts/record-video.sh` (native window, streams
+  frames to ffmpeg; scripted interaction via `GLR_POINTER_SCRIPT` pointer
+  scripts with symbolic targets - same engine powers the in-app **Tours**
+  menu: `tours/*.pointer` + `tours/catalog.ini`, compiled by
+  `scripts/gen_tours.py`, validated by `make check-tours-catalog`);
+  `scripts/record-gif.sh` (OSMesa-only, so dead on macOS).
+  **Two capture flags matter for anything long**: `--tour <name>` films a
+  built-in tour *with* its presence layer (title card, breathing border, HUD)
+  - `--script` on the same `.pointer` file is a different run kind and renders
+  neither - and `--lossless` writes an FFV1 master for
+  `scripts/convert-video.sh`, which re-encodes to gif/apng/mp4/webm with
+  fps/scale/colors/dither flags. Tours are completion-driven, so their length
+  is not knowable from the file: over-record and trim at convert time.
   Full detail: `docs/ADVANCED_USAGE.md`.
 - **Web build**: `make web` needs `emcc` on `PATH` - per-shell
   (`source <emsdk>/emsdk_env.sh`); `scripts/build-web.sh` is self-contained
