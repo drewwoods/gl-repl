@@ -208,7 +208,7 @@ There are two data structures and one rule:
 - **`flat`** — what the source expands to when loops unroll and functions inline. Rebuilt automatically the first frame after an edit.
 - **the rule** — the source is the only thing you ever edit. The flat array is regenerated, never written to.
 
-Everything else is plumbing: the parser turns text into [`GLCmd`](../src/repl/command.h#L122) structs; [`repl_execute_program()`](../src/repl/executor.h#L258) walks the flat array each frame and emits real GL calls; the editor maintains an input buffer, an undo ring, an autocomplete provider. See **`ARCHITECTURE.md`** for the full layered diagram.
+Everything else is plumbing: the parser turns text into [`GLCmd`](../src/repl/command.h#L127) structs; [`repl_execute_program()`](../src/repl/executor.h#L286) walks the flat array each frame and emits real GL calls; the editor maintains an input buffer, an undo ring, an autocomplete provider. See **`ARCHITECTURE.md`** for the full layered diagram.
 
 ---
 
