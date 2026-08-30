@@ -1,7 +1,8 @@
-# Highlights - the short showcase used for the README animation. Three
-# acts, roughly 45 seconds: type a 2D triangle and give it a transform
-# (learn), replay the parametric torus call by call (debug), then load
-# the jellyfish and let it run (build).
+# Highlights - the short showcase used for the README animation. Four
+# acts, roughly 55 seconds: type a 2D triangle and give it a transform
+# (learn), replay the parametric torus call by call (debug), load the
+# jellyfish and let it run (create), then show export/import (independence).
+# The echo captions carry the pitch: each act's caption leads with its verb.
 #
 # Points are symbolic targets (grammar: src/app/glr_pointer_script.h),
 # resolved against the live layout at fire time, so the tour plays at any
@@ -12,7 +13,7 @@
 #reset presentation             # a known screen, whatever the last tour left
 
 move scene:0.55,0.30
-echo stroke_hi scene:0.5,0.76 32 2.6 GL-REPL: Render as you type
+echo stroke_hi scene:0.5,0.76 32 2.4 GL-REPL: Immediate mode, Immediately.
 
 # --- Learn: a 2D triangle, typed line by line ------------------------
 
@@ -33,16 +34,16 @@ cfg grid GRID_THEME_OFF
 
 # @checkpoint after-new-scene
 
-echo bitmap scene:0.25,0.76 24 3.4 See the impact of transformations live
+echo bitmap scene:0.25,0.76 24 3.6 Transform as you type.
 key@30 glRotatef(t * 20, 0, 0, 1)
 # The ; key commits the line. `key` payload runs to end of line, so these
 # lines carry no trailing comment - it would be typed into the editor.
-pause 2.6
+pause 2.0
 key ;
 
 # @checkpoint before-triangle
 
-echo bitmap scene:0.25,0.76 24 5.6 Watch each vertex appear as it is defined
+echo bitmap scene:0.25,0.76 24 4.4 Instant geometry.\nNo compile. No reload.
 key@40 glBegin(GL_TRIANGLES);
 key@40 glColor3f(1, 0, 0);
 key@30 glVertex2f(
@@ -56,27 +57,28 @@ key@40 glEnd();
 
 # @checkpoint before-torus
 
-glide menu:scene 0.7
+glide menu:scene 0.3
 click
-glide item:3d 0.4               # hover 3D -> examples flyout opens
-glide subenter:3d 0.3           # straight right into the flyout
+glide item:3d 0.3               # hover 3D -> examples flyout opens
+glide subenter:3d 0.2           # straight right into the flyout
 glide sub:3d:parametric_torus 0.5
+pause 0.2
 click                           # load it; camera eases in
 cfg vertex_points 0
 
 # @checkpoint before-replay
-echo bitmap scene:0.25,0.76 24 5.6 Replay is a visual debugger. Code and scene advance one vertex at a time
-glide pin:replay 0.7
+echo bitmap scene:0.25,0.73 24 5.8 Replay, call by call.\nCode and geometry in lockstep.
+glide pin:replay 0.5
 click                           # start replay
 key v
-glide code:30 0.7
+glide code:30 0.5
 ring code:30 1.0
 pause 1.0
 glide scene:0.72,0.34 0.6       # park; watch it build
 ring scene:0.72,0.34 1.0
-pause 2.0
+pause 0.5
 
-# --- Build: the same language, a finished scene ----------------------
+# --- Create: the same language, a finished scene ---------------------
 
 # @checkpoint before-jellyfish
 
@@ -89,6 +91,25 @@ pause 0.25
 click
 # Ctrl+R exits the replay (the pin click would only pause it)
 key \cr
-echo bitmap scene:0.25,0.76 24 3.6 Create beautiful scenes
+echo bitmap scene:0.25,0.76 24 2.8 Simple commands. Living scenes.
 pause 3.0
-echo bitmap scene:0.25,0.76 18 3.0 Tour finished - it's all yours!\nEscape takes control now.
+
+# --- Independence: export the result, import it when ready --------------
+
+# @checkpoint before-export
+# The browser exposes the same actions in its shell rather than this native
+# File menu, so keep the visual menu walk native and share the narration.
+echo bitmap scene:0.25,0.76 24 3.6 Your work stays yours.\nExport C. Import anytime.
+#ifdef __EMSCRIPTEN__
+move scene:0.55,0.30
+#else
+glide menu:file 0.5
+click
+glide item:save_scene_as_.c 0.2
+ring item:save_scene_as_.c 1.0
+glide item:load_scene 0.2
+ring item:load_scene 1.0
+click scene:0.55,0.30
+#endif
+pause 0.6
+echo bitmap scene:0.25,0.76 24 2.6 Your turn to explore.
