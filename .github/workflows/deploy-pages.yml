@@ -51,17 +51,19 @@ jobs:
           ./emsdk install "${EM_VERSION}"
           ./emsdk activate "${EM_VERSION}"
 
-      # The 18-track pack lives in the assets-v1 release, not in git.
+      # The 18-track pack lives in the assets-v1 release, not in git. Fetch it
+      # into its own dir: assets/ itself holds the tracked sample.mp3 test
+      # fixture, which must not ship as a 19th track.
       - name: Fetch music pack
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/fetch-music.sh --dir assets --tag "${MUSIC_TAG}"
+        run: bash scripts/fetch-music.sh --dir assets/favorite --tag "${MUSIC_TAG}"
 
       - name: Build web target
         run: |
           source ~/emsdk/emsdk_env.sh
           emcc --version | head -1
-          make web WEB_MUSIC_SRC_DIR=assets
+          make web WEB_MUSIC_SRC_DIR=assets/favorite
 
       # build/release-web also holds .o files and object subdirs; publish only
       # the four things the page actually loads, plus the streamed mp3s.
