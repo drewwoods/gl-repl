@@ -208,6 +208,11 @@ If a symbolic target cannot resolve, a built-in tour stops with a status
 message. An environment-driven recording fails instead, rather than capturing
 an unintended interaction.
 
+Syntax errors are written to stderr with the physical source line. When one
+token is unambiguously at fault, the diagnostic names it directly (for example,
+`unknown echo style 'stoke_hi'`). A `--tour` requested at startup that cannot
+load is fatal: the app logs the failed tour and exits nonzero.
+
 ## Event reference
 
 | Event | Syntax | Effect |

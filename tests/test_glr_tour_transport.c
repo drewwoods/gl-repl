@@ -30,6 +30,7 @@
 #include "support/test_harness.h"
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
 
@@ -37,6 +38,40 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
 #define ASSERT_INT(label, g, e)   TEST_ASSERT_INT(&g_harness, label, g, e)
 #define ASSERT_STR(label, g, e)   TEST_ASSERT_STR(&g_harness, label, g, e)
 #define ASSERT_FLOAT(label, g, e) TEST_ASSERT_FLOAT_DEFAULT(&g_harness, label, g, e)
+
+#define STDERR_CAPTURE_PATH "test_glr_tour_transport_stderr.tmp"
+
+static int g_saved_stderr = -1;
+
+static void stderr_capture_begin(void) {
+    fflush(stderr);
+    g_saved_stderr = dup(fileno(stderr));
+    if (!freopen(STDERR_CAPTURE_PATH, "w", stderr)) {
+        if (g_saved_stderr >= 0) {
+            close(g_saved_stderr);
+            g_saved_stderr = -1;
+        }
+    }
+}
+
+static void stderr_capture_end(char *buf, size_t cap) {
+    fflush(stderr);
+    if (g_saved_stderr >= 0) {
+        dup2(g_saved_stderr, fileno(stderr));
+        close(g_saved_stderr);
+        g_saved_stderr = -1;
+    }
+    clearerr(stderr);
+
+    buf[0] = '\0';
+    FILE *fp = fopen(STDERR_CAPTURE_PATH, "r");
+    if (fp) {
+        size_t n = fread(buf, 1, cap - 1, fp);
+        buf[n] = '\0';
+        fclose(fp);
+    }
+    remove(STDERR_CAPTURE_PATH);
+}
 
 static void start_tour(const char *const *lines, int n) {
     glr_ctrl_reset_all();
@@ -259,6 +294,32 @@ static void test_timestamped_tour_rejected(void) {
     int r = glr_pointer_script_start_tour("T", "f", lines, 1);
     ASSERT_INT("timestamped tour rejected", r, 0);
     ASSERT_INT("no tour active", glr_pointer_script_tour_view().active, 0);
+}
+
+static void test_parse_error_names_bad_token(void) {
+    const char *bad_style[] = {
+        "echo stoke_hi scene:0.5,0.86 32 6.4 Instant geometry."
+    };
+    const char *bad_verb[] = { "glidde menu:file 0.5" };
+    char stderr_text[2048];
+
+    stderr_capture_begin();
+    int style_result = glr_pointer_script_start_tour(
+        "Bad", "bad.pointer", bad_style, 1);
+    int verb_result = glr_pointer_script_start_tour(
+        "Bad", "bad.pointer", bad_verb, 1);
+    stderr_capture_end(stderr_text, sizeof(stderr_text));
+
+    ASSERT_INT("unknown echo style rejected", style_result, 0);
+    ASSERT_INT("unknown event verb rejected", verb_result, 0);
+    ASSERT_TRUE("echo diagnostic identifies the bad style token",
+                strstr(stderr_text,
+                       "unknown echo style 'stoke_hi'") != NULL);
+    ASSERT_TRUE("verb diagnostic identifies the bad verb token",
+                strstr(stderr_text,
+                       "unknown event verb 'glidde'") != NULL);
+    ASSERT_TRUE("diagnostic retains the source line",
+                strstr(stderr_text, bad_style[0]) != NULL);
 }
 
 static void test_platform_conditionals(void) {
@@ -1277,6 +1338,7 @@ int main(void) {
     test_space_restart_from_done();
     test_speed_persists_through_done_restart();
     test_timestamped_tour_rejected();
+    test_parse_error_names_bad_token();
     test_reset_presentation_restores_defaults();
     test_reset_subject_required();
     test_platform_conditionals();

@@ -159,6 +159,16 @@ typedef struct {
                                    /* echo: caption text to draw         */
 } PsEvent;
 
+/* Optional detail for a rejected event line. Most grammar failures still
+ * report the full line, but errors with one unambiguous culprit retain its
+ * byte span so diagnostics can name the token instead of making the author
+ * hunt through the whole event. */
+typedef struct {
+    const char *message;
+    int         token_col;
+    int         token_len;
+} PsParseError;
+
 typedef struct {
     char name[PS_MAX_CHECKPOINT_NAME];
     int event_index;             /* number of active events before marker */
@@ -617,14 +627,50 @@ static const char *ps_scan_point(const char *args, PsEvent *ev) {
     return NULL;
 }
 
+static void ps_parse_error_set(PsParseError *error, const char *line,
+                               const char *token, int token_len,
+                               const char *message) {
+    if (!error) return;
+    error->message = message;
+    error->token_col = (int)(token - line);
+    error->token_len = token_len;
+}
+
+static void ps_report_bad_line(const char *prefix, int lineno,
+                               const char *line,
+                               const PsParseError *error) {
+    fprintf(stderr, "%s%d: ", prefix, lineno);
+    if (error && error->message) {
+        fprintf(stderr, "%s", error->message);
+        if (error->token_col >= 0 && error->token_len > 0)
+            fprintf(stderr, " '%.*s'", error->token_len,
+                    line + error->token_col);
+    } else {
+        fprintf(stderr, "bad line");
+    }
+    fprintf(stderr, ": %s", line);
+    if (!strchr(line, '\n'))
+        fputc('\n', stderr);
+}
+
 /* Parse one script line into *ev. Returns 1 on an event, 0 on a blank or
- * comment line, -1 on a malformed line. */
-static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
+ * comment line, -1 on a malformed line. `error` identifies a token when the
+ * failure has one unambiguous culprit (currently event verbs and echo styles). */
+static int ps_parse_line(const char *line, PsEvent *ev, int *timed,
+                         PsParseError *error) {
+    const char *source_line = line;
+    const char *verb_start;
     char verb[24];
     float secs = 0.0f;
     int consumed = 0;
     int verb_consumed = 0;
     char *time_end;
+
+    if (error) {
+        error->message = NULL;
+        error->token_col = -1;
+        error->token_len = 0;
+    }
 
     /* Skip leading whitespace; blank and #-comment lines are no-ops. */
     while (*line == ' ' || *line == '\t') line++;
@@ -637,11 +683,14 @@ static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
     if (time_end != line) {
         if (secs < 0.0f || (*time_end != ' ' && *time_end != '\t'))
             return -1;
+        verb_start = time_end;
+        while (*verb_start == ' ' || *verb_start == '\t') verb_start++;
         if (sscanf(time_end, " %23s %n", verb, &verb_consumed) < 1)
             return -1;
         consumed = (int)(time_end - line) + verb_consumed;
         *timed = 1;
     } else {
+        verb_start = line;
         if (sscanf(line, "%23s %n", verb, &consumed) < 1)
             return -1;
         *timed = 0;
@@ -910,6 +959,10 @@ static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
         } else if (strcasecmp(modtok, "bitmap") == 0) {
             ev->echo_style = PS_ECHO_BITMAP;
         } else {
+            const char *style_start = args;
+            while (*style_start == ' ' || *style_start == '\t') style_start++;
+            ps_parse_error_set(error, source_line, style_start,
+                               (int)strlen(modtok), "unknown echo style");
             return -1;
         }
         args += nread;
@@ -952,6 +1005,8 @@ static int ps_parse_line(const char *line, PsEvent *ev, int *timed) {
         if (ev->dur_frames < 1) ev->dur_frames = 1;
         return 1;
     }
+    ps_parse_error_set(error, source_line, verb_start, (int)strlen(verb),
+                       "unknown event verb");
     return -1;
 }
 
@@ -996,11 +1051,17 @@ int glr_pointer_script_load_env(void) {
         if (checkpoint > 0)
             continue;
         PsEvent ev;
+        PsParseError parse_error;
         int timed = 0;
-        int r = ps_parse_line(line, &ev, &timed);
+        int r = ps_parse_line(line, &ev, &timed, &parse_error);
         if (r < 0 || (r > 0 && mode >= 0 && timed != mode)) {
-            fprintf(stderr, "gl-repl: GLR_POINTER_SCRIPT: %s:%d: bad line: %s",
-                    path, lineno, line);
+            char prefix[640];
+            snprintf(prefix, sizeof(prefix),
+                     "gl-repl: GLR_POINTER_SCRIPT: %s:", path);
+            if (r < 0)
+                ps_report_bad_line(prefix, lineno, line, &parse_error);
+            else
+                ps_report_bad_line(prefix, lineno, line, NULL);
             exit(1);
         }
         if (r == 0) continue;
@@ -1147,16 +1208,21 @@ int glr_pointer_script_start_tour_at_checkpoint(
             continue;
         }
         PsEvent ev;
+        PsParseError parse_error;
         int timed = 0;
-        int r = ps_parse_line(lines[i], &ev, &timed);
+        int r = ps_parse_line(lines[i], &ev, &timed, &parse_error);
         /* Controlled tours are untimed, completion-driven scripts: a
          * timestamped or malformed line is an authoring error (built-in tours
          * are validated by gen_tours.py + tests, so this is a backstop). */
         if (r < 0 || (r > 0 && timed)) {
-            fprintf(stderr, "gl-repl: tour script line %d: %s: %s\n", i + 1,
-                    (r < 0) ? "bad line"
-                            : "tours must use untimed, completion-driven events",
-                    lines[i]);
+            if (r < 0) {
+                ps_report_bad_line("gl-repl: tour script line ", i + 1,
+                                   lines[i], &parse_error);
+            } else {
+                fprintf(stderr, "gl-repl: tour script line %d: "
+                                "tours must use untimed, completion-driven "
+                                "events: %s\n", i + 1, lines[i]);
+            }
             g_event_count = 0;
             return 0;
         }

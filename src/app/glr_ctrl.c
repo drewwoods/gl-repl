@@ -3330,11 +3330,23 @@ void glr_ctrl_render_tour_presence(int win_w, int win_h) {
 }
 
 int glr_ctrl_start_tour(int tour_idx) {
-    return glr_tours_start(tour_idx);
+    int started = glr_tours_start(tour_idx);
+    if (!started) {
+        const char *name = glr_tours_name(tour_idx);
+        fprintf(stderr, "gl-repl: --tour '%s' failed to start\n",
+                name ? name : "(unknown)");
+    }
+    return started;
 }
 
 int glr_ctrl_start_tour_at_checkpoint(int tour_idx, const char *checkpoint) {
-    return glr_tours_start_at_checkpoint(tour_idx, checkpoint);
+    int started = glr_tours_start_at_checkpoint(tour_idx, checkpoint);
+    if (!started) {
+        const char *name = glr_tours_name(tour_idx);
+        fprintf(stderr, "gl-repl: --tour '%s' failed to start\n",
+                name ? name : "(unknown)");
+    }
+    return started;
 }
 
 void glr_ctrl_start_tutorial(int tutorial_idx) {
