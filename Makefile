@@ -1792,7 +1792,7 @@ release-config: ## Edit + save the release build plan (.release.ini) via the arr
 # (scripts/fetch-music.sh defaults to the assets-v1 asset release otherwise).
 #? MUSIC_DEST: directory `make fetch-music` unpacks the music pack into (default assets).
 #? MUSIC_TAG: release tag the music pack is pulled from (default assets-v1).
-#? NO_MUSIC: set to 1 to skip the automatic music fetch that `make gl-repl` runs.
+#? NO_MUSIC: set to 1 to skip the automatic music fetch (no prompt, no remembered answer); the test targets set it themselves, NO_MUSIC=0 re-enables the prompt there.
 MUSIC_DEST ?= assets
 MUSIC_FETCH = bash scripts/fetch-music.sh --dir "$(MUSIC_DEST)" $(if $(MUSIC_TAG),--tag "$(MUSIC_TAG)",)
 
@@ -1805,10 +1805,16 @@ fetch-music: ## Download the music pack from the GitHub release into MUSIC_DEST 
 # short-circuits when that tag's tracks are already on disk, notes and moves on
 # when there is no terminal (CI), and swallows every download failure.
 # NO_MUSIC=1 opts out without answering; `make fetch-music` always fetches.
+#
+# The test targets set NO_MUSIC=1 for themselves (below): a suite that happens
+# to link `gl-repl` must never block on a question, and it must not answer one
+# on the user's behalf either - NO_MUSIC skips without writing .music.ini, so
+# the next ordinary `make gl-repl` still asks. An explicit NO_MUSIC=0 on the
+# command line wins, since a command-line variable overrides the export.
 # internal-* because it is a hook, not something to type (the naming escape
 # hatch check-make-target-documented offers for undocumented targets).
 internal-music-auto:
-	@NO_MUSIC="$(NO_MUSIC)" $(MUSIC_FETCH) --auto || true
+	@NO_MUSIC="$(filter-out 0,$(NO_MUSIC))" $(MUSIC_FETCH) --auto || true
 
 music-forget: ## Forget the cached music-pack answer, so the next build asks again.
 	@bash scripts/fetch-music.sh --forget
@@ -2608,6 +2614,16 @@ check: ## Run all checks.
 		printf "$(CYAN)\n==> %s$(NC)\n" "$$desc"; \
 		$(MAKE) --no-print-directory $$target || exit $$?; \
 	done
+
+# Test targets never answer the optional music-pack prompt. `export` so the
+# recursive $(MAKE) invocations these targets fan out into inherit it, and so
+# it reaches internal-music-auto through however many levels sit between.
+# NO_MUSIC=1 skips without recording an answer, so this suppresses the
+# question for the duration of a test run and leaves the next interactive
+# `make gl-repl` free to ask.
+TEST_MUSIC_TARGETS := test test-detailed test-scenes test-stubs test-msan \
+                      test-web test-full gl-tests
+$(TEST_MUSIC_TARGETS): export NO_MUSIC := 1
 
 # `make test` is the portable, headless contract: one check gate followed by
 # the ordinary suite against the no-op GL stubs. Real-context tests remain

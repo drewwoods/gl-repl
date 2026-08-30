@@ -1370,7 +1370,8 @@ fail a build:
 | You answer `n` | Remembered; you are never asked again |
 | Pack already installed for that tag | Skipped without touching the network |
 | Any standard stream is not a terminal, or the build is not the foreground terminal job (CI, Bear/another wrapper, redirection) | Skipped with a one-line note on stderr, and *not* remembered - a later ordinary interactive build still asks |
-| `NO_MUSIC=1` | Skipped, no prompt |
+| `NO_MUSIC=1` | Skipped, no prompt, and *not* remembered - the next ordinary build asks again |
+| A `make test*` / `gl-tests` target | `NO_MUSIC=1` is exported for the run, so a suite that links `gl-repl` cannot block on the question; pass `NO_MUSIC=0` to re-enable it there |
 | Download fails (offline, rate-limited) | Warns and continues; the build still succeeds |
 
 The answer and the identity of the installed pack live in `.music.ini` at the
