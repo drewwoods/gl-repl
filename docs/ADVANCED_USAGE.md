@@ -473,6 +473,12 @@ scripts/convert-video.sh --in tour.mkv --format mp4  --scale 1200 --out tour
   better on gradients and compress worse; `none` is smallest and bands.
 - **`--colors`/`--dither`/`--truecolor` are rejected for `mp4`/`webm`** rather
   than silently ignored, since they mean nothing there.
+- **GIF and APNG receive the same final optimization as documentation clips.**
+  GIF runs ImageMagick's fuzzy layer optimizer (`--gif-fuzz 4` by default);
+  APNG is assembled with `apngasm`, then compressed losslessly with
+  `oxipng -o max` (adjustable with `--oxipng-level`). Pass `--no-optimize` to
+  retain the ffmpeg-only path when those tools are unavailable or exact fuzzy
+  GIF deltas matter more than size.
 
 **GIF or APNG?** APNG's only real advantage is 24-bit color, and on animated
 content it costs roughly 20x the bytes: its per-frame zlib cannot exploit a

@@ -112,6 +112,11 @@ scripts/convert-video.sh --in tour.mkv --format gif --scale 900 --fps 15 \
     --colors 128 --duration 69.5 --out tour
 ```
 
+GIF/APNG conversion applies the same final optimization used by
+`docs-assets.sh`: ImageMagick fuzzy layer optimization for GIF, and apngasm +
+oxipng for APNG. Use `--no-optimize` for the ffmpeg-only fallback;
+`--gif-fuzz` and `--oxipng-level` tune the two optimized paths.
+
 `--tour` and `--script` are **different run kinds**: `--script` renders only
 the pointer and captions, `--tour` adds the presence layer (title card,
 breathing border, `Tour | <name> | Esc exit` HUD). Pick `--tour` when the

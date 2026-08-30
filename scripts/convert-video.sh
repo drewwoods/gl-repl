@@ -31,6 +31,9 @@
 #   --loop <n>          GIF/APNG loop count, 0 = forever   (default: 0)
 #   --crf <n>           MP4/WebM quality, lower is better  (default: 18)
 #   --out <base>        Output base name; the extension follows --format
+#   --no-optimize       Skip the final GIF/APNG container optimization
+#   --gif-fuzz <pct>    GIF optimizer fuzz, 0..100          (default: 4)
+#   --oxipng-level <n>  APNG oxipng level, 0..6 or max      (default: max)
 #   --keep-palette      Keep the generated palette PNG next to the output
 #   -h, --help          This help
 #
@@ -45,7 +48,9 @@
 # pixel-identical to the GIF and about 20% larger. Reach for --format apng
 # --truecolor only for short clips where gradient banding is unacceptable.
 #
-# Requires: ffmpeg.
+# Requires: ffmpeg; optimized GIF additionally needs ImageMagick (magick), and
+# optimized APNG needs apngasm + oxipng. --no-optimize keeps the ffmpeg-only
+# path.
 
 set -euo pipefail
 
@@ -62,6 +67,9 @@ loop="0"
 crf="18"
 out=""
 keep_palette=0
+optimize=1
+gif_fuzz="4"
+oxipng_level="max"
 
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 
@@ -71,6 +79,8 @@ need_val() { [ "$#" -ge 2 ] || { echo "convert-video: option '$1' requires a val
 # can fire on "you asked for this" rather than on the default value.
 colors_set=0
 dither_set=0
+gif_fuzz_set=0
+oxipng_level_set=0
 
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -86,6 +96,9 @@ while [ $# -gt 0 ]; do
 		--loop)         need_val "$@"; loop="$2"; shift 2;;
 		--crf)          need_val "$@"; crf="$2"; shift 2;;
 		--out)          need_val "$@"; out="$2"; shift 2;;
+		--no-optimize)  optimize=0; shift;;
+		--gif-fuzz)     need_val "$@"; gif_fuzz="$2"; gif_fuzz_set=1; shift 2;;
+		--oxipng-level) need_val "$@"; oxipng_level="$2"; oxipng_level_set=1; shift 2;;
 		--keep-palette) keep_palette=1; shift;;
 		-h|--help)      usage; exit 0;;
 		*) echo "convert-video: unknown option '$1' (try --help)" >&2; exit 2;;
@@ -102,6 +115,16 @@ chk_num --scale "$scale"
 chk_num --start "$start"
 chk_num --duration "$duration"
 chk_num --crf "$crf"
+chk_num --gif-fuzz "$gif_fuzz"
+
+awk -v n="$gif_fuzz" 'BEGIN { exit !(n >= 0 && n <= 100) }' || {
+	echo "convert-video: --gif-fuzz must be 0..100 (got '$gif_fuzz')" >&2
+	exit 2
+}
+case "$oxipng_level" in
+	[0-6]|max) :;;
+	*) echo "convert-video: --oxipng-level must be 0..6 or max (got '$oxipng_level')" >&2; exit 2;;
+esac
 
 [ -n "$src" ] || { echo "convert-video: --in is required (try --help)" >&2; exit 2; }
 [ -r "$src" ] || { echo "convert-video: source '$src' not readable" >&2; exit 1; }
@@ -128,6 +151,18 @@ if [ "$format" = mp4 ] || [ "$format" = webm ]; then
 	[ "$colors_set" = 0 ] || { echo "convert-video: --colors has no meaning for $format" >&2; exit 2; }
 	[ "$dither_set" = 0 ] || { echo "convert-video: --dither has no meaning for $format" >&2; exit 2; }
 	[ "$truecolor" = 0 ]  || { echo "convert-video: --truecolor has no meaning for $format ($format is already truecolor)" >&2; exit 2; }
+fi
+if [ "$gif_fuzz_set" = 1 ] && [ "$format" != gif ]; then
+	echo "convert-video: --gif-fuzz has no meaning for $format" >&2
+	exit 2
+fi
+if [ "$oxipng_level_set" = 1 ] && [ "$format" != apng ]; then
+	echo "convert-video: --oxipng-level has no meaning for $format" >&2
+	exit 2
+fi
+if [ "$optimize" = 0 ] && { [ "$gif_fuzz_set" = 1 ] || [ "$oxipng_level_set" = 1 ]; }; then
+	echo "convert-video: optimizer settings cannot be combined with --no-optimize" >&2
+	exit 2
 fi
 if [ "$format" = gif ] && [ "$truecolor" = 1 ]; then
 	echo "convert-video: --truecolor is not possible for gif (GIF is 256 colors per frame by format)" >&2
@@ -169,6 +204,28 @@ fi
 out_dir="$(dirname "$out")"
 [ -d "$out_dir" ] || { echo "convert-video: output dir '$out_dir' does not exist" >&2; exit 1; }
 
+work=""
+cleanup() { [ -z "$work" ] || rm -rf "$work"; }
+trap cleanup EXIT HUP INT TERM
+if [ "$optimize" = 1 ] && { [ "$format" = gif ] || [ "$format" = apng ]; }; then
+	work="$(mktemp -d "${TMPDIR:-/tmp}/glr-convert-video.XXXXXX")"
+	if [ "$format" = gif ]; then
+		command -v magick >/dev/null 2>&1 || {
+			echo "convert-video: magick not found (brew install imagemagick), needed for optimized GIF" >&2
+			echo "               pass --no-optimize to use ffmpeg only" >&2
+			exit 1
+		}
+	else
+		for tool in apngasm oxipng ffprobe; do
+			command -v "$tool" >/dev/null 2>&1 || {
+				echo "convert-video: $tool not found, needed for optimized APNG" >&2
+				echo "               pass --no-optimize to use ffmpeg only" >&2
+				exit 1
+			}
+		done
+	fi
+fi
+
 # Trim flags go before -i so ffmpeg seeks rather than decodes-and-discards.
 # They live in the positional params, not an array: macOS ships bash 3.2,
 # where "${arr[@]}" on an empty array trips `set -u`. "$@" is exempt from that.
@@ -186,7 +243,7 @@ if [ -n "$scale" ]; then
 fi
 [ -n "$chain" ] || chain="null"
 
-echo "convert-video: $src -> $format${fps:+ fps=$fps}${scale:+ scale=${scale}px}$([ "$palette" = 1 ] && echo " colors=$colors $dither" || true)${start:+ start=${start}s}${duration:+ dur=${duration}s}"
+echo "convert-video: $src -> $format${fps:+ fps=$fps}${scale:+ scale=${scale}px}$([ "$palette" = 1 ] && echo " colors=$colors $dither" || true)${start:+ start=${start}s}${duration:+ dur=${duration}s}$([ "$optimize" = 1 ] && { [ "$format" = gif ] || [ "$format" = apng ]; } && echo ' optimized' || true)"
 
 case "$format" in
 	mp4)
@@ -212,27 +269,65 @@ case "$format" in
 			# region, which is most of the saving on a static-chrome UI clip.
 			puse="paletteuse=${dither_arg}:diff_mode=rectangle"
 			if [ "$format" = gif ]; then
+				gif_out="$out.gif"
+				[ "$optimize" = 0 ] || gif_out="$work/raw.gif"
 				ffmpeg -y -loglevel error "$@" -i "$src" -i "$pal" \
 					-lavfi "[0:v]${chain}[x];[x][1:v]${puse}" \
-					-loop "$loop" "$out.gif"
+					-loop "$loop" "$gif_out"
+				if [ "$optimize" = 1 ]; then
+					# Match docs-assets.sh: fuzzy layer deltas buy most of the
+					# size reduction, at the cost of a deliberately lossy step.
+					magick "$gif_out" -fuzz "${gif_fuzz}%" -layers Optimize "$out.gif"
+				fi
 			else
-				# -f apng is required: a .png filename otherwise selects the
-				# image2 muxer, which refuses a second frame.
-				ffmpeg -y -loglevel error "$@" -i "$src" -i "$pal" \
-					-lavfi "[0:v]${chain}[x];[x][1:v]${puse}" \
-					-c:v apng -pix_fmt pal8 -pred mixed -plays "$loop" \
-					-f apng "$out.apng"
+				if [ "$optimize" = 1 ]; then
+					mkdir "$work/frames"
+					ffmpeg -y -loglevel error "$@" -i "$src" -i "$pal" \
+						-lavfi "[0:v]${chain}[x];[x][1:v]${puse}" \
+						"$work/frames/f-%08d.png"
+				else
+					# -f apng is required: the .apng suffix is not enough on
+					# every ffmpeg build to select the animated muxer.
+					ffmpeg -y -loglevel error "$@" -i "$src" -i "$pal" \
+						-lavfi "[0:v]${chain}[x];[x][1:v]${puse}" \
+						-c:v apng -pix_fmt pal8 -pred mixed -plays "$loop" \
+						-f apng "$out.apng"
+				fi
 			fi
 			[ "$keep_palette" = 1 ] || rm -f "$pal"
 			[ "$keep_palette" = 0 ] || echo "convert-video: kept palette $pal"
 		else
-			# Truecolor APNG. -pred mixed lets the encoder pick a PNG filter
-			# per row; it is a few percent smaller than the paeth default and
-			# costs only encode time.
-			ffmpeg -y -loglevel error "$@" -i "$src" \
-				-vf "$chain" \
-				-c:v apng -pix_fmt rgb24 -pred mixed -plays "$loop" \
-				-f apng "$out.apng"
+			if [ "$optimize" = 1 ]; then
+				mkdir "$work/frames"
+				ffmpeg -y -loglevel error "$@" -i "$src" \
+					-vf "${chain},format=rgb24" "$work/frames/f-%08d.png"
+			else
+				# Truecolor APNG. -pred mixed lets the encoder pick a PNG
+				# filter per row; it costs only encode time.
+				ffmpeg -y -loglevel error "$@" -i "$src" \
+					-vf "$chain" \
+					-c:v apng -pix_fmt rgb24 -pred mixed -plays "$loop" \
+					-f apng "$out.apng"
+			fi
+		fi
+		if [ "$format" = apng ] && [ "$optimize" = 1 ]; then
+			# apngasm produces much tighter frame rectangles than ffmpeg's APNG
+			# muxer. Its fixed delay is exact for the CFR captures this script
+			# consumes; use --fps to override a source rate when needed.
+			rate="$fps"
+			[ -n "$rate" ] || rate="$(ffprobe -v error -select_streams v:0 \
+				-show_entries stream=avg_frame_rate -of default=nw=1:nk=1 "$src" | head -1)"
+			delay="$(awk -v rate="$rate" 'BEGIN {
+				n = split(rate, p, "/"); fps = (n == 2 ? p[1] / p[2] : rate);
+				if (fps <= 0) exit 1; printf "%d", 1000 / fps + 0.5
+			}')" || {
+				echo "convert-video: could not determine APNG frame delay; pass --fps" >&2
+				exit 1
+			}
+			apngasm -F -o "$out.apng" "$work"/frames/f-*.png \
+				-d "$delay" -l "$loop" >/dev/null 2>&1
+			# Lossless and preserves the APNG control chunks.
+			oxipng -o "$oxipng_level" "$out.apng" >/dev/null 2>&1
 		fi
 		echo "convert-video: wrote $out.$format"
 		;;
