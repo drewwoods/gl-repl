@@ -224,3 +224,18 @@ the plan provides.
 - New behavior gets a test next to its peers under `tests/`.
 - Match the surrounding code's style; the guards enforce the load-bearing
   parts.
+
+### AI-assisted contributions
+
+They are welcome, and they have to be **explicit**. Much of this codebase was
+itself written with AI assistance (see [`CREDITS.md`](../CREDITS.md)), so the
+policy is disclosure, not prohibition:
+
+- Say so in the pull request when a model wrote or substantially shaped a
+  change, and name it.
+- Add a `Co-Authored-By:` trailer to the commits it worked on, the same way
+  the existing history does.
+- Disclosure does not transfer responsibility. You are the author: you are
+  vouching that you understand the change, that it is yours to contribute,
+  and that the guards and tests pass because the code is right rather than
+  because the output looked plausible.
