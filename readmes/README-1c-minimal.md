@@ -15,9 +15,9 @@ make gl-repl && ./gl-repl                     # macOS: brew install cmake
 
 Linux: `sudo apt install freeglut3-dev`. Also runs in the browser — `make web`.
 
-<img src="../docs/images/tour-editing-basics.gif" width="100%">
+<img src="../docs/images/tour-highlights.gif" width="100%">
 
-<sub>the whole app, in one animation — the built-in **Editing Basics** tour</sub>
+<sub> the built-in **Highlights** tour</sub>
 
 - **Render as you type** — edit a `glVertex3f`, see it move.
 - **`Ctrl+T` for time** — reference `t` anywhere, animation with no boilerplate.
