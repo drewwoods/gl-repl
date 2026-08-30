@@ -12,55 +12,45 @@
 #reset presentation             # a known screen, whatever the last tour left
 
 move scene:0.55,0.30
-echo bitmap scene:0.25,0.76 24 2.6 gl-repl: type OpenGL, see it render.
-pause 2.2
+echo stroke_hi scene:0.5,0.76 32 2.6 GL-REPL: Render as you type
 
 # --- Learn: a 2D triangle, typed line by line ------------------------
 
 #ifdef __EMSCRIPTEN__
-glide shell:new 0.7             # browser shell's New button
+glide shell:new 0.5             # browser shell's New button
 click shell:new
-glide scene:0.55,0.30 0.5       # bring the tour cursor back into the canvas
+glide scene:0.55,0.30 0.3       # bring the tour cursor back into the canvas
 #else
-glide menu:file 0.7             # File > New Scene
+glide menu:file 0.5             # File > New Scene
 click
-glide item:new_scene 0.4
+glide item:new_scene 0.3
 click
 #endif
 chord ctrl+shift c              # recenter the camera
 view 2d                         # flat view - this act is a 2D sketch
 
+cfg grid GRID_THEME_OFF
+
 # @checkpoint after-new-scene
 
-echo bitmap scene:0.25,0.76 24 3.4 A new scene, and a line to animate it.
-key@20 glRotatef(t * 40, 0, 0, 1)
+echo bitmap scene:0.25,0.76 24 3.4 See the impact of transformations live
+key@30 glRotatef(t * 20, 0, 0, 1)
 # The ; key commits the line. `key` payload runs to end of line, so these
 # lines carry no trailing comment - it would be typed into the editor.
+pause 2.6
 key ;
-echo bitmap scene:0.25,0.76 24 3.4 t is the clock - no boilerplate.
-pause 1.6
 
 # @checkpoint before-triangle
 
-echo bitmap scene:0.25,0.76 24 3.6 Now a triangle, one vertex per line.
-key@22 glBegin(GL_TRIANGLES)
-key ;
-key@22 glColor3f(1, 0.4, 0.4)
-key ;
-key@22 glVertex2f(-1, -0.7)
-key ;
-key@22 glColor3f(0.4, 1, 0.4)
-key ;
-key@22 glVertex2f(1, -0.7)
-key ;
-key@22 glColor3f(0.4, 0.4, 1)
-key ;
-key@22 glVertex2f(0, 1.1)
-key ;
-key@22 glEnd()
-key ;
-echo bitmap scene:0.25,0.76 24 3.2 Every keystroke redraws the scene.
-pause 2.6
+echo bitmap scene:0.25,0.76 24 5.6 Watch each vertex appear as it is defined
+key@40 glBegin(GL_TRIANGLES);
+key@40 glColor3f(1, 0, 0);
+key@30 glVertex2f(
+key@5 -1, -0.7);
+key@40 glColor3f(1, 1, 1);
+key@40 glVertex2f(1, -0.7);
+key@40 glVertex2f(0, 1.1);
+key@40 glEnd();
 
 # --- Debug: replay a built-in example, call by call ------------------
 
@@ -72,28 +62,33 @@ glide item:3d 0.4               # hover 3D -> examples flyout opens
 glide subenter:3d 0.3           # straight right into the flyout
 glide sub:3d:parametric_torus 0.5
 click                           # load it; camera eases in
-echo bitmap scene:0.25,0.76 24 3.4 41 examples ship in the binary.
-pause 2.2
-echo bitmap scene:0.25,0.76 24 3.6 Replay rebuilds a frame, call by call.
+cfg vertex_points 0
+
+# @checkpoint before-replay
+echo bitmap scene:0.25,0.76 24 5.6 Replay is a visual debugger. Code and scene advance one vertex at a time
 glide pin:replay 0.7
 click                           # start replay
+key v
+glide code:30 0.7
+ring code:30 1.0
+pause 1.0
 glide scene:0.72,0.34 0.6       # park; watch it build
-pause 5.0
-# Ctrl+R exits the replay (the pin click would only pause it)
-key \cr
+ring scene:0.72,0.34 1.0
+pause 2.0
 
 # --- Build: the same language, a finished scene ----------------------
 
 # @checkpoint before-jellyfish
 
-glide menu:scene 0.7
+glide menu:scene 0.4
 click
-glide item:lines 0.4            # hover Lines -> flyout opens
-glide subenter:lines 0.3
-glide sub:lines:jellyfish 0.6
+glide item:3D 0.2            # hover 3D -> flyout opens
+glide subenter:3D 0.2
+glide sub:3D:jellyfish 0.35
+pause 0.25
 click
-echo bitmap scene:0.25,0.76 24 3.6 Same language, a whole scene.
+# Ctrl+R exits the replay (the pin click would only pause it)
+key \cr
+echo bitmap scene:0.25,0.76 24 3.6 Create beautiful scenes
 pause 3.0
-glide scene:0.55,0.42 0.8
-pause 3.0
-echo bitmap scene:0.25,0.76 18 4.0 Tour finished - it's all yours!\nEscape takes control now.
+echo bitmap scene:0.25,0.76 18 3.0 Tour finished - it's all yours!\nEscape takes control now.
