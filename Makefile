@@ -3541,7 +3541,8 @@ PUBLIC_MAKE_VARS := \
 	ENTRY EXAMPLES_CATALOG FORMAT \
 	FREEGLUT_INCLUDE_DIR FREEGLUT_LIB_PATH FREEGLUT_OSMESA \
 	FREEGLUT_VENDOR FREEGLUT_VENDOR_LINUX \
-	GLUT_BITMAP_BENCH_ARGS MSAN_CC MUSIC_DEST NOSAN NO_SAN \
+	GLUT_BITMAP_BENCH_ARGS MACOS_UNIVERSAL MSAN_CC MUSIC_DEST MUSIC_TAG \
+	NO_MUSIC NOSAN NO_SAN \
 	SAMPLE SAN SKIP_CHECKS TEST_CASE TEST_JOBS TEST_VERBOSE \
 	USE_GL_STUBS V VERBOSE VERTEX_LABEL_BENCH_ARGS WEB ZSHRC
 
@@ -3585,7 +3586,7 @@ LEGACY_TARGETS := \
 	analyze audit-editor-ownership config-list coverage \
 	callgraph-files callgraph-graphviz callgraph-html callgraph-profile \
 	callgraph-static callgraph-static-entry \
-	debug distclean extract fetch-music internal-music-auto music-forget \
+	debug distclean extract fetch-music music-forget \
 	find-trailing-whitespace gl-tests \
 	icon-cube icon-cube-strong icon-regen keymap-list lines lines-test \
 	palette-list rebuild-golden render3d-hot-lib require-emcc unicode-count
