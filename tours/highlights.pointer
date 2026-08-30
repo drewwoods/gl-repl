@@ -34,7 +34,7 @@ cfg grid GRID_THEME_OFF
 
 # @checkpoint after-new-scene
 
-echo bitmap scene:0.25,0.76 24 3.6 Transform as you type.
+echo stroke_hi scene:0.5,0.86 26 3.6 Transform as you type.
 key@30 glRotatef(t * 20, 0, 0, 1)
 # The ; key commits the line. `key` payload runs to end of line, so these
 # lines carry no trailing comment - it would be typed into the editor.
@@ -43,7 +43,7 @@ key ;
 
 # @checkpoint before-triangle
 
-echo bitmap scene:0.25,0.76 24 4.4 Instant geometry.\nNo compile. No reload.
+echo stroke_hi scene:0.5,0.86 26 6.4 Instant geometry. No compile. No reload.
 key@40 glBegin(GL_TRIANGLES);
 key@40 glColor3f(1, 0, 0);
 key@30 glVertex2f(
@@ -67,7 +67,7 @@ click                           # load it; camera eases in
 cfg vertex_points 0
 
 # @checkpoint before-replay
-echo bitmap scene:0.25,0.73 24 5.8 Replay, call by call.\nCode and geometry in lockstep.
+echo stroke_hi scene:0.5,0.70 26 7.0 Replay, call by call.\nCode and geometry in lockstep.
 glide pin:replay 0.5
 click                           # start replay
 key v
@@ -76,7 +76,7 @@ ring code:30 1.0
 pause 1.0
 glide scene:0.72,0.34 0.6       # park; watch it build
 ring scene:0.72,0.34 1.0
-pause 0.5
+pause 1.0
 
 # --- Create: the same language, a finished scene ---------------------
 
@@ -91,7 +91,7 @@ pause 0.25
 click
 # Ctrl+R exits the replay (the pin click would only pause it)
 key \cr
-echo bitmap scene:0.25,0.76 24 2.8 Simple commands. Living scenes.
+echo stroke_hi scene:0.5,0.86 26 2.9 Simple commands. Living scenes.
 pause 3.0
 
 # --- Independence: export the result, import it when ready --------------
@@ -99,7 +99,7 @@ pause 3.0
 # @checkpoint before-export
 # The browser exposes the same actions in its shell rather than this native
 # File menu, so keep the visual menu walk native and share the narration.
-echo bitmap scene:0.25,0.76 24 3.6 Your work stays yours.\nExport C. Import anytime.
+echo stroke_hi scene:0.5,0.86 26 3.6 Your work stays yours.\nExport C. Import anytime.
 #ifdef __EMSCRIPTEN__
 move scene:0.55,0.30
 #else
@@ -112,4 +112,4 @@ ring item:load_scene 1.0
 click scene:0.55,0.30
 #endif
 pause 0.6
-echo bitmap scene:0.25,0.76 24 2.6 Your turn to explore.
+echo stroke_hi scene:0.5,0.86 30 2.6 Your turn to explore.
