@@ -170,6 +170,13 @@ def music_dir(cfg):
     return "assets"
 
 
+def macos_universal():
+    """Release artifacts are universal (arm64 + x86_64) by default - one
+    download that runs on Apple Silicon and Intel. MACOS_UNIVERSAL=0 opts out
+    for a host-arch-only build."""
+    return os.environ.get("MACOS_UNIVERSAL", "1")
+
+
 NOTES_DIR = ROOT / "packaging" / "release"
 NOTES_AUTO = "(auto)"
 NOTES_NONE = "(none)"
@@ -318,14 +325,15 @@ def build_macos(cfg, dist: Path, tag, mdir, target):
             warn("macOS mode is local but not on macOS — skipping macOS.")
             return
         say(f"building macOS app bundle locally (make app) @ {target[:12]}")
-        run(["make", "-C", str(ROOT), "app"])
+        run(["make", "-C", str(ROOT), "app", f"MACOS_UNIVERSAL={macos_universal()}"])
         appdir = ROOT / "gl-repl.app"
     else:  # remote
         if not m["host"]:
             die("macOS mode is remote but no host set (edit via make release-config).")
         say(f"building macOS app bundle on {m['host']}:{m['path']}")
         remote_checkout(m["host"], m["path"], cfg["release"]["remote_branch"], target)
-        run(["ssh", m["host"], f"cd {m['path']} && make app"])
+        run(["ssh", m["host"],
+             f"cd {m['path']} && make app MACOS_UNIVERSAL={macos_universal()}"])
         shutil.rmtree(stage, ignore_errors=True)
         stage.mkdir(parents=True)
         say(f"copying gl-repl.app back from {m['host']}")

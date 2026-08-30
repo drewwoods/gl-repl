@@ -141,6 +141,21 @@ endif
 GL4ES_DIR ?= third_party/web/gl4es
 GLU_DIR   ?= third_party/web/GLU
 
+# MACOS_UNIVERSAL=1 builds a 2-arch (arm64 + x86_64) macOS binary, so one
+# release artifact runs on Apple Silicon and Intel. Clang compiles and links
+# each -arch in one invocation and lipos the results, and the only
+# arch-sensitive code in the tree is miniaudio's SIMD dispatch, which is
+# preprocessor-conditional and therefore resolved correctly per arch.
+# Objects and the vendored freeglut both get their own trees, so a universal
+# build and a native one coexist without a clean in between.
+#? MACOS_UNIVERSAL: set to 1 for a universal (arm64 + x86_64) macOS build.
+MACOS_UNIVERSAL ?=
+ifeq ($(UNAME_S),Darwin)
+  ifeq ($(MACOS_UNIVERSAL),1)
+    MACOS_ARCH_FLAGS := -arch arm64 -arch x86_64
+  endif
+endif
+
 ifeq ($(WEB),1)
   FREEGLUT_BUILD          := $(FREEGLUT_SRC)/build-wasm
   FREEGLUT_STATIC_LIB     := $(FREEGLUT_BUILD)/lib/libglut.a
@@ -152,11 +167,12 @@ else ifeq ($(FREEGLUT_OSMESA),1)
   FREEGLUT_CMAKE_LAUNCHER :=
   FREEGLUT_CMAKE_BACKEND  := -DFREEGLUT_OSMESA=ON -DFREEGLUT_GLES=OFF
 else
-  FREEGLUT_BUILD          := $(FREEGLUT_SRC)/build
+  FREEGLUT_BUILD          := $(FREEGLUT_SRC)/build$(if $(MACOS_ARCH_FLAGS),-universal,)
   FREEGLUT_STATIC_LIB     := $(FREEGLUT_BUILD)/lib/libglut.a
   FREEGLUT_CMAKE_LAUNCHER :=
   ifeq ($(UNAME_S),Darwin)
-    FREEGLUT_CMAKE_BACKEND := -DFREEGLUT_COCOA=ON -DFREEGLUT_COCOA_SCROLLING_DELTA=ON
+    FREEGLUT_CMAKE_BACKEND := -DFREEGLUT_COCOA=ON -DFREEGLUT_COCOA_SCROLLING_DELTA=ON \
+      $(if $(MACOS_ARCH_FLAGS),-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64",)
   else
     # Linux windowed: the stock X11/GLX backend. Only reached under
     # FREEGLUT_VENDOR_LINUX=1 (see below) - the default Linux build links
@@ -868,7 +884,7 @@ REPL_LIVE_DEMO_DEP_SRCS = $(REPL_DEMO_DEP_SRCS) \
 # comes with its own headers (FREEGLUT_INCLUDE_DIR), and those objects must not
 # be reused by - or reuse - a vendored-header build. It applies on every arm,
 # since the header swap is platform-independent.
-OBJDIR = build/$(BUILD)$(if $(filter debug,$(BUILD)),$(DEBUG_SAN_SUFFIX),)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)$(if $(filter 0,$(FREEGLUT_VENDOR)),-glut,)$(if $(filter 1,$(WEB)),-web,)$(if $(filter 1,$(USE_GL_STUBS))$(filter 1,$(FREEGLUT_OSMESA))$(filter 1,$(WEB))$(filter Darwin,$(UNAME_S)),,$(if $(filter 1,$(FREEGLUT_VENDOR_LINUX)),-fgvendor,))$(if $(FREEGLUT_LIB_PATH),-fgext,)
+OBJDIR = build/$(BUILD)$(if $(MACOS_ARCH_FLAGS),-universal,)$(if $(filter debug,$(BUILD)),$(DEBUG_SAN_SUFFIX),)$(if $(filter 1,$(USE_GL_STUBS)),-gl-stubs,)$(if $(filter 1,$(FREEGLUT_OSMESA)),-osmesa,)$(if $(filter 0,$(FREEGLUT_VENDOR)),-glut,)$(if $(filter 1,$(WEB)),-web,)$(if $(filter 1,$(USE_GL_STUBS))$(filter 1,$(FREEGLUT_OSMESA))$(filter 1,$(WEB))$(filter Darwin,$(UNAME_S)),,$(if $(filter 1,$(FREEGLUT_VENDOR_LINUX)),-fgvendor,))$(if $(FREEGLUT_LIB_PATH),-fgext,)
 BINDIR = $(OBJDIR)
 # Each Make process gets its own report directory. Recursive test/build
 # invocations therefore print and summarize only their own source files.
@@ -903,7 +919,7 @@ WEB_MUSIC_SRC_DIR ?= $(MUSIC_SRC_DIR)
 # through. It used to be advertised while nothing referenced it, which meant
 # `make gl-repl CPPFLAGS=-DFOO` silently dropped the define and built the
 # default. Both append in order, so an explicit CFLAGS wins on a conflict.
-OBJ_CFLAGS = $(BUILD_CFLAGS) $(CPPFLAGS) $(CFLAGS) -include config.h -include prof_sections.h
+OBJ_CFLAGS = $(MACOS_ARCH_FLAGS) $(BUILD_CFLAGS) $(CPPFLAGS) $(CFLAGS) -include config.h -include prof_sections.h
 DEPFLAGS = -MMD -MP
 
 SAMPLE_OBJS = $(addprefix $(OBJDIR)/,$(SRCS:.c=.o))
