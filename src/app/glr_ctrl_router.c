@@ -357,18 +357,21 @@ int glr_ctrl_code_line_point(const char *spec, int *mx, int *my) {
     glr_ctrl_build_ui_snapshot(&snap);
 
     if (spec[0] >= '0' && spec[0] <= '9') {
-        /* Numeric targets are the code panel's own line numbers, 1-based, the
-         * same as the GLR_* capture hooks - a script says what the reader sees
-         * in the gutter. 0 addresses no row, so it fails the target rather
-         * than aiming at the first line. */
-        int line = atoi(spec) - 1;
-        if (line < 0 || line >= count)
-            return 0;
-        if (ui_repl_code_panel_source_line_point(&snap, line, mx, my))
+        /* Numeric targets are the code panel's own line numbers, 1-based: a
+         * script says what the reader sees in the gutter. Generated display()
+         * framing means that number is not the document index even in focused
+         * mode, so resolve it directly through the rendered row model. */
+        int panel_row = -1;
+        int gutter_line = atoi(spec);
+        if (ui_repl_code_panel_gutter_line_point(&snap, gutter_line,
+                                                  mx, my, &panel_row))
             return 1;
-        glr_ctrl_set_code_panel_scroll(line < 3 ? 0 : line - 2);
+        if (panel_row < 0)
+            return 0;
+        glr_ctrl_set_code_panel_scroll(panel_row < 4 ? 0 : panel_row - 3);
         glr_ctrl_build_ui_snapshot(&snap);
-        return ui_repl_code_panel_source_line_point(&snap, line, mx, my);
+        return ui_repl_code_panel_gutter_line_point(&snap, gutter_line,
+                                                     mx, my, NULL);
     }
 
     /* Text targets take the first *visible* match: a long document repeats a

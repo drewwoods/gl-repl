@@ -4,9 +4,8 @@
 # autocomplete, and the right-click GL-state inspector.
 #
 # Points are symbolic targets (grammar: src/app/glr_pointer_script.h),
-# resolved against the live layout at fire time. `code:<n>` is a document
-# row, 1-based; the panel gutter shows it one higher because row 1 of the
-# gutter is the generated `void display(void) {`.
+# resolved against the live layout at fire time. `code:<n>` names the number
+# shown in the panel gutter; the generated `display {` frame is line 1.
 #
 # The caption band anchors at scene:0.25,0.76 - inside the scene viewport,
 # above the status bar, and clear of the variable panel's right column.
@@ -29,13 +28,13 @@ click
 chord ctrl+shift c              # recenter the camera
 
 echo bitmap scene:0.25,0.76 24 3.6 A new scene seeds the GL boilerplate.
-glide code:3 0.4
-ring  code:1 0.3
+glide code:4 0.4
 ring  code:2 0.3
 ring  code:3 0.3
 ring  code:4 0.3
 ring  code:5 0.3
 ring  code:6 0.3
+ring  code:7 0.3
 pause 1.2
 
 # @checkpoint after-new-scene
@@ -69,8 +68,8 @@ key@5 t * 40, 0, 1, 0);
 # shows what that transform is doing.
 echo bitmap scene:0.25,0.76 18 8.0 The cursor position also drives the overlays: with the cursor\non the glRotatef line, its effect on the geometry is revealed.
 skey up
-glide code:9 0.5
-ring code:9 1.5
+glide code:10 0.5
+ring code:10 1.5
 glide scene:0.5,0.5 1.0
 ring scene:0.5,0.5 1.5
 pause 3.0
@@ -124,23 +123,23 @@ key ;
 skey up
 
 echo bitmap scene:0.25,0.76 24 5.0 The torus inherits the last glColor,\nas the gutter swatch shows.
-glide code:15 1.0
-ring code:15 1.5
+glide code:16 1.0
+ring code:16 1.5
 pause 2.5
 echo bitmap scene:0.25,0.76 24 4.0 It inherits the transforms above it too.
-glide code:9 1.0
-ring code:9 1.5
+glide code:10 1.0
+ring code:10 1.5
 pause 2.5
 
 # @checkpoint before-gl-state
 
 # Right-click a blank row for the GL state at that point in the program.
 echo bitmap scene:0.25,0.76 24 5.0 Right-click a blank row to read the GL state\nat that point in the program.
-glide code:18 1.0
+glide code:19 1.0
 rightclick
 pause 4.5
 echo bitmap scene:0.25,0.76 24 5.0 Shift + right-click a second blank row to compare\nthe two points instead of the GL defaults.
-glide code:7 1.0
+glide code:8 1.0
 rightclick shift
 pause 5.0
 

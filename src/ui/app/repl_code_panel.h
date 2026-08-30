@@ -158,6 +158,15 @@ int  ui_repl_code_panel_source_line_point(const UiRenderSnapshot *snap,
                                           int *out_mx,
                                           int *out_my);
 
+/* Resolve a 1-based gutter label to a point in that row's text area. Unlike
+ * source_line_point(), this includes generated-C rows. out_panel_row receives
+ * the logical row even when it is currently scrolled off-screen. */
+int  ui_repl_code_panel_gutter_line_point(const UiRenderSnapshot *snap,
+                                          int gutter_line,
+                                          int *out_mx,
+                                          int *out_my,
+                                          int *out_panel_row);
+
 int  ui_repl_code_panel_input_row_y(const UiRenderSnapshot *snap,
                                     float *out_py);
 int  ui_repl_code_panel_input_row_has_color_swatch(

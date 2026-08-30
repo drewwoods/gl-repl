@@ -1712,6 +1712,35 @@ static void test_help_and_code_targets_resolve_to_hits(void) {
                                                    &mx, &my));
 }
 
+static void test_numeric_code_target_uses_visible_gutter_line(void) {
+    int mx = -1, my = -1;
+    int source_line;
+    int gutter_line = -1;
+    UiRenderSnapshot snap;
+    UiHit hit;
+
+    reset_menu_bar_fixture(1200, 800);
+    glr_state_presentation_mut()->code_focus = 1;
+    glr_ctrl_sync_ui_chrome();
+    for (int i = 0; i < 35; i++) {
+        char line[64];
+        snprintf(line, sizeof(line), "// tour target row %d;", i + 1);
+        editor_feed_line(line);
+    }
+
+    ASSERT_TRUE("code:30 resolves in the focused code panel",
+                glr_pointer_script_resolve_target("code:30", &mx, &my));
+    glr_ctrl_build_ui_snapshot(&snap);
+    hit = ui_repl_code_panel_hit_test(&snap, mx, my);
+    ASSERT_INT_EQ("code:30 lands on code text", (int)hit.kind,
+                  (int)UI_HIT_CODE_TEXT);
+    source_line = hit.line_idx;
+    ui_repl_code_panel_gutter_labels_for_lines(&snap, &source_line,
+                                                &gutter_line, 1);
+    ASSERT_INT_EQ("numeric tour target names the visible gutter line",
+                  gutter_line, 30);
+}
+
 int main(void) {
     printf("--- ui_menu_bar tests ---\n");
 
@@ -1731,6 +1760,7 @@ int main(void) {
     test_config_short_flyout_consumes_but_no_scroll();
     test_symbolic_targets_resolve_to_hits();
     test_help_and_code_targets_resolve_to_hits();
+    test_numeric_code_target_uses_visible_gutter_line();
 #ifdef GL_STUBS
     test_msaa_label_dynamic();
     test_dropdown_geometry_pinned();

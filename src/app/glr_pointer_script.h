@@ -44,8 +44,8 @@
  *                         (unresolvable while the overlay is closed)
  *   code:glrotatef        code-panel row, by normalized prefix of its
  *                         canonical text, or by the line number the panel's
- *                         gutter shows (code:3 = line 3, 1-based, same as the
- *                         GLR_* capture hooks); auto-scrolls into view if off-screen
+ *                         gutter shows (code:3 = visible line 3, 1-based);
+ *                         auto-scrolls into view if off-screen
  *   shell:new             Emscripten shell's DOM New button (web only)
  *   scene:0.55,0.30       fraction of the scene viewport rect (x,y from
  *                         its top-left)

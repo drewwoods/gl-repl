@@ -3246,6 +3246,39 @@ int ui_repl_code_panel_source_line_point(const UiRenderSnapshot *snap,
     return 0;
 }
 
+int ui_repl_code_panel_gutter_line_point(const UiRenderSnapshot *snap,
+                                         int gutter_line,
+                                         int *out_mx,
+                                         int *out_my,
+                                         int *out_panel_row) {
+    ReplCodePanelBuilder builder;
+    int i;
+    int py;
+
+    if (!snap || gutter_line < 1 ||
+        !repl_code_panel_init_builder(&builder, snap))
+        return 0;
+    repl_code_panel_build_rows(&builder);
+
+    for (i = 0; i < builder.row_count; i++) {
+        const UiTextPanelRow *row = &builder.text_snap.rows[i];
+
+        if (row->left_gutter_label != gutter_line)
+            continue;
+        if (out_panel_row)
+            *out_panel_row = i;
+        if (!ui_text_panel_row_y(&builder.text_snap, i, &py))
+            return 0;
+        if (out_mx)
+            *out_mx = builder.text_snap.cp_x + builder.text_snap.text_x +
+                      FONT_W;
+        if (out_my)
+            *out_my = builder.text_snap.vp_h - py;
+        return 1;
+    }
+    return 0;
+}
+
 int ui_repl_code_panel_input_row_y(const UiRenderSnapshot *snap,
                                    float *out_py) {
     ReplCodePanelBuilder builder;

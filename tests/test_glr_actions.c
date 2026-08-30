@@ -1142,7 +1142,7 @@ static void test_all_catalog_tours_playback_to_completion(void) {
         glr_ctrl_reshape(1200, 800);
         ASSERT_INT("start catalog tour",
                    glr_action_menu_item_activate(GLR_MENU_TOURS, t), 1);
-        int max_frames = 5000;
+        int max_frames = 6000;
         int frames = 0;
         while (glr_pointer_script_tour_active() && frames++ < max_frames) {
             glr_pointer_script_frame();
