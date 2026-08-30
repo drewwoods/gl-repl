@@ -29,6 +29,7 @@
 #include "subsystems/tutorial/tutorial_state.h"
 #include "app/glr_tours.h"
 #include "app/glr_pointer_script.h"
+#include "app/glr_camera_export.h"  /* stand in for the display frame's pose drain */
 #include "source_document.h"
 #include "keymap.h"
 #include "keys.h"
@@ -1107,8 +1108,16 @@ static void test_tour_prereq_free_scenes(void) {
     ASSERT_TRUE("error status set",
                 strstr(g_last_status, "need 1 free scene slot") != NULL);
 
-    /* Tours without prerequisites (e.g. Start Here) can still start */
-    int start_here_idx = 0;
+    /* Tours without prerequisites (e.g. Start Here) can still start.
+     * Resolve by name, not by index: catalog order is editorial. */
+    int start_here_idx = -1;
+    for (int i = 0; i < glr_tours_count(); i++) {
+        if (strcmp(glr_tours_name(i), "Start Here") == 0) {
+            start_here_idx = i;
+            break;
+        }
+    }
+    ASSERT_TRUE("found start-here tour", start_here_idx >= 0);
     ASSERT_INT("start-here has 0 prereq scenes",
                glr_tours_prereq_free_scenes(start_here_idx), 0);
     ASSERT_INT("start-here launch succeeds when slots full",
@@ -1137,6 +1146,13 @@ static void test_all_catalog_tours_playback_to_completion(void) {
         int frames = 0;
         while (glr_pointer_script_tour_active() && frames++ < max_frames) {
             glr_pointer_script_frame();
+            /* A `view` event waits on the projection/camera transition, and
+             * only the controller's fixed-dt tick advances it - which in turn
+             * defers while an example camera apply still holds a pending
+             * saved-3D pose that a display frame would drain. This loop
+             * renders no frames, so stand in for both. */
+            glr_camera_export_take_pending_3d_pose(NULL, NULL, NULL);
+            glr_ctrl_tick();
         }
         ASSERT_TRUE("tour completed frames without infinite hang",
                     frames < max_frames);

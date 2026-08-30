@@ -1,0 +1,99 @@
+# Highlights - the short showcase used for the README animation. Three
+# acts, roughly 45 seconds: type a 2D triangle and give it a transform
+# (learn), replay the parametric torus call by call (debug), then load
+# the jellyfish and let it run (build).
+#
+# Points are symbolic targets (grammar: src/app/glr_pointer_script.h),
+# resolved against the live layout at fire time, so the tour plays at any
+# window size. The caption band anchors at scene:0.25,0.76 - inside the
+# scene viewport, above the status bar, and clear of the variable panel's
+# right-hand column.
+
+#reset presentation             # a known screen, whatever the last tour left
+
+move scene:0.55,0.30
+echo bitmap scene:0.25,0.76 24 2.6 gl-repl: type OpenGL, see it render.
+pause 2.2
+
+# --- Learn: a 2D triangle, typed line by line ------------------------
+
+#ifdef __EMSCRIPTEN__
+glide shell:new 0.7             # browser shell's New button
+click shell:new
+glide scene:0.55,0.30 0.5       # bring the tour cursor back into the canvas
+#else
+glide menu:file 0.7             # File > New Scene
+click
+glide item:new_scene 0.4
+click
+#endif
+chord ctrl+shift c              # recenter the camera
+view 2d                         # flat view - this act is a 2D sketch
+
+# @checkpoint after-new-scene
+
+echo bitmap scene:0.25,0.76 24 3.4 A new scene, and a line to animate it.
+key@20 glRotatef(t * 40, 0, 0, 1)
+# The ; key commits the line. `key` payload runs to end of line, so these
+# lines carry no trailing comment - it would be typed into the editor.
+key ;
+echo bitmap scene:0.25,0.76 24 3.4 t is the clock - no boilerplate.
+pause 1.6
+
+# @checkpoint before-triangle
+
+echo bitmap scene:0.25,0.76 24 3.6 Now a triangle, one vertex per line.
+key@22 glBegin(GL_TRIANGLES)
+key ;
+key@22 glColor3f(1, 0.4, 0.4)
+key ;
+key@22 glVertex2f(-1, -0.7)
+key ;
+key@22 glColor3f(0.4, 1, 0.4)
+key ;
+key@22 glVertex2f(1, -0.7)
+key ;
+key@22 glColor3f(0.4, 0.4, 1)
+key ;
+key@22 glVertex2f(0, 1.1)
+key ;
+key@22 glEnd()
+key ;
+echo bitmap scene:0.25,0.76 24 3.2 Every keystroke redraws the scene.
+pause 2.6
+
+# --- Debug: replay a built-in example, call by call ------------------
+
+# @checkpoint before-torus
+
+glide menu:scene 0.7
+click
+glide item:3d 0.4               # hover 3D -> examples flyout opens
+glide subenter:3d 0.3           # straight right into the flyout
+glide sub:3d:parametric_torus 0.5
+click                           # load it; camera eases in
+echo bitmap scene:0.25,0.76 24 3.4 41 examples ship in the binary.
+pause 2.2
+echo bitmap scene:0.25,0.76 24 3.6 Replay rebuilds a frame, call by call.
+glide pin:replay 0.7
+click                           # start replay
+glide scene:0.72,0.34 0.6       # park; watch it build
+pause 5.0
+# Ctrl+R exits the replay (the pin click would only pause it)
+key \cr
+
+# --- Build: the same language, a finished scene ----------------------
+
+# @checkpoint before-jellyfish
+
+glide menu:scene 0.7
+click
+glide item:lines 0.4            # hover Lines -> flyout opens
+glide subenter:lines 0.3
+glide sub:lines:jellyfish 0.6
+click
+echo bitmap scene:0.25,0.76 24 3.6 Same language, a whole scene.
+pause 3.0
+glide scene:0.55,0.42 0.8
+pause 3.0
+echo bitmap scene:0.25,0.76 18 4.0 Tour finished - it's all yours!\nEscape takes control now.
