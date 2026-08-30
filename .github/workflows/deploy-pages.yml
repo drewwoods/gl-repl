@@ -1,0 +1,101 @@
+name: Deploy web build to Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege: read the repo, mint an OIDC token, publish to Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; never cancel a half-finished publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  EM_VERSION: 6.0.1
+  MUSIC_TAG: assets-v1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # gl4es + GLU are SHA-pinned by scripts/web-deps.sh, so a hit here is
+      # safe to reuse; the patch set is part of the key so a patch edit rebuilds.
+      - name: Cache gl4es/GLU wasm archives
+        uses: actions/cache@v4
+        with:
+          path: third_party/web
+          key: web-deps-${{ runner.os }}-${{ hashFiles('scripts/web-deps.sh', 'packaging/web/patches/**') }}
+
+      - name: Cache emsdk
+        uses: actions/cache@v4
+        with:
+          path: ~/emsdk
+          key: emsdk-${{ runner.os }}-${{ env.EM_VERSION }}
+
+      - name: Install Emscripten ${{ env.EM_VERSION }}
+        run: |
+          if [ ! -d ~/emsdk/.git ]; then
+            git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
+          fi
+          cd ~/emsdk
+          git fetch --tags origin
+          ./emsdk install "${EM_VERSION}"
+          ./emsdk activate "${EM_VERSION}"
+
+      # The 18-track pack lives in the assets-v1 release, not in git.
+      - name: Fetch music pack
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/fetch-music.sh --dir assets --tag "${MUSIC_TAG}"
+
+      - name: Build web target
+        run: |
+          source ~/emsdk/emsdk_env.sh
+          emcc --version | head -1
+          make web WEB_MUSIC_SRC_DIR=assets
+
+      # build/release-web also holds .o files and object subdirs; publish only
+      # the four things the page actually loads, plus the streamed mp3s.
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          cp build/release-web/index.html build/release-web/index.js \
+             build/release-web/index.wasm _site/
+          cp -R build/release-web/assets _site/assets
+          touch _site/.nojekyll
+          echo "tracks: $(ls _site/assets/*.mp3 2>/dev/null | wc -l)"
+          echo "initial load: $(du -ch _site/index.* _site/assets/music.json | tail -1 | cut -f1)"
+          echo "site total:   $(du -sh _site | cut -f1)"
+
+      - name: Verify site payload
+        run: |
+          set -e
+          for f in index.html index.js index.wasm assets/music.json; do
+            test -s "_site/$f" || { echo "missing/empty: $f" >&2; exit 1; }
+          done
+          n=$(ls _site/assets/*.mp3 2>/dev/null | wc -l | tr -d ' ')
+          test "$n" -eq 18 || { echo "expected 18 tracks, got $n" >&2; exit 1; }
+          python3 scripts/check-web-manifest.py _site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
