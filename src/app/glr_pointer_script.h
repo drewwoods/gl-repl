@@ -31,7 +31,9 @@
  * form. A *point* is either literal window pixels
  * "<x> <y>" (origin top-left, the GLUT callback convention) or a symbolic
  * target token resolved against the LIVE layout when the event fires - so
- * symbolic scripts are window-size- and catalog-order-independent:
+ * symbolic scripts are window-size- and catalog-order-independent. A glide
+ * to `code:` keeps resolving that row until the glide completes because
+ * replay follow-scroll can move it in flight:
  *
  *   menu:scene            top-level menu-bar button, by label
  *   item:new_scene        row of the currently open dropdown, by label

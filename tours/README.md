@@ -213,7 +213,7 @@ an unintended interaction.
 | Event | Syntax | Effect |
 | --- | --- | --- |
 | Move | `move <point>` | Moves the pointer immediately. |
-| Glide | `glide <point> <seconds>` | Smoothly moves the pointer over a positive duration. |
+| Glide | `glide <point> <seconds>` | Smoothly moves the pointer over a positive duration. A `code:` endpoint tracks its live row while replay or scrolling moves the panel. |
 | Left click | `click [<mods>] [point]` | Optionally applies a `+`-joined modifier set and moves, then presses and releases the left button. |
 | Right click | `rightclick [<mods>] [point]` | Optionally applies a `+`-joined modifier set and moves, then presses and releases the right button. |
 | Left-drag press | `down [point]` | Optionally moves, then holds the left button. Subsequent moves and glides use the normal drag path. |

@@ -832,6 +832,43 @@ static void test_drag_pointer_motion_ownership(void) {
                glr_pointer_script_owns_pointer_motion(), 0);
 }
 
+/* A code target can move while its glide is in flight: replay follow-scroll
+ * and ordinary panel scrolling both change the row's window y. The pointer
+ * must finish on the live row, matching a ring resolved after the glide. */
+static void test_code_glide_tracks_live_row_position(void) {
+    const char *lines[] = { "glide code:30 0.2" };
+    int target_x = -1, target_y = -1;
+    int initial_scroll;
+    UiPointerState pointer;
+
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(1200, 800);
+    ui_state_pointer_set(100, 100, -1);
+    for (int i = 0; i < 40; i++) {
+        char line[64];
+        snprintf(line, sizeof(line), "// moving code target %d;", i + 1);
+        editor_feed_line(line);
+    }
+    ASSERT_INT("moving-target glide tour starts",
+               glr_pointer_script_start_tour(
+                   "Moving target", "moving.pointer", lines, 1), 1);
+    frames(2);   /* baseline capture; glide fires and auto-scrolls code:30 */
+
+    initial_scroll = editor_state_scroll().scroll;
+    ASSERT_TRUE("code target auto-scrolled before glide",
+                initial_scroll >= 5);
+    glr_ctrl_set_code_panel_scroll(initial_scroll - 5);
+    ASSERT_TRUE("moved code row remains resolvable",
+                glr_pointer_script_resolve_target("code:30",
+                                                  &target_x, &target_y));
+    ASSERT_TRUE("moving-target glide reaches Done",
+                run_until_state(GLR_TOUR_DONE, 30));
+
+    pointer = ui_state_pointer();
+    ASSERT_INT("glide ends at live code-target x", pointer.mouse_x, target_x);
+    ASSERT_INT("glide ends at live code-target y", pointer.mouse_y, target_y);
+}
+
 static void test_tour_blocks_physical_motion_throughout(void) {
     const char *lines[] = {
         "move scene:0.4,0.4",
@@ -1265,6 +1302,7 @@ int main(void) {
     test_backstep_reconstructs_camera_drag();
     test_right_drag_pans_camera_and_rewinds();
     test_drag_pointer_motion_ownership();
+    test_code_glide_tracks_live_row_position();
     test_tour_blocks_physical_motion_throughout();
     test_controller_arbitrates_physical_and_scripted_input();
     test_view_event_ensures_3d_and_reconstructs();

@@ -136,7 +136,8 @@ typedef struct {
                                    /* symbolic)                          */
     int         x, y;              /* literal point (move/glide/ring...) */
     char        target[PS_MAX_TARGET]; /* symbolic point token ("" = use */
-                                   /* x/y); resolved at fire time        */
+                                   /* x/y); resolved at fire time, while */
+                                   /* code glides track the live row     */
     int         dur_frames;        /* glide/ring/echo duration           */
     int         button;            /* down/up: GLUT_LEFT/RIGHT_BUTTON    */
     int         wheel_dir;         /* wheel: +1 / -1                     */
@@ -246,6 +247,7 @@ static int   g_glide_active = 0;
 static int   g_glide_start = 0, g_glide_dur = 1;
 static float g_glide_from_x = 0.0f, g_glide_from_y = 0.0f;
 static float g_glide_to_x = 0.0f, g_glide_to_y = 0.0f;
+static char  g_glide_target[PS_MAX_TARGET] = "";
 
 /* Pending synthesized release for click/rightclick. */
 static int g_release_frame = -1;
@@ -1073,6 +1075,7 @@ static void ps_reset_runtime(void) {
     g_pause_until = -1;
     g_step_wait = PS_WAIT_NONE;
     g_glide_active = 0;
+    g_glide_target[0] = '\0';
     g_release_frame = -1;
     g_button_held = -1;
     g_ripple_frame = -1;
@@ -1345,6 +1348,39 @@ int glr_pointer_script_resolve_target(const char *target, int *mx, int *my) {
     return 0;
 }
 
+/* Code rows can move after a glide fires: replay follow-scroll updates the
+ * panel throughout Highlights, and manual/tour scrolling can do the same.
+ * Keep only code targets live; re-resolving menu targets while their hover
+ * path is opening flyouts would make those carefully authored paths chase a
+ * changing menu layout. A transient miss retains the last valid endpoint. */
+static void ps_refresh_live_glide_target(void) {
+    int mx, my;
+
+    if (!g_glide_target[0])
+        return;
+    if (glr_pointer_script_resolve_target(g_glide_target, &mx, &my)) {
+        g_glide_to_x = (float)mx;
+        g_glide_to_y = (float)my;
+    }
+}
+
+static void ps_step_active_glide(void) {
+    float t;
+    float s;
+
+    if (!g_glide_active)
+        return;
+    ps_refresh_live_glide_target();
+    t = (float)(g_frame - g_glide_start) / (float)g_glide_dur;
+    s = ps_smoothstep(t);
+    ps_dispatch_move(g_glide_from_x + (g_glide_to_x - g_glide_from_x) * s,
+                     g_glide_from_y + (g_glide_to_y - g_glide_from_y) * s);
+    if (t >= 1.0f) {
+        g_glide_active = 0;
+        g_glide_target[0] = '\0';
+    }
+}
+
 /* Resolve an event's point for firing (a literal point passes through).
  * On a failed symbolic resolve, a capture run exits nonzero - recording
  * the wrong interaction is worse than failing - while a tour stops with a
@@ -1390,6 +1426,7 @@ static void ps_fire(const PsEvent *ev) {
     case PS_MOVE:
         if (!ps_fire_point(ev, &x, &y)) break;
         g_glide_active = 0;
+        g_glide_target[0] = '\0';
         ps_dispatch_move(x, y);
         break;
     case PS_GLIDE:
@@ -1401,6 +1438,11 @@ static void ps_fire(const PsEvent *ev) {
         g_glide_from_y = g_py;
         g_glide_to_x = x;
         g_glide_to_y = y;
+        if (strncmp(ev->target, "code:", 5) == 0)
+            snprintf(g_glide_target, sizeof(g_glide_target), "%s",
+                     ev->target);
+        else
+            g_glide_target[0] = '\0';
         break;
     case PS_CLICK:
     case PS_RIGHTCLICK: {
@@ -1604,14 +1646,7 @@ static void ps_advance_one_virtual_frame(void) {
 
     /* Step the active glide AFTER event fire so the glide's own start
      * frame emits its first (near-source) sample this same frame. */
-    if (g_glide_active) {
-        float t = (float)(g_frame - g_glide_start) / (float)g_glide_dur;
-        float s = ps_smoothstep(t);
-        ps_dispatch_move(g_glide_from_x + (g_glide_to_x - g_glide_from_x) * s,
-                         g_glide_from_y + (g_glide_to_y - g_glide_from_y) * s);
-        if (t >= 1.0f)
-            g_glide_active = 0;
-    }
+    ps_step_active_glide();
 
     g_frame++;
     /* No auto-stop on this path: env-driven capture keeps the overlay up until
@@ -1665,6 +1700,7 @@ static void ps_finish_event_immediate(const PsEvent *ev, int allow_overlays) {
     case PS_MOVE:
         if (!ps_fire_point(ev, &x, &y)) break;
         g_glide_active = 0;
+        g_glide_target[0] = '\0';
         ps_dispatch_move(x, y);
         break;
     case PS_GLIDE: {
@@ -1811,8 +1847,10 @@ static void ps_clear_decor_overlays(void) {
  * synthesized click, flush paced typing, cancel a pause. */
 static void ps_force_current_complete(void) {
     if (g_glide_active) {
+        ps_refresh_live_glide_target();
         ps_dispatch_move(g_glide_to_x, g_glide_to_y);
         g_glide_active = 0;
+        g_glide_target[0] = '\0';
     }
     if (g_release_frame >= 0) {
         g_release_frame = -1;
@@ -1836,6 +1874,7 @@ static void ps_tour_enter_done(void) {
         ps_release(g_button_held);
     ps_type_flush();
     g_glide_active = 0;
+    g_glide_target[0] = '\0';
     g_pause_until = -1;
     g_current_event = -1;
     g_step_wait = PS_WAIT_NONE;
@@ -1899,14 +1938,7 @@ static void ps_tour_advance_one_virtual_frame(void) {
         ps_type_send((int)((float)(g_frame - g_type_start) *
                            g_type_cps / PS_FPS) + 1);
 
-    if (g_glide_active) {
-        float t = (float)(g_frame - g_glide_start) / (float)g_glide_dur;
-        float s = ps_smoothstep(t);
-        ps_dispatch_move(g_glide_from_x + (g_glide_to_x - g_glide_from_x) * s,
-                         g_glide_from_y + (g_glide_to_y - g_glide_from_y) * s);
-        if (t >= 1.0f)
-            g_glide_active = 0;
-    }
+    ps_step_active_glide();
 
     g_frame++;
 
@@ -1936,6 +1968,7 @@ static void ps_tour_begin_seek(int target, int pause_at_target) {
     if (g_button_held >= 0)
         ps_release(g_button_held);
     g_glide_active = 0;
+    g_glide_target[0] = '\0';
     g_type_active = 0;
     g_type_text[0] = '\0';
     g_pause_until = -1;
