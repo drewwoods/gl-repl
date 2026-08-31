@@ -16,7 +16,12 @@ on:
     - cron: '20 6 * * *'
   workflow_dispatch:
 
-# The traffic API requires push access, and the job commits its own output.
+# contents: write is for the commit. It is NOT enough for the traffic API:
+# the Actions GITHUB_TOKEN is an "integration" and GitHub refuses the
+# traffic/* endpoints to it outright (HTTP 403, "Resource not accessible by
+# integration") no matter what permissions are granted here. Those endpoints
+# accept only a user token, so the job reads them with the TRAFFIC_TOKEN
+# secret when one exists - see the step below.
 permissions:
   contents: write
 
@@ -60,23 +65,51 @@ jobs:
             --jq '.content' | base64 -d > .ci/traffic-archive.py
           test -s .ci/traffic-archive.py
 
+      # TRAFFIC_TOKEN is a classic PAT with `repo` scope (or a fine-grained one
+      # with Administration: read) belonging to someone with push access.
+      # Without it the traffic/* fetches 403 and only the release download
+      # counts get archived - which is why the summary below says so out loud
+      # rather than leaving a half-empty archive to be discovered months later.
+      #
       # Each endpoint is fetched independently and allowed to fail: a partial
       # snapshot still archives everything else, which beats losing a day.
       - name: Snapshot the traffic API
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.TRAFFIC_TOKEN || github.token }}
         run: |
           mkdir -p .ci/snapshot
+          failed=""
           fetch() {
-            gh api "repos/${GITHUB_REPOSITORY}/$1" > ".ci/snapshot/$2.json" \
-              || { echo "warning: $1 failed"; rm -f ".ci/snapshot/$2.json"; }
+            if ! gh api "repos/${GITHUB_REPOSITORY}/$1" > ".ci/snapshot/$2.json" 2>.ci/err; then
+              echo "warning: $1 failed: $(cat .ci/err)"
+              rm -f ".ci/snapshot/$2.json"
+              failed="$failed $2"
+            fi
           }
           fetch 'traffic/views?per=day'   views
           fetch 'traffic/clones?per=day'  clones
           fetch 'traffic/popular/referrers' referrers
           fetch 'traffic/popular/paths'     paths
           fetch 'releases?per_page=100'     releases
+          rm -f .ci/err
           ls -l .ci/snapshot
+
+          {
+            echo "## Traffic snapshot"
+            if [ -z "$failed" ]; then
+              echo "All endpoints archived."
+            else
+              echo "Endpoints unavailable:\`$failed\`"
+              if [ -z "${{ secrets.TRAFFIC_TOKEN }}" ]; then
+                echo
+                echo "No \`TRAFFIC_TOKEN\` secret is set. The Actions token cannot"
+                echo "read \`traffic/*\` (403 by design), so views, clones, referrers"
+                echo "and paths are **not** being archived and their 14-day window"
+                echo "keeps expiring. Add a PAT with \`repo\` scope as the"
+                echo "\`TRAFFIC_TOKEN\` repository secret to capture them."
+              fi
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Merge into the archive
         run: python3 .ci/traffic-archive.py .ci/snapshot traffic

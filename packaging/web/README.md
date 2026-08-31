@@ -363,6 +363,19 @@ line, not a headcount. Release download counts are cumulative and never
 expire; they are archived anyway because a daily series of a cumulative
 counter is the only way to recover the per-day rate.
 
+**The traffic tables need a `TRAFFIC_TOKEN` secret.** GitHub refuses the
+`traffic/*` endpoints to the Actions `GITHUB_TOKEN` outright - HTTP 403,
+*"Resource not accessible by integration"* - regardless of the `permissions:`
+block, because those endpoints accept only a user token. Add a classic PAT
+with `repo` scope (or a fine-grained one with *Administration: read*)
+belonging to an account with push access, as the repository secret
+`TRAFFIC_TOKEN`.
+
+Without it the workflow still runs and still archives release download
+counts, but views, clones, referrers and paths are skipped - and their
+14-day window keeps expiring. The job writes that state into its own run
+summary rather than leaving a half-empty archive to be discovered later.
+
 ## Benchmarking the web build
 
 `make bench-web` compiles `bench/bench_repl.c` to wasm and runs it headless
