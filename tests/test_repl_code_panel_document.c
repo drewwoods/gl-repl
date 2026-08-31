@@ -547,6 +547,50 @@ static void test_statusbar_readouts(TestHarness *h) {
     glr_ctrl_sync_ui_chrome();
 }
 
+/* The render->hit-test row cache once keyed on the snapshot POINTER alone.
+ * Snapshots are stack values in the router and here, so a later snapshot
+ * lands on a retired one's address and inherited its cached panel rect -
+ * the statusbar band then sat at the old geometry and every chip hit-test
+ * fell through to the text rows. Reusing one snapshot variable across two
+ * different panel layouts reproduces that address collision by
+ * construction rather than by stack luck. */
+static void test_hit_test_cache_survives_snapshot_address_reuse(TestHarness *h) {
+    UiRenderSnapshot snap;
+    UiReplCodePanelLayout layout;
+    int cp_y, status_my;
+
+    printf("Testing hit-test row cache is not fooled by a reused snapshot address...\n");
+    reset_doc_fixture();
+    ui_repl_code_panel_invalidate_row_cache_for_test();
+
+    /* Render in LEFT layout at a small viewport: this is what seeds the
+     * cache with a panel rect the TOP-layout probe below must not inherit. */
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    ui_state_viewport_set_size(800, 260);
+    glr_ctrl_sync_ui_chrome();
+    editor_feed_line("glClearColor(0, 0, 0, 1);");
+    editor_feed_line("glBegin(GL_POINTS);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("glEnd();");
+    build_doc(&snap, &layout);
+    ui_repl_code_panel_render_with_chrome(&snap, NULL);
+
+    /* Same `snap` storage, different panel geometry. */
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_TOP;
+    ui_state_viewport_set_size(1600, 300);
+    glr_ctrl_sync_ui_chrome();
+    ui_layout_code_panel_rect(NULL, &cp_y, NULL, NULL);
+    status_my = ui_state_viewport().window_h - (cp_y + STATUSBAR_H / 2);
+    build_doc(&snap, &layout);
+
+    TEST_ASSERT_TRUE(h, "rebuilt snapshot gets a fresh build serial",
+                     snap.build_serial != 0);
+    TEST_ASSERT_TRUE(h, "help chip is hit-testable after the layout change",
+                     statusbar_hit_x(&snap, status_my, UI_HIT_HELP_TOGGLE) >= 0);
+    TEST_ASSERT_TRUE(h, "focus chip is hit-testable after the layout change",
+                     statusbar_hit_x(&snap, status_my, UI_HIT_CODE_FOCUS_TOGGLE) >= 0);
+}
+
 static void test_statusbar_cull_rank_independent_of_order(TestHarness *h) {
     UiRenderSnapshot snap;
     UiReplCodePanelLayout layout;
@@ -1339,6 +1383,7 @@ int main(void) {
     }
 
     test_attrib_bit_tokens_align_on_edit_line(&g_harness);
+    test_hit_test_cache_survives_snapshot_address_reuse(&g_harness);
     test_statusbar_readouts(&g_harness);
     test_statusbar_cull_rank_independent_of_order(&g_harness);
     test_statusbar_hover_band_host(&g_harness);

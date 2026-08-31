@@ -2559,9 +2559,17 @@ static void glr_ctrl_assign_plot_title(int line_idx, char *out, size_t out_sz) {
 }
 
 void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
+    static unsigned s_build_serial;
     FlatProgramView flat_program;
     ReplPredefView predef;
     memset(snap, 0, sizeof(*snap));
+
+    /* Identity for snapshot-keyed caches downstream - see the field's note
+     * in ui/app/snapshot.h. Starts at 1 so 0 stays the "not built" value;
+     * wrapping skips 0 for the same reason. */
+    if (++s_build_serial == 0)
+        s_build_serial = 1;
+    snap->build_serial = s_build_serial;
 
     /* Refresh derived workspace header lines so the import/export view
      * reflects the current frame before rendering reads it. */

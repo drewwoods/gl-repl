@@ -316,6 +316,14 @@ typedef struct UiRenderSnapshot {
      * cross-fade/cube visual purely from this pair. */
     int                         view_ortho_mode;
     float                       view_projection_mix;
+
+    /* Monotonic stamp assigned by glr_ctrl_build_ui_snapshot(), unique to
+     * this build. Snapshots are stack values in several callers, so their
+     * addresses are recycled; anything caching work derived from a snapshot
+     * must key on this rather than on the pointer. 0 = never built by the
+     * controller, which is what makes such a cache miss instead of matching
+     * a stale entry. */
+    unsigned                    build_serial;
 } UiRenderSnapshot;
 
 #endif /* UI_SNAPSHOT_H */

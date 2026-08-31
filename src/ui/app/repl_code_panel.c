@@ -112,11 +112,24 @@ typedef struct {
 
 static const char *repl_code_panel_display_text(const UiRenderSnapshot *snap, int line_idx);
 
+/* Render->hit-test row cache. The address alone does NOT identify a
+ * snapshot: callers build them on the stack (glr_ctrl_router.c, tests), so
+ * a later, unrelated snapshot can land on a retired one's address and hand
+ * back a builder laid out for the wrong panel rect. `build_serial` is the
+ * per-build stamp that tells the two apart; a snapshot that carries none
+ * (serial 0) never matches. */
 static struct {
     const UiRenderSnapshot *snap;
+    unsigned                snap_serial;
     ReplCodePanelBuilder    builder;
     int                     valid;
 } g_builder_cache;
+
+static int repl_code_panel_cache_matches(const UiRenderSnapshot *snap) {
+    return g_builder_cache.valid && g_builder_cache.snap == snap &&
+           snap->build_serial != 0 &&
+           g_builder_cache.snap_serial == snap->build_serial;
+}
 
 static UiTextPanelColor repl_code_panel_rgb(float r, float g, float b) {
     UiTextPanelColor color = { r, g, b, 1.0f, 0 };
@@ -2969,6 +2982,7 @@ void ui_repl_code_panel_render_with_chrome(const UiRenderSnapshot *snap,
     prof_end(PROF_CODE_PANEL_ROWS);
 
     g_builder_cache.snap    = snap;
+    g_builder_cache.snap_serial = snap->build_serial;
     g_builder_cache.builder = builder;
     g_builder_cache.builder.text_snap.rows = g_repl_code_panel_rows;
     g_builder_cache.valid   = 1;
@@ -3103,7 +3117,7 @@ UiHit ui_repl_code_panel_hit_test(const UiRenderSnapshot *snap,
     if (!snap)
         return ui_hit_none();
 
-    if (g_builder_cache.valid && g_builder_cache.snap == snap) {
+    if (repl_code_panel_cache_matches(snap)) {
         builder = g_builder_cache.builder;
         builder.text_snap.rows = g_repl_code_panel_rows;
     } else {
@@ -3190,7 +3204,7 @@ int ui_repl_code_panel_scrollbar_scroll_at(const UiRenderSnapshot *snap,
     if (!snap)
         return -1;
 
-    if (g_builder_cache.valid && g_builder_cache.snap == snap) {
+    if (repl_code_panel_cache_matches(snap)) {
         builder = g_builder_cache.builder;
         builder.text_snap.rows = g_repl_code_panel_rows;
     } else {
@@ -3318,6 +3332,7 @@ int ui_repl_code_panel_input_row_has_color_swatch(
 void ui_repl_code_panel_invalidate_row_cache_for_test(void) {
     g_builder_cache.valid = 0;
     g_builder_cache.snap  = NULL;
+    g_builder_cache.snap_serial = 0;
 }
 
 /* Test-only: after a render or hit-test populates the row builder,
@@ -3359,7 +3374,7 @@ void ui_repl_code_panel_gutter_labels_for_lines(const UiRenderSnapshot *snap,
     if (!snap || !source_lines)
         return;
 
-    if (g_builder_cache.valid && g_builder_cache.snap == snap) {
+    if (repl_code_panel_cache_matches(snap)) {
         builder = g_builder_cache.builder;
     } else {
         if (!repl_code_panel_init_builder(&builder, snap))
