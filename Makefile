@@ -1674,6 +1674,42 @@ web: require-emcc ## Build the Emscripten/wasm web target (needs emcc on PATH --
 web-serve: web ## Serve the built web target over HTTP (builds it first if needed).
 	python3 scripts/web-serve.py $(WEB_BINDIR)
 
+# Publishing is CI's job, not a local upload: .github/workflows/deploy-pages.yml
+# builds the wasm target on a clean runner (Emscripten pinned, music pulled from
+# the MUSIC_TAG release) and deploys that to Pages. A push to main already
+# triggers it; this target is the manual/out-of-band spelling, so what ships is
+# always a CI build and never whatever happens to sit in build/release-web.
+#? WEB_PAGES_BRANCH: branch the Pages deploy workflow is dispatched on (default main).
+WEB_PAGES_WORKFLOW = deploy-pages.yml
+WEB_PAGES_BRANCH  ?= main
+WEB_PAGES_URL      = https://drewwoods.github.io/gl-repl/
+
+web-deploy: ## Trigger the GitHub Pages deploy workflow for the web build and follow it (needs gh).
+	@command -v gh >/dev/null 2>&1 || { \
+		echo "web-deploy: needs the GitHub CLI (gh) on PATH." >&2; \
+		echo "  brew install gh && gh auth login" >&2; \
+		exit 1; \
+	}
+	@echo "Dispatching $(WEB_PAGES_WORKFLOW) on $(WEB_PAGES_BRANCH)..."
+	@gh workflow run $(WEB_PAGES_WORKFLOW) --ref $(WEB_PAGES_BRANCH)
+	@# The run needs a moment to exist before it can be looked up by id.
+	@sleep 5
+	@# Filter to workflow_dispatch so a concurrent push-triggered run is not
+	@# mistaken for the one just dispatched.
+	@run=$$(gh run list --workflow=$(WEB_PAGES_WORKFLOW) --branch $(WEB_PAGES_BRANCH) \
+		--event workflow_dispatch --limit 1 --json databaseId -q '.[0].databaseId'); \
+	 [ -n "$$run" ] || { echo "web-deploy: could not find the dispatched run." >&2; exit 1; }; \
+	 echo "Watching run $$run..."; \
+	 gh run watch "$$run" --exit-status
+	@echo "Deployed: $(WEB_PAGES_URL)"
+
+web-deploy-status: ## Show recent GitHub Pages deploy runs for the web build (needs gh).
+	@command -v gh >/dev/null 2>&1 || { \
+		echo "web-deploy-status: needs the GitHub CLI (gh) on PATH." >&2; exit 1; \
+	}
+	@gh run list --workflow=$(WEB_PAGES_WORKFLOW) --limit 5
+	@echo "Live: $(WEB_PAGES_URL)"
+
 # macOS .app bundle so the Dock/Finder show the gl-repl cube icon instead of
 # the launching terminal's icon. Pure packaging - no source changes, so the
 # -std=c99 / Linux-portable build stays untouched. Needs rsvg-convert
@@ -3568,7 +3604,8 @@ PUBLIC_MAKE_VARS := \
 	GLUT_BITMAP_BENCH_ARGS MACOS_UNIVERSAL MSAN_CC MUSIC_DEST MUSIC_TAG \
 	NO_MUSIC NOSAN NO_SAN \
 	SAMPLE SAN SKIP_CHECKS TEST_CASE TEST_JOBS TEST_VERBOSE \
-	USE_GL_STUBS V VERBOSE VERTEX_LABEL_BENCH_ARGS WEB ZSHRC
+	USE_GL_STUBS V VERBOSE VERTEX_LABEL_BENCH_ARGS WEB WEB_PAGES_BRANCH \
+	ZSHRC
 
 # The target-name grammar: `<verb>-<subject>`, one verb per line of business.
 # The list is here rather than inside the guard so `make help-<verb>` and
@@ -3582,7 +3619,7 @@ MAKE_TARGET_VERBS := \
 # below.
 ROOT_TARGETS := \
 	all app demos gl-repl gl-repl-unchained glut render3d-asset-builder \
-	web web-serve \
+	web web-serve web-deploy web-deploy-status \
 	debug-msan freeglut-clean glprobe glprobe-preload \
 	assign-plot-demo color-picker-demo cpuprof-demo editor-demo memprof-demo \
 	render3d-demo render3d-hot repl-demo repl-live-demo variable-panel-demo

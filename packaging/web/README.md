@@ -161,6 +161,37 @@ there: 5.4 MB vs 1.8 MB of `index.wasm` for no measurable runtime difference,
 so it is purely a fetch-and-compile cost. Pass
 `make web DEBUG_INFO_CFLAGS=-g2` when a browser profile needs named frames.
 
+## Hosting (GitHub Pages)
+
+The build is published at <https://drewwoods.github.io/gl-repl/> by
+`.github/workflows/deploy-pages.yml`, which runs on every push to `main`.
+Pages is configured with `build_type: workflow`, so the Actions artifact *is*
+the site - there is no `gh-pages` branch and nothing is uploaded from a
+developer machine. `make web-deploy` dispatches that same workflow by hand and
+follows it; `make web-deploy-status` lists recent runs. Both need `gh`.
+
+Deploying only through CI is deliberate: the runner pins Emscripten, builds
+gl4es/GLU from their recorded SHAs, and pulls the music pack from the
+`assets-v1` release, so what ships never depends on the state of a local
+`build/release-web`.
+
+Two things the workflow does that are easy to get wrong by hand:
+
+- **Music comes from `assets/favorite`, not `assets/`.** `assets/` also holds
+  the tracked `sample.mp3` test fixture, which would otherwise ship as a 19th
+  "track" in the player.
+- **`scripts/check-web-manifest.py` gates the upload.** A `music.json` entry
+  whose file did not make it into the site 404s only when a listener presses
+  play, so the manifest is checked against the assembled directory first.
+
+The page itself loads in ~2.3 MB (`index.html` + `index.js` + `index.wasm` +
+the ~1 KB manifest). Tracks are *not* in the Emscripten preload package: they
+sit beside the page as loose mp3s and `glr_audio.c` sets `audio.src` only when
+one is played, so a track transfers on demand and Pages serves it with range
+requests. Release assets cannot host them directly - they send no
+`Access-Control-Allow-Origin` header and redirect to a signed URL that expires
+in about an hour.
+
 The shipping build uses `examples/catalog-emscripten.ini`. To compile a
 different catalog into the web app, pass `EXAMPLES_CATALOG` to `make web`; an
 explicit override accepts the same flat-file and free-form-tag catalog shape
