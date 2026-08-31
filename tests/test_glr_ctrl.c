@@ -8740,10 +8740,22 @@ static void test_autocomplete_wheel_routing(void) {
                editor_scroll(), scroll_before);
 }
 
-static void test_console_visibility_follows_example_scene_changes(void) {
-    GLCmd *flat_cmds;
+static int test_flat_program_has_console(void) {
+    FlatProgramView flat = repl_state_flat_program_view();
+    int i;
 
-    printf("--- imrepl_ctrl console visibility across examples ---\n");
+    for (i = 0; i < flat.cmd_count; i++) {
+        if (flat.cmds[i].valid && flat.cmds[i].type == CMD_CONSOLE)
+            return 1;
+    }
+    return 0;
+}
+
+static void test_console_visibility_follows_document_replacements(void) {
+    GLCmd *flat_cmds;
+    unsigned int generation_before;
+
+    printf("--- imrepl_ctrl console visibility across replacements ---\n");
     prepare_display_fixture();
     replay_state_mut()->active = 0;
     replay_state_mut()->state = REPLAY_OFF;
@@ -8759,6 +8771,7 @@ static void test_console_visibility_follows_example_scene_changes(void) {
     set_cmd3(&flat_cmds[0], CMD_VERTEX3F, 0, "glVertex3f(1, 2, 3);",
              1.0f, 2.0f, 3.0f);
     repl_state_scenes_set_active_example_idx(11);
+    editor_undo_note_wholesale_replacement();
     glr_ctrl_display_frame();
     ASSERT_INT("next example closes the stale console", console_is_open(), 0);
 
@@ -8770,13 +8783,55 @@ static void test_console_visibility_follows_example_scene_changes(void) {
     glr_ctrl_display_frame();
     ASSERT_INT("same-example refresh preserves manual console visibility",
                console_is_open(), 1);
+
+    /* Promotion changes example/user-slot identity without replacing the
+     * live document or bumping its undo generation. It must not look like a
+     * leave transition and dismiss a console the user opened manually. */
+    prepare_display_fixture();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+    repl_state_scenes_set_active_example_idx(10);
+    glr_ctrl_display_frame();
+    ASSERT_INT("promotion fixture has no console command",
+               test_flat_program_has_console(), 0);
+    console_open();
+    generation_before = editor_undo_generation();
+    editor_undo_push_snapshot();
+    ASSERT_TRUE("first edit promotes the example", repl_active_user_scene() >= 0);
+    ASSERT_INT("promotion preserves the document generation",
+               (int)editor_undo_generation(), (int)generation_before);
+    glr_ctrl_display_frame();
+    ASSERT_INT("promotion preserves a manually opened console",
+               console_is_open(), 1);
+
+    /* Consecutive tutorials are wholesale replacements but retain transient
+     * scene identity (-1, -1). The generation change must still close a
+     * console left open on the outgoing post-tutorial document. */
+    prepare_display_fixture();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+    ASSERT_TRUE("tutorial replacement fixture has two lessons",
+                repl_tutorial_count() > 1);
+    if (repl_tutorial_count() > 1) {
+        glr_ctrl_start_tutorial(0);
+        glr_ctrl_display_frame();
+        ASSERT_INT("first tutorial fixture has no console command",
+                   test_flat_program_has_console(), 0);
+        tutorial_stop();
+        console_open();
+        glr_ctrl_start_tutorial(1);
+        glr_ctrl_display_frame();
+        ASSERT_INT("next tutorial closes the stale console",
+                   console_is_open(), 0);
+        tutorial_stop();
+    }
 }
 
 int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
     test_display_frame_builds_config_and_restores_live_state();
-    test_console_visibility_follows_example_scene_changes();
+    test_console_visibility_follows_document_replacements();
     test_display_frame_clear_color_after_clear_is_ignored();
     test_display_frame_clear_color_before_clear_applies();
     test_display_frame_chrome_clears_after_the_scene();

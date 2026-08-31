@@ -162,11 +162,11 @@ static UiRenderSnapshot g_last_ui_snapshot;
 static int g_last_ui_snapshot_valid = 0;
 static ReplReplayPathSnapshot g_published_replay_path;
 static int g_last_replay_follow_src_line = -1;
-/* Identity and console-presence state observed by the last display frame.
- * Reset with the rest of the world so the first scene after a reset is also
- * treated as a fresh destination. */
-static int g_last_console_scene_slot = -2;
-static int g_last_console_example_idx = -2;
+/* Document generation and console-presence state observed by the last display
+ * frame. Reset with the rest of the world so the first scene after a reset is
+ * also treated as a fresh destination. */
+static unsigned int g_last_console_undo_generation = 0;
+static int g_have_console_undo_generation = 0;
 static int g_last_scene_had_console = 0;
 /* Offline/capture mode: advance the complete fixed-dt simulation once per
  * rendered frame instead of once per wall-clock-paced GLUT timer callback. */
@@ -3530,14 +3530,16 @@ void glr_ctrl_display_frame(void) {
         prof_end(PROF_ASSIGN_PLOT_MARKERS);
     }
 
-    /* Auto-open console panel if the document uses console(...) and scene changed
-     * or newly added to the document. Only scanned on scene load / program refresh. */
+    /* Follow console visibility across wholesale document replacements: open
+     * for a destination that uses console(...), close when leaving for one
+     * that does not. Within one document, adding console(...) still auto-opens
+     * the panel without overriding a user's manual visibility choice on other
+     * program refreshes. */
     {
-        int active_slot = repl_active_user_scene();
-        int active_example = repl_state_scenes().active_example_idx;
-        int scene_changed = active_slot != g_last_console_scene_slot ||
-                            active_example != g_last_console_example_idx;
-        if (flat_refresh != REPL_FLAT_REFRESH_NONE || scene_changed) {
+        unsigned int undo_generation = editor_undo_generation();
+        int document_replaced = !g_have_console_undo_generation ||
+            undo_generation != g_last_console_undo_generation;
+        if (flat_refresh != REPL_FLAT_REFRESH_NONE || document_replaced) {
             int has_console = 0;
             for (int i = 0; i < flat_program.cmd_count; i++) {
                 if (flat_program.cmds[i].valid && flat_program.cmds[i].type == CMD_CONSOLE) {
@@ -3545,13 +3547,9 @@ void glr_ctrl_display_frame(void) {
                     break;
                 }
             }
-            if (scene_changed) {
-                g_last_console_scene_slot = active_slot;
-                g_last_console_example_idx = active_example;
-                /* Console visibility belongs to the destination scene. A
-                 * console-bearing example opens it; moving on to an ordinary
-                 * scene closes the now-empty panel instead of carrying it
-                 * across the scene boundary. */
+            if (document_replaced) {
+                g_last_console_undo_generation = undo_generation;
+                g_have_console_undo_generation = 1;
                 console_set_open(has_console);
             } else if (has_console && !g_last_scene_had_console) {
                 console_open();
@@ -4707,8 +4705,8 @@ void glr_ctrl_reset_all(void) {
     glr_ctrl_view_reset();
     g_last_ui_snapshot_valid = 0;
     g_last_replay_follow_src_line = -1;
-    g_last_console_scene_slot = -2;
-    g_last_console_example_idx = -2;
+    g_last_console_undo_generation = 0;
+    g_have_console_undo_generation = 0;
     g_last_scene_had_console = 0;
     g_frame_replay_exec_limit = -1;
     editor_state_reset();
