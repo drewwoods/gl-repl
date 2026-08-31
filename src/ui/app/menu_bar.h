@@ -151,6 +151,12 @@ const char *ui_menu_bar_menu_item_label_for_test(int menu_id, int item_idx);
  * the hovered parent row or Scene example submenu changed. */
 int  ui_menu_bar_update_pointer_hover(int mx, int my, float now);
 
+/* Is (mx, my) inside the currently open flyout? A flyout with no room beside
+ * its parent flips back over the dropdown, so the point that opened it can
+ * land on one of its rows - the caller needs to know that before routing a
+ * press. Window coords, as everywhere else in this header. */
+int  ui_menu_bar_point_in_open_submenu(int mx, int my);
+
 /* Pure hit-test: classify (mx, my) as a UiHit for menu-bar-related regions.
  * Reports the menu-bar slice of the hit-test in priority order: submenu row >
  * open dropdown row > pin button > top-level menu button.

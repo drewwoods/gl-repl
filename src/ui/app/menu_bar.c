@@ -1919,6 +1919,17 @@ static void update_submenu_hover_at(int mx, int my, float now) {
     submenu_reset();
 }
 
+int ui_menu_bar_point_in_open_submenu(int mx, int my) {
+    int sx, sy, sw, sh;
+
+    if (g_submenu_menu_id < 0 || g_submenu_parent_row < 0)
+        return 0;
+    if (!submenu_rect(g_submenu_menu_id, g_submenu_parent_row,
+                      &sx, &sy, &sw, &sh))
+        return 0;
+    return point_in_rect_gl(mx, my, sx, sy, sw, sh);
+}
+
 int ui_menu_bar_update_pointer_hover(int mx, int my, float now) {
     int old_hover  = g_menu_item_hover;
     int old_menu   = g_submenu_menu_id;

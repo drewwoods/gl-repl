@@ -2700,6 +2700,41 @@ static void mouse_dispatch(int button, int state, int x, int y) {
         ui_state_pointer_set_pos(x, y);
     }
 
+    /* Menu flyouts open on hover (update_submenu_hover_at), and hover is a
+     * pointer concept a touch screen does not have: with no passive motion
+     * before the press, a tap on a Config/Scene section row finds no open
+     * flyout and the parent row is inert on click, so the menu is a dead end
+     * under touch (the web build's GLUT layer synthesizes only
+     * mousedown/move/up from touches). Resolve hover from the press point
+     * instead of relying on a preceding motion event. For a mouse this is
+     * idempotent - passive motion already ran this at these exact coords, so
+     * the state is unchanged - while a tap now opens the flyout on the first
+     * press and picks a row on the second.
+     *
+     * A flyout with no room beside its parent flips back over the dropdown,
+     * and then it covers the very point that opened it: routing this same
+     * press on would pick whichever row the finger happens to be over -
+     * loading a scene the user never chose. A press that opens a flyout onto
+     * itself is therefore consumed here, leaving the second tap to choose.
+     * Only that case: a flyout that opened beside its parent falls through to
+     * the (inert) parent row exactly as a mouse click on it would, and a tap
+     * on an ordinary dropdown row changes hover without opening anything and
+     * must still activate on its first press. */
+    if (state == GLUT_DOWN) {
+        UiMenuBarRuntimeSnapshot before, after;
+        ui_menu_bar_runtime_capture(&before);
+        ui_menu_bar_update_pointer_hover(x, y,
+                                         repl_state_variables().anim_time);
+        ui_menu_bar_runtime_capture(&after);
+        if (after.submenu_parent_row >= 0 &&
+            (after.submenu_parent_row != before.submenu_parent_row ||
+             after.submenu_menu_id != before.submenu_menu_id) &&
+            ui_menu_bar_point_in_open_submenu(x, y)) {
+            editor_request_redraw();
+            return;
+        }
+    }
+
     /* The release paired with the right-click that opened the card is not a
      * new editor interaction. A later press/wheel event in the editor is. */
     if (state == GLUT_DOWN && ui_state_command_description().visible &&

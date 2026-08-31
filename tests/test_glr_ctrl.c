@@ -7105,6 +7105,141 @@ static void test_mouse_routing_and_hit_testing(void) {
     glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, 100, 100);
 }
 
+/* A menu flyout opens on hover (ui_menu_bar_update_pointer_hover, driven from
+ * passive motion), and a touch screen produces no passive motion at all - the
+ * web build's GLUT layer synthesizes only mousedown/move/up from touches. A
+ * press must therefore resolve hover from its own coordinates, or a tap on a
+ * Config section row finds no flyout, hits the parent row, and the parent row
+ * is inert on click: the menu is a dead end under touch. */
+static void test_press_opens_flyout_without_prior_motion(void) {
+    UiMenuBarRuntimeSnapshot menu_snap;
+    int parent_row = -1;
+    int mx = -1, my = -1;
+    int win_w, win_h;
+
+    printf("--- imrepl_ctrl press opens a flyout with no preceding motion ---\n");
+    prepare_display_fixture();
+    glr_ctrl_reshape(1000, 700);
+    /* An earlier case leaves the help overlay up, and it captures left
+     * clicks ahead of everything else in the press path. */
+    ui_state_help_mut()->visible = 0;
+    win_w = ui_state_viewport().window_w;
+    win_h = ui_state_viewport().window_h;
+    /* Paint once before probing: the dropdown's geometry follows the code
+     * panel layout, which the frame establishes. Probing first would find
+     * coordinates the press then no longer agrees with. */
+    ui_menu_bar_set_open_menu(GLR_MENU_CONFIG, 0.0f);
+    glr_ctrl_display_frame();
+
+    /* Find a Config parent row by the property under test - a point where a
+     * hover opens a flyout - rather than by hit-test kind, so the fixture
+     * cannot drift from what the press path actually consults. Each probe
+     * reopens the menu so the walk leaves no hover behind it. */
+    for (int y = 0; y < win_h && mx < 0; y += 8) {
+        for (int x = 0; x < win_w; x += 8) {
+            ui_menu_bar_close();
+            ui_menu_bar_set_open_menu(GLR_MENU_CONFIG, 0.0f);
+            ui_menu_bar_update_pointer_hover(x, y, 0.0f);
+            ui_menu_bar_runtime_capture(&menu_snap);
+            if (menu_snap.submenu_parent_row >= 0) {
+                mx = x;
+                my = y;
+                parent_row = menu_snap.submenu_parent_row;
+                break;
+            }
+        }
+    }
+    ASSERT_TRUE("found a Config parent row a hover would open", mx >= 0);
+
+    /* The state a finger arrives in: menu open, nothing hovered, and one
+     * frame painted since it opened - the dropdown's hit geometry is derived
+     * during the frame, so a press before the first paint has nothing to
+     * hit-test against. */
+    ui_menu_bar_close();
+    ui_menu_bar_set_open_menu(GLR_MENU_CONFIG, 0.0f);
+    glr_ctrl_display_frame();
+    ui_menu_bar_runtime_capture(&menu_snap);
+    ASSERT_INT("no flyout open before the press", menu_snap.submenu_parent_row, -1);
+
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, mx, my);
+
+    ui_menu_bar_runtime_capture(&menu_snap);
+    ASSERT_INT("press leaves the dropdown open",
+               ui_menu_bar_open_menu_id(), GLR_MENU_CONFIG);
+    ASSERT_INT("press opens the row's flyout",
+               menu_snap.submenu_parent_row, parent_row);
+    ASSERT_INT("flyout belongs to the Config menu",
+               menu_snap.submenu_menu_id, GLR_MENU_CONFIG);
+
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, mx, my);
+    ui_menu_bar_close();
+}
+
+/* When there is no room beside the parent row, the flyout flips back over the
+ * dropdown - so it covers the point that opened it. Routing that same press on
+ * would pick whichever flyout row the finger landed on, which for the Scene
+ * menu means loading a scene the user never chose. The opening press has to be
+ * consumed, leaving the second tap to choose. */
+static void test_press_defers_when_flyout_covers_the_tap(void) {
+    UiMenuBarRuntimeSnapshot menu_snap;
+    int mx = -1, my = -1;
+    int win_w, win_h;
+
+    printf("--- imrepl_ctrl press is consumed when the flyout covers it ---\n");
+    prepare_display_fixture();
+    /* Narrow enough that the Scene flyout has to flip over its parent, the
+     * same width test_ui_menu_bar pins that behavior at. */
+    glr_ctrl_reshape(420, 600);
+    ui_state_help_mut()->visible = 0;
+    win_w = ui_state_viewport().window_w;
+    win_h = ui_state_viewport().window_h;
+    ui_menu_bar_set_open_menu(GLR_MENU_SCENE, 0.0f);
+    glr_ctrl_display_frame();
+
+    /* A point that opens a flyout which then covers that same point. */
+    for (int y = 0; y < win_h && mx < 0; y += 4) {
+        for (int x = 0; x < win_w; x += 4) {
+            ui_menu_bar_close();
+            ui_menu_bar_set_open_menu(GLR_MENU_SCENE, 0.0f);
+            ui_menu_bar_update_pointer_hover(x, y, 0.0f);
+            ui_menu_bar_runtime_capture(&menu_snap);
+            if (menu_snap.submenu_parent_row >= 0 &&
+                ui_menu_bar_point_in_open_submenu(x, y)) {
+                mx = x;
+                my = y;
+                break;
+            }
+        }
+    }
+    ASSERT_TRUE("found a tap point an opened flyout covers", mx >= 0);
+
+    ui_menu_bar_close();
+    ui_menu_bar_set_open_menu(GLR_MENU_SCENE, 0.0f);
+    glr_ctrl_display_frame();
+
+    /* First tap: opens the flyout and stops there. A scene pick would have
+     * closed the whole menu (route_submenu_item_hit dismisses on load), so an
+     * open Scene menu is the proof nothing was chosen. */
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, mx, my);
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, mx, my);
+    ui_menu_bar_runtime_capture(&menu_snap);
+    ASSERT_INT("opening tap leaves the Scene menu open",
+               ui_menu_bar_open_menu_id(), GLR_MENU_SCENE);
+    ASSERT_TRUE("opening tap opened the flyout",
+                menu_snap.submenu_parent_row >= 0);
+    ASSERT_TRUE("the flyout covers the tap point",
+                ui_menu_bar_point_in_open_submenu(mx, my));
+
+    /* Second tap at the same point now picks the row under it. */
+    glr_ctrl_display_frame();
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_DOWN, mx, my);
+    glr_ctrl_mouse(GLUT_LEFT_BUTTON, GLUT_UP, mx, my);
+    ASSERT_INT("second tap picks the scene and dismisses the menu",
+               ui_menu_bar_open_menu_id(), -1);
+
+    ui_menu_bar_close();
+}
+
 /* glMaterialfv's RGBA value lives in a compound literal at args[2..5],
  * behind two baked enum tokens - so both the read (swatch color) and the
  * write (source rewrite) take their own path through the picker host. */
@@ -8927,6 +9062,8 @@ int main(void) {
     test_display_frame_merges_light_theme_and_enable_mask();
     test_export_light_bridge_reads_app_state();
     test_mouse_routing_and_hit_testing();
+    test_press_opens_flyout_without_prior_motion();
+    test_press_defers_when_flyout_covers_the_tap();
     test_color_picker_materialfv();
     test_color_picker_literal_function_body();
     test_special_key_shortcuts();
