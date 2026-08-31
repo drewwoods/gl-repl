@@ -162,6 +162,12 @@ static UiRenderSnapshot g_last_ui_snapshot;
 static int g_last_ui_snapshot_valid = 0;
 static ReplReplayPathSnapshot g_published_replay_path;
 static int g_last_replay_follow_src_line = -1;
+/* Identity and console-presence state observed by the last display frame.
+ * Reset with the rest of the world so the first scene after a reset is also
+ * treated as a fresh destination. */
+static int g_last_console_scene_slot = -2;
+static int g_last_console_example_idx = -2;
+static int g_last_scene_had_console = 0;
 /* Offline/capture mode: advance the complete fixed-dt simulation once per
  * rendered frame instead of once per wall-clock-paced GLUT timer callback. */
 static int g_tick_per_frame = 0;
@@ -3527,10 +3533,11 @@ void glr_ctrl_display_frame(void) {
     /* Auto-open console panel if the document uses console(...) and scene changed
      * or newly added to the document. Only scanned on scene load / program refresh. */
     {
-        static int s_last_console_scene_slot = -2;
-        static int s_last_had_console = 0;
         int active_slot = repl_active_user_scene();
-        if (flat_refresh != REPL_FLAT_REFRESH_NONE || active_slot != s_last_console_scene_slot) {
+        int active_example = repl_state_scenes().active_example_idx;
+        int scene_changed = active_slot != g_last_console_scene_slot ||
+                            active_example != g_last_console_example_idx;
+        if (flat_refresh != REPL_FLAT_REFRESH_NONE || scene_changed) {
             int has_console = 0;
             for (int i = 0; i < flat_program.cmd_count; i++) {
                 if (flat_program.cmds[i].valid && flat_program.cmds[i].type == CMD_CONSOLE) {
@@ -3538,15 +3545,18 @@ void glr_ctrl_display_frame(void) {
                     break;
                 }
             }
-            if (active_slot != s_last_console_scene_slot) {
-                s_last_console_scene_slot = active_slot;
-                if (has_console) {
-                    console_open();
-                }
-            } else if (has_console && !s_last_had_console) {
+            if (scene_changed) {
+                g_last_console_scene_slot = active_slot;
+                g_last_console_example_idx = active_example;
+                /* Console visibility belongs to the destination scene. A
+                 * console-bearing example opens it; moving on to an ordinary
+                 * scene closes the now-empty panel instead of carrying it
+                 * across the scene boundary. */
+                console_set_open(has_console);
+            } else if (has_console && !g_last_scene_had_console) {
                 console_open();
             }
-            s_last_had_console = has_console;
+            g_last_scene_had_console = has_console;
         }
     }
 
@@ -4697,6 +4707,9 @@ void glr_ctrl_reset_all(void) {
     glr_ctrl_view_reset();
     g_last_ui_snapshot_valid = 0;
     g_last_replay_follow_src_line = -1;
+    g_last_console_scene_slot = -2;
+    g_last_console_example_idx = -2;
+    g_last_scene_had_console = 0;
     g_frame_replay_exec_limit = -1;
     editor_state_reset();
     ui_state_reset();

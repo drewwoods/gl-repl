@@ -8740,10 +8740,43 @@ static void test_autocomplete_wheel_routing(void) {
                editor_scroll(), scroll_before);
 }
 
+static void test_console_visibility_follows_example_scene_changes(void) {
+    GLCmd *flat_cmds;
+
+    printf("--- imrepl_ctrl console visibility across examples ---\n");
+    prepare_display_fixture();
+    replay_state_mut()->active = 0;
+    replay_state_mut()->state = REPLAY_OFF;
+    flat_cmds = repl_state_flat_program_writable()->cmds;
+
+    set_cmd3(&flat_cmds[0], CMD_CONSOLE, 0, "console(\"recipe\");",
+             0.0f, 0.0f, 0.0f);
+    repl_state_flat_program_set_count(1);
+    repl_state_scenes_set_active_example_idx(10);
+    glr_ctrl_display_frame();
+    ASSERT_INT("console example opens the console", console_is_open(), 1);
+
+    set_cmd3(&flat_cmds[0], CMD_VERTEX3F, 0, "glVertex3f(1, 2, 3);",
+             1.0f, 2.0f, 3.0f);
+    repl_state_scenes_set_active_example_idx(11);
+    glr_ctrl_display_frame();
+    ASSERT_INT("next example closes the stale console", console_is_open(), 0);
+
+    /* A refresh within one scene is not a scene transition: a console the
+     * user opened manually should not be dismissed merely because they edit
+     * an ordinary command. */
+    console_open();
+    repl_state_mark_flat_dirty();
+    glr_ctrl_display_frame();
+    ASSERT_INT("same-example refresh preserves manual console visibility",
+               console_is_open(), 1);
+}
+
 int main(void) {
     printf("--- imrepl_ctrl tests ---\n");
 
     test_display_frame_builds_config_and_restores_live_state();
+    test_console_visibility_follows_example_scene_changes();
     test_display_frame_clear_color_after_clear_is_ignored();
     test_display_frame_clear_color_before_clear_applies();
     test_display_frame_chrome_clears_after_the_scene();
