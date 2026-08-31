@@ -45,7 +45,7 @@ Now press `Ctrl+T`. The torus spins — the rate is just the scalar in front of
 - **Render as you type** — edit a `glVertex3f`, see it move.
 - **`Ctrl+T` for time** — reference `t` anywhere, animation with no boilerplate.
 - **A C-like language** — loops, functions, `if`; expressions wherever a number goes.
-- [**Runs in the browser**]((https://drewwoods.github.io/gl-repl/)) — the same app as wasm via gl4es.
+- [**Runs in the browser**](https://drewwoods.github.io/gl-repl/) — the same app as wasm via gl4es.
 - **`Ctrl+R` replays your draws** — the scene assembles call by call.
 - **Export and import** — standalone C89, compiles on its own, round-trips back in.
 
