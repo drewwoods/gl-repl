@@ -4,6 +4,10 @@
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Source revision this page was built from; filled in by
+         scripts/web-stamp-build.sh after emcc copies this shell. -->
+    <meta name="gl-repl-build" content="@GLR_BUILD_SHA@">
+    <meta name="gl-repl-build-date" content="@GLR_BUILD_DATE@">
     <title>gl-repl &mdash; OpenGL REPL, immediate mode, immediately</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2316181c'/%3E%3Cpolygon points='8,2.2 12.8,5 8,7.8 3.2,5' fill='%23c9cce0'/%3E%3Cpolygon points='12.8,5 12.8,11 8,13.8 8,7.8' fill='%23d2d5db'/%3E%3Cpolygon points='3.2,5 8,7.8 3.2,11' fill='%233da8f5'/%3E%3Cpolygon points='8,7.8 8,13.8 3.2,11' fill='%23f841e0'/%3E%3Cpath d='M8 2.2 12.8 5v6L8 13.8 3.2 11V5Z M3.2 5 8 7.8 12.8 5 M8 7.8v6' fill='none' stroke='%23ffffff' stroke-width='1.1' stroke-linejoin='round'/%3E%3C/svg%3E">
     <style>
@@ -121,6 +125,29 @@
       .badge.warn:focus-visible {
         background: #2c1a18;
         border-color: #e06c60;
+      }
+
+      /* The build pill states which commit produced this page. Neutral
+         rather than amber: it is an identifier, not a caveat about the
+         build. Monospace so a hex SHA reads as one. */
+      .badge.build {
+        border-color: var(--border);
+        color: var(--muted);
+        cursor: pointer;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.04em;
+        text-decoration: none;
+        text-transform: none;
+      }
+
+      /* An unstamped or non-git build has no revision worth showing. */
+      .badge.build[data-build-state="unknown"] { display: none; }
+
+      .badge.build:hover,
+      .badge.build:focus-visible {
+        background: var(--hover);
+        border-color: var(--muted);
+        color: var(--text);
       }
 
       /* Own tooltip rather than a title= attribute: the native one is
@@ -393,6 +420,10 @@
       <span class="badge warn" id="safariBadge" tabindex="0" hidden
             aria-label="Safari renders this build at roughly half the frame rate of Chrome or Firefox. Either one will feel noticeably smoother for the same scene. To watch the frame rate yourself, set Config &rarr; Interface &rarr; Compute profile to FPS."
             data-tip="Safari renders this build at roughly half the frame rate of Chrome or Firefox. Either one will feel noticeably smoother for the same scene. To watch the frame rate yourself, set Config &rarr; Interface &rarr; Compute profile to FPS.">slow in safari</span>
+      <a class="badge build" id="buildBadge" data-build-state="@GLR_BUILD_STATE@"
+         href="@GLR_BUILD_URL@" target="_blank" rel="noopener"
+         aria-label="@GLR_BUILD_TIP@"
+         data-tip="@GLR_BUILD_TIP@">@GLR_BUILD_SHORT@</a>
       <div class="spacer"></div>
       <input type="file" id="sceneFileInput" accept=".c,text/plain" hidden>
       <button type="button" class="keycap" id="newSceneButton" disabled>new</button>

@@ -1669,6 +1669,7 @@ web: require-emcc ## Build the Emscripten/wasm web target (needs emcc on PATH --
 	scripts/web-deps.sh
 	$(MAKE) WEB=1 $(WEB_BINDIR)/index.html
 	bash scripts/web-audio-assets.sh "$(WEB_MUSIC_SRC_DIR)" "$(WEB_BINDIR)/assets"
+	bash scripts/web-stamp-build.sh "$(WEB_BINDIR)/index.html"
 	@echo "Built $(WEB_BINDIR)/index.html -- run 'make web-serve' to try it."
 
 web-serve: web ## Serve the built web target over HTTP (builds it first if needed).

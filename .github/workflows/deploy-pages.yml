@@ -87,6 +87,18 @@ jobs:
           n=$(ls _site/assets/*.mp3 2>/dev/null | wc -l | tr -d ' ')
           test "$n" -eq 18 || { echo "expected 18 tracks, got $n" >&2; exit 1; }
           python3 scripts/check-web-manifest.py _site
+          # The page must name the commit it was built from.
+          sha=$(grep -o 'name=gl-repl-build content="[^"]*"' _site/index.html \
+                | head -1 | sed 's/.*content="//; s/"//') || true
+          [ -z "$sha" ] && sha=$(grep -o 'content="[^"]*" name=gl-repl-build' _site/index.html \
+                | head -1 | sed 's/content="//; s/".*//') || true
+          echo "build stamp: ${sha:-<none>}"
+          case "$sha" in
+            ""|unknown|*-dirty)
+              echo "refusing to deploy: build stamp is '${sha:-<none>}'" >&2; exit 1 ;;
+          esac
+          test "$sha" = "${GITHUB_SHA}" || {
+            echo "stamp $sha != GITHUB_SHA $GITHUB_SHA" >&2; exit 1; }
 
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -161,6 +161,31 @@ there: 5.4 MB vs 1.8 MB of `index.wasm` for no measurable runtime difference,
 so it is purely a fetch-and-compile cost. Pass
 `make web DEBUG_INFO_CFLAGS=-g2` when a browser profile needs named frames.
 
+## Build provenance
+
+The built page names the commit it came from, so a deployed `.wasm` can be
+identified. `scripts/web-stamp-build.sh` (run by `make web`) fills the
+`@GLR_BUILD_*@` placeholders in this shell:
+
+- `<meta name="gl-repl-build">` / `gl-repl-build-date` - readable with `curl`,
+  no DOM needed, which is how the Pages workflow asserts it deployed the
+  commit it built.
+- a header pill linking to that commit on GitHub, tooltipped with the full
+  SHA and commit date.
+
+It stamps the *commit* date, not the wall clock, so two builds of one commit
+stamp identically. A tree with modified tracked files gets a `-dirty` suffix
+and a `+` on the pill; untracked files are ignored, since they never reach the
+build. Outside a git checkout everything resolves to `unknown` and CSS hides
+the pill - but an unsubstituted `@GLR_BUILD_*@` placeholder is a hard error,
+never shipped as literal text.
+
+One trap worth knowing: emcc minifies this shell into `index.html` and strips
+quotes from attribute values that do not need them, and a bare placeholder
+never needs them. The stamper therefore rewrites whole `name=value` pairs and
+re-quotes; a plain textual substitution turns a tooltip sentence into a run of
+bogus attributes.
+
 ## Hosting (GitHub Pages)
 
 The build is published at <https://drewwoods.github.io/gl-repl/> by
