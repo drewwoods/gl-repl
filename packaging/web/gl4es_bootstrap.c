@@ -309,6 +309,16 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
                 }
                 return glrOrigAsciiKey(event);
             };
+
+            /* Multi-touch: see glrHandlePinch above. Declared later in this
+             * same scope, which is fine - the whole EM_ASM body runs to
+             * completion in this constructor, long before glutInit registers
+             * the listener that reads this property. */
+            var glrOrigTouchHandler = GLUT.touchHandler;
+            GLUT.touchHandler = function(event) {
+                if (glrHandlePinch(event)) return;
+                glrOrigTouchHandler(event);
+            };
         }
 
         function getCanvas() {
@@ -337,6 +347,159 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
         function callWheel(direction, x, y) {
             if (!wheelCallback) return;
             getWasmTableEntry(wheelCallback)(0, direction, x, y);
+        }
+
+        /* --- Pinch-to-zoom -------------------------------------------------
+         *
+         * Emscripten's GLUT synthesizes mouse events from touches
+         * (library_glut.js GLUT.touchHandler), but only ever from
+         * changedTouches[0] -- a second finger is invisible to it, and it
+         * preventDefault()s every touch event, so the browser's own pinch is
+         * gone too. Zoom on a touch device therefore has no route at all.
+         *
+         * Take over the handler at the source (same technique as the
+         * GLUT.onMouseWheel / getSpecialKey overrides above: GLUT reads these
+         * properties when it registers its listeners inside glutInit, which
+         * runs from main, after this constructor). One finger still delegates
+         * to the stock handler, so tap and drag-to-orbit are untouched; two
+         * fingers become wheel ticks through the same callback the wheel
+         * bridge uses, so the pinch centroid picks the target the way the
+         * pointer does for a wheel -- over the scene it zooms the camera, over
+         * the code panel it scrolls.
+         *
+         * Accumulation is on the distance RATIO, not the pixel delta: that is
+         * scale-invariant, so the same finger travel zooms the same amount
+         * whether the fingers started an inch apart or a hand's width, and the
+         * sub-threshold remainder stays in the reference distance exactly the
+         * way glrWheelAccum buffers a partial notch. */
+        /* Distance ratio per emitted tick. Ticks per unit of finger travel go
+         * as 1/ln(step), so sensitivity scales by lowering it: 1.06^(1/1.4)
+         * is the 1.06 this started at, 40% livelier. */
+        var GLR_PINCH_STEP = 1.0425;
+        /* Per event, as with the wheel bridge - and scaled with the step so
+         * the cap still lands at the same ~1.59 zoom ratio for one event: a
+         * cap left at 8 would quietly undo the sensitivity change for exactly
+         * the fast pinches that reach it. */
+        var GLR_PINCH_MAX_TICKS = 11;
+        var glrPinchActive = false;
+        var glrPinchRefDist = 0.0;
+
+        function glrTouchDist(a, b) {
+            var dx = a.clientX - b.clientX;
+            var dy = a.clientY - b.clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        /* The first finger of a pinch has already produced a GLUT mousedown,
+         * so a camera orbit (or a code-panel selection drag) is in progress
+         * when the second finger lands. Release it, or the pinch drags the
+         * scene around while it zooms. */
+        function glrEndSyntheticDrag(canvas, touch) {
+            var ev;
+            try {
+                ev = new MouseEvent('mouseup', {
+                    bubbles: true, cancelable: true, view: window,
+                    clientX: touch.clientX, clientY: touch.clientY, button: 0
+                });
+            } catch (e) {
+                ev = document.createEvent("MouseEvent");
+                ev.initMouseEvent('mouseup', true, true, window, 1,
+                                  touch.screenX, touch.screenY,
+                                  touch.clientX, touch.clientY,
+                                  false, false, false, false, 0, null);
+            }
+            canvas.dispatchEvent(ev);
+        }
+
+        function glrPinchReset() {
+            glrPinchActive = false;
+            glrPinchRefDist = 0.0;
+        }
+
+        /* Returns 1 when the event belongs to a pinch and the stock GLUT
+         * handler must not see it. Once a pinch starts, every touch event is
+         * ours until the last finger lifts: the leftover finger of a finished
+         * pinch has no mousedown behind it, so letting its move/end reach GLUT
+         * would emit an orphan drag and mouse-up into the app. */
+        function glrHandlePinch(event) {
+            /* One declarator per var: EM_ASM is a variadic macro, and a
+             * top-level comma inside its braces would split the body into
+             * extra macro arguments. */
+            var canvas = getCanvas();
+            var touches = event.touches;
+            var cx = 0.0;
+            var cy = 0.0;
+            var d = 0.0;
+            var emitted = 0;
+            var p = null;
+
+            if (!canvas || event.target !== canvas) return 0;
+
+            if (event.type === 'touchstart') {
+                /* A touchstart that leaves one finger down is the start of a
+                 * fresh gesture - every finger of any previous one has lifted.
+                 * Clearing here self-heals a pinch left active by a cancel the
+                 * guards below never saw. */
+                if (touches.length < 2) {
+                    glrPinchReset();
+                    return 0;
+                }
+                /* Re-seed on every second-finger arrival, including one that
+                 * rejoins a pinch mid-gesture: the old reference distance
+                 * describes finger positions that no longer exist and would
+                 * fire a jump of ticks on the next move. Only the first entry
+                 * has an orbit drag to release. */
+                if (!glrPinchActive) {
+                    glrPinchActive = true;
+                    glrEndSyntheticDrag(canvas, touches[0]);
+                }
+                glrPinchRefDist = glrTouchDist(touches[0], touches[1]);
+                event.preventDefault();
+                return 1;
+            }
+
+            if (!glrPinchActive) return 0;
+
+            if (event.type === 'touchend') {
+                if (touches.length === 0) glrPinchReset();
+                event.preventDefault();
+                return 1;
+            }
+
+            if (event.type !== 'touchmove' || touches.length < 2) {
+                event.preventDefault();
+                return 1;
+            }
+
+            event.preventDefault();
+            d = glrTouchDist(touches[0], touches[1]);
+            if (d <= 0.0 || glrPinchRefDist <= 0.0) {
+                glrPinchRefDist = d;
+                return 1;
+            }
+
+            cx = (touches[0].clientX + touches[1].clientX) / 2;
+            cy = (touches[0].clientY + touches[1].clientY) / 2;
+            p = canvasCoords(canvas, { clientX: cx, clientY: cy });
+
+            /* direction 1 = wheel up = zoom in (route_wheel negates it, and
+             * glr_camera scales dist by exp(vel), so a negative delta pulls
+             * the camera closer). Fingers spreading apart zoom in. */
+            emitted = 0;
+            while (d / glrPinchRefDist >= GLR_PINCH_STEP &&
+                   emitted < GLR_PINCH_MAX_TICKS) {
+                glrPinchRefDist *= GLR_PINCH_STEP;
+                callWheel(1, p[0], p[1]);
+                emitted++;
+            }
+            while (glrPinchRefDist / d >= GLR_PINCH_STEP &&
+                   emitted < GLR_PINCH_MAX_TICKS) {
+                glrPinchRefDist /= GLR_PINCH_STEP;
+                callWheel(-1, p[0], p[1]);
+                emitted++;
+            }
+            if (emitted >= GLR_PINCH_MAX_TICKS) glrPinchRefDist = d;
+            return 1;
         }
 
         function installInputGuards() {
@@ -389,6 +552,26 @@ __attribute__((constructor)) void gl4es_bootstrap(void) {
             canvas.addEventListener('contextmenu', function(event) {
                 event.preventDefault();
             }, true);
+            /* GLUT registers touchstart/move/end only, so a cancelled
+             * gesture (a system edge-swipe, an incoming call) would never
+             * reach the override and would strand glrPinchActive. */
+            canvas.addEventListener('touchcancel', function() {
+                glrPinchReset();
+            }, true);
+            /* WebKit fires its own gesture events for multi-touch,
+             * independently of the touch events, and their default action is
+             * a page zoom. No other engine implements them; registering the
+             * listeners is harmless where they never fire. */
+            (['gesturestart', 'gesturechange', 'gestureend']).forEach(
+                function(name) {
+                    canvas.addEventListener(name, function(event) {
+                        event.preventDefault();
+                    }, { capture: true, passive: false });
+                });
+            /* Browser touch gestures (pan/pinch-zoom/double-tap-zoom) would
+             * otherwise scroll or scale the page instead of reaching the
+             * canvas; the CSS twin of this lives in packaging/web/shell.html. */
+            canvas.style.touchAction = 'none';
             canvas.addEventListener('wheel', function(event) {
                 var p, ticks, dir, emitted;
                 focusCanvas();

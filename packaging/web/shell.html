@@ -3,7 +3,11 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- maximum-scale/user-scalable: the app owns its own zoom (pinch over
+         the canvas becomes a camera/code-panel zoom, see gl4es_bootstrap.c),
+         so the browser must not also scale the page under the same gesture
+         or double-tap. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <!-- Source revision this page was built from; filled in by
          scripts/web-stamp-build.sh after emcc copies this shell. -->
     <meta name="gl-repl-build" content="@GLR_BUILD_SHA@">
@@ -281,6 +285,11 @@
         height: 100%;
         outline: none;
         width: 100%;
+        /* Hand every touch to the app: without this the browser claims
+           pan/pinch before the touch listeners see them. Set from JS too
+           (installInputGuards), since the canvas is also reachable from the
+           freeglut demo pages, which do not use this shell. */
+        touch-action: none;
       }
 
       #stage:fullscreen,
