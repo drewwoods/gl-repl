@@ -73,6 +73,8 @@ jobs:
           cp build/release-web/index.html build/release-web/index.js \
              build/release-web/index.wasm _site/
           cp -R build/release-web/assets _site/assets
+          cp build/release-web/favicon.svg build/release-web/favicon-32.png \
+             build/release-web/apple-touch-icon.png _site/
           touch _site/.nojekyll
           echo "tracks: $(ls _site/assets/*.mp3 2>/dev/null | wc -l)"
           echo "initial load: $(du -ch _site/index.* _site/assets/music.json | tail -1 | cut -f1)"
@@ -81,7 +83,8 @@ jobs:
       - name: Verify site payload
         run: |
           set -e
-          for f in index.html index.js index.wasm assets/music.json; do
+          for f in index.html index.js index.wasm assets/music.json \
+                   favicon.svg favicon-32.png apple-touch-icon.png; do
             test -s "_site/$f" || { echo "missing/empty: $f" >&2; exit 1; }
           done
           n=$(ls _site/assets/*.mp3 2>/dev/null | wc -l | tr -d ' ')

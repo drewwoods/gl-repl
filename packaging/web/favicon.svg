@@ -1,0 +1,12 @@
+<!-- gl-repl mark: lit-cube.glr's open cube seen down its diagonal.
+     Kept in sync with the data: URI this file replaced in shell.html and
+     with packaging/macos/gl-repl-open-cube.svg. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <rect width="16" height="16" rx="3" fill="#16181c"/>
+  <polygon points="8,2.2 12.8,5 8,7.8 3.2,5" fill="#c9cce0"/>
+  <polygon points="12.8,5 12.8,11 8,13.8 8,7.8" fill="#d2d5db"/>
+  <polygon points="3.2,5 8,7.8 3.2,11" fill="#3da8f5"/>
+  <polygon points="8,7.8 8,13.8 3.2,11" fill="#f841e0"/>
+  <path d="M8 2.2 12.8 5v6L8 13.8 3.2 11V5Z M3.2 5 8 7.8 12.8 5 M8 7.8v6"
+        fill="none" stroke="#ffffff" stroke-width="1.1" stroke-linejoin="round"/>
+</svg>

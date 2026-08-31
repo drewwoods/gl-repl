@@ -9,7 +9,14 @@
     <meta name="gl-repl-build" content="@GLR_BUILD_SHA@">
     <meta name="gl-repl-build-date" content="@GLR_BUILD_DATE@">
     <title>gl-repl &mdash; OpenGL REPL, immediate mode, immediately</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2316181c'/%3E%3Cpolygon points='8,2.2 12.8,5 8,7.8 3.2,5' fill='%23c9cce0'/%3E%3Cpolygon points='12.8,5 12.8,11 8,13.8 8,7.8' fill='%23d2d5db'/%3E%3Cpolygon points='3.2,5 8,7.8 3.2,11' fill='%233da8f5'/%3E%3Cpolygon points='8,7.8 8,13.8 3.2,11' fill='%23f841e0'/%3E%3Cpath d='M8 2.2 12.8 5v6L8 13.8 3.2 11V5Z M3.2 5 8 7.8 12.8 5 M8 7.8v6' fill='none' stroke='%23ffffff' stroke-width='1.1' stroke-linejoin='round'/%3E%3C/svg%3E">
+    <!-- Real icon files, not a data: URI. Chrome's favicon database indexes
+         by icon URL, so a data: URI renders in a live tab but leaves history
+         and bookmark entries without an icon to look up. The 32px PNG is the
+         format that database is happiest with; the SVG scales for everything
+         else. -->
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <style>
       :root {
         /* Chrome neutrals + accent mirror the in-app UI token table

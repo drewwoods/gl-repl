@@ -1669,6 +1669,10 @@ web: require-emcc ## Build the Emscripten/wasm web target (needs emcc on PATH --
 	scripts/web-deps.sh
 	$(MAKE) WEB=1 $(WEB_BINDIR)/index.html
 	bash scripts/web-audio-assets.sh "$(WEB_MUSIC_SRC_DIR)" "$(WEB_BINDIR)/assets"
+	@# shell.html references these by relative path, so they have to sit
+	@# beside index.html rather than being inlined as data: URIs.
+	cp packaging/web/favicon.svg packaging/web/favicon-32.png \
+	   packaging/web/apple-touch-icon.png "$(WEB_BINDIR)/"
 	bash scripts/web-stamp-build.sh "$(WEB_BINDIR)/index.html"
 	@echo "Built $(WEB_BINDIR)/index.html -- run 'make web-serve' to try it."
 
