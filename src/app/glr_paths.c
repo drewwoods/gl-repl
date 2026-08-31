@@ -5,6 +5,7 @@
 
 #include <errno.h>
 #include <ctype.h>
+#include <limits.h>       /* PATH_MAX - realpath() output size */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -241,7 +242,11 @@ static int absolute_lexical_path(const char *path, char *buf, size_t buflen) {
 }
 
 int glr_paths_same_dir(const char *a, const char *b) {
-    char ar[GLR_PATH_MAX], br[GLR_PATH_MAX];
+    /* realpath() writes up to PATH_MAX bytes and is contractually allowed
+     * to assume that much room, so the resolved buffers are PATH_MAX and
+     * not the smaller GLR_PATH_MAX - glibc's _FORTIFY_SOURCE checks the
+     * destination size and aborts the process outright on a short one. */
+    char ar[PATH_MAX], br[PATH_MAX];
     if (!a || !a[0] || !b || !b[0])
         return 0;
     if (realpath(a, ar) && realpath(b, br))
