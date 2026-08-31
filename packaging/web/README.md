@@ -161,6 +161,45 @@ there: 5.4 MB vs 1.8 MB of `index.wasm` for no measurable runtime difference,
 so it is purely a fetch-and-compile cost. Pass
 `make web DEBUG_INFO_CFLAGS=-g2` when a browser profile needs named frames.
 
+## freeglut's own demos (`make freeglut-demos-web`)
+
+The same stack builds freeglut's `progs/demos` as standalone wasm pages, which
+is the cheapest way to reproduce a gl4es or JS-GLUT behaviour without gl-repl
+in the picture. `make freeglut-demos-web` writes one page per demo into
+`build/$(BUILD)-web-demos`; `make freeglut-demos-web-serve` serves that
+directory (no index - pick a demo from the listing).
+
+Two inputs come from **outside** this tree, because
+`scripts/vendor-freeglut.sh` copies a build-essential allowlist that
+deliberately omits `progs/`:
+
+- the demo sources, from `FREEGLUT_DEMOS_SRC` (default `~/src/freeglut-fork`),
+- and `src/emscripten/fg_glut_shim_emscripten.c` from that same checkout,
+  compiled into each page.
+
+The shim exists because Emscripten's `library_glut.js` implements 27 GLUT
+entry points and `emscripten_hide_glut.h` renames freeglut's own to `fg_glut*`,
+so anything outside those 27 is simply undefined at link. It currently supplies
+`glutLeaveMainLoop`, written against the JS loop's mechanics rather than
+freeglut's: `glutMainLoop()` unwinds the C stack and what keeps running is a
+one-shot `requestAnimationFrame` chain that each `glutPostRedisplay()` re-arms,
+so leaving the loop means dropping the display and idle callbacks. That one
+function is what makes `accum`, `Lorenz` and `Fractals_random` link.
+
+Everything else - solids, teapot, stroke/bitmap fonts - still comes from the
+**vendored** `libglut.a`, so keep `FREEGLUT_DEMOS_SRC` roughly in step with
+the pin in `third_party/freeglut/VENDORED.txt`.
+
+The roster is seven demos (`3dview Fractals_random Lorenz accum fonts keyboard
+shapes`) and the rest of `progs/demos` is absent on purpose, not by oversight:
+menus, subwindows, game mode, joystick/spaceball, colour-index mode and
+`glutSwapInterval` have no JS implementation to call and freeglut's are hidden
+behind the rename over a stubbed-out backend (`src/emscripten/` is windowing
+stubs - the JS side owns the window). Growing the list means finishing that
+backend, not adding names to `FREEGLUT_WEB_DEMOS`. Note also that linking is
+not running: `glutGet` on the JS side `abort()`s the page on any enum outside
+its fixed set (see above), which a demo can still hit at runtime.
+
 ## Build provenance
 
 The built page names the commit it came from, so a deployed `.wasm` can be

@@ -141,6 +141,27 @@ endif
 GL4ES_DIR ?= third_party/web/gl4es
 GLU_DIR   ?= third_party/web/GLU
 
+# `make freeglut-demos-web` builds freeglut's own progs/demos as wasm pages.
+# Those sources are not vendored -- scripts/vendor-freeglut.sh copies a
+# build-essential allowlist that deliberately omits progs/ -- so the demos come
+# from an ordinary freeglut checkout instead. That same checkout supplies the
+# JS-GLUT shim TU (glutLeaveMainLoop, see below): it lives in the fork's
+# emscripten backend but not in the pinned vendor tree, and compiling it
+# alongside the demos keeps the demo target working without re-pinning
+# VENDORED.txt. Everything else (solids, fonts, teapot) still comes from the
+# vendored $(FREEGLUT_STATIC_LIB), so keep this checkout roughly in step with
+# the pin.
+#? FREEGLUT_DEMOS_SRC: freeglut checkout supplying progs/demos for `make freeglut-demos-web`.
+FREEGLUT_DEMOS_SRC ?= $(HOME)/src/freeglut-fork
+FREEGLUT_DEMOS_DIR  = $(FREEGLUT_DEMOS_SRC)/progs/demos
+FREEGLUT_DEMOS_SHIM = $(FREEGLUT_DEMOS_SRC)/src/emscripten/fg_glut_shim_emscripten.c
+# The demo roster and its output dir stay outside the WEB=1 block: the entry
+# target runs with the ambient flag and has to name the pages it re-invokes
+# for, the same way WEB_BINDIR is readable without repeating WEB=1.
+FREEGLUT_WEB_DEMOS    = 3dview Fractals_random Lorenz accum fonts keyboard shapes
+FREEGLUT_DEMOS_BINDIR = build/$(BUILD)-web-demos
+FREEGLUT_DEMO_PAGES   = $(addprefix $(FREEGLUT_DEMOS_BINDIR)/,$(addsuffix .html,$(FREEGLUT_WEB_DEMOS)))
+
 # MACOS_UNIVERSAL=1 builds a 2-arch (arm64 + x86_64) macOS binary, so one
 # release artifact runs on Apple Silicon and Intel. Clang compiles and links
 # each -arch in one invocation and lipos the results, and the only
@@ -1678,6 +1699,82 @@ web: require-emcc ## Build the Emscripten/wasm web target (needs emcc on PATH --
 
 web-serve: web ## Serve the built web target over HTTP (builds it first if needed).
 	python3 scripts/web-serve.py $(WEB_BINDIR)
+
+# Rules for the pages themselves, so they see the WEB=1 toolchain (CC=emcc,
+# GL_HEADER_CFLAGS, the wasm archives). Placed after `all:` on purpose --
+# generated rules earlier in the file would claim the default goal of a bare
+# `make WEB=1`.
+ifeq ($(WEB),1)
+# `make freeglut-demos-web`: freeglut's own progs/demos, each linked as a
+# standalone wasm page against the same gl4es + GLU + vendored-freeglut stack
+# gl-repl uses. Emscripten's JS GLUT owns the window and the event loop here
+# exactly as it does for gl-repl (see packaging/web/README.md), so the demos
+# that build are the ones whose GLUT usage stays inside what that JS layer
+# implements, plus glutLeaveMainLoop from $(FREEGLUT_DEMOS_SHIM). The rest of
+# progs/demos is deliberately absent, not overlooked: menus, subwindows, game
+# mode, joystick/spaceball, colour-index mode and glutSwapInterval have no JS
+# implementation to call, and freeglut's own are hidden behind the fg_glut*
+# rename over a stubbed-out backend. Filling those in means finishing
+# src/emscripten/, not extending this list.
+FGDEMO_SRCS_3dview          = 3dview/3dview.c
+FGDEMO_SRCS_Fractals_random = Fractals_random/fractals_random.c
+FGDEMO_SRCS_Lorenz          = Lorenz/lorenz.c
+FGDEMO_SRCS_accum           = accum/accum.c
+FGDEMO_SRCS_fonts           = fonts/fonts.c
+FGDEMO_SRCS_keyboard        = keyboard/keyboard.c
+FGDEMO_SRCS_shapes          = shapes/shapes.c shapes/glmatrix.c
+
+# gl4es_bootstrap.c is on the link line rather than in $(WEB_GL_ARCHIVES)
+# because it is a source file, and it carries -Isrc for its GLR_LOG_TAG
+# include. It keeps its gl4es setenv() constructor and the Display-P3 canvas
+# tagging; the gl-repl-specific hooks it also declares are weak no-ops, which
+# is what makes it reusable for one-file samples like these.
+FREEGLUT_DEMO_CFLAGS  = -O2 $(GL_HEADER_CFLAGS) -Isrc
+# The app-page link set is wrong for a demo twice over: --shell-file and
+# -sEXPORTED_FUNCTIONS name gl-repl's JS glue and its exported entry points,
+# and WEB_RUNTIME_LDFLAGS' 768 MB initial heap sizes gl-repl's flat program and
+# audio. A demo gets emcc's default shell and grows its heap on demand.
+FREEGLUT_DEMO_LDFLAGS = $(WEB_GL_ARCHIVES) -sUSE_WEBGL2=1 -sFULL_ES2=1 \
+	-sALLOW_MEMORY_GROWTH=1
+
+define FREEGLUT_DEMO_WEB_RULE
+$$(FREEGLUT_DEMOS_BINDIR)/$(1).html: $$(addprefix $$(FREEGLUT_DEMOS_DIR)/,$$(FGDEMO_SRCS_$(1))) \
+		$$(FREEGLUT_DEMOS_SHIM) packaging/web/gl4es_bootstrap.c $$(WEB_GL_ARCHIVES)
+	@mkdir -p $$(dir $$@)
+	$$(CC) $$(FREEGLUT_DEMO_CFLAGS) \
+	  $$(addprefix $$(FREEGLUT_DEMOS_DIR)/,$$(FGDEMO_SRCS_$(1))) \
+	  $$(FREEGLUT_DEMOS_SHIM) packaging/web/gl4es_bootstrap.c \
+	  $$(FREEGLUT_DEMO_LDFLAGS) -o $$@
+endef
+$(foreach demo,$(FREEGLUT_WEB_DEMOS),$(eval $(call FREEGLUT_DEMO_WEB_RULE,$(demo))))
+endif
+
+freeglut-demos-web: require-emcc ## Build freeglut's fixed-function progs/demos as standalone wasm pages (needs FREEGLUT_DEMOS_SRC).
+	@test -d "$(FREEGLUT_DEMOS_DIR)" || { \
+		printf 'error: no demo sources at %s\n' '$(FREEGLUT_DEMOS_DIR)' >&2; \
+		printf '       progs/ is not part of the vendored freeglut allowlist, so this\n' >&2; \
+		printf '       target reads a freeglut checkout. Point it at one:\n' >&2; \
+		printf '         make freeglut-demos-web FREEGLUT_DEMOS_SRC=<freeglut-checkout>\n' >&2; \
+		exit 1; \
+	}
+	@test -f "$(FREEGLUT_DEMOS_SHIM)" || { \
+		printf 'error: %s is missing.\n' '$(FREEGLUT_DEMOS_SHIM)' >&2; \
+		printf '       FREEGLUT_DEMOS_SRC needs a checkout carrying the Emscripten backend\n' >&2; \
+		printf '       (its glutLeaveMainLoop is what makes accum/Lorenz/Fractals_random link).\n' >&2; \
+		exit 1; \
+	}
+	@# Unlike `make web`, fetch the deps only when they are missing. gl4es is a
+	@# managed checkout that web-deps.sh refuses to touch once it has local
+	@# edits, and a tree mid-way through a gl4es patch is exactly where someone
+	@# reaches for a small demo page to isolate a driver behaviour.
+	@test -f $(GL4ES_DIR)/lib/libGL.a -a -f $(GLU_DIR)/.libs/libGLU.a \
+		|| scripts/web-deps.sh
+	$(MAKE) WEB=1 $(FREEGLUT_DEMO_PAGES)
+	@echo "Built $(words $(FREEGLUT_WEB_DEMOS)) demo pages in $(FREEGLUT_DEMOS_BINDIR) --"
+	@echo "run 'make freeglut-demos-web-serve' and pick one from the listing."
+
+freeglut-demos-web-serve: freeglut-demos-web ## Serve the built freeglut demo pages over HTTP (builds them first if needed).
+	python3 scripts/web-serve.py $(FREEGLUT_DEMOS_BINDIR)
 
 # Publishing is CI's job, not a local upload: .github/workflows/deploy-pages.yml
 # builds the wasm target on a clean runner (Emscripten pinned, music pulled from
@@ -3604,7 +3701,7 @@ PUBLIC_MAKE_VARS := \
 	ARGS ASAN BUILD CALLGRAPH_FILES_GROUP_CONFIG CC CFLAGS \
 	CODE_PANEL_STENCIL_BENCH_ARGS CODE_PANEL_TEXT_BENCH_ARGS \
 	ENTRY EXAMPLES_CATALOG FORMAT \
-	FREEGLUT_INCLUDE_DIR FREEGLUT_LIB_PATH FREEGLUT_OSMESA \
+	FREEGLUT_DEMOS_SRC FREEGLUT_INCLUDE_DIR FREEGLUT_LIB_PATH FREEGLUT_OSMESA \
 	FREEGLUT_VENDOR FREEGLUT_VENDOR_LINUX \
 	GLUT_BITMAP_BENCH_ARGS MACOS_UNIVERSAL MSAN_CC MUSIC_DEST MUSIC_TAG \
 	NO_MUSIC NOSAN NO_SAN \
@@ -3625,7 +3722,8 @@ MAKE_TARGET_VERBS := \
 ROOT_TARGETS := \
 	all app demos gl-repl gl-repl-unchained glut render3d-asset-builder \
 	web web-serve web-deploy web-deploy-status \
-	debug-msan freeglut-clean glprobe glprobe-preload \
+	debug-msan freeglut-clean freeglut-demos-web freeglut-demos-web-serve \
+	glprobe glprobe-preload \
 	assign-plot-demo color-picker-demo cpuprof-demo editor-demo memprof-demo \
 	render3d-demo render3d-hot repl-demo repl-live-demo variable-panel-demo
 
