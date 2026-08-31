@@ -265,6 +265,104 @@ as `--examples-dir`:
 make web EXAMPLES_CATALOG=tests/scenes/general/catalog.ini
 ```
 
+## Usage telemetry (off by default)
+
+GitHub Pages keeps **no access logs**. There is no request count, no bandwidth
+figure and no API: the repo's *Insights → Traffic* graph measures
+`github.com/drewwoods/gl-repl` and says nothing at all about the deployed
+site. So the only way to know whether the wasm build reaches a running state
+for real visitors is for the page to report it.
+
+That reporting exists, and **ships disabled**. The switch is one repo variable:
+
+| State | How | Result |
+|-------|-----|--------|
+| Off (default) | `GLR_ANALYTICS_ENDPOINT` unset | The `gl-repl-analytics` meta ships empty; the shim makes **zero** network requests |
+| On | Set the repo variable (Settings → Secrets and variables → Actions → *Variables*) to a collector URL | The page fires pixel beacons to that URL |
+
+A local `make web`, a fork's CI, and any self-hosted copy of the artifact are
+all in the "off" column - the endpoint only ever comes from the deploy
+environment, and `scripts/web-stamp-build.sh` substitutes an empty value when
+it is unset.
+
+It is a *variable*, not a secret: the value ships in the page's HTML, so
+nothing about it is confidential, and marking it secret would only mask it in
+the CI log while serving it to every visitor.
+
+### What it sends, and what it never sends
+
+The transport is a bare pixel `GET` - GoatCounter's documented
+no-JavaScript endpoint, and the same `p`/`t`/`r`/`e` query vocabulary any
+collector of your own (a Cloudflare Worker, say) can accept. **No third-party
+script is loaded**, which keeps a blocking third-party fetch off the boot path,
+adds nothing to the payload budget the release build guards with `-g0`, and
+leaves no room for a vendor script to grow behavior on its own.
+
+Sent: a coarse event name, the page path, the page title, and the referrer the
+browser would hand that origin anyway.
+
+Never sent: scene text, file names, expressions, variable values, camera poses
+- anything the user authored. Event names are slugified in
+`src/app/glr_telemetry.c` before they can reach the wire, and
+`tests/test_glr_telemetry.c` asserts that rule (including that a name can
+neither inject a query parameter nor escape an HTML attribute).
+
+The shim honours `navigator.doNotTrack`, Global Privacy Control, and a
+`glr-telemetry-opt-out` key in `localStorage`. An unreadable storage
+preference counts as opted **out**.
+
+### The event catalog
+
+| Event | Fired from | Answers |
+|-------|-----------|---------|
+| *(pageview)* | shell, on load | How many loads, from where |
+| `boot` | shell, before the wasm is requested | Load attempts |
+| `ready` | shell, `Module.postRun` | Loads that reached a running app |
+| `error/exception` | shell, `window.onerror` | Loads that threw |
+| `error/webgl-context-lost` | shell, `webglcontextlost` | GPU-side losses |
+| `example/<name>` | `glr_ctrl_reset_example_chrome()` | Which scenes get looked at |
+| `scene/new`, `scene/open`, `scene/download` | shell, topbar buttons | Whether anyone authors |
+| `share/make-scene`, `share/make-cfg` | shell, share button | Whether anyone shares |
+| `share/open-scene`, `share/open-cfg` | shell, `#s`/`#c` hash | Whether shared links get followed |
+
+**`boot` minus `ready` is the number worth having.** It counts visitors for
+whom this build silently does not work - no WebGL2, a stalled `.wasm`, an OOM
+on a phone - and that is exactly the population which can never file a bug,
+because they never got an app to file one from. Nothing else in the project
+can see them.
+
+The `example/<name>` hook hangs off
+`ReplHostEffects.example_presentation_reset`, the callback every example load
+already funnels through, so it costs no new call sites and cannot drift out of
+step with the loader. `-1` (the documented "no example" sentinel used by
+tests, bench and `repl_load_example_lines`) reports nothing.
+
+Two limits bound a runaway page: `eventOnce` names fire at most once per load,
+consecutive duplicate events collapse (holding F12 to cycle examples is one
+event per *distinct* scene, not per frame), and a hard budget of 100 requests
+per page caps the rest.
+
+### Native builds have no telemetry at all
+
+`glr_telemetry_event()` is an empty function off `__EMSCRIPTEN__` - not
+disabled at runtime, not off by default. A desktop `gl-repl` contains no
+beacon code and no flag that could enable one.
+
+### Repo traffic, which is a different thing
+
+`.github/workflows/traffic-archive.yml` snapshots the *repository* traffic API
+daily onto an orphan `traffic-data` branch, merged by
+`scripts/traffic-archive.py`. That exists because **GitHub discards traffic
+data after 14 days** with no export - miss two weeks and it is gone. It
+archives views, clones, referrers, popular paths, and release asset download
+counts.
+
+It measures github.com, not the Pages site; the two are complementary. Note
+that GitHub's "uniques" de-duplicates roughly per-IP per-day, so it is a trend
+line, not a headcount. Release download counts are cumulative and never
+expire; they are archived anyway because a daily series of a cumulative
+counter is the only way to recover the per-day rate.
+
 ## Benchmarking the web build
 
 `make bench-web` compiles `bench/bench_repl.c` to wasm and runs it headless

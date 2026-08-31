@@ -8,6 +8,13 @@
          scripts/web-stamp-build.sh after emcc copies this shell. -->
     <meta name="gl-repl-build" content="@GLR_BUILD_SHA@">
     <meta name="gl-repl-build-date" content="@GLR_BUILD_DATE@">
+    <!-- Analytics collector, filled in by scripts/web-stamp-build.sh from
+         GLR_ANALYTICS_ENDPOINT. Empty by default and empty in every build
+         nobody deliberately configured - the shim below then sends nothing
+         and makes no requests at all. Carried as a meta rather than inlined
+         into the script so it reuses the same attribute-substitution path
+         the build stamp already uses. -->
+    <meta name="gl-repl-analytics" content="@GLR_ANALYTICS_ENDPOINT@">
     <title>gl-repl &mdash; OpenGL REPL, immediate mode, immediately</title>
     <!-- Real icon files, not a data: URI. Chrome's favicon database indexes
          by icon URL, so a data: URI renders in a live tab but leaves history
@@ -501,6 +508,132 @@
       var lastSceneFilename = 'gl-repl-scene.c';
       if (outputElement) outputElement.value = '';
 
+      // ── Telemetry ───────────────────────────────────────
+      // GitHub Pages serves this page with no access logs, no bandwidth
+      // stats and no API: the repo's Insights → Traffic graph counts views
+      // of github.com/<repo>, not of the deployed site, so nothing outside
+      // this page can tell whether the wasm build ever reached a running
+      // state for anyone. This shim is that signal, and it is deliberately
+      // the smallest thing that can produce it.
+      //
+      // Off unless deliberately switched on. The endpoint arrives from the
+      // meta above, which scripts/web-stamp-build.sh fills from
+      // GLR_ANALYTICS_ENDPOINT and leaves EMPTY by default. A local
+      // `make web`, a fork's CI, and anyone self-hosting the artifact
+      // therefore make no requests whatsoever - the object below still
+      // exists (so callers need no guard) and drops everything.
+      //
+      // No third-party script. The collector is hit as a bare pixel GET,
+      // which is GoatCounter's documented no-JavaScript endpoint; any
+      // collector accepting the same p/t/r/e query vocabulary (a Worker of
+      // your own, say) is a drop-in substitute. That keeps the critical
+      // path free of a blocking third-party fetch, adds nothing to the
+      // payload budget the release build guards with -g0, and leaves no
+      // room for a vendor script to grow new behavior on its own.
+      //
+      // What is sent: a coarse event name, the page path, and the referrer
+      // the browser already gave the collector's origin. What is never
+      // sent: scene text, file names, expressions, variable values, or
+      // anything else the user authored. glr_telemetry.c slugifies names
+      // before they reach here, and the budget below bounds them.
+      window.glrTelemetry = (function () {
+        var meta = document.querySelector('meta[name="gl-repl-analytics"]');
+        var endpoint = ((meta && meta.content) || '').trim();
+
+        // Honour the browser's own privacy signals, plus a local override
+        // for anyone who wants out on a configured deployment. Checked once:
+        // these do not change mid-session, and re-reading localStorage on
+        // every event would be a synchronous storage hit in the frame loop.
+        var optedOut = false;
+        try {
+          optedOut = navigator.doNotTrack === '1' ||
+                     window.doNotTrack === '1' ||
+                     navigator.msDoNotTrack === '1' ||
+                     navigator.globalPrivacyControl === true ||
+                     localStorage.getItem('glr-telemetry-opt-out') === '1';
+        } catch (e) {
+          // Storage can throw outright in a locked-down context. Treat an
+          // unreadable preference as opted out: the failure mode of a
+          // missing datapoint is strictly better than ignoring a choice we
+          // could not read.
+          optedOut = true;
+        }
+
+        var enabled = !!endpoint && !optedOut;
+
+        // Two separate limits, because two different things can go wrong.
+        // `once` names the events that describe a page load and must not be
+        // double-counted if a code path runs twice; `budget` bounds the
+        // repeatable ones, so holding F12 to cycle examples cannot turn into
+        // an unbounded request stream from a single tab.
+        var seen = {};
+        var budget = 100;
+        var lastName = '';
+
+        var send = (name, isEvent) => {
+          if (!enabled || budget <= 0) return;
+          budget--;
+          try {
+            var url = endpoint +
+              (endpoint.indexOf('?') === -1 ? '?' : '&') +
+              'p=' + encodeURIComponent(name) +
+              '&t=' + encodeURIComponent(document.title || 'gl-repl') +
+              '&r=' + encodeURIComponent(document.referrer || '') +
+              '&rnd=' + Math.random().toString(36).slice(2);
+            if (isEvent) url += '&e=true';
+            // A detached Image is the whole transport: fire-and-forget, no
+            // response read, no cookie of our own, and a failed request is
+            // indistinguishable from a blocked one - which is correct,
+            // because neither is the app's problem.
+            var img = new Image();
+            img.referrerPolicy = 'no-referrer-when-downgrade';
+            img.src = url;
+          } catch (e) {
+            // Never let a beacon take the app down with it.
+          }
+        };
+
+        return {
+          // True only when a collector was configured AND the visitor has
+          // not opted out. Exposed so a caller can skip building an event
+          // name it would otherwise throw away.
+          enabled: enabled,
+
+          // One pageview for the page load itself.
+          pageview: () => send(location.pathname || '/', false),
+
+          // A named event. Repeats are allowed (that is what makes
+          // example/<name> useful) but consecutive duplicates collapse: the
+          // interesting signal is which scenes get opened, not how many
+          // frames one of them stayed on screen.
+          event: (name) => {
+            if (!name || name === lastName) return;
+            lastName = name;
+            send(name, true);
+          },
+
+          // A named event that fires at most once per page load. Used for
+          // the boot/ready pair and for failures, where a second report
+          // would say nothing the first did not.
+          eventOnce: (name) => {
+            if (!name || seen[name]) return;
+            seen[name] = 1;
+            lastName = name;
+            send(name, true);
+          }
+        };
+      })();
+
+      // The boot/ready pair is the whole point of the exercise. `boot` fires
+      // on every load attempt, before the wasm is even requested; `ready`
+      // fires from postRun, once the runtime is actually up. The DIFFERENCE
+      // between the two counts is the number of people for whom this build
+      // silently does not work - a missing WebGL2, a stalled .wasm download,
+      // an OOM on a phone - and it is precisely the population that can
+      // never report a bug, because they never got an app to report it from.
+      window.glrTelemetry.pageview();
+      window.glrTelemetry.eventOnce('boot');
+
       // Safari runs this build at roughly half the frame rate Chrome and
       // Firefox manage: say so in the loading overlay, and reveal the
       // topbar pill that carries the caveat once the overlay is gone.
@@ -624,6 +757,9 @@
                                 ['string', 'string'],
                                 [text, fallbackSceneName(file.name)]);
           if (ok) {
+            // The event records THAT a scene was opened, never which one -
+            // file.name is the user's own text and never leaves the browser.
+            window.glrTelemetry.event('scene/open');
             lastSceneFilename = safeDownloadName(file.name);
             canvasElement.focus();
           }
@@ -647,6 +783,7 @@
         if (!sceneControlsReady) return;
         var text = exportSceneText();
         if (text === null) return;
+        window.glrTelemetry.event('scene/download');
 
         var blob = new Blob([text], { type: 'text/x-csrc;charset=utf-8' });
         var url = URL.createObjectURL(blob);
@@ -664,6 +801,7 @@
         if (!sceneControlsReady) return;
         var ok = Module.ccall('glr_web_new_scene', 'number', [], []);
         if (ok) {
+          window.glrTelemetry.event('scene/new');
           lastSceneFilename = 'gl-repl-scene.c';
           canvasElement.focus();
         }
@@ -747,6 +885,8 @@
           ? Module.ccall('glr_web_cfg_share_text', 'string', [], [])
           : exportSceneText();
         if (!text) { glrShareFeedback('failed'); return; }
+        window.glrTelemetry.event(cfgOnly ? 'share/make-cfg'
+                                          : 'share/make-scene');
         glrEncodeSharePayload(text).then((enc) => {
           var hash = '#' + (cfgOnly ? 'c' : 's') + enc.v + '=' + enc.data;
           history.replaceState(null, '', hash);
@@ -773,6 +913,10 @@
       var glrApplySharedHash = () => {
         var m = location.hash.match(/^#([sc])([01])=(.+)$/);
         if (!m) return;
+        // Distinguish the two link kinds: a shared scene and a shared
+        // settings link are different things to have been sent.
+        window.glrTelemetry.eventOnce(
+          m[1] === 's' ? 'share/open-scene' : 'share/open-cfg');
         glrDecodeSharePayload(m[2], m[3]).then((text) => {
           if (m[1] === 's') {
             var ok = Module.ccall('glr_web_load_scene_text', 'number',
@@ -927,6 +1071,7 @@
       };
 
       canvasElement.addEventListener('webglcontextlost', (e) => {
+        window.glrTelemetry.eventOnce('error/webgl-context-lost');
         showOverlayError('WebGL context lost &mdash; reload the page.');
         e.preventDefault();
       }, false);
@@ -1109,6 +1254,9 @@
         canvas: canvasElement,
         setStatus: setStatus,
         postRun: [() => {
+          // Paired with the 'boot' event above: boot minus ready is the
+          // silent-failure population.
+          window.glrTelemetry.eventOnce('ready');
           setSceneControlsReady(true);
           glrApplySharedHash();
         }],
@@ -1120,6 +1268,10 @@
       };
       setStatus('Downloading...');
       window.onerror = window.onunhandledrejection = () => {
+        // Once per load, and no message text: the string can carry a file
+        // path or user content, and the count is what says "this build is
+        // breaking for real people" anyway.
+        window.glrTelemetry.eventOnce('error/exception');
         showOverlayError('Exception thrown &mdash; see the JavaScript console.');
         setStatus = (text) => {
           if (text) console.error('[post-exception status] ' + text);

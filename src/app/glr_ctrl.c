@@ -44,6 +44,7 @@
 #include "app/glr_config.h"
 #include "app/glr_camera.h"
 #include "app/glr_url.h"
+#include "app/glr_telemetry.h"
 #include "app/glr_camera_export.h"
 #include "app/glr_workspaces.h"      /* glr_workspaces_active_name (window title) */
 #include "repl/workspace_io.h"       /* WORKSPACE_IO_NAME_MAX (snapshot cap assert) */
@@ -3936,6 +3937,15 @@ int glr_ctrl_apply_tag_defaults(int example_idx,
 }
 
 static void glr_ctrl_reset_example_chrome(int example_idx) {
+    /* This callback is the REPL's own "an example is being loaded" edge -
+     * every load funnels through repl_dispatch_example_presentation_reset(),
+     * so hanging the beacon here costs no new call sites and cannot drift
+     * out of step with the loader. -1 is the documented "no example"
+     * sentinel (tests, bench, repl_load_example_lines, tutorial reset) and
+     * carries no name to report. */
+    if (example_idx >= 0)
+        glr_telemetry_event_detail("example", repl_example_name(example_idx));
+
     glr_state_presentation_reset_example_defaults();
     glr_camera_mut()->auto_rotate = CFG_DEFAULT_CAMERA_ROTATE;
     variable_panel_set_visible(CFG_DEFAULT_VARIABLE_PANEL);

@@ -1037,6 +1037,7 @@ TEST_BINS = \
 	test_glr_tour_transport \
 	test_glr_frame_pacer \
 	test_glr_url \
+	test_glr_telemetry \
 	test_splash
 
 
@@ -1221,6 +1222,13 @@ test_glr_frame_pacer_OBJS = $(OBJDIR)/$(TEST_DIR)/test_glr_frame_pacer.o \
 	$(OBJDIR)/src/app/boot/glr_frame_pacer.o
 test_glr_frame_pacer_LDLIBS = -lm
 test_glr_frame_pacer_RUN ?= $(BINDIR)/test_glr_frame_pacer
+
+# The beacon's name sanitizer, which is compiled on every platform even
+# though the transport around it exists only under __EMSCRIPTEN__.
+test_glr_telemetry_OBJS = $(OBJDIR)/$(TEST_DIR)/test_glr_telemetry.o \
+	$(OBJDIR)/src/app/glr_telemetry.o
+test_glr_telemetry_LDLIBS =
+test_glr_telemetry_RUN ?= $(BINDIR)/test_glr_telemetry
 
 # Splash rendering relies only on its theme table and the GL-stub counters.
 test_splash_OBJS = $(OBJDIR)/$(TEST_DIR)/test_splash.o \

@@ -1,0 +1,96 @@
+name: Archive repo traffic
+
+# GitHub keeps repository traffic for 14 days and then discards it - there is
+# no export and no way to ask for a window that has rolled off. This job takes
+# a daily snapshot so the history survives, and is the *only* usage signal that
+# needs no code in the shipped page.
+#
+# It measures github.com/<repo> - views and clones of the repo itself. It says
+# nothing about drewwoods.github.io/gl-repl, which GitHub does not report on at
+# all; that is what the page's own beacon covers (packaging/web/README.md).
+on:
+  schedule:
+    # 06:20 UTC. Off the hour on purpose: Actions' scheduled runs queue behind
+    # everyone else's on the hour, and a delayed run risks straddling the
+    # 14-day cliff on a busy day.
+    - cron: '20 6 * * *'
+  workflow_dispatch:
+
+# The traffic API requires push access, and the job commits its own output.
+permissions:
+  contents: write
+
+# Never let two runs race on the same branch push.
+concurrency:
+  group: traffic-archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # The data lives on its own orphan branch, so a daily automated commit
+      # never touches main's history or triggers main's other workflows.
+      - uses: actions/checkout@v4
+        with:
+          ref: traffic-data
+          fetch-depth: 1
+        continue-on-error: true
+        id: checkout_data
+
+      # First run: no branch yet. Start an empty orphan rather than making
+      # someone bootstrap it by hand.
+      - name: Create the data branch if missing
+        if: steps.checkout_data.outcome == 'failure'
+        run: |
+          git init -q .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git" || true
+          git checkout -q --orphan traffic-data
+          git rm -rqf . 2>/dev/null || true
+
+      # The merge script is versioned on main; the data branch does not carry
+      # it. Fetch just that one file rather than checking out a second tree.
+      - name: Fetch the merge script from main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .ci
+          gh api "repos/${GITHUB_REPOSITORY}/contents/scripts/traffic-archive.py?ref=${GITHUB_SHA}" \
+            --jq '.content' | base64 -d > .ci/traffic-archive.py
+          test -s .ci/traffic-archive.py
+
+      # Each endpoint is fetched independently and allowed to fail: a partial
+      # snapshot still archives everything else, which beats losing a day.
+      - name: Snapshot the traffic API
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .ci/snapshot
+          fetch() {
+            gh api "repos/${GITHUB_REPOSITORY}/$1" > ".ci/snapshot/$2.json" \
+              || { echo "warning: $1 failed"; rm -f ".ci/snapshot/$2.json"; }
+          }
+          fetch 'traffic/views?per=day'   views
+          fetch 'traffic/clones?per=day'  clones
+          fetch 'traffic/popular/referrers' referrers
+          fetch 'traffic/popular/paths'     paths
+          fetch 'releases?per_page=100'     releases
+          ls -l .ci/snapshot
+
+      - name: Merge into the archive
+        run: python3 .ci/traffic-archive.py .ci/snapshot traffic
+
+      # .ci/ is scratch for this run and must never be committed.
+      - name: Commit if anything changed
+        run: |
+          rm -rf .ci
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add traffic
+          if git diff --cached --quiet; then
+            echo "no change"
+            exit 0
+          fi
+          git commit -qm "traffic: snapshot $(date -u +%Y-%m-%d)"
+          git push origin HEAD:traffic-data

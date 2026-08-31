@@ -59,7 +59,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/fetch-music.sh --dir assets/favorite --tag "${MUSIC_TAG}"
 
+      # The usage beacon is off unless this repo variable is set (Settings →
+      # Secrets and variables → Actions → Variables). It is a *variable*, not
+      # a secret, because the value ships in the page's HTML - nothing about
+      # it is confidential, and a secret would only be masked in the log
+      # while being served to every visitor. Unset = the built page makes no
+      # analytics requests at all, which is also what every local build,
+      # every fork and every self-hosted copy gets.
       - name: Build web target
+        env:
+          GLR_ANALYTICS_ENDPOINT: ${{ vars.GLR_ANALYTICS_ENDPOINT }}
         run: |
           source ~/emsdk/emsdk_env.sh
           emcc --version | head -1
