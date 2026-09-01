@@ -128,9 +128,8 @@ Examples* entry from the [Tours](#guided-tours) menu.
 Fresh launches open on the default built-in example. Choose **File → New
 Scene** first so the triangle has a clean scene of its own. New Scene already
 seeds the first line below (see [Display default
-commands](#display-default-commands)); keep it so it is obvious that *your
-program* owns the frame. Type the remaining lines after the defaults, then
-press **`;`** to commit each line, or **Enter** to commit and insert a new one:
+commands](#display-default-commands)); keep it - your program owns the frame.
+Type the remaining lines after the defaults, then press **`;`** to commit each line, or **Enter** to commit and insert a new one:
 
 ```c
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -280,10 +279,9 @@ New and edited lines are checked before they become part of the scene.
   it. **Enter** commits *and* inserts a new line after it. If the line is
   invalid, the error is highlighted and the line stays active so you can fix
   it.
-- Moving to another line with **Up/Down** or by clicking attempts to commit
-  your edit automatically. Valid edits are kept; invalid edits are discarded
-  and the previous committed version is restored. This keeps every inactive
-  line valid.
+- Moving to another line with **Up/Down** or a click commits the edit if it
+  is valid; otherwise the previous committed text comes back. So every line
+  you are not editing is always valid.
 - Press **Esc** to discard an edit yourself.
 
 ### Autocomplete
@@ -341,14 +339,14 @@ glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.4, 0.4, 0.4, 1.0});
 glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 30);
 ```
 
-These defaults reduce boilerplate for a lit scene. They are ordinary editable
-commands, so feel free to modify, remove, or replace them. Keep `glClear`
-unless you want the previous frame to smear.
+They are the boilerplate for a lit scene, and they are ordinary lines: edit or
+delete them freely. Keep `glClear` unless you want the previous frame to
+smear.
 
 ### Adjusting values without retyping
 
-Two in-panel widgets close the loop between "committed line" and "number I
-want to nudge" without a retype-and-recommit round trip.
+Two in-panel widgets let you nudge a number in a committed line without
+retyping it.
 
 **The inline numeric stepper.** Put the cursor on any number in a committed
 line and a small up/down stepper appears at the panel's right edge:
@@ -440,16 +438,16 @@ never mid-session, so it cannot undo a retarget you just made by hand.
 
 ### Inspecting OpenGL state
 
-Right-click a visually blank row in the code panel to inspect OpenGL state at
-that point in the program. The row may already be committed or may be the
-current, still-uncommitted empty input row.
+Right-click a blank row in the code panel to inspect the OpenGL state at that
+point in the program. A committed blank row and the empty input row both
+work.
 
 ![OpenGL state inspector opened on a blank source row](images/gl-state-inspector.png)
 
-The popup opens on the state **your program** wrote before that row. Setup
-writes from generated `init()` / `display()` start folded behind the
-**[+] N from setup** chip. Click it to expand them; they draw muted. Explicit
-writes that happen to match the OpenGL default are kept either way.
+The popup opens on the state **your program** wrote before that row. Writes
+from the generated `init()` / `display()` scaffold start folded behind the
+**[+] N from setup** chip; click it to show them, muted. A write of your own
+that happens to match the OpenGL default is listed either way.
 
 The current value is always visible; click the **[+] default/source** chip in
 the column header to add the initial default and the source of the latest
@@ -631,19 +629,17 @@ With lighting on, the text colour is the *lit* result latched at the
 
 ![The console panel: formatted debug output auto-indented by call depth](images/console-panel.png)
 
-- `console("fmt", a, b, c, ...)` outputs formatted debug strings to a floating
-  **Console panel** in the scene overlay. Up to 8 substitution arguments;
-  `%f` substitutes a 6-character field (` 1.250`, `-0.017`) with a leading
-  minus when negative so a live line does not shift as values change, and
-  `%%` produces a literal percent sign. The format string is limited to 64
+- `console("fmt", a, b, c, ...)` prints formatted text to the floating
+  **Console panel**. Up to 8 substitution arguments; `%f` fills a 6-character
+  field (` 1.250`, `-0.017`) so a live line does not shift as values change,
+  and `%%` is a literal percent sign. The format string is limited to 64
   characters and may not contain `//`, `(`, `)`, `,`, or backslashes.
-- Lines emitted from functions are auto-indented by `2 * call_depth` spaces to
-  visually mirror the execution tree.
+- Lines printed from inside a function are indented two spaces per call
+  level, so the output mirrors the call tree.
 - Legal anywhere in a scene, including inside `glBegin` / `glEnd` blocks.
-- In the REPL: When frame replay is active, console output scrubs with the
-  replay position.
-- In standalone C export: Emits a `console()` helper that prints unindented
-  lines directly to `stdout` with the same fixed-width numeric fields.
+- During [replay](#replay) the console output scrubs with the replay position.
+- Exported C gets a `console()` helper that prints the same fixed-width
+  fields to `stdout`, unindented.
 
 ### Math expressions
 
@@ -1031,7 +1027,7 @@ Because `t` is just a variable, dragging that row is a timeline scrubber.
 Pause with **Ctrl+T**, drag `t`, then **Ctrl+T** again to resume from wherever
 you left it.
 
-#### Stepping One Frame At A Time
+#### Stepping one frame at a time
 
 A drag scrubs, it does not step: at 0.1 units/px even the slow scrub moves
 `t` more than a frame per pixel. So the `t` row carries a small **frame
@@ -1101,10 +1097,10 @@ orthographically. Examples can declare `@cfg projection = PROJ_ORTHO`.
 ## Seeing What You're Doing
 
 Immediate-mode GL is invisible state: the current color, the current matrix,
-the winding of the polygon you just typed. A family of guides and overlays
-exists to make that state visible while you edit. The [diagnostic
-views](#diagnostic-views) that follow work the other way round: they re-render
-the whole scene to answer one question.
+the winding of the polygon you just typed. The guides and overlays below make
+that state visible while you edit. The [diagnostic views](#diagnostic-views)
+that follow work the other way round: they re-render the whole scene to answer
+one question.
 
 ### Vertex entry guides
 
@@ -1368,9 +1364,9 @@ flyouts taller than the window):
   Wrap at commas, Syntax highlight, Paren match, Paren scope
 
 **Left-click** a flyout item to cycle it forward, **right-click** to cycle
-backward. Multi-state items show their current state name. Items shown without
-a shortcut are available from the menu; examples include Point attenuation,
-Post FX Effect, Auto-normals, and Vertex label placement.
+backward. Multi-state items show their current state name. A few items have
+no shortcut and live only here: Point attenuation, Post FX Effect,
+Auto-normals, and Vertex label placement.
 
 Function keys drive the most common cycles directly (**Shift+F*n*** steps
 backward):
@@ -1392,8 +1388,8 @@ backward):
 ## Scene Appearance
 
 The stage your geometry stands on, and the quality settings that render it.
-None of this is part of your program - it is not exported, and switching any
-of it changes nothing about the commands in the code panel.
+None of it is part of your program: nothing here is exported, and nothing
+here changes a line in the code panel.
 
 ### Grid & axes
 
@@ -1533,15 +1529,15 @@ both blocks. The exported program carries the same lines.
   Scanlines, or Film grain.
 
 If the frame rate stays well below what the display can do for a couple of
-seconds **and** one of those settings is above its shipped default, a warning
-appears at the left of the code-panel status strip: `! 38 fps  Accum Blur 16x`
-in amber, with **`[off]`** (step that setting back - accum passes to 1, Post FX
-off, or line smooth off) and **`[x]`** (hide it for this combination while it
-stays slow; it comes back if you change the setting, or if the frame rate
-recovers and then drops again). Hover the readout for the exact fix. The
-warning does not fire for a heavy scene that is already on defaults, and the
-app never changes a setting you did not ask it to. Tours and capture runs
-suppress it so it cannot bake into screenshots.
+seconds **and** one of those settings is above its shipped default, an amber
+warning appears at the left of the code-panel status strip: `! 38 fps  Accum
+Blur 16x`. Its **`[off]`** chip steps that setting back (accum passes to 1,
+Post FX off, or line smooth off); **`[x]`** hides the warning while this
+combination stays slow, and it returns if you change the setting or the frame
+rate recovers and drops again. Hover the readout for the exact fix. A heavy
+scene that is already on defaults gets no warning, and the app never changes a
+setting on its own. Tours and capture runs suppress it so it cannot bake into
+screenshots.
 
 ---
 
@@ -1580,8 +1576,7 @@ annotates lines in place as a `//` comment. Assignment readouts follow the
 whole live call chain, not just the innermost function: standing on a draw
 inside `func4`, the `a = x * 0.9;` row of the `func3` invocation that called
 it still shows that invocation's own values. A call that has already
-*returned* is not on the chain and stays unannotated, so a readout is never
-left over from finished work. **Verbose** is the only mode
+*returned* is off the chain and stays unannotated. **Verbose** is the only mode
 that splits a source row, adding a call-path breadcrumb (how the focused
 vertex was reached: loop iterators and each `funcN` invocation's arguments)
 then substituted and evaluated rows beneath it. The breadcrumb is vertex
@@ -1597,20 +1592,18 @@ gl-repl keeps up to 8 scenes in memory, shown as tabs below the menu bar.
   scene is created when you choose File → New Scene, load a scene file or
   workspace, or edit an example.
 - **Auto-promotion** - editing a built-in example, or saving it into a managed
-  workspace, forks it into a fresh scene slot named after the example.
-  Subsequent edits accumulate there. Promotion needs a free scene slot: with
-  all eight occupied your edit still applies to the working copy, but it has
-  nowhere to be parked, so the status line says *All user scene slots full*
-  and the document stays unparked until you delete a scene - the next edit
-  retries and carries along everything typed in the meantime.
+  workspace, forks it into a fresh scene slot named after the example, and
+  later edits accumulate there.
 - **Rename** - File → Rename Scene opens an inline prompt in the status bar
-  (Enter commits, Esc cancels). In a managed workspace this changes the tab
-  name while retaining the scene's stable persisted filename. The action is
-  disabled while an example or tutorial is active.
+  (Enter commits, Esc cancels). In a managed workspace only the tab name
+  changes; the file on disk keeps its name. Not available while an example or
+  tutorial is active.
 - **Switching** - click a scene tab, or cycle with F12 / Shift+F12.
-- **Capacity** - all eight tabs are explicit. New/load/promotion operations
-  fail without mutation when every slot is occupied; gl-repl never evicts a
-  tab implicitly.
+- **Capacity** - with all eight slots occupied, New Scene, Load and promotion
+  refuse rather than close a tab for you. An edit to an example still applies,
+  but the status line says *All user scene slots full* and the document stays
+  unparked until you delete a scene; the next edit then retries with
+  everything typed in the meantime.
 
 ### Saving and loading
 
@@ -1734,9 +1727,9 @@ modifying an example**. `--export-glr <path>` writes the same file from the
 command line, without opening a window. Phase order, the `@cfg` subset, and
 catalog authoring live in
 [ADVANCED_USAGE.md](ADVANCED_USAGE.md#authoring-an-example-catalog). For a
-file that carries *everything* back, use Save Scene. The required `display()`
-frame uses ordinary C-like indentation: globals and helper functions remain at
-file scope, while camera and body rows are indented two spaces inside it.
+file that carries *everything* back, use Save Scene. The file is indented like
+C: globals and helper functions sit at file scope, and the camera and body rows
+sit two spaces inside the required `display()` frame.
 
 ### Mesh export (PLY)
 
@@ -1752,8 +1745,8 @@ window, use the [OSMesa build](ADVANCED_USAGE.md#headless-rendering-osmesa)):
 ./gl-repl --example "2d assignment sketch (vars only)" --export-ply out.ply
 ```
 
-`--export-ply-srgb` decodes colors sRGB→linear for color-managed viewers.
-Feedback-pass and color-management detail:
+`--export-ply-srgb` decodes colors sRGB→linear for color-managed viewers. The
+feedback pass and color management are described in
 [ADVANCED_USAGE.md](ADVANCED_USAGE.md#mesh-export-ply).
 
 ---
@@ -1768,20 +1761,18 @@ float amp = 1.5; // @tune
 float freq = 2;  // @tune
 ```
 
-The tag is a bare trailing comment token. If a declaration line contains
-multiple names, every name on that line is tagged. A knob needs a
-variable-panel row, so the tag requires a program-wide declaration. Inside a
+Tagging a line that declares several names tags all of them. A knob needs a
+variable-panel row, so the declaration must be program-wide: inside a
 function body, write `static float amp = 1; // @tune`.
 
-Tagged variables are still normal REPL variables while you are authoring. In
-the variable panel, tagged rows get an accent mark so you can see which
-values will export as knobs.
+While you are authoring, a tagged variable is still an ordinary variable. Its
+variable-panel row carries an accent mark so you can see which values will
+export as knobs.
 
 ### Exported controls
 
-When you save/export C, each tagged variable becomes a keyboard knob in the
-standalone program. The generated program also draws a small HUD listing each
-knob, its current value, and its keys.
+In the exported program each tagged variable becomes a keyboard knob, and a
+small HUD lists every knob with its current value and keys.
 
 ![The exported grass program's knob HUD: bladeCount as exported, and after holding q](images/export-c-knobs.png)
 
@@ -1799,12 +1790,11 @@ Knobs are assigned in declaration order:
 | 8 | `i` | `k` |
 | 9 | `o` | `l` |
 
-For a `@tune @bool` variable, the HUD uses only the first-column key as a
-toggle and omits the paired lower key; its HUD state indicator remains
-`[x]` / `[ ]`. Numeric knobs keep the raise/lower pairs shown above.
+A `@tune @bool` variable uses only its raise key, as a toggle, and the HUD
+shows `[x]` / `[ ]` instead of a value.
 
-Only the first 9 tagged variables get keyboard controls. If more are tagged,
-the export keeps the first 9 and writes a note in the generated C.
+Only the first nine tagged variables get keys. Any beyond that are left out,
+and the generated C says so in a comment.
 
 ### Step size
 
@@ -1831,8 +1821,8 @@ float radius = 2; // @tune
 glutSolidSphere(radius, 32, 16);
 ```
 
-This appears inert in the exported program because the assignment runs again
-on every display call:
+This one does nothing in the exported program, because the assignment
+overwrites the knob every frame:
 
 ```c
 float radius = 2; // @tune
@@ -1841,12 +1831,11 @@ radius = 2;
 glutSolidSphere(radius, 32, 16);
 ```
 
-Use tunables for parameter-style values that the scene reads, not values the
-scene recomputes unconditionally each frame.
+Tag values the scene reads, not values it recomputes every frame.
 
-`// @tune` survives export/import round trips. The generated keyboard
-controls live only in the standalone exported C. Inside gl-repl, adjust
-values through the variable panel or inline numeric steppers.
+The tag survives export and import. The keyboard knobs exist only in the
+exported program; inside gl-repl, use the variable panel or the numeric
+stepper.
 
 ---
 
@@ -1895,13 +1884,9 @@ outside that scope:
 - **Shaders and buffered drawing are not supported.** Immediate-mode
   `glBegin`/`glEnd` keeps individual source lines visible while editing and
   replaying.
-- **Individual lights use presets.** A light theme supplies the four slots'
-  positions and colors; scene code enables or disables the slots it needs.
-  The generated and exported C still exposes the underlying `glLightfv`
-  calls; see [Lighting](#lighting).
-
-These points describe the current release, not commitments about future
-versions.
+- **Lights come from presets.** A light theme positions and colors the four
+  slots; your code turns slots on and off. The generated and exported C still
+  shows the `glLightfv` calls; see [Lighting](#lighting).
 
 ---
 
@@ -1925,12 +1910,12 @@ Three floating panels work together:
   sections. *Frame Time* is the whole callback; it splits into *Frame Work*
   (producing the image) and *Present* (the callback tail containing finish and
   swap). *Frame Wait* on native builds, or *Browser Wait* on the web build,
-  accounts for the gap from that callback's end to the next callback's start.
-  Previous Frame Time + following Wait is therefore the interval represented
-  by the FPS graph. Browser Wait includes animation-frame scheduling and any
-  queued WebGL/GPU back-pressure the browser resolves between callbacks; it is
-  not evidence of a CPU stall inside a particular GL call. **Frame Work is the
-  number to watch for callback cost; use Wait plus the FPS graph for pacing.**
+  is the gap from that callback's end to the next one's start, so Frame Time
+  plus the following Wait is the interval the FPS graph shows. Browser Wait
+  includes animation-frame scheduling and whatever WebGL/GPU back-pressure the
+  browser drains between callbacks; it does not point at a stall inside any
+  one GL call. **Watch Frame Work for callback cost, and Wait plus the FPS
+  graph for pacing.**
   The **CPU** column is a running average of wall-clock time; the **GPU** column
   comes from asynchronous GL timer queries and reads `--` where the driver
   lacks them. **Max** shows the worse of the two averages.
@@ -2019,9 +2004,9 @@ environment variable, is in
 `GLR_TIME` and `GLR_ASSETS_DIR` set the same values as `--time` and
 `--assets`; `GLR_NO_GPU_PROF=1` turns off GPU timer-query profiling.
 
-A second family of `GLR_*` variables exists to pose the app for scripted
-screenshots and recordings. Those, and headless (no-window) rendering, are
-in [`ADVANCED_USAGE.md`](ADVANCED_USAGE.md#environment-variables).
+Another set of `GLR_*` variables poses the app for scripted screenshots and
+recordings. Those, and headless (no-window) rendering, are in
+[`ADVANCED_USAGE.md`](ADVANCED_USAGE.md#environment-variables).
 
 ---
 
