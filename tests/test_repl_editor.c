@@ -822,8 +822,10 @@ int main() {
         ASSERT_INT("bare Ctrl_L leaves scroll-follow off", g_scroll_follow_cursor, 0);
         editor_handle_special(GLUT_KEY_SHIFT_R, 0, 0);
         ASSERT_INT("bare Shift_R leaves scroll-follow off", g_scroll_follow_cursor, 0);
+#ifdef GLUT_KEY_SUPER_L /* absent on older freeglut */
         editor_handle_special(GLUT_KEY_SUPER_L, 0, 0);
         ASSERT_INT("bare Cmd_L leaves scroll-follow off", g_scroll_follow_cursor, 0);
+#endif
 
         /* A real navigation special key re-arms follow as before. */
         editor_handle_special(GLUT_KEY_LEFT, 0, 0);

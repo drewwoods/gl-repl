@@ -140,11 +140,16 @@ static int replay_modifier_special_key(int key) {
 #ifdef USE_GLUT
     return 0;
 #else
-    return key == GLUT_KEY_NUM_LOCK ||
-           key == GLUT_KEY_SHIFT_L || key == GLUT_KEY_SHIFT_R ||
-           key == GLUT_KEY_CTRL_L || key == GLUT_KEY_CTRL_R ||
-           key == GLUT_KEY_ALT_L || key == GLUT_KEY_ALT_R ||
-           key == GLUT_KEY_SUPER_L || key == GLUT_KEY_SUPER_R;
+    if (key == GLUT_KEY_NUM_LOCK ||
+        key == GLUT_KEY_SHIFT_L || key == GLUT_KEY_SHIFT_R ||
+        key == GLUT_KEY_CTRL_L || key == GLUT_KEY_CTRL_R ||
+        key == GLUT_KEY_ALT_L || key == GLUT_KEY_ALT_R)
+        return 1;
+#ifdef GLUT_KEY_SUPER_L /* absent on older freeglut */
+    if (key == GLUT_KEY_SUPER_L || key == GLUT_KEY_SUPER_R)
+        return 1;
+#endif
+    return 0;
 #endif
 }
 

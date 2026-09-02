@@ -2057,7 +2057,9 @@ static int special_key_is_bare_modifier(int key) {
     case GLUT_KEY_SHIFT_L: case GLUT_KEY_SHIFT_R:
     case GLUT_KEY_CTRL_L:  case GLUT_KEY_CTRL_R:
     case GLUT_KEY_ALT_L:   case GLUT_KEY_ALT_R:
+#ifdef GLUT_KEY_SUPER_L /* absent on older freeglut */
     case GLUT_KEY_SUPER_L: case GLUT_KEY_SUPER_R:
+#endif
         return 1;
 #endif
     default:

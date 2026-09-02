@@ -3504,7 +3504,7 @@ static void test_editor_input_dismisses_gl_state_report(void) {
     glr_ctrl_mouse(GLUT_RIGHT_BUTTON, GLUT_UP, anchor_x, anchor_y);
     ASSERT_INT("state reopens before modifier-only special keys",
                ui_state_gl_state_inspector().visible, 1);
-#ifdef GLUT_KEY_SHIFT_L
+#if defined(GLUT_KEY_SHIFT_L) && defined(GLUT_KEY_SUPER_L)
     {
         static const int modifier_keys[] = {
             GLUT_KEY_SHIFT_L, GLUT_KEY_SHIFT_R,
