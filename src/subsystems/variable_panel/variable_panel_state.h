@@ -89,6 +89,7 @@ void variable_panel_set_visible(int visible);
  * title bar's chip, no keymap binding. */
 int  variable_panel_collapsed(void);
 void variable_panel_toggle_collapsed(void);
+void variable_panel_set_collapsed(int collapsed);
 
 /* --- Drag transaction handler API ---
  *

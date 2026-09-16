@@ -835,6 +835,12 @@
       //       the current scene on boot without replacing it.
       // The *0 variants are uncompressed base64url fallbacks for browsers
       // without CompressionStream (and links stay decodable everywhere).
+      // Either kind may carry a `&key=value&...` view tail after the payload
+      // (edit cursor row/column, variable-panel fold) - state the exported
+      // text has no home for. The vocabulary is owned by the C side
+      // (glr_web_view_share_text / glr_web_apply_view_text); the shell only
+      // splices the tail in and hands it back. base64url has no `&`, so the
+      // first one is unambiguous.
 
       var glrBytesToB64url = (bytes) => {
         var bin = '';
@@ -896,8 +902,13 @@
         if (!text) { glrShareFeedback('failed'); return; }
         window.glrTelemetry.event(cfgOnly ? 'share/make-cfg'
                                           : 'share/make-scene');
+        // The cursor only means something against the scene it was in, so
+        // a settings-only link carries the panel fold and nothing else.
+        var view = Module.ccall('glr_web_view_share_text', 'string',
+                                ['number'], [cfgOnly ? 0 : 1]);
         glrEncodeSharePayload(text).then((enc) => {
-          var hash = '#' + (cfgOnly ? 'c' : 's') + enc.v + '=' + enc.data;
+          var hash = '#' + (cfgOnly ? 'c' : 's') + enc.v + '=' + enc.data +
+                     (view ? '&' + view : '');
           history.replaceState(null, '', hash);
           // The hash is in the URL bar either way; the clipboard write is
           // best-effort (it can be denied outside a secure context).
@@ -920,22 +931,30 @@
       // into an already-open tab (the share button's replaceState does not
       // fire hashchange, so it never re-applies its own link).
       var glrApplySharedHash = () => {
-        var m = location.hash.match(/^#([sc])([01])=(.+)$/);
+        var m = location.hash.match(/^#([sc])([01])=([^&]+)(?:&(.*))?$/);
         if (!m) return;
         // Distinguish the two link kinds: a shared scene and a shared
         // settings link are different things to have been sent.
         window.glrTelemetry.eventOnce(
           m[1] === 's' ? 'share/open-scene' : 'share/open-cfg');
         glrDecodeSharePayload(m[2], m[3]).then((text) => {
+          var applied;
           if (m[1] === 's') {
-            var ok = Module.ccall('glr_web_load_scene_text', 'number',
-                                  ['string', 'string'],
-                                  [text, 'Shared Scene']);
-            if (ok) lastSceneFilename = 'shared-scene.c';
+            applied = Module.ccall('glr_web_load_scene_text', 'number',
+                                   ['string', 'string'],
+                                   [text, 'Shared Scene']);
+            if (applied) lastSceneFilename = 'shared-scene.c';
           } else {
-            Module.ccall('glr_web_apply_cfg_text', 'number',
-                         ['string'], [text]);
+            applied = Module.ccall('glr_web_apply_cfg_text', 'number',
+                                   ['string'], [text]);
           }
+          // A scene link's view tail rides on its payload: the cursor row
+          // indexes the document that payload just loaded, so a rejected
+          // scene takes its tail down with it. A settings link's tail is
+          // independent of how many directives matched.
+          if (m[4] && (m[1] !== 's' || applied))
+            Module.ccall('glr_web_apply_view_text', 'number',
+                         ['string'], [m[4]]);
           canvasElement.focus();
         }).catch((err) => {
           console.error('Failed to decode shared URL payload:', err);

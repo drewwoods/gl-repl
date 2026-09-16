@@ -62,6 +62,10 @@ void variable_panel_toggle_collapsed(void) {
     g_variable_panel.view.collapsed = !g_variable_panel.view.collapsed;
 }
 
+void variable_panel_set_collapsed(int collapsed) {
+    g_variable_panel.view.collapsed = collapsed ? 1 : 0;
+}
+
 /* Drag transaction handlers. The pure-pass-through query / handler
  * wrappers (variable_panel_drag_active / _active_var / _coarse /
  * variable_panel_handle_drag_begin / _motion / _reset) live in

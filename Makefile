@@ -580,7 +580,7 @@ GL_LDFLAGS = \
 	packaging/web/gl4es_bootstrap.c $(WEB_GL_ARCHIVES) \
 	--shell-file packaging/web/shell.html \
 	$(WEB_RUNTIME_LDFLAGS) \
-	-sEXPORTED_FUNCTIONS=_main,_glr_web_new_scene,_glr_web_load_scene_text,_glr_web_export_scene,_glr_web_cfg_share_text,_glr_web_apply_cfg_text,_glr_web_clipboard_copy,_glr_web_clipboard_cut,_glr_web_clipboard_text,_glr_web_clipboard_kind,_glr_web_clipboard_paste_text,_glr_audio_web_manifest_begin,_glr_audio_web_manifest_add,_glr_audio_web_manifest_finish \
+	-sEXPORTED_FUNCTIONS=_main,_glr_web_new_scene,_glr_web_load_scene_text,_glr_web_export_scene,_glr_web_cfg_share_text,_glr_web_apply_cfg_text,_glr_web_view_share_text,_glr_web_apply_view_text,_glr_web_clipboard_copy,_glr_web_clipboard_cut,_glr_web_clipboard_text,_glr_web_clipboard_kind,_glr_web_clipboard_paste_text,_glr_audio_web_manifest_begin,_glr_audio_web_manifest_add,_glr_audio_web_manifest_finish \
 	-sEXPORTED_RUNTIME_METHODS=ccall,FS
 GLUT_GL_LDFLAGS = $(GL_LDFLAGS)
 

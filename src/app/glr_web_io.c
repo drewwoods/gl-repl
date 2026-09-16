@@ -19,6 +19,7 @@
 #include "repl/state_notify.h"
 #include "repl/state_views.h"
 #include "source_document.h"
+#include "subsystems/variable_panel/variable_panel_state.h"
 
 #include <emscripten/emscripten.h>
 #include <stdio.h>
@@ -160,6 +161,83 @@ int glr_web_apply_cfg_text(const char *text) {
         repl_set_status("Applied shared settings from URL");
     }
     return matched;
+}
+
+/*
+ * View-state tail. Neither payload kind carries where the author was
+ * *looking*: the exported text has no notion of an edit cursor, and the
+ * variable panel's collapse chip is mouse-only with no @cfg slug (visibility
+ * has one; the fold does not). The shell appends this as `&key=value` pairs
+ * after the payload, so a link reproduces the author's cursor row and a
+ * folded panel, not just the scene. Vocabulary lives here, on both sides:
+ *
+ *   cursor=<row>.<col>   edit-line index and input-buffer column
+ *   varpanel=collapsed|expanded
+ *
+ * A settings-only link omits `cursor` - it applies to whatever scene the
+ * receiver has open, where the author's row means nothing.
+ */
+EMSCRIPTEN_KEEPALIVE
+const char *glr_web_view_share_text(int with_cursor) {
+    static char buf[64];
+    size_t off = 0;
+
+    if (with_cursor)
+        off += (size_t)snprintf(buf + off, sizeof(buf) - off, "cursor=%d.%d&",
+                                editor_state_edit_line(), editor_cursor_pos());
+    off += (size_t)snprintf(buf + off, sizeof(buf) - off, "varpanel=%s",
+                            variable_panel_collapsed() ? "collapsed"
+                                                       : "expanded");
+    return buf;
+}
+
+/* Park the edit cursor on a row the way the controller's host focus does
+ * (glr_ctrl_host_focus_line): the row's text goes to the input buffer,
+ * insert mode drops, and the code panel scrolls to keep it visible. The
+ * column is clamped to the loaded text by editor_cursor_pos_set. */
+static void web_view_apply_cursor(int row, int col) {
+    int count = repl_state_document_count();
+    if (row < 0)
+        row = 0;
+    if (row > count)  /* == count is the append row, a legal cursor home */
+        row = count;
+    editor_state_edit_line_set(row);
+    editor_insert_mode_set(0);
+    editor_load_line_to_input(row);
+    editor_cursor_pos_set(col < 0 ? 0 : col);
+    editor_scroll_follow_cursor_set(1);
+}
+
+/* Apply a decoded view tail (`key=value&key=value`). Unknown keys are
+ * skipped so an older build can open a link from a newer one. Returns the
+ * number of keys applied. */
+EMSCRIPTEN_KEEPALIVE
+int glr_web_apply_view_text(const char *text) {
+    if (!text || !text[0])
+        return 0;
+
+    int applied = 0;
+    const char *p = text;
+    while (*p) {
+        const char *amp = strchr(p, '&');
+        size_t len = amp ? (size_t)(amp - p) : strlen(p);
+        int row, col;
+        if (len > 7 && strncmp(p, "cursor=", 7) == 0 &&
+            sscanf(p + 7, "%d.%d", &row, &col) == 2) {
+            web_view_apply_cursor(row, col);
+            applied++;
+        } else if (len == 18 && strncmp(p, "varpanel=collapsed", 18) == 0) {
+            variable_panel_set_collapsed(1);
+            applied++;
+        } else if (len == 17 && strncmp(p, "varpanel=expanded", 17) == 0) {
+            variable_panel_set_collapsed(0);
+            applied++;
+        }
+        if (!amp)
+            break;
+        p = amp + 1;
+    }
+    return applied;
 }
 
 /*

@@ -143,6 +143,15 @@ original `OpenGL-Vibe/emscripten/` prototyping tree (`git log -- packaging/web/*
   routes it through `glr_web_load_scene_text` (scene) or the
   `glr_web_apply_cfg_text` export (settings; its counterpart
   `glr_web_cfg_share_text` generates the payload from the live config).
+  Either kind may carry a **view tail** after the payload -
+  `&cursor=<row>.<col>&varpanel=collapsed|expanded` - for state the exported
+  text has no home for: the edit cursor (0-based row and input column) and
+  whether the variable panel is folded to its title bar. The vocabulary is
+  owned by the C side (`glr_web_view_share_text` / `glr_web_apply_view_text`
+  in `glr_web_io.c`); the shell only splices the tail in and hands it back
+  after the payload has landed. A settings-only link omits `cursor` - it
+  applies to whatever scene the receiver has open. Unknown keys are skipped,
+  a row past the document clamps to the append row.
   Pasting a share hash into an already-open tab applies it via
   `hashchange`; the share button itself uses `history.replaceState`, which
   doesn't fire that event, so it never re-applies its own link. A default

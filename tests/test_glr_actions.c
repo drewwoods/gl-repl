@@ -34,6 +34,7 @@
 #include "keymap.h"
 #include "keys.h"
 #include "app/glr_camera.h"               /* glr_camera_target_active / glr_camera */
+#include "subsystems/variable_panel/variable_panel_state.h" /* variable_panel_set_collapsed */
 #include "ui/app/menu_bar.h"              /* ui_menu_bar_open_menu_id, _set_open_menu */
 #include "ui/app/view_mode_swatch.h"      /* ui_view_mode_swatch_state */
 #include "ui/app/layout.h"                /* CODE_PANEL_LAYOUT_* */
@@ -1199,6 +1200,52 @@ static void test_web_shell_new_creates_scene(void) {
     ASSERT_INT("headless shell:new creates a user scene",
                repl_user_scene_count(), n0 + 1);
     glr_pointer_script_stop();
+}
+
+/* The share link's view tail (glr_web_io.c): the edit cursor and the
+ * variable panel's fold round-trip through the `key=value&...` text the
+ * shell splices after the payload. A settings-only link drops the cursor
+ * key; unknown keys and a row past the document are tolerated. */
+const char *glr_web_view_share_text(int with_cursor);
+int glr_web_apply_view_text(const char *text);
+
+static void test_web_view_share_round_trip(void) {
+    glr_ctrl_reset_all();
+    editor_feed_line("glClear(GL_COLOR_BUFFER_BIT);");
+    editor_feed_line("glVertex3f(1,1,1);");
+    editor_feed_line("glVertex3f(2,2,2);");
+    variable_panel_set_collapsed(0);
+
+    /* Author side: park on row 1, column 4, fold the panel. */
+    editor_navigate_to_line(1);
+    editor_cursor_pos_set(4);
+    variable_panel_set_collapsed(1);
+    ASSERT_STR("scene tail carries cursor + fold",
+               glr_web_view_share_text(1), "cursor=1.4&varpanel=collapsed");
+    ASSERT_STR("settings tail carries the fold only",
+               glr_web_view_share_text(0), "varpanel=collapsed");
+
+    /* Receiver side: disturb both, then apply the tail. */
+    editor_navigate_to_line(3);
+    variable_panel_set_collapsed(0);
+    ASSERT_INT("both keys applied",
+               glr_web_apply_view_text("cursor=1.4&varpanel=collapsed"), 2);
+    ASSERT_INT("cursor row restored", editor_state_edit_line(), 1);
+    ASSERT_INT("cursor column restored", editor_cursor_pos(), 4);
+    ASSERT_INT("panel fold restored", variable_panel_collapsed(), 1);
+    ASSERT_STR("row text landed in the input buffer",
+               editor_input_text(), "glVertex3f(1, 1, 1)");
+
+    /* Clamps: a row past the document lands on the append row, a column
+     * past the text on its end; an unknown key is skipped, not fatal. */
+    ASSERT_INT("clamped keys still count as applied",
+               glr_web_apply_view_text("cursor=99.99&future=x&varpanel=expanded"),
+               2);
+    ASSERT_INT("row clamps to the append row",
+               editor_state_edit_line(), repl_state_document_count());
+    ASSERT_INT("column clamps to the (empty) append row", editor_cursor_pos(), 0);
+    ASSERT_INT("panel unfolded", variable_panel_collapsed(), 0);
+    ASSERT_INT("empty tail applies nothing", glr_web_apply_view_text(""), 0);
 }
 #endif
 
@@ -3183,6 +3230,7 @@ int main(void) {
     test_all_catalog_tours_playback_to_completion();
 #if defined(__EMSCRIPTEN__)
     test_web_shell_new_creates_scene();
+    test_web_view_share_round_trip();
 #endif
     test_tour_done_auto_closes();
     test_tour_paced_key();
