@@ -59,11 +59,9 @@
 EM_JS(int, ps_web_shell_target, (const char *name_ptr, int *mx, int *my), {
     var name = UTF8ToString(name_ptr);
     if (name !== 'new' && name !== 'new_scene') return 0;
-    /* test-web is node: no document. Park the cursor above the canvas
-     * the way a real New button above the canvas would. This branch is
-     * the reason there is no `typeof document` early-out above it: one
-     * was added once and silently turned every node run of Editing
-     * Basics into "Tour stopped (target not found)". */
+    /* test-web is node (no document); this branch must succeed before
+     * any document use. Park the cursor above the canvas like the
+     * real New button. */
     if (typeof document === 'undefined') {
         if (mx) HEAP32[mx >> 2] = 40;
         if (my) HEAP32[my >> 2] = -20;
