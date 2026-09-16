@@ -423,6 +423,37 @@ static void compose_compile_cmd(char *buf, size_t n,
         exported_c, bin_path, log_path);
 }
 
+static int shell_status_to_rc(int status) {
+    if (WIFEXITED(status))
+        return WEXITSTATUS(status);
+    if (WIFSIGNALED(status))
+        return 128 + WTERMSIG(status);
+    return -1;
+}
+
+#if defined(__EMSCRIPTEN__)
+/* wasm has no fork(): under node the two compiles run back to back through
+ * system(), which emscripten routes to child_process.spawnSync - the same
+ * path test_repl_core_examples compiles through. The returned "job" is a
+ * 1-based slot holding the finished status, so the start/wait call sites
+ * below stay identical to the native overlap. */
+static int g_sync_job_rc[2];
+static int g_sync_job_next;
+
+static pid_t start_shell_command(const char *cmd) {
+    int slot = g_sync_job_next++ % 2;
+    int status = system(cmd);
+
+    if (status == -1)
+        return -1;
+    g_sync_job_rc[slot] = shell_status_to_rc(status);
+    return (pid_t)(slot + 1);
+}
+
+static int wait_shell_command(pid_t job) {
+    return g_sync_job_rc[job - 1];
+}
+#else
 static pid_t start_shell_command(const char *cmd) {
     pid_t pid = fork();
 
@@ -441,12 +472,9 @@ static int wait_shell_command(pid_t pid) {
     } while (waited < 0 && errno == EINTR);
     if (waited < 0)
         return -1;
-    if (WIFEXITED(status))
-        return WEXITSTATUS(status);
-    if (WIFSIGNALED(status))
-        return 128 + WTERMSIG(status);
-    return -1;
+    return shell_status_to_rc(status);
 }
+#endif
 
 /* ---- Trace (argument-value) comparison ---------------------------------
  *
