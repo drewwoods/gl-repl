@@ -6,6 +6,7 @@
 static float cycle = 48; // @tune seconds until all sixteen pendulums reunite
 static float swing = 28; // @tune maximum swing angle in degrees
 static float trails = 1; // @tune @bool show the last half-second of motion
+static float ink; // brightness multiplier on the MIST anchor for the unlit frame
 
 // Integer frequencies drift into waves, then return to their starting pose.
 // Bob i completes 24+i swings per cycle. Length is proportional to 1/f^2,
@@ -57,12 +58,11 @@ pendulum(index) {
     glutSolidSphere(0.16, 20, 14);
   glPopMatrix();
 }
-
 display() {
-  glTranslatef(0, 0, -10.5); // @camera dist
-  glRotatef(22, 1, 0, 0); // @camera rx
-  glRotatef(-24, 0, 1, 0); // @camera ry
-  glTranslatef(0, -1.9, 0); // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -10.5000f);   // @camera dist
+  glRotatef(22.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(-24.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(0.0000f, -1.9000f, 0.0000f);   // @camera pan
 
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -78,9 +78,11 @@ display() {
   swing = clamp(swing, 0, 35);
 
   // A low plinth and two end supports frame the suspended color ramp.
-  glColor3f(0.92 * 0.18, 0.95 * 0.18, 0.98 * 0.18);
+  ink = 0.18;
+  glColor3f(0.92*ink, 0.95*ink, 0.98*ink);
   beam(0, 0.08, 0, 7.6, 0.16, 3.4);
-  glColor3f(0.92 * 0.45, 0.95 * 0.45, 0.98 * 0.45);
+  ink = 0.45;
+  glColor3f(0.92*ink, 0.95*ink, 0.98*ink);
   beam(-3.6, 1.98, 0, 0.12, 3.8, 0.18);
   beam(3.6, 1.98, 0, 0.12, 3.8, 0.18);
   beam(0, 3.9, 0, 7.4, 0.2, 0.22);
@@ -91,8 +93,9 @@ display() {
   // A front-edge progress ruler fills over one complete reunion cycle.
   glDisable(GL_LIGHTING);
   glLineWidth(2);
+  ink = 0.25;
   glBegin(GL_LINES);
-    glColor3f(0.92 * 0.25, 0.95 * 0.25, 0.98 * 0.25);
+    glColor3f(0.92*ink, 0.95*ink, 0.98*ink);
     glVertex3f(-3.3, 0.18, 1.45);
     glVertex3f(3.3, 0.18, 1.45);
     glColor3f(0.1, 0.95, 0.85);
