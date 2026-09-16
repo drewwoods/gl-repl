@@ -1,0 +1,105 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg light_theme = LIGHT_THEME_HEADLIGHT
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+static float cycle = 48; // @tune seconds until all sixteen pendulums reunite
+static float swing = 28; // @tune maximum swing angle in degrees
+static float trails = 1; // @tune @bool show the last half-second of motion
+
+// Integer frequencies drift into waves, then return to their starting pose.
+// Bob i completes 24+i swings per cycle. Length is proportional to 1/f^2,
+// the ideal small-angle pendulum relation; motion is prescribed, not simulated.
+beam(x, y, z, sx, sy, sz) {
+  glPushMatrix();
+    glTranslatef(x, y, z);
+    glScalef(sx, sy, sz);
+    glutSolidCube(1);
+  glPopMatrix();
+}
+
+pendulum(index) {
+  float length, angle, phase, mix, red, green, blue, fade;
+  length = 2.8 * pow(24 / (24 + index), 2);
+  phase = TAU * (24 + index) / cycle;
+  angle = swing * cos(phase * t);
+  mix = index / 15;
+  red = lerp(1, 0.15, mix);
+  green = lerp(0.35, 0.55, mix);
+  blue = lerp(0.2, 1, mix);
+  glPushMatrix();
+    glTranslatef((index - 7.5) * 0.43, 3.8, 0);
+
+    // Unlit trails sample the same analytic path as the moving bob.
+    glDisable(GL_LIGHTING);
+    if(trails > 0.5) {
+      glLineWidth(2);
+      glBegin(GL_LINE_STRIP);
+        for(j, 0, 25) {
+          fade = 0.08 + 0.5 * j / 24;
+          glColor3f(red * fade, green * fade, blue * fade);
+          angle = swing * PI / 180 * cos(phase * (t - 0.5 + j / 48));
+          glVertex3f(0, -length * cos(angle), -length * sin(angle));
+        }
+      glEnd();
+    }
+    angle = swing * cos(phase * t);
+    glRotatef(angle, 1, 0, 0);
+    glColor3f(0.92, 0.95, 0.98);
+    glLineWidth(1);
+    glBegin(GL_LINES);
+      glVertex3f(0, 0, 0);
+      glVertex3f(0, -length, 0);
+    glEnd();
+    glEnable(GL_LIGHTING);
+    glColor3f(red, green, blue);
+    glTranslatef(0, -length, 0);
+    glutSolidSphere(0.16, 20, 14);
+  glPopMatrix();
+}
+
+display() {
+  glTranslatef(0, 0, -10.5); // @camera dist
+  glRotatef(22, 1, 0, 0); // @camera rx
+  glRotatef(-24, 0, 1, 0); // @camera ry
+  glTranslatef(0, -1.9, 0); // @camera pan
+
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_NORMALIZE);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.92, 0.95, 0.98, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 64);
+  cycle = clamp(cycle, 12, 120);
+  swing = clamp(swing, 0, 35);
+
+  // A low plinth and two end supports frame the suspended color ramp.
+  glColor3f(0.92 * 0.18, 0.95 * 0.18, 0.98 * 0.18);
+  beam(0, 0.08, 0, 7.6, 0.16, 3.4);
+  glColor3f(0.92 * 0.45, 0.95 * 0.45, 0.98 * 0.45);
+  beam(-3.6, 1.98, 0, 0.12, 3.8, 0.18);
+  beam(3.6, 1.98, 0, 0.12, 3.8, 0.18);
+  beam(0, 3.9, 0, 7.4, 0.2, 0.22);
+  for(i, 0, 16) {
+    pendulum(i);
+  }
+
+  // A front-edge progress ruler fills over one complete reunion cycle.
+  glDisable(GL_LIGHTING);
+  glLineWidth(2);
+  glBegin(GL_LINES);
+    glColor3f(0.92 * 0.25, 0.95 * 0.25, 0.98 * 0.25);
+    glVertex3f(-3.3, 0.18, 1.45);
+    glVertex3f(3.3, 0.18, 1.45);
+    glColor3f(0.1, 0.95, 0.85);
+    glVertex3f(-3.3, 0.19, 1.45);
+    glVertex3f(-3.3 + 6.6 * fmod(t / cycle, 1), 0.19, 1.45);
+  glEnd();
+  glColor3f(0.92, 0.95, 0.98);
+  glRasterPos3f(-3.3, 0.28, 1.5);
+  label("Reunion every %f s", cycle);
+}

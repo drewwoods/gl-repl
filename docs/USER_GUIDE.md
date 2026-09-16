@@ -165,10 +165,14 @@ for you. That is the same rule the [exported C](#exporting--importing) follows.
 
 ## Built-in Examples
 
-**F12** cycles forward through the 41 built-in examples, then any saved
+**F12** cycles forward through the 42 built-in examples, then any saved
 scenes, wrapping to the start; **Shift+F12** cycles backward. The Scene menu
 lists them grouped by tag. `./gl-repl --list-examples` prints the compiled-in
 set.
+
+Try `./gl-repl --example "Pendulum wave"` for sixteen pendulums whose
+frequencies drift into waves and reunite every 48 seconds. Adjust `cycle`
+and `swing` in the variable panel, or toggle `trails` to inspect the motion.
 
 The **&lt; Prev** / **Next &gt;** buttons in the menu bar (left of the 2D/3D
 swatch) do the same stepping with the mouse - and while a tutorial is

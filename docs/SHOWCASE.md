@@ -562,7 +562,16 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 <br><sub>a sine-driven bar pulse with `smoothstep` falloff and `lerp`d height</sub>
 
 </td>
-<td width="33%"></td>
+<td width="33%" align="center">
+
+<!-- images/showcase/pendulum-wave.gif
+     scripts/docs-assets.sh sc-pendulum-wave -->
+<img src="images/showcase/pendulum-wave.gif" alt="Sixteen colored pendulums swinging out of phase with curved motion trails" width="100%">
+
+**[Pendulum wave](../examples/scenes/pendulum-wave.glr)**
+<br><sub>integer swing frequencies form waves and reunite; tune the cycle and amplitude</sub>
+
+</td>
 <td width="33%"></td>
 </tr>
 </table>

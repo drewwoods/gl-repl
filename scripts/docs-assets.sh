@@ -142,7 +142,7 @@ GIF_ASSETS=(
     sc-conditional-colors sc-sierpinski-carpet sc-sierpinski-sponge
     sc-whale sc-stress-test sc-lantern-festival sc-aurora-observatory
     sc-planar-shadows sc-fog-ring-tunnel sc-pulse-bars sc-stencil-mask
-    sc-material-recipes
+    sc-material-recipes sc-pendulum-wave
     sc-feature-time
 )
 
@@ -2690,6 +2690,11 @@ fi
 if want sc-pulse-bars; then
     clip "$SHOW/pulse-bars" 200 2 20 560 \
         --example "Pulse bars (easing)"
+fi
+if want sc-pendulum-wave; then
+    ( WARM=240
+      clip "$SHOW/pendulum-wave" 240 2 30 720 \
+          --example "Pendulum wave" )
 fi
 if want sc-stencil-mask; then
     clip "$SHOW/stencil-mask" 200 2 20 560 \

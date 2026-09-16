@@ -13,7 +13,7 @@ the source that made it. No rebuild while editing scenes.
 # macOS: brew install cmake
 # Ubuntu/Debian: sudo apt install freeglut3-dev
 make gl-repl && ./gl-repl
-./gl-repl --example "Torus knot"              # F12 cycles all 41
+./gl-repl --example "Torus knot"              # F12 cycles all 42
 ```
 
 Also runs in the [browser](https://drewwoods.github.io/gl-repl/): with Emscripten's `emcc` on `PATH`, run `make web`.
@@ -55,7 +55,7 @@ Now press `Ctrl+T`. The torus spins — the rate is just the scalar in front of
 &nbsp;
 <a href="docs/SHOWCASE.md"><img src="docs/images/labels-orrery.png" alt="Orrery with tracking labels" width="32%"></a>
 
-<sub>three of 41 built-in scenes, each a screenful of typed GL — **[browse the showcase →](docs/SHOWCASE.md)**</sub>
+<sub>three of 42 built-in scenes, each a screenful of typed GL — **[browse the showcase →](docs/SHOWCASE.md)**</sub>
 
 ---
 
