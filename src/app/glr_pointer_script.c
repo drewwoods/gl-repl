@@ -57,11 +57,13 @@
  * the scripted cursor glides toward the canvas edge while activation is
  * forwarded to the real DOM control below. */
 EM_JS(int, ps_web_shell_target, (const char *name_ptr, int *mx, int *my), {
-    if (typeof document === 'undefined') return 0;
     var name = UTF8ToString(name_ptr);
     if (name !== 'new' && name !== 'new_scene') return 0;
     /* test-web is node: no document. Park the cursor above the canvas
-     * the way a real New button above the canvas would. */
+     * the way a real New button above the canvas would. This branch is
+     * the reason there is no `typeof document` early-out above it: one
+     * was added once and silently turned every node run of Editing
+     * Basics into "Tour stopped (target not found)". */
     if (typeof document === 'undefined') {
         if (mx) HEAP32[mx >> 2] = 40;
         if (my) HEAP32[my >> 2] = -20;
@@ -86,7 +88,6 @@ EM_JS(int, ps_web_shell_target, (const char *name_ptr, int *mx, int *my), {
  * existing listener owns the New-scene bridge and restores canvas focus.
  * Under node, call the same C export that listener would invoke. */
 EM_JS(int, ps_web_shell_click, (const char *name_ptr), {
-    if (typeof document === 'undefined') return 0;
     var name = UTF8ToString(name_ptr);
     if (name !== 'new' && name !== 'new_scene') return 0;
     if (typeof document === 'undefined') {
