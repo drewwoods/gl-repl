@@ -62,13 +62,16 @@ internals, [`ARCHITECTURE.md`](ARCHITECTURE.md).
 - [Scenes & Workspaces](#scenes--workspaces)
 - [Exporting & Importing](#exporting--importing)
 - [Tunable Variables (`// @tune`)](#tunable-variables--tune)
+
+**Performance and limits**
+
 - [Performance](#performance)
-- [Limitations](#limitations)
 - [Profiling](#profiling)
-- [Music](#music)
+- [Limitations](#limitations)
 
 **Reference**
 
+- [Music](#music)
 - [Command-Line Options](#command-line-options)
 - [Keyboard & Mouse Reference](#keyboard--mouse-reference)
 
@@ -125,11 +128,12 @@ Examples* entry from the [Tours](#guided-tours) menu.
 
 ### Your first triangle
 
-Fresh launches open on the default built-in example. Choose **File → New
-Scene** first so the triangle has a clean scene of its own. New Scene already
-seeds the first line below (see [Display default
-commands](#display-default-commands)); keep it - your program owns the frame.
-Type the remaining lines after the defaults, then press **`;`** to commit each line, or **Enter** to commit and insert a new one:
+A fresh launch opens on a built-in example, so choose **File → New Scene**
+to give the triangle a clean scene of its own. The new scene already holds
+the `glClear` line below among its [display
+defaults](#display-default-commands) - keep it, your program owns the frame.
+Type the remaining lines after the defaults, pressing **`;`** to commit each
+line, or **Enter** to commit and insert a new one:
 
 ```c
 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -288,6 +292,11 @@ New and edited lines are checked before they become part of the scene.
   you are not editing is always valid.
 - Press **Esc** to discard an edit yourself.
 
+A committed line holds at most **255 characters**. The line you are typing is
+not held to that (the input buffer is 1024 bytes), and a
+[Replace All](#replace) that would push any line past 255 fails the whole
+operation rather than truncating.
+
 ### Autocomplete
 
 Autocomplete appears as you type:
@@ -300,17 +309,21 @@ parameter hint after the open paren names that definition's parameters.
 
 ### Editing what's there
 
-Selection, clipboard (**Ctrl+C / Ctrl+X / Ctrl+V**), and undo/redo
-(**Ctrl+Z / Ctrl+Shift+Z**, with Ctrl+Y as an alternate) work like a normal
-editor. Copy and cut also put the text on the **system clipboard**, and
-Ctrl+V pastes from anywhere else - multi-line text arrives as source lines, a
-single line lands in the input row when you are editing one. Right-click a GL
-command for a short description, or right-click an assignment for [a plot of
-its values](#plotting-an-assignments-values). **Ctrl+D** deletes the current
-line or selection. The status-bar **select-all** button (the dashed marquee,
-left of copy) highlights every line at once, ready to copy or cut; the trash
-button resets the whole scene to the
-[six editable display defaults](#display-default-commands).
+Selection, clipboard, and undo/redo work like a normal editor:
+
+- **Ctrl+C / Ctrl+X / Ctrl+V** copy, cut, and paste. Copy and cut also put
+  the text on the **system clipboard**, and Ctrl+V pastes from anywhere else -
+  multi-line text arrives as source lines, a single line lands in the input
+  row when you are editing one.
+- **Ctrl+Z / Ctrl+Shift+Z** undo and redo (Ctrl+Y is an alternate redo).
+- **Ctrl+D** deletes the current line or selection.
+- The status-bar **select-all** button (the dashed marquee, left of copy)
+  highlights every line at once, ready to copy or cut; the trash button
+  resets the whole scene to the
+  [six editable display defaults](#display-default-commands).
+- **Right-click** a GL command for a short description, an assignment row for
+  [a plot of its values](#plotting-an-assignments-values), or a blank row for
+  [the OpenGL state](#inspecting-opengl-state) at that point.
 
 **Ctrl+F** opens case-insensitive search over the buffer; **Up / Down** move
 to the previous / next match. Press **Enter** for the next match, or **Esc**
@@ -373,103 +386,6 @@ panel. Click it to open the floating picker:
 - Palette tabs: **Basic**, **Full**, **Neon** (the curated accent set the
   built-in examples are coloured from), and **Harmony**.
 - Changes write back to the source line in real time.
-
-### Plotting an assignment's values
-
-Right-click a `var = expr;` (or `A[i] = expr;`) row to plot what it actually
-computed. The plot costs nothing while closed.
-
-**X follows the row.** Inside a `for` loop it is the execution number within
-one frame; for a top-level row that runs once per frame it is successive
-captures over time.
-
-![Left: a loop row, X is the execution index within one frame. Right: a top-level row, X is successive captures](images/assign-plot.png)
-
-The caption names the mode and reports executions per frame. **Y** fits the
-data without forcing a zero baseline; when the range crosses zero, that line
-is brighter. The `log` chip uses ordinary log₁₀ for positive-only data and a
-symmetric log axis when negative values or a zero crossing are present.
-
-![The same two traces on a linear axis and on the symmetric log axis](images/assign-plot-log.png)
-
-Log spacing separates traces of different magnitudes while keeping their
-signs. Near-zero values collapse onto the center line; an all-zero trace has no
-logarithmic range, so the chip is disabled. **Min**, **max**, **mean**, and
-**sd** use every captured value for the selected series - hover its legend
-entry, or move away to select the first.
-
-| Control | Action |
-|---|---|
-| `once` / `1 Hz` / `frame` | Cycle capture rate; right-click cycles backward |
-| `lin` / `log` | Switch Y between linear and logarithmic spacing |
-| `1x` / `2x` | Toggle normal and double-size panels |
-| `[reset]` | Clear samples and statistics, keeping the plotted rows and rate |
-| `[x]` | Close the plot |
-
-**once** freezes one comparable frame, **1 Hz** is the default live view, and
-**frame** captures every frame. With several rows, **once** waits for a frame
-in which they all execute.
-
-**During [replay](#replay)** a vertical rule marks how far the replay has run
-through each plotted row this frame, with the value printed beside it. Replay
-captures every frame so the rule sits on real values; **once** stays frozen
-and gets no rule. A top-level row plotted against successive captures has no
-within-frame position to mark.
-
-**Comparing several rows.** **Shift**+right-click adds an assignment to the
-open plot instead of replacing it, up to four at once; Shift+right-click a
-plotted row again to remove it.
-
-![Three assignments from one loop body overlaid, with the legend naming them](images/assign-plot-series.png)
-
-X comes from the first row, so another row must have the same executions per
-frame or it is refused. Y spans every series - use `log` for widely different
-magnitudes. Plain right-click retargets the plot to one row. Editing a plotted
-row keeps tracking it; deleting it removes that series.
-
-**Opening the plot from the scene: `// @plot`.** A trailing `// @plot` comment
-on an assignment row plots that row as soon as the document loads:
-
-```c
-static float wobble;
-wobble = sin(t * 3) * 0.4;   // @plot
-```
-
-Tag several rows to overlay them. The first tagged row fixes the X axis; rows
-past the four-series limit are ignored. The tag rides the row's text, so it
-survives save, reload, and export. It is re-read when a document is loaded,
-never mid-session, so it cannot undo a retarget you just made by hand.
-
-### Inspecting OpenGL state
-
-Right-click a blank row in the code panel to inspect the OpenGL state at that
-point in the program. A committed blank row and the empty input row both
-work.
-
-![OpenGL state inspector opened on a blank source row](images/gl-state-inspector.png)
-
-The popup opens on the state **your program** wrote before that row. Writes
-from the generated `init()` / `display()` scaffold start folded behind the
-**[+] N from setup** chip; click it to show them, muted. A write of your own
-that happens to match the OpenGL default is listed either way.
-
-The current value is always visible; click the **[+] default/source** chip in
-the column header to add the initial default and the source of the latest
-write. The line number it quotes is the one in the code panel's left margin.
-
-**Shift+right-click a second blank row** while the popup is open to pin that
-row as the comparison basis: the default column becomes **value at L*n***, and
-rows are coloured by whether they changed between the two lines. Shift+right-
-click the pinned row again to unpin. The basis is a live line, so the
-comparison stays correct as `t` advances.
-
-A light's rows appear only while it can affect the frame. Modelview matrices
-use four aligned rows; light positions show in both world and eye coordinates
-when available. Scroll with the mouse wheel; click elsewhere or type in the
-editor to dismiss.
-
-`label(...)` draws with the raster color latched at `glRasterPos3f`, not a
-later `glColor3f`. See [`label()`](#bitmap-text---label).
 
 ### Keeping the buffer tidy
 
@@ -720,10 +636,6 @@ glVertex3f(x, y, z);    // use anywhere a number is expected
   produce a file that does not compile. Names that merely start with a
   keyword (`intensity`, `elsewhere`) are fine.
 
-A committed line holds at most **255 characters**. The line you are typing is
-not held to that (the input buffer is 1024 bytes). A Replace All that would
-push any line past 255 fails the whole operation rather than truncating.
-
 That is what `float` means at the top level; `static float` is also
 program-wide even when typed inside a function. A plain `float` inside a
 function instead declares a [function-scoped local](#function-scoped-locals).
@@ -965,9 +877,7 @@ A trailing comment on a `float` declaration can also carry a tag:
 
 `t` is the one predefined variable - it exists in every session without a
 declaration, starts at `0`, and while playing advances a fixed 1/60 s per
-simulation tick. That is *not* the same as per rendered frame: a replay
-backstep reconstructs its frame over several rendered frames, and none of
-them advance `t`. Use it in any expression:
+simulation tick. Use it in any expression:
 
 ```c
 glRotatef(t*45, 0, 1, 0);
@@ -1046,6 +956,10 @@ on a number and the find bar puts on the match count.
 - Stepping backwards runs `t` below zero, exactly as dragging the slider
   does. Reset to a clean origin with **Ctrl+Shift+T**.
 
+A tick is a unit of simulation time, not a rendered frame: a replay backstep
+reconstructs its frame over several rendered frames, and none of them
+advance `t`.
+
 Stepping is a transport control, not an edit: it moves the clock, leaves your
 source untouched, and does not enter the undo history.
 
@@ -1083,6 +997,12 @@ its `glVertex3f` line (or the variable feeding it); see
 | Ctrl+Shift+E | Toggle Projection: Perspective / Ortho (free camera) |
 | Ctrl+Shift+I | Look down Z |
 
+**Reset camera** (Ctrl+Shift+C) returns to the scene's authored `// camera`
+pose - from a built-in example or a loaded file - and to the built-in defaults
+only when the scene has no camera header. **Look down Z** (Ctrl+Shift+I)
+swings the camera head-on down the Z axis: orbit angles and pan ease back to
+zero, and the current zoom distance is kept.
+
 **2D mode.** *View mode* (Ctrl+Shift+V, or the CAMERA section of the Config
 menu) switches between the 3D perspective camera and a flat 2D orthographic
 projection - useful for plots, sketches, and UI-like drawings. Examples that
@@ -1102,9 +1022,11 @@ orthographically. Examples can declare `@cfg projection = PROJ_ORTHO`.
 
 Immediate-mode GL is invisible state: the current color, the current matrix,
 the winding of the polygon you just typed. The guides and overlays below make
-that state visible while you edit. The [diagnostic views](#diagnostic-views)
-that follow work the other way round: they re-render the whole scene to answer
-one question.
+that state visible while you edit, and two right-click inspectors at the end
+of the section show the numbers behind it - what an assignment row computed,
+and the GL state at any point in the program. The
+[diagnostic views](#diagnostic-views) that follow work the other way round:
+they re-render the whole scene to answer one question.
 
 ### Vertex entry guides
 
@@ -1244,6 +1166,103 @@ Generated lines are tagged `auto` and drawn dimmer. Switching to **Off**
 removes them (undoable). Editing a generated line makes it yours. Exported
 `.c` files mark generated normals with `/* @auto */`.
 
+### Plotting an assignment's values
+
+Right-click a `var = expr;` (or `A[i] = expr;`) row to plot what it actually
+computed. The plot costs nothing while closed.
+
+**X follows the row.** Inside a `for` loop it is the execution number within
+one frame; for a top-level row that runs once per frame it is successive
+captures over time.
+
+![Left: a loop row, X is the execution index within one frame. Right: a top-level row, X is successive captures](images/assign-plot.png)
+
+The caption names the mode and reports executions per frame. **Y** fits the
+data without forcing a zero baseline; when the range crosses zero, that line
+is brighter. The `log` chip uses ordinary log₁₀ for positive-only data and a
+symmetric log axis when negative values or a zero crossing are present.
+
+![The same two traces on a linear axis and on the symmetric log axis](images/assign-plot-log.png)
+
+Log spacing separates traces of different magnitudes while keeping their
+signs. Near-zero values collapse onto the center line; an all-zero trace has no
+logarithmic range, so the chip is disabled. **Min**, **max**, **mean**, and
+**sd** use every captured value for the selected series - hover its legend
+entry, or move away to select the first.
+
+| Control | Action |
+|---|---|
+| `once` / `1 Hz` / `frame` | Cycle capture rate; right-click cycles backward |
+| `lin` / `log` | Switch Y between linear and logarithmic spacing |
+| `1x` / `2x` | Toggle normal and double-size panels |
+| `[reset]` | Clear samples and statistics, keeping the plotted rows and rate |
+| `[x]` | Close the plot |
+
+**once** freezes one comparable frame, **1 Hz** is the default live view, and
+**frame** captures every frame. With several rows, **once** waits for a frame
+in which they all execute.
+
+**During [replay](#replay)** a vertical rule marks how far the replay has run
+through each plotted row this frame, with the value printed beside it. Replay
+captures every frame so the rule sits on real values; **once** stays frozen
+and gets no rule. A top-level row plotted against successive captures has no
+within-frame position to mark.
+
+**Comparing several rows.** **Shift**+right-click adds an assignment to the
+open plot instead of replacing it, up to four at once; Shift+right-click a
+plotted row again to remove it.
+
+![Three assignments from one loop body overlaid, with the legend naming them](images/assign-plot-series.png)
+
+X comes from the first row, so another row must have the same executions per
+frame or it is refused. Y spans every series - use `log` for widely different
+magnitudes. Plain right-click retargets the plot to one row. Editing a plotted
+row keeps tracking it; deleting it removes that series.
+
+**Opening the plot from the scene: `// @plot`.** A trailing `// @plot` comment
+on an assignment row plots that row as soon as the document loads:
+
+```c
+static float wobble;
+wobble = sin(t * 3) * 0.4;   // @plot
+```
+
+Tag several rows to overlay them. The first tagged row fixes the X axis; rows
+past the four-series limit are ignored. The tag rides the row's text, so it
+survives save, reload, and export. It is re-read when a document is loaded,
+never mid-session, so it cannot undo a retarget you just made by hand.
+
+### Inspecting OpenGL state
+
+Right-click a blank row in the code panel to inspect the OpenGL state at that
+point in the program. A committed blank row and the empty input row both
+work.
+
+![OpenGL state inspector opened on a blank source row](images/gl-state-inspector.png)
+
+The popup opens on the state **your program** wrote before that row. Writes
+from the generated `init()` / `display()` scaffold start folded behind the
+**[+] N from setup** chip; click it to show them, muted. A write of your own
+that happens to match the OpenGL default is listed either way.
+
+The current value is always visible; click the **[+] default/source** chip in
+the column header to add the initial default and the source of the latest
+write. The line number it quotes is the one in the code panel's left margin.
+
+**Shift+right-click a second blank row** while the popup is open to pin that
+row as the comparison basis: the default column becomes **value at L*n***, and
+rows are coloured by whether they changed between the two lines. Shift+right-
+click the pinned row again to unpin. The basis is a live line, so the
+comparison stays correct as `t` advances.
+
+A light's rows appear only while it can affect the frame. Modelview matrices
+use four aligned rows; light positions show in both world and eye coordinates
+when available. Scroll with the mouse wheel; click elsewhere or type in the
+editor to dismiss.
+
+`label(...)` draws with the raster color latched at `glRasterPos3f`, not a
+later `glColor3f`. See [`label()`](#bitmap-text---label).
+
 ---
 
 ## Diagnostic Views
@@ -1353,12 +1372,8 @@ flyouts taller than the window):
 - **TIME & REPLAY** - Auto time, Replay, Replay mode, Replay expand
 - **SCENE** - Grid, Grid major, Grid extent, Grid brightness, Axes, Backdrop, Light theme,
   Light indicators
-- **CAMERA** - View mode, Projection, Camera rotate, Focus origin, Look down Z
-  (swings the camera head-on down the Z axis: orbit angles and pan ease back to
-  zero, the current zoom distance is kept), Reset camera
-  (returns to the scene's authored `// camera` pose - from a built-in example
-  or a loaded file - and to the built-in defaults only when the scene has no
-  camera header)
+- **CAMERA** - View mode, Projection, Camera rotate, Focus origin, Look down Z,
+  Reset camera
 - **GEOMETRY** - Wireframe, Winding, Depth view, Stencil view, Call depth,
   Auto-normals
 - **OVERLAYS** - Overlay scope, Vertex labels, Vertex label placement, Vertex
@@ -1401,17 +1416,16 @@ here changes a line in the code panel.
 
 Twelve directly-selectable grid themes (**F2**): Off, Classic, Tron, Ember,
 Ocean, XZ Ruler *(default)*, Adaptive Planes, Radar, Tilled Field, Sketchbook,
-Graph Planes, Checkerboard. Checkerboard is the odd one out: a
-translucent solid floor lit by the scene's own lights rather than a line
-drawing, with each cell labelled with its `x,z` coordinate - the labels fade
-into the background with distance and stop entirely past a camera-relative
-radius, so the far floor stays clean. Some backdrops enable hidden companion
-grids; see
-[Advanced Usage](ADVANCED_USAGE.md#cfg-backdropgrid-pairing).
-**Grid major** (Ctrl+Shift+G) cycles the major-tick spacing (1/2/5/10),
-**Grid extent** (F3) the grid's reach (Close / Mid / Far), and **Grid
-brightness** (F4) the line weight (Dim / Normal / Bright / Bold). Theme
-changes cross-fade.
+Graph Planes, Checkerboard. Theme changes cross-fade. Checkerboard is the odd
+one out: a translucent solid floor lit by the scene's own lights rather than a
+line drawing, with each cell labelled with its `x,z` coordinate - the labels
+fade into the background with distance and stop entirely past a
+camera-relative radius, so the far floor stays clean.
+
+Three settings shape whichever theme is on: **Grid major** (Ctrl+Shift+G)
+cycles the major-tick spacing (1/2/5/10), **Grid extent** (F3) the grid's
+reach (Close / Mid / Far), and **Grid brightness** (F4) the line weight
+(Dim / Normal / Bright / Bold).
 
 ![Grid brightness against a bright cube - Dim, Normal (top), Bright, Bold (bottom)](images/grid-brightness.png)
 
@@ -1458,9 +1472,9 @@ fly-past sweeps a highlight across the scene.
 
 > [!TIP]
 > Fairies are the backdrop to reach for when you want to *see*
-> `GL_QUADRATIC_ATTENUATION` rather than reason about it. Both bounds-driven
-> backdrops scale themselves to whatever you have drawn, so the falloff
-> looks the same on a half-unit sketch and a forty-unit model.
+> `GL_QUADRATIC_ATTENUATION` rather than reason about it. Like Drones, the
+> rig scales itself to whatever you have drawn, so the falloff looks the same
+> on a half-unit sketch and a forty-unit model.
 
 Some backdrops enable a hidden companion grid. Nebula selects Star Chart;
 see [Advanced Usage](ADVANCED_USAGE.md#cfg-backdropgrid-pairing) for the
@@ -1475,15 +1489,10 @@ keys), Headlight (light 0 rides the camera), Solar (light 0 at the world
 origin - for orbit/planet scenes), Studio (warm key / cool rim / warm fill),
 Neon (saturated magenta/cyan/lime triad).
 
-> [!NOTE]
-> A theme only positions and colors
-> the four light slots - your program still chooses which ones are on via
-> `glEnable(GL_LIGHT0..3)`.
-
 **Themes are the in-app control for light positions and colors.** The REPL
-command set does not include `glLightfv`, so you choose a preset rig and use
-`glEnable` / `glDisable` to select its slots rather than editing each light.
-See [Limitations](#limitations).
+command set does not include `glLightfv`, so a theme positions and colors the
+four light slots, and your program chooses which ones are on with
+`glEnable` / `glDisable(GL_LIGHT0..3)`. See [Limitations](#limitations).
 
 **Light indicators** (Ctrl+L) draw a marker at each light's position
 (labelled `L0..L3`, with *off* noted for disabled lights). Park the cursor on
@@ -1574,17 +1583,20 @@ An open [assignment value plot](#plotting-an-assignments-values) follows the
 replay: it marks how far each plotted row has run this frame and prints the
 value at that point.
 
-Two related config items: **Replay mode** (Polygon steps a primitive at a
-time, Vertex steps a vertex at a time) and **Replay expand**. **Expanded**
-annotates lines in place as a `//` comment. Assignment readouts follow the
-whole live call chain, not just the innermost function: standing on a draw
-inside `func4`, the `a = x * 0.9;` row of the `func3` invocation that called
-it still shows that invocation's own values. A call that has already
-*returned* is off the chain and stays unannotated. **Verbose** is the only mode
-that splits a source row, adding a call-path breadcrumb (how the focused
-vertex was reached: loop iterators and each `funcN` invocation's arguments)
-then substituted and evaluated rows beneath it. The breadcrumb is vertex
-replay only.
+Two config items shape what replay shows:
+
+- **Replay mode** - *Polygon* steps a primitive at a time, *Vertex* a vertex
+  at a time.
+- **Replay expand** - Off / Expanded / Verbose. **Expanded** annotates lines
+  in place as a `//` comment. Assignment readouts follow the whole live call
+  chain, not just the innermost function: standing on a draw inside `func4`,
+  the `a = x * 0.9;` row of the `func3` invocation that called it still shows
+  that invocation's own values. A call that has already *returned* is off the
+  chain and stays unannotated. **Verbose** is the only mode that splits a
+  source row, adding a call-path breadcrumb (how the focused vertex was
+  reached: loop iterators and each `funcN` invocation's arguments) then
+  substituted and evaluated rows beneath it. The breadcrumb is vertex replay
+  only.
 
 ---
 
@@ -1647,6 +1659,11 @@ you can write to and it keeps using that directory. The packaged macOS app
 saves into your gl-repl data folder instead, and it will ask you to name a
 scene the first time.
 
+**Ctrl+Q** (and File → Quit) writes a recovery copy before exiting and prints
+where it went: the live scene to `recovery.c` in the gl-repl data folder, or,
+when the visible document is an unedited built-in example, every open user
+scene to a `recovery-workspace/` there. Reload either with `./gl-repl <path>`.
+
 ---
 
 ## Exporting & Importing
@@ -1654,17 +1671,13 @@ scene the first time.
 ### Standalone C export
 
 **File → Save Scene as .c** writes the active scene as a complete, compilable
-GLUT/OpenGL C program. Where the file lands depends on whether you have a
-workspace open: with one bound it becomes a scene file inside that workspace,
-and without one it is the scene-named `.c` file next to the binary (or
-`output.c` for an unnamed scene). This explicit action is useful after loading
-a `.glr`: **Save Scene** preserves that file's authoring format, while **Save
-Scene as .c** produces the standalone program.
-
-**Ctrl+S** (File → Save Scene) saves the active scene in the format it was
-loaded from. For ordinary workspace scenes and built-in examples, that is the
-standalone C export described above. If what you are looking at is still a
-built-in example, saving forks it into a scene of your own first.
+GLUT/OpenGL C program. **Ctrl+S** (File → Save Scene) saves in whatever
+format the scene was loaded from: for workspace scenes and built-in examples
+that is this same C export, while a scene loaded from a `.glr` keeps that
+format and needs the explicit **Save Scene as .c** to become a standalone
+program. Saving a built-in example forks it into a scene of your own first.
+With a workspace bound, the file becomes a scene inside it; without one it is
+the scene-named `.c` next to the binary (`output.c` for an unnamed scene).
 
 Header comments carry the REPL state (variables, config, camera), your
 functions become C functions, and your commands become the `display()` body.
@@ -1688,9 +1701,6 @@ The same export is available without opening the app at all:
 `--export-c` loads the session, writes the file, and exits. It never creates a
 window or touches GL, so it works over ssh and in CI; `--window WxH` sets the
 window size the exported program opens with.
-
-`Ctrl+Q` quits and saves a recovery copy to a temp file - an unedited built-in
-example is skipped instead (any unsaved scenes go to `recovery-workspace/`).
 
 The exported program is your scene with the interpreter removed. No code
 panel, no grid, no menu bar, and **no flat-command budget**: your `for` loops
@@ -1877,23 +1887,6 @@ export is the product.
 
 ---
 
-## Limitations
-
-gl-repl focuses on fixed-function, immediate-mode geometry. Intentionally
-outside that scope:
-
-- **Geometry is edited through code.** Viewport input moves only the camera.
-- **Textures are not supported.** No `glTexCoord`, texture binding, or image
-  loading.
-- **Shaders and buffered drawing are not supported.** Immediate-mode
-  `glBegin`/`glEnd` keeps individual source lines visible while editing and
-  replaying.
-- **Lights come from presets.** A light theme positions and colors the four
-  slots; your code turns slots on and off. The generated and exported C still
-  shows the `glLightfv` calls; see [Lighting](#lighting).
-
----
-
 ## Profiling
 
 When a scene starts feeling heavy, the built-in profilers show where the
@@ -1949,6 +1942,23 @@ cadence cross-check when that column reads `--`.
 - **Ctrl+Shift+N** - dump debug state to stdout.
 - Startup prints an init trace (`[init +N.NNNs] <phase>`) to stderr;
   `--detailed-prof` adds finer phases.
+
+---
+
+## Limitations
+
+gl-repl focuses on fixed-function, immediate-mode geometry. Intentionally
+outside that scope:
+
+- **Geometry is edited through code.** Viewport input moves only the camera.
+- **Textures are not supported.** No `glTexCoord`, texture binding, or image
+  loading.
+- **Shaders and buffered drawing are not supported.** Immediate-mode
+  `glBegin`/`glEnd` keeps individual source lines visible while editing and
+  replaying.
+- **Lights come from presets.** A light theme positions and colors the four
+  slots; your code turns slots on and off. The generated and exported C still
+  shows the `glLightfv` calls; see [Lighting](#lighting).
 
 ---
 
