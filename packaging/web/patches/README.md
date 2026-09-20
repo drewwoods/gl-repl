@@ -2,13 +2,14 @@
 
 This directory contains local patches applied to the pinned gl4es checkout by
 [`scripts/web-deps.sh`](../../../scripts/web-deps.sh). This file is the running
-investigation log for those patches: why a patch exists, what evidence led to
-it, which tempting approaches failed, and how its behavior was verified.
+investigation log for those patches: why a patch exists, whether that reason
+was missing/wrong GL behavior or a measured cost, what evidence led to it,
+which tempting approaches failed, and how its behavior was verified.
 
 The patch files themselves remain the executable source of truth. New patches
 should add an entry here while the measurements and failed hypotheses are
-still available. Older patches predate this log; their inventory below is
-derived from their header comments rather than reconstructed history.
+still available, and must say **functionality** or **performance** in the
+inventory. A performance row is incomplete without a quantified A/B.
 
 The web build currently pins gl4es commit
 `17f0894e19d1553e4176276c759915dab44c08e2`. Patches are applied in the order
@@ -19,31 +20,45 @@ not treated as “already applied”.
 
 ## Patch inventory
 
-| Patch | Purpose |
-|---|---|
-| `gl4es-rasterpos-perspective-divide.patch` | Perspective-divide clip coordinates before deriving the raster position; invalidate on `w<=0` / out of clip. |
-| `gl4es-bitmap-dirty-clear.patch` | Clear only the dirty CPU bitmap rectangle between glyph batches. |
-| `gl4es-getter-client-state.patch` | Answer tracked `glGet*` state locally instead of synchronously draining WebGL. |
-| `gl4es-color-material-face.patch` | Track front/back `GL_COLOR_MATERIAL` independently in the fixed-pipeline emulator. |
-| `gl4es-pushattrib-gaps.patch` | Fill polygon, line, point, and transform state gaps in `glPushAttrib`/`glPopAttrib`. |
-| `gl4es-pushattrib-texenv.patch` | Preserve texture environment mode and color per texture unit. |
-| `gl4es-accum-fbo.patch` | Implement the accumulation buffer with an internal FBO. |
-| `gl4es-accum-deferred-return.patch` | Cache LOAD/ACCUM snapshots and reduce their weights once at RETURN. |
-| `gl4es-accum-deferred-scissor.patch` | Size and copy deferred samples to the WebGL scene scissor. |
-| `gl4es-point-smooth.patch` | Emulate round antialiased points in the GLES2 fixed-pipeline shader. |
-| `gl4es-polygon-line-drawarrays.patch` | Avoid Emscripten's client-index upload and scan for polygon-mode lines. |
-| `gl4es-point-size-batch.patch` | Apply `glPointSize` to the batch it was called on, not to whatever is still pending. |
-| `gl4es-polygon-offset-line.patch` | Shadow `GL_POLYGON_OFFSET_LINE` and apply a projection-row depth bias around polygon-mode line draws. |
-| `gl4es-line-width-quads.patch` | Expand `glLineWidth` > 1 into screen-space quads on `[1, 1]` line-width stacks. |
-| `gl4es-edge-flag.patch` | Implement `glEdgeFlag`: build polygon-mode line edges from the original primitive topology and drop the suppressed ones. |
-| `gl4es-polygon-line-quad-edges.patch` | Draw quad and quad-strip boundary edges under polygon-mode lines instead of the triangulation's spokes and diagonals. |
-| `gl4es-getbooleanv-local-state.patch` | Answer `glGetBooleanv` from tracked state instead of a synchronous WebGL `getParameter`. |
+**Functionality** means desktop-GL behavior was missing or wrong on the web
+build; the patch exists so the scene looks like native. **Performance** means
+the rendered result was already acceptable (or became acceptable via a
+functionality patch) and the change exists to cut a measured cost. Performance
+numbers are browser-, scene-, and viewport-specific; they are attribution for
+the workload named in the row, not universal multipliers.
 
-See each older patch's leading prose for the detail that is available.
+Seventeen patches: eleven functionality, six performance.
+
+| Patch | Kind | Why applied | Measured |
+|---|---|---|---|
+| `gl4es-rasterpos-perspective-divide.patch` | functionality | Perspective-divide clip coordinates before deriving the raster position; invalidate on `w<=0` / out of clip so `label()` / `glRasterPos3f` land correctly under a non-identity projection. | - |
+| `gl4es-bitmap-dirty-clear.patch` | performance | `glBitmap` memset the full viewport-sized CPU buffer at every glyph-batch start, even though only the previous dirty rectangle could contain pixels. | Headless Chrome, Lit-cube: **~0.1 ms/frame** of memset. Real, but minor next to the getter stalls. |
+| `gl4es-getter-client-state.patch` | performance | Tracked `glGet*` pnames fell through to WebGL `getParameter()`, a synchronous pipeline drain on every `glPushAttrib` - including every glyph-batch blit. | Headless Chrome/SwiftShader, Lit-cube, 1200x800: gl4es flush work **12.2 -> 0.6 ms/frame**. Code-panel menu/labels had been charged 2.2 ms (1.86 ms labels) vs 33 us native. |
+| `gl4es-color-material-face.patch` | functionality | Track the single active `GL_COLOR_MATERIAL_FACE` so two-sided lighting does not leak back-face accent colors onto front faces. | - |
+| `gl4es-pushattrib-gaps.patch` | functionality | Fill polygon, line, point, and transform gaps in `glPushAttrib`/`glPopAttrib` so a scene's `glFrontFace(GL_CW)`, stipple, point parameters, or clip-plane equations cannot leak into the next pass. | - |
+| `gl4es-pushattrib-texenv.patch` | functionality | Preserve per-unit texenv mode and color so a Post FX `GL_REPLACE` cannot leak into line-stipple emulation and untint overlay ghosts. | - |
+| `gl4es-accum-fbo.patch` | functionality | Implement the accumulation buffer with an internal FBO instead of stubbing `glAccum`. Without it, web either paid N scene passes for the last image only, or (after detection) disabled Accum AA / Blur entirely. | - |
+| `gl4es-accum-deferred-return.patch` | performance | Cache LOAD/ACCUM snapshots and reduce their weights once at RETURN, dropping the per-sample RGBA16F read/modify/write chain. | In-app Chromium/WebGL2, default logo, 1280x676, 16x accum AA + 4x canvas MSAA: **33.962 -> 37.035 FPS (+9.05%)**, mean callback **29.444 -> 27.002 ms (-2.443 ms)**. |
+| `gl4es-accum-deferred-scissor.patch` | performance | Size and copy deferred samples to the WebGL scene scissor so the code-panel area is not snapshotted. | Same run, incremental over deferred RETURN: **37.035 -> 38.545 FPS (+4.08%)**, **27.002 -> 25.944 ms (-1.058 ms)**. Together with RETURN: **+13.49%**, **-3.500 ms/frame**. |
+| `gl4es-point-smooth.patch` | functionality | Emulate round antialiased points in the GLES2 fixed-pipeline shader; GLES2 has no point-antialiasing state, so `GL_POINT_SMOOTH` was a tracked no-op and points rasterized as hard squares. | - |
+| `gl4es-polygon-line-drawarrays.patch` | performance | Avoid Emscripten's client-index upload and JavaScript index-range scan for polygon-mode lines by expanding edges and issuing `glDrawArrays`. | Aurora observatory, paused, `t = 0`: plain wireframe **28.5 -> 60.0 FPS** (display cap). Hidden-line, vertex outlines, and polygon highlight went from bottlenecked to **60 FPS**. Unpatched wireframe spent ~35 ms/frame, **28.71 ms** of it in `bufferSubData` (~128 ELEMENT_ARRAY_BUFFER uploads). |
+| `gl4es-point-size-batch.patch` | functionality | Apply `glPointSize` to the batch it was called on, not to whatever is still pending at flush. A trailing `glPointSize(1)` otherwise shrinks every point that pass already drew. | - |
+| `gl4es-polygon-offset-line.patch` | functionality | Shadow `GL_POLYGON_OFFSET_LINE` (not a GLES enum) and apply a projection-row depth bias around polygon-mode line draws so vertex outlines are not a silent `GL_INVALID_ENUM`. | - |
+| `gl4es-line-width-quads.patch` | functionality | Expand `glLineWidth` > 1 into screen-space quads on stacks whose `ALIASED_LINE_WIDTH_RANGE` is `[1, 1]` (ANGLE / WebGL). Without it every `glLineWidth` is a no-op. | - |
+| `gl4es-edge-flag.patch` | functionality | Implement `glEdgeFlag`: build polygon-mode line edges from the original primitive topology and drop the suppressed ones. Upstream stubbed the call, so tessellated outlines showed every interior diagonal. | - |
+| `gl4es-polygon-line-quad-edges.patch` | functionality | Draw quad and quad-strip boundary edges under polygon-mode lines instead of the triangulation's spokes and diagonals. | - |
+| `gl4es-getbooleanv-local-state.patch` | performance | Answer `glGetBooleanv` from tracked state instead of a synchronous WebGL `getParameter`. The integer/float getter patch left this path draining the queue. | Headless Chrome/SwiftShader, 20000 iterations of `glGetBooleanv(GL_DEPTH_WRITEMASK)` + `glGetIntegerv(GL_SHADE_MODEL)`: **37.2 -> 0.14 us/pair** (~265x; ranges 34.8-57.1 vs 0.135-0.185, no overlap). |
+
+The dated sections below are the investigation log. Every patch has a
+dated entry; the table and each patch file's leading prose are the quick
+reference. The 2026-07-15 performance pair is reconstructed
+from the original commit measurements so those numbers are not git-only.
 
 ## 2026-08-24: `glEdgeFlag` under polygon-mode lines
 
 Patch: [`gl4es-edge-flag.patch`](gl4es-edge-flag.patch)
+
+Kind: functionality.
 
 ### Premise
 
@@ -184,6 +199,8 @@ noted rather than touched.
 
 Patch: [`gl4es-polygon-line-quad-edges.patch`](gl4es-polygon-line-quad-edges.patch)
 
+Kind: functionality.
+
 Found while reviewing the edge-flag patch above, and independent of it: this
 one changes *unflagged* rendering, so it is kept separate to stay revertable
 on its own.
@@ -252,6 +269,8 @@ output.
 
 Patch: [`gl4es-getbooleanv-local-state.patch`](gl4es-getbooleanv-local-state.patch)
 
+Kind: performance.
+
 Split out of the edge-flag patch, which needed only `GL_EDGE_FLAG` answered
 locally. Widening that to every tracked pname is a separate decision with a
 separate risk - and this is the patch to drop first if a boolean query is ever
@@ -298,6 +317,10 @@ native GL (Mesa 4.6 compat / llvmpipe through surfaceless EGL) on
 pnames, not the whole enum space.
 
 ## 2026-08-24: deferred accumulation performance
+
+Kind: performance (`gl4es-accum-deferred-return.patch`,
+`gl4es-accum-deferred-scissor.patch`). The FBO implementation they sit on
+is functionality.
 
 The two deferred-accumulation patches were measured separately rather than
 assigning their combined result to both. Three browser builds used the same
@@ -356,6 +379,8 @@ the patch that owns the code:
 
 ## 2026-08-19: `GL_POLYGON_OFFSET_LINE` and `glLineWidth` on WebGL
 
+Kind: functionality (both patches).
+
 Two patches, in this order.
 
 `gl4es-polygon-offset-line.patch` is a pre-existing web bug: `GL_POLYGON_OFFSET_LINE` is not a GLES enum, so `glEnable` raised `GL_INVALID_ENUM` and changed nothing. GLES fill-offset does not apply to the `GL_LINES` draw that polygon-mode already lowered to, so wrapping that draw in `GL_POLYGON_OFFSET_FILL` is also a no-op. The fix shadows the LINE enable, mirrors factor/units (including `glPolygonOffsetx`) onto `GL_POLYGON_BIT`, and pokes `P_row2 += d · P_row3` around the line draw — `d = 2 · units · 2^{-depth_bits} / (Far − Near)`, clamped to `[-1, 1]`. Cached object-space `line_arrays` are never written. Independently testable at width 1: a vertex-outline pass over a solid face should stop speckling. Genuine `GL_LINE_LOOP` (the tessellation overlay) is out of scope; native `_LINE` never applied to line primitives. `maxlinewidth` and `depthbits` are probed on the notest path as well as the full test — Emscripten always calls `GetHardwareExtensions` with notest, and a skipped probe left both at 0.
@@ -377,6 +402,8 @@ fill-offset isolation, width-1 polygon offset, and the wide path's
 live-clip fallbacks instead of treating them as failures.
 
 ## 2026-08-02: the point-smooth workarounds come out
+
+Kind: functionality.
 
 `gl4es-point-smooth.patch` is what the two chrome vertex-marker sites were
 waiting on. Both had forked by target to avoid gl4es' square points:
@@ -441,6 +468,8 @@ instead of 73, and `test_render3d_guides` / `test_render3d_render` drop their
 
 Patch: [`gl4es-point-size-batch.patch`](gl4es-point-size-batch.patch)
 
+Kind: functionality.
+
 The finding above, fixed at the source instead of routed around.
 
 gl4es defers immediate-mode geometry into a renderlist and draws it later; the
@@ -477,6 +506,8 @@ client-side state to flush on. No symptom chased down yet.
 ## 2026-08-02: polygon-mode lines via `glDrawArrays`
 
 Patch: [`gl4es-polygon-line-drawarrays.patch`](gl4es-polygon-line-drawarrays.patch)
+
+Kind: performance.
 
 ### Premise
 
@@ -766,3 +797,101 @@ Two harness details are now considered mandatory for this class of work:
 Finally, do not use gl-repl's C profiler alone to judge WebGL submission
 changes. A browser-side stall can appear in frame cadence or presentation
 without being attributed to the C section which caused it.
+
+## 2026-07-16: remaining functionality patches from that week
+
+Kind: functionality (all four).
+
+These four exist so desktop-GL behavior that gl-repl relies on is present on
+the web build. None of them was applied as a speedup.
+
+`gl4es-accum-fbo.patch` implements `glAccum` / `glClearAccum` with an
+internal FBO. Upstream stubbed both, so Accum AA, Blur, and Blur Cam were
+either N wasted scene passes for the last image only, or (once
+`GL_ACCUM_RED_BITS` detection landed) disabled entirely. The getter reports
+`GL_ACCUM_*_BITS` so that detection self-heals. Later deferred-RETURN and
+deferred-scissor patches are the performance follow-ups on top of this
+working path.
+
+`gl4es-pushattrib-gaps.patch` fills the `GL_POLYGON_BIT` / line-stipple /
+point-parameter / clip-plane-equation gaps in `glPushAttrib`/`glPopAttrib`.
+gl-repl brackets every render pass with `GL_ALL_ATTRIB_BITS`; a
+`glFrontFace(GL_CW)` scene used to reverse winding for every scene after it.
+
+`gl4es-pushattrib-texenv.patch` saves and restores per-unit
+`GL_TEXTURE_ENV_MODE` / `GL_TEXTURE_ENV_COLOR`. The Post FX pass sets
+`GL_REPLACE` inside its push/pop and relied on the pop to restore
+`GL_MODULATE`; without it, stippled overlay lines lost their color after one
+filter frame.
+
+`gl4es-color-material-face.patch` (2026-07-15) tracks the single active
+`GL_COLOR_MATERIAL_FACE`. gl4es had been generating both lighting paths from
+the same per-vertex color, so two-sided scenes leaked back-face accents onto
+front faces. The logo example is the integration regression: exterior stays
+near-white, visible interior back faces keep their cyan/magenta materials.
+
+## 2026-07-15: bitmap dirty-clear and client-side `glGet*`
+
+Kind: performance (both patches).
+
+Two performance patches from the same investigation. The first is a real but
+small CPU win; the second is the stall that made text look expensive.
+
+### `gl4es-bitmap-dirty-clear.patch`
+
+`glBitmap` expands 1-bit glyphs into a viewport-sized CPU RGBA buffer,
+uploads the dirty rectangle, and blits it. Geometry between strings flushes
+that batch. The old next-batch initialization then memset the entire
+viewport even though only the preceding dirty rectangle could contain
+non-zero pixels. Immediate-mode UI flushes several glyph batches per frame,
+so that was several full-window memsets per frame in Wasm.
+
+The patch initializes the full buffer only on allocation/growth, and after
+each upload+blit clears just that batch's dirty rectangle.
+
+Measured in headless Chrome on the default Lit-cube scene: **~0.1 ms/frame**
+of memset. Worth doing, but it did not move the code-panel text cost that
+started the investigation.
+
+### `gl4es-getter-client-state.patch`
+
+The Emscripten Compute Profile charged the menu section of the code panel
+**2.2 ms/frame** (labels alone 1.86 ms) against **33 us native**. Neither
+app-side draw batching nor the dirty-clear patch moved it. The menu was
+never the work: it was where the frame's queued GPU pipeline got drained.
+
+gl4es answers most `glGet*` queries from shadowed client state, but six
+pnames fell through to the GLES driver: `GL_COLOR_CLEAR_VALUE`,
+`GL_DEPTH_CLEAR_VALUE`, `GL_LINE_WIDTH`, `GL_SCISSOR_BOX`, `GL_VIEWPORT`,
+and `GL_GENERATE_MIPMAP_HINT`. Under Emscripten a driver `glGet*` becomes
+WebGL `getParameter()`, which is synchronous. `glPushAttrib` reads all six,
+and `bitmap_flush` -> `gl4es_blitTexture` pushes `GL_COLOR_BUFFER_BIT` on
+every glyph-batch blit, so ~16 glyph-batch flushes meant ~16 pipeline syncs
+per frame. The sync that landed after the frame's bulk (3D scene +
+code-panel text) absorbed the whole drain: **1.5-4 ms** charged to a
+104x14 px strip of text, plus a second **~1-1.5 ms** drain at the frame's
+final flush. Identical blits earlier in the frame cost ~0.2 ms (queue
+shallow), which is why the profiler pinned the cost to "menu / labels".
+
+The patch mirrors those pnames client-side.
+
+Measured, headless Chrome + SwiftShader, default Lit-cube scene, 1200x800:
+gl4es flush work fell from **~12.2 ms/frame** (5.0 ms in `bitmap_flush`
+blits + 7.2 ms in pending-list flushes, both dominated by the
+`getParameter` syncs) to **~0.6 ms/frame**. The only remaining driver
+`glGet*` in a 20 s run is one `GL_SAMPLES` query at context init.
+
+`glGetBooleanv` was left out and is the 2026-08-24 local-state patch.
+
+## 2026-07-08: raster-position perspective divide
+
+Patch: [`gl4es-rasterpos-perspective-divide.patch`](gl4es-rasterpos-perspective-divide.patch)
+
+Kind: functionality.
+
+`glRasterPos3f` derived NDC / viewport coordinates from
+clip-space `transl[0..2]` without dividing by `transl[3]`, so
+`label()` / `glRasterPos3f` landed in the wrong place under any
+non-identity projection. Clip-space `w<=0`, a non-finite divide, or NDC
+outside [-1, 1] now invalidates the raster position so a later `glBitmap`
+is ignored instead of drawing at the previous on-screen position.
