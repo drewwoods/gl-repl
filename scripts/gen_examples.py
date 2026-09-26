@@ -17,7 +17,7 @@ from pathlib import Path
 # - that list seeds the registry the compiled-in catalog matches against by
 # string, so a tag known only here would resolve to no index and stay invisible.
 # Ordered (not a set) so the rejection message lists the tags the same way twice.
-BUILTIN_TAGS = ("2D", "3D", "Polygons", "Lines")
+BUILTIN_TAGS = ("2D", "3D", "Polygons", "Lines", "Points")
 MAX_TAG_NAME_LENGTH = 64  # ReplTagNode.name, including its terminator.
 
 FORMAT_MACROS = {

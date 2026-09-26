@@ -102,6 +102,7 @@ enum {
     REPL_EXAMPLE_TAG_3D,
     REPL_EXAMPLE_TAG_POLYGONS,
     REPL_EXAMPLE_TAG_LINES,
+    REPL_EXAMPLE_TAG_POINTS,
 };
 
 int repl_example_tag_count(void);

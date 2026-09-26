@@ -23,10 +23,10 @@ group = Basics
 - `name` is the user-visible name returned by [`repl_example_name()`](../src/repl/examples.h#L80).
 - `file` must be a relative path under `scenes/` and must end in `.glr` or
   `.c`.
-- `tags` must use the existing labels: `2D`, `3D`, `Polygons`, `Lines`.
+- `tags` must use the existing labels: `2D`, `3D`, `Polygons`, `Lines`, `Points`.
   Do not list `All`; it is synthetic.
 - `group` is the Scene menu flyout subheading returned by
-  [`repl_example_subheading()`](../src/repl/examples.h#L125).
+  [`repl_example_subheading()`](../src/repl/examples.h#L126).
 - Section order is the F12 / `--example <idx>` order.
 
 `.glr` files are plain REPL source lines. They may start with leading
@@ -71,7 +71,7 @@ The tag vocabulary is the mechanical form of that split - and it is policy, not
 a storage limit. Tags are stored as names in dynamic
 [`ReplTagNode`](../src/repl/catalog_tags.h#L13) / `ReplItemTagNode` lists, so a
 runtime `--examples-dir` catalog registers whatever names its `catalog.ini`
-uses. The built-in catalog is held to the four labels above by two gates that
+uses. The built-in catalog is held to the five labels above by two gates that
 must agree:
 
 - [`scripts/gen_examples.py`](../scripts/gen_examples.py) rejects any `tags`

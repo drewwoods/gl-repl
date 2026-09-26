@@ -80,7 +80,7 @@ static const ReplTagNode *find_or_register_tag_in_registry(
 }
 
 static const char *const k_default_example_tag_names[] = {
-    "All", "2D", "3D", "Polygons", "Lines"
+    "All", "2D", "3D", "Polygons", "Lines", "Points"
 };
 
 static int init_default_tag_registry(ReplTagNode **head, int *count) {
