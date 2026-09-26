@@ -1,0 +1,42 @@
+// @cfg grid = GRID_THEME_OFF
+// @cfg view_mode = RENDER3D_VIEW_2D
+// @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF
+// @cfg vertex_points = 0
+// @cfg vertex_outlines = 0
+// @cfg polygon_highlight = 2
+static float count = 1000; // @tune @config seeds in the head
+static float spread = 0.4; // @tune @config radial spacing
+static float spin = 0.3; // @tune @config slow rotation in radians per second
+static float ang, r, s, x, y; // polar working set
+display() {
+  glTranslatef(0.0000f, 0.0000f, -4.3506f);   // @camera dist
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
+
+  // --- Render State -------------------
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  glEnable(GL_BLEND); // for point smooth to work correctly
+  glEnable(GL_POINT_SMOOTH);
+  glPointSize(5);
+
+  // --- Scene Geometry -----------------
+  // A sunflower head: each seed sits one golden angle past the last, so
+  // the spirals emerge from arithmetic alone. Radius grows as sqrt(i)
+  // for equal-area packing; color ramps the family CORAL -> AZURE.
+  count = clamp(count, 100, 1100);
+  spread = clamp(spread, 0.3, 1.5);
+  glBegin(GL_POINTS);
+    for(i, 1, count) {
+      ang = i * PI * (3 - sqrt(5)) + t * spin;
+      r = spread * 0.1 * sqrt(i);
+      s = sqrt(i / count);
+      x = r * cos(ang);
+      y = r * sin(ang);
+      glColor3f(lerp(1, 0.15, s), lerp(0.35, 0.55, s), lerp(0.2, 1, s)); // CORAL -> AZURE
+      glVertex3f(x, y, 0);
+    }
+  glEnd();
+}

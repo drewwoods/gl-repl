@@ -158,7 +158,7 @@ PNG_ASSETS=(
     vertex-guides cursor-highlight clip-plane autocomplete
     color-picker numeric-stepper gl-state-inspector profile-panels
     assign-plot assign-plot-series assign-plot-log
-    sc-parametric-torus sc-bezier sc-orbit-plot sc-gl-repl-logo sc-function-demo
+    sc-parametric-torus sc-bezier sc-orbit-plot sc-sunflower sc-gl-repl-logo sc-function-demo
     sc-function-polygons sc-feature-ply sc-feature-export-c
 )
 
@@ -2609,6 +2609,11 @@ fi
 if want sc-orbit-plot; then
     still "$SHOW/orbit-plot.png" 16 \
         --example "Annotated orbit plot (labels)"
+fi
+
+if want sc-sunflower; then
+    still "$SHOW/sunflower.png" 16 \
+        --example "Golden angle sunflower"
 fi
 
 if want sc-wave-surface; then

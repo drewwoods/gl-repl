@@ -235,7 +235,15 @@ Grouped by what they show off. Load any with `./gl-repl --example "<name>"`.
 <br><sub>bitmap `label(...)` text</sub>
 
 </td>
-<td></td>
+<td align="center">
+
+<!-- images/showcase/sunflower.png - docs-assets.sh sc-sunflower -->
+<img src="images/showcase/sunflower.png" alt="Golden angle sunflower point spiral" width="100%">
+
+**[Golden angle sunflower](../examples/scenes/golden-angle-sunflower.glr)**
+<br><sub>golden spiral; arithmetic alone</sub>
+
+</td>
 </tr>
 </table>
 

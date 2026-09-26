@@ -27,13 +27,13 @@
 /* @cfg call_depth_tint = 0 */
 /* @cfg auto_normals = REPL_AUTONORMAL_OFF */
 /* @cfg overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE */
-/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF */
 /* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED */
 /* @cfg vertex_points = 0 */
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */
 /* @cfg normal_vectors = 0 */
-/* @cfg polygon_highlight = 1 */
+/* @cfg polygon_highlight = 0 */
 /* @cfg transform_guides = 2 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
@@ -89,56 +89,90 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
 }
 float A[16], B[16], C[16];
 --- source_prologue ---
-// Sierpinski carpet: cut the middle cell out of a 3x3 grid, then do the
-// same to the 8 cells that remain. Each call owns one square; u is a
-// 0..1 shade the children nudge so the tiles ramp MAGENTA -> AZURE.
-void carpet(depth, size, u) {
-  // Base case: fill this cell. The holes are simply cells nobody fills.
-  if(depth <= 0) {
-    glColor3f(0.95 - 0.8*u, 0.25 + 0.3*u, 1);
-    glBegin(GL_QUADS);
-      glNormal3f(0, 0, 1);
-      glVertex3f(-0.5*size, -0.5*size, 0);
-      glVertex3f(0.5*size, -0.5*size, 0);
-      glVertex3f(0.5*size, 0.5*size, 0);
-      glVertex3f(-0.5*size, 0.5*size, 0);
-    glEnd();
-  }
-  // Recursive case: walk the 3x3 grid -- loops are half-open, so
-  // -1..2 visits -1, 0, 1 -- and skip the center cell.
-  if(depth > 0) {
-    for(i, -1, 2) {
-      for(j, -1, 2) {
-        if(abs(i) + abs(j) > 0) {
-          glPushMatrix();
-            glTranslatef(i*size/3, j*size/3, 0);
-            carpet(depth - 1, size/3, u + (i + j)*0.12);
-          glPopMatrix();
-        }
-      }
-    }
-  }
-}
+// --- Description --------------------
+// Bubble sort, scrubbed by t. A[0..15] holds 16 bar heights; the nested
+// loops below are the classic compare-and-swap, but each compare only
+// runs once enough time has passed (its overall index p*15 + j must stay
+// under steps). Every frame re-seeds and re-sorts from scratch, so the
+// bars freeze mid-algorithm at exactly floor(steps) compares -- drag the
+// time slider or replay to scrub the sort.
+
+static float rate = 45; // compare steps per second @tune
+static float hold = 1.5; // seconds to rest on the sorted bars @tune
+static float period, cycle, steps; // seconds per cycle; shuffle index; compares done so far
+static float tmp; // swap scratch
+static float x, h, s; // bar center x, bar height, palette mix
+static float cur; // bar index under the compare marker
 --- display_header ---
 void display(void) {
   glLoadIdentity();
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -6.0000f);   // @camera dist
+  glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
   glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
 --- source ---
 
+  period = 225/rate + hold;
+  cycle = floor(t/period);
+  steps = fmod(t, period)*rate;
+
+  // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
   glEnable(GL_DEPTH_TEST);
-  glEnable(GL_NORMALIZE);
-  glRotatef(sin(t*0.35)*10, 0, 0, 1);
-  carpet(2, 3.6, 0.5);
+  glEnable(GL_POINT_SMOOTH);
+
+  // --- Scene Geometry -----------------
+
+  // A fresh deterministic shuffle each cycle
+  for(i, 0, 16) {
+    A[i] = rand(i, cycle);
+  }
+  // Pass p bubbles the largest unsorted value to the right
+  for(p, 0, 15) {
+    for(j, 0, 15) {
+      if(p*15 + j < steps && A[j] > A[j+1]) {
+        tmp = A[j];
+        A[j] = A[j+1];
+        A[j+1] = tmp;
+      }
+    }
+  }
+  // Bars: height and color both follow the value, so sorted reads as a
+  // staircase with a smooth left-to-right gradient
+  glBegin(GL_QUADS);
+    for(i, 0, 16) {
+      s = A[i];
+      glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
+      x = (i - 7.5)*0.42;
+      h = 0.3 + 2.4*s;
+      glVertex3f(x - 0.15, -1.5, 0);
+      glVertex3f(x + 0.15, -1.5, 0);
+      glVertex3f(x + 0.15, -1.5 + h, 0);
+      glVertex3f(x - 0.15, -1.5 + h, 0);
+    }
+  glEnd();
+  if(steps < 225) {
+    // Two dots mark the pair the sort is comparing right now
+    cur = fmod(floor(steps), 15);
+    glPointSize(7);
+    glColor3f(1, 0.85, 0.15);
+    glBegin(GL_POINTS);
+      glVertex3f((cur - 7.5)*0.42, -1.75, 0);
+      glVertex3f((cur - 6.5)*0.42, -1.75, 0);
+    glEnd();
+    glColor3f(0.92, 0.95, 0.98);
+    glRasterPos3f(-3.4, 1.7, 0);
+    label("pass %f of 15", floor(steps/15) + 1);
+  } else {
+    glColor3f(0.92, 0.95, 0.98);
+    glRasterPos3f(-3.4, 1.7, 0);
+    label("sorted");
+  }
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);

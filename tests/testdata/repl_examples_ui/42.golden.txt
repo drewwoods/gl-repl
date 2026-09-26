@@ -1,0 +1,205 @@
+/* @cfg msaa = 1 */
+/* @cfg line_smooth = 0 */
+/* @cfg accum_effect = 1 */
+/* @cfg accum_passes = 0 */
+/* @cfg point_attenuation = 1 */
+/* @cfg post_fx_scope = GLR_POST_FX_SCOPE_OFF */
+/* @cfg post_fx_effect = GLR_POST_FX_EFFECT_CHROMATIC_ABERRATION */
+/* @cfg auto_time = 1 */
+/* @cfg replay = 0 */
+/* @cfg replay_mode = 1 */
+/* @cfg replay_expand = 1 */
+/* @cfg grid = GRID_THEME_OFF */
+/* @cfg grid_major = GRID_MAJOR_1 */
+/* @cfg grid_extent = GRID_EXTENT_FAR */
+/* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
+/* @cfg axes = AXES_THEME_OFF */
+/* @cfg backdrop = RENDER3D_BACKDROP_OFF */
+/* @cfg light_theme = LIGHT_THEME_HEADLIGHT */
+/* @cfg light_indicators = 0 */
+/* @cfg view_mode = RENDER3D_VIEW_3D */
+/* @cfg projection = PROJ_PERSPECTIVE */
+/* @cfg camera_rotate = 0 */
+/* @cfg wireframe = WIREFRAME_OFF */
+/* @cfg winding = 0 */
+/* @cfg depth_view = 0 */
+/* @cfg stencil_view = 0 */
+/* @cfg call_depth_tint = 0 */
+/* @cfg auto_normals = REPL_AUTONORMAL_OFF */
+/* @cfg overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE */
+/* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_OFF */
+/* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED */
+/* @cfg vertex_points = 0 */
+/* @cfg vertex_outlines = 0 */
+/* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */
+/* @cfg normal_vectors = 0 */
+/* @cfg polygon_highlight = 1 */
+/* @cfg transform_guides = 2 */
+/* @cfg variable_panel = 1 */
+/* @cfg compute_profile = 0 */
+/* @cfg memory_profile = 0 */
+/* @cfg code_panel = 1 */
+/* @cfg console_panel = 0 */
+/* @cfg wrap_at_commas = 1 */
+/* @cfg syntax_highlight = SYNTAX_HIGHLIGHT_ON_SHADOW */
+/* @cfg paren_match = 1 */
+/* @cfg paren_scope = 1 */
+/* @cfg audio = -1 */
+--- header_pre ---
+#include <stddef.h>
+#if defined(__APPLE__)
+#include <OpenGL/gl.h>
+#include <OpenGL/glu.h>
+#include <GLUT/glut.h>
+#else
+#define GL_GLEXT_PROTOTYPES
+#include <GL/gl.h>
+#include <GL/glext.h>
+#include <GL/glu.h>
+#include <GL/freeglut.h>
+#endif
+#include <math.h>
+#include <stdlib.h>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+static float g_angle = 0.0f;
+static int   g_rotating = 0;
+
+--- gl_vector_helpers ---
+/* C89 replacements for C99 compound GL literals. */
+
+static GLfloat *repl_glfloat3(GLfloat a, GLfloat b, GLfloat c) {
+  static GLfloat repl_glfloat3_buf[3];
+  repl_glfloat3_buf[0] = a;
+  repl_glfloat3_buf[1] = b;
+  repl_glfloat3_buf[2] = c;
+  return repl_glfloat3_buf;
+}
+
+static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
+  static GLfloat repl_glfloat4_buf[4];
+  repl_glfloat4_buf[0] = a;
+  repl_glfloat4_buf[1] = b;
+  repl_glfloat4_buf[2] = c;
+  repl_glfloat4_buf[3] = d;
+  return repl_glfloat4_buf;
+}
+float A[16], B[16], C[16];
+--- source_prologue ---
+static float cycle = 48; // @tune seconds until all sixteen pendulums reunite
+static float swing = 28; // @tune maximum swing angle in degrees
+static float trails = 1; // @tune @bool show the last half-second of motion
+static float ink; // brightness multiplier on the MIST anchor for the unlit frame
+
+// Integer frequencies drift into waves, then return to their starting pose.
+// Bob i completes 24+i swings per cycle. Length is proportional to 1/f^2,
+// the ideal small-angle pendulum relation; motion is prescribed, not simulated.
+void beam(x, y, z, sx, sy, sz) {
+  glPushMatrix();
+    glTranslatef(x, y, z);
+    glScalef(sx, sy, sz);
+    glutSolidCube(1);
+  glPopMatrix();
+}
+
+void pendulum(index) {
+  float length, angle, phase, mix, red, green, blue, fade;
+  length = 2.8 * pow(24 / (24 + index), 2);
+  phase = TAU * (24 + index) / cycle;
+  angle = swing * cos(phase * t);
+  mix = index / 15;
+  red = lerp(1, 0.15, mix);
+  green = lerp(0.35, 0.55, mix);
+  blue = lerp(0.2, 1, mix);
+  glPushMatrix();
+    glTranslatef((index - 7.5) * 0.43, 3.8, 0);
+
+    // Unlit trails sample the same analytic path as the moving bob.
+    glDisable(GL_LIGHTING);
+    if(trails > 0.5) {
+      glLineWidth(2);
+      glBegin(GL_LINE_STRIP);
+        for(j, 0, 25) {
+          fade = 0.08 + 0.5 * j / 24;
+          glColor3f(red * fade, green * fade, blue * fade);
+          angle = swing * PI / 180 * cos(phase * (t - 0.5 + j / 48));
+          glVertex3f(0, -length * cos(angle), -length * sin(angle));
+        }
+      glEnd();
+    }
+    angle = swing * cos(phase * t);
+    glRotatef(angle, 1, 0, 0);
+    glColor3f(0.92, 0.95, 0.98);
+    glLineWidth(1);
+    glBegin(GL_LINES);
+      glVertex3f(0, 0, 0);
+      glVertex3f(0, -length, 0);
+    glEnd();
+    glEnable(GL_LIGHTING);
+    glColor3f(red, green, blue);
+    glTranslatef(0, -length, 0);
+    glutSolidSphere(0.16, 20, 14);
+  glPopMatrix();
+}
+--- display_header ---
+void display(void) {
+  glLoadIdentity();
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+--- lights_pre_camera ---
+  // Eye-space light positions, set before the camera transform.
+  glLightfv(GL_LIGHT0, GL_POSITION, repl_glfloat4(0, 0, -1, 1));
+--- camera ---
+  glTranslatef(0.0000f, 0.0000f, -10.5000f);   // @camera dist
+  glRotatef(22.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(-24.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-0.0000f, -1.9000f, -0.0000f);   // @camera pan
+--- header_post ---
+--- source ---
+
+  glClearColor(0.05, 0.06, 0.08, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_NORMALIZE);
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_COLOR_MATERIAL);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.92, 0.95, 0.98, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 64);
+  cycle = clamp(cycle, 12, 120);
+  swing = clamp(swing, 0, 35);
+
+  // A low plinth and two end supports frame the suspended color ramp.
+  ink = 0.18;
+  glColor3f(0.92*ink, 0.95*ink, 0.98*ink);
+  beam(0, 0.08, 0, 7.6, 0.16, 3.4);
+  ink = 0.45;
+  glColor3f(0.92*ink, 0.95*ink, 0.98*ink);
+  beam(-3.6, 1.98, 0, 0.12, 3.8, 0.18);
+  beam(3.6, 1.98, 0, 0.12, 3.8, 0.18);
+  beam(0, 3.9, 0, 7.4, 0.2, 0.22);
+  for(i, 0, 16) {
+    pendulum(i);
+  }
+
+  // A front-edge progress ruler fills over one complete reunion cycle.
+  glDisable(GL_LIGHTING);
+  glLineWidth(2);
+  ink = 0.25;
+  glBegin(GL_LINES);
+    glColor3f(0.92*ink, 0.95*ink, 0.98*ink);
+    glVertex3f(-3.3, 0.18, 1.45);
+    glVertex3f(3.3, 0.18, 1.45);
+    glColor3f(0.1, 0.95, 0.85);
+    glVertex3f(-3.3, 0.19, 1.45);
+    glVertex3f(-3.3 + 6.6 * fmod(t / cycle, 1), 0.19, 1.45);
+  glEnd();
+  glColor3f(0.92, 0.95, 0.98);
+  glRasterPos3f(-3.3, 0.28, 1.5);
+  label("Reunion every %f s", cycle);
+--- render_state ---
+  glEnable(GL_MULTISAMPLE);
+  glDisable(GL_LINE_SMOOTH);

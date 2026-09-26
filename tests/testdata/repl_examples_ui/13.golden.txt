@@ -9,7 +9,7 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_PLANES */
+/* @cfg grid = GRID_THEME_OFF */
 /* @cfg grid_major = GRID_MAJOR_1 */
 /* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
@@ -33,7 +33,7 @@
 /* @cfg vertex_outlines = 0 */
 /* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */
 /* @cfg normal_vectors = 0 */
-/* @cfg polygon_highlight = 0 */
+/* @cfg polygon_highlight = 2 */
 /* @cfg transform_guides = 2 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
@@ -89,90 +89,48 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
 }
 float A[16], B[16], C[16];
 --- source_prologue ---
-// --- Description --------------------
-// Bubble sort, scrubbed by t. A[0..15] holds 16 bar heights; the nested
-// loops below are the classic compare-and-swap, but each compare only
-// runs once enough time has passed (its overall index p*15 + j must stay
-// under steps). Every frame re-seeds and re-sorts from scratch, so the
-// bars freeze mid-algorithm at exactly floor(steps) compares -- drag the
-// time slider or replay to scrub the sort.
-
-static float rate = 45; // compare steps per second @tune
-static float hold = 1.5; // seconds to rest on the sorted bars @tune
-static float period, cycle, steps; // seconds per cycle; shuffle index; compares done so far
-static float tmp; // swap scratch
-static float x, h, s; // bar center x, bar height, palette mix
-static float cur; // bar index under the compare marker
+static float count = 1000; // @tune @config seeds in the head
+static float spread = 0.4; // @tune @config radial spacing
+static float spin = 0.3; // @tune @config slow rotation in radians per second
+static float ang, r, s, x, y; // polar working set
 --- display_header ---
 void display(void) {
   glLoadIdentity();
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -8.5000f);   // @camera dist
+  glTranslatef(0.0000f, 0.0000f, -4.3506f);   // @camera dist
   glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
   glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
   glTranslatef(-0.0000f, -0.0000f, -0.0000f);   // @camera pan
 --- header_post ---
 --- source ---
 
-  period = 225/rate + hold;
-  cycle = floor(t/period);
-  steps = fmod(t, period)*rate;
-
   // --- Render State -------------------
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glEnable(GL_DEPTH_TEST);
+
+  glEnable(GL_BLEND); // for point smooth to work correctly
   glEnable(GL_POINT_SMOOTH);
+  glPointSize(5);
 
   // --- Scene Geometry -----------------
-
-  // A fresh deterministic shuffle each cycle
-  for(i, 0, 16) {
-    A[i] = rand(i, cycle);
-  }
-  // Pass p bubbles the largest unsorted value to the right
-  for(p, 0, 15) {
-    for(j, 0, 15) {
-      if(p*15 + j < steps && A[j] > A[j+1]) {
-        tmp = A[j];
-        A[j] = A[j+1];
-        A[j+1] = tmp;
-      }
-    }
-  }
-  // Bars: height and color both follow the value, so sorted reads as a
-  // staircase with a smooth left-to-right gradient
-  glBegin(GL_QUADS);
-    for(i, 0, 16) {
-      s = A[i];
-      glColor3f(1 - 0.85*s, 0.35 + 0.2*s, 0.2 + 0.8*s); // CORAL -> AZURE
-      x = (i - 7.5)*0.42;
-      h = 0.3 + 2.4*s;
-      glVertex3f(x - 0.15, -1.5, 0);
-      glVertex3f(x + 0.15, -1.5, 0);
-      glVertex3f(x + 0.15, -1.5 + h, 0);
-      glVertex3f(x - 0.15, -1.5 + h, 0);
+  // A sunflower head: each seed sits one golden angle past the last, so
+  // the spirals emerge from arithmetic alone. Radius grows as sqrt(i)
+  // for equal-area packing; color ramps the family CORAL -> AZURE.
+  count = clamp(count, 100, 1100);
+  spread = clamp(spread, 0.3, 1.5);
+  glBegin(GL_POINTS);
+    for(i, 1, count) {
+      ang = i * PI * (3 - sqrt(5)) + t * spin;
+      r = spread * 0.1 * sqrt(i);
+      s = sqrt(i / count);
+      x = r * cos(ang);
+      y = r * sin(ang);
+      glColor3f(lerp(1, 0.15, s), lerp(0.35, 0.55, s), lerp(0.2, 1, s)); // CORAL -> AZURE
+      glVertex3f(x, y, 0);
     }
   glEnd();
-  if(steps < 225) {
-    // Two dots mark the pair the sort is comparing right now
-    cur = fmod(floor(steps), 15);
-    glPointSize(7);
-    glColor3f(1, 0.85, 0.15);
-    glBegin(GL_POINTS);
-      glVertex3f((cur - 7.5)*0.42, -1.75, 0);
-      glVertex3f((cur - 6.5)*0.42, -1.75, 0);
-    glEnd();
-    glColor3f(0.92, 0.95, 0.98);
-    glRasterPos3f(-3.4, 1.7, 0);
-    label("pass %f of 15", floor(steps/15) + 1);
-  } else {
-    glColor3f(0.92, 0.95, 0.98);
-    glRasterPos3f(-3.4, 1.7, 0);
-    label("sorted");
-  }
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);

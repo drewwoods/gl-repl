@@ -9,15 +9,15 @@
 /* @cfg replay = 0 */
 /* @cfg replay_mode = 1 */
 /* @cfg replay_expand = 1 */
-/* @cfg grid = GRID_THEME_SKETCH */
+/* @cfg grid = GRID_THEME_OFF */
 /* @cfg grid_major = GRID_MAJOR_1 */
-/* @cfg grid_extent = GRID_EXTENT_CLOSE */
+/* @cfg grid_extent = GRID_EXTENT_FAR */
 /* @cfg grid_brightness = GRID_BRIGHTNESS_NORMAL */
 /* @cfg axes = AXES_THEME_OFF */
-/* @cfg backdrop = RENDER3D_BACKDROP_OFF */
-/* @cfg light_theme = LIGHT_THEME_DEFAULT */
+/* @cfg backdrop = RENDER3D_BACKDROP_FAIRIES */
+/* @cfg light_theme = LIGHT_THEME_STUDIO */
 /* @cfg light_indicators = 0 */
-/* @cfg view_mode = RENDER3D_VIEW_3D */
+/* @cfg view_mode = RENDER3D_VIEW_2D */
 /* @cfg projection = PROJ_PERSPECTIVE */
 /* @cfg camera_rotate = 0 */
 /* @cfg wireframe = WIREFRAME_OFF */
@@ -29,11 +29,11 @@
 /* @cfg overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE */
 /* @cfg vertex_labels = OVERLAY_VERTEX_LABEL_INDEX */
 /* @cfg vertex_label_placement = OVERLAY_LABEL_PLACEMENT_DECLUTTERED */
-/* @cfg vertex_points = 1 */
-/* @cfg vertex_outlines = 1 */
+/* @cfg vertex_points = 0 */
+/* @cfg vertex_outlines = 0 */
 /* @cfg vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT */
 /* @cfg normal_vectors = 0 */
-/* @cfg polygon_highlight = 1 */
+/* @cfg polygon_highlight = 2 */
 /* @cfg transform_guides = 2 */
 /* @cfg variable_panel = 1 */
 /* @cfg compute_profile = 0 */
@@ -89,51 +89,320 @@ static GLfloat *repl_glfloat4(GLfloat a, GLfloat b, GLfloat c, GLfloat d) {
 }
 float A[16], B[16], C[16];
 --- source_prologue ---
-static float p, d, s, h;
+// Material-color gallery on GLUT solids, three rows deep.
+//
+// Row 1 isolates the channels: coral-only ambient (flat), coral-only
+// diffuse (lit side), specular only, all three together, the shade
+// trick (coral ambient + white diffuse), then a hue split.
+// Row 2 is a shininess ladder plus colored spec and emission.
+// Row 3 spends all of it at once -- five finished materials.
+//
+// LIGHT0 is the studio key, and it is the only light enabled. It cycles
+// off and back: with the key gone the diffuse term goes with it, and
+// what is left is the ambient term against the global light-model
+// ambient, plus anything emissive -- the fairies drifting behind stay
+// lit because they are their own light. Cycle Config > Light theme to
+// see the same materials under Headlight / Neon.
+//
+// Palette: CANVAS / CORAL / AMBER / VIOLET / AZURE / TEAL / MIST.
+
+static float period = 20; // @tune
+static float pulse;
+
+// One tessellation knob for the whole gallery. `detail` is the slice
+// count -- the subdivision around each generated solid -- so dragging it
+// in the variable panel coarsens every sphere, torus and cone at once and
+// the shading breaks down with them. The panel's drag is unbounded, so
+// the number the solids actually receive is clamped and rounded here
+// rather than at a dozen call sites: `slices` goes around the shape,
+// `stacks` is the secondary axis (sphere stacks, torus tube sides, cone
+// stacks). The cube and the teapot take no tessellation arguments and so
+// are the two shapes the knob cannot reach.
+static float detail = 32; // @tune
+static float slices;
+static float stacks;
+
+// RGB material: ambient, diffuse, shininess. Specular defaults to MIST;
+// call spec() to override (0 = matte). Emission is cleared every call.
+void body(ar, ag, ab, dr, dg, db, shin) {
+  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, (GLfloat[]){ar, ag, ab, 1});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, (GLfloat[]){dr, dg, db, 1});
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){0.92, 0.95, 0.98, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, shin);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){0, 0, 0, 1});
+}
+
+void spec(sr, sg, sb, shin) {
+  glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (GLfloat[]){sr, sg, sb, 1});
+  glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, shin);
+}
+
+// Ambient and diffuse in one call, for a body whose shadow and its lit
+// side carry the same color. Taking the channels as parameters is not
+// only tidier: an all-constant compound literal written inline gets
+// const-folded on export, so `0.78*0.92` would come back as `0.7176` and
+// the palette provenance would be gone from the file.
+void tone(r, g, b) {
+  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, (GLfloat[]){r, g, b, 1});
+}
+
+void glow(er, eg, eb) {
+  glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, (GLfloat[]){er, eg, eb, 1});
+}
+
+void place(x, y) {
+  glTranslatef(x, y, 0);
+  glRotatef(26 * t, 0.22, 1, 0.18);
+}
+
+// Center a GLUT_BITMAP_9_BY_15 caption on x. At this camera scale each
+// nine-pixel glyph spans about 0.118 world units. Raster color is sampled
+// at glRasterPos, so lighting is off for the sample and restored after.
+void caption(x, y, chars) {
+  glDisable(GL_LIGHTING);
+  glColor3f(0.92, 0.95, 0.98);
+  glRasterPos3f(x - chars*0.059, y, 0);
+  glEnable(GL_LIGHTING);
+}
+
+// Row headings, in AMBER so they read as structure rather than as one
+// more specimen label.
+void heading(x, y, chars) {
+  glDisable(GL_LIGHTING);
+  glColor3f(1, 0.85, 0.15);
+  glRasterPos3f(x - chars*0.059, y, 0);
+  glEnable(GL_LIGHTING);
+}
 --- display_header ---
 void display(void) {
   glLoadIdentity();
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 --- lights_pre_camera ---
 --- camera ---
-  glTranslatef(0.0000f, 0.0000f, -7.6741f);   // @camera dist
-  glRotatef(15.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
-  glRotatef(0.5000f, 0.0f, 1.0f, 0.0f);   // @camera ry
-  glTranslatef(-0.0000f, -1.3500f, -0.0000f);   // @camera pan
+  glTranslatef(0.0000f, 0.0000f, -9.0000f);   // @camera dist
+  glRotatef(0.0000f, 1.0f, 0.0f, 0.0f);   // @camera rx
+  glRotatef(0.0000f, 0.0f, 1.0f, 0.0f);   // @camera ry
+  glTranslatef(-1.4622f, 0.0450f, -0.0000f);   // @camera pan
 --- header_post ---
 --- source ---
 
-  // --- Render State -------------------
+
   glClearColor(0.05, 0.06, 0.08, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_LIGHTING);
-  glEnable(GL_LIGHT0);
-  glEnable(GL_COLOR_MATERIAL);
-  glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-
-  // the sine's own cosine falloff eases each turnaround, so the pulse reverses
-  // the moment it reaches a rail -- no hold. Wrap this in
-  // smoothstep(-1, 1, k * sin(...)) with k > 1 to buy a dwell at the ends.
-  p = 3 * sin(1.2 * t);
-
-  for(i, -3, 4) {
-    d = i - p;
-    // s eases from 1 at the pulse to 0 two units away
-    s = 1 - smoothstep(0, 2, abs(d));
-    h = lerp(0.3, 1.15, s);
-    glPushMatrix();
-      glTranslatef(i, 0, 0);
-      // bars lean away from the pulse, hardest a bar-width off center and
-      // upright right under it; clamp bounds the lean to the falloff radius,
-      // where s has already faded to 0
-      glRotatef(-27 * s * clamp(d, -2, 2), 0, 0, 1);
-      glColor3f(lerp(0.2, 1, s), lerp(0.25, 0.55, s), lerp(0.9, 0.25, s));
-      glTranslatef(0, h / 2, 0);
-      glScalef(0.55, h, 0.55);
-      glutSolidCube(1);
-    glPopMatrix();
+  if(fmod(t, period) < period/2) {
+    glEnable(GL_LIGHT0);
+    console("key light on -- off in %f s", ceil(period/2 - fmod(t, period)));
+  } else {
+    glDisable(GL_LIGHT0);
+    console("key light off -- back in %f s", ceil(period - fmod(t, period)));
   }
+  glEnable(GL_NORMALIZE);
+  glShadeModel(GL_SMOOTH);
+  glDisable(GL_COLOR_MATERIAL);
+  glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE);
+
+  pulse = 0.55 + 0.30 * sin(t * 3);
+  slices = round(clamp(detail, 3, 64));
+  stacks = round(clamp(detail * 0.8, 3, 64));
+
+  // --- Row 1: ambient, diffuse, spec recipes, shade trick, hue split. ---
+
+  heading(0, 3.20, 30);
+  label("ambient vs diffuse vs specular");
+
+  // 1. Ambient only -- uniform coral, no lighting variation.
+  body(1.00, 0.35, 0.20,  0, 0, 0,  8);
+  spec(0, 0, 0, 1);
+  glPushMatrix();
+    place(-4.5, 2.30);
+    glutSolidSphere(0.5, slices, stacks);
+  glPopMatrix();
+  caption(-4.5, 1.48, 7);
+  label("ambient");
+
+  // 2. Diffuse only -- black in shadow, coral where the key hits.
+  body(0, 0, 0,  1.00, 0.35, 0.20,  24);
+  spec(0, 0, 0, 1);
+  glPushMatrix();
+    place(-2.7, 2.30);
+    glutSolidSphere(0.5, slices, stacks);
+  glPopMatrix();
+  caption(-2.7, 1.48, 7);
+  label("diffuse");
+
+  // 3. Specular only -- black body with white (MIST) highlight.
+  body(0, 0, 0,  0, 0, 0,  48);
+  glPushMatrix();
+    place(-0.9, 2.30);
+    glutSolidSphere(0.5, slices, stacks);
+  glPopMatrix();
+  caption(-0.9, 1.48, 8);
+  label("specular");
+
+  // 4. All three -- ambient, diffuse, and MIST specular on one body.
+  body(1.00, 0.35, 0.20,  1.00, 0.35, 0.20,  48);
+  glPushMatrix();
+    place(0.9, 2.30);
+    glutSolidSphere(0.5, slices, stacks);
+  glPopMatrix();
+  caption(0.9, 1.48, 9);
+  label("all three");
+
+  // 5. Coral ambient + white (MIST) diffuse: shadow keeps the hue,
+  //    light washes toward white -- shades of one color.
+  body(1.00, 0.35, 0.20,  0.92, 0.95, 0.98,  32);
+  glPushMatrix();
+    place(2.7, 2.30);
+    glutSolidCube(0.88);
+  glPopMatrix();
+  caption(2.7, 1.48, 11);
+  label("amb + white");
+
+  // 6. Hue split -- teal in shadow, coral where lit.
+  body(0.10, 0.95, 0.85,  1.00, 0.35, 0.20,  40);
+  glPushMatrix();
+    place(4.5, 2.30);
+    glRotatef(70, 1, 0, 0);
+    glutSolidTorus(0.16, 0.5, stacks, slices);
+  glPopMatrix();
+  caption(4.5, 1.48, 9);
+  label("split hue");
+
+  // --- Row 2: shininess ladder, colored spec, emission. ---
+
+  heading(0, 0.90, 33);
+  label("shininess  colored spec  emission");
+
+  // Shared teal body, held back to 0.60 so the highlight is what changes;
+  // only the specular amount and the shininess exponent move along the row.
+  body(0.22*0.10, 0.22*0.95, 0.22*0.85,  0.60*0.10, 0.60*0.95, 0.60*0.85,  8);
+
+  spec(0, 0, 0, 1);
+  glPushMatrix();
+    place(-4.6, 0.00);
+    glutSolidSphere(0.5, slices, stacks);
+  glPopMatrix();
+  caption(-4.6, -0.82, 5);
+  label("matte");
+
+  spec(0.45*0.92, 0.45*0.95, 0.45*0.98,  12);
+  glPushMatrix();
+    place(-2.3, 0.00);
+    glutSolidSphere(0.5, slices, stacks);
+  glPopMatrix();
+  caption(-2.3, -0.82, 5);
+  label("satin");
+
+  spec(0.92, 0.95, 0.98,  128);
+  glPushMatrix();
+    place(0.0, 0.00);
+    glutSolidSphere(0.5, slices, stacks);
+  glPopMatrix();
+  caption(0.0, -0.82, 6);
+  label("mirror");
+
+  // Azure body, amber highlight -- spec color is independent of diffuse.
+  body(0.22*0.15, 0.22*0.55, 0.22*1.00,  0.60*0.15, 0.60*0.55, 0.60*1.00,  64);
+  spec(1.00, 0.85, 0.15,  64);
+  glPushMatrix();
+    place(2.3, 0.00);
+    glutSolidSphere(0.5, slices, stacks);
+  glPopMatrix();
+  caption(2.3, -0.82, 12);
+  label("colored spec");
+
+  // Dim teal body + teal emission: it glows even on the unlit side.
+  body(0.06*0.10, 0.06*0.95, 0.06*0.85,  0.10*0.10, 0.10*0.95, 0.10*0.85,  24);
+  spec(0.40*0.92, 0.40*0.95, 0.40*0.98,  32);
+  glow(0.45*0.10, 0.45*0.95, 0.45*0.85);
+  glPushMatrix();
+    place(4.6, -0.05);
+    glutSolidTeapot(0.62);
+  glPopMatrix();
+  caption(4.6, -0.82, 8);
+  label("emission");
+
+  // --- Row 3: the same three channels spent on finished materials. ---
+
+  heading(0, -1.40, 16);
+  label("material recipes");
+
+  // Pearl -- near-white body with ambient and diffuse equal, so it never
+  // darkens to a hue, and a broad low-exponent sheen instead of a point.
+  // One GL_AMBIENT_AND_DIFFUSE call is the honest spelling when the two
+  // channels carry the same color.
+  tone(0.78*0.92, 0.78*0.95, 0.78*0.98);
+  glow(0, 0, 0);
+  spec(0.92, 0.95, 0.98,  16);
+  glPushMatrix();
+    place(-4.6, -2.30);
+    glutSolidSphere(0.5, slices, stacks);
+  glPopMatrix();
+  caption(-4.6, -3.12, 5);
+  label("pearl");
+
+  // Jade -- deep teal ambient under a lighter teal diffuse, tight
+  // near-white highlight: the stone reads translucent because the shadow
+  // stays saturated instead of going black.
+  body(0.30*0.10, 0.30*0.95, 0.30*0.85,  0.75*0.10, 0.75*0.95, 0.75*0.85,  64);
+  spec(0.85*0.92, 0.85*0.95, 0.85*0.98,  72);
+  glPushMatrix();
+    place(-2.3, -2.30);
+    glRotatef(58, 1, 0, 0);
+    glutSolidTorus(0.19, 0.50, stacks, slices);
+  glPopMatrix();
+  caption(-2.3, -3.12, 4);
+  label("jade");
+
+  // Gold -- metal is the case where the highlight takes the body's hue
+  // rather than the light's, so the specular is AMBER, not MIST. Diffuse
+  // is held low on purpose: on metal most of the color arrives in that
+  // highlight, and a bright diffuse just flattens it into paint.
+  body(0.22*1.00, 0.22*0.85, 0.22*0.15,  0.52*1.00, 0.52*0.85, 0.52*0.15,  48);
+  spec(1.00, 0.85, 0.15,  48);
+  glPushMatrix();
+    // place() tumbles it like the rest of the row so the highlight
+    // sweeps the flank; spinning a cone about its own axis instead would
+    // leave the shading identical frame to frame. glutSolidCone grows
+    // from its base along +z, so back it up half a height to centre it.
+    place(0.0, -2.30);
+    glRotatef(-90, 1, 0, 0);
+    glTranslatef(0, 0, -0.52);
+    glutSolidCone(0.42, 1.05, slices, stacks);
+  glPopMatrix();
+  caption(0.0, -3.12, 4);
+  label("gold");
+
+  // Velvet -- no specular at all and a lifted ambient, so the cloth has
+  // no glint and its folds never fall to black.
+  body(0.40*1.00, 0.40*0.35, 0.40*0.20,  0.85*1.00, 0.85*0.35, 0.85*0.20,  4);
+  spec(0, 0, 0, 1);
+  glPushMatrix();
+    place(2.3, -2.30);
+    glutSolidCube(0.86);
+  glPopMatrix();
+  caption(2.3, -3.12, 6);
+  label("velvet");
+
+  // Neon -- almost no body color, all of it in the emission, which is
+  // added flat and so survives the key light going out. The glow is the
+  // one thing here that animates, and a colour that changes every frame
+  // is exactly what GL_COLOR_MATERIAL is for: glColor3f writes the
+  // tracked channel directly instead of restating glMaterialfv.
+  body(0.05*0.55, 0.05*0.30, 0.05*1.00,  0.10*0.55, 0.10*0.30, 0.10*1.00,  32);
+  spec(0.30*0.92, 0.30*0.95, 0.30*0.98,  32);
+  glColorMaterial(GL_FRONT_AND_BACK, GL_EMISSION);
+  glEnable(GL_COLOR_MATERIAL);
+  glColor3f(pulse*0.55, pulse*0.30, pulse*1.00);
+  glPushMatrix();
+    place(4.6, -2.30);
+    glutSolidTorus(0.20, 0.44, stacks, slices);
+  glPopMatrix();
+  glDisable(GL_COLOR_MATERIAL);
+  caption(4.6, -3.12, 4);
+  label("neon");
 --- render_state ---
   glEnable(GL_MULTISAMPLE);
   glDisable(GL_LINE_SMOOTH);
