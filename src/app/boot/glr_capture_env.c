@@ -354,6 +354,28 @@ static void maybe_capture_panel_frac(void) {
     }
 }
 
+int glr_capture_env_frozen(void) {
+    static int limit = -1;
+    static int frames;
+    static int frozen;
+
+    if (limit < 0) {
+        const char *v = getenv("GLR_FREEZE_AFTER_FRAMES");
+        limit = (v && *v) ? atoi(v) : 0;
+        if (limit < 0)
+            limit = 0;
+    }
+    if (limit == 0 || frozen)
+        return frozen;
+    if (frames >= limit) {
+        frozen = 1;
+        fprintf(stderr, "GLR_FREEZE_AFTER_FRAMES: frozen after %d frames\n", frames);
+        return 1;
+    }
+    frames++;
+    return 0;
+}
+
 void glr_capture_env_frame_hook(void) {
     maybe_capture_panel_frac();
     maybe_capture_view_toggle();

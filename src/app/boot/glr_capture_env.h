@@ -42,6 +42,17 @@ void glr_capture_env_apply(const char *time_arg);
  * before rendering, so the posed state is in the frame that renders. */
 void glr_capture_env_frame_hook(void);
 
+/* GLR_FREEZE_AFTER_FRAMES=N: non-zero from the (N+1)th display callback on.
+ * gl_repl.c then returns from the callback before any GL work or sim tick, so
+ * the last rendered frame stays on screen unchanged. With GLR_TICK_PER_FRAME
+ * that frame is a function of N, the scene and the GL alone - scenes that carry
+ * state from frame to frame never settle by themselves - which is what the
+ * gl4es screenshot A/B (scripts/gl4es-ab-catalog.mjs) needs. Logs one
+ * "GLR_FREEZE_AFTER_FRAMES: frozen after N frames" line on stderr when it
+ * trips; the harness waits for it. Counts its own calls: call it once per
+ * display callback, first. Zero forever when the variable is unset. */
+int glr_capture_env_frozen(void);
+
 /* Non-zero when GLR_NO_INPUT is set to anything but "0": the window ignores
  * real keyboard and mouse events for the run.
  *

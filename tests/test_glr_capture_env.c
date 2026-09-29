@@ -323,6 +323,20 @@ static void test_cfg_hook(void) {
     clear_capture_env();
 }
 
+/* GLR_FREEZE_AFTER_FRAMES=N lets N callbacks render, then freezes for good.
+ * The limit is read on first call, so this is the only case that calls it. */
+static void test_freeze_after_frames(void) {
+    clear_capture_env();
+    setenv("GLR_FREEZE_AFTER_FRAMES", "3", 1);
+    ASSERT_INT("frame 1 renders", glr_capture_env_frozen(), 0);
+    ASSERT_INT("frame 2 renders", glr_capture_env_frozen(), 0);
+    ASSERT_INT("frame 3 renders", glr_capture_env_frozen(), 0);
+    ASSERT_INT("frame 4 is frozen", glr_capture_env_frozen(), 1);
+    ASSERT_INT("frozen stays frozen", glr_capture_env_frozen(), 1);
+    unsetenv("GLR_FREEZE_AFTER_FRAMES");
+    ASSERT_INT("unsetting later does not thaw it", glr_capture_env_frozen(), 1);
+}
+
 static void test_no_splash_hook(void) {
     clear_capture_env();
     ASSERT_INT("splash initially active", splash_active(), 1);
@@ -451,6 +465,7 @@ int main(void) {
 
     test_glr_time_hook();
     test_cfg_hook();
+    test_freeze_after_frames();
     test_no_splash_hook();
     test_tick_per_frame_hook();
     test_type_keys_hook();

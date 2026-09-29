@@ -2223,14 +2223,14 @@ GL_TEST_BINS = test_ui_gl_state test_scene_underwater_fill_gl test_attrib_bits_g
 	test_tour_overlay_feedback test_gl_state_inspector_gl
 
 # Each gl-test's link inputs beyond its own object. Shared by the native rules
-# below and the gl4es web pages (`make gl-tests-web`), so the two cannot drift.
+# below and the gl4es web pages (`make test-gl-web`), so the two cannot drift.
 GL_TEST_DEPS_test_ui_gl_state =
 GL_TEST_DEPS_test_gl_state_inspector_gl = $(CORE_TEST_OBJS)
 GL_TEST_DEPS_test_tour_overlay_feedback = $(CORE_TEST_OBJS)
 GL_TEST_DEPS_test_attrib_bits_gl = $(OBJDIR)/src/repl/attrib_bits.o $(OBJDIR)/src/repl/command_spec.o
 GL_TEST_DEPS_test_scene_underwater_fill_gl = $(OBJDIR)/src/render3d/grid.o
 
-# `make gl-tests-web` pages (see that target). GL4ES_KNOWN_GAPS is the allow
+# `make test-gl-web` pages (see that target). GL4ES_KNOWN_GAPS is the allow
 # list of gl4es features the oracles find missing - and the gl4es to-do list.
 GL4ES_KNOWN_GAPS ?= packaging/web/gl4es-known-gaps.txt
 GL_TESTS_WEB_BINDIR ?= build/release-web/gl-tests
@@ -3330,7 +3330,7 @@ endef
 $(foreach test,$(GL_TEST_BINS),$(eval $(call GL_TEST_WEB_RULE,$(test))))
 endif
 
-# `make gl-tests-web`: the real-GL oracles from `make gl-tests`, asked of gl4es
+# `make test-gl-web`: the real-GL oracles from `make gl-tests`, asked of gl4es
 # -> WebGL2 instead of the desktop driver - the GL the web build actually
 # ships. Pages run in headless Chrome on SwiftShader (scripts/run-web-tests.mjs),
 # so results do not depend on the host GPU.
@@ -3342,7 +3342,7 @@ endif
 # 17f0894e pin: no patch or upstream change since touches it). The script checks.
 # GL_TESTS_WEB_* are defined up by GL_TEST_DEPS_*: the page rules are
 # generated before this point, and a rule's target name expands immediately.
-gl-tests-web: require-emcc ## Run the real-GL oracles (gl-tests) against gl4es in headless Chrome (needs emcc, node, Chrome).
+test-gl-web: require-emcc ## Run the real-GL oracles (gl-tests) against gl4es in headless Chrome (needs emcc, node, Chrome).
 	@command -v node >/dev/null 2>&1 || { echo "ERROR: node not found on PATH." >&2; exit 1; }
 	@# Like freeglut-demos-web: fetch the deps only when missing, so a
 	@# GL4ES_DIR override (or a managed tree mid-edit) is never reset.
@@ -3351,6 +3351,15 @@ gl-tests-web: require-emcc ## Run the real-GL oracles (gl-tests) against gl4es i
 	$(MAKE) --no-print-directory WEB=1 BUILD=release $(GL_TESTS_WEB_PAGES)
 	node scripts/run-web-tests.mjs $(if $(GL_TESTS_WEB_JSON),--json $(GL_TESTS_WEB_JSON),) \
 		--known $(GL4ES_KNOWN_GAPS) $(GL_TESTS_WEB_BINDIR) $(addsuffix .html,$(GL_TEST_BINS))
+
+# `make test-gl4es-ab`: the same oracles plus the render bench and a screenshot of
+# every example, run against two gl4es builds and compared - A is what a
+# gl-repl revision ships (default HEAD), B any built gl4es tree (default the
+# managed one). ARGS goes to scripts/gl4es-ab.sh, e.g.
+#   make test-gl4es-ab ARGS='--b ../gl4es-pr05 --lanes oracles,catalog'
+# Writes build/gl4es-ab/index.html; exits non-zero on an oracle regression.
+test-gl4es-ab: require-emcc ## A/B two gl4es builds through the web app: oracles, render bench, example screenshots (ARGS for scripts/gl4es-ab.sh).
+	scripts/gl4es-ab.sh $(ARGS)
 
 # count lines: $(SRCS) $(HDRS)
 lines: $(SRCS) $(HDRS) ## Count SLOC (code/comment/blank) across source and header files.

@@ -17,14 +17,10 @@
 // gap that stopped failing should come off the list. Exit status is 0 unless
 // some page FAILs (an unlisted failure, crash, or timeout).
 //
-// Chrome: $CHROME, else the macOS app bundle, else google-chrome / chromium
-// on PATH. No npm dependencies: node >= 22 has a global WebSocket, which is
-// all the DevTools protocol needs.
-import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer } from 'node:http';
-import { tmpdir } from 'node:os';
-import { extname, join, normalize } from 'node:path';
+// Browser plumbing (Chrome lookup, SwiftShader, file server, DevTools client)
+// lives in web-chrome.mjs, shared with gl4es-ab-catalog.mjs.
+import { readFileSync, writeFileSync } from 'node:fs';
+import { consoleText, launchChrome, serveDirs, sleep } from './web-chrome.mjs';
 
 function usage(msg) {
   if (msg) console.error(`run-web-tests: ${msg}`);
@@ -64,84 +60,18 @@ function loadKnown(file) {
 }
 const known = knownFile ? loadKnown(knownFile) : [];
 
-function findChrome() {
-  if (process.env.CHROME) return process.env.CHROME;
-  const mac = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-  if (existsSync(mac)) return mac;
-  for (const name of ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser']) {
-    const r = spawnSync('sh', ['-c', `command -v ${name}`], { encoding: 'utf8' });
-    if (r.status === 0 && r.stdout.trim()) return r.stdout.trim();
-  }
-  usage('Chrome not found; set $CHROME');
-}
-
-const MIME = {
-  '.html': 'text/html', '.js': 'text/javascript',
-  '.wasm': 'application/wasm', '.data': 'application/octet-stream',
-};
-const server = createServer((req, res) => {
-  const rel = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname));
-  const file = join(dir, rel);
-  if (rel.startsWith('..') || !existsSync(file)) { res.writeHead(404); res.end(); return; }
-  res.writeHead(200, { 'Content-Type': MIME[extname(file)] || 'application/octet-stream' });
-  res.end(readFileSync(file));
-});
-await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-const port = server.address().port;
-
-const profile = mkdtempSync(join(tmpdir(), 'glr-web-tests-'));
-const chrome = spawn(findChrome(), [
-  '--headless=new', '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
-  '--no-first-run', '--no-default-browser-check', `--user-data-dir=${profile}`,
-  '--remote-debugging-port=0', 'about:blank',
-], { stdio: ['ignore', 'ignore', 'pipe'] });
-const wsUrl = await new Promise((resolve, reject) => {
-  let buf = '';
-  chrome.stderr.on('data', d => {
-    buf += d;
-    const m = buf.match(/DevTools listening on (ws:\/\/\S+)/);
-    if (m) resolve(m[1]);
-  });
-  setTimeout(() => reject(new Error('Chrome did not report a DevTools endpoint')), 20000);
-});
-
-const ws = new WebSocket(wsUrl);
-await new Promise(resolve => ws.addEventListener('open', resolve));
-let nextId = 0;
-const pending = new Map();
-let onEvent = () => {};
-ws.addEventListener('message', e => {
-  const msg = JSON.parse(e.data);
-  if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); }
-  else onEvent(msg);
-});
-const send = (method, params = {}, sessionId) => new Promise(resolve => {
-  const id = ++nextId;
-  pending.set(id, resolve);
-  ws.send(JSON.stringify({ id, method, params, sessionId }));
-});
-
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const server = await serveDirs({ t: dir });
+const chrome = await launchChrome();
 
 async function runPage(page) {
-  const { result: { targetId } } = await send('Target.createTarget', { url: 'about:blank' });
-  const { result: { sessionId } } = await send('Target.attachToTarget', { targetId, flatten: true });
-  await send('Runtime.enable', {}, sessionId);
+  const tab = await chrome.openPage();
   const out = { page, passed: 0, run: 0, status: 'TIMEOUT', failures: [], log: [] };
   let done = false;
-  onEvent = msg => {
-    if (msg.sessionId !== sessionId) return;
-    let text = null;
-    if (msg.method === 'Runtime.consoleAPICalled')
-      text = msg.params.args.map(a => a.value ?? a.description ?? '').join(' ');
-    else if (msg.method === 'Runtime.exceptionThrown') {
-      const d = msg.params.exceptionDetails;
-      text = `EXCEPTION ${d.exception?.description || d.text}`;
-      out.status = 'CRASH';
-      done = true;
-    }
+  tab.events(msg => {
+    const text = consoleText(msg);
     if (text === null) return;
     out.log.push(text);
+    if (msg.method === 'Runtime.exceptionThrown') { out.status = 'CRASH'; done = true; }
     if (/^FAIL /.test(text)) out.failures.push(text);
     const m = text.match(/:\s*(\d+)\/(\d+) passed/);
     if (m) {
@@ -150,12 +80,12 @@ async function runPage(page) {
       out.status = out.passed === out.run ? 'PASS' : 'FAIL';
       done = true;
     }
-  };
-  await send('Page.navigate', { url: `http://127.0.0.1:${port}/${page}` }, sessionId);
+  });
+  await tab.send('Page.navigate', { url: `http://127.0.0.1:${server.port}/t/${page}` });
   const start = Date.now();
   while (!done && Date.now() - start < timeoutMs) await sleep(100);
   await sleep(200);   // trailing output after the summary line
-  await send('Target.closeTarget', { targetId });
+  await tab.close();
   return out;
 }
 
@@ -201,12 +131,6 @@ console.log(`${results.length - bad}/${results.length} pages ok` +
             (knownPages ? ` (${knownPages} with known gl4es gaps only)` : '') +
             (stale.length ? `, ${stale.length} stale known-gap entr${stale.length === 1 ? 'y' : 'ies'}` : ''));
 
-// Chrome keeps writing its profile while it shuts down, so wait for the exit
-// before removing it; a leftover temp profile is not worth failing the run.
-ws.close();
 server.close();
-const exited = new Promise(resolve => chrome.once('exit', resolve));
-chrome.kill();
-await Promise.race([exited, sleep(5000)]);
-try { rmSync(profile, { recursive: true, force: true, maxRetries: 5 }); } catch { /* best effort */ }
+await chrome.close();
 process.exit(bad ? 1 : 0);

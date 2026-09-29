@@ -483,12 +483,12 @@ is not guaranteed. `pmset -g therm` can confirm recorded pressure warnings
 without a sampling trace, but neither it nor the AGX `ioreg` utilization
 counter substitutes for average GPU frequency. `powermetrics` requires root.
 
-### Real-GL oracles against gl4es (`make gl-tests-web`)
+### Real-GL oracles against gl4es (`make test-gl-web`)
 
 `make gl-tests` holds the tests that need a real GL context: an oracle that
 checks `attrib_bits.c` against what `glPushAttrib` actually saves, a
 differential check of the state inspector against `glGet*`, and three more.
-Natively they ask the desktop driver. `make gl-tests-web` links the same test
+Natively they ask the desktop driver. `make test-gl-web` links the same test
 objects (their link inputs are the shared `GL_TEST_DEPS_*` in the Makefile)
 against gl4es as wasm pages under `build/release-web/gl-tests/`, and
 [`scripts/run-web-tests.mjs`](../../scripts/run-web-tests.mjs) runs them in
@@ -508,6 +508,38 @@ keeps its pages apart; `GL_TESTS_WEB_JSON=<file>` writes per-page results.
 That is the A/B: the same oracles against two gl4es revisions, compared
 failure by failure. It relies on both trees having identical `include/`,
 because the app objects are compiled once.
+
+### A/B of two gl4es builds (`make test-gl4es-ab`)
+
+[`scripts/gl4es-ab.sh`](../../scripts/gl4es-ab.sh) runs gl-repl's web build
+against two gl4es trees and compares them. **A** is the gl4es a gl-repl
+revision ships: its `GL4ES_SHA` plus its patches, built into
+`build/gl4es-ab/gl4es-A` (default `HEAD`). **B** is any built gl4es tree:
+by default the managed `third_party/web/gl4es`, or a PR branch checkout in a
+gl4es fork - which is how an upstream PR gets exercised in gl-repl before it
+is opened (`make test-gl4es-ab ARGS='--b <tree>'`). Three lanes:
+
+| Lane | What runs | What counts |
+|---|---|---|
+| `oracles` | `make test-gl-web` against each tree | A failure only B has is a regression (non-zero exit). One only A has is a gap B closed: delete it from `gl4es-known-gaps.txt`. |
+| `render` | [`bench/bench_render.c`](../../bench/bench_render.c)'s fixed workloads, 7 alternating runs, a fresh Chrome each | Per-case median ms/frame; a delta counts past twice the run-to-run noise (median absolute deviation) and 3%. Pixel oracles per case. |
+| `catalog` | every web example at frame 300: `GLR_TIME=2.5`, `GLR_CFG=auto_time=0`, `GLR_TICK_PER_FRAME=1`, `GLR_FREEZE_AFTER_FRAMES=300` | Exact pixel diff (ImageMagick). A build diffed against itself is 0 px, so any diff is the gl4es change - which a fix *should* produce; the report shows A, B and the diff to judge. |
+
+Everything lands in `build/gl4es-ab/` with `index.html` linking the lane
+reports; `--lanes`, `--examples 1,5,9` and `--runs` narrow a run.
+
+Three measurement traps it is built around. The catalog captures at a frame
+count, not "once the picture stops changing": a paused `t` is not a still
+frame, because many scenes carry state from frame to frame and eased cameras
+take a few hundred frames to land, so 12 of 43 examples never settled - frame
+300 under `GLR_TICK_PER_FRAME` is identical run to run. The catalog does no
+timing: a paused scene is where gl-repl's frame pacer idles, so a frame rate
+there measures the pacer. And the render lane runs each case in a new browser,
+because successive tabs in one Chrome got steadily slower (the fifth run was
+up to 10x the first). Some cases also run at one of two speeds per browser
+process (attrib-stack, about 0.1 or 0.6 ms); a side whose runs spread past 3x
+is reported unstable rather than judged. All times are SwiftShader's:
+comparable between A and B, not a prediction for any GPU.
 
 ### Web-aware tests, and the exclusion list
 

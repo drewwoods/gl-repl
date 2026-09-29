@@ -1,4 +1,4 @@
-# gl4es known gaps - expected failures of `make gl-tests-web`
+# gl4es known gaps - expected failures of `make test-gl-web`
 #
 # The real-GL oracles (`make gl-tests`) were written against desktop drivers.
 # Run against gl4es -> WebGL2 they find behavior gl4es does not implement yet.

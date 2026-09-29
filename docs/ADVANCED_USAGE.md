@@ -142,6 +142,7 @@ A value below 1 is refused with a note on stderr rather than acted on.
 |---|---|---|
 | `GLR_ASSETS_DIR` | Directory path; default `./assets`; `--assets` wins. | Primary music directory scanned for `*.mp3`. |
 | `GLR_TIME` | Seconds; default `0`; `--time` wins. | Initial animation time `t`, applied after any example/file load. |
+| `GLR_FREEZE_AFTER_FRAMES` | Frame count *N*. | Renders *N* frames, then the display callback stops drawing and ticking, so frame *N* stays on screen; logs `GLR_FREEZE_AFTER_FRAMES: frozen after N frames` when it trips. With `GLR_TICK_PER_FRAME` that frame is reproducible even for scenes that carry state between frames - the gl4es screenshot A/B uses it. |
 | `GLR_CFG` | `slug=value` pairs separated by `;`, e.g. `auto_time=0;grid=GRID_THEME_PLANES`. | Applies each pair as a `// @cfg slug = value` scene header would, after any example/file load (so it wins over the scene's own `@cfg`). With `GLR_TIME`, `auto_time=0` freezes `t` before the first tick - a reproducible still frame. Malformed pairs are reported; unknown slugs are dropped, as in a scene. |
 | `GLR_EDIT_LINE` | Line number as the code panel shows it (1-based); clamped. | Parks the cursor after load and scrolls it into view so cursor-bound overlays render in captures. |
 | `GLR_TYPE_KEYS` | Text fed through the keyboard dispatch after load. | Poses mid-typing states (partial-input vertex guides, autocomplete ghost/popup) for captures. |

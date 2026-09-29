@@ -28,6 +28,12 @@ static const char *g_export_ply_path = NULL;
 static int g_export_ply_srgb = 0;
 
 static void display_func(void) {
+    /* GLR_FREEZE_AFTER_FRAMES: past the limit, draw nothing and tick nothing,
+     * so the last frame stays on screen for a screenshot. Before the frame
+     * opens, so a frozen callback is not a frame at all. */
+    if (glr_capture_env_frozen())
+        return;
+
     /* Open the profiled frame - first statement in the callback, because this
      * file owns that callback boundary, not the controller, which is only one
      * of the stages below. Everything from here to glr_frame_ended() at the
