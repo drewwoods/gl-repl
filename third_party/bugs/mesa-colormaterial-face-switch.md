@@ -8,8 +8,10 @@
 
 While `GL_COLOR_MATERIAL` is enabled and `GL_FRONT` is the tracked face, a
 `glColor*` correctly updates `GL_FRONT`'s material. Selecting a *different*
-face afterwards then throws that value away: `GL_FRONT` reverts to the
-untouched GL default instead of keeping the color it tracked.
+face afterwards then throws that value away: `GL_FRONT` keeps the value it
+held before that `glColor` (in a fresh context, the (1, 1, 1, 1) that
+`glEnable` copied in) instead of the color it tracked. See the follow-up
+below.
 
 The call that causes the loss names `GL_BACK` and changes no color.
 
@@ -140,9 +142,10 @@ passes on Mesa. Writing the named face works; only the outgoing face is lost.
 
 Both are worth knowing before writing a test, and both cost time here:
 
-1. **Use a distinctive color.** The unwritten material sits at GL's default
-   white, so a test that tracks white passes for the wrong reason — it cannot
-   distinguish "tracked correctly" from "never written".
+1. **Use a distinctive color.** The lost face keeps the color `glEnable`
+   copied in, which in a fresh context is the initial current color, white
+   (GL's default ambient is 0.2 grey). So a test that tracks white passes for
+   the wrong reason: it can't tell "tracked correctly" from "lost".
 
 2. **Do not query between the `glColor` and the face switch.** A
    `glGetMaterialfv` in that window makes the bug vanish (case C). That is the
@@ -165,9 +168,56 @@ than a hardware driver:
 | GPU | Intel Alder Lake-N UHD Graphics `[8086:46d2]` |
 | Backend 1 | `Mesa Intel(R) Graphics (ADL-N)` (iris), GL 4.6 compat, Mesa **25.2.8** (`libgl1-mesa-dri` 25.2.8-0ubuntu0.24.04.2) |
 | Backend 2 | `llvmpipe (LLVM 20.1.2, 256 bits)` via OSMesa, GL 4.5 compat, Mesa **25.1.7** (`libosmesa6` 25.1.7-1ubuntu2~24.04.2) |
+| Backend 3 | `llvmpipe` via EGL surfaceless, Mesa **25.2.8** (`LIBGL_ALWAYS_SOFTWARE=1`); see the follow-up below |
 
 Not reproducible on NVIDIA (proprietary) or Apple's OpenGL: both report
 `0.20 0.60 0.30`.
+
+## Follow-up: what the old face keeps (2026-09-28)
+
+Rerun on gracemont through the gl4es-ab native harness (EGL surfaceless, a
+fresh context, with each sequence as the first GL calls). The value read is
+`glGetMaterialfv(GL_FRONT, GL_AMBIENT)` afterwards:
+
+| # | Sequence | iris 25.2.8 | llvmpipe 25.2.8 | Spec |
+|---|---|---|---|---|
+| 1 | `glEnable`, `CM(FRONT)`, `glColor(.2,.6,.3)`, `CM(BACK)` (case B) | 1.00 1.00 1.00 | 1.00 1.00 1.00 | 0.20 0.60 0.30 |
+| 2 | `CM(FRONT)`, `glEnable`, `glColor(.2,.6,.3)`, `CM(BACK)` | 1.00 1.00 1.00 | 1.00 1.00 1.00 | 0.20 0.60 0.30 |
+| 3 | `glColor(0,0,0)`, query, then as 1 | 0.00 0.00 0.00 | 0.00 0.00 0.00 | 0.20 0.60 0.30 |
+| 4 | `CM(FRONT)`, `glColor(.2,.6,.3)`, `CM(BACK)`, then `glEnable` | 0.20 0.20 0.20 | 0.20 0.20 0.20 | 0.20 0.20 0.20 |
+
+(`CM(face)` is `glColorMaterial(face, GL_AMBIENT_AND_DIFFUSE)`.)
+
+- **The lost face keeps the color from `glEnable`, not the GL default.** In
+  a fresh context the current color is (1, 1, 1, 1), and `glEnable` copies it
+  into the tracked materials. That's the 1.00 in case B. GL's default front
+  ambient is (0.2, 0.2, 0.2, 1), which case 4 shows: there nothing tracks
+  before the enable, and the retarget leaves the front untouched. With the
+  current color set to black first (case 3), the lost face reads 0.00. So the
+  old face keeps whatever it held before the pending `glColor`, which in a
+  real frame loop is the previous tracked color. That's why `glr-logo`'s
+  exterior shows up black, not white.
+- **Enable order: confirmed, it doesn't matter** (cases 1 and 2), in a
+  fresh context.
+- **History can hide it.** The same shape as case 2 kept the tracked color
+  on both drivers when it followed `glDisable(GL_COLOR_MATERIAL)`,
+  `glColorMaterial(GL_FRONT_AND_BACK, …)`, `glMaterialfv(GL_FRONT_AND_BACK,
+  GL_AMBIENT_AND_DIFFUSE, …)` and `glColor3f(0, 0, 0)` in the same context.
+  A test that runs many cases in one context can miss it, so reproduce in a
+  fresh context, as `mesa-colormaterial-face-switch.c` does.
+- **llvmpipe on 25.2.8 too:** same results as iris, through EGL rather than
+  OSMesa, so it isn't specific to OSMesa 25.1.7.
+
+gl4es, for comparison (it emulates fixed function on GLES2, so it has its
+own color-material code, not Mesa's):
+
+- **master** (ptitSeb/gl4es a444cc94) has a different bug. It uses the
+  current color for **both** faces whenever `GL_COLOR_MATERIAL` is on, so in
+  `glr-logo` the interior accent colors land on the exterior.
+- **with drewwoods/gl4es `pr-05-color-material`** (this repo's
+  `gl4es-color-material-face.patch`) it gives the spec values in all four
+  cases above. A/B demo:
+  https://drewwoods.github.io/gl4es-ab/05-color-material
 
 ## Possibly related
 
