@@ -32,6 +32,7 @@ GLES1 keeps the indexed path because it may synthesize final colors and
 texture coordinates later in draw_renderlist.
 
 Applied by scripts/web-deps.sh after cloning the pinned gl4es checkout.
+
 diff --git a/src/gl/gl4es.c b/src/gl/gl4es.c
 index ae6ec683..b20bcff5 100644
 --- a/src/gl/gl4es.c
@@ -45,7 +46,7 @@ index ae6ec683..b20bcff5 100644
          }
          glstate->list.compiling = false;
 diff --git a/src/gl/list.c b/src/gl/list.c
-index 63d4d0cc..2b446fc7 100644
+index 8cb8f4b7..585629ab 100644
 --- a/src/gl/list.c
 +++ b/src/gl/list.c
 @@ -37,6 +37,34 @@ renderlist_t *alloc_renderlist() {
@@ -83,7 +84,7 @@ index 63d4d0cc..2b446fc7 100644
  bool ispurerender_renderlist(renderlist_t *list) {
      // return true if renderlist contains only rendering command, no state changes
      if (list->calls.len)
-@@ -619,6 +647,14 @@ renderlist_t* append_calllist(renderlist_t *list, renderlist_t *a)
+@@ -621,6 +649,14 @@ renderlist_t* append_calllist(renderlist_t *list, renderlist_t *a)
              }
              // batch copy first
              memcpy(new, a, sizeof(renderlist_t));
@@ -98,7 +99,7 @@ index 63d4d0cc..2b446fc7 100644
              list->next = new;
              new->prev = list;
              // ok, now on new list
-@@ -756,8 +792,7 @@ void free_renderlist(renderlist_t *list) {
+@@ -758,8 +794,7 @@ void free_renderlist(renderlist_t *list) {
              free(list->bitmaps);
          }
          
@@ -109,7 +110,7 @@ index 63d4d0cc..2b446fc7 100644
              free(list->final_colors);
          if(list->vbo_array)
 diff --git a/src/gl/list.h b/src/gl/list.h
-index 1efc143f..e0f05667 100644
+index 815a93ca..554de899 100644
 --- a/src/gl/list.h
 +++ b/src/gl/list.h
 @@ -137,6 +137,23 @@ typedef struct {
@@ -136,7 +137,7 @@ index 1efc143f..e0f05667 100644
  typedef struct _renderlist_t {
      unsigned long len;
      unsigned long ilen;
-@@ -223,6 +240,8 @@ typedef struct _renderlist_t {
+@@ -226,6 +243,8 @@ typedef struct _renderlist_t {
  
      GLushort    *ind_lines;
      int         ind_line;
@@ -145,7 +146,7 @@ index 1efc143f..e0f05667 100644
      GLfloat      *final_colors;
  
      int         instanceCount;
-@@ -272,6 +291,8 @@ renderlist_t* GetFirst(renderlist_t* list);
+@@ -275,6 +294,8 @@ renderlist_t* GetFirst(renderlist_t* list);
  renderlist_t *alloc_renderlist();
  renderlist_t *extend_renderlist(renderlist_t *list);
  void free_renderlist(renderlist_t *list);
@@ -155,7 +156,7 @@ index 1efc143f..e0f05667 100644
  renderlist_t* end_renderlist(renderlist_t *list);
  bool isempty_renderlist(renderlist_t *list);
 diff --git a/src/gl/listdraw.c b/src/gl/listdraw.c
-index d616b3b8..f00111f3 100644
+index baeebbac..d915e654 100644
 --- a/src/gl/listdraw.c
 +++ b/src/gl/listdraw.c
 @@ -359,6 +359,122 @@ int fill_lineIndices(modeinit_t *modes, int length, GLenum mode, GLushort* indic
@@ -281,7 +282,7 @@ index d616b3b8..f00111f3 100644
  void draw_renderlist(renderlist_t *list) {
      if (!list) return;
      // go to 1st...
-@@ -529,25 +645,77 @@ void draw_renderlist(renderlist_t *list) {
+@@ -532,25 +648,77 @@ void draw_renderlist(renderlist_t *list) {
          if(!use_vbo_indices &&  (hardext.esversion==1 || globals4es.usevbo==0 || !list->name)) {
              use_vbo_indices = 1;
          }
@@ -366,7 +367,7 @@ index d616b3b8..f00111f3 100644
              fpe_glEnableClientState(GL_COLOR_ARRAY);
              if (glstate->enable.color_sum && (list->secondary) && hardext.esversion==1 && !list->use_glstate) {
                  if(!list->final_colors) {
-@@ -566,23 +734,23 @@ void draw_renderlist(renderlist_t *list) {
+@@ -569,23 +737,23 @@ void draw_renderlist(renderlist_t *list) {
                  gles_glColorPointer(4, GL_FLOAT, 0, list->final_colors);
              } else {
  //printf("colors=%f, %f, %f, %f / %f, %f, %f, %f\n", list->color[0],list->color[1],list->color[2],list->color[3], list->color[4],list->color[5],list->color[6],list->color[7]);
@@ -395,7 +396,7 @@ index d616b3b8..f00111f3 100644
              } else {
                  fpe_glDisableClientState(GL_FOG_COORD_ARRAY);
              }
-@@ -691,10 +859,13 @@ void draw_renderlist(renderlist_t *list) {
+@@ -694,10 +862,13 @@ void draw_renderlist(renderlist_t *list) {
          } else {
              // texture loop for ES2+ version
              for (int a=0; a<hardext.maxtex; a++) {
@@ -411,7 +412,7 @@ index d616b3b8..f00111f3 100644
                  } else {
                      TEXTURE(a);
                      fpe_glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-@@ -714,10 +885,20 @@ void draw_renderlist(renderlist_t *list) {
+@@ -717,10 +888,20 @@ void draw_renderlist(renderlist_t *list) {
                  // evaluated, seems good to go !
                  use_vbo_array = list2VBO(list);
          }
@@ -433,7 +434,7 @@ index d616b3b8..f00111f3 100644
              list->use_vbo_array = use_vbo_array;
          
          GLenum mode;
-@@ -727,7 +908,15 @@ void draw_renderlist(renderlist_t *list) {
+@@ -730,7 +911,15 @@ void draw_renderlist(renderlist_t *list) {
  		if ((glstate->polygon_mode == GL_POINT) && (mode>=GL_TRIANGLES))
  			mode = GL_POINTS;
  
@@ -450,7 +451,7 @@ index d616b3b8..f00111f3 100644
              if (glstate->render_mode == GL_SELECT) {
                  vertexattrib_t vtx = {0};
                  vtx.pointer = list->vert;
-@@ -811,6 +1000,9 @@ void draw_renderlist(renderlist_t *list) {
+@@ -814,6 +1003,9 @@ void draw_renderlist(renderlist_t *list) {
              list->use_vbo_indices = use_vbo_indices;
          if(use_vbo_array==2)
              listInactiveVBO(list, saved);
@@ -460,4 +461,3 @@ index d616b3b8..f00111f3 100644
  
          #define TEXTURE(A) if (cur_tex!=A) {gl4es_glClientActiveTexture(A+GL_TEXTURE0); cur_tex=A;}
          if(hardext.esversion==1)
-

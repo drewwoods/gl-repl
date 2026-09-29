@@ -39,8 +39,9 @@ perspective-correct.
 - Returns GL4ES_WIDE_HANDLED vs GL4ES_WIDE_FALLBACK.
 
 Applied last in GL4ES_PATCHES.
+
 diff --git a/src/gl/drawing.c b/src/gl/drawing.c
-index 67e6e8e4..2be96785 100644
+index 498ecc5a..b3de0a9b 100644
 --- a/src/gl/drawing.c
 +++ b/src/gl/drawing.c
 @@ -6,6 +6,7 @@
@@ -61,7 +62,7 @@ index 67e6e8e4..2be96785 100644
      );
  }
 diff --git a/src/gl/getter.c b/src/gl/getter.c
-index 52611ff3..d633a172 100644
+index 2ae12bfa..9a8bb18a 100644
 --- a/src/gl/getter.c
 +++ b/src/gl/getter.c
 @@ -8,8 +8,13 @@
@@ -78,7 +79,7 @@ index 52611ff3..d633a172 100644
  //#define DEBUG
  #ifdef DEBUG
  #define DBG(a) a
-@@ -337,6 +342,9 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
+@@ -327,6 +332,9 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
          case GL_POLYGON_OFFSET_UNITS:
              *params = gl4es_mirror_polygon_offset_units;
              break;
@@ -88,7 +89,7 @@ index 52611ff3..d633a172 100644
          case GL_MAX_ELEMENTS_INDICES:
              *params = 1024;
              break;
-@@ -893,6 +901,15 @@ void APIENTRY_GL4ES gl4es_glGetIntegerv(GLenum pname, GLint *params) {
+@@ -905,6 +913,15 @@ void APIENTRY_GL4ES gl4es_glGetIntegerv(GLenum pname, GLint *params) {
          case GL_ALIASED_POINT_SIZE_RANGE:
              gles_glGetIntegerv(GL_ALIASED_POINT_SIZE_RANGE, params);
              break;
@@ -104,7 +105,7 @@ index 52611ff3..d633a172 100644
          case GL_NUM_COMPRESSED_TEXTURE_FORMATS:
              gles_glGetIntegerv(GL_NUM_COMPRESSED_TEXTURE_FORMATS, params);
              (*params)+=4;	// adding fake DXTc
-@@ -1001,6 +1018,15 @@ void APIENTRY_GL4ES gl4es_glGetFloatv(GLenum pname, GLfloat *params) {
+@@ -1015,6 +1032,15 @@ void APIENTRY_GL4ES gl4es_glGetFloatv(GLenum pname, GLfloat *params) {
          case GL_ALIASED_POINT_SIZE_RANGE:
              gles_glGetFloatv(GL_ALIASED_POINT_SIZE_RANGE, params);
              break;
@@ -120,7 +121,7 @@ index 52611ff3..d633a172 100644
          case GL_TRANSPOSE_PROJECTION_MATRIX:
              matrix_transpose(TOP(projection_matrix), params);
              break;
-@@ -1084,6 +1110,16 @@ void APIENTRY_GL4ES gl4es_glGetDoublev(GLenum pname, GLdouble *params) {
+@@ -1101,6 +1127,16 @@ void APIENTRY_GL4ES gl4es_glGetDoublev(GLenum pname, GLdouble *params) {
              gles_glGetFloatv(GL_ALIASED_POINT_SIZE_RANGE, tmp);
              params[0] = tmp[0]; params[1] = tmp[1];
              break;
@@ -138,10 +139,10 @@ index 52611ff3..d633a172 100644
              matrix_transpose(TOP(projection_matrix), tmp);
              for(int i=0; i<16; i++) params[i] = tmp[i];
 diff --git a/src/gl/line.c b/src/gl/line.c
-index 603f329f..a43aeaa4 100644
+index 603f329f..a50fb2d1 100644
 --- a/src/gl/line.c
 +++ b/src/gl/line.c
-@@ -1,12 +1,23 @@
+@@ -1,12 +1,22 @@
  #include "line.h"
 +#include <limits.h>
  #include <stdio.h>
@@ -161,11 +162,10 @@ index 603f329f..a43aeaa4 100644
 +#include "texture.h"
 +#include "wrap/gl4es.h"
 +
-+extern GLfloat gl4es_mirror_line_width;
  
  //#define DEBUG
  #ifdef DEBUG
-@@ -164,3 +175,577 @@ GLfloat *gen_stipple_tex_coords(GLfloat *vert, GLushort *sindices, modeinit_t *m
+@@ -164,3 +174,577 @@ GLfloat *gen_stipple_tex_coords(GLfloat *vert, GLushort *sindices, modeinit_t *m
      DBG(printf("\n");)
      return tex;
  }
@@ -176,7 +176,7 @@ index 603f329f..a43aeaa4 100644
 +    int maxw = hardext.maxlinewidth;
 +    if (maxw < 1)
 +        maxw = 1;
-+    if (gl4es_mirror_line_width <= (GLfloat)maxw)
++    if (glstate->line_width <= (GLfloat)maxw)
 +        return 0;
 +    /* raster.viewport is 0 until the first glViewport. Treating that
 +     * as 1 px makes Δndc = width and fills the clip volume. */
@@ -576,7 +576,7 @@ index 603f329f..a43aeaa4 100644
 +    if (instance_count <= 0)
 +        return GL4ES_WIDE_HANDLED;
 +
-+    GLfloat width = gl4es_mirror_line_width;
++    GLfloat width = glstate->line_width;
 +    if (width > GL4ES_EMULATED_LINE_WIDTH_MAX)
 +        width = GL4ES_EMULATED_LINE_WIDTH_MAX;
 +    {
@@ -778,10 +778,10 @@ index b5413cab..781406f0 100644
 +
  #endif // _GL4ES_LINE_H
 diff --git a/src/gl/listdraw.c b/src/gl/listdraw.c
-index 15ffc58e..d890b9bd 100644
+index 7143f9ee..925a6c80 100644
 --- a/src/gl/listdraw.c
 +++ b/src/gl/listdraw.c
-@@ -517,6 +517,7 @@ void draw_renderlist(renderlist_t *list) {
+@@ -605,6 +605,7 @@ void draw_renderlist(renderlist_t *list) {
      GLint needclean[MAX_TEX] = {0};
      bool stipple;
      int stipple_tmu;
@@ -789,7 +789,7 @@ index 15ffc58e..d890b9bd 100644
      GLenum stipple_env;
      GLenum stipple_afunc;
      GLfloat stipple_aref;
-@@ -817,6 +818,9 @@ void draw_renderlist(renderlist_t *list) {
+@@ -912,6 +913,9 @@ void draw_renderlist(renderlist_t *list) {
              bind_stipple_tex();
              modeinit_t tmp; tmp.mode_init = list->mode_init; tmp.ilen=list->ilen?list->ilen:list->len;
              list->tex[stipple_tmu] = gen_stipple_tex_coords(list->vert, list->indices, list->mode_inits?list->mode_inits:&tmp, list->vert_stride, list->mode_inits?list->mode_init_len:1, (list->use_glstate)?(list->vert+8+stipple_tmu*4):NULL);
@@ -799,7 +799,7 @@ index 15ffc58e..d890b9bd 100644
          }
          #define RS(A, len) if(glstate->texgenedsz[A]<len) {free(glstate->texgened[A]); glstate->texgened[A]=malloc(4*sizeof(GLfloat)*len); glstate->texgenedsz[A]=len; } use_texgen[A]=1
          // cannot use list->maxtex because some TMU can be using TexGen or point sprites...
-@@ -899,11 +903,83 @@ void draw_renderlist(renderlist_t *list) {
+@@ -994,11 +998,83 @@ void draw_renderlist(renderlist_t *list) {
  
          realize_textures(1);
  
@@ -884,7 +884,7 @@ index 15ffc58e..d890b9bd 100644
                  use_vbo_array = list2VBO(list);
          }
          if (use_line_arrays && list->line_arrays == line_arrays &&
-@@ -1036,6 +1112,7 @@ void draw_renderlist(renderlist_t *list) {
+@@ -1133,6 +1209,7 @@ void draw_renderlist(renderlist_t *list) {
              listInactiveVBO(list, saved);
          if(use_line_vbo)
              listInactiveVBO(&line_vbo_view, line_saved);
@@ -892,7 +892,7 @@ index 15ffc58e..d890b9bd 100644
          clear_line_arrays(&transient_line_arrays);
  
          #define TEXTURE(A) if (cur_tex!=A) {gl4es_glClientActiveTexture(A+GL_TEXTURE0); cur_tex=A;}
-@@ -1058,6 +1135,7 @@ void draw_renderlist(renderlist_t *list) {
+@@ -1155,6 +1232,7 @@ void draw_renderlist(renderlist_t *list) {
              if(!list->use_glstate)   //TODO: avoid that malloc/free...
                  free(list->tex[stipple_tmu]);
              list->tex[stipple_tmu]=NULL;
@@ -901,34 +901,35 @@ index 15ffc58e..d890b9bd 100644
              if(glstate->gleshard->active!=stipple_tmu)
                  gl4es_glActiveTexture(GL_TEXTURE0+stipple_tmu);
 diff --git a/src/gl/wrap/gles.c b/src/gl/wrap/gles.c
-index 88e6eb95..5036fe72 100644
+index c8cde96c..992274fe 100644
 --- a/src/gl/wrap/gles.c
 +++ b/src/gl/wrap/gles.c
-@@ -1406,10 +1406,8 @@ void APIENTRY_GL4ES gl4es_glLineWidth(GLfloat width) {
+@@ -1404,10 +1404,8 @@ void APIENTRY_GL4ES gl4es_glLineWidth(GLfloat width) {
+     PUSH_IF_COMPILING(glLineWidth)
  #endif
-     {
-         extern GLfloat gl4es_mirror_line_width;
+     if(width>0.f) {   // otherwise GL_INVALID_VALUE, from the driver
 -        // A repeated width is a no-op: nothing to flush, nothing to tell the
--        // driver. gl4es_mirror_line_width is authoritative (every path that
+-        // driver. glstate->line_width is authoritative (every path that
 -        // changes the width, glPopAttrib and display-list replay included,
 -        // comes back through here).
 +        // Same-width early-out is *after* PUSH_IF_COMPILING: a compiled
-+        // glLineWidth(4) must record even when the live mirror is already 4.
-         if (gl4es_mirror_line_width == width)
++        // glLineWidth(4) must record even when the live width is already 4.
+         if (glstate->line_width == width)
              return;
          // Same trap as glPointSize: immediate-mode geometry is batched and
-@@ -1433,6 +1431,15 @@ void APIENTRY_GL4ES gl4es_glLineWidthx(GLfixed width) {
+@@ -1431,8 +1429,14 @@ void APIENTRY_GL4ES gl4es_glLineWidthx(GLfixed width) {
  #ifndef direct_glLineWidthx
      PUSH_IF_COMPILING(glLineWidthx)
  #endif
-+    {
-+        extern GLfloat gl4es_mirror_line_width;
+-    if(width>0)
+-        glstate->line_width = width/65536.0f;
++    if(width>0) {   // otherwise GL_INVALID_VALUE, from the driver
 +        GLfloat fwidth = (GLfloat)width / 65536.0f;
-+        if (gl4es_mirror_line_width == fwidth)
++        if (glstate->line_width == fwidth)
 +            return;
 +        if (hardext.maxlinewidth > 1)
 +            FLUSH_BEGINEND;
-+        gl4es_mirror_line_width = fwidth;
++        glstate->line_width = fwidth;
 +    }
      gles_glLineWidthx(width);
  }

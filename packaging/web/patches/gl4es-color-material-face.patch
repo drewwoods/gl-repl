@@ -18,6 +18,10 @@ near-white while its visible interior back faces retain their cyan/magenta
 materials in the Emscripten/WebGL build.
 
 Applied by scripts/web-deps.sh after cloning the pinned gl4es checkout.
+
+Now carried as the two commits of the upstream PR branch pr-05-color-material
+(4a933865 + ea04a451 in the fork's gl-repl-upstream stack).
+
 diff --git a/src/gl/enable.c b/src/gl/enable.c
 index bfed03ad..7adec6d5 100644
 --- a/src/gl/enable.c
@@ -199,10 +203,10 @@ index dc7ebb19..c8c4536f 100644
              ShadAppend(buff);
          }
 diff --git a/src/gl/getter.c b/src/gl/getter.c
-index 9edc08c0..295e3b46 100644
+index e058f6ce..ffa6d54b 100644
 --- a/src/gl/getter.c
 +++ b/src/gl/getter.c
-@@ -550,6 +550,12 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
+@@ -534,6 +534,12 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
          case GL_LIGHT_MODEL_TWO_SIDE:
              *params=glstate->light.two_side;
              break;
@@ -236,7 +240,7 @@ index 674eaa5e..b1b41be0 100644
  AliasExport(void,glColor4fv,,(GLfloat* v));
  
 diff --git a/src/gl/glstate.c b/src/gl/glstate.c
-index 16b29bd8..c7d19dd0 100644
+index 1469cd32..77eed079 100644
 --- a/src/gl/glstate.c
 +++ b/src/gl/glstate.c
 @@ -279,6 +279,8 @@ void* NewGLState(void* shared_glstate, int es2only) {
@@ -371,10 +375,10 @@ index b6d226f9..739f1181 100644
  
  #endif // _GL4ES_LIGHT_H_
 diff --git a/src/gl/stack.c b/src/gl/stack.c
-index 1a6d5556..75b94328 100644
+index a8c946e2..22cae91c 100644
 --- a/src/gl/stack.c
 +++ b/src/gl/stack.c
-@@ -154,6 +154,9 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
+@@ -155,6 +155,9 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
          cur->lighting = gl4es_glIsEnabled(GL_LIGHTING);
          gl4es_glGetFloatv(GL_LIGHT_MODEL_AMBIENT, cur->light_model_ambient);
          gl4es_glGetIntegerv(GL_LIGHT_MODEL_TWO_SIDE, &cur->light_model_two_side);
@@ -384,7 +388,7 @@ index 1a6d5556..75b94328 100644
  
          int i;
          int j=0;
-@@ -465,6 +468,8 @@ DBG(printf("glPopAttrib()\n");)
+@@ -486,6 +489,8 @@ DBG(printf("glPopAttrib()\n");)
          enable_disable(GL_LIGHTING, cur->lighting);
          gl4es_glLightModelfv(GL_LIGHT_MODEL_AMBIENT, cur->light_model_ambient);
          gl4es_glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, cur->light_model_two_side);
@@ -393,15 +397,8 @@ index 1a6d5556..75b94328 100644
  
          int i;
          int j=0;
-@@ -660,4 +665,4 @@ void APIENTRY_GL4ES gl4es_glPopClientAttrib(void) {
- AliasExport(void,glPushClientAttrib,,(GLbitfield mask));
- AliasExport_V(void,glPopClientAttrib);
- AliasExport(void,glPushAttrib,,(GLbitfield mask));
--AliasExport_V(void,glPopAttrib);
-\ No newline at end of file
-+AliasExport_V(void,glPopAttrib);
 diff --git a/src/gl/stack.h b/src/gl/stack.h
-index 3a6fc275..d145bf1f 100644
+index 0ce76a5b..7f17a164 100644
 --- a/src/gl/stack.h
 +++ b/src/gl/stack.h
 @@ -90,6 +90,8 @@ typedef struct _glstack_t {

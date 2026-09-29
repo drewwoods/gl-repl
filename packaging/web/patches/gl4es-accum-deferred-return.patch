@@ -29,7 +29,7 @@ so a later LOAD does not retry every frame. Dispose also frees sample
 textures and the reduce program.
 
 diff --git a/src/gl/accum.c b/src/gl/accum.c
-index 6f493cb5..1978d479 100644
+index 10f34042..a1a66b2b 100644
 --- a/src/gl/accum.c
 +++ b/src/gl/accum.c
 @@ -1,35 +1,42 @@
@@ -87,7 +87,8 @@ index 6f493cb5..1978d479 100644
  #include <stdlib.h>
  #include <string.h>
  
-@@ -104,6 +111,7 @@ static glesaccum_t* accum_state() {
+@@ -102,7 +109,8 @@ static glesaccum_t* accum_state() {
+ 
  // force the GLES-side active texture unit to 0; tracked, so the next user
  // draw re-realizes (same dance as gl4es_blitTexture)
 -static void realize_accumenv(glesaccum_t *a, GLfloat scale);
@@ -96,7 +97,7 @@ index 6f493cb5..1978d479 100644
  static int accum_create_program(glesaccum_t *a);
  
  static void accum_force_tmu0() {
-@@ -157,7 +165,7 @@ static int accum_try_format(glesaccum_t *a, GLenum intformat, GLenum format,
+@@ -244,7 +252,7 @@ static int accum_try_format(glesaccum_t *a, GLenum intformat, GLenum format,
              gles_glBlendFunc(GL_ONE, GL_ONE);
              if(gles_glBlendEquation)
                  gles_glBlendEquation(GL_FUNC_ADD);
@@ -105,7 +106,7 @@ index 6f493cb5..1978d479 100644
              gles_glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
              ok = (gles_glGetError()==GL_NO_ERROR);
              accum_restore_probe_blend(saved_blend, saved_srgb, saved_drgb,
-@@ -315,6 +323,145 @@ static int accum_create_program(glesaccum_t *a) {
+@@ -408,6 +416,145 @@ static int accum_create_program(glesaccum_t *a) {
      return 1;
  }
  
@@ -251,7 +252,7 @@ index 6f493cb5..1978d479 100644
  // (re)create the accum FBO + textures at the current target size.
  // Returns 0 (op becomes a no-op) when the target size is unknown or
  // creation fails; a->bits is only zeroed on hard shader failure.
-@@ -354,6 +500,14 @@ static int accum_ensure(glesaccum_t *a) {
+@@ -447,6 +594,14 @@ static int accum_ensure(glesaccum_t *a) {
          gles_glDeleteTextures(1, &a->scratch_tex);
          a->scratch_tex = 0;
      }
@@ -266,7 +267,7 @@ index 6f493cb5..1978d479 100644
  
      accum_force_tmu0();
      while(gles_glGetError()!=GL_NO_ERROR);
-@@ -411,16 +565,51 @@ static int accum_ensure(glesaccum_t *a) {
+@@ -504,16 +659,51 @@ static int accum_ensure(glesaccum_t *a) {
      return ok;
  }
  
@@ -324,7 +325,7 @@ index 6f493cb5..1978d479 100644
      unboundBuffers();
      for(int i=0; i<hardext.maxvattrib; i++) {
          vertexattrib_t *v = &glstate->gleshard->vertexattrib[i];
-@@ -458,11 +647,126 @@ static void accum_draw_quad(glesaccum_t *a, GLuint texture, GLfloat scale) {
+@@ -551,11 +741,126 @@ static void accum_draw_quad(glesaccum_t *a, GLuint texture, GLfloat scale) {
      LOAD_GLES(glDrawArrays);
      accum_force_tmu0();
      gles_glBindTexture(GL_TEXTURE_2D, texture);
@@ -452,7 +453,7 @@ index 6f493cb5..1978d479 100644
  int gl4es_accum_get_bits() {
      glesaccum_t *a = accum_state();
      accum_probe(a);
-@@ -489,12 +793,21 @@ void gl4es_accum_dispose(void *accum) {
+@@ -582,12 +887,21 @@ void gl4es_accum_dispose(void *accum) {
              gles_glDeleteTextures(1, &a->accum_tex);
          if(a->scratch_tex && gles_glDeleteTextures)
              gles_glDeleteTextures(1, &a->scratch_tex);
@@ -474,7 +475,7 @@ index 6f493cb5..1978d479 100644
      }
      free(a);
  }
-@@ -504,6 +817,18 @@ void gl4es_accum_clear() {
+@@ -597,6 +911,18 @@ void gl4es_accum_clear() {
      accum_probe(a);
      if(!a->bits) return;
      if(!accum_ensure(a)) return;
@@ -493,7 +494,7 @@ index 6f493cb5..1978d479 100644
      LOAD_GLES(glClearColor);
      LOAD_GLES(glClear);
      LOAD_GLES2_OR_OES(glBindFramebuffer);
-@@ -572,24 +897,47 @@ void APIENTRY_GL4ES gl4es_glAccum(GLenum op, GLfloat value) {
+@@ -667,24 +993,47 @@ void APIENTRY_GL4ES gl4es_glAccum(GLenum op, GLfloat value) {
      gl4es_glDisable(GL_STENCIL_TEST);
      // scissor left untouched: real glAccum is bounded by the scissor box
  
@@ -553,7 +554,7 @@ index 6f493cb5..1978d479 100644
          gles_glBindFramebuffer(GL_FRAMEBUFFER, a->fbo);
          gl4es_glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
          if(op==GL_ACCUM) {
-@@ -597,14 +945,16 @@ void APIENTRY_GL4ES gl4es_glAccum(GLenum op, GLfloat value) {
+@@ -692,14 +1041,16 @@ void APIENTRY_GL4ES gl4es_glAccum(GLenum op, GLfloat value) {
              gl4es_glBlendFunc(GL_ONE, GL_ONE);
              gl4es_glBlendEquation(GL_FUNC_ADD);
              gl4es_glDisable(GL_COLOR_LOGIC_OP);
@@ -572,10 +573,10 @@ index 6f493cb5..1978d479 100644
          gl4es_glDepthMask(GL_TRUE);
      gl4es_glPopAttrib();
 diff --git a/src/gl/state.h b/src/gl/state.h
-index 3e2fd41d..0ddbdd57 100644
+index a79dda8c..ca802cd1 100644
 --- a/src/gl/state.h
 +++ b/src/gl/state.h
-@@ -250,6 +250,8 @@ typedef struct {
+@@ -251,6 +251,8 @@ typedef struct {
      GLfloat         vert[8], tex[8];
  } glesblit_t;
  
@@ -584,7 +585,7 @@ index 3e2fd41d..0ddbdd57 100644
  // accumulation-buffer emulation state (accum.c)
  typedef struct {
      // one-time renderability probe
-@@ -262,6 +264,13 @@ typedef struct {
+@@ -263,6 +265,13 @@ typedef struct {
      GLuint          fbo;
      GLuint          accum_tex;
      GLuint          scratch_tex;    // framebuffer snapshot for GL_ACCUM/GL_LOAD
@@ -598,7 +599,7 @@ index 3e2fd41d..0ddbdd57 100644
      int             width, height;
      GLfloat         clear[4];       // glClearAccum value
      // private scaled-copy program
-@@ -269,6 +278,13 @@ typedef struct {
+@@ -270,6 +279,13 @@ typedef struct {
      GLuint          pixelshader;
      GLuint          program;
      GLint           uscale;

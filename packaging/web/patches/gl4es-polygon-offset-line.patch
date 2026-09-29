@@ -35,8 +35,8 @@ screenshot of polygon-mode / GLUT solids stops speckling. Genuine
 GL_LINE_LOOP (including the tessellation overlay) is out of scope --
 native _LINE never applied to line primitives.
 
-Applied by scripts/web-deps.sh after gl4es-point-size-batch.patch
-(needs the polygon-line DrawArrays path). Must also sit after
+Applied by scripts/web-deps.sh after gl4es-polygon-line-drawarrays.patch
+(needs its DrawArrays path). Must also sit after
 gl4es-pushattrib-gaps.patch (same stack.c polygon block).
 
 After a real GL context exists, gl4es_probe_line_width_and_depth()
@@ -77,19 +77,22 @@ index 166ec797..142223be 100644
          clientisenabled(GL_SECONDARY_COLOR_ARRAY, vertexattrib[ATT_SECONDARY].enabled);
          clientisenabled(GL_FOG_COORD_ARRAY, vertexattrib[ATT_FOGCOORD].enabled);
 diff --git a/src/gl/getter.c b/src/gl/getter.c
-index 94115767..52611ff3 100644
+index c6a01d87..2ae12bfa 100644
 --- a/src/gl/getter.c
 +++ b/src/gl/getter.c
-@@ -28,6 +28,8 @@
- GLfloat gl4es_mirror_clear_color[4] = {0.f, 0.f, 0.f, 0.f};
- GLfloat gl4es_mirror_clear_depth = 1.0f; /* written from depth.c; getter reads glstate->depth.clear */
- GLfloat gl4es_mirror_line_width = 1.0f;
+@@ -17,6 +17,11 @@
+ #define DBG(a)
+ #endif
+ 
++/* glPolygonOffset values, for glGet(GL_POLYGON_OFFSET_FACTOR/_UNITS) and the
++ * polygon-mode line depth bias (matrix.c). Written by glPolygonOffset. */
 +GLfloat gl4es_mirror_polygon_offset_factor = 0.0f;
 +GLfloat gl4es_mirror_polygon_offset_units = 0.0f;
- GLint   gl4es_mirror_mipmap_hint = GL_DONT_CARE;
- 
++
  GLenum APIENTRY_GL4ES gl4es_glGetError(void) {
-@@ -329,6 +331,12 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
+     DBG(printf("glGetError(), noerror=%d, type_error=%d shim_error=%s\n", globals4es.noerror, glstate->type_error, PrintEnum(glstate->shim_error));)
+     if(globals4es.noerror)
+@@ -316,6 +321,12 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
          case GL_DOUBLEBUFFER:
              *params = 1;    // Fake double buffering...
              break;
@@ -103,7 +106,7 @@ index 94115767..52611ff3 100644
              *params = 1024;
              break;
 diff --git a/src/gl/listdraw.c b/src/gl/listdraw.c
-index d915e654..15ffc58e 100644
+index 407de565..7143f9ee 100644
 --- a/src/gl/listdraw.c
 +++ b/src/gl/listdraw.c
 @@ -11,6 +11,24 @@
@@ -131,7 +134,7 @@ index d915e654..15ffc58e 100644
  /* return 1 if failed, 2 if succeed */
  typedef struct array2vbo_s {
      uintptr_t   real_base;
-@@ -912,6 +930,8 @@ void draw_renderlist(renderlist_t *list) {
+@@ -1007,6 +1025,8 @@ void draw_renderlist(renderlist_t *list) {
  			mode = GL_POINTS;
  
          if (use_line_arrays) {
@@ -140,7 +143,7 @@ index d915e654..15ffc58e 100644
              if(list->instanceCount==1)
                  gles_glDrawArrays(GL_LINES, 0, line_arrays->count);
              else {
-@@ -919,6 +939,7 @@ void draw_renderlist(renderlist_t *list) {
+@@ -1014,6 +1034,7 @@ void draw_renderlist(renderlist_t *list) {
                      gles_glDrawArrays(GL_LINES, 0, line_arrays->count);
                  glstate->instanceID = 0;
              }
@@ -148,7 +151,7 @@ index d915e654..15ffc58e 100644
          } else if (indices) {
              if (glstate->render_mode == GL_SELECT) {
                  vertexattrib_t vtx = {0};
-@@ -940,7 +961,12 @@ void draw_renderlist(renderlist_t *list) {
+@@ -1036,7 +1057,12 @@ void draw_renderlist(renderlist_t *list) {
                          list->ind_line = k;
                      }
                      bindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -162,7 +165,7 @@ index d915e654..15ffc58e 100644
                      use_vbo_indices = 1;
                  } else {
                      int vbo_indices = 0;
-@@ -987,7 +1013,12 @@ void draw_renderlist(renderlist_t *list) {
+@@ -1084,7 +1110,12 @@ void draw_renderlist(renderlist_t *list) {
                          list->ind_line = k;
                      }
                      bindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -286,10 +289,10 @@ index 43596d61..05b6379a 100644
  
  #endif // _GL4ES_MATRIX_H_
 diff --git a/src/gl/raster.c b/src/gl/raster.c
-index 71900301..f02dabd9 100644
+index b0067219..102cdcd8 100644
 --- a/src/gl/raster.c
 +++ b/src/gl/raster.c
-@@ -115,6 +115,7 @@ void APIENTRY_GL4ES gl4es_glViewport(GLint x, GLint y, GLsizei width, GLsizei he
+@@ -106,6 +106,7 @@ void APIENTRY_GL4ES gl4es_glViewport(GLint x, GLint y, GLsizei width, GLsizei he
  		  glstate->raster.viewport.width = width;
  		  glstate->raster.viewport.height = height;
  		  glstate->raster.viewport_known = 1;
@@ -298,7 +301,7 @@ index 71900301..f02dabd9 100644
  #if !defined(NO_EGL) && !defined(NOX11)
  		if(!globals4es.usefbo && !globals4es.usefb && glstate->fbo.fbo_draw->id==0) {
 diff --git a/src/gl/stack.c b/src/gl/stack.c
-index 77981a15..23dad138 100644
+index 6df80c45..401c333f 100644
 --- a/src/gl/stack.c
 +++ b/src/gl/stack.c
 @@ -4,6 +4,7 @@
@@ -309,7 +312,7 @@ index 77981a15..23dad138 100644
  #include "line.h"
  #include "matrix.h"
  #include "debug.h"
-@@ -109,7 +110,7 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
+@@ -110,7 +111,7 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
          cur->multisample = gl4es_glIsEnabled(GL_MULTISAMPLE);
          cur->normalize = gl4es_glIsEnabled(GL_NORMALIZE);
          cur->point_smooth = gl4es_glIsEnabled(GL_POINT_SMOOTH);
@@ -318,7 +321,7 @@ index 77981a15..23dad138 100644
          cur->polygon_offset_fill = gl4es_glIsEnabled(GL_POLYGON_OFFSET_FILL);
          //TODO: GL_POLYGON_OFFSET_POINT
          //TODO: GL_POLYGON_SMOOTH
-@@ -242,8 +243,11 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
+@@ -243,8 +244,11 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
          gl4es_glGetIntegerv(GL_FRONT_FACE, &cur->front_face);
          cur->polygon_mode = glstate->polygon_mode;  // 0 means GL_FILL here
          cur->polygon_offset_fill = gl4es_glIsEnabled(GL_POLYGON_OFFSET_FILL);
@@ -331,7 +334,7 @@ index 77981a15..23dad138 100644
      }
      // TODO: GL_POLYGON_STIPPLE_BIT
  
-@@ -434,7 +438,7 @@ DBG(printf("glPopAttrib()\n");)
+@@ -436,7 +440,7 @@ DBG(printf("glPopAttrib()\n");)
          enable_disable(GL_MULTISAMPLE, cur->multisample);
          enable_disable(GL_NORMALIZE, cur->normalize);
          enable_disable(GL_POINT_SMOOTH, cur->point_smooth);
@@ -340,7 +343,7 @@ index 77981a15..23dad138 100644
          enable_disable(GL_POLYGON_OFFSET_FILL, cur->polygon_offset_fill);
          //TODO: GL_POLYGON_OFFSET_POINT
          //TODO: GL_POLYGON_SMOOTH
-@@ -583,6 +587,8 @@ DBG(printf("glPopAttrib()\n");)
+@@ -585,6 +589,8 @@ DBG(printf("glPopAttrib()\n");)
          gl4es_glFrontFace(cur->front_face);
          gl4es_glPolygonMode(GL_FRONT_AND_BACK, cur->polygon_mode?cur->polygon_mode:GL_FILL);
          enable_disable(GL_POLYGON_OFFSET_FILL, cur->polygon_offset_fill);
@@ -350,10 +353,10 @@ index 77981a15..23dad138 100644
  
      if (cur->mask & GL_SCISSOR_BIT) {
 diff --git a/src/gl/stack.h b/src/gl/stack.h
-index 7f17a164..f41cebd7 100644
+index aacda876..9732a85a 100644
 --- a/src/gl/stack.h
 +++ b/src/gl/stack.h
-@@ -59,6 +59,7 @@ typedef struct _glstack_t {
+@@ -60,6 +60,7 @@ typedef struct _glstack_t {
      GLboolean cull_face;
      GLboolean normalize;
      GLboolean polygon_offset_fill;
@@ -361,7 +364,7 @@ index 7f17a164..f41cebd7 100644
      GLboolean stencil_test;
      GLuint    tex_enabled[MAX_TEX];
      GLboolean texgen_s[MAX_TEX];
-@@ -119,10 +120,12 @@ typedef struct _glstack_t {
+@@ -120,10 +121,12 @@ typedef struct _glstack_t {
      GLfloat point_fade_threshold;
      GLfloat point_distance_attenuation[3];
  
@@ -376,7 +379,7 @@ index 7f17a164..f41cebd7 100644
      // TODO: GL_POLYGON_STIPPLE_BIT
  
 diff --git a/src/gl/state.h b/src/gl/state.h
-index f5589c45..531b7712 100644
+index bfc561a1..dc23f59c 100644
 --- a/src/gl/state.h
 +++ b/src/gl/state.h
 @@ -57,6 +57,7 @@ typedef struct {
@@ -388,26 +391,28 @@ index f5589c45..531b7712 100644
                vertex_two_side_arb,
                fragment_arb,
 diff --git a/src/gl/wrap/gles.c b/src/gl/wrap/gles.c
-index 842bdd6f..88e6eb95 100644
+index f09564eb..c8cde96c 100644
 --- a/src/gl/wrap/gles.c
 +++ b/src/gl/wrap/gles.c
-@@ -1,6 +1,7 @@
- #include "gles.h"
+@@ -2,6 +2,7 @@
  #include "../gl4es.h"
  #include "../loader.h"
+ #include "../depth.h"
 +#include "../../glx/hardext.h"
  #include "skips.h"
  
  // emulation of 'glTexParameteri' (for internal use only)
-@@ -1405,6 +1406,21 @@ void APIENTRY_GL4ES gl4es_glLineWidth(GLfloat width) {
+@@ -1402,8 +1403,24 @@ void APIENTRY_GL4ES gl4es_glLineWidth(GLfloat width) {
+ #ifndef direct_glLineWidth
+     PUSH_IF_COMPILING(glLineWidth)
  #endif
-     {
-         extern GLfloat gl4es_mirror_line_width;
+-    if(width>0.f)   // otherwise GL_INVALID_VALUE, from the driver
++    if(width>0.f) {   // otherwise GL_INVALID_VALUE, from the driver
 +        // A repeated width is a no-op: nothing to flush, nothing to tell the
-+        // driver. gl4es_mirror_line_width is authoritative (every path that
++        // driver. glstate->line_width is authoritative (every path that
 +        // changes the width, glPopAttrib and display-list replay included,
 +        // comes back through here).
-+        if (gl4es_mirror_line_width == width)
++        if (glstate->line_width == width)
 +            return;
 +        // Same trap as glPointSize: immediate-mode geometry is batched and
 +        // drawn later, so a width set between primitives would otherwise apply
@@ -418,10 +423,12 @@ index 842bdd6f..88e6eb95 100644
 +        // batching and change no pixel.
 +        if (hardext.maxlinewidth > 1)
 +            FLUSH_BEGINEND;
-         gl4es_mirror_line_width = width;
-     }
+         glstate->line_width = width;
++    }
      gles_glLineWidth(width);
-@@ -1717,6 +1733,12 @@ void APIENTRY_GL4ES gl4es_glPolygonOffset(GLfloat factor, GLfloat units) {
+ }
+ AliasExport(void,glLineWidth,,(GLfloat width));
+@@ -1716,6 +1733,12 @@ void APIENTRY_GL4ES gl4es_glPolygonOffset(GLfloat factor, GLfloat units) {
  #ifndef direct_glPolygonOffset
      PUSH_IF_COMPILING(glPolygonOffset)
  #endif
@@ -434,7 +441,7 @@ index 842bdd6f..88e6eb95 100644
      gles_glPolygonOffset(factor, units);
  }
  AliasExport(void,glPolygonOffset,,(GLfloat factor, GLfloat units));
-@@ -1727,6 +1749,12 @@ void APIENTRY_GL4ES gl4es_glPolygonOffsetx(GLfixed factor, GLfixed units) {
+@@ -1726,6 +1749,12 @@ void APIENTRY_GL4ES gl4es_glPolygonOffsetx(GLfixed factor, GLfixed units) {
  #ifndef direct_glPolygonOffsetx
      PUSH_IF_COMPILING(glPolygonOffsetx)
  #endif

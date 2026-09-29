@@ -72,13 +72,8 @@ only propagates the value when it did, so inherited compile-time state cannot
 overwrite the caller's current flag. glEdgeFlagv is promoted out of the stub
 table alongside it. GL_CURRENT_BIT now saves and restores the flag.
 
-The query side needs both halves.  GL_EDGE_FLAG joins gl4es_commonGet(),
-which serves glGetIntegerv/glGetFloatv/glGetDoublev; glGetBooleanv had no
-gl4es-side implementation at all, so it gets one (skip_glGetBooleanv) that
-answers GL_EDGE_FLAG and passes every other pname straight to the driver,
-exactly as before.  Answering the rest of gl4es's tracked state locally is a
-worthwhile optimization but a separate decision - see
-gl4es-getbooleanv-local-state.patch.
+On the query side, GL_EDGE_FLAG joins gl4es_commonGet(), which serves
+glGetBooleanv/glGetIntegerv/glGetFloatv/glGetDoublev.
 
 The client-array path (glEdgeFlagPointer) stays stubbed - gl-repl draws in
 immediate mode, so renderlists cover it.
@@ -89,10 +84,10 @@ suppressions lands within a pixel of the calibrated edge it should remove,
 and gl4es-line-width reproduces its documented pre-patch numbers exactly.
 
 diff --git a/src/gl/getter.c b/src/gl/getter.c
-index 1a93221d..bc123b87 100644
+index 21280ee7..c6a01d87 100644
 --- a/src/gl/getter.c
 +++ b/src/gl/getter.c
-@@ -647,6 +647,11 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
+@@ -646,6 +646,11 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
          case GL_SHADE_MODEL:
              *params=glstate->shademodel;
              break;
@@ -104,36 +99,8 @@ index 1a93221d..bc123b87 100644
          case GL_ALPHA_TEST_FUNC:
              *params=glstate->alphafunc;
              break;
-@@ -828,6 +833,27 @@ int gl4es_commonGet(GLenum pname, GLfloat *params) {
- }
- 
- // glGet
-+void APIENTRY_GL4ES gl4es_glGetBooleanv(GLenum pname, GLboolean *params) {
-+    DBG(printf("glGetBooleanv(%s, %p)\n", PrintEnum(pname), params);)
-+    if (params==NULL) {
-+        errorShim(GL_INVALID_OPERATION);
-+        return;
-+    }
-+    if (pname == GL_EDGE_FLAG) {
-+        /* CPU-only state (see gl4es_glEdgeFlag): GLES has no edge flag, so
-+         * without this the query falls through to the driver and raises
-+         * GL_INVALID_ENUM without writing params.  Everything else keeps
-+         * going straight through, exactly as before. */
-+        noerrorShim();
-+        *params = glstate->edgeflag ? GL_TRUE : GL_FALSE;
-+        return;
-+    }
-+    LOAD_GLES(glGetBooleanv);
-+    errorGL();
-+    gles_glGetBooleanv(pname, params);
-+}
-+AliasExport(void,glGetBooleanv,,(GLenum pname, GLboolean *params));
-+
- void APIENTRY_GL4ES gl4es_glGetIntegerv(GLenum pname, GLint *params) {
-     DBG(printf("glGetIntegerv(%s, %p)\n", PrintEnum(pname), params);)
-     if (params==NULL) {
 diff --git a/src/gl/gl4es.c b/src/gl/gl4es.c
-index b20bcff5..7a068848 100644
+index b20bcff5..f1de0c50 100644
 --- a/src/gl/gl4es.c
 +++ b/src/gl/gl4es.c
 @@ -376,6 +376,36 @@ void APIENTRY_GL4ES gl4es_glVertex4fv(GLfloat* v) {
@@ -173,10 +140,11 @@ index b20bcff5..7a068848 100644
  void APIENTRY_GL4ES gl4es_glColor4f(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) {
      if (glstate->list.active) {
          if (glstate->list.active->stage != STAGE_DRAW) {
-@@ -877,9 +905,27 @@
+@@ -875,13 +905,31 @@ renderlist_t* append_calllist(renderlist_t *list, renderlist_t *a);
+ void APIENTRY_GL4ES gl4es_glCallList(GLuint list) {
+ 	noerrorShim();
      if (glstate->list.active) {
 -        glstate->list.active = append_calllist(glstate->list.active, gl4es_glGetList(list));
--		return;
 +        renderlist_t *called = gl4es_glGetList(list);
 +        glstate->list.active = append_calllist(glstate->list.active, called);
 +        if (called) {
@@ -190,9 +158,8 @@ index b20bcff5..7a068848 100644
 +                    glstate->edgeflag = tail->lastEdgeFlag;
 +            }
 +        }
-+		return;
--	}
-+	}
+ 		return;
+ 	}
      // TODO: the output of this call can be compiled into another display list
      renderlist_t *l = gl4es_glGetList(list);
      if (l)
@@ -204,7 +171,8 @@ index b20bcff5..7a068848 100644
 +            glstate->edgeflag = tail->lastEdgeFlag;
 +    }
  }
-
+ AliasExport(void,glCallList,,(GLuint list));
+ 
 diff --git a/src/gl/gl4es.h b/src/gl/gl4es.h
 index 0d748e3d..0e20d345 100644
 --- a/src/gl/gl4es.h
@@ -239,10 +207,10 @@ index 6c6ed2a2..7eba566f 100644
      
      //EXT_direct_state_access
 diff --git a/src/gl/glstate.c b/src/gl/glstate.c
-index 40428dd4..62c4937e 100644
+index d0e42304..f9cf46d3 100644
 --- a/src/gl/glstate.c
 +++ b/src/gl/glstate.c
-@@ -323,6 +323,7 @@ void* NewGLState(void* shared_glstate, int es2only) {
+@@ -328,6 +328,7 @@ void* NewGLState(void* shared_glstate, int es2only) {
      for(int i=0; i<4; i++)
          glstate->raster.raster_scale[i] = 1.0f;
      // ShadeModel
@@ -251,7 +219,7 @@ index 40428dd4..62c4937e 100644
      // TexEnv
      for (int i=0; i<hardext.maxtex; i++) {
 diff --git a/src/gl/glstate.h b/src/gl/glstate.h
-index a8622330..fd0f42b4 100644
+index 3df5ef65..57b410f1 100644
 --- a/src/gl/glstate.h
 +++ b/src/gl/glstate.h
 @@ -71,6 +71,10 @@ struct glstate_s {
@@ -266,7 +234,7 @@ index a8622330..fd0f42b4 100644
      GLenum              alphafunc;
      GLfloat             alpharef;
 diff --git a/src/gl/list.c b/src/gl/list.c
-index 585629ab..16b9ce59 100644
+index 585629ab..7e3af20a 100644
 --- a/src/gl/list.c
 +++ b/src/gl/list.c
 @@ -30,6 +30,7 @@ renderlist_t *alloc_renderlist() {
@@ -333,8 +301,7 @@ index 585629ab..16b9ce59 100644
      for (int i=0; i<a->maxtex; i++)
          if (a->tex[i]) memcpy(a->tex[i]+a->len*4, b->tex[i], b->len*4*sizeof(GLfloat));
      // indices
-@@ -628,6 +628,8 @@ renderlist_t *extend_renderlist(renderlist_t *list) {
-         memcpy(new->lastNormal, list->lastNormal, 3*sizeof(GLfloat));
+@@ -604,6 +633,8 @@ renderlist_t *extend_renderlist(renderlist_t *list) {
          memcpy(new->lastSecondaryColors, list->lastSecondaryColors, 3*sizeof(GLfloat));
          memcpy(new->lastColors, list->lastColors, 4*sizeof(GLfloat));
          new->lastColorsSet = list->lastColorsSet;
@@ -342,8 +309,8 @@ index 585629ab..16b9ce59 100644
 +        new->lastEdgeFlagSet = list->lastEdgeFlagSet;
          // detach
          list->prev = NULL;
-@@ -643,7 +645,9 @@ renderlist_t *extend_renderlist(renderlist_t *list) {
-         memcpy(new->lastNormal, list->lastNormal, 3*sizeof(GLfloat));
+         // free list now
+@@ -619,6 +650,8 @@ renderlist_t *extend_renderlist(renderlist_t *list) {
          memcpy(new->lastSecondaryColors, list->lastSecondaryColors, 3*sizeof(GLfloat));
          memcpy(new->lastColors, (list->post_color)?list->post_colors:list->lastColors, 4*sizeof(GLfloat));
          new->lastColorsSet = (list->post_color || list->lastColorsSet)?1:0;
@@ -352,7 +319,7 @@ index 585629ab..16b9ce59 100644
          return new;
      }
  }
-@@ -736,6 +761,7 @@ void free_renderlist(renderlist_t *list) {
+@@ -736,6 +769,7 @@ void free_renderlist(renderlist_t *list) {
                  if (list->color) free(list->color);
                  if (list->secondary) free(list->secondary);
                  if (list->fogcoord) free(list->fogcoord);
@@ -360,7 +327,7 @@ index 585629ab..16b9ce59 100644
                  for (a=0; a<list->maxtex; a++)
                      if (list->tex[a]) free(list->tex[a]);
              }
-@@ -744,8 +770,13 @@ void free_renderlist(renderlist_t *list) {
+@@ -744,8 +778,13 @@ void free_renderlist(renderlist_t *list) {
                  if (list->indices)
                      free(list->indices);
              }
@@ -375,7 +342,7 @@ index 585629ab..16b9ce59 100644
  
          if (list->material) {
              rendermaterial_t *m;
-@@ -822,6 +853,10 @@ void resize_renderlist(renderlist_t *list) {
+@@ -822,6 +861,10 @@ void resize_renderlist(renderlist_t *list) {
              if(list->tex[1]) list->tex[1] = glstate->merger_master+4+4+4;
              if(list->fogcoord) list->fogcoord = glstate->merger_master+4+4+2*4+3;
              if(list->secondary) list->secondary = glstate->merger_secondary;
@@ -386,7 +353,7 @@ index 585629ab..16b9ce59 100644
              for (int a=2; a<list->maxtex; a++)
                  if(list->tex[a]) list->tex[a] = glstate->merger_tex[a-2];
          }
-@@ -833,6 +868,9 @@ void resize_renderlist(renderlist_t *list) {
+@@ -833,6 +876,9 @@ void resize_renderlist(renderlist_t *list) {
              realloc_sublist(list->color, 4, list->cap);
              realloc_sublist(list->secondary, 4, list->cap);
              realloc_sublist(list->fogcoord, 1, list->cap);
@@ -397,7 +364,7 @@ index 585629ab..16b9ce59 100644
              realloc_sublist(list->tex[a], 4, list->cap);
          }
 diff --git a/src/gl/list.h b/src/gl/list.h
-index 554de899..89d64a86 100644
+index 554de899..ae299124 100644
 --- a/src/gl/list.h
 +++ b/src/gl/list.h
 @@ -135,6 +135,12 @@ typedef struct {
@@ -422,7 +389,7 @@ index 554de899..89d64a86 100644
      int use_glstate;
  
      int lastColorsSet;
-@@ -182,6 +189,13 @@ typedef struct _renderlist_t {
+@@ -182,6 +190,13 @@ typedef struct _renderlist_t {
      GLfloat *color;
      GLfloat *secondary;
      GLfloat *fogcoord;
@@ -436,7 +403,7 @@ index 554de899..89d64a86 100644
      GLfloat *tex[MAX_TEX];
      int      vert_stride;
      int      normal_stride;
-@@ -343,6 +357,11 @@ void rlFogOp(renderlist_t *list, int op, const GLfloat* v);
+@@ -343,6 +358,11 @@ void rlFogOp(renderlist_t *list, int op, const GLfloat* v);
  void rlPointParamOp(renderlist_t *list, int op, const GLfloat* v);
  void rlPointSizeOp(renderlist_t *list, GLfloat size);
  void rlFogCoordf(renderlist_t *list, GLfloat coord);
@@ -449,10 +416,10 @@ index 554de899..89d64a86 100644
  
  #endif // _GL4ES_LIST_H_
 diff --git a/src/gl/listdraw.c b/src/gl/listdraw.c
-index d890b9bd..a3c965fd 100644
+index d0429ab7..407de565 100644
 --- a/src/gl/listdraw.c
 +++ b/src/gl/listdraw.c
-@@ -257,6 +257,82 @@ void listInactiveVBO(renderlist_t* list, save_vbo_t* saved) {
+@@ -239,6 +239,82 @@ void listInactiveVBO(renderlist_t* list, save_vbo_t* saved) {
      }
  }
  
@@ -535,7 +502,7 @@ index d890b9bd..a3c965fd 100644
  int fill_lineIndices(modeinit_t *modes, int length, GLenum mode, GLushort* indices, GLushort *ind_line)
  {
      #define ind(a)  indices?indices[a]:(a)
-@@ -682,7 +785,14 @@ void draw_renderlist(renderlist_t *list) {
+@@ -675,7 +751,14 @@ void draw_renderlist(renderlist_t *list) {
                      modeinit_t tmp;
                      tmp.mode_init = list->mode_init;
                      tmp.ilen = source_count;
@@ -551,7 +518,7 @@ index d890b9bd..a3c965fd 100644
                          list->mode_inits ? list->mode_inits : &tmp,
                          list->mode_inits ? list->mode_init_len : 1,
                          list->mode, indices, list->ind_lines);
-@@ -1032,8 +1142,9 @@ void draw_renderlist(renderlist_t *list) {
+@@ -947,8 +1030,9 @@ void draw_renderlist(renderlist_t *list) {
                      int ilen = list->ilen;
                      if(!list->ind_lines) {
                          GLushort *ind_line = list->ind_lines = (GLushort*)malloc(sizeof(GLushort)*ilen*4+2);
@@ -563,7 +530,7 @@ index d890b9bd..a3c965fd 100644
                          list->ind_line = k;
                      }
                      bindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-@@ -1084,8 +1195,9 @@ void draw_renderlist(renderlist_t *list) {
+@@ -994,8 +1078,9 @@ void draw_renderlist(renderlist_t *list) {
                  if ((glstate->polygon_mode == GL_LINE) && (list->mode_init>=GL_TRIANGLES)) {
                      if(!list->ind_lines) {
                          GLushort *ind_line = list->ind_lines = (GLushort*)malloc(sizeof(GLushort)*len*4+2);
@@ -576,7 +543,7 @@ index d890b9bd..a3c965fd 100644
                      }
                      bindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 diff --git a/src/gl/listrl.c b/src/gl/listrl.c
-index 784a1410..1365ee46 100644
+index 784a1410..3435ffdf 100644
 --- a/src/gl/listrl.c
 +++ b/src/gl/listrl.c
 @@ -1,3 +1,8 @@
@@ -588,7 +555,7 @@ index 784a1410..1365ee46 100644
  #include "list.h"
  
  #include "../glx/hardext.h"
-@@ -19,6 +22,9 @@ static inline void rlVertexCommon(renderlist_t *list, int idx, int l) {
+@@ -19,6 +24,9 @@ static inline void rlVertexCommon(renderlist_t *list, int idx, int l) {
          if (list->fogcoord) memcpy(list->fogcoord + (l * 1), glstate->fogcoord, sizeof(GLfloat) * 1);
      }
      // common part
@@ -598,7 +565,7 @@ index 784a1410..1365ee46 100644
      if (list->color)    memcpy(list->color + idx, list->lastColors, sizeof(GLfloat) * 4);
      if (list->secondary)    memcpy(list->secondary + (l * 4), glstate->secondary, sizeof(GLfloat) * 4);
      if (list->tex[0])   memcpy(list->tex[0] + idx, glstate->texcoord[0], sizeof(GLfloat) * 4);
-@@ -53,6 +57,35 @@ void FASTMATH rlVertex4fv(renderlist_t *list, GLfloat* v) {
+@@ -53,6 +61,35 @@ void FASTMATH rlVertex4fv(renderlist_t *list, GLfloat* v) {
      memcpy(vert, v, 4*sizeof(GLfloat));
  }
  
@@ -635,10 +602,10 @@ index 784a1410..1365ee46 100644
      // adjust number of vertex, to remove extra vertex
      int adj = list->len - list->cur_istart;
 diff --git a/src/gl/stack.c b/src/gl/stack.c
-index cce967d5..0fa10941 100644
+index 22cae91c..6df80c45 100644
 --- a/src/gl/stack.c
 +++ b/src/gl/stack.c
-@@ -68,6 +68,7 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
+@@ -67,6 +67,7 @@ void APIENTRY_GL4ES gl4es_glPushAttrib(GLbitfield mask) {
          gl4es_glGetFloatv(GL_CURRENT_COLOR, cur->color);
          gl4es_glGetFloatv(GL_CURRENT_NORMAL, cur->normal);
          gl4es_glGetFloatv(GL_CURRENT_TEXTURE_COORDS, cur->tex);
@@ -646,7 +613,7 @@ index cce967d5..0fa10941 100644
      }
  
      if (mask & GL_DEPTH_BUFFER_BIT) {
-@@ -397,6 +398,7 @@ DBG(printf("glPopAttrib()\n");)
+@@ -394,6 +395,7 @@ DBG(printf("glPopAttrib()\n");)
          gl4es_glColor4f(v4(cur->color));
          gl4es_glNormal3f(v3(cur->normal));
          gl4es_glTexCoord4f(v4(cur->tex));
@@ -655,7 +622,7 @@ index cce967d5..0fa10941 100644
  
      if (cur->mask & GL_DEPTH_BUFFER_BIT) {
 diff --git a/src/gl/stack.h b/src/gl/stack.h
-index f41cebd7..9732a85a 100644
+index 7f17a164..aacda876 100644
 --- a/src/gl/stack.h
 +++ b/src/gl/stack.h
 @@ -41,6 +41,7 @@ typedef struct _glstack_t {
@@ -685,18 +652,6 @@ index 8ef049b2..e187f69e 100644
 -STUB(void,glEdgeFlagv,(GLboolean *flag));
  //STUB(void glIndexPointer(GLenum  type,  GLsizei  stride,  const GLvoid *  pointer));
  #undef STUB
-diff --git a/src/gl/wrap/skips.h b/src/gl/wrap/skips.h
-index f709d0d5..58cf9a17 100644
---- a/src/gl/wrap/skips.h
-+++ b/src/gl/wrap/skips.h
-@@ -58,6 +58,7 @@
- // getter.c
- #define skip_glGetError
- #define skip_glGetPointerv
-+#define skip_glGetBooleanv
- #define skip_glGetIntegerv
- #define skip_glGetFloatv
- #define skip_glGetString
 diff --git a/src/gl/wrap/stub.h b/src/gl/wrap/stub.h
 index 7fc797c4..99547606 100644
 --- a/src/gl/wrap/stub.h

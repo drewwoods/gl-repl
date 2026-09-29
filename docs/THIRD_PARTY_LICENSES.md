@@ -63,44 +63,21 @@ license text, reproduced verbatim from `third_party/freeglut/COPYING`:
   `third_party/web/gl4es/` (not vendored in-tree - the build is
   toolchain-specific to the pinned Emscripten SDK). Pinned SHA recorded in
   `third_party/web/PINNED.txt` after a build; default pin at time of writing
-  is `17f0894e19d1553e4176276c759915dab44c08e2`.
+  is `a444cc94b17c672c66c3e6ce07428dc603034db1`.
 - **Local patches:** applied by `scripts/web-deps.sh` after cloning, before
-  building (none yet upstream or in a public fork):
-  - `packaging/web/patches/gl4es-rasterpos-perspective-divide.patch` - a
-    `glRasterPos3f` perspective-divide fix. Clip-space `w<=0` or NDC
-    outside [-1, 1] invalidates the raster position so a later
-    `glBitmap`/`label()` is ignored.
-  - `packaging/web/patches/gl4es-bitmap-dirty-clear.patch` - clear only the
-    glyph batch's dirty rectangle of the CPU bitmap buffer instead of
-    memsetting the full viewport at every batch start. Realloc always
-    zeros the new buffer.
-  - `packaging/web/patches/gl4es-getter-client-state.patch` - serve
-    `glGet*` of clear color/depth, line width, scissor box, viewport, and
-    the generate-mipmap hint from client-side mirrors instead of the GLES
-    driver (on WebGL a driver `glGet*` is a synchronous `getParameter()`
-    that stalls the pipeline; `glPushAttrib` reads several of these).
-    `GL_DEPTH_CLEAR_VALUE` is `glstate->depth.clear` (the wrap/gles.c
-    setter is `skip_glClearDepthf`). Viewport/scissor use a "has been
-    set" flag so a legal zero-size box is not treated as uninitialized.
+  building, in this order. Six earlier ones are upstream since #517-#520
+  (listed in `packaging/web/patches/README.md`); these are the rest, also
+  carried on the `drewwoods/gl4es` fork while they go upstream:
   - `packaging/web/patches/gl4es-color-material-face.patch` - track the
     single active `GL_COLOR_MATERIAL_FACE` so `glColorMaterial(GL_FRONT, …)`
     / `(GL_BACK, …)` updates only the selected side's material in the
     generated shaders (two-sided scenes had back-face colors leaking onto
     front faces). `glPushAttrib(GL_LIGHTING_BIT)` also restores the
     `GL_COLOR_MATERIAL` enable.
-  - `packaging/web/patches/gl4es-pushattrib-gaps.patch` - implement the
-    `glPushAttrib`/`glPopAttrib` groups gl4es left as TODOs, for the
-    state gl-repl exercises: all of `GL_POLYGON_BIT` (front-face winding,
-    cull-face mode, polygon mode - a scene's `glFrontFace(GL_CW)` used to
-    escape the render pass's push/pop bracket and reverse front/back for
-    every scene after it), plus the `glLineStipple` factor/pattern,
-    `glPointParameterfv` point parameters, and `glClipPlane` equations
-    the `GL_LINE_BIT`/`GL_POINT_BIT`/`GL_TRANSFORM_BIT` groups skipped.
-  - `packaging/web/patches/gl4es-pushattrib-texenv.patch` - save/restore
-    per-unit `GL_TEXTURE_ENV_MODE`/`GL_TEXTURE_ENV_COLOR` in
-    `GL_TEXTURE_BIT` (upstream "TODO: incomplete"), so the post-processing
-    pass's `GL_REPLACE` texenv can't leak into gl4es's line-stipple
-    emulation and untint the stippled overlay ghosts.
+  - `packaging/web/patches/gl4es-point-smooth.patch` - emulate round
+    antialiased points in the GLES2 fixed-pipeline shader.
+  - `packaging/web/patches/gl4es-point-size-batch.patch` - apply
+    `glPointSize` to the batch it was called on.
   - `packaging/web/patches/gl4es-accum-fbo.patch` - implement the
     accumulation buffer with an internal FBO (new `src/gl/accum.c`)
     instead of stubbing `glAccum`/`glClearAccum`: `GL_ACCUM`/`GL_LOAD`
@@ -117,13 +94,17 @@ license text, reproduced verbatim from `third_party/freeglut/COPYING`:
     LOAD/ACCUM snapshots and reduce their weights once at RETURN.
   - `packaging/web/patches/gl4es-accum-deferred-scissor.patch` - size and
     copy deferred samples to the WebGL scene scissor.
-  - `packaging/web/patches/gl4es-point-smooth.patch` - emulate round
-    antialiased points in the GLES2 fixed-pipeline shader.
   - `packaging/web/patches/gl4es-polygon-line-drawarrays.patch` - expand
     polygon-mode edges to `glDrawArrays` instead of client-indexed
     `glDrawElements`.
-  - `packaging/web/patches/gl4es-point-size-batch.patch` - apply
-    `glPointSize` to the batch it was called on.
+  - `packaging/web/patches/gl4es-polygon-line-quad-edges.patch` - draw a
+    quad's (and quad strip's) boundary edges under polygon-mode lines
+    instead of the triangulation's spokes and diagonals.
+  - `packaging/web/patches/gl4es-edge-flag.patch` - implement `glEdgeFlag`
+    (upstream a stub): polygon-mode line edges are built from the original
+    primitive topology and suppressed edges are dropped, so tessellated
+    outlines no longer show every interior diagonal. `GL_EDGE_FLAG` is
+    answered by the getter.
   - `packaging/web/patches/gl4es-polygon-offset-line.patch` - shadow
     `GL_POLYGON_OFFSET_LINE` and apply a projection-row depth bias
     around polygon-mode line draws so vertex outlines are not a

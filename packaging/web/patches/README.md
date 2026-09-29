@@ -12,7 +12,9 @@ still available, and must say **functionality** or **performance** in the
 inventory. A performance row is incomplete without a quantified A/B.
 
 The web build currently pins gl4es commit
-`17f0894e19d1553e4176276c759915dab44c08e2`. Patches are applied in the order
+`a444cc94b17c672c66c3e6ce07428dc603034db1` (upstream `master`, 2026-09-28), which
+already contains six of the original seventeen patches - see
+[Landed upstream](#landed-upstream). Patches are applied in the order
 listed in `GL4ES_PATCHES` in `scripts/web-deps.sh`. That script stamps the pin
 SHA plus a hash of every patch file; a mismatch resets the managed
 `third_party/web/gl4es` clone and rebuilds it. A failed `git apply --check` is
@@ -27,32 +29,116 @@ functionality patch) and the change exists to cut a measured cost. Performance
 numbers are browser-, scene-, and viewport-specific; they are attribution for
 the workload named in the row, not universal multipliers.
 
-Seventeen patches: eleven functionality, six performance.
+Eleven patches: eight functionality, three performance.
 
 | Patch | Kind | Why applied | Measured |
 |---|---|---|---|
-| `gl4es-rasterpos-perspective-divide.patch` | functionality | Perspective-divide clip coordinates before deriving the raster position; invalidate on `w<=0` / out of clip so `label()` / `glRasterPos3f` land correctly under a non-identity projection. | - |
-| `gl4es-bitmap-dirty-clear.patch` | performance | `glBitmap` memset the full viewport-sized CPU buffer at every glyph-batch start, even though only the previous dirty rectangle could contain pixels. | Headless Chrome, Lit-cube: **~0.1 ms/frame** of memset. Real, but minor next to the getter stalls. |
-| `gl4es-getter-client-state.patch` | performance | Tracked `glGet*` pnames fell through to WebGL `getParameter()`, a synchronous pipeline drain on every `glPushAttrib` - including every glyph-batch blit. | Headless Chrome/SwiftShader, Lit-cube, 1200x800: gl4es flush work **12.2 -> 0.6 ms/frame**. Code-panel menu/labels had been charged 2.2 ms (1.86 ms labels) vs 33 us native. |
 | `gl4es-color-material-face.patch` | functionality | Track the single active `GL_COLOR_MATERIAL_FACE` so two-sided lighting does not leak back-face accent colors onto front faces. | - |
-| `gl4es-pushattrib-gaps.patch` | functionality | Fill polygon, line, point, and transform gaps in `glPushAttrib`/`glPopAttrib` so a scene's `glFrontFace(GL_CW)`, stipple, point parameters, or clip-plane equations cannot leak into the next pass. | - |
-| `gl4es-pushattrib-texenv.patch` | functionality | Preserve per-unit texenv mode and color so a Post FX `GL_REPLACE` cannot leak into line-stipple emulation and untint overlay ghosts. | - |
+| `gl4es-point-smooth.patch` | functionality | Emulate round antialiased points in the GLES2 fixed-pipeline shader; GLES2 has no point-antialiasing state, so `GL_POINT_SMOOTH` was a tracked no-op and points rasterized as hard squares. | - |
+| `gl4es-point-size-batch.patch` | functionality | Apply `glPointSize` to the batch it was called on, not to whatever is still pending at flush. A trailing `glPointSize(1)` otherwise shrinks every point that pass already drew. | - |
 | `gl4es-accum-fbo.patch` | functionality | Implement the accumulation buffer with an internal FBO instead of stubbing `glAccum`. Without it, web either paid N scene passes for the last image only, or (after detection) disabled Accum AA / Blur entirely. | - |
 | `gl4es-accum-deferred-return.patch` | performance | Cache LOAD/ACCUM snapshots and reduce their weights once at RETURN, dropping the per-sample RGBA16F read/modify/write chain. | In-app Chromium/WebGL2, default logo, 1280x676, 16x accum AA + 4x canvas MSAA: **33.962 -> 37.035 FPS (+9.05%)**, mean callback **29.444 -> 27.002 ms (-2.443 ms)**. |
 | `gl4es-accum-deferred-scissor.patch` | performance | Size and copy deferred samples to the WebGL scene scissor so the code-panel area is not snapshotted. | Same run, incremental over deferred RETURN: **37.035 -> 38.545 FPS (+4.08%)**, **27.002 -> 25.944 ms (-1.058 ms)**. Together with RETURN: **+13.49%**, **-3.500 ms/frame**. |
-| `gl4es-point-smooth.patch` | functionality | Emulate round antialiased points in the GLES2 fixed-pipeline shader; GLES2 has no point-antialiasing state, so `GL_POINT_SMOOTH` was a tracked no-op and points rasterized as hard squares. | - |
 | `gl4es-polygon-line-drawarrays.patch` | performance | Avoid Emscripten's client-index upload and JavaScript index-range scan for polygon-mode lines by expanding edges and issuing `glDrawArrays`. | Aurora observatory, paused, `t = 0`: plain wireframe **28.5 -> 60.0 FPS** (display cap). Hidden-line, vertex outlines, and polygon highlight went from bottlenecked to **60 FPS**. Unpatched wireframe spent ~35 ms/frame, **28.71 ms** of it in `bufferSubData` (~128 ELEMENT_ARRAY_BUFFER uploads). |
-| `gl4es-point-size-batch.patch` | functionality | Apply `glPointSize` to the batch it was called on, not to whatever is still pending at flush. A trailing `glPointSize(1)` otherwise shrinks every point that pass already drew. | - |
+| `gl4es-polygon-line-quad-edges.patch` | functionality | Draw quad and quad-strip boundary edges under polygon-mode lines instead of the triangulation's spokes and diagonals. | - |
+| `gl4es-edge-flag.patch` | functionality | Implement `glEdgeFlag`: build polygon-mode line edges from the original primitive topology and drop the suppressed ones. Upstream stubbed the call, so tessellated outlines showed every interior diagonal. | - |
 | `gl4es-polygon-offset-line.patch` | functionality | Shadow `GL_POLYGON_OFFSET_LINE` (not a GLES enum) and apply a projection-row depth bias around polygon-mode line draws so vertex outlines are not a silent `GL_INVALID_ENUM`. | - |
 | `gl4es-line-width-quads.patch` | functionality | Expand `glLineWidth` > 1 into screen-space quads on stacks whose `ALIASED_LINE_WIDTH_RANGE` is `[1, 1]` (ANGLE / WebGL). Without it every `glLineWidth` is a no-op. | - |
-| `gl4es-edge-flag.patch` | functionality | Implement `glEdgeFlag`: build polygon-mode line edges from the original primitive topology and drop the suppressed ones. Upstream stubbed the call, so tessellated outlines showed every interior diagonal. | - |
-| `gl4es-polygon-line-quad-edges.patch` | functionality | Draw quad and quad-strip boundary edges under polygon-mode lines instead of the triangulation's spokes and diagonals. | - |
-| `gl4es-getbooleanv-local-state.patch` | performance | Answer `glGetBooleanv` from tracked state instead of a synchronous WebGL `getParameter`. The integer/float getter patch left this path draining the queue. | Headless Chrome/SwiftShader, 20000 iterations of `glGetBooleanv(GL_DEPTH_WRITEMASK)` + `glGetIntegerv(GL_SHADE_MODEL)`: **37.2 -> 0.14 us/pair** (~265x; ranges 34.8-57.1 vs 0.135-0.185, no overlap). |
+
+### Landed upstream
+
+Merged into ptitSeb/gl4es from the `drewwoods/gl4es` fork (the upstreaming
+effort is [gl4es#515](https://github.com/ptitSeb/gl4es/issues/515)) and
+deleted here when the pin moved to `a444cc94`. Their investigation-log
+entries below stay as history.
+
+| Patch | Upstream | Notes |
+|---|---|---|
+| `gl4es-rasterpos-perspective-divide.patch` | #517 | Landed with the `glBitmap` invalid-position check (it used to ride in `bitmap-dirty-clear`) and TODOs marking the gaps; see [2026-09-26](#2026-09-26-raster-position-validity-gaps). |
+| `gl4es-bitmap-dirty-clear.patch` | #518 | Performance only once the check moved out. |
+| `gl4es-getter-client-state.patch` | #519 | **Rewritten upstream**: the `gl4es_mirror_*` globals became `glstate` fields, `glGetIntegerv` of `GL_COLOR_CLEAR_VALUE` / `GL_DEPTH_CLEAR_VALUE` maps [0, 1] onto [0, INT_MAX] (the patch cast to 0), `glClearColor` clamps to [0, 1], `glLineWidth` records only width > 0, and the mipmap hint stores only valid modes. |
+| `gl4es-getbooleanv-local-state.patch` | #519 | Same PR. |
+| `gl4es-pushattrib-gaps.patch` | #520 | Split into polygon / line stipple / point parameter / clip plane commits; same code. |
+| `gl4es-pushattrib-texenv.patch` | #520 | Same PR. |
+
+The pin also brought #516, an upstream fix for `glBitmap` clipping at the
+viewport's left edge (an out-of-bounds write the old pin had), and #513, an
+MSVC build fix.
 
 The dated sections below are the investigation log. Every patch has a
 dated entry; the table and each patch file's leading prose are the quick
 reference. The 2026-07-15 performance pair is reconstructed
 from the original commit measurements so those numbers are not git-only.
+
+## 2026-09-28: re-pin to upstream `a444cc94`; six patches retired
+
+Six patches landed upstream (#517-#520; [table above](#landed-upstream)), so
+the pin moved from `17f0894e` to upstream `master` `a444cc94` and the other
+eleven were rebased onto it in the fork (branch `gl-repl-upstream`, one commit
+per patch; the files here are generated from it). The color-material patch is
+now the two commits of its upstream PR branch, `pr-05-color-material`, with
+identical code.
+
+The rebase was mechanical except where the #519 getter rewrite removed the
+`gl4es_mirror_*` globals that later patches read:
+
+- `accum-fbo`: `accum.c` restores the clear color from `glstate->clear_color`
+  (was `gl4es_mirror_clear_color`, which would no longer link). Upstream now
+  clamps that value to [0, 1]; accum only replays it through
+  `gles_glClearColor`, which clamps anyway. Its `commonGet` hunk keeps only
+  the four `GL_ACCUM_*_BITS` cases. Its `glGetIntegerv(GL_ACCUM_CLEAR_VALUE)`
+  still casts to `GLint` instead of #519's [0, INT_MAX] mapping - to settle
+  when accum goes upstream.
+- `polygon-offset-line`: keeps its two `gl4es_mirror_polygon_offset_*`
+  globals, now alone at the top of `getter.c`; moving them into `glstate`, as
+  #519 did for the rest, is for its upstream PR. Its `glLineWidth` same-width
+  early-out and conditional flush sit inside upstream's `width > 0` guard,
+  keyed on `glstate->line_width`.
+- `line-width-quads`: the same port for `glLineWidthx`, and `line.c` reads
+  `glstate->line_width`.
+
+Gate, before the pin moved: `make test-gl4es-ab` (tested pin with its 17
+patches as A, this tree as B) - identical oracle failure sets, no significant
+render-bench delta, 0 of 43 examples with a differing pixel at frame 300.
+
+## 2026-09-26: raster-position validity gaps
+
+Found while preparing the patches for upstream
+([gl4es#515](https://github.com/ptitSeb/gl4es/issues/515)). No patch
+changes behavior here; this records what the `rPos_valid` flag does **not**
+cover yet, so the next person to touch it starts from the list.
+
+The raster-position patch (upstream since #517) sets
+`glstate->raster.rPos_valid`, and its only reader is the early return in
+`gl4es_glBitmap()`, which landed in the same PR. That return is skipped while a display list
+is being recorded, and replay calls `gl4es_glBitmap()` again (`listdraw.c`),
+so display-list `glBitmap` is covered. Still open:
+
+- **`glDrawPixels` ignores the flag.** It draws through
+  `render_raster_list()` in `raster.c` (immediate mode, and a
+  `glDrawPixels` recorded in a display list via `listdraw.c`), which blits at
+  `rPos` unconditionally. With an invalid raster position it draws at the last
+  valid on-screen position instead of drawing nothing, and still applies
+  `xmove`/`ymove`. Fix: return early from `render_raster_list()` when
+  `!glstate->raster.rPos_valid`.
+- **`glWindowPos3f` invalidates on negative coordinates.** The spec never
+  invalidates a window position: negative coordinates are legal and should
+  still draw, clipped. The patch keeps upstream's `x, y, z >= 0` guard and
+  marks the position invalid instead. Upstream previously kept the old
+  position; neither behavior is right.
+- **`GL_CURRENT_RASTER_POSITION_VALID` is not queryable.** No getter
+  answers it (nor `GL_CURRENT_RASTER_POSITION`), so the query reaches
+  the driver and raises `GL_INVALID_ENUM`. gl-repl's GL state dump asks
+  for both (`src/support/gl_state_dump.c`), so those rows are wrong on web.
+  Adding them to `gl4es_commonGet()` would answer all four typed getters
+  once `gl4es-getbooleanv-local-state.patch` routes `glGetBooleanv` through
+  it.
+
+gl-repl calls neither `glDrawPixels` nor `glWindowPos`, so the first two
+gaps are invisible in the app; the third shows up only in the state dump.
+Upstream gl4es carries a `TODO` at each of the three spots (from #517), and
+`../gl4es-known-gaps.txt` tracks the query gap as an expected failure of
+`make test-gl-web`.
 
 ## 2026-08-24: `glEdgeFlag` under polygon-mode lines
 
@@ -267,7 +353,7 @@ output.
 
 ## 2026-08-24: `glGetBooleanv` from tracked state
 
-Patch: [`gl4es-getbooleanv-local-state.patch`](gl4es-getbooleanv-local-state.patch)
+Patch: `gl4es-getbooleanv-local-state.patch`
 
 Kind: performance.
 
@@ -885,7 +971,7 @@ blits + 7.2 ms in pending-list flushes, both dominated by the
 
 ## 2026-07-08: raster-position perspective divide
 
-Patch: [`gl4es-rasterpos-perspective-divide.patch`](gl4es-rasterpos-perspective-divide.patch)
+Patch: `gl4es-rasterpos-perspective-divide.patch`
 
 Kind: functionality.
 

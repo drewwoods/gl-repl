@@ -33,19 +33,25 @@ Only the fixed-pipeline generator (fpe_FragmentShader) is patched;
 fpe_CustomFragmentShader, used for ARB program conversion, is left alone.
 
 Applied by scripts/web-deps.sh after cloning the pinned gl4es checkout.
---- a/src/gl/fpe.h
-+++ b/src/gl/fpe.h
-@@ -205,6 +205,7 @@
-     unsigned int light_separate:1;       // light separate specular color
-     unsigned int light_localviewer:1;    // light local viewer
-     unsigned int point:1;                // point rendering
-+    unsigned int point_smooth:1;         // GL_POINT_SMOOTH: round, antialiased points
-     unsigned int pointsprite:1;          // point sprite rendering
-     unsigned int pointsprite_coord:1;    // point sprite coord replace
-     unsigned int pointsprite_upper:1;    // if coord is upper left and not lower left
+
+diff --git a/src/gl/enable.c b/src/gl/enable.c
+index 7adec6d5..166ec797 100644
+--- a/src/gl/enable.c
++++ b/src/gl/enable.c
+@@ -162,7 +162,7 @@ static void proxy_glEnable(GLenum cap, bool enable, void (APIENTRY_GLES *next)(G
+         proxy_GOFPE(GL_SAMPLE_COVERAGE, sample_coverage, );
+         proxy_GOFPE(GL_SAMPLE_ALPHA_TO_COVERAGE, sample_alpha_to_coverage, );
+         proxy_GOFPE(GL_SAMPLE_ALPHA_TO_ONE, sample_alpha_to_one, );
+-        proxy_GOFPE(GL_POINT_SMOOTH, point_smooth, );
++        proxy_GOFPE(GL_POINT_SMOOTH, point_smooth, glstate->fpe_state->point_smooth=enable);
+         proxy_GOFPE(GL_LINE_SMOOTH, line_smooth, );
+ 
+         proxy_GO(GL_POLYGON_OFFSET_FILL, polyfill_offset);
+diff --git a/src/gl/fpe.c b/src/gl/fpe.c
+index 758761d0..c21bcf1f 100644
 --- a/src/gl/fpe.c
 +++ b/src/gl/fpe.c
-@@ -135,8 +135,10 @@
+@@ -135,8 +135,10 @@ void APIENTRY_GL4ES fpe_ReleventState_DefaultVertex(fpe_state_t *dest, fpe_state
          dest->fogsource = 0;
          dest->fogdist = 0;
      }
@@ -57,7 +63,7 @@ Applied by scripts/web-deps.sh after cloning the pinned gl4es checkout.
      if(!dest->pointsprite) {
          dest->pointsprite_upper = 0;
          dest->pointsprite_coord = 0;
-@@ -242,8 +244,10 @@
+@@ -242,8 +244,10 @@ void APIENTRY_GL4ES fpe_ReleventState(fpe_state_t *dest, fpe_state_t *src, int f
          dest->fogsource = 0;
          dest->fogdist = 0;
      }
@@ -69,20 +75,23 @@ Applied by scripts/web-deps.sh after cloning the pinned gl4es checkout.
      if(!fixed || !dest->pointsprite) {
          dest->pointsprite_upper = 0;
          dest->pointsprite_coord = 0;
---- a/src/gl/enable.c
-+++ b/src/gl/enable.c
-@@ -162,7 +162,7 @@
-         proxy_GOFPE(GL_SAMPLE_COVERAGE, sample_coverage, );
-         proxy_GOFPE(GL_SAMPLE_ALPHA_TO_COVERAGE, sample_alpha_to_coverage, );
-         proxy_GOFPE(GL_SAMPLE_ALPHA_TO_ONE, sample_alpha_to_one, );
--        proxy_GOFPE(GL_POINT_SMOOTH, point_smooth, );
-+        proxy_GOFPE(GL_POINT_SMOOTH, point_smooth, glstate->fpe_state->point_smooth=enable);
-         proxy_GOFPE(GL_LINE_SMOOTH, line_smooth, );
- 
-         proxy_GO(GL_POLYGON_OFFSET_FILL, polyfill_offset);
+diff --git a/src/gl/fpe.h b/src/gl/fpe.h
+index 9a7b187d..4c51179f 100644
+--- a/src/gl/fpe.h
++++ b/src/gl/fpe.h
+@@ -205,6 +205,7 @@ typedef struct fpe_state_s {
+     unsigned int light_separate:1;       // light separate specular color
+     unsigned int light_localviewer:1;    // light local viewer
+     unsigned int point:1;                // point rendering
++    unsigned int point_smooth:1;         // GL_POINT_SMOOTH: round, antialiased points
+     unsigned int pointsprite:1;          // point sprite rendering
+     unsigned int pointsprite_coord:1;    // point sprite coord replace
+     unsigned int pointsprite_upper:1;    // if coord is upper left and not lower left
+diff --git a/src/gl/fpe_shader.c b/src/gl/fpe_shader.c
+index c8c4536f..692cd2ae 100644
 --- a/src/gl/fpe_shader.c
 +++ b/src/gl/fpe_shader.c
-@@ -834,6 +834,7 @@
+@@ -834,6 +834,7 @@ const char* const* fpe_FragmentShader(shaderconv_need_t* need, fpe_state_t *stat
      int fogdist = state->fogdist;
      int planes = state->plane;
      int point = state->point;
@@ -90,12 +99,10 @@ Applied by scripts/web-deps.sh after cloning the pinned gl4es checkout.
      int pointsprite = state->pointsprite;
      int pointsprite_coord = state->pointsprite_coord;
      int pointsprite_upper = state->pointsprite_upper;
-@@ -958,6 +959,22 @@
-             }
-         }
+@@ -960,6 +961,22 @@ const char* const* fpe_FragmentShader(shaderconv_need_t* need, fpe_state_t *stat
          ShadAppend(")<0.) discard;\n");
-+    }
-+
+     }
+ 
 +    //*** Point Smooth: round out the square point raster, with a soft edge.
 +    // Desktop GL_POINT_SMOOTH is coverage-based antialiasing; GLES2/WebGL has
 +    // no equivalent, so derive coverage from gl_PointCoord (always available
@@ -110,10 +117,12 @@ Applied by scripts/web-deps.sh after cloning the pinned gl4es checkout.
 +        ShadAppend("if(_gl4es_pd > 1.0) discard;\n");
 +        ShadAppend("_gl4es_PointCov = 1.0 - smoothstep(0.85, 1.0, _gl4es_pd);\n");
 +        ShadAppend("}\n");
-     }
- 
++    }
++
      //*** initial color
-@@ -1342,6 +1359,11 @@
+     sprintf(buff, "vec4 fColor = %s;\n", twosided?"(gl_FrontFacing)?Color:BackColor":"Color");
+     ShadAppend(buff);
+@@ -1342,6 +1359,11 @@ const char* const* fpe_FragmentShader(shaderconv_need_t* need, fpe_state_t *stat
          }
      }
  
