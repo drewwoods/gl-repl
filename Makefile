@@ -2222,46 +2222,61 @@ $(foreach bin,$(BENCH_BINS),$(eval $(call built_binary,$(bin))))
 GL_TEST_BINS = test_ui_gl_state test_scene_underwater_fill_gl test_attrib_bits_gl \
 	test_tour_overlay_feedback test_gl_state_inspector_gl
 
-$(BINDIR)/test_ui_gl_state: $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o | $(COMPILE_REPORT_START)
+# Each gl-test's link inputs beyond its own object. Shared by the native rules
+# below and the gl4es web pages (`make gl-tests-web`), so the two cannot drift.
+GL_TEST_DEPS_test_ui_gl_state =
+GL_TEST_DEPS_test_gl_state_inspector_gl = $(CORE_TEST_OBJS)
+GL_TEST_DEPS_test_tour_overlay_feedback = $(CORE_TEST_OBJS)
+GL_TEST_DEPS_test_attrib_bits_gl = $(OBJDIR)/src/repl/attrib_bits.o $(OBJDIR)/src/repl/command_spec.o
+GL_TEST_DEPS_test_scene_underwater_fill_gl = $(OBJDIR)/src/render3d/grid.o
+
+# `make gl-tests-web` pages (see that target). GL4ES_KNOWN_GAPS is the allow
+# list of gl4es features the oracles find missing - and the gl4es to-do list.
+GL4ES_KNOWN_GAPS ?= packaging/web/gl4es-known-gaps.txt
+GL_TESTS_WEB_BINDIR ?= build/release-web/gl-tests
+GL_TESTS_WEB_PAGES = $(addprefix $(GL_TESTS_WEB_BINDIR)/,$(addsuffix .html,$(GL_TEST_BINS)))
+GL_TESTS_WEB_LDFLAGS = $(WEB_GL_ARCHIVES) -sUSE_WEBGL2=1 -sFULL_ES2=1 \
+	-sALLOW_MEMORY_GROWTH=1 -sEXIT_RUNTIME=1
+
+$(BINDIR)/test_ui_gl_state: $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o $(GL_TEST_DEPS_test_ui_gl_state) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o $(GL_LDFLAGS) -o $@
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o $(GL_TEST_DEPS_test_ui_gl_state) $(GL_LDFLAGS) -o $@
 
 # Differential oracle: drives one GLCmd program through both the real executor
 # (against a live context) and the pure gl_state_inspector fold, then compares
 # each report row with glGet*. Needs the executor + generated-setup enumeration,
 # so it links CORE_TEST_OBJS against real GL like the tour feedback test.
 $(BINDIR)/test_gl_state_inspector_gl: \
-	$(OBJDIR)/$(TEST_DIR)/test_gl_state_inspector_gl.o $(CORE_TEST_OBJS) | $(COMPILE_REPORT_START)
+	$(OBJDIR)/$(TEST_DIR)/test_gl_state_inspector_gl.o $(GL_TEST_DEPS_test_gl_state_inspector_gl) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_gl_state_inspector_gl.o $(CORE_TEST_OBJS) $(GL_LDFLAGS) -o $@
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_gl_state_inspector_gl.o $(GL_TEST_DEPS_test_gl_state_inspector_gl) $(GL_LDFLAGS) -o $@
 
 # Captures the controlled-tour overlay + HUD passes with GL_FEEDBACK and asserts
 # on the drawn geometry (ring suppression on seek, HUD containment). Needs the
 # whole controller graph, so it links CORE_TEST_OBJS like the stub transport
 # test but against a real GL context.
-$(BINDIR)/test_tour_overlay_feedback: $(OBJDIR)/$(TEST_DIR)/test_tour_overlay_feedback.o $(CORE_TEST_OBJS) | $(COMPILE_REPORT_START)
+$(BINDIR)/test_tour_overlay_feedback: $(OBJDIR)/$(TEST_DIR)/test_tour_overlay_feedback.o $(GL_TEST_DEPS_test_tour_overlay_feedback) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
-	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_tour_overlay_feedback.o $(CORE_TEST_OBJS) $(GL_LDFLAGS) -o $@
+	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_tour_overlay_feedback.o $(GL_TEST_DEPS_test_tour_overlay_feedback) $(GL_LDFLAGS) -o $@
 
 # Real-GL oracle: proves the attrib_bits.c cell->bit table matches what the
 # driver's glPushAttrib/glPopAttrib actually save/restore. Links the pure
 # mapping module (attrib_bits) + its spec-table dependency (command_spec); the
 # two collector-only state accessors are stubbed inside the test.
 $(BINDIR)/test_attrib_bits_gl: $(OBJDIR)/$(TEST_DIR)/test_attrib_bits_gl.o \
-	$(OBJDIR)/src/repl/attrib_bits.o $(OBJDIR)/src/repl/command_spec.o | $(COMPILE_REPORT_START)
+	$(GL_TEST_DEPS_test_attrib_bits_gl) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
 	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_attrib_bits_gl.o \
-		$(OBJDIR)/src/repl/attrib_bits.o $(OBJDIR)/src/repl/command_spec.o \
-		$(GL_LDFLAGS) -o $@
+		$(GL_TEST_DEPS_test_attrib_bits_gl) $(GL_LDFLAGS) -o $@
 
 # Drives scene_grid_render(GRID_THEME_OCEAN) with cam_world_y < 0 and
 # nv_fog_distance_supported = 1, then glReadPixels and checks corner
 # pixels. Reproduces the post-fb976f0 underwater-fill regression on
 # drivers that advertise GL_NV_fog_distance.
-$(BINDIR)/test_scene_underwater_fill_gl: $(OBJDIR)/$(TEST_DIR)/test_scene_underwater_fill_gl.o $(OBJDIR)/src/render3d/grid.o | $(COMPILE_REPORT_START)
+$(BINDIR)/test_scene_underwater_fill_gl: $(OBJDIR)/$(TEST_DIR)/test_scene_underwater_fill_gl.o $(GL_TEST_DEPS_test_scene_underwater_fill_gl) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
 	@bash scripts/compile-report.sh link "$(COMPILE_REPORT_DIR)" "$@" "$(COMPILE_REPORT_VERBOSE)" -- $(CC) $(OBJ_CFLAGS) $(OBJDIR)/$(TEST_DIR)/test_scene_underwater_fill_gl.o \
-		$(OBJDIR)/src/render3d/grid.o $(GL_LDFLAGS) -o $@
+		$(GL_TEST_DEPS_test_scene_underwater_fill_gl) $(GL_LDFLAGS) -o $@
 
 gl-tests: $(addprefix $(BINDIR)/,$(GL_TEST_BINS)) ## Run real-GL UI state tests (needs a display; excluded from `make test`).
 	@bash scripts/compile-report.sh summary "$(COMPILE_REPORT_DIR)"
@@ -3300,7 +3315,42 @@ $(WEB_BINDIR)/gl4es-render.html: $(GL4ES_RENDER_BENCH_SRC) \
 	$(CC) $(GL_HEADER_CFLAGS) -Iinclude -Isrc \
 		$(GL4ES_RENDER_BENCH_SRC) packaging/web/gl4es_bootstrap.c \
 		$(WEB_GL_ARCHIVES) $(WEB_RUNTIME_LDFLAGS) -o $@
+
+# One page per gl-test: the same object and GL_TEST_DEPS_* the native binary
+# links, against $(GL4ES_DIR)'s libGL.a instead of the desktop driver.
+# -sEXIT_RUNTIME=1 so main()'s return reaches the page; the runner reads the
+# harness summary line from the console.
+define GL_TEST_WEB_RULE
+$$(GL_TESTS_WEB_BINDIR)/$(1).html: $$(OBJDIR)/$$(TEST_DIR)/$(1).o $$(GL_TEST_DEPS_$(1)) \
+		packaging/web/gl4es_bootstrap.c $$(WEB_GL_ARCHIVES)
+	@mkdir -p $$(dir $$@)
+	$$(CC) $$(GL_HEADER_CFLAGS) -Isrc $$(OBJDIR)/$$(TEST_DIR)/$(1).o $$(GL_TEST_DEPS_$(1)) \
+		packaging/web/gl4es_bootstrap.c $$(GL_TESTS_WEB_LDFLAGS) -o $$@
+endef
+$(foreach test,$(GL_TEST_BINS),$(eval $(call GL_TEST_WEB_RULE,$(test))))
 endif
+
+# `make gl-tests-web`: the real-GL oracles from `make gl-tests`, asked of gl4es
+# -> WebGL2 instead of the desktop driver - the GL the web build actually
+# ships. Pages run in headless Chrome on SwiftShader (scripts/run-web-tests.mjs),
+# so results do not depend on the host GPU.
+#
+# GL4ES_DIR picks the gl4es tree to link and GL_TESTS_WEB_BINDIR where the pages
+# go, which is how scripts/gl4es-ab.sh runs the same oracles against two gl4es
+# revisions. The app objects are compiled once, against GL4ES_DIR's headers;
+# that is only sound while both trees ship identical include/ (true since the
+# 17f0894e pin: no patch or upstream change since touches it). The script checks.
+# GL_TESTS_WEB_* are defined up by GL_TEST_DEPS_*: the page rules are
+# generated before this point, and a rule's target name expands immediately.
+gl-tests-web: require-emcc ## Run the real-GL oracles (gl-tests) against gl4es in headless Chrome (needs emcc, node, Chrome).
+	@command -v node >/dev/null 2>&1 || { echo "ERROR: node not found on PATH." >&2; exit 1; }
+	@# Like freeglut-demos-web: fetch the deps only when missing, so a
+	@# GL4ES_DIR override (or a managed tree mid-edit) is never reset.
+	@test -f $(GL4ES_DIR)/lib/libGL.a -a -f $(GLU_DIR)/.libs/libGLU.a \
+		|| scripts/web-deps.sh
+	$(MAKE) --no-print-directory WEB=1 BUILD=release $(GL_TESTS_WEB_PAGES)
+	node scripts/run-web-tests.mjs $(if $(GL_TESTS_WEB_JSON),--json $(GL_TESTS_WEB_JSON),) \
+		--known $(GL4ES_KNOWN_GAPS) $(GL_TESTS_WEB_BINDIR) $(addsuffix .html,$(GL_TEST_BINS))
 
 # count lines: $(SRCS) $(HDRS)
 lines: $(SRCS) $(HDRS) ## Count SLOC (code/comment/blank) across source and header files.

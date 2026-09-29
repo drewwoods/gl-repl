@@ -483,6 +483,32 @@ is not guaranteed. `pmset -g therm` can confirm recorded pressure warnings
 without a sampling trace, but neither it nor the AGX `ioreg` utilization
 counter substitutes for average GPU frequency. `powermetrics` requires root.
 
+### Real-GL oracles against gl4es (`make gl-tests-web`)
+
+`make gl-tests` holds the tests that need a real GL context: an oracle that
+checks `attrib_bits.c` against what `glPushAttrib` actually saves, a
+differential check of the state inspector against `glGet*`, and three more.
+Natively they ask the desktop driver. `make gl-tests-web` links the same test
+objects (their link inputs are the shared `GL_TEST_DEPS_*` in the Makefile)
+against gl4es as wasm pages under `build/release-web/gl-tests/`, and
+[`scripts/run-web-tests.mjs`](../../scripts/run-web-tests.mjs) runs them in
+headless Chrome on SwiftShader, so the answer is gl4es's on every machine.
+Needs emcc, node >= 22 and Chrome (`$CHROME` overrides the lookup).
+
+Those oracles were written against desktop drivers, and gl4es does not
+implement everything they check. [`gl4es-known-gaps.txt`](gl4es-known-gaps.txt)
+lists what is missing, grouped by feature with a note on the fix, and is the
+runner's allow list: a listed failure reports as KNOWN and passes, an unlisted
+one fails the target, and an entry that stops failing is reported for
+deletion - so the file stays the current to-do list for gl4es work rather than
+a pile of suppressions.
+
+`GL4ES_DIR=<tree>` links another gl4es build and `GL_TESTS_WEB_BINDIR=<dir>`
+keeps its pages apart; `GL_TESTS_WEB_JSON=<file>` writes per-page results.
+That is the A/B: the same oracles against two gl4es revisions, compared
+failure by failure. It relies on both trees having identical `include/`,
+because the app objects are compiled once.
+
 ### Web-aware tests, and the exclusion list
 
 74 of the 76 binaries run under node. Where a test asserted behavior the web

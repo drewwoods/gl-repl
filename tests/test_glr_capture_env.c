@@ -56,6 +56,7 @@ static TestHarness g_harness = TEST_HARNESS_INIT;
  * from a known-unset environment. */
 static void clear_capture_env(void) {
     unsetenv("GLR_TIME");
+    unsetenv("GLR_CFG");
     unsetenv("GLR_NO_SPLASH");
     unsetenv("GLR_TICK_PER_FRAME");
     unsetenv("GLR_VIEW_TOGGLE_AT");
@@ -296,6 +297,32 @@ static void test_glr_time_hook(void) {
                 (float)repl_state_variables().anim_time == 12.0f);
 }
 
+/* GLR_CFG applies @cfg pairs by slug after the scene load. Drive auto_time to
+ * each state in turn so a no-op implementation cannot pass on the default,
+ * and check that an unknown slug is skipped without costing the valid pair
+ * next to it. */
+static void test_cfg_hook(void) {
+    clear_capture_env();
+
+    setenv("GLR_CFG", "auto_time=1", 1);
+    glr_capture_env_apply(NULL);
+    ASSERT_INT("GLR_CFG sets auto_time on",
+               glr_config_get(GLR_CONFIG_AUTO_TIME), 1);
+
+    setenv("GLR_CFG", "no_such_slug=3;auto_time = 0", 1);
+    glr_capture_env_apply(NULL);
+    ASSERT_INT("GLR_CFG applies the valid pair past an unknown slug",
+               glr_config_get(GLR_CONFIG_AUTO_TIME), 0);
+
+    /* An empty value is treated as unset. */
+    setenv("GLR_CFG", "", 1);
+    glr_capture_env_apply(NULL);
+    ASSERT_INT("empty GLR_CFG is ignored",
+               glr_config_get(GLR_CONFIG_AUTO_TIME), 0);
+
+    clear_capture_env();
+}
+
 static void test_no_splash_hook(void) {
     clear_capture_env();
     ASSERT_INT("splash initially active", splash_active(), 1);
@@ -423,6 +450,7 @@ int main(void) {
     test_frame_hook_inert_when_unset();
 
     test_glr_time_hook();
+    test_cfg_hook();
     test_no_splash_hook();
     test_tick_per_frame_hook();
     test_type_keys_hook();

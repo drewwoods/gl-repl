@@ -1,0 +1,79 @@
+# gl4es known gaps - expected failures of `make gl-tests-web`
+#
+# The real-GL oracles (`make gl-tests`) were written against desktop drivers.
+# Run against gl4es -> WebGL2 they find behavior gl4es does not implement yet.
+# This file lists those gaps, grouped by what is missing, and does two jobs:
+#
+#   - allow list: scripts/run-web-tests.mjs (--known) counts a failure that
+#     matches an entry as KNOWN, not FAIL, so the gate only trips on new ones;
+#   - roadmap: each group says what gl4es would need, so the list doubles as
+#     the queue of gl4es work (see packaging/web/patches/README.md and the
+#     upstreaming notes in gl4es#515).
+#
+# The runner also reports entries that no longer fail. That means gl4es gained
+# the feature (or the test changed): delete the entry rather than leaving it.
+#
+# Format: `<test page, no .html> | <failure label>`. The label is the text inside
+# `FAIL [...]`, without the `(line N)` suffix. `*` matches any run of
+# characters, so measured values in a label do not pin the entry. A label of
+# `CRASH` or `TIMEOUT` accepts that page ending that way instead of reporting.
+#
+# First recorded 2026-09-28 against gl4es a444cc94 + gl-repl's 11 patches; the
+# old pin (17f0894e + 17 patches) fails exactly the same set.
+
+# --- Raster position state is not queryable -----------------------------------
+# glGet(GL_CURRENT_RASTER_COLOR) and GL_CURRENT_RASTER_POSITION_VALID reach the
+# driver, which has neither, and gl4es never latches the current color at
+# glRasterPos. The default GL_CURRENT_RASTER_POSITION w is not 1. gl4es tracks
+# the position (glstate->raster.rPos, plus rPos_valid since the rasterpos PR,
+# #517); the fix is a latched color plus gl4es_commonGet cases for all three.
+# The rasterpos PR's TODO in state.h marks the VALID half.
+test_ui_gl_state | default raster position[3]
+test_ui_gl_state | default raster color[*]
+test_ui_gl_state | raster color latched at glRasterPos (*)
+test_gl_state_inspector_gl | *: raster position inside the clip volume
+test_gl_state_inspector_gl | GL_CURRENT_RASTER_COLOR[*]: fold * == driver *
+
+# --- GL_ATTRIB_STACK_DEPTH is not answered -------------------------------------
+# gl4es keeps its own attribute stack (glstate->stack, depth in ->len) but no
+# getter answers the depth query, so it falls through to the driver: 0.
+test_ui_gl_state | default attribute stack depth
+test_gl_state_inspector_gl | GL_ATTRIB_STACK_DEPTH: fold * == driver *
+
+# --- Line stipple state is not answered ----------------------------------------
+# glLineStipple is emulated (glstate->linestipple.factor/pattern, saved by
+# glPushAttrib since #520) but GL_LINE_STIPPLE_REPEAT / _PATTERN are not.
+test_ui_gl_state | default line stipple repeat
+test_ui_gl_state | default line stipple pattern
+test_gl_state_inspector_gl | GL_LINE_STIPPLE_REPEAT: fold * == driver *
+test_gl_state_inspector_gl | GL_LINE_STIPPLE_PATTERN: fold * == driver *
+
+# --- GL_POLYGON_MODE is misreported --------------------------------------------
+# No getter answers it, so the driver's reply comes back (wrong front, 0 back).
+# gl4es tracks one mode for both faces (glstate->polygon_mode, an int), so a
+# faithful answer needs per-face tracking as well as the getter case.
+test_ui_gl_state | default polygon mode back
+test_gl_state_inspector_gl | GL_POLYGON_MODE (front): fold * == driver *
+test_gl_state_inspector_gl | GL_POLYGON_MODE (back): fold * == driver *
+
+# --- Default diffuse/specular alpha of GL_LIGHT1..7 ----------------------------
+# Spec default is (0, 0, 0, 1). NewGLState (glstate.c) sets alpha 1 only for
+# GL_LIGHT0's diffuse/specular; the per-light init loop never sets [3] for the
+# rest, and glGetLightfv returns the zero.
+test_ui_gl_state | light* diffuse[3]
+test_ui_gl_state | light* specular[3]
+
+# --- GL_MULTISAMPLE default ----------------------------------------------------
+# Desktop GL starts with GL_MULTISAMPLE enabled; gl4es reports it disabled.
+test_ui_gl_state | GL_MULTISAMPLE initially enabled
+
+# --- glPushAttrib(GL_STENCIL_BUFFER_BIT) misses the stencil write mask ---------
+# stack.c saves the stencil function's mask (GL_STENCIL_VALUE_MASK) but not
+# the write mask (GL_STENCIL_WRITEMASK), so glStencilMask leaks through pops.
+test_attrib_bits_gl | STENCIL_BUFFER_BIT restores stencil write mask
+
+# --- Feedback mode crashes -----------------------------------------------------
+# The test (glFeedbackBuffer / glRenderMode(GL_FEEDBACK) over the tour overlay)
+# ends in a wasm "memory access out of bounds" before it reports anything. Not
+# yet triaged: gl4es's feedback path or the test's reading of the buffer.
+test_tour_overlay_feedback | CRASH

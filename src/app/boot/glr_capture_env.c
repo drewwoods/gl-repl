@@ -13,6 +13,9 @@
 #include "app/boot/splash.h"             /* splash_skip */
 #include "app/glr_config.h"         /* accum-effect state lookup */
 #include "app/glr_state.h"          /* code-focus level check */
+#include "repl/export.h"            /* repl_export_apply_pending_cfg (GLR_CFG) */
+#include "repl/export_state.h"      /* WORKSPACE_HEADER_LINE_LEN */
+#include "repl/state_notify.h"      /* repl_state_parse_workspace_header_line */
 #include "subsystems/assign_plot/assign_plot.h"  /* plot presentation chips */
 
 #include <ctype.h>                  /* tolower */
@@ -107,6 +110,34 @@ static void cfg_apply_state_env(const char *var, GlrConfigKey key) {
  * hook is active, so the transition and the rest of the simulation advance
  * exactly once per captured frame. Unset => no-op; production behavior is
  * unchanged. */
+/* GLR_CFG: feed each `slug=value` pair through the scene-header parser, then
+ * apply them in one batch the way a loaded scene's @cfg block is applied. A
+ * malformed pair is reported; an unknown slug is dropped at apply time, as it
+ * would be in a scene's own @cfg. */
+static void capture_env_apply_cfg(const char *spec) {
+    char line[WORKSPACE_HEADER_LINE_LEN];
+    const char *p = spec;
+    int matched = 0;
+
+    if (!spec || !*spec)
+        return;
+    while (*p) {
+        size_t len = strcspn(p, ";\n");
+        if (len > 0) {
+            snprintf(line, sizeof(line), "// @cfg %.*s", (int)len, p);
+            if (repl_state_parse_workspace_header_line(line))
+                matched++;
+            else
+                fprintf(stderr, "gl-repl: GLR_CFG: ignoring '%.*s'\n", (int)len, p);
+        }
+        p += len;
+        if (*p)
+            p++;
+    }
+    if (matched)
+        repl_export_apply_pending_cfg();
+}
+
 static void maybe_capture_view_toggle(void) {
     static int   inited = 0;
     static int   frame = 0;
@@ -353,6 +384,14 @@ void glr_capture_env_apply(const char *time_arg) {
         if (t_src && *t_src)
             glr_ctrl_set_time((float)atof(t_src));
     }
+    /* Config overrides: GLR_CFG='slug=value[;slug=value...]' applies each
+     * pair exactly as a `// @cfg slug = value` scene header would. After the
+     * example/file load, so it wins over the scene's own @cfg. Its reason to
+     * exist is `auto_time=0`: with GLR_TIME it pins t before the first tick,
+     * which is what makes a paused frame reproducible - the A/B screenshot
+     * harness (scripts/gl4es-ab.sh) cannot pause from the page without
+     * racing the clock. */
+    capture_env_apply_cfg(getenv("GLR_CFG"));
     /* Scripted pointer/keyboard input: GLR_POINTER_SCRIPT=<file> drives
      * menu navigation & co. on the rendered-frame clock (video capture
      * hook - see src/app/glr_pointer_script.h for the grammar). Loaded

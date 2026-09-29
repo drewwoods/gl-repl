@@ -55,6 +55,7 @@ Line numbers are the code panel's own (1-based); below 1 is refused.
 | `GLR_VIEW_TOGGLE_AT=<t1,t2,…>` | 2D/3D swatch transition; implies tick-per-frame |
 | `GLR_POINTER_SCRIPT=<file>` | scripted pointer/keyboard + cursor overlay |
 | `GLR_NO_SPLASH=1` | suppress the startup splash |
+| `GLR_CFG='slug=v;…'` | apply `@cfg` pairs after load - `auto_time=0` + `GLR_TIME` = a frozen, reproducible frame |
 | `GLR_NO_INPUT=1` | window ignores real keyboard/mouse - **use on every windowed capture** (the window takes focus, so terminal keystrokes would otherwise edit the document). Scripted input still works. |
 
 Other env: `GLR_NO_POINT_PARAMETER=1` (force the no-`glPointParameterfv`
