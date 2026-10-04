@@ -9,6 +9,7 @@ begun. They move to `plans/active/` once implementation starts.
 |---|---|
 | `audio-playlist-and-organizer.md` | Audio menu: playlist browser, play/remove, tag organization - browser half **already shipped** by `done/audio-menu.md`; only right-click removal and `tags.txt` tag groups remain |
 | `clang-ast-mutation-analysis.md` | Clang AST pass for mutation analysis |
+| `gl4es-known-gaps.md` | Close the `gl4es-known-gaps.txt` oracle failures upstream: phase A = known fixes (unreported tracked state, light 1..7 alpha, stencil write mask in push/pop); phase B = items needing ptitSeb's call (per-face polygon mode, raster color latch, `GL_MULTISAMPLE` default, feedback mode) |
 | `float-returning-repl-functions.md` | Functions that return float values |
 | `historic-benchmark.md` | Historic bench trend tracking |
 | `local-aware-rebake.md` | Carry function-scoped locals through a value-only rebake, so a global feeding a local stops forcing a full flatten |

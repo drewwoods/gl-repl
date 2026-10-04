@@ -7,8 +7,9 @@
 #   - allow list: scripts/run-web-tests.mjs (--known) counts a failure that
 #     matches an entry as KNOWN, not FAIL, so the gate only trips on new ones;
 #   - roadmap: each group says what gl4es would need, so the list doubles as
-#     the queue of gl4es work (see packaging/web/patches/README.md and the
-#     upstreaming notes in gl4es#515).
+#     the queue of gl4es work. docs/plans/not-started/gl4es-known-gaps.md
+#     orders it (known fixes first, then the ones that need a decision); see
+#     also packaging/web/patches/README.md and gl4es#515.
 #
 # The runner also reports entries that no longer fail. That means gl4es gained
 # the feature (or the test changed): delete the entry rather than leaving it.
