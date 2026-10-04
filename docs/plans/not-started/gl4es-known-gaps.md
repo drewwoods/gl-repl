@@ -44,23 +44,39 @@ The same path the #515 series used:
 ## Phase A: known fixes
 
 Each one corrects queries, defaults, or restoration of state gl4es already
-tracks. No new rendering emulation. A3 can change subsequent stencil draws
+tracks. No new rendering emulation. A4 can change subsequent stencil draws
 or clears by restoring the write mask correctly.
 
-### A1. Answer the state queries gl4es already tracks
+### A1. Let the shared getter return more than one value
 
-One PR in `src/gl/getter.c`: shared query cases in `gl4es_commonGet`,
-plus changes to the `glGet*` wrappers so they handle the query's component
-count and convert every component correctly.
+A prerequisite PR in `src/gl/getter.c`, ahead of A2. It adds no query.
 
-The common getter currently handles scalar results. `glGetBooleanv` and
+`gl4es_commonGet` currently returns scalars only. `glGetBooleanv` and
 `glGetIntegerv` pass the address of a single `GLfloat` temporary
-(`getter.c:862` / `:883`); a four-component case would overwrite stack
+(`getter.c:862` / `:883`), so a four-component case would overwrite stack
 memory. `glGetDoublev` has a large enough temporary but copies only its
-first component (`:1120`). Fix that contract before adding vector cases,
-preserving scalar queries and applying GL's conversion rules per component.
-The same handling will be needed for B1's two polygon modes and B2's four
-raster-color components.
+first component (`:1120`). Change the contract so `gl4es_commonGet` reports
+how many components it wrote and each wrapper converts every one by GL's
+rules: rounding for integer state, the color mapping for color state, and
+`!= 0` for booleans. No case in `gl4es_commonGet` returns more than one
+value today, so scalar queries must come out exactly as before.
+
+It goes out on its own because it is the risky half of the query work:
+it changes every wrapper, and a mistake there is memory corruption, not a
+wrong answer. Reviewed alone, it stays small. A2's queries are then plain
+table rows, and B1's two polygon modes and B2's four raster-color
+components rely on the same handling.
+
+Verification: every scalar `gl4es_commonGet` query answers the same
+through all four wrappers before and after the change. With no vector
+query yet, the multi-value path is exercised first by A2's raster
+position, whose tests check for writes past the result buffer.
+
+Clears: nothing by itself.
+
+### A2. Answer the state queries gl4es already tracks
+
+One PR in `gl4es_commonGet`, on top of A1:
 
 | Query | Source | Notes |
 |---|---|---|
@@ -80,12 +96,13 @@ Verification must query a raster position with distinct components through
 every converted component, and detect writes beyond the result buffer.
 Include scalar queries and server/client attribute-stack depth before
 push, after nested pushes, and after pops. The existing float-only raster
-oracle does not cover the wrapper hazard.
+oracle does not cover A1's wrapper hazard; these tests are its first real
+exercise.
 
 Clears: attribute stack depth (2), line stipple (4), raster position
 `[3]` and "inside the clip volume" (2).
 
-### A2. Default diffuse/specular alpha for `GL_LIGHT1..7`
+### A3. Default diffuse/specular alpha for `GL_LIGHT1..7`
 
 The spec default for lights 1..7 is (0, 0, 0, 1). `NewGLState`
 (`glstate.c:263`) has a per-light loop that sets `ambient[3] = 1` but
@@ -95,7 +112,7 @@ lighting takes its alpha from the material, not the light.
 
 Clears: `light* diffuse[3]`, `light* specular[3]` (all seven lights).
 
-### A3. `GL_STENCIL_BUFFER_BIT` saves the stencil write mask
+### A4. `GL_STENCIL_BUFFER_BIT` saves the stencil write mask
 
 `stack.c:275` and `:607` are both `//TODO: Stencil buffer writemask`. The
 getter already answers `GL_STENCIL_WRITEMASK` / `_BACK_WRITEMASK` from
@@ -107,10 +124,10 @@ alone (out of scope).
 
 Clears: `STENCIL_BUFFER_BIT restores stencil write mask`.
 
-A2 and A3 are separate PRs: they touch different files, and a small PR
+A3 and A4 are separate PRs: they touch different files, and a small PR
 is easier to review than a themed bundle.
 
-### A4. `GL_MULTISAMPLE` initially enabled
+### A5. `GL_MULTISAMPLE` initially enabled
 
 Desktop GL's enable flag starts true independently of the framebuffer's
 sample buffers ([OpenGL 2.1, table 6.15](https://registry.khronos.org/OpenGL/specs/gl/glspec21.pdf#page=294)).
@@ -166,7 +183,7 @@ gl4es latches nothing and has no getter case.
 
 - *Partial, subject to the regression gate:* initialize the raster color
   to (1, 1, 1, 1), latch the current color for unlit `glRasterPos`, and
-  add the getter using A1's vector handling. `glWindowPos` bypasses
+  add the getter using A1's multi-value handling. `glWindowPos` bypasses
   lighting and latches the current color clamped to [0, 1]. This covers
   the default and unlit latch, but needs an explicit, tested policy for
   lit `glRasterPos` before it is a viable PR.
@@ -194,7 +211,7 @@ Entries: `default raster color[*]`, `raster color latched at glRasterPos
 
 ### B3. Controlling multisampling on GLES
 
-The tracked-default fix is A4. The GLES path currently tracks
+The tracked-default fix is A5. The GLES path currently tracks
 `GL_MULTISAMPLE` without switching rasterization (`enable.c:165`,
 `proxy_GOFPE`), so faithfully honoring desktop GL's disable behavior is
 separate emulation work.
@@ -203,7 +220,7 @@ Question: does ptitSeb want that emulation, or should the rendering
 limitation remain explicitly unsupported? Keep the enable flag independent
 of `GL_SAMPLE_BUFFERS` in either case.
 
-No separate known-gap entry for rendering control today; A4 clears the
+No separate known-gap entry for rendering control today; A5 clears the
 default-state oracle without claiming to implement this behavior.
 
 ### B4. Feedback mode
@@ -237,7 +254,7 @@ Entries: the 13 `test_tour_overlay_feedback` checks.
 
 ## Done when
 
-- Phase A: A1-A4 merged upstream, targeted regression coverage passes,
+- Phase A: A1-A5 merged upstream, targeted regression coverage passes,
   gl-repl re-pinned, their entries deleted from the known-gaps file, and
   `make test-gl4es-ab` clean.
 - Phase B: each item has an answer. Implemented, or recorded in the
