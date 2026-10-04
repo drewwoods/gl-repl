@@ -24,6 +24,8 @@ The same path the #515 series used:
 2. Build that tree for wasm and run
    `make test-gl4es-ab ARGS="--b <fork tree>"`. The oracle lane must
    show the targeted entries as "fixed in B" and **no regressions**.
+   A1 closes no entry: require unchanged oracle failures and its targeted
+   buffer-overrun test passing instead.
    Supplement the existing lane with targeted regression coverage for the
    behavior each patch introduces.
    For query/default-only changes, expect a 0 px catalog diff and flat
@@ -56,21 +58,28 @@ A prerequisite PR in `src/gl/getter.c`, ahead of A2. It adds no query.
 (`getter.c:862` / `:883`), so a four-component case would overwrite stack
 memory. `glGetDoublev` has a large enough temporary but copies only its
 first component (`:1120`). Change the contract so `gl4es_commonGet` reports
-how many components it wrote and each wrapper converts every one by GL's
-rules: rounding for integer state, the color mapping for color state, and
-`!= 0` for booleans. No case in `gl4es_commonGet` returns more than one
-value today, so scalar queries must come out exactly as before.
+how many components it wrote, give the wrappers enough temporary storage,
+and have each wrapper copy or convert every component using its existing
+conversion behavior. Scalar queries must come out exactly as before,
+including the current float-to-integer truncation. Corrections to rounding
+and normalized color-to-integer mapping are deferred to separate work;
+A1 and A2 do not claim to fix conversion policy.
 
 It goes out on its own because it is the risky half of the query work:
-it changes every wrapper, and a mistake there is memory corruption, not a
-wrong answer. Reviewed alone, it stays small. A2's queries are then plain
-table rows, and B1's two polygon modes and B2's four raster-color
+it changes every wrapper, and a mistake there can corrupt memory. Reviewing
+that rework alone, with its buffer-overrun test, keeps A2 focused on tracked
+state and query cases. B1's two polygon modes and B2's four raster-color
 components rely on the same handling.
 
 Verification: every scalar `gl4es_commonGet` query answers the same
-through all four wrappers before and after the change. With no vector
-query yet, the multi-value path is exercised first by A2's raster
-position, whose tests check for writes past the result buffer.
+through all four wrappers before and after the change, including fractional
+values that would distinguish truncation from rounding. A1 also ships the
+buffer-overrun regression test: use a test-only four-component result from
+the shared getter, without adding a production query, to exercise all four
+wrappers. Check every returned component and writes past the result buffer;
+run with memory-safety instrumentation to catch overruns of the wrappers'
+internal temporaries. This test must pass before A1 goes out, so its safety
+does not depend on waiting for A2's first production vector query.
 
 Clears: nothing by itself.
 
@@ -93,11 +102,12 @@ the default raster x, y, z "pass" and only w (spec: 1) fails.
 
 Verification must query a raster position with distinct components through
 `glGetFloatv`, `glGetDoublev`, `glGetIntegerv`, and `glGetBooleanv`, check
-every converted component, and detect writes beyond the result buffer.
+every component according to the retained wrapper conversions, and detect
+writes beyond the result buffer.
 Include scalar queries and server/client attribute-stack depth before
 push, after nested pushes, and after pops. The existing float-only raster
-oracle does not cover A1's wrapper hazard; these tests are its first real
-exercise.
+oracle does not cover A1's wrapper hazard; these tests extend A1's synthetic
+buffer-overrun coverage to real raster-position state.
 
 Clears: attribute stack depth (2), line stipple (4), raster position
 `[3]` and "inside the clip volume" (2).
