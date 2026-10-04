@@ -72,8 +72,22 @@ test_ui_gl_state | GL_MULTISAMPLE initially enabled
 # the write mask (GL_STENCIL_WRITEMASK), so glStencilMask leaks through pops.
 test_attrib_bits_gl | STENCIL_BUFFER_BIT restores stencil write mask
 
-# --- Feedback mode crashes -----------------------------------------------------
-# The test (glFeedbackBuffer / glRenderMode(GL_FEEDBACK) over the tour overlay)
-# ends in a wasm "memory access out of bounds" before it reports anything. Not
-# yet triaged: gl4es's feedback path or the test's reading of the buffer.
-test_tour_overlay_feedback | CRASH
+# --- Feedback mode is not implemented ------------------------------------------
+# glFeedbackBuffer is a stub (wrap/glstub.c) and glRenderMode(GL_FEEDBACK)
+# answers GL_INVALID_ENUM (render.c, "missing GL_FEEDBACK"), so geometry is
+# drawn instead of captured and every capture comes back empty. gl4es already
+# emulates GL_SELECT in render.c; feedback would follow that shape, writing
+# transformed vertices (GL_2D at least: window x, y) and bitmap tokens.
+test_tour_overlay_feedback | overlay captured (cursor present)
+test_tour_overlay_feedback | final replayed ring drawn at its point
+test_tour_overlay_feedback | ring present at its point after landing on it
+test_tour_overlay_feedback | still-live caption restored at its point
+test_tour_overlay_feedback | long caption overlay captured
+test_tour_overlay_feedback | long left-anchored caption emits bitmap glyphs
+test_tour_overlay_feedback | multiline caption overlay captured
+test_tour_overlay_feedback | caption newline is rendered as 9 single-pass glyphs
+test_tour_overlay_feedback | caption glyphs occupy two baselines
+test_tour_overlay_feedback | stroke caption overlay captured vertices
+test_tour_overlay_feedback | strokehi caption overlay captured vertices
+test_tour_overlay_feedback | HUD geometry captured
+test_tour_overlay_feedback | drawn panel width matches tour_hud_panel_width()

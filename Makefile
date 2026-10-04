@@ -2235,8 +2235,11 @@ GL_TEST_DEPS_test_scene_underwater_fill_gl = $(OBJDIR)/src/render3d/grid.o
 GL4ES_KNOWN_GAPS ?= packaging/web/gl4es-known-gaps.txt
 GL_TESTS_WEB_BINDIR ?= build/release-web/gl-tests
 GL_TESTS_WEB_PAGES = $(addprefix $(GL_TESTS_WEB_BINDIR)/,$(addsuffix .html,$(GL_TEST_BINS)))
+# The app's 8 MB stack, not Emscripten's 64 KB default: the oracles run the
+# real UI render paths (a UiRenderSnapshot lives on the stack), which overflow
+# 64 KB as a wasm "memory access out of bounds".
 GL_TESTS_WEB_LDFLAGS = $(WEB_GL_ARCHIVES) -sUSE_WEBGL2=1 -sFULL_ES2=1 \
-	-sALLOW_MEMORY_GROWTH=1 -sEXIT_RUNTIME=1
+	-sALLOW_MEMORY_GROWTH=1 -sEXIT_RUNTIME=1 -sSTACK_SIZE=8388608
 
 $(BINDIR)/test_ui_gl_state: $(OBJDIR)/$(TEST_DIR)/test_ui_gl_state.o $(GL_TEST_DEPS_test_ui_gl_state) | $(COMPILE_REPORT_START)
 	@mkdir -p $(dir $@)
