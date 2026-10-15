@@ -12,8 +12,8 @@ still available, and must say **functionality** or **performance** in the
 inventory. A performance row is incomplete without a quantified A/B.
 
 The web build currently pins gl4es commit
-`a444cc94b17c672c66c3e6ce07428dc603034db1` (upstream `master`, 2026-09-28), which
-already contains six of the original seventeen patches - see
+`a025615bc79ac43ec911dced8fe5b8eb45a0b72d` (upstream `master`, 2026-10-15), which
+already contains nine of the original seventeen patches - see
 [Landed upstream](#landed-upstream). Patches are applied in the order
 listed in `GL4ES_PATCHES` in `scripts/web-deps.sh`. That script stamps the pin
 SHA plus a hash of every patch file; a mismatch resets the managed
@@ -29,13 +29,10 @@ functionality patch) and the change exists to cut a measured cost. Performance
 numbers are browser-, scene-, and viewport-specific; they are attribution for
 the workload named in the row, not universal multipliers.
 
-Eleven patches: eight functionality, three performance.
+Eight patches: five functionality, three performance.
 
 | Patch | Kind | Why applied | Measured |
 |---|---|---|---|
-| `gl4es-color-material-face.patch` | functionality | Track the single active `GL_COLOR_MATERIAL_FACE` so two-sided lighting does not leak back-face accent colors onto front faces. | - |
-| `gl4es-point-smooth.patch` | functionality | Emulate round antialiased points in the GLES2 fixed-pipeline shader; GLES2 has no point-antialiasing state, so `GL_POINT_SMOOTH` was a tracked no-op and points rasterized as hard squares. | - |
-| `gl4es-point-size-batch.patch` | functionality | Apply `glPointSize` to the batch it was called on, not to whatever is still pending at flush. A trailing `glPointSize(1)` otherwise shrinks every point that pass already drew. | - |
 | `gl4es-accum-fbo.patch` | functionality | Implement the accumulation buffer with an internal FBO instead of stubbing `glAccum`. Without it, web either paid N scene passes for the last image only, or (after detection) disabled Accum AA / Blur entirely. | - |
 | `gl4es-accum-deferred-return.patch` | performance | Cache LOAD/ACCUM snapshots and reduce their weights once at RETURN, dropping the per-sample RGBA16F read/modify/write chain. | In-app Chromium/WebGL2, default logo, 1280x676, 16x accum AA + 4x canvas MSAA: **33.962 -> 37.035 FPS (+9.05%)**, mean callback **29.444 -> 27.002 ms (-2.443 ms)**. |
 | `gl4es-accum-deferred-scissor.patch` | performance | Size and copy deferred samples to the WebGL scene scissor so the code-panel area is not snapshotted. | Same run, incremental over deferred RETURN: **37.035 -> 38.545 FPS (+4.08%)**, **27.002 -> 25.944 ms (-1.058 ms)**. Together with RETURN: **+13.49%**, **-3.500 ms/frame**. |
@@ -49,8 +46,9 @@ Eleven patches: eight functionality, three performance.
 
 Merged into ptitSeb/gl4es from the `drewwoods/gl4es` fork (the upstreaming
 effort is [gl4es#515](https://github.com/ptitSeb/gl4es/issues/515)) and
-deleted here when the pin moved to `a444cc94`. Their investigation-log
-entries below stay as history.
+deleted here when the pin moved past their merge (`a444cc94` for #517-#520,
+`ec16bedd` for #521, `a025615b` for #522). Their investigation-log entries
+below stay as history.
 
 | Patch | Upstream | Notes |
 |---|---|---|
@@ -60,6 +58,9 @@ entries below stay as history.
 | `gl4es-getbooleanv-local-state.patch` | #519 | Same PR. |
 | `gl4es-pushattrib-gaps.patch` | #520 | Split into polygon / line stipple / point parameter / clip plane commits; same code. |
 | `gl4es-pushattrib-texenv.patch` | #520 | Same PR. |
+| `gl4es-color-material-face.patch` | #521 | Split into two commits (track the selected face; answer and save `GL_COLOR_MATERIAL_FACE` / `_PARAMETER`); same code. |
+| `gl4es-point-smooth.patch` | #522 | Same code, plus a comment commit marking where point smoothing and the `GL_POINT_SIZE_MAX` default of 32 differ from GL. |
+| `gl4es-point-size-batch.patch` | #522 | Same PR. #522 also computes the fixed-function eye-space position in highp, which gl-repl never carried; it changes nothing in the web catalog. |
 
 The pin also brought #516, an upstream fix for `glBitmap` clipping at the
 viewport's left edge (an out-of-bounds write the old pin had), and #513, an
@@ -69,6 +70,41 @@ The dated sections below are the investigation log. Every patch has a
 dated entry; the table and each patch file's leading prose are the quick
 reference. The 2026-07-15 performance pair is reconstructed
 from the original commit measurements so those numbers are not git-only.
+
+## 2026-10-15: re-pin to upstream `a025615b`; the point patches retired
+
+#522 merged PR06, so `gl4es-point-smooth.patch` and
+`gl4es-point-size-batch.patch` are gone and the pin moved from `ec16bedd` to
+`a025615b`. Besides the two patches' code, the move brings:
+
+- a comment-only commit noting where point smoothing and the
+  `GL_POINT_SIZE_MAX` default (32) differ from GL;
+- `src/gl: Compute the fixed-function eye-space position in highp`, new to
+  gl-repl. On drivers that run mediump as fp16 (NVIDIA, radeonsi, mobile),
+  points more than 256 units from the eye got a NaN size. ANGLE runs mediump
+  at 32 bits, and PR06's `make test-gl4es-ab` catalog was 0 px on all 43
+  examples with it;
+- #523, from another contributor: `glBindRenderbuffer(target, 0)` unbinds
+  instead of failing with `GL_INVALID_OPERATION`. Neither gl-repl nor the
+  accum patches bind renderbuffers.
+
+The other eight patches apply unchanged. Gate: `make test-gl4es-ab`, old pin
+plus ten vs new pin plus eight.
+
+## 2026-10-04: re-pin to upstream `ec16bedd`; color-material retired
+
+#521 merged the color-material PR (`pr-05-color-material`, the two commits
+that had replaced `gl4es-color-material-face.patch`), so the pin moved from
+`a444cc94` to the merge, `ec16bedd`, and the patch file is gone. The other ten
+apply unchanged. The merge's tree is the PR branch's tip, and the new pin plus
+the ten patches is byte-identical source to the old pin plus eleven, so the
+web build's `libGL.a` does not change. Checked with `make test-gl-web`
+(same results as before).
+
+Next to go (done 2026-10-15): `gl4es-point-smooth.patch` and
+`gl4es-point-size-batch.patch`, whose code was then open upstream as PR06 (`pr-06-points`, same code plus a
+comment commit and a highp fix that changes nothing on the web; its
+`make test-gl4es-ab` catalog lane was 0 px on all 43 examples).
 
 ## 2026-09-28: re-pin to upstream `a444cc94`; six patches retired
 
@@ -552,7 +588,7 @@ instead of 73, and `test_render3d_guides` / `test_render3d_render` drop their
 
 ## 2026-08-02: `glPointSize` applies to the batch it was called on
 
-Patch: [`gl4es-point-size-batch.patch`](gl4es-point-size-batch.patch)
+Patch: `gl4es-point-size-batch.patch` (upstream since #522)
 
 Kind: functionality.
 

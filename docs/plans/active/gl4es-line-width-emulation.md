@@ -9,7 +9,7 @@ Native Cocoa / GLX / OSMesa are unchanged — they already rasterize
 wide lines and honour `GL_POLYGON_OFFSET_LINE`.
 
 This is the line-width twin of
-[`gl4es-point-smooth.patch`](../../../packaging/web/patches/gl4es-point-smooth.patch):
+`gl4es-point-smooth.patch` (upstream since gl4es#522):
 fix the translator, keep one C path in gl-repl. Do not add
 `#ifdef __EMSCRIPTEN__` geometry proxies in `grid.c`, overlays, or
 guides.

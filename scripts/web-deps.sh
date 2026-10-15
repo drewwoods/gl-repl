@@ -32,11 +32,8 @@ ROOT="$(git rev-parse --show-toplevel)"
 WEB_DEPS_ROOT="$ROOT/third_party/web"
 
 GL4ES_URL="https://github.com/ptitSeb/gl4es.git"
-GL4ES_SHA="a444cc94b17c672c66c3e6ce07428dc603034db1"
+GL4ES_SHA="a025615bc79ac43ec911dced8fe5b8eb45a0b72d"
 GL4ES_PATCHES=(
-	"$ROOT/packaging/web/patches/gl4es-color-material-face.patch"
-	"$ROOT/packaging/web/patches/gl4es-point-smooth.patch"
-	"$ROOT/packaging/web/patches/gl4es-point-size-batch.patch"
 	"$ROOT/packaging/web/patches/gl4es-accum-fbo.patch"
 	"$ROOT/packaging/web/patches/gl4es-accum-deferred-return.patch"
 	"$ROOT/packaging/web/patches/gl4es-accum-deferred-scissor.patch"
@@ -114,6 +111,11 @@ apply_gl4es_patches() {
 			exit 1
 		fi
 		echo -e "${CYAN}gl4es patch set changed; resetting $GL4ES_SHA and reapplying ...${NC}"
+		# A moved pin can name a commit this clone has never fetched.
+		if ! git -C "$GL4ES_DIR" cat-file -e "$GL4ES_SHA^{commit}" 2>/dev/null; then
+			echo -e "${CYAN}Fetching gl4es for the new pin ...${NC}"
+			git -C "$GL4ES_DIR" fetch --quiet "$GL4ES_URL"
+		fi
 		git -C "$GL4ES_DIR" reset --hard --quiet "$GL4ES_SHA"
 		# Earlier patches can add source files that are untracked in the
 		# upstream checkout (for example accum.c/accum.h). reset --hard does

@@ -63,21 +63,11 @@ license text, reproduced verbatim from `third_party/freeglut/COPYING`:
   `third_party/web/gl4es/` (not vendored in-tree - the build is
   toolchain-specific to the pinned Emscripten SDK). Pinned SHA recorded in
   `third_party/web/PINNED.txt` after a build; default pin at time of writing
-  is `a444cc94b17c672c66c3e6ce07428dc603034db1`.
+  is `a025615bc79ac43ec911dced8fe5b8eb45a0b72d`.
 - **Local patches:** applied by `scripts/web-deps.sh` after cloning, before
-  building, in this order. Six earlier ones are upstream since #517-#520
+  building, in this order. Nine earlier ones are upstream since #517-#522
   (listed in `packaging/web/patches/README.md`); these are the rest, also
   carried on the `drewwoods/gl4es` fork while they go upstream:
-  - `packaging/web/patches/gl4es-color-material-face.patch` - track the
-    single active `GL_COLOR_MATERIAL_FACE` so `glColorMaterial(GL_FRONT, …)`
-    / `(GL_BACK, …)` updates only the selected side's material in the
-    generated shaders (two-sided scenes had back-face colors leaking onto
-    front faces). `glPushAttrib(GL_LIGHTING_BIT)` also restores the
-    `GL_COLOR_MATERIAL` enable.
-  - `packaging/web/patches/gl4es-point-smooth.patch` - emulate round
-    antialiased points in the GLES2 fixed-pipeline shader.
-  - `packaging/web/patches/gl4es-point-size-batch.patch` - apply
-    `glPointSize` to the batch it was called on.
   - `packaging/web/patches/gl4es-accum-fbo.patch` - implement the
     accumulation buffer with an internal FBO (new `src/gl/accum.c`)
     instead of stubbing `glAccum`/`glClearAccum`: `GL_ACCUM`/`GL_LOAD`

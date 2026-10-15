@@ -208,8 +208,8 @@ static void draw_vertex_point_marker(const Render3dGuideSnapshot *snapshot,
     /* Desktop GL rasterizes points as circles under multisample rasterization,
      * so the native build barely needs this - gl4es has no such implicit path
      * and honours GL_POINT_SMOOTH only when it is explicitly enabled (its
-     * fixed-pipeline shader derives coverage from gl_PointCoord; see
-     * packaging/web/patches/gl4es-point-smooth.patch). */
+     * fixed-pipeline shader derives coverage from gl_PointCoord; upstream
+     * since gl4es#522). */
     glEnable(GL_POINT_SMOOTH);
     glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
 
@@ -232,7 +232,7 @@ static void draw_vertex_point_marker(const Render3dGuideSnapshot *snapshot,
      * geometry_guides_push_state()'s glPushAttrib(GL_ALL_ATTRIB_BITS), which
      * restores the size. A reset here would also shrink the marker to one
      * pixel on web, where gl4es applies the last size set before a flush to
-     * the whole pending batch (packaging/web/patches/gl4es-point-size-batch.patch). */
+     * the whole pending batch (fixed upstream in gl4es#522). */
     glDisable(GL_POINT_SMOOTH);
     if (depth) glEnable(GL_DEPTH_TEST);
 }

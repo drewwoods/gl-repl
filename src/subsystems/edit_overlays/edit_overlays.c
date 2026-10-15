@@ -1055,8 +1055,8 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
     /* Desktop GL rasterizes points as circles under multisample rasterization,
      * so the native build barely needs this - gl4es has no such implicit path
      * and honours GL_POINT_SMOOTH only when it is explicitly enabled (its
-     * fixed-pipeline shader derives coverage from gl_PointCoord; see
-     * packaging/web/patches/gl4es-point-smooth.patch). */
+     * fixed-pipeline shader derives coverage from gl_PointCoord; upstream
+     * since gl4es#522). */
     glEnable(GL_POINT_SMOOTH);
     glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
 
@@ -1103,7 +1103,7 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
          * would be redundant - and on web, gl4es applies the last size set
          * before its flush to the whole pending batch, so resetting here
          * used to shrink every marker this walk had just drawn to one pixel
-         * (fixed by packaging/web/patches/gl4es-point-size-batch.patch). */
+         * (fixed upstream in gl4es#522). */
         /* Drop them before the glut pass re-applies the program's clip state
          * from scratch: a cap left on here is not in that walk's mask, so it
          * would clip shapes drawn before the program ever enabled it. */
