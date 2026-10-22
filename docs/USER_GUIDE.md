@@ -1102,7 +1102,7 @@ The overlay toggles annotate geometry in the selected scope:
 
 The cursor's own vertex stays in scope when narrowing. With no resolvable
 primitive or contour, that vertex family's whole block stays selected. Known
-closing-line, nested-strip, and multi-contour arrow limitations are recorded in the
+closing-line and nested-strip limitations are recorded in the
 [overlay scope contract](ARCHITECTURE.md#overlay-scope-contract).
 
 Vertex outlines and vertex points always report the geometry the frame

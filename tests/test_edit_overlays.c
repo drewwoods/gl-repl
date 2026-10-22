@@ -3364,6 +3364,78 @@ static void test_single_polygon_keeps_cursor_vertex(void) {
     }
 }
 
+/* Normal arrows on a two-contour polygon. The arrow pass keeps its own "is
+ * the current block the cursor's" verdict, and it cleared that verdict at
+ * every gluEnd() - so the first contour's close dropped the arrows of the
+ * second contour in every cursor scope. Real flatten output, cursor in each
+ * contour. Arrows are drawn from each vertex position, so a traced
+ * "glVertex3f x y z" at a vertex means its arrow was drawn. */
+static void test_normal_vectors_reach_later_contours(void) {
+    printf("--- edit_overlays normal arrows on every contour ---\n");
+
+    glr_ctrl_reset_all();
+    editor_feed_line("gluBegin(GLU_POLYGON);");      /* 0 */
+    editor_feed_line("gluBegin(GLU_CONTOUR);");      /* 1 */
+    editor_feed_line("gluVertex(-0.8, -0.8, 0);");   /* 2  contour 1 */
+    editor_feed_line("gluVertex(0.8, -0.8, 0);");    /* 3 */
+    editor_feed_line("gluVertex(0, 0.8, 0);");       /* 4 */
+    editor_feed_line("gluEnd();");                   /* 5 */
+    editor_feed_line("gluBegin(GLU_CONTOUR);");      /* 6 */
+    editor_feed_line("gluVertex(-0.2, -0.2, 0);");   /* 7  contour 2 */
+    editor_feed_line("gluVertex(0.2, -0.2, 0);");    /* 8 */
+    editor_feed_line("gluVertex(0.2, 0.2, 0);");     /* 9 */
+    editor_feed_line("gluVertex(-0.2, 0.2, 0);");    /* 10 */
+    editor_feed_line("gluEnd();");                   /* 11 */
+    editor_feed_line("gluEnd();");                   /* 12 */
+    repl_flatten_commands(editor_state_edit_line());
+
+    static const char *const at[7] = {
+        "glVertex3f -0.8 -0.8 0", "glVertex3f 0.8 -0.8 0",
+        "glVertex3f 0 0.8 0",
+        "glVertex3f -0.2 -0.2 0", "glVertex3f 0.2 -0.2 0",
+        "glVertex3f 0.2 0.2 0", "glVertex3f -0.2 0.2 0",
+    };
+    /* Per scope and cursor contour: which of the 7 vertices carry an arrow.
+     * Last instance takes the whole polygon; single polygon takes the
+     * cursor's contour. */
+    static const struct {
+        int scope;
+        int cursor;
+        const char *what;
+        int want[7];
+    } cases[] = {
+        { OVERLAY_SCOPE_LAST_INSTANCE, 3, "last instance, cursor in contour 1",
+          { 1, 1, 1, 1, 1, 1, 1 } },
+        { OVERLAY_SCOPE_LAST_INSTANCE, 8, "last instance, cursor in contour 2",
+          { 1, 1, 1, 1, 1, 1, 1 } },
+        { OVERLAY_SCOPE_ALL_INSTANCES, 3, "all instances, cursor in contour 1",
+          { 1, 1, 1, 1, 1, 1, 1 } },
+        { OVERLAY_SCOPE_SINGLE_POLYGON, 3, "single polygon, cursor in contour 1",
+          { 1, 1, 1, 0, 0, 0, 0 } },
+        { OVERLAY_SCOPE_SINGLE_POLYGON, 8, "single polygon, cursor in contour 2",
+          { 0, 0, 0, 1, 1, 1, 1 } },
+    };
+    char lbl[160];
+
+    for (size_t c = 0; c < sizeof cases / sizeof cases[0]; c++) {
+        OverlayWalkCtx walk;
+        TraceLog log;
+
+        build_single_polygon_walk(cases[c].cursor, &walk);
+        walk.cursor_overlay_scope = cases[c].scope;
+        walk.show_normal_vectors = 1;
+
+        trace_begin();
+        edit_overlays_render_normal_vectors(&walk);
+        trace_end(&log);
+        for (int v = 0; v < 7; v++) {
+            snprintf(lbl, sizeof lbl, "%s: vertex %d arrow %s", cases[c].what,
+                     v, cases[c].want[v] ? "drawn" : "absent");
+            ASSERT_INT(lbl, trace_count_line(&log, at[v]), cases[c].want[v]);
+        }
+    }
+}
+
 static void test_nested_strip_single_polygon_labels(void) {
     printf("--- edit_overlays single-polygon labels in a nested strip ---\n");
 
@@ -3975,6 +4047,7 @@ int main(void) {
     test_tess_contour_vertex_labels();
     test_nested_strip_single_polygon_labels();
     test_single_polygon_keeps_cursor_vertex();
+    test_normal_vectors_reach_later_contours();
     test_cursor_guides_render_for_unterminated_begin();
     test_cursor_guides_follow_last_instance();
     test_cursor_guides_render_for_raster_pos();

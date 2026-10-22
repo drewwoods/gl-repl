@@ -904,10 +904,6 @@ Current implementation gaps must be changed together with their tests:
   selection at `glBegin` / `glEnd`. The gutter mirrors it: after the nested
   `glEnd`, cursor-scoped labels stay absent until another block head. Restore
   the enclosing context in both consumers together.
-- The normal-arrow gate in `on_normal_vector_cmd()` clears on every
-  `CMD_TESS_END`, including contour closes. Later contours can lose
-  cursor-scoped arrows despite remaining selected for labels and outlines;
-  that gate must follow the polygon's lifetime.
 
 Scope membership precedes visibility and layout: in-scope labels can be
 off-screen, depth-occluded, or omitted by decluttering. Highlight Off / On /
@@ -921,7 +917,8 @@ primitive/contour narrowing, cursor-vertex retention, and outline ordering;
 [`test_ui.c`](../tests/test_ui.c) checks gutter/scene numbering parity;
 [`test_repl_core_internal.c`](../tests/test_repl_core_internal.c) checks ranges.
 The parity sweep currently covers Last instance only; the cursor-vertex sweep
-exercises the shared predicate, not the normal-arrow gate. Item 7 extends
+exercises the shared predicate, not the normal-arrow pass's own block gate,
+which a two-contour arrow test covers separately. Item 7 extends
 coverage across all four scopes and three consumers with real catalog scenes.
 
 #### Edit Overlays: polygon outlines on geometry

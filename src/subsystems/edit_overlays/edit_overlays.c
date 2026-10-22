@@ -1926,6 +1926,7 @@ typedef struct NormalVectorRenderCtx {
     int target_head;
     int cur_head;
     int cur_head_matches;
+    int tess_depth;   /* repl_tess_advance_depth() over the walk */
 } NormalVectorRenderCtx;
 
 /* Track which block the walk is inside, and whether that block belongs to the
@@ -1941,9 +1942,13 @@ static void on_normal_vector_cmd(const ReplayVertexWalkState *state,
     if (state->flat_cmd_idx < 0 || state->flat_cmd_idx >= ctx->program->cmd_count)
         return;
     cmd = &ctx->program->cmds[state->flat_cmd_idx];
-    if (cmd->type == CMD_END || cmd->type == CMD_TESS_END) {
-        /* Clear on the way out, or a stray vertex between blocks would
-         * inherit the previous block's verdict. */
+    ctx->tess_depth = repl_tess_advance_depth(cmd->type, ctx->tess_depth);
+    /* Clear on the way out of a block, or a stray vertex between blocks would
+     * inherit the previous block's verdict. A tess polygon is left only at its
+     * own gluEnd(): a contour closes with the same command, and clearing at
+     * that one would leave every later contour's vertices out of scope. */
+    if (cmd->type == CMD_END ||
+        (cmd->type == CMD_TESS_END && ctx->tess_depth == 0)) {
         ctx->cur_head = -1;
         ctx->cur_head_matches = 0;
         return;
