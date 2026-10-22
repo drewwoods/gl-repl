@@ -99,9 +99,8 @@ typedef enum {
     RENDER3D_CLR_TESS_PREVIEW,        /* tess wire preview        0.30,0.95,0.75 */
     RENDER3D_CLR_VERTEX_LABEL,        /* vertex-number text       1.00,1.00,0.30 */
     RENDER3D_CLR_NORMAL_LABEL,        /* normal-arrow text        0.80,0.80,0.30 */
-    RENDER3D_CLR_OUTLINE_ACTIVE,      /* cursor/tess-current edge 0.00,0.90,0.90 */
-    RENDER3D_CLR_OUTLINE,             /* tess non-current edge    0.55,0.20,0.70 */
-    RENDER3D_CLR_OUTLINE_EDGE,        /* silhouette outline       0.00,0.00,0.00 */
+    RENDER3D_CLR_OUTLINE_ACTIVE,      /* polygon highlight edge   0.00,0.90,0.90 */
+    RENDER3D_CLR_OUTLINE_EDGE,        /* plain outline (GL + GLU) 0.00,0.00,0.00 */
     RENDER3D_CLR_VERTEX_POINT,        /* idle vertex points       0.85,0.85,0.90 */
     RENDER3D_CLR_VERTEX_POINT_REPLAY, /* replay vertex points     1.00,0.88,0.20 */
 
@@ -161,7 +160,6 @@ static const Render3dRgba g_render3d_palette[RENDER3D_CLR_COUNT] = {
     [RENDER3D_CLR_VERTEX_LABEL]        = { 1.00f, 1.00f, 0.30f, 1.0f },
     [RENDER3D_CLR_NORMAL_LABEL]        = { 0.80f, 0.80f, 0.30f, 1.0f },
     [RENDER3D_CLR_OUTLINE_ACTIVE]      = { 0.00f, 0.90f, 0.90f, 1.0f },
-    [RENDER3D_CLR_OUTLINE]             = { 0.55f, 0.20f, 0.70f, 1.0f },
     [RENDER3D_CLR_OUTLINE_EDGE]        = { 0.00f, 0.00f, 0.00f, 1.0f },
     [RENDER3D_CLR_VERTEX_POINT]        = { 0.85f, 0.85f, 0.90f, 1.0f },
     [RENDER3D_CLR_VERTEX_POINT_REPLAY] = { 1.00f, 0.88f, 0.20f, 1.0f },

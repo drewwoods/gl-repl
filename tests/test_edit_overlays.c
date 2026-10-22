@@ -1591,6 +1591,8 @@ static void test_render_outlines_tess(void) {
                trace_count_line(&log, "glVertex3f -1 -2 0"), 1);
     ASSERT_INT("contour outline width applied",
                trace_count_line_width_near(&log, VERTEX_OUTLINE_TESS_WIDTH), 1);
+    ASSERT_INT("plain contour uses the GL outline color (black)",
+               trace_count_line(&log, "glColor4f 0 0 0 1"), 1);
 
     ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD;
     trace_begin();
@@ -1604,8 +1606,8 @@ static void test_render_outlines_tess(void) {
     trace_begin();
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
-    ASSERT_INT("inverted tess contour flips outline color",
-               trace_count_line(&log, "glColor4f 0.45 0.8 0.3 1"), 1);
+    ASSERT_INT("inverted plain contour inverts like a GL outline (white)",
+               trace_count_line(&log, "glColor4f 1 1 1 1"), 1);
     ASSERT_INT("inverted tess contour keeps default width",
                trace_count_line_width_near(&log, VERTEX_OUTLINE_TESS_WIDTH), 1);
 
@@ -1652,7 +1654,7 @@ static void test_render_outlines_tess(void) {
                trace_count_line_width_near(
                    &log, VERTEX_OUTLINE_TESS_WIDTH * VERTEX_OUTLINE_BOLD_SCALE), 0);
     ASSERT_INT("tess current-poly highlight ignores inverted outline color",
-               trace_count_line(&log, "glColor4f 0.45 0.8 0.3 1"), 0);
+               trace_count_line(&log, "glColor4f 1 1 1 1"), 0);
 
     /* Two closed contours (the real flat form: each contour has its own
      * gluEnd). The current-poly highlight draws at the active width while a
@@ -1775,6 +1777,68 @@ static void test_render_outlines_tess(void) {
     ASSERT_INT("no contour drawn as GL_LINE_LOOP", trace_count_line(&log, "glBegin 2"), 0);
     ASSERT_INT("contours drawn under line polygon mode",
                trace_count_line(&log, "glPolygonMode 1032 6913"), 1);
+}
+
+/* Color in effect at the first trace line equal to `vertex_line`, or "" when
+ * that vertex is never drawn. */
+static void trace_color_at_vertex(const TraceLog *log, const char *vertex_line,
+                                  char *out, size_t out_sz) {
+    const char *color = "";
+    for (int i = 0; i < log->n; i++) {
+        if (strncmp(log->lines[i], "glColor4f ", 10) == 0) {
+            color = log->lines[i];
+        } else if (strcmp(log->lines[i], vertex_line) == 0) {
+            snprintf(out, out_sz, "%s", color);
+            return;
+        }
+    }
+    if (out_sz > 0)
+        out[0] = '\0';
+}
+
+/* Plain outlines are one color whatever drew the geometry: a GLU contour's
+ * plain outline matches a glBegin block's in every outline style, inverted
+ * ones included. Only the highlight singles geometry out. */
+static void test_tess_plain_outline_matches_gl_color(void) {
+    printf("--- edit_overlays GLU plain outlines match GL ---\n");
+
+    GLCmd cmds[11];
+    mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&cmds[1], CMD_VERTEX3F, 0.25f, 0, 0);
+    mk_cmd(&cmds[2], CMD_VERTEX3F, 1, 0, 0);
+    mk_cmd(&cmds[3], CMD_VERTEX3F, 0, 1, 0);
+    mk_cmd(&cmds[4], CMD_END, 0, 0, 0);
+    mk_cmd(&cmds[5], CMD_TESS_BEGIN_POLYGON, 0, 0, 0);
+    mk_cmd(&cmds[6], CMD_TESS_BEGIN_CONTOUR, 0, 0, 0);
+    mk_cmd(&cmds[7], CMD_TESS_VERTEX, 5, 5, 0);
+    mk_cmd(&cmds[8], CMD_TESS_VERTEX, 6, 5, 0);
+    mk_cmd(&cmds[9], CMD_TESS_VERTEX, 5, 6, 0);
+    mk_cmd(&cmds[10], CMD_TESS_END, 0, 0, 0);
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 11;
+    ctx.cursor.edit_line_idx = -1;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.show_vertex_outlines = 1;
+
+    for (int style = 0; style < VERTEX_OUTLINE_STYLE_COUNT; style++) {
+        char gl_color[128], glu_color[128], lbl[96];
+        TraceLog log;
+        ctx.vertex_outline_style = style;
+        trace_begin();
+        edit_overlays_render_outlines(&ctx, 0, 0);
+        trace_end(&log);
+        trace_color_at_vertex(&log, "glVertex3f 0.25 0 0", gl_color, sizeof gl_color);
+        trace_color_at_vertex(&log, "glVertex3f 5 5 0", glu_color, sizeof glu_color);
+        snprintf(lbl, sizeof lbl, "style %d: both plain outlines drawn", style);
+        ASSERT_INT(lbl, gl_color[0] != '\0' && glu_color[0] != '\0', 1);
+        snprintf(lbl, sizeof lbl, "style %d: GLU plain color == GL (%s vs %s)",
+                 style, glu_color, gl_color);
+        ASSERT_INT(lbl, strcmp(gl_color, glu_color), 0);
+    }
 }
 
 /* A contour polygon is culled by its own winding, which says nothing about
@@ -3876,6 +3940,7 @@ int main(void) {
     test_render_outlines_tess();
     test_highlight_drawn_after_all_plain_outlines();
     test_tess_outlines_lift_culling();
+    test_tess_plain_outline_matches_gl_color();
     test_render_outlines_glut();
     test_find_next_vertex_args();
     test_cursor_guide_snapshot_with_flat_args();
