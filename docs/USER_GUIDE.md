@@ -1061,46 +1061,66 @@ This works through function calls and loop iterations, not just on literal
 vertex. Arrow the cursor down through a `glBegin` block and the crosshair
 steps from vertex to vertex.
 
-The overlay toggles annotate geometry scene-wide:
+The overlay toggles annotate geometry in the selected scope:
 
 ![The cursor on the glNormal3f row, and the quad below it carrying vertex labels, points, outlines, normals and the polygon highlight](images/vertex-overlays.png)
 
 - **Vertex labels** (F7): Off / Index / Index+Pos / Index+World /
-  Index+World Fine - numbers each vertex of the primitive at the cursor.
-  The cursor has to be resting on a committed `glVertex3f` line, unless
-  **Overlay scope** is *Whole scene*.
+  Index+World Fine - numbers authored `glVertex*` and `gluVertex` vertices.
+  Cursor scopes select the block around the committed cursor line, including
+  its begin/end and comment rows; a function-call line can select its geometry.
 - **Overlay scope** (F8): Cursor block - last instance / all instances /
   single polygon - plus **Whole scene**. Controls how broadly the cursor-bound
   overlays are shown. *Last instance* picks the final unrolled copy, so they
   sit on the copy whose loop-body values the **variable panel** is showing.
-  *Whole scene* takes every vertex the program emits. Vertex labels are culled
-  against the depth buffer when the context can read it; the web build shows
-  every in-scope label instead.
+  *All instances* takes every copy of the cursor's block. *Whole scene* labels
+  and draws normal arrows at every authored vertex; the highlight still follows
+  the cursor, across all matching copies. Vertex labels are culled against the
+  depth buffer when the context can read it; the web build shows every in-scope
+  label instead.
 - **Vertex label placement**: Decluttered / At vertex - *where* each label
-  sits. Decluttered numbers globally and floats labels onto clear rows; At
-  vertex numbers per primitive and pins each label to its vertex. See the
+  sits. Decluttered floats labels onto clear rows; At vertex pins each label
+  to its vertex. Scope and placement together determine numbering. See the
   figure under [Vertex label placement](#vertex-label-placement).
 - **Normal vectors** (Ctrl+N): draws each vertex's normal as an arrow,
   within the **Overlay scope** above.
 - **Vertex outlines** (Ctrl+Shift+O) and **Vertex points** (Ctrl+Shift+P):
-  outline polygons and mark vertices *(both on by default)*.
+  outline polygons and mark vertices scene-wide *(both on by default)*.
 - **Polygon highlight** (Ctrl+P): highlights the polygon under the cursor
   line. Cycles Off / On / **Clipped & culled**. On draws the cursor's shape
   **as authored**; Clipped & culled draws only what the frame draws.
 
+*Single polygon* uses the last matching copy and narrows it as follows:
+
+| Geometry at the cursor | Vertex labels and normal arrows | Highlight |
+|---|---|---|
+| `glBegin` block | The point, line, triangle, or quad being built; `GL_POLYGON` and `GL_LINE_LOOP` keep the whole block | Same primitive |
+| GLU contour | That contour's `gluVertex` vertices | That contour's boundary, including a hole |
+| GLU polygon begin/end, or between contours | The whole polygon | All its contour boundaries |
+| Strip nested inside a GLU contour | The strip's current primitive **plus** the contour's `gluVertex` vertices | The strip primitive **plus** the contour boundary |
+| `glutSolid*` shape | No authored vertices to label or draw arrows at | The whole shape |
+
+The cursor's own vertex stays in scope when narrowing. With no resolvable
+primitive or contour, that vertex family's whole block stays selected. Known
+closing-line, nested-strip, and multi-contour arrow limitations are recorded in the
+[overlay scope contract](ARCHITECTURE.md#overlay-scope-contract).
+
 Vertex outlines and vertex points always report the geometry the frame
-actually shows (clip planes, culling, color mask). The cursor highlight is
-the deliberate exception: it draws through a color mask, and under Polygon
-highlight = On it ignores clipping and culling too.
+actually shows (clip planes, culling, color mask), except that GLU contour
+outlines ignore face culling because a hole's winding differs from its face.
+The cursor highlight draws through a color mask; Polygon highlight = On
+ignores clipping and culling too.
 
 ### Vertex label placement
 
 ![Label placement: one quad drawn twice by a loop, shown decluttered (v0..v7, globally unique) and at vertex (v0..v3, repeated per copy)](images/label-placement.png)
 
-**Decluttered** is global (`v0`..`v7` across both copies). **At vertex** is
-per-primitive (`v0`..`v3`, repeated). *Single polygon* scope narrows labels
-and the highlight to the one primitive your cursor is building inside a
-multi-face `glBegin`.
+**Decluttered** numbers globally in All instances and Whole scene (`v0`..`v7`
+across both copies). **At vertex** and the single-copy scopes use block-local
+numbers (`v0`..`v3`, repeated per copy). Within a block, `glVertex*` and
+`gluVertex` share one numbering run; contours do not restart it, but a nested
+`glBegin` does. The gutter uses that same block-local number. *Single polygon*
+narrows membership without renumbering the surviving vertices.
 
 ![Single polygon scope: cursor on the second quad's second vertex highlights and labels only that quad](images/single-polygon-scope.png)
 

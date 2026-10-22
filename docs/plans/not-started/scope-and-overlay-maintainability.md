@@ -1,6 +1,14 @@
 ## Scope and Overlay Maintainability - one cursor-scope query, one vertex numbering, one outline walk
 
-## Status - NOT STARTED
+## Status - NOT STARTED (item 10, the written spec, is done)
+
+No runtime item has started, so the plan stays in `not-started/`. Item 10
+completed 2026-10-22: the
+[overlay scope contract](../../ARCHITECTURE.md#overlay-scope-contract) defines
+the four scopes, primitive-specific rules, numbering, and current gaps;
+[the user guide](../../USER_GUIDE.md#cursor-guides--vertex-overlays) summarizes
+the behavior. Closing lines are inclusive; a nested `glEnd()` must preserve
+the enclosing GLU context. The runtime changes remain in item 1.
 
 Written 2026-10-22, after a day of GLU-tessellator overlay fixes. The scope is
 deliberately narrow: only the code that work touched - cursor block
@@ -40,7 +48,7 @@ and 3, items 10 and 11, and additions to items 6 and 7.
 | 7 | Test fixtures from real flatten output; named GL enums in traces | fixtures cannot drift from production | ongoing | - |
 | 8 | Overlay setup out of `glr_ctrl.c` | smaller controller, fewer `_for_test` seams | ~0.5 day | best after 1 |
 | 9 | Habits: present-tense comments, one worktree per session | less comment rot, clean benchmarks | - | - |
-| 10 | Written spec: overlay scope per primitive kind | one source of truth for items 1, 3, 4 and their tests | 1-2 h | - |
+| 10 | Written spec: overlay scope per primitive kind - DONE | one source of truth for items 1, 3, 4 and their tests | 1-2 h | - |
 | 11 | Adjacent: workspace manifest forward compatibility | new builds' workspaces stay readable by older builds | ~1 h | - |
 
 Suggested order: **10, 2, 5, 6** first (10 is the spec items 1, 3 and 4 are
@@ -111,10 +119,11 @@ All three extents in one call, built on the existing prefix caches so a
 cursor move is a lookup, not a document scan. Nested cases (a `glBegin`
 strip inside a GLU contour, as in the extrusion example) report both.
 
-**Decisions to make first** (record both in the item 10 spec):
+**Decisions recorded by item 10** in the
+[overlay scope contract](../../ARCHITECTURE.md#overlay-scope-contract):
 
-*Is the closing line inside its block?* Recommend
-**inclusive**: a cursor parked on `glEnd()` / `gluEnd()` belongs to the block
+*Is the closing line inside its block?* **Inclusive**: a cursor parked on
+`glEnd()` / `gluEnd()` belongs to the block
 it closes, which is what the gutter, the contour resolver, and users already
 expect. That changes the flat-cache behavior the core-internal test pins;
 update that test deliberately, in the same commit, with the reason.
@@ -124,9 +133,9 @@ update that test deliberately, in the same commit, with the reason.
 a contour (the extrusion example), any `gluVertex` after the strip's
 `glEnd()` is therefore unlabelled, and the enclosing polygon's own close is
 never seen. The gutter copies this on purpose for parity (`05f2c7a9`:
-"nothing after a glEnd is labelled until the next head"). Decide whether that
-is intended or an artifact. If it is fixed, fix the walker and the gutter in
-one commit, or the gutter/scene parity test fails.
+"nothing after a glEnd is labelled until the next head"). This is an artifact:
+`glEnd()` closes only the strip and must restore the enclosing GLU context.
+Fix the walker and gutter in one commit, or the gutter/scene parity test fails.
 
 #### Migration
 
@@ -439,7 +448,12 @@ e.g. `REPL_DEMO_DEP_SRCS`), and the `check-app-boot-band` /
 
 ---
 
-### 10. Written spec: overlay scope per primitive kind
+### 10. Written spec: overlay scope per primitive kind - DONE
+
+Implemented in the [overlay scope contract](../../ARCHITECTURE.md#overlay-scope-contract)
+and [user guide](../../USER_GUIDE.md#cursor-guides--vertex-overlays). These are
+the source of truth for the remaining refactors; the context below records
+why the spec was needed.
 
 The single-polygon rules grew piecemeal across `fb2cc2a8`, `3388794c`,
 `05f2c7a9` and `7a6b03f3`, and live only in code and test names. Today:

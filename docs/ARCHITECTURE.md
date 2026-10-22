@@ -814,10 +814,120 @@ The GLUT stroke font (`glutStrokeCharacter` / `glutStrokeWidth` /
 were added to [`tests/gl-stubs/include/GL/freeglut.h`](../tests/gl-stubs/include/GL/freeglut.h) and
 [`tests/gl-stubs/include/GL/gl.h`](../tests/gl-stubs/include/GL/gl.h) so `USE_GL_STUBS` builds still compile.
 
+#### Overlay scope contract
+
+Overlay scope selects geometry for **vertex labels**, **normal arrows**, and
+the **cursor outline highlight**. Compose the two tables below: select
+instances first, then narrow primitives only in Single polygon. This is the
+acceptance contract for items 1, 3, 4, and 7 of
+[Scope and Overlay Maintainability](plans/not-started/scope-and-overlay-maintainability.md);
+the implementation gaps listed below remain work for item 1.
+
+An *instance* is a flat-program copy of a source block or shape from loop
+unrolling or function inlining; *last* means last in execution order. Cursor
+matching uses source extents (including comment rows) and call-site provenance,
+so a function-call row can select its emitted geometry. With no match, cursor
+scopes select nothing.
+
+| Overlay scope | Vertex labels | Normal arrows | Cursor outline highlight |
+|---|---|---|---|
+| Cursor block, last instance | Last matching block's authored vertices | Last matching block's authored vertices | Last matching block or shape in each outline pass |
+| Cursor block, all instances | Every matching block's authored vertices | Every matching block's authored vertices | Every matching block or shape |
+| Whole scene | Every authored vertex, independent of cursor | Every authored vertex, independent of cursor | Every matching block or shape; still cursor-bound |
+| Cursor block, single polygon | Last instance, narrowed by vertex family below | Same instance and narrowing as labels | Last instance, narrowed by primitive kind below |
+
+Authored vertices are `glVertex*` and `gluVertex` commands; generated GLUT or
+tessellation vertices have no source row to annotate. Standing **Vertex
+outlines** and **Vertex points** remain scene-wide. Each consumer requires its
+own toggle. Replay's focused label and normal display are separate; cursor
+highlight is disabled during replay.
+
+| Primitive / cursor position | Labels and arrows in Last / All instances | Single polygon: labels and arrows | Single polygon: outline highlight |
+|---|---|---|---|
+| `glBegin(mode)` block | All authored vertices owned by the selected block copies | `glVertex*` in the cursor's GL primitive, using immediate-only ordinals | That GL primitive |
+| GLU polygon, cursor on its own begin/end or between contours | All polygon-owned authored vertices across contours | Whole polygon: no cursor contour resolves | Every contour of the polygon |
+| GLU contour, including its begin/end | All polygon-owned authored vertices across contours | `gluVertex` in the cursor's contour, using polygon-local tess-only ordinals | That contour's boundary, including a hole |
+| `glBegin` strip nested in a GLU contour, cursor inside the strip | Both vertex families owned by the strip; the containing polygon can also match | `glVertex*` in the cursor's strip primitive **and** `gluVertex` in the cursor's contour | The strip primitive **and** the contour boundary |
+| `glutSolid*` command | No labels or arrows: no authored vertices | No labels or arrows | Whole shape; falls back to Last instance |
+
+Whole scene drops the block gate for labels and arrows in every row; its
+highlight follows All instances without primitive narrowing. Last and All
+instances highlight entire matching `glBegin` blocks, all contours of matching
+GLU polygons, and whole matching GLUT shapes. A contour is not an instance:
+its polygon owns the instance and the tess-only ordinal run.
+
+Immediate-mode narrowing selects fixed-size point/line/triangle/quad groups.
+Strips select the segment, triangle, or quad completed by the cursor vertex
+(the earliest containing primitive for initial vertices); a fan includes
+vertex 0 and its selected pair. `GL_POLYGON` and `GL_LINE_LOOP` keep the whole
+block. Non-vertex rows select the next emitted immediate vertex, or the last
+one when past the final vertex. The `glBegin` head itself and unresolved
+ranges keep that family's whole block. **Narrowing must retain the cursor's
+own vertex**, including a `gluVertex` inside a strip: it belongs to the
+contour, not to a GL quad. `single_polygon_keeps_vertex()` in
+[`edit_overlays.c`](../src/subsystems/edit_overlays/edit_overlays.c) is the shared
+label/normal predicate; the tess highlight uses the same contour range.
+
+Display indices count **both** vertex families in one zero-based run,
+restarted by the innermost `glBegin` or `gluBegin(GLU_POLYGON)` head, never a
+contour head. A nested strip owns its interleaved `gluVertex` rows too. The
+gutter always shows that block index; a loop row may use `vn` when it
+represents several vertices. Decluttered labels in All instances and Whole
+scene use a global run to disambiguate copies; At vertex placement and
+single-copy scopes use the shared block index, and there the gutter and scene
+must agree. Immediate-only and tess-only
+ordinals are for filtering, never substitute display indices. Tess-only
+ordinals continue across contours, including vertices inside nested strips.
+
+Two boundary decisions govern item 1:
+
+- **Closing lines belong to the block they close.** Source extents include
+  heads and matching `glEnd()` / `gluEnd()` rows. A contour's close selects
+  that contour; the polygon's own close selects the whole polygon. An
+  immediate block's close selects its final primitive in Single polygon.
+  Unterminated blocks extend through the last committed row.
+- **A nested `glEnd()` closes only the immediate block.** It preserves the
+  enclosing GLU polygon and contour. Later `gluVertex` rows return to the
+  polygon's shared display run, resuming its saved index; the tess-only run
+  continues through the strip. Clearing the enclosing tess state is an
+  implementation artifact, not a scope rule.
+
+Current implementation gaps must be changed together with their tests:
+
+- The controller/gutter include `glEnd()`, but
+  `flatten_current_begin_block_source_extent()` in
+  [`flatten_query.c`](../src/repl/flatten_query.c) excludes it. Single polygon
+  therefore keeps the whole block on that row; `test_repl_core_internal`
+  pins the exclusive result.
+- `replay_walk_user_vertices()` in
+  [`replay.c`](../src/subsystems/replay/replay.c) resets tess depth and block
+  selection at `glBegin` / `glEnd`. The gutter mirrors it: after the nested
+  `glEnd`, cursor-scoped labels stay absent until another block head. Restore
+  the enclosing context in both consumers together.
+- The normal-arrow gate in `on_normal_vector_cmd()` clears on every
+  `CMD_TESS_END`, including contour closes. Later contours can lose
+  cursor-scoped arrows despite remaining selected for labels and outlines;
+  that gate must follow the polygon's lifetime.
+
+Scope membership precedes visibility and layout: in-scope labels can be
+off-screen, depth-occluded, or omitted by decluttering. Highlight Off / On /
+Clipped & culled changes visibility, not membership. Plain outlines precede
+all highlights so shared edges retain the highlight. GLU contour outlines
+lift face culling in every mode because hole winding does not determine the
+tessellated face's orientation.
+
+Coverage: [`test_edit_overlays.c`](../tests/test_edit_overlays.c) checks scopes,
+primitive/contour narrowing, cursor-vertex retention, and outline ordering;
+[`test_ui.c`](../tests/test_ui.c) checks gutter/scene numbering parity;
+[`test_repl_core_internal.c`](../tests/test_repl_core_internal.c) checks ranges.
+The parity sweep currently covers Last instance only; the cursor-vertex sweep
+exercises the shared predicate, not the normal-arrow gate. Item 7 extends
+coverage across all four scopes and three consumers with real catalog scenes.
+
 #### Edit Overlays: polygon outlines on geometry
 
 [`src/subsystems/edit_overlays/edit_overlays.c`](../src/subsystems/edit_overlays/edit_overlays.c) draws the "Vertex
-outlines" (F7, `show_vertex_outlines`) and cursor "highlight current
+outlines" (`show_vertex_outlines`) and cursor "highlight current
 polygon" (`highlight_current_poly`) overlays. `edit_overlays_render_outlines`
 sets the shared overlay GL state once - lighting off, depth test on with
 `glDepthMask(GL_FALSE)`, `glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)`, and
