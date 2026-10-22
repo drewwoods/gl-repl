@@ -344,6 +344,84 @@ static int cursor_polygon_group_range(GLenum mode, int ord, int count,
     return 1;
 }
 
+/* Source line of the gluBegin(GLU_CONTOUR) whose contour holds
+ * edit_line_idx (begin and gluEnd() lines included), or -1. */
+static int cursor_tess_contour_source_begin(int edit_line_idx) {
+    const GLCmd *doc = repl_state_document_cmds();
+    int doc_count = repl_state_document_count();
+    int depth = 0;
+    int open = -1;
+
+    for (int i = 0; i < doc_count; i++) {
+        int prev;
+
+        if (open < 0 && i > edit_line_idx)
+            break;  /* no later contour can start at or before the cursor */
+        if (!doc[i].valid)
+            continue;
+        prev = depth;
+        depth = repl_tess_advance_depth(doc[i].type, depth);
+        if (prev == 1 && depth == 2) {
+            open = i;
+        } else if (prev == 2 && depth < 2) {
+            if (open >= 0 && edit_line_idx >= open && edit_line_idx <= i)
+                return open;
+            open = -1;
+        }
+    }
+
+    /* Unterminated contour (the user is still typing it). */
+    if (open >= 0 && edit_line_idx >= open)
+        return open;
+    return -1;
+}
+
+ReplCursorPolygon repl_flatten_cursor_tess_contour(int edit_line_idx) {
+    ReplCursorPolygon out = { 0, 0, 0, 0 };
+    const GLCmd *flat_cmds = repl_state_flat_program_cmds();
+    int flat_cmd_count = repl_state_flat_program_count();
+    int src_begin;
+    int depth = 0;
+    int ord = 0;
+    int first = -1;
+
+    if (edit_line_idx < 0 || edit_line_idx >= repl_state_document_count())
+        return out;
+    src_begin = cursor_tess_contour_source_begin(edit_line_idx);
+    if (src_begin < 0)
+        return out;
+
+    for (int i = 0; i < flat_cmd_count; i++) {
+        CmdType t;
+        int prev;
+
+        if (!flat_cmds[i].valid)
+            continue;
+        t = flat_cmds[i].type;
+        if (t == CMD_TESS_BEGIN_POLYGON) {
+            if (first >= 0)
+                break;  /* unterminated contour: its polygon ended here */
+            ord = 0;
+        }
+        prev = depth;
+        depth = repl_tess_advance_depth(t, depth);
+        if (prev == 1 && depth == 2 && flat_cmds[i].src_cmd_idx == src_begin) {
+            first = ord;
+        } else if (prev == 2 && depth < 2 && first >= 0) {
+            break;
+        }
+        if (t == CMD_TESS_VERTEX && depth > 0)
+            ord++;
+    }
+
+    if (first < 0 || ord <= first)
+        return out;  /* contour not in the flat program, or vertex-less */
+    out.valid = 1;
+    out.first = first;
+    out.last = ord - 1;
+    return out;
+}
+
 ReplCursorPolygon repl_flatten_cursor_polygon(int edit_line_idx) {
     ReplCursorPolygon out = { 0, 0, 0, 0 };
     const GLCmd *flat_cmds = repl_state_flat_program_cmds();

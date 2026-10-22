@@ -1635,6 +1635,97 @@ int main() {
         ASSERT_INT("top-level line outside block is invalid", p.valid, 0);
     }
 
+    /* repl_flatten_cursor_tess_contour: SINGLE_POLYGON scope for a tess
+     * polygon resolves the contour under the cursor as a polygon-local
+     * ordinal range. The two contours of the glu-concave-arrow-cutout shape,
+     * with a comment between them and a glBegin block after. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("gluBegin(GLU_POLYGON);");   /* 0 */
+        editor_feed_line("gluBegin(GLU_CONTOUR);");   /* 1 */
+        editor_feed_line("gluVertex(0, 0, 0);");      /* 2  v0 */
+        editor_feed_line("gluVertex(1, 0, 0);");      /* 3  v1 */
+        editor_feed_line("gluVertex(0, 1, 0);");      /* 4  v2 */
+        editor_feed_line("gluEnd();");                /* 5 */
+        editor_feed_line("// hole");                  /* 6 */
+        editor_feed_line("gluBegin(GLU_CONTOUR);");   /* 7 */
+        editor_feed_line("gluVertex(0.2, 0.2, 0);");  /* 8  v3 */
+        editor_feed_line("gluVertex(0.4, 0.2, 0);");  /* 9  v4 */
+        editor_feed_line("gluVertex(0.4, 0.4, 0);");  /* 10 v5 */
+        editor_feed_line("gluVertex(0.2, 0.4, 0);");  /* 11 v6 */
+        editor_feed_line("gluEnd();");                /* 12 */
+        editor_feed_line("gluEnd();");                /* 13 */
+        editor_feed_line("glBegin(GL_TRIANGLES);");   /* 14 */
+        editor_feed_line("glVertex3f(0, 0, 0);");     /* 15 */
+        editor_feed_line("glEnd();");                 /* 16 */
+        repl_flatten_commands(editor_state_edit_line());
+
+        ReplCursorPolygon p;
+
+        p = repl_flatten_cursor_tess_contour(0);
+        ASSERT_INT("tess: polygon gluBegin line is in no contour", p.valid, 0);
+        p = repl_flatten_cursor_tess_contour(1);
+        ASSERT_TRUE("tess: contour gluBegin line -> outer contour",
+                    p.valid && p.first == 0 && p.last == 2);
+        p = repl_flatten_cursor_tess_contour(3);
+        ASSERT_TRUE("tess: outer vertex -> outer contour",
+                    p.valid && p.first == 0 && p.last == 2);
+        p = repl_flatten_cursor_tess_contour(5);
+        ASSERT_TRUE("tess: contour gluEnd line -> its contour",
+                    p.valid && p.first == 0 && p.last == 2);
+        p = repl_flatten_cursor_tess_contour(6);
+        ASSERT_INT("tess: comment between contours is in no contour", p.valid, 0);
+        p = repl_flatten_cursor_tess_contour(7);
+        ASSERT_TRUE("tess: second contour gluBegin -> inner contour",
+                    p.valid && p.first == 3 && p.last == 6);
+        p = repl_flatten_cursor_tess_contour(10);
+        ASSERT_TRUE("tess: inner vertex -> inner contour, ordinals run on",
+                    p.valid && p.first == 3 && p.last == 6);
+        p = repl_flatten_cursor_tess_contour(12);
+        ASSERT_TRUE("tess: inner contour gluEnd -> inner contour",
+                    p.valid && p.first == 3 && p.last == 6);
+        p = repl_flatten_cursor_tess_contour(13);
+        ASSERT_INT("tess: polygon gluEnd line is in no contour", p.valid, 0);
+        p = repl_flatten_cursor_tess_contour(15);
+        ASSERT_INT("tess: glBegin block is no contour", p.valid, 0);
+        ASSERT_INT("tess: no fan anchor", p.fan_anchor, 0);
+    }
+
+    /* Ordinals are polygon-local: a second polygon restarts them, and a
+     * polygon unrolled by a loop resolves against its first copy. */
+    {
+        glr_ctrl_reset_all(); declare_test_vars();
+        editor_feed_line("gluBegin(GLU_POLYGON);");     /* 0 */
+        editor_feed_line("gluBegin(GLU_CONTOUR);");     /* 1 */
+        editor_feed_line("gluVertex(0, 0, 0);");        /* 2 */
+        editor_feed_line("gluVertex(1, 0, 0);");        /* 3 */
+        editor_feed_line("gluVertex(0, 1, 0);");        /* 4 */
+        editor_feed_line("gluEnd();");                  /* 5 */
+        editor_feed_line("gluEnd();");                  /* 6 */
+        editor_feed_line("for(k, 0, 2) {");             /* 7 */
+        editor_feed_line("gluBegin(GLU_POLYGON);");     /* 8 */
+        editor_feed_line("gluBegin(GLU_CONTOUR);");     /* 9 */
+        editor_feed_line("gluVertex(k, 0, 1);");        /* 10 v0 */
+        editor_feed_line("gluVertex(k, 1, 1);");        /* 11 v1 */
+        editor_feed_line("gluEnd();");                  /* 12 */
+        editor_feed_line("gluBegin(GLU_CONTOUR);");     /* 13 */
+        editor_feed_line("gluVertex(k, 0, 2);");        /* 14 v2 */
+        editor_feed_line("gluVertex(k, 1, 2);");        /* 15 v3 */
+        editor_feed_line("gluVertex(k, 2, 2);");        /* 16 v4 */
+        editor_feed_line("gluEnd();");                  /* 17 */
+        editor_feed_line("gluEnd();");                  /* 18 */
+        editor_feed_line("}");                          /* 19 */
+        repl_flatten_commands(editor_state_edit_line());
+
+        ReplCursorPolygon p;
+        p = repl_flatten_cursor_tess_contour(11);
+        ASSERT_TRUE("tess: second polygon restarts ordinals",
+                    p.valid && p.first == 0 && p.last == 1);
+        p = repl_flatten_cursor_tess_contour(15);
+        ASSERT_TRUE("tess: looped polygon's second contour is block-local",
+                    p.valid && p.first == 2 && p.last == 4);
+    }
+
     /* repl_flatten_cursor_polygon: per-mode grouping (GL_TRIANGLES,
      * GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN, GL_QUAD_STRIP, GL_LINES,
      * GL_LINE_STRIP, GL_POINTS) and the whole-block modes (GL_POLYGON,

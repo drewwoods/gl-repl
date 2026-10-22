@@ -61,14 +61,14 @@ int replay_compute_fade_skip_limits(FlatProgramView flat_program, int *out_limit
         case CMD_END:   open_begin = -1; break;
         case CMD_TESS_BEGIN_POLYGON:
             open_tess = pc;
-            tess_depth = replay_advance_tess_depth(flat_cmds[pc].type, tess_depth);
+            tess_depth = repl_tess_advance_depth(flat_cmds[pc].type, tess_depth);
             break;
         case CMD_TESS_BEGIN_CONTOUR:
-            tess_depth = replay_advance_tess_depth(flat_cmds[pc].type, tess_depth);
+            tess_depth = repl_tess_advance_depth(flat_cmds[pc].type, tess_depth);
             break;
         case CMD_TESS_END: {
             int old_depth = tess_depth;
-            tess_depth = replay_advance_tess_depth(flat_cmds[pc].type, tess_depth);
+            tess_depth = repl_tess_advance_depth(flat_cmds[pc].type, tess_depth);
             if (old_depth == 1 && tess_depth == 0) {
                 open_tess = -1;
             }

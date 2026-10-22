@@ -556,18 +556,15 @@ static int outline_block_matches_cursor(int begin_idx, int is_tess,
                                         const OverlayWalkCtx *ctx) {
     const GLCmd *cmds = ctx->program.cmds;
     int cmd_count = ctx->program.cmd_count;
-    int depth = is_tess ? 1 : 0;
+    int depth = 1;
 
     for (int i = begin_idx; i < cmd_count; i++) {
         if (!cmds[i].valid) continue;
         if (outline_cmd_matches_cursor(i, ctx)) return 1;
         if (!is_tess && i > begin_idx && cmds[i].type == CMD_END) break;
         if (is_tess && i > begin_idx) {
-            if (cmds[i].type == CMD_TESS_BEGIN_POLYGON) depth++;
-            else if (cmds[i].type == CMD_TESS_END) {
-                depth--;
-                if (depth == 0) break;
-            }
+            depth = repl_tess_advance_depth(cmds[i].type, depth);
+            if (depth == 0) break;
         }
     }
     return 0;
@@ -814,6 +811,7 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
     int matrix_depth = 0;
     int tess_in_contour = 0;
     int tess_poly_is_current = 0;
+    int tess_depth = 0;
     int one_instance = cursor_scope_selects_one_instance(ctx);
     int selected_head = one_instance
                         ? last_selected_block_head(ctx, CMD_TESS_BEGIN_POLYGON, 1)
@@ -834,6 +832,7 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
         if (!tess_in_contour && overlay_gl_track_cmd(&cmds[i], &trk))
             continue;
 
+        tess_depth = repl_tess_advance_depth(cmds[i].type, tess_depth);
         switch (cmds[i].type) {
         case CMD_TESS_BEGIN_POLYGON:
             tess_poly_is_current = ctx->highlight_current_poly &&
@@ -883,7 +882,9 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
                 overlay_gl_resume(ctx, &trk.st);
                 contour_clip_suspended = 0;
             }
-            if (!tess_in_contour) tess_poly_is_current = 0;
+            /* Only the polygon's own gluEnd() ends "current": a contour's
+             * gluEnd() must leave it standing for the contours after it. */
+            if (tess_depth == 0) tess_poly_is_current = 0;
             break;
         default:
             break;
@@ -1249,6 +1250,11 @@ typedef struct {
     int   poly_first;
     int   poly_last;
     int   poly_fan_anchor;
+    /* SINGLE_POLYGON scope, tess polygons: the cursor contour's polygon-local
+     * ordinal range. contour_valid == 0 -> whole-polygon labels. */
+    int   contour_valid;
+    int   contour_first;
+    int   contour_last;
     /* Scene depth for the occlusion cull, captured by the controller at the
      * end of the PREVIOUS frame - this pass performs no readback of its own.
      * See OverlayDepthSnapshot in edit_overlays.h for why, and for the
@@ -1468,9 +1474,10 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
      * is last, so every new copy simply discards what the previous one
      * collected. All-instances, Whole-scene and At-vertex modes keep all
      * copies; declutter pass still drops whatever doesn't fit. Single-polygon
-     * narrows last-instance further to the primitive under the cursor - but
-     * only for glBegin blocks (primitive_mode != 0); tess (GLU) polygons keep
-     * whole-block labels by design. */
+     * narrows last-instance further: a glBegin block (primitive_mode != 0) to
+     * the primitive under the cursor, a tess (GLU) polygon to the contour
+     * under the cursor. A tess polygon is one primitive to the tessellator,
+     * so its contour is the closest thing to "the polygon being edited". */
     if (state->vertex_idx_in_block == 0) {
         ctx->block_instances++;
         if ((ctx->scope == OVERLAY_SCOPE_LAST_INSTANCE ||
@@ -1485,6 +1492,13 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
         int ord = state->vertex_idx_in_block;
         if (!((ord >= ctx->poly_first && ord <= ctx->poly_last) ||
               (ctx->poly_fan_anchor && ord == 0)))
+            return;
+    }
+    /* in_block with no primitive mode = inside a tess polygon. */
+    if (ctx->scope == OVERLAY_SCOPE_SINGLE_POLYGON && ctx->contour_valid &&
+        state->in_block && state->primitive_mode == 0) {
+        int ord = state->vertex_idx_in_block;
+        if (ord < ctx->contour_first || ord > ctx->contour_last)
             return;
     }
     if (ctx->count >= VERTEX_LABEL_MAX)
@@ -1996,6 +2010,9 @@ void edit_overlays_render_vertex_numbers(const OverlayWalkCtx *walk_ctx,
     label_ctx.poly_first      = walk_ctx ? walk_ctx->cursor_poly_first : 0;
     label_ctx.poly_last       = walk_ctx ? walk_ctx->cursor_poly_last : 0;
     label_ctx.poly_fan_anchor = walk_ctx ? walk_ctx->cursor_poly_fan_anchor : 0;
+    label_ctx.contour_valid   = walk_ctx ? walk_ctx->cursor_contour_valid : 0;
+    label_ctx.contour_first   = walk_ctx ? walk_ctx->cursor_contour_first : 0;
+    label_ctx.contour_last    = walk_ctx ? walk_ctx->cursor_contour_last : 0;
 
     /* The scene's projection + viewport are live here and the walker leaves
      * them intact (it only pushes/pops the modelview), so snapshot them once

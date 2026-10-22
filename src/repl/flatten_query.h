@@ -75,4 +75,19 @@ typedef struct {
 
 ReplCursorPolygon repl_flatten_cursor_polygon(int edit_line_idx);
 
+/* The tessellator counterpart: the gluBegin(GLU_CONTOUR) ... gluEnd() run
+ * holding the cursor, as a range of polygon-local tess-vertex ordinals.
+ * Ordinals count gluVertex calls from the polygon's gluBegin(GLU_POLYGON)
+ * and run on across contours (the inner contour of a two-contour polygon
+ * starts where the outer one stopped), which is the numbering the 3D vertex
+ * labels and the code-panel gutter both show.
+ *
+ * The cursor counts as in a contour from its gluBegin(GLU_CONTOUR) line
+ * through its gluEnd() line, inclusive. valid == 0 means whole-polygon
+ * behavior: cursor outside every contour (on the polygon's own begin/end
+ * line, between contours, outside any polygon), or an empty contour.
+ * Resolved against the first flat instance of the contour; unrolled copies
+ * of a polygon share their ordinal layout. fan_anchor is always 0. */
+ReplCursorPolygon repl_flatten_cursor_tess_contour(int edit_line_idx);
+
 #endif /* REPL_FLATTEN_QUERY_H */

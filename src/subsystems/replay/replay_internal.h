@@ -24,18 +24,6 @@
 #define REPLAY_SPEED_STEP_UP   1.5f
 #define REPLAY_SPEED_STEP_DOWN 0.67f
 
-static inline int replay_advance_tess_depth(CmdType type, int depth) {
-    switch (type) {
-    case CMD_TESS_BEGIN_POLYGON: return 1;
-    case CMD_TESS_BEGIN_CONTOUR: return (depth == 1) ? 2 : depth;
-    case CMD_TESS_END:
-        if (depth == 2) return 1;
-        if (depth == 1) return 0;
-        return depth;
-    default: return depth;
-    }
-}
-
 void replay_clear_fade_batches(void);
 void replay_push_fade_batch(int old_pc, int new_pc);
 void replay_clamp_fade_batches(int max_pc);

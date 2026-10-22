@@ -684,6 +684,9 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
     pack->walk.cursor_poly_first = 0;
     pack->walk.cursor_poly_last = 0;
     pack->walk.cursor_poly_fan_anchor = 0;
+    pack->walk.cursor_contour_valid = 0;
+    pack->walk.cursor_contour_first = 0;
+    pack->walk.cursor_contour_last = 0;
     if (presentation.overlay_scope == OVERLAY_SCOPE_SINGLE_POLYGON) {
         ReplCursorPolygon poly =
             repl_flatten_cursor_polygon(pack->walk.cursor.edit_line_idx);
@@ -691,6 +694,12 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
         pack->walk.cursor_poly_first = poly.first;
         pack->walk.cursor_poly_last = poly.last;
         pack->walk.cursor_poly_fan_anchor = poly.fan_anchor;
+
+        ReplCursorPolygon contour =
+            repl_flatten_cursor_tess_contour(pack->walk.cursor.edit_line_idx);
+        pack->walk.cursor_contour_valid = contour.valid;
+        pack->walk.cursor_contour_first = contour.first;
+        pack->walk.cursor_contour_last = contour.last;
     }
 
     /* Silhouette outlines only make sense over filled geometry; in any

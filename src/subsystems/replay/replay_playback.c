@@ -55,7 +55,7 @@ static int replay_find_open_tess_polygon_before(int limit, int *out_depth) {
             tess_depth = 1;
         } else {
             int old_depth = tess_depth;
-            tess_depth = replay_advance_tess_depth(type, tess_depth);
+            tess_depth = repl_tess_advance_depth(type, tess_depth);
             if (type == CMD_TESS_END && old_depth == 1 && tess_depth == 0) {
                 poly_start = -1;
             }
@@ -203,10 +203,10 @@ static int replay_next_polygon_limit(int start, int *fade_begin, int *fade_end) 
                 if (type == CMD_TESS_BEGIN_POLYGON) {
                     tess_depth = 1;
                 } else if (type == CMD_TESS_BEGIN_CONTOUR) {
-                    tess_depth = replay_advance_tess_depth(type, tess_depth);
+                    tess_depth = repl_tess_advance_depth(type, tess_depth);
                 } else if (type == CMD_TESS_END) {
                     int old_depth = tess_depth;
-                    tess_depth = replay_advance_tess_depth(type, tess_depth);
+                    tess_depth = repl_tess_advance_depth(type, tess_depth);
                     if (old_depth == 1 && tess_depth == 0) {
                         if (fade_begin) *fade_begin = start;
                         if (fade_end) *fade_end = tess_idx;
@@ -261,11 +261,11 @@ static int replay_next_vertex_limit(int start, int *fade_begin, int *fade_end) {
             tess_depth = 1;
             break;
         case CMD_TESS_BEGIN_CONTOUR:
-            tess_depth = replay_advance_tess_depth(t, tess_depth);
+            tess_depth = repl_tess_advance_depth(t, tess_depth);
             break;
         case CMD_TESS_END: {
             int old_depth = tess_depth;
-            tess_depth = replay_advance_tess_depth(t, tess_depth);
+            tess_depth = repl_tess_advance_depth(t, tess_depth);
             if (old_depth == 1 && tess_depth == 0) {
                 if (fade_begin) *fade_begin = (open_tess_poly >= 0) ? open_tess_poly : start;
                 if (fade_end) *fade_end = flat_idx;

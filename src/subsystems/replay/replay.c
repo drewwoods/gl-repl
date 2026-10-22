@@ -137,7 +137,7 @@ static int replay_walk_block_matches_cursor(int begin_idx, int is_tess,
                                             int cursor_block_end,
                                             unsigned int cursor_func_scope_mask,
                                             FlatProgramView program) {
-    int depth = is_tess ? 1 : 0;
+    int depth = 1;
 
     for (int i = begin_idx; i < program.cmd_count; i++) {
         if (!program.cmds[i].valid) continue;
@@ -150,11 +150,8 @@ static int replay_walk_block_matches_cursor(int begin_idx, int is_tess,
         if (!is_tess && i > begin_idx && program.cmds[i].type == CMD_END)
             break;
         if (is_tess && i > begin_idx) {
-            if (program.cmds[i].type == CMD_TESS_BEGIN_POLYGON) depth++;
-            else if (program.cmds[i].type == CMD_TESS_END) {
-                depth--;
-                if (depth == 0) break;
-            }
+            depth = repl_tess_advance_depth(program.cmds[i].type, depth);
+            if (depth == 0) break;
         }
     }
 
@@ -243,16 +240,16 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
                                                    program)
                 : 1;
             state.vertex_idx_in_block = 0;
-            tess_depth = replay_advance_tess_depth(cmd->type, tess_depth);
+            tess_depth = repl_tess_advance_depth(cmd->type, tess_depth);
             state.normal[0] = 0.0f; state.normal[1] = 0.0f; state.normal[2] = 1.0f;
             state.tess_normal[0] = 0.0f; state.tess_normal[1] = 0.0f; state.tess_normal[2] = 1.0f;
             break;
         case CMD_TESS_BEGIN_CONTOUR:
-            tess_depth = replay_advance_tess_depth(cmd->type, tess_depth);
+            tess_depth = repl_tess_advance_depth(cmd->type, tess_depth);
             break;
         case CMD_TESS_END: {
             int old_depth = tess_depth;
-            tess_depth = replay_advance_tess_depth(cmd->type, tess_depth);
+            tess_depth = repl_tess_advance_depth(cmd->type, tess_depth);
             if (old_depth == 1 && tess_depth == 0) {
                 state.in_block = 0;
                 state.block_selected = selected_block_only ? 0 : 1;

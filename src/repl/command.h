@@ -406,4 +406,23 @@ static inline int repl_cmd_consumes_current_color(CmdType type) {
             repl_cmd_is_glut_solid(type));
 }
 
+/* Tessellator nesting depth after `type`: 0 outside a polygon, 1 inside
+ * gluBegin(GLU_POLYGON), 2 inside one of its contours. A contour closes with
+ * the same gluEnd() spelling as the polygon, so anything that scans for "the
+ * end of this polygon" must count depth with this rather than stop at the
+ * first CMD_TESS_END - which is the first contour's, and drops every later
+ * contour from the scan. Out-of-place commands (a contour outside a polygon,
+ * a nested polygon) are absorbed the way the tessellator absorbs them. */
+static inline int repl_tess_advance_depth(CmdType type, int depth) {
+    switch (type) {
+    case CMD_TESS_BEGIN_POLYGON: return 1;
+    case CMD_TESS_BEGIN_CONTOUR: return (depth == 1) ? 2 : depth;
+    case CMD_TESS_END:
+        if (depth == 2) return 1;
+        if (depth == 1) return 0;
+        return depth;
+    default: return depth;
+    }
+}
+
 #endif /* REPL_COMMAND_H */

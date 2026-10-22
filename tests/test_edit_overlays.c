@@ -6,6 +6,7 @@
 #include "repl/state_views.h"
 #include "repl/state_owners.h"
 #include "repl/flatten.h"
+#include "repl/flatten_query.h"
 #include "repl/pipeline.h"
 #include "app/glr_ctrl.h"
 #include "subsystems/edit_overlays/edit_overlays.h"
@@ -258,6 +259,26 @@ static void test_outline_block_matches_cursor(void) {
 
     cmds[2].src_cmd_idx = 5;
     ASSERT_INT("tess match", outline_block_matches_cursor(0, 1, &ctx), 1);
+
+    /* Two closed contours, cursor on the second. The first contour's
+     * gluEnd() is not the polygon's: the scan used to stop there, so a cursor
+     * in any later contour never matched its own polygon. */
+    memset(cmds, 0, sizeof(cmds));
+    cmds[0].valid = 1; cmds[0].type = CMD_TESS_BEGIN_POLYGON;
+    cmds[1].valid = 1; cmds[1].type = CMD_TESS_BEGIN_CONTOUR;
+    cmds[2].valid = 1; cmds[2].type = CMD_TESS_VERTEX; cmds[2].src_cmd_idx = 2;
+    cmds[3].valid = 1; cmds[3].type = CMD_TESS_END;
+    cmds[4].valid = 1; cmds[4].type = CMD_TESS_BEGIN_CONTOUR;
+    cmds[5].valid = 1; cmds[5].type = CMD_TESS_VERTEX; cmds[5].src_cmd_idx = 5;
+    cmds[6].valid = 1; cmds[6].type = CMD_TESS_END;
+    cmds[7].valid = 1; cmds[7].type = CMD_TESS_END;
+    cmds[8].valid = 1; cmds[8].type = CMD_TESS_VERTEX; cmds[8].src_cmd_idx = 8;
+    ASSERT_INT("tess match in second contour",
+               outline_block_matches_cursor(0, 1, &ctx), 1);
+    /* ...but the scan still ends at the polygon's own gluEnd(). */
+    ctx.cursor.edit_line_idx = 8;
+    ASSERT_INT("tess no match past the polygon's gluEnd",
+               outline_block_matches_cursor(0, 1, &ctx), 0);
 }
 
 static void test_build_vertex_walk_context(void) {
@@ -1460,6 +1481,53 @@ static void test_render_outlines_tess(void) {
                    &log, VERTEX_OUTLINE_TESS_WIDTH * VERTEX_OUTLINE_BOLD_SCALE), 0);
     ASSERT_INT("tess current-poly highlight ignores inverted outline color",
                trace_count_line(&log, "glColor4f 0.45 0.8 0.3 1"), 0);
+
+    /* Two closed contours (the real flat form: each contour has its own
+     * gluEnd). The current-poly highlight draws at the plain tess width while
+     * a non-current contour under Bold draws scaled, so the widths tell the
+     * two apart. A contour's gluEnd() used to clear "current", so the second
+     * contour fell back to a plain outline - and with the cursor in the
+     * second contour, neither contour was current. */
+    GLCmd two[10];
+    mk_cmd(&two[0], CMD_TESS_BEGIN_POLYGON, 0, 0, 0); two[0].src_cmd_idx = 0;
+    mk_cmd(&two[1], CMD_TESS_BEGIN_CONTOUR, 0, 0, 0); two[1].src_cmd_idx = 1;
+    mk_cmd(&two[2], CMD_TESS_VERTEX, 0.0f, 0.0f, 0.0f); two[2].src_cmd_idx = 2;
+    mk_cmd(&two[3], CMD_TESS_VERTEX, 1.0f, 0.0f, 0.0f); two[3].src_cmd_idx = 3;
+    mk_cmd(&two[4], CMD_TESS_END, 0, 0, 0);           two[4].src_cmd_idx = 4;
+    mk_cmd(&two[5], CMD_TESS_BEGIN_CONTOUR, 0, 0, 0); two[5].src_cmd_idx = 5;
+    mk_cmd(&two[6], CMD_TESS_VERTEX, 0.2f, 0.2f, 0.0f); two[6].src_cmd_idx = 6;
+    mk_cmd(&two[7], CMD_TESS_VERTEX, 0.4f, 0.2f, 0.0f); two[7].src_cmd_idx = 7;
+    mk_cmd(&two[8], CMD_TESS_END, 0, 0, 0);           two[8].src_cmd_idx = 8;
+    mk_cmd(&two[9], CMD_TESS_END, 0, 0, 0);           two[9].src_cmd_idx = 9;
+
+    memset(&tctx, 0, sizeof(tctx));
+    tctx.program.cmds = two;
+    tctx.program.cmd_count = 10;
+    tctx.cursor.cursor_block_begin = -1;
+    tctx.cursor.cursor_block_end = -1;
+    tctx.highlight_current_poly = 1;
+    tctx.show_vertex_outlines = 1;
+    tctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD;
+    {
+        const int cursor_lines[2] = { 3, 7 };
+        for (int c = 0; c < 2; c++) {
+            char lbl[96];
+            tctx.cursor.edit_line_idx = cursor_lines[c];
+            trace_begin();
+            edit_overlays_render_outlines(&tctx, 0, 0);
+            trace_end(&log);
+            snprintf(lbl, sizeof lbl,
+                     "cursor in contour %d: both contours highlighted", c + 1);
+            ASSERT_INT(lbl, trace_count_line_width_near(
+                                &log, VERTEX_OUTLINE_TESS_WIDTH), 2);
+            snprintf(lbl, sizeof lbl,
+                     "cursor in contour %d: no contour drawn as plain outline",
+                     c + 1);
+            ASSERT_INT(lbl, trace_count_line_width_near(
+                                &log, VERTEX_OUTLINE_TESS_WIDTH *
+                                          VERTEX_OUTLINE_BOLD_SCALE), 0);
+        }
+    }
 }
 
 /* render_outlines_glut_pass: re-draws glutSolid* shapes in wireframe under
@@ -2164,6 +2232,56 @@ static void test_single_polygon_label_scope(void) {
     ASSERT_INT("tess (primitive_mode 0) bypasses the per-primitive filter",
                tess.count, 8);
 
+    /* The tess filter is the cursor contour's ordinal range instead. Inside a
+     * polygon (in_block, primitive_mode 0) only [3, 5] labels, numbered by
+     * polygon-local ordinal so the inner contour keeps reading v3..v5. */
+    VertexLabelCtx contour;
+    memset(&contour, 0, sizeof(contour));
+    contour.mode = OVERLAY_VERTEX_LABEL_INDEX;
+    contour.scope = OVERLAY_SCOPE_SINGLE_POLYGON;
+    contour.contour_valid = 1;
+    contour.contour_first = 3;
+    contour.contour_last = 5;
+    memcpy(contour.proj, id, sizeof(id));
+    contour.vw = 1024;
+    contour.vh = 768;
+    state.primitive_mode = 0;
+    state.in_block = 1;
+    for (int i = 0; i < 8; i++) {
+        state.vertex_idx_in_block = i;
+        on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &contour);
+    }
+    ASSERT_INT("single-polygon tess labels only the cursor contour",
+               contour.count, 3);
+    ASSERT_TRUE("cursor contour keeps polygon-local numbering",
+                strcmp(contour.labels[0].idx, " v3") == 0 &&
+                strcmp(contour.labels[1].idx, " v4") == 0 &&
+                strcmp(contour.labels[2].idx, " v5") == 0);
+
+    /* The contour range never narrows a glBegin block... */
+    memset(&contour.labels, 0, sizeof(contour.labels));
+    contour.count = 0;
+    contour.block_instances = 0;
+    state.primitive_mode = GL_POLYGON;
+    for (int i = 0; i < 8; i++) {
+        state.vertex_idx_in_block = i;
+        on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &contour);
+    }
+    ASSERT_INT("contour range ignored for a glBegin block", contour.count, 8);
+
+    /* ...and only applies in single-polygon scope. */
+    contour.count = 0;
+    contour.block_instances = 0;
+    contour.scope = OVERLAY_SCOPE_LAST_INSTANCE;
+    state.primitive_mode = 0;
+    for (int i = 0; i < 8; i++) {
+        state.vertex_idx_in_block = i;
+        on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &contour);
+    }
+    ASSERT_INT("contour range ignored outside single-polygon scope",
+               contour.count, 8);
+    state.in_block = 0;
+
     /* GL_TRIANGLE_FAN: the fan center (ordinal 0) labels alongside the
      * selected [first, last] pair. */
     VertexLabelCtx fan;
@@ -2536,6 +2654,117 @@ static void test_vertex_numbers_use_source_begin_block(void) {
                trace_count_line(&log, "glRasterPos2f 256 384"), 0);
     ASSERT_INT("cursor source block vertex labelled",
                trace_count_line(&log, "glRasterPos2f 512 384"), 1);
+}
+
+/* End-to-end over a real two-contour tess polygon (the glu-concave-arrow-
+ * cutout shape): the cursor in the SECOND contour still selects the polygon
+ * for vertex labels, and single-polygon scope narrows them to that contour.
+ * The walk context is built the way the controller builds it - flat block
+ * cache for cursor_block_*, repl_flatten_cursor_tess_contour for the contour.
+ * At-vertex placement so the declutter pass cannot drop a label. */
+static void render_cutout_labels(int edit_line, int scope, char *out,
+                                 size_t out_sz) {
+    OverlayWalkCtx walk;
+    ReplCursorPolygon contour;
+    TraceLog log;
+
+    repl_flatten_refresh_current_block_highlight(edit_line);
+    memset(&walk, 0, sizeof(walk));
+    walk.program = repl_state_flat_program_view();
+    walk.cursor.edit_line_idx = edit_line;
+    walk.cursor.cursor_block_begin = repl_state_flat_program_current_block_begin();
+    walk.cursor.cursor_block_end = repl_state_flat_program_current_block_end();
+    if (scope == OVERLAY_SCOPE_SINGLE_POLYGON) {
+        contour = repl_flatten_cursor_tess_contour(edit_line);
+        walk.cursor_contour_valid = contour.valid;
+        walk.cursor_contour_first = contour.first;
+        walk.cursor_contour_last = contour.last;
+    }
+
+    trace_begin();
+    edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX, 0,
+                                        scope,
+                                        OVERLAY_LABEL_PLACEMENT_AT_VERTEX,
+                                        NULL);
+    trace_end(&log);
+    trace_bitmap_text(&log, out, out_sz);
+}
+
+static int count_label_text(const char *text, const char *label) {
+    int n = 0;
+    size_t len = strlen(label);
+    for (const char *p = strstr(text, label); p; p = strstr(p + len, label))
+        n++;
+    return n;
+}
+
+static void test_tess_contour_vertex_labels(void) {
+    printf("--- edit_overlays tess vertex labels per contour ---\n");
+
+    float idm[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
+    extern float g_gl_stub_modelview_matrix[16];
+    memcpy(g_gl_stub_modelview_matrix, idm, sizeof(idm));
+
+    glr_ctrl_reset_all();
+    editor_feed_line("gluBegin(GLU_POLYGON);");      /* 0 */
+    editor_feed_line("gluBegin(GLU_CONTOUR);");      /* 1 */
+    editor_feed_line("gluVertex(-0.8, -0.8, 0);");   /* 2  v0 */
+    editor_feed_line("gluVertex(0.8, -0.8, 0);");    /* 3  v1 */
+    editor_feed_line("gluVertex(0, 0.8, 0);");       /* 4  v2 */
+    editor_feed_line("gluEnd();");                   /* 5 */
+    editor_feed_line("gluBegin(GLU_CONTOUR);");      /* 6 */
+    editor_feed_line("gluVertex(-0.2, -0.2, 0);");   /* 7  v3 */
+    editor_feed_line("gluVertex(0.2, -0.2, 0);");    /* 8  v4 */
+    editor_feed_line("gluVertex(0.2, 0.2, 0);");     /* 9  v5 */
+    editor_feed_line("gluVertex(-0.2, 0.2, 0);");    /* 10 v6 */
+    editor_feed_line("gluEnd();");                   /* 11 */
+    editor_feed_line("gluEnd();");                   /* 12 */
+    repl_flatten_commands(editor_state_edit_line());
+
+    char text[512];
+    char lbl[96];
+    static const char *const all_labels[7] = {
+        " v0", " v1", " v2", " v3", " v4", " v5", " v6"
+    };
+
+    /* Last-instance scope, cursor in either contour: the whole polygon. */
+    {
+        const int cursor_lines[2] = { 3, 8 };
+        for (int c = 0; c < 2; c++) {
+            render_cutout_labels(cursor_lines[c], OVERLAY_SCOPE_LAST_INSTANCE,
+                                 text, sizeof text);
+            for (int v = 0; v < 7; v++) {
+                snprintf(lbl, sizeof lbl,
+                         "last-instance, cursor in contour %d: %s drawn once",
+                         c + 1, all_labels[v]);
+                ASSERT_INT(lbl, count_label_text(text, all_labels[v]), 1);
+            }
+        }
+    }
+
+    /* Single-polygon scope narrows to the cursor's contour. */
+    render_cutout_labels(8, OVERLAY_SCOPE_SINGLE_POLYGON, text, sizeof text);
+    for (int v = 0; v < 7; v++) {
+        snprintf(lbl, sizeof lbl, "single-polygon, inner contour: %s %s",
+                 all_labels[v], v >= 3 ? "drawn" : "hidden");
+        ASSERT_INT(lbl, count_label_text(text, all_labels[v]), v >= 3 ? 1 : 0);
+    }
+    render_cutout_labels(2, OVERLAY_SCOPE_SINGLE_POLYGON, text, sizeof text);
+    for (int v = 0; v < 7; v++) {
+        snprintf(lbl, sizeof lbl, "single-polygon, outer contour: %s %s",
+                 all_labels[v], v < 3 ? "drawn" : "hidden");
+        ASSERT_INT(lbl, count_label_text(text, all_labels[v]), v < 3 ? 1 : 0);
+    }
+
+    /* Cursor on the polygon's own gluEnd(): in no contour, so single-polygon
+     * keeps the whole polygon, like a cursor on a glBegin line. */
+    render_cutout_labels(12, OVERLAY_SCOPE_SINGLE_POLYGON, text, sizeof text);
+    for (int v = 0; v < 7; v++) {
+        snprintf(lbl, sizeof lbl,
+                 "single-polygon, cursor on polygon gluEnd: %s drawn",
+                 all_labels[v]);
+        ASSERT_INT(lbl, count_label_text(text, all_labels[v]), 1);
+    }
 }
 
 /* End-to-end: feed a real REPL program, flatten it, then drive the
@@ -3080,6 +3309,7 @@ int main(void) {
     test_render_replay_vertex_label();
     test_vertex_numbers_use_source_begin_block();
     test_render_via_repl_program();
+    test_tess_contour_vertex_labels();
     test_cursor_guides_render_for_unterminated_begin();
     test_cursor_guides_follow_last_instance();
     test_cursor_guides_render_for_raster_pos();
