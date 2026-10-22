@@ -819,8 +819,13 @@ modelview with `apply_tracked_transform` / `unwind_transform_stack`:
 
 1. `render_outlines_glbegin_pass` - re-issues `glBegin`/`glVertex` blocks
    as line geometry from the REPL-tracked vertices.
-2. `render_outlines_tess_pass` - the same for tessellated polygons
-   (`gluTess*` contours), drawn as `GL_LINE_LOOP`.
+2. `render_outlines_tess_pass` - the same for tessellated polygons: each
+   `gluTess*` contour is drawn as a `GL_POLYGON` under the line polygon mode,
+   so the polygon offset applies to it exactly as to a `glBegin` block (it
+   would not to a `GL_LINE_LOOP`, and a contour's edges sit on the tessellated
+   face's own). Culling is lifted around contour draws: a hole is usually
+   wound against its outer contour, so contour winding cannot stand in for
+   face orientation.
 3. `render_outlines_glut_pass` - for `glutSolid*` shapes.
 
 These passes consume `OverlayWalkCtx.program`, populated once per frame from

@@ -1404,7 +1404,8 @@ static void test_single_polygon_highlight_bold_style(void) {
                trace_count_line(&log, "glVertex3f 4 0 0"), 2);
 }
 
-/* render_outlines_tess_pass: draws each tess contour as a GL_LINE_LOOP. */
+/* render_outlines_tess_pass: draws each tess contour as a GL_POLYGON under
+ * the pass's line polygon mode, like the glBegin pass. */
 static void test_render_outlines_tess(void) {
     printf("--- edit_overlays render_outlines (tess pass) ---\n");
 
@@ -1490,8 +1491,8 @@ static void test_render_outlines_tess(void) {
     edit_overlays_render_outlines(&tctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("first contour vertex traced", trace_count_sym(&log, "glVertex3f") >= 2, 1);
-    ASSERT_TRUE("multi-contour opens two line loops",
-                trace_count_line_width_near(&log, VERTEX_OUTLINE_TESS_WIDTH) >= 2);
+    ASSERT_TRUE("multi-contour highlights both contours at the active width",
+                trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH) >= 2);
     ASSERT_INT("tess current-poly highlight ignores bold outline width",
                trace_count_line_width_near(
                    &log, VERTEX_OUTLINE_TESS_WIDTH * VERTEX_OUTLINE_BOLD_SCALE), 0);
@@ -1499,9 +1500,9 @@ static void test_render_outlines_tess(void) {
                trace_count_line(&log, "glColor4f 0.45 0.8 0.3 1"), 0);
 
     /* Two closed contours (the real flat form: each contour has its own
-     * gluEnd). The current-poly highlight draws at the plain tess width while
-     * a non-current contour under Bold draws scaled, so the widths tell the
-     * two apart. A contour's gluEnd() used to clear "current", so the second
+     * gluEnd). The current-poly highlight draws at the active width while a
+     * non-current contour under Bold draws at the scaled tess width, so the
+     * widths tell the two apart. A contour's gluEnd() used to clear "current", so the second
      * contour fell back to a plain outline - and with the cursor in the
      * second contour, neither contour was current. */
     GLCmd two[10];
@@ -1535,7 +1536,7 @@ static void test_render_outlines_tess(void) {
             snprintf(lbl, sizeof lbl,
                      "cursor in contour %d: both contours highlighted", c + 1);
             ASSERT_INT(lbl, trace_count_line_width_near(
-                                &log, VERTEX_OUTLINE_TESS_WIDTH), 2);
+                                &log, VERTEX_OUTLINE_ACTIVE_WIDTH), 2);
             snprintf(lbl, sizeof lbl,
                      "cursor in contour %d: no contour drawn as plain outline",
                      c + 1);
@@ -1561,7 +1562,7 @@ static void test_render_outlines_tess(void) {
     edit_overlays_render_outlines(&tctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("single-polygon: one contour highlighted",
-               trace_count_line_width_near(&log, VERTEX_OUTLINE_TESS_WIDTH), 1);
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
     ASSERT_INT("single-polygon: cursor contour vertex 0 drawn",
                trace_count_line(&log, "glVertex3f 0.2 0.2 0"), 1);
     ASSERT_INT("single-polygon: cursor contour vertex 1 drawn",
@@ -1591,7 +1592,7 @@ static void test_render_outlines_tess(void) {
     edit_overlays_render_outlines(&tctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("single-polygon, outlines on: one highlighted contour",
-               trace_count_line_width_near(&log, VERTEX_OUTLINE_TESS_WIDTH), 1);
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
     ASSERT_INT("single-polygon, outlines on: one plain contour",
                trace_count_line_width_near(
                    &log, VERTEX_OUTLINE_TESS_WIDTH * VERTEX_OUTLINE_BOLD_SCALE), 1);
@@ -1603,14 +1604,82 @@ static void test_render_outlines_tess(void) {
     edit_overlays_render_outlines(&tctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("single-polygon, no cursor contour: both contours highlighted",
-               trace_count_line_width_near(&log, VERTEX_OUTLINE_TESS_WIDTH), 2);
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 2);
     tctx.cursor_contour_valid = 1;
     tctx.cursor_overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE;
     trace_begin();
     edit_overlays_render_outlines(&tctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("last-instance ignores the cursor contour",
-               trace_count_line_width_near(&log, VERTEX_OUTLINE_TESS_WIDTH), 2);
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 2);
+
+    /* Contours are GL_POLYGONs (9) in line mode, never GL_LINE_LOOPs (2):
+     * only a polygon is moved by GL_POLYGON_OFFSET_LINE, and the contour's
+     * edges sit exactly on the tessellated face's. */
+    ASSERT_INT("contours drawn as GL_POLYGON", trace_count_line(&log, "glBegin 9"), 2);
+    ASSERT_INT("no contour drawn as GL_LINE_LOOP", trace_count_line(&log, "glBegin 2"), 0);
+    ASSERT_INT("contours drawn under line polygon mode",
+               trace_count_line(&log, "glPolygonMode 1032 6913"), 1);
+}
+
+/* A contour polygon is culled by its own winding, which says nothing about
+ * the tessellated face (a hole is usually wound against its outer contour).
+ * The tess pass lifts culling around every contour draw - plain outlines and
+ * the Clipped & culled highlight included - and puts it back after, so the
+ * glBegin pass's cull replay is untouched. */
+static void test_tess_outlines_lift_culling(void) {
+    printf("--- edit_overlays tess outlines ignore culling ---\n");
+
+    GLCmd cmds[11];
+    mk_cmd(&cmds[0], CMD_ENABLE, (float)GL_CULL_FACE, 0, 0);
+    cmds[0].num_args = 1;
+    mk_cmd(&cmds[1], CMD_TESS_BEGIN_POLYGON, 0, 0, 0);    cmds[1].src_cmd_idx = 1;
+    mk_cmd(&cmds[2], CMD_TESS_BEGIN_CONTOUR, 0, 0, 0);    cmds[2].src_cmd_idx = 2;
+    mk_cmd(&cmds[3], CMD_TESS_VERTEX, 0.0f, 0.0f, 0.0f);  cmds[3].src_cmd_idx = 3;
+    mk_cmd(&cmds[4], CMD_TESS_VERTEX, 1.0f, 0.0f, 0.0f);  cmds[4].src_cmd_idx = 4;
+    mk_cmd(&cmds[5], CMD_TESS_VERTEX, 0.0f, 1.0f, 0.0f);  cmds[5].src_cmd_idx = 5;
+    mk_cmd(&cmds[6], CMD_TESS_END, 0, 0, 0);              cmds[6].src_cmd_idx = 6;
+    mk_cmd(&cmds[7], CMD_TESS_END, 0, 0, 0);              cmds[7].src_cmd_idx = 7;
+    mk_cmd(&cmds[8], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
+    mk_cmd(&cmds[9], CMD_VERTEX3F, 5, 0, 0);
+    mk_cmd(&cmds[10], CMD_END, 0, 0, 0);
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 11;
+    ctx.cursor.edit_line_idx = -1;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.show_vertex_outlines = 1;
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
+
+    /* GL_CULL_FACE = 2884. */
+    TraceLog log;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("plain contour outline drawn with culling off",
+               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884",
+                                  "glVertex3f 0 1 0"), 0);
+    ASSERT_INT("glBegin outlines keep the program's culling",
+               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884",
+                                  "glVertex3f 5 0 0"), 1);
+
+    /* Clipped & culled keeps the program's culling for glBegin highlights,
+     * but a contour has no face orientation to cull by. */
+    ctx.show_vertex_outlines = 0;
+    ctx.highlight_current_poly = 1;
+    ctx.highlight_clipped_culled = 1;
+    ctx.cursor.edit_line_idx = 4;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("Clipped & culled contour highlight drawn",
+               trace_count_line(&log, "glVertex3f 0 1 0"), 1);
+    ASSERT_INT("Clipped & culled contour highlight drawn with culling off",
+               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884",
+                                  "glVertex3f 0 1 0"), 0);
 }
 
 /* render_outlines_glut_pass: re-draws glutSolid* shapes in wireframe under
@@ -3484,6 +3553,7 @@ int main(void) {
     test_single_polygon_highlight_fan_anchor();
     test_single_polygon_highlight_bold_style();
     test_render_outlines_tess();
+    test_tess_outlines_lift_culling();
     test_render_outlines_glut();
     test_find_next_vertex_args();
     test_cursor_guide_snapshot_with_flat_args();

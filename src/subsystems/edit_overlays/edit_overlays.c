@@ -824,6 +824,42 @@ static int tess_contour_is_highlighted(const OverlayWalkCtx *ctx,
     return first_ord == ctx->cursor_contour_first;
 }
 
+/* Close the contour outline open in the tess pass, if any, and put back
+ * the state its draw lifted. */
+static void tess_contour_outline_end(const OverlayWalkCtx *ctx,
+                                     const OverlayGlState *st,
+                                     int *in_contour, int *clip_suspended,
+                                     int *cull_lifted) {
+    if (*in_contour) {
+        glEnd();
+        glLineWidth(1.0f);
+        *in_contour = 0;
+    }
+    if (*clip_suspended) {
+        overlay_gl_resume(ctx, st);
+        *clip_suspended = 0;
+    }
+    if (*cull_lifted) {
+        glEnable(GL_CULL_FACE);
+        *cull_lifted = 0;
+    }
+}
+
+/* Each contour is drawn as a GL_POLYGON under the pass's glPolygonMode(GL_LINE),
+ * the same way the glBegin pass outlines its blocks. That is what puts the
+ * contour under GL_POLYGON_OFFSET_LINE: an offset only applies to polygons,
+ * and the contour's edges are the tessellated face's own edges, so a line
+ * primitive at that depth loses fragments to the face it traces. Line mode
+ * draws a polygon's boundary edges, so a concave contour outlines cleanly
+ * (gl4es walks a GL_POLYGON's ring too - no fan diagonals).
+ *
+ * Culling is lifted for the contour draw in every mode, CLIPPED_CULLED
+ * included. A contour's own winding says nothing about the face: the
+ * tessellator orients the filled triangles by the whole polygon, and a hole
+ * is usually wound against its outer contour, so culling by contour winding
+ * would drop a hole whose face is plainly visible. Line loops were never
+ * culled, so this keeps the outlines' long-standing visibility. Clip planes
+ * and the stencil test still apply to plain outlines as before. */
 static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
     const GLCmd *cmds = ctx->program.cmds;
     int cmd_count = ctx->program.cmd_count;
@@ -838,6 +874,7 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
                         : -1;
     OverlayGlTracker trk;
     int contour_clip_suspended = 0;
+    int contour_cull_lifted = 0;
     int contour_is_current = 0;
 
     overlay_gl_walk_begin(&trk);
@@ -863,27 +900,29 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
             break;
         case CMD_TESS_BEGIN_CONTOUR:
             if (ctx->replay_tess_preview) break;
-            if (tess_in_contour) {
-                glEnd();
-                glLineWidth(1.0f);
-            }
-            if (contour_clip_suspended) {
-                overlay_gl_resume(ctx, &trk.st);
-                contour_clip_suspended = 0;
-            }
+            tess_contour_outline_end(ctx, &trk.st, &tess_in_contour,
+                                     &contour_clip_suspended,
+                                     &contour_cull_lifted);
             contour_is_current =
                 tess_contour_is_highlighted(ctx, tess_poly_is_current, tess_ord);
             if ((ctx->show_vertex_outlines && trk.st.color_writes) || contour_is_current) {
                 if (contour_is_current) {
                     overlay_gl_suspend(ctx, &trk.st);
                     contour_clip_suspended = 1;
-                    glLineWidth(VERTEX_OUTLINE_TESS_WIDTH);
+                    /* Same width as a glBegin block's whole-block highlight:
+                     * each contour draws once, so no plain redraw follows
+                     * that a Bold-scaled width would have to outrun. */
+                    glLineWidth(VERTEX_OUTLINE_ACTIVE_WIDTH);
                     render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
                 } else {
                     glLineWidth(vertex_outline_width(ctx, VERTEX_OUTLINE_TESS_WIDTH));
                     vertex_outline_color(ctx, RENDER3D_CLR_OUTLINE);
                 }
-                glBegin(GL_LINE_LOOP);
+                if (trk.st.cull_enabled) {
+                    glDisable(GL_CULL_FACE);
+                    contour_cull_lifted = 1;
+                }
+                glBegin(GL_POLYGON);
                 tess_in_contour = 1;
             }
             break;
@@ -899,15 +938,9 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
                 tess_poly_is_current = 0;
                 break;
             }
-            if (tess_in_contour) {
-                glEnd();
-                glLineWidth(1.0f);
-                tess_in_contour = 0;
-            }
-            if (contour_clip_suspended) {
-                overlay_gl_resume(ctx, &trk.st);
-                contour_clip_suspended = 0;
-            }
+            tess_contour_outline_end(ctx, &trk.st, &tess_in_contour,
+                                     &contour_clip_suspended,
+                                     &contour_cull_lifted);
             /* Only the polygon's own gluEnd() ends "current": a contour's
              * gluEnd() must leave it standing for the contours after it. */
             if (tess_depth == 0) tess_poly_is_current = 0;
@@ -917,12 +950,8 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
         }
     }
 
-    if (tess_in_contour) {
-        glEnd();
-        glLineWidth(1.0f);
-    }
-    if (contour_clip_suspended)
-        overlay_gl_resume(ctx, &trk.st);
+    tess_contour_outline_end(ctx, &trk.st, &tess_in_contour,
+                             &contour_clip_suspended, &contour_cull_lifted);
     overlay_gl_reset(&trk.st);
     unwind_transform_stack(&matrix_depth);
     glPopMatrix();
