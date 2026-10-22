@@ -139,22 +139,79 @@ Fix the walker and gutter in one commit, or the gutter/scene parity test fails.
 
 #### Migration
 
-1. Add the API plus a table-driven unit test: cutout (two contours),
-   extrusion (strip nested in a contour), single-contour polygon, a polygon
-   inside a `for`, an unterminated block, malformed input (contour outside a
-   polygon, nested polygon).
-2. Switch the two `glr_ctrl.c` scanners; delete them.
-3. Switch the two `flatten_query.c` scanners; delete them.
-4. Switch the code panel's gutter gate to the snapshot fields filled from the
-   query (`current_begin_block_*`, `current_tess_block_*`).
-5. Fold the two flat-side matchers into one helper next to the query. Keep
-   the rule that a cursor on any source line inside a block's extent -
-   comment lines included - selects that block, as the `glBegin` source
-   extent and the tess-head match do today.
+1. **Source-scope API and unit tests (`src/repl/source_scope.h`, `src/repl/source_scope.c`, `tests/test_repl_core_internal.c`).**
+   - Declare `ReplSourceExtent`, `ReplCursorScope`, `repl_source_scope_view_cursor_scope()`, and the live-document wrapper `repl_source_scope_cursor_scope(int line_idx, ReplCursorScope *out)`. Invalid extents initialize to `{ 0, -1, -1 }` so callers that copy `start`/`end` unconditionally keep `-1` when out of scope.
+   - Implement all three extents with one helper over the existing prefix arrays in `ReplSourceScopeView` (no new `MAX_EDITOR_COMMANDS` arrays on the stack-allocated view):
+     ```c
+     static ReplSourceExtent source_scope_extent_from_prefix(
+             const int *prefix, int count, int line_idx, int min_depth) {
+         ReplSourceExtent ext = { 0, -1, -1 };
+         int s, e;
 
-Acceptance: the full stub gate plus the new test; no other scan of
-`CMD_BEGIN`/`CMD_END` or `CMD_TESS_*` pairs for "the block around a line"
-remains outside `source_scope.c`.
+         if (!prefix || line_idx < 0 || line_idx >= count)
+             return ext;
+         if (prefix[line_idx] < min_depth && prefix[line_idx + 1] < min_depth)
+             return ext;
+
+         s = line_idx;
+         while (s > 0 && prefix[s] >= min_depth)
+             s--;
+         e = line_idx;
+         while (e + 1 < count && prefix[e + 1] >= min_depth)
+             e++;
+         ext.valid = 1;
+         ext.start = s;
+         ext.end = e;
+         return ext;
+     }
+     ```
+     Call it with `(view->begin_depth_prefix, view->count, line_idx, 1)` for `begin_block`, `(view->tess_depth_prefix, view->count, line_idx, 1)` for `tess_polygon`, and `(view->tess_depth_prefix, view->count, line_idx, 2)` for `tess_contour`:
+     - Outside a block, both `prefix[line_idx]` (depth before) and `prefix[line_idx + 1]` (depth after) are `< min_depth`, returning in $O(1)$.
+     - On a head row, `prefix[line_idx] < min_depth` and `prefix[line_idx + 1] >= min_depth`; on a closing `glEnd()` / `gluEnd()` row, `prefix[line_idx] >= min_depth` and `prefix[line_idx + 1] < min_depth` (inclusive close).
+     - Adjacent blocks or back-to-back contours drop below `min_depth` at the shared boundary index (`prefix[k] == 0` between blocks/polygons, `prefix[k] == 1` between contours), so neither `s` nor `e` bleeds across neighbours.
+     - Unterminated blocks keep `prefix[count] >= min_depth`, so `e` stops at `count - 1`.
+     - Because `tess_depth_prefix` is built with `repl_tess_advance_depth()`, a contour outside a polygon stays at depth `0` (invalid) and a nested `gluBegin(GLU_POLYGON)` stays at depth `1` (absorbed into the enclosing polygon and closed by a single polygon `gluEnd()`).
+   - Add a table-driven test in `tests/test_repl_core_internal.c` covering: cutout (two contours + comment between), extrusion (`glBegin` strip nested in a contour, reporting all three extents simultaneously), single-contour polygon, a polygon inside a `for`, unterminated `glBegin` / polygon / contour, and malformed input (contour outside a polygon, nested polygon, and two `glBegin` rows with no `glEnd()` between them - `begin_depth_prefix` reaches 2 and the `min_depth = 1` scan reports one merged extent; assert that rather than leaving it unspecified).
+
+2. **Switch the controller scanners (`src/app/glr_ctrl.c`).**
+   - In `glr_ctrl_fill_cursor_block_state()` and `glr_ctrl_build_ui_snapshot()`, call `repl_source_scope_cursor_scope()` and populate `cursor_source_block_*` / `cursor_source_tess_*` and `snap->current_begin_block_*` / `snap->current_tess_block_*` from `scope.begin_block` and `scope.tess_polygon`.
+   - Delete `glr_ctrl_current_begin_block_source_extent()` and `glr_ctrl_current_tess_block_source_extent()`.
+
+3. **Switch the flatten-query scanners (`src/repl/flatten_query.c`, `tests/test_repl_core_internal.c`).**
+   - In `repl_flatten_refresh_current_block_highlight()`, replace `flatten_current_begin_block_source_extent()` with `repl_source_scope_cursor_scope(edit_line_idx, &scope)` and pass `scope.begin_block.start` / `scope.begin_block.end` to `flatten_find_flat_begin_block_extent()`.
+   - In `flatten_find_flat_begin_block_extent()`, handle unterminated blocks without relying on `source_end < 0` (since `ReplSourceExtent.end` is `doc_count - 1` when unterminated): if the inner scan from `i + 1` reaches `flat_cmd_count` without encountering any `CMD_END`, return `[i, flat_cmd_count - 1]`.
+   - In `repl_flatten_cursor_tess_contour()`, replace `cursor_tess_contour_source_begin()` with `repl_source_scope_cursor_scope()` and read `scope.tess_contour.start` when `scope.tess_contour.valid`.
+   - Delete `flatten_current_begin_block_source_extent()` and `cursor_tess_contour_source_begin()`.
+   - Update the `glEnd()` assertion in `tests/test_repl_core_internal.c`: with `glEnd()` now inclusive in `begin_block`, `repl_flatten_cursor_polygon(14)` resolves the block's final primitive (`p.valid == 1, p.first == 4, p.last == 7`) per the overlay scope contract.
+
+4. **Preserve enclosing GLU context across nested `glBegin`/`glEnd` in walker and gutter (`src/subsystems/replay/replay.c`, `src/ui/app/repl_code_panel.c`, `scripts/check/check-tess-depth.py`, `tests/test_ui.c`).**
+   - In `replay_walk_user_vertices()` (`src/subsystems/replay/replay.c`):
+     - Track the enclosing tess polygon's state alongside the immediate block (`in_begin_block`, `tess_poly_selected`, `tess_poly_vertex_idx`).
+     - Remove the two `tess_depth = 0;` resets at `CMD_BEGIN` and `CMD_END`, and remove the corresponding `("src/subsystems/replay/replay.c", "tess_depth", "0"): 2` entry from `EXCEPTIONS` in `scripts/check/check-tess-depth.py`.
+     - At `CMD_TESS_BEGIN_POLYGON`: once `state.block_selected` holds the polygon's verdict, capture `tess_poly_selected = state.block_selected` and `tess_poly_vertex_idx = 0`. It must be captured here, before any nested `CMD_BEGIN` overwrites `state.block_selected` with the strip's verdict; the `CMD_END` restore below depends on it.
+     - At `CMD_BEGIN`: if `tess_depth > 0` and not already in a `begin_block`, save `tess_poly_vertex_idx = state.vertex_idx_in_block` before resetting `state.vertex_idx_in_block = 0` and computing the strip's `state.block_selected`.
+     - At `CMD_END`: clear `in_begin_block` and `state.primitive_mode = 0`. If `tess_depth > 0`, restore `state.in_block = 1`, `state.block_selected = tess_poly_selected`, and `state.vertex_idx_in_block = tess_poly_vertex_idx`; otherwise clear `state.in_block = 0` and `state.block_selected = selected_block_only ? 0 : 1`.
+     - At `CMD_TESS_END`: when `old_depth == 1 && tess_depth == 0`, clear `tess_poly_selected` and `tess_poly_vertex_idx`, and if `!in_begin_block`, clear `state.in_block = 0` and `state.block_selected`.
+   - In `ReplCodePanelWalkState` (`src/ui/app/repl_code_panel.c`):
+     - Add `tess_vnum` and `tess_vnums_exact` to save the enclosing polygon's shared display counter while walking a nested `CMD_BEGIN` block.
+     - At `CMD_BEGIN`: if `state->owner == REPL_CODE_PANEL_VOWNER_TESS`, save `tess_vnum = state->vnum` and `tess_vnums_exact = state->vnums_exact` before switching `state->owner = REPL_CODE_PANEL_VOWNER_BEGIN` and resetting `state->vnum = 0`.
+     - At `CMD_FOR_BEGIN`: if `state->tess_depth > 0`, also mark `state->tess_vnums_exact = 0`.
+     - At `CMD_END`: if `state->tess_depth > 0`, restore `state->owner = REPL_CODE_PANEL_VOWNER_TESS`, `state->vnum = state->tess_vnum`, and `state->vnums_exact = state->tess_vnums_exact && (state->loop_depth == 0)` instead of resetting `owner` to `NONE`.
+   - Extend `test_vertex_gutter_labels_glbegin_inside_tess_polygon()` in `tests/test_ui.c` with a `gluVertex` row after the nested strip's `glEnd()` to assert that it resumes the polygon's shared display run (`v1`) and matches the scene walker.
+
+5. **Unify the flat-side cursor matchers (`src/repl/flatten_query.h`, `src/repl/flatten_query.c`, `src/subsystems/edit_overlays/edit_overlays.c`, `src/subsystems/replay/replay.c`).**
+   - **Today the two matchers disagree for `glBegin` blocks, and the merge must pick the walker's rule.** The replay walker (`CMD_BEGIN` in `replay_walk_user_vertices()`) lets the cursor's `glBegin` source extent **decide alone** whenever `cursor_source_block_valid`; it falls back to the flat walk only without one. `outline_block_matches_cursor()` never consults the `glBegin` source extent - it checks flat commands only. The walker's rule is deliberate: `test_vertex_numbers_use_source_begin_block()` in `tests/test_edit_overlays.c` pins that a flat block range landing inside an earlier block must not label that block. A helper that ORs the source match with the flat walk would select that earlier block and fail the test.
+   - **Per-kind rule (record it in the overlay scope contract with this step):**
+     - `glBegin` block: when `cursor_source_block_valid`, the block matches iff its source extent matches (`repl_cursor_source_begin_head_matches()`); otherwise the flat walk decides.
+     - Tess polygon: the source tess-head match **or** the flat walk. The OR is what lets a cursor on a comment line between contours select its polygon (`05f2c7a9`); there is no stale-range hazard because the tess-head match compares source indices only.
+   - Add the shared helpers to `src/repl/flatten_query.c` (declared in `flatten_query.h`; not inline - the block matcher loops over the flat program):
+     - `repl_cursor_flat_cmd_matches(FlatProgramView program, const CursorBlockState *cursor, int flat_idx)` - call-site provenance (`call_src_cmd_idx`, `root_call_src_cmd_idx`), `cursor_func_scope_mask`, `cursor_block_begin..cursor_block_end`, and `src_cmd_idx == edit_line_idx`.
+     - `repl_cursor_source_begin_head_matches(FlatProgramView program, const CursorBlockState *cursor, int begin_idx)` - the `glBegin` source-extent matcher (today `replay_walk_source_block_matches_cursor()` in `replay.c`): any unrolled copy whose `CMD_BEGIN` has `src_cmd_idx == cursor_source_block_begin` and whose closing `CMD_END` (if present) has `src_cmd_idx == cursor_source_block_end`.
+     - `repl_cursor_flat_block_matches(FlatProgramView program, const CursorBlockState *cursor, int begin_idx, int is_tess)` - applies the per-kind rule above: for `!is_tess` with a valid source extent, return `repl_cursor_source_begin_head_matches()` and stop; for `is_tess`, return 1 on `repl_cursor_source_tess_head_matches()`; otherwise walk the flat block from `begin_idx` to its `CMD_END` or polygon `CMD_TESS_END` (`repl_tess_advance_depth() == 0`) testing `repl_cursor_flat_cmd_matches()`.
+   - Replace `outline_cmd_matches_cursor()` / `outline_block_matches_cursor()` in `edit_overlays.c` and `replay_walk_flat_cmd_matches_cursor()` / `replay_walk_source_block_matches_cursor()` / `replay_walk_block_matches_cursor()` in `replay.c` with calls to those helpers.
+   - **Visible change:** the outline highlight adopts the `glBegin` source-extent rule the labels already follow, so highlight and labels select the same copies. Extend the gutter/scene parity sweep (or add a sibling) to assert that the outline-highlighted blocks and the labelled blocks agree for every cursor line of the GLU concave-arrow examples, and keep `test_vertex_numbers_use_source_begin_block()` passing unchanged.
+
+Acceptance: the full stub gate (`make test-stubs`, including `check-tess-depth` without the `replay.c` exception) plus the new unit tests; no other scan of `CMD_BEGIN`/`CMD_END` or `CMD_TESS_*` pairs for "the block around a line" remains outside `source_scope.c` and the shared flat-side matchers. The code panel's gutter walk still steps through `CMD_BEGIN`/`CMD_END` after this item, but to **number** vertices (step 4 adjusts it), not to find the cursor's block; replacing that walk is item 3.
 
 ---
 
