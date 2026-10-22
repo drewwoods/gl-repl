@@ -1528,6 +1528,73 @@ static void test_render_outlines_tess(void) {
                                           VERTEX_OUTLINE_BOLD_SCALE), 0);
         }
     }
+
+    /* Single-polygon scope with a resolved cursor contour highlights that
+     * contour alone - the tess counterpart of a glBegin block highlighting
+     * only the cursor's primitive. Plain outlines off, so the only vertices
+     * in the trace are the highlighted contour's. Contour 2 owns ordinals
+     * [2, 3]. */
+    tctx.show_vertex_outlines = 0;
+    tctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT;
+    tctx.cursor_overlay_scope = OVERLAY_SCOPE_SINGLE_POLYGON;
+    tctx.cursor_contour_valid = 1;
+    tctx.cursor_contour_first = 2;
+    tctx.cursor_contour_last = 3;
+    tctx.cursor.edit_line_idx = 7;
+    trace_begin();
+    edit_overlays_render_outlines(&tctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("single-polygon: one contour highlighted",
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_TESS_WIDTH), 1);
+    ASSERT_INT("single-polygon: cursor contour vertex 0 drawn",
+               trace_count_line(&log, "glVertex3f 0.2 0.2 0"), 1);
+    ASSERT_INT("single-polygon: cursor contour vertex 1 drawn",
+               trace_count_line(&log, "glVertex3f 0.4 0.2 0"), 1);
+    ASSERT_INT("single-polygon: other contour not highlighted",
+               trace_count_line(&log, "glVertex3f 0 0 0") +
+               trace_count_line(&log, "glVertex3f 1 0 0"), 0);
+
+    /* Cursor in the first contour: the highlight follows it. */
+    tctx.cursor_contour_first = 0;
+    tctx.cursor_contour_last = 1;
+    tctx.cursor.edit_line_idx = 3;
+    trace_begin();
+    edit_overlays_render_outlines(&tctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("single-polygon, first contour: outer vertices drawn",
+               trace_count_line(&log, "glVertex3f 0 0 0") +
+               trace_count_line(&log, "glVertex3f 1 0 0"), 2);
+    ASSERT_INT("single-polygon, first contour: inner contour not highlighted",
+               trace_count_line(&log, "glVertex3f 0.2 0.2 0"), 0);
+
+    /* With plain outlines on, the other contour still draws - as a plain
+     * outline, never in the highlight. */
+    tctx.show_vertex_outlines = 1;
+    tctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD;
+    trace_begin();
+    edit_overlays_render_outlines(&tctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("single-polygon, outlines on: one highlighted contour",
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_TESS_WIDTH), 1);
+    ASSERT_INT("single-polygon, outlines on: one plain contour",
+               trace_count_line_width_near(
+                   &log, VERTEX_OUTLINE_TESS_WIDTH * VERTEX_OUTLINE_BOLD_SCALE), 1);
+
+    /* No resolved contour (cursor on the polygon's own begin/end line), or a
+     * scope other than single-polygon: the whole polygon stays highlighted. */
+    tctx.cursor_contour_valid = 0;
+    trace_begin();
+    edit_overlays_render_outlines(&tctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("single-polygon, no cursor contour: both contours highlighted",
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_TESS_WIDTH), 2);
+    tctx.cursor_contour_valid = 1;
+    tctx.cursor_overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE;
+    trace_begin();
+    edit_overlays_render_outlines(&tctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("last-instance ignores the cursor contour",
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_TESS_WIDTH), 2);
 }
 
 /* render_outlines_glut_pass: re-draws glutSolid* shapes in wireframe under

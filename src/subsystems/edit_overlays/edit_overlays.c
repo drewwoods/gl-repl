@@ -805,6 +805,22 @@ static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx) {
     glPopMatrix();
 }
 
+/* Is the contour opening at polygon-local vertex ordinal `first_ord` the one
+ * the active highlight should draw? Every contour of the current polygon,
+ * except in single-polygon scope with a resolved cursor contour: then only
+ * that one, the tess counterpart of a glBegin block highlighting just the
+ * cursor's primitive. Contours own disjoint, contiguous ordinal runs, so the
+ * first ordinal identifies one. */
+static int tess_contour_is_highlighted(const OverlayWalkCtx *ctx,
+                                       int poly_is_current, int first_ord) {
+    if (!poly_is_current)
+        return 0;
+    if (ctx->cursor_overlay_scope != OVERLAY_SCOPE_SINGLE_POLYGON ||
+        !ctx->cursor_contour_valid)
+        return 1;
+    return first_ord == ctx->cursor_contour_first;
+}
+
 static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
     const GLCmd *cmds = ctx->program.cmds;
     int cmd_count = ctx->program.cmd_count;
@@ -812,12 +828,14 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
     int tess_in_contour = 0;
     int tess_poly_is_current = 0;
     int tess_depth = 0;
+    int tess_ord = 0;   /* polygon-local vertex ordinal, as the labels count */
     int one_instance = cursor_scope_selects_one_instance(ctx);
     int selected_head = one_instance
                         ? last_selected_block_head(ctx, CMD_TESS_BEGIN_POLYGON, 1)
                         : -1;
     OverlayGlTracker trk;
     int contour_clip_suspended = 0;
+    int contour_is_current = 0;
 
     overlay_gl_walk_begin(&trk);
     glPushMatrix();
@@ -838,6 +856,7 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
             tess_poly_is_current = ctx->highlight_current_poly &&
                                    outline_block_matches_cursor(i, 1, ctx) &&
                                    (!one_instance || i == selected_head);
+            tess_ord = 0;
             break;
         case CMD_TESS_BEGIN_CONTOUR:
             if (ctx->replay_tess_preview) break;
@@ -849,8 +868,10 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
                 overlay_gl_resume(ctx, &trk.st);
                 contour_clip_suspended = 0;
             }
-            if ((ctx->show_vertex_outlines && trk.st.color_writes) || tess_poly_is_current) {
-                if (tess_poly_is_current) {
+            contour_is_current =
+                tess_contour_is_highlighted(ctx, tess_poly_is_current, tess_ord);
+            if ((ctx->show_vertex_outlines && trk.st.color_writes) || contour_is_current) {
+                if (contour_is_current) {
                     overlay_gl_suspend(ctx, &trk.st);
                     contour_clip_suspended = 1;
                     glLineWidth(VERTEX_OUTLINE_TESS_WIDTH);
@@ -864,6 +885,8 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx) {
             }
             break;
         case CMD_TESS_VERTEX:
+            if (tess_depth > 0)
+                tess_ord++;
             if (ctx->replay_tess_preview) break;
             if (tess_in_contour)
                 glVertex3f(cmds[i].args[0], cmds[i].args[1], cmds[i].args[2]);

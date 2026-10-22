@@ -156,8 +156,9 @@ typedef struct OverlayWalkCtx {
     int              cursor_poly_fan_anchor; /* 1 = ordinal 0 (fan center) too */
     /* SINGLE_POLYGON scope, tess (GLU) polygons: polygon-local ordinal range
      * of the contour under the cursor (repl_flatten_cursor_tess_contour).
-     * Narrows the vertex labels only; cursor_contour_valid == 0 (cursor not
-     * inside a contour) keeps whole-polygon labels. */
+     * Narrows the vertex labels and the current-polygon outline highlight to
+     * that contour; cursor_contour_valid == 0 (cursor not inside a contour)
+     * keeps the whole polygon. */
     int              cursor_contour_valid;
     int              cursor_contour_first;   /* first ordinal, inclusive */
     int              cursor_contour_last;    /* last ordinal, inclusive */
