@@ -599,28 +599,6 @@ static int last_matching_block_head(const OverlayWalkCtx *ctx,
     return found;
 }
 
-/* Same, gated on the highlight actually being on - the outline passes have
- * nothing to resolve when it is off. The normal-vector pass wants the
- * ungated form above: it honors the scope whether or not the highlight does. */
-static int last_selected_block_head(const OverlayWalkCtx *ctx,
-                                    CmdType head_type, int is_tess) {
-    if (!ctx->highlight_current_poly) return -1;
-    return last_matching_block_head(ctx, head_type, is_tess);
-}
-
-/* Same, for the glutSolid* pass - those match per command, not per block. */
-static int last_selected_glut_shape(const OverlayWalkCtx *ctx) {
-    const GLCmd *cmds = ctx->program.cmds;
-    int found = -1;
-
-    if (!ctx->highlight_current_poly) return -1;
-    for (int i = 0; i < ctx->program.cmd_count; i++) {
-        if (!cmds[i].valid || !repl_cmd_is_glut_solid(cmds[i].type)) continue;
-        if (outline_cmd_matches_cursor(i, ctx)) found = i;
-    }
-    return found;
-}
-
 /* SINGLE_POLYGON narrowing of one walked vertex, for the labels and the
  * normal arrows. Each family is narrowed by its own primitive: a glVertex to
  * the cursor's glBegin primitive (glVertex-only ordinals, the space GL builds
@@ -656,27 +634,8 @@ static int cursor_poly_contains_ordinal(const OverlayWalkCtx *ctx, int ord) {
            (ctx->cursor_poly_fan_anchor && ord == 0);
 }
 
-/* Emit only the cursor's primitive from the glBegin block headed at
- * begin_idx, in the active-highlight style. Re-issuing the block's own
- * mode with just the selected ordinal run renders exactly one primitive
- * for every grouping the resolver produces: a quad/triangle/line/point
- * group, a strip sub-window, or a fan triangle (center vertex 0 plus
- * the [first, last] pair). Transforms cannot occur inside a begin
- * block, so re-walking the range under the caller's modelview is safe.
- *
- * Runs in the highlight phase, after the plain phase has outlined the whole
- * block - this primitive included - so it is drawn last and wins its edges
- * at the plain VERTEX_OUTLINE_ACTIVE_WIDTH, like a whole-block highlight.
- * (It used to run first, with the plain redraw on top: a black core down
- * every highlighted edge, and a Bold-scaled width just to stay visible.)
- *
- * One wrinkle once culling is live (CLIPPED_CULLED): GL implicitly reverses
- * the winding of every odd-numbered GL_TRIANGLE_STRIP triangle, and the
- * resolver hands us `first` == that triangle's index. Re-issued on its own the
- * run becomes strip triangle 0, losing the flip - so an odd triangle would be
- * culled exactly when the real face is visible. Swapping glFrontFace for the
- * draw restores the parity. Quad strips (first is always even, and a 4-vertex
- * run rebuilds the same quad) and fans (center + pair, in order) need none. */
+/* A selected odd triangle-strip triangle needs its original winding when
+ * reissued as triangle zero; quad strips and fans keep their winding. */
 static GLenum overlay_front_face_opposite(GLenum front_face) {
     return front_face == GL_CW ? GL_CCW : GL_CW;
 }
@@ -696,383 +655,483 @@ static void overlay_emit_immediate_vertex(const GLCmd *cmd) {
         glVertex4f(cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
 }
 
-static void render_single_polygon_highlight(const OverlayWalkCtx *ctx,
-                                            int begin_idx,
-                                            const OverlayGlState *st) {
-    const GLCmd *cmds = ctx->program.cmds;
-    int cmd_count = ctx->program.cmd_count;
-    GLenum mode = (GLenum)cmds[begin_idx].args[0];
-    int ord = 0;
-    int flip_winding = ctx->highlight_clipped_culled && st->cull_enabled &&
-                       mode == GL_TRIANGLE_STRIP && (ctx->cursor_poly_first & 1);
-
-    overlay_gl_suspend(ctx, st);
-    if (flip_winding)
-        glFrontFace(overlay_front_face_opposite(st->front_face));
-    glLineWidth(VERTEX_OUTLINE_ACTIVE_WIDTH);
-    render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
-    glBegin(mode);
-    for (int i = begin_idx + 1; i < cmd_count; i++) {
-        if (!cmds[i].valid) continue;
-        if (cmds[i].type == CMD_END) break;
-        if (!repl_cmd_emits_immediate_vertex(cmds[i].type))
-            continue;
-        if (cursor_poly_contains_ordinal(ctx, ord))
-            overlay_emit_immediate_vertex(&cmds[i]);
-        ord++;
-    }
-    glEnd();
-    glLineWidth(1.0f);
-    render3d_clr(RENDER3D_CLR_OUTLINE_EDGE);
-    if (flip_winding)
-        glFrontFace(st->front_face);
-    overlay_gl_resume(ctx, st);
-}
-
-/* Every outline overlay sits at one depth - the same polygon offset, no depth
- * writes - so on an edge two of them share, whichever draws last wins. The
- * passes therefore run twice: every plain outline first, then every
- * highlight, so a highlight always ends up on top. Drawn in one walk, a
- * highlight lost to whatever came after it: the single-polygon redraw of its
- * own block (a black core down each highlighted edge), a later block sharing
- * an edge (the next row of a strip surface, the next face of a cube), or a
- * later pass (a GLU contour over a glBegin wall's front edge). */
+/* One CPU collection feeds both outline phases. */
 typedef enum {
-    OUTLINE_PHASE_PLAIN,
-    OUTLINE_PHASE_HIGHLIGHT,
-} OutlinePhase;
+    OUTLINE_IMMEDIATE,
+    OUTLINE_CONTOUR,
+    OUTLINE_GLUT,
+    OUTLINE_KIND_COUNT
+} OutlineKind;
 
-/* The block head / shape each pass highlights, resolved once per outline
- * render rather than once per pass and phase. -1 = nothing in that pass
- * matches the cursor (or the highlight is off), which lets the highlight
- * phase skip the pass outright. In a one-instance scope only that copy is
- * highlighted; otherwise every matching copy is, and the head only records
- * that one exists. */
 typedef struct {
-    int one_instance;
-    int begin_head;
-    int tess_head;
-    int glut_shape;
-} OutlineSelection;
+    float m[16];
+    int absolute; /* glLoadIdentity drops the incoming camera matrix. */
+} OutlineMatrix;
 
-static void render_outlines_glbegin_pass(const OverlayWalkCtx *ctx,
-                                         OutlinePhase phase,
-                                         const OutlineSelection *sel) {
-    const GLCmd *cmds = ctx->program.cmds;
-    int cmd_count = ctx->program.cmd_count;
-    int in_begin = 0;
-    int matrix_depth = 0;
-    int block_is_current = 0;
-    int one_instance = sel->one_instance;
-    int selected_head = sel->begin_head;
-    OverlayGlTracker trk;
-    int block_clip_suspended = 0;
+typedef struct {
+    GLdouble eq[4];
+    int matrix_idx; /* -1 = already in eye space (inherited plane). */
+} OutlineClip;
 
-    overlay_gl_walk_begin(&trk);
-    glPushMatrix();
-    for (int i = 0; i < cmd_count; i++) {
-        if (!cmds[i].valid) continue;
+typedef struct {
+    OverlayGlState gl;
+    GLenum cull_face;
+    int clip[OUTLINE_CLIP_PLANE_COUNT];
+} OutlineState;
 
-        if (repl_cmd_is_transform(cmds[i].type)) {
-            if (!in_begin)
-                apply_tracked_transform(&cmds[i], &matrix_depth);
-            continue;
-        }
-        /* State (clip/cull/color-mask) and push/pop scoping land between
-         * blocks; inside one they would be an illegal glBegin/glEnd
-         * interleave. */
-        if (!in_begin && overlay_gl_track_cmd(&cmds[i], &trk))
-            continue;
+typedef struct {
+    unsigned mask;
+    OutlineState state;
+} OutlineAttrib;
 
-        switch (cmds[i].type) {
-        case CMD_BEGIN: {
-            int draw_outline = outline_begin_mode_has_overlay((GLenum)cmds[i].args[0]);
-            int block_matches_current = ctx->highlight_current_poly &&
-                                        outline_block_matches_cursor(i, 0, ctx);
-            if (in_begin) glEnd();
-            /* An unterminated highlight block (no CMD_END) still has to put
-             * the planes back before the next block outlines. */
-            if (block_clip_suspended) {
-                overlay_gl_resume(ctx, &trk.st);
-                block_clip_suspended = 0;
-            }
-            block_is_current = block_matches_current &&
-                               (!one_instance || i == selected_head);
-            int one_primitive = block_is_current &&
-                ctx->cursor_overlay_scope == OVERLAY_SCOPE_SINGLE_POLYGON &&
-                ctx->cursor_poly_valid;
-            in_begin = 0;
-            if (phase == OUTLINE_PHASE_HIGHLIGHT) {
-                if (one_primitive) {
-                    render_single_polygon_highlight(ctx, i, &trk.st);
-                    break;
-                }
-                if (!block_is_current)
-                    break;
-                overlay_gl_suspend(ctx, &trk.st);
-                block_clip_suspended = 1;
-                glLineWidth(VERTEX_OUTLINE_ACTIVE_WIDTH);
-                render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
-            } else {
-                /* A whole-block highlight covers every edge of its block,
-                 * so the plain phase leaves that block to it. A
-                 * one-primitive highlight covers only its primitive: the
-                 * rest of the block still needs its plain outline. */
-                if (block_is_current && !one_primitive)
-                    break;
-                if (!(ctx->show_vertex_outlines && draw_outline &&
-                      trk.st.color_writes))
-                    break;
-                glLineWidth(vertex_outline_width(ctx, VERTEX_OUTLINE_EDGE_WIDTH));
-                vertex_outline_color(ctx, RENDER3D_CLR_OUTLINE_EDGE);
-            }
-            glBegin((GLenum)cmds[i].args[0]);
-            in_begin = 1;
-            break;
-        }
-        case CMD_END:
-            if (in_begin) {
-                glEnd();
-                in_begin = 0;
-                glLineWidth(1.0f);
-                render3d_clr(RENDER3D_CLR_OUTLINE_EDGE);
-            }
-            if (block_clip_suspended) {
-                overlay_gl_resume(ctx, &trk.st);
-                block_clip_suspended = 0;
-            }
-            block_is_current = 0;
-            break;
-        case CMD_VERTEX3F:
-        case CMD_VERTEX2F:
-        case CMD_VERTEX4F:
-            if (in_begin)
-                overlay_emit_immediate_vertex(&cmds[i]);
-            break;
-        default:
-            break;
-        }
-    }
+typedef struct {
+    int head, prefix, matches, next;
+    OutlineKind kind;
+} OutlineScope;
 
-    if (in_begin) {
-        glEnd();
-        glLineWidth(1.0f);
-    }
-    if (block_clip_suspended)
-        overlay_gl_resume(ctx, &trk.st);
-    overlay_gl_reset(&trk.st);
-    unwind_transform_stack(&matrix_depth);
-    glPopMatrix();
-}
+typedef struct {
+    int cmd_idx, next;
+} OutlineVertex;
 
-/* Is the contour opening at polygon-local vertex ordinal `first_ord` the one
- * the active highlight should draw? Every contour of the current polygon,
- * except in single-polygon scope with a resolved cursor contour: then only
- * that one, the tess counterpart of a glBegin block highlighting just the
- * cursor's primitive. Contours own disjoint, contiguous ordinal runs, so the
- * first ordinal identifies one. */
-static int tess_contour_is_highlighted(const OverlayWalkCtx *ctx,
-                                       int poly_is_current, int first_ord) {
-    if (!poly_is_current)
-        return 0;
-    if (ctx->cursor_overlay_scope != OVERLAY_SCOPE_SINGLE_POLYGON ||
-        !ctx->cursor_contour_valid)
-        return 1;
-    return first_ord == ctx->cursor_contour_first;
-}
+typedef struct {
+    OutlineKind kind;
+    GLenum mode;
+    int first, last, count;
+    int scope, head, contour_first;
+    int matrix_idx, state_idx, next;
+    int is_current;
+} OutlineBatch;
 
-/* Close the contour outline open in the tess pass, if any, and put back
- * the state its draw lifted. */
-static void tess_contour_outline_end(const OverlayWalkCtx *ctx,
-                                     const OverlayGlState *st,
-                                     int *in_contour, int *clip_suspended,
-                                     int *cull_lifted) {
-    if (*in_contour) {
-        glEnd();
-        glLineWidth(1.0f);
-        *in_contour = 0;
-    }
-    if (*clip_suspended) {
-        overlay_gl_resume(ctx, st);
-        *clip_suspended = 0;
-    }
-    if (*cull_lifted) {
-        glEnable(GL_CULL_FACE);
-        *cull_lifted = 0;
+typedef struct {
+    OutlineBatch batches[MAX_FLAT_COMMANDS];
+    OutlineVertex vertices[MAX_FLAT_COMMANDS];
+    OutlineScope scopes[MAX_FLAT_COMMANDS];
+    OutlineMatrix matrices[MAX_FLAT_COMMANDS + 1];
+    OutlineState states[MAX_FLAT_COMMANDS + 1];
+    OutlineClip clips[MAX_FLAT_COMMANDS + OUTLINE_CLIP_PLANE_COUNT];
+    int matrix_stack[MAX_FLAT_COMMANDS];
+    OutlineAttrib attrib_stack[REPL_ATTRIB_STACK_CAP];
+    int batch_count, vertex_count, scope_count, matrix_count, state_count, clip_count;
+    int first[OUTLINE_KIND_COUNT], last[OUTLINE_KIND_COUNT];
+    int pending_begin, pending_tess, match_prefix, unmatched_scopes;
+    int matrix_idx, matrix_depth, state_idx, attrib_depth, inherited_clips;
+} OutlineCollection;
+
+/* Each record consumes a distinct flat command; only baseline records need
+ * extra slots. Linked vertices keep interleaved GL and GLU streams separate. */
+static OutlineCollection g_outlines;
+
+static void outline_matrix_cmd(const GLCmd *cmd) {
+    OutlineCollection *c = &g_outlines;
+    if (cmd->type == CMD_PUSH_MATRIX) {
+        c->matrix_stack[c->matrix_depth++] = c->matrix_idx;
+    } else if (cmd->type == CMD_POP_MATRIX) {
+        if (c->matrix_depth > 0)
+            c->matrix_idx = c->matrix_stack[--c->matrix_depth];
+    } else {
+        OutlineMatrix *next = &c->matrices[c->matrix_count];
+        *next = c->matrices[c->matrix_idx];
+        mat4_apply_cmd(next->m, cmd);
+        if (cmd->type == CMD_LOAD_IDENTITY)
+            next->absolute = 1;
+        c->matrix_idx = c->matrix_count++;
     }
 }
 
-/* Each contour is drawn as a GL_POLYGON under the pass's glPolygonMode(GL_LINE),
- * the same way the glBegin pass outlines its blocks. That is what puts the
- * contour under GL_POLYGON_OFFSET_LINE: an offset only applies to polygons,
- * and the contour's edges are the tessellated face's own edges, so a line
- * primitive at that depth loses fragments to the face it traces. Line mode
- * draws a polygon's boundary edges, so a concave contour outlines cleanly
- * (gl4es walks a GL_POLYGON's ring too - no fan diagonals).
- *
- * Culling is lifted for the contour draw in every mode, CLIPPED_CULLED
- * included. A contour's own winding says nothing about the face: the
- * tessellator orients the filled triangles by the whole polygon, and a hole
- * is usually wound against its outer contour, so culling by contour winding
- * would drop a hole whose face is plainly visible. Line loops were never
- * culled, so this keeps the outlines' long-standing visibility. Clip planes
- * and the stencil test still apply to plain outlines as before. */
-static void render_outlines_tess_pass(const OverlayWalkCtx *ctx,
-                                      OutlinePhase phase,
-                                      const OutlineSelection *sel) {
-    const GLCmd *cmds = ctx->program.cmds;
-    int cmd_count = ctx->program.cmd_count;
-    int matrix_depth = 0;
-    int tess_in_contour = 0;
-    int tess_poly_is_current = 0;
+/* Only an inherited, never-authored equation needs GL's initial value.
+ * Capture that baseline once, before any drawing; all scope saves are CPU copies. */
+static void outline_capture_inherited_clips(void) {
+    OutlineCollection *c = &g_outlines;
+    if (c->inherited_clips) return;
+    for (int i = 0; i < OUTLINE_CLIP_PLANE_COUNT; i++)
+        glGetClipPlane((GLenum)(GL_CLIP_PLANE0 + i), c->clips[i].eq);
+    c->inherited_clips = 1;
+}
+
+static void outline_restore_attrib(OutlineState *st, const OutlineAttrib *fr) {
+    unsigned mask = fr->mask;
+    const OutlineState *saved = &fr->state;
+    if (mask & repl_attrib_bits_for_type(CMD_ENABLE, GL_CLIP_PLANE0))
+        st->gl.clip_enabled_mask = saved->gl.clip_enabled_mask;
+    if (mask & repl_attrib_bits_for_type(CMD_CLIP_PLANE, 0))
+        memcpy(st->clip, saved->clip, sizeof(st->clip));
+    if (mask & repl_attrib_bits_for_type(CMD_ENABLE, GL_CULL_FACE))
+        st->gl.cull_enabled = saved->gl.cull_enabled;
+    if (mask & repl_attrib_bits_for_type(CMD_CULL_FACE, 0))
+        st->cull_face = saved->cull_face;
+    if (mask & repl_attrib_bits_for_type(CMD_FRONT_FACE, 0))
+        st->gl.front_face = saved->gl.front_face;
+    if (mask & repl_attrib_bits_for_type(CMD_COLOR_MASK, 0))
+        st->gl.color_writes = saved->gl.color_writes;
+    if (mask & repl_attrib_bits_for_type(CMD_ENABLE, GL_STENCIL_TEST))
+        st->gl.stencil_enabled = saved->gl.stencil_enabled;
+    if (mask & repl_attrib_bits_for_type(CMD_STENCIL_FUNC, 0)) {
+        st->gl.stencil_func = saved->gl.stencil_func;
+        st->gl.stencil_ref = saved->gl.stencil_ref;
+        st->gl.stencil_value_mask = saved->gl.stencil_value_mask;
+    }
+}
+
+/* Copy only for a tracked setter, directly into its prospective record. */
+static OutlineState *outline_state_copy(void) {
+    OutlineCollection *c = &g_outlines;
+    c->states[c->state_count] = c->states[c->state_idx];
+    return &c->states[c->state_count];
+}
+
+/* Pure state fold except for the one inherited-plane baseline acquisition. */
+static void outline_state_cmd(const GLCmd *cmd) {
+    OutlineCollection *c = &g_outlines;
+    OutlineState *next;
+    switch (cmd->type) {
+    case CMD_PUSH_ATTRIB:
+        if (c->attrib_depth < REPL_ATTRIB_STACK_CAP) {
+            OutlineAttrib *fr = &c->attrib_stack[c->attrib_depth];
+            fr->mask = (unsigned)cmd->args[0];
+            fr->state = c->states[c->state_idx];
+            if (fr->mask & repl_attrib_bits_for_type(CMD_CLIP_PLANE, 0))
+                outline_capture_inherited_clips();
+        }
+        c->attrib_depth++;
+        return;
+    case CMD_POP_ATTRIB:
+        if (c->attrib_depth == 0) return;
+        c->attrib_depth--;
+        if (c->attrib_depth >= REPL_ATTRIB_STACK_CAP) return;
+        next = outline_state_copy();
+        outline_restore_attrib(next, &c->attrib_stack[c->attrib_depth]);
+        break;
+    case CMD_CLIP_PLANE: {
+        int plane = outline_clip_cap_index((GLenum)cmd->args[0]);
+        if (plane < 0) return;
+        OutlineClip *clip = &c->clips[c->clip_count];
+        for (int j = 0; j < 4; j++) clip->eq[j] = cmd->args[j + 1];
+        clip->matrix_idx = c->matrix_idx;
+        next = outline_state_copy();
+        next->clip[plane] = c->clip_count++;
+        break;
+    }
+    case CMD_CULL_FACE:
+        next = outline_state_copy();
+        next->cull_face = (GLenum)cmd->args[0];
+        break;
+    case CMD_FRONT_FACE:
+        next = outline_state_copy();
+        next->gl.front_face = (GLenum)cmd->args[0];
+        break;
+    case CMD_COLOR_MASK:
+        next = outline_state_copy();
+        next->gl.color_writes = color_mask_writes_color(cmd);
+        break;
+    case CMD_STENCIL_FUNC:
+        next = outline_state_copy();
+        next->gl.stencil_func = (GLenum)cmd->args[0];
+        next->gl.stencil_ref = (GLint)cmd->args[1];
+        next->gl.stencil_value_mask = (GLuint)cmd->args[2];
+        break;
+    case CMD_ENABLE:
+    case CMD_DISABLE: {
+        GLenum cap = (GLenum)cmd->args[0];
+        int on = cmd->type == CMD_ENABLE;
+        int plane = outline_clip_cap_index(cap);
+        if (plane < 0 && cap != GL_CULL_FACE && cap != GL_STENCIL_TEST) return;
+        next = outline_state_copy();
+        if (plane >= 0) {
+            if (on) next->gl.clip_enabled_mask |= 1u << plane;
+            else next->gl.clip_enabled_mask &= ~(1u << plane);
+        } else if (cap == GL_CULL_FACE) next->gl.cull_enabled = on;
+        else next->gl.stencil_enabled = on;
+        break;
+    }
+    default: return; /* Stencil writes never belong to an overlay. */
+    }
+    if (memcmp(next, &c->states[c->state_idx], sizeof(*next)) == 0) return;
+    c->state_idx = c->state_count++;
+}
+
+static int outline_scope_begin(int head, int is_tess, const OverlayWalkCtx *ctx) {
+    OutlineCollection *c = &g_outlines;
+    int idx = c->scope_count++;
+    OutlineScope *scope = &c->scopes[idx];
+    scope->head = head;
+    scope->kind = is_tess ? OUTLINE_CONTOUR : OUTLINE_IMMEDIATE;
+    scope->prefix = c->match_prefix;
+    scope->matches = is_tess && repl_cursor_source_tess_head_matches(&ctx->cursor, &ctx->program.cmds[head]);
+    if (ctx->highlight_current_poly && !scope->matches) c->unmatched_scopes++;
+    scope->next = is_tess ? c->pending_tess : c->pending_begin;
+    if (is_tess) c->pending_tess = idx;
+    else c->pending_begin = idx;
+    return idx;
+}
+
+static void outline_scope_end(int *pending) {
+    OutlineCollection *c = &g_outlines;
+    for (int idx = *pending; idx >= 0; idx = c->scopes[idx].next) {
+        OutlineScope *scope = &c->scopes[idx];
+        scope->matches |= c->match_prefix > scope->prefix;
+        if (!scope->matches && c->unmatched_scopes > 0) c->unmatched_scopes--;
+    }
+    *pending = -1;
+}
+
+static int outline_batch_begin(OutlineKind kind, GLenum mode, int head, int scope, int contour_first) {
+    OutlineCollection *c = &g_outlines;
+    int idx = c->batch_count++;
+    OutlineBatch *b = &c->batches[idx];
+    memset(b, 0, sizeof(*b));
+    b->kind = kind; b->mode = mode; b->head = head; b->scope = scope;
+    b->first = b->last = b->next = -1;
+    b->matrix_idx = c->matrix_idx; b->state_idx = c->state_idx;
+    const OutlineState *st = &c->states[c->state_idx];
+    for (int i = 0; i < OUTLINE_CLIP_PLANE_COUNT; i++) {
+        if ((st->gl.clip_enabled_mask & (1u << i)) && st->clip[i] < OUTLINE_CLIP_PLANE_COUNT)
+            outline_capture_inherited_clips();
+    }
+    b->contour_first = contour_first;
+    if (c->last[kind] >= 0) c->batches[c->last[kind]].next = idx;
+    else c->first[kind] = idx;
+    c->last[kind] = idx;
+    return idx;
+}
+
+static void outline_vertex_add(int batch, int cmd_idx) {
+    if (batch < 0) return;
+    OutlineCollection *c = &g_outlines;
+    OutlineBatch *b = &c->batches[batch];
+    int idx = c->vertex_count++;
+    c->vertices[idx].cmd_idx = cmd_idx;
+    c->vertices[idx].next = -1;
+    if (b->last >= 0) c->vertices[b->last].next = idx;
+    else b->first = idx;
+    b->last = idx;
+    b->count++;
+}
+
+static void outline_collect(const OverlayWalkCtx *ctx) {
+    OutlineCollection *c = &g_outlines;
+    int begin = -1, contour = -1, polygon_scope = -1;
     int tess_depth = 0;
-    int tess_ord = 0;   /* polygon-local vertex ordinal, as the labels count */
-    int one_instance = sel->one_instance;
-    int selected_head = sel->tess_head;
-    OverlayGlTracker trk;
-    int contour_clip_suspended = 0;
-    int contour_cull_lifted = 0;
-    int contour_is_current = 0;
-
-    overlay_gl_walk_begin(&trk);
-    glPushMatrix();
-    for (int i = 0; i < cmd_count; i++) {
-        if (!cmds[i].valid) continue;
-
-        if (repl_cmd_is_transform(cmds[i].type)) {
-            if (!tess_in_contour)
-                apply_tracked_transform(&cmds[i], &matrix_depth);
+    int tess_ord = 0;
+    int count = ctx->program.cmds ? ctx->program.cmd_count : 0;
+    if (count > MAX_FLAT_COMMANDS) count = MAX_FLAT_COMMANDS;
+    c->batch_count = c->vertex_count = c->scope_count = 0;
+    c->matrix_count = c->state_count = 1;
+    c->clip_count = OUTLINE_CLIP_PLANE_COUNT;
+    c->matrix_idx = c->matrix_depth = c->state_idx = c->attrib_depth = 0;
+    c->inherited_clips = c->match_prefix = c->unmatched_scopes = 0;
+    c->pending_begin = c->pending_tess = -1;
+    for (int i = 0; i < OUTLINE_KIND_COUNT; i++) c->first[i] = c->last[i] = -1;
+    mat4_identity(c->matrices[0].m); c->matrices[0].absolute = 0;
+    memset(&c->states[0], 0, sizeof(c->states[0]));
+    c->states[0].gl.front_face = GL_CCW;
+    c->states[0].gl.color_writes = 1;
+    c->states[0].gl.stencil_func = GL_ALWAYS;
+    c->states[0].gl.stencil_value_mask = 0xFFu;
+    c->states[0].cull_face = GL_BACK;
+    for (int i = 0; i < OUTLINE_CLIP_PLANE_COUNT; i++) {
+        c->states[0].clip[i] = i;
+        c->clips[i].matrix_idx = -1;
+    }
+    for (int i = 0; i < count; i++) {
+        const GLCmd *cmd = &ctx->program.cmds[i];
+        if (!cmd->valid) continue;
+        if (cmd->type == CMD_BEGIN) {
+            int scope = outline_scope_begin(i, 0, ctx);
+            begin = outline_batch_begin(OUTLINE_IMMEDIATE, (GLenum)cmd->args[0], i, scope, 0);
+        }
+        if (cmd->type == CMD_TESS_BEGIN_POLYGON) {
+            polygon_scope = outline_scope_begin(i, 1, ctx);
+            tess_ord = 0;
+        }
+        /* One match resolves every scope already open. Later vertices cannot
+         * add membership; only a new head can need another cursor query. */
+        int matches_cursor = -1;
+        if (c->unmatched_scopes > 0) {
+            matches_cursor = outline_cmd_matches_cursor(i, ctx);
+            if (matches_cursor) {
+                c->match_prefix++;
+                c->unmatched_scopes = 0;
+            }
+        }
+        tess_depth = repl_tess_advance_depth(cmd->type, tess_depth);
+        if (repl_cmd_is_transform(cmd->type)) {
+            if (begin < 0) outline_matrix_cmd(cmd);
             continue;
         }
-        if (!tess_in_contour && overlay_gl_track_cmd(&cmds[i], &trk))
-            continue;
-
-        tess_depth = repl_tess_advance_depth(cmds[i].type, tess_depth);
-        switch (cmds[i].type) {
-        case CMD_TESS_BEGIN_POLYGON:
-            tess_poly_is_current = ctx->highlight_current_poly &&
-                                   outline_block_matches_cursor(i, 1, ctx) &&
-                                   (!one_instance || i == selected_head);
-            tess_ord = 0;
+        switch (cmd->type) {
+        case CMD_END:
+            begin = -1;
+            outline_scope_end(&c->pending_begin);
             break;
         case CMD_TESS_BEGIN_CONTOUR:
-            if (ctx->replay_tess_preview) break;
-            tess_contour_outline_end(ctx, &trk.st, &tess_in_contour,
-                                     &contour_clip_suspended,
-                                     &contour_cull_lifted);
-            contour_is_current =
-                tess_contour_is_highlighted(ctx, tess_poly_is_current, tess_ord);
-            if (phase == OUTLINE_PHASE_HIGHLIGHT
-                    ? contour_is_current
-                    : (!contour_is_current && ctx->show_vertex_outlines &&
-                       trk.st.color_writes)) {
-                if (contour_is_current) {
-                    overlay_gl_suspend(ctx, &trk.st);
-                    contour_clip_suspended = 1;
-                    /* Same width as a glBegin block's whole-block highlight:
-                     * each contour draws once, so no plain redraw follows
-                     * that a Bold-scaled width would have to outrun. */
-                    glLineWidth(VERTEX_OUTLINE_ACTIVE_WIDTH);
-                    render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
-                } else {
-                    /* Same width and color as a glBegin / glut plain
-                     * outline (and the same Bold scaling and inversion):
-                     * only the highlight singles geometry out. */
-                    glLineWidth(vertex_outline_width(ctx, VERTEX_OUTLINE_EDGE_WIDTH));
-                    vertex_outline_color(ctx, RENDER3D_CLR_OUTLINE_EDGE);
-                }
-                if (trk.st.cull_enabled) {
-                    glDisable(GL_CULL_FACE);
-                    contour_cull_lifted = 1;
-                }
-                glBegin(GL_POLYGON);
-                tess_in_contour = 1;
+            contour = ctx->replay_tess_preview ? -1 :
+                outline_batch_begin(OUTLINE_CONTOUR, GL_POLYGON, i, polygon_scope, tess_ord);
+            break;
+        case CMD_TESS_END:
+            contour = -1;
+            if (tess_depth == 0) {
+                outline_scope_end(&c->pending_tess);
+                polygon_scope = -1;
             }
             break;
         case CMD_TESS_VERTEX:
-            if (tess_depth > 0)
-                tess_ord++;
-            if (ctx->replay_tess_preview) break;
-            if (tess_in_contour)
-                glVertex3f(cmds[i].args[0], cmds[i].args[1], cmds[i].args[2]);
-            break;
-        case CMD_TESS_END:
-            if (ctx->replay_tess_preview) {
-                tess_poly_is_current = 0;
-                break;
-            }
-            tess_contour_outline_end(ctx, &trk.st, &tess_in_contour,
-                                     &contour_clip_suspended,
-                                     &contour_cull_lifted);
-            /* Only the polygon's own gluEnd() ends "current": a contour's
-             * gluEnd() must leave it standing for the contours after it. */
-            if (tess_depth == 0) tess_poly_is_current = 0;
+            if (tess_depth > 0) tess_ord++;
+            outline_vertex_add(contour, i);
             break;
         default:
+            if (repl_cmd_emits_immediate_vertex(cmd->type)) outline_vertex_add(begin, i);
+            else if (repl_cmd_is_glut_solid(cmd->type)) {
+                int b = outline_batch_begin(OUTLINE_GLUT, 0, i, -1, 0);
+                c->batches[b].is_current = ctx->highlight_current_poly &&
+                    (matches_cursor >= 0 ? matches_cursor : outline_cmd_matches_cursor(i, ctx));
+            } else if (begin < 0) outline_state_cmd(cmd);
             break;
         }
     }
-
-    tess_contour_outline_end(ctx, &trk.st, &tess_in_contour,
-                             &contour_clip_suspended, &contour_cull_lifted);
-    overlay_gl_reset(&trk.st);
-    unwind_transform_stack(&matrix_depth);
-    glPopMatrix();
-}
-
-/* glutSolid* shapes emit no REPL-tracked vertices, so the glBegin/tess
- * passes above can't trace their edges. Instead, re-invoke each shape
- * under the already-active glPolygonMode(GL_LINE) + polygon offset so
- * the GL pipeline rasterizes the wireframe itself. Modelview transforms
- * are tracked exactly like the other passes so each shape lands at its
- * own matrix. */
-static void render_outlines_glut_pass(const OverlayWalkCtx *ctx,
-                                      OutlinePhase phase,
-                                      const OutlineSelection *sel) {
-    const GLCmd *cmds = ctx->program.cmds;
-    int cmd_count = ctx->program.cmd_count;
-    int matrix_depth = 0;
-    int one_instance = sel->one_instance;
-    int selected_shape = sel->glut_shape;
-    OverlayGlTracker trk;
-
-    overlay_gl_walk_begin(&trk);
-    glPushMatrix();
-    for (int i = 0; i < cmd_count; i++) {
-        if (!cmds[i].valid) continue;
-
-        if (repl_cmd_is_transform(cmds[i].type)) {
-            apply_tracked_transform(&cmds[i], &matrix_depth);
-            continue;
-        }
-        if (overlay_gl_track_cmd(&cmds[i], &trk))
-            continue;
-        if (!repl_cmd_is_glut_solid(cmds[i].type)) continue;
-
-        int is_current = ctx->highlight_current_poly &&
-                         outline_cmd_matches_cursor(i, ctx) &&
-                         (!one_instance || i == selected_shape);
-        if (phase == OUTLINE_PHASE_HIGHLIGHT) {
-            if (!is_current)
-                continue;
-            overlay_gl_suspend(ctx, &trk.st);
-            glLineWidth(VERTEX_OUTLINE_ACTIVE_WIDTH);
-            render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
-        } else {
-            if (is_current || !(ctx->show_vertex_outlines && trk.st.color_writes))
-                continue;
-            glLineWidth(vertex_outline_width(ctx, VERTEX_OUTLINE_EDGE_WIDTH));
-            vertex_outline_color(ctx, RENDER3D_CLR_OUTLINE_EDGE);
-        }
-        repl_executor_draw_glut_solid(&cmds[i]);
-        glLineWidth(1.0f);
-        if (is_current)
-            overlay_gl_resume(ctx, &trk.st);
+    outline_scope_end(&c->pending_begin);
+    outline_scope_end(&c->pending_tess);
+    int last[OUTLINE_KIND_COUNT] = {-1, -1, -1};
+    /* Empty polygons still own the last matching instance. */
+    for (int i = 0; i < c->scope_count; i++) {
+        const OutlineScope *scope = &c->scopes[i];
+        if (scope->matches) last[scope->kind] = scope->head;
     }
-    overlay_gl_reset(&trk.st);
-    unwind_transform_stack(&matrix_depth);
+    for (int i = 0; i < c->batch_count; i++) {
+        OutlineBatch *b = &c->batches[i];
+        if (b->scope >= 0)
+            b->is_current = ctx->highlight_current_poly && c->scopes[b->scope].matches;
+        else if (b->is_current) last[b->kind] = b->head;
+    }
+    for (int i = 0; i < c->batch_count; i++) {
+        OutlineBatch *b = &c->batches[i];
+        int head = b->scope >= 0 ? c->scopes[b->scope].head : b->head;
+        if (cursor_scope_selects_one_instance(ctx) && head != last[b->kind]) b->is_current = 0;
+        if (b->kind == OUTLINE_CONTOUR && ctx->cursor_overlay_scope == OVERLAY_SCOPE_SINGLE_POLYGON &&
+            ctx->cursor_contour_valid && b->contour_first != ctx->cursor_contour_first)
+            b->is_current = 0;
+    }
+}
+
+/* Restore entry modelview before applying a relative snapshot. No readback,
+ * and glLoadIdentity remains absolute rather than accidentally retaining the camera. */
+static void outline_bind_matrix(int idx, int *live) {
+    if (idx == *live) return;
+    glPopMatrix(); glPushMatrix();
+    if (idx < 0) glLoadIdentity();
+    else {
+        const OutlineMatrix *m = &g_outlines.matrices[idx];
+        if (m->absolute) glLoadMatrixf(m->m);
+        else if (idx != 0) glMultMatrixf(m->m);
+    }
+    *live = idx;
+}
+
+static void outline_bind_state(const OutlineState *want, OutlineKind kind, int highlight,
+                                const OverlayWalkCtx *ctx, OutlineState *live, int *matrix) {
+    OverlayGlState effective = want->gl;
+    if (highlight && !ctx->highlight_clipped_culled) {
+        effective.clip_enabled_mask = 0;
+        effective.cull_enabled = effective.stencil_enabled = 0;
+    }
+    if (kind == OUTLINE_CONTOUR) effective.cull_enabled = 0;
+    for (int i = 0; i < OUTLINE_CLIP_PLANE_COUNT; i++) {
+        if (want->clip[i] != live->clip[i]) {
+            const OutlineClip *clip = &g_outlines.clips[want->clip[i]];
+            outline_bind_matrix(clip->matrix_idx, matrix);
+            glClipPlane((GLenum)(GL_CLIP_PLANE0 + i), clip->eq);
+            live->clip[i] = want->clip[i];
+        }
+        unsigned bit = 1u << i;
+        if ((effective.clip_enabled_mask ^ live->gl.clip_enabled_mask) & bit) {
+            if (effective.clip_enabled_mask & bit) glEnable((GLenum)(GL_CLIP_PLANE0 + i));
+            else glDisable((GLenum)(GL_CLIP_PLANE0 + i));
+        }
+    }
+    if (effective.cull_enabled != live->gl.cull_enabled) {
+        if (effective.cull_enabled) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+    }
+    if (want->cull_face != live->cull_face) glCullFace(want->cull_face);
+    if (effective.front_face != live->gl.front_face) glFrontFace(effective.front_face);
+    if (effective.stencil_enabled != live->gl.stencil_enabled) {
+        if (effective.stencil_enabled) glEnable(GL_STENCIL_TEST); else glDisable(GL_STENCIL_TEST);
+    }
+    if (effective.stencil_func != live->gl.stencil_func || effective.stencil_ref != live->gl.stencil_ref ||
+        effective.stencil_value_mask != live->gl.stencil_value_mask)
+        glStencilFunc(effective.stencil_func, effective.stencil_ref, effective.stencil_value_mask);
+    live->gl = effective;
+    live->cull_face = want->cull_face;
+}
+
+static void outline_draw_batches(const OverlayWalkCtx *ctx) {
+    OutlineCollection *c = &g_outlines;
+    OutlineState live = c->states[0];
+    int matrix = 0, state_idx = -1, policy = -1;
+    int drew = 0;
+    overlay_gl_reset(&live.gl);
+    for (int i = 0; i < OUTLINE_CLIP_PLANE_COUNT; i++)
+        glDisable((GLenum)(GL_CLIP_PLANE0 + i));
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_STENCIL_TEST);
+    glStencilFunc(GL_ALWAYS, 0, 0xFFu);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP); glStencilMask(0);
+    glPushMatrix();
+    for (int highlight = 0; highlight <= 1; highlight++) {
+        if (highlight ? !ctx->highlight_current_poly : !ctx->show_vertex_outlines) continue;
+        int width_set = 0;
+        for (int kind = 0; kind < OUTLINE_KIND_COUNT; kind++) {
+            for (int idx = c->first[kind]; idx >= 0; idx = c->batches[idx].next) {
+                const OutlineBatch *b = &c->batches[idx];
+                const OutlineState *st = &c->states[b->state_idx];
+                int single = b->kind == OUTLINE_IMMEDIATE && b->is_current &&
+                    ctx->cursor_overlay_scope == OVERLAY_SCOPE_SINGLE_POLYGON && ctx->cursor_poly_valid;
+                if (highlight ? !b->is_current :
+                    ((b->is_current && !single) || !st->gl.color_writes ||
+                     (b->kind == OUTLINE_IMMEDIATE && !outline_begin_mode_has_overlay(b->mode)))) continue;
+                int next_policy = (highlight && !ctx->highlight_clipped_culled) |
+                                  ((b->kind == OUTLINE_CONTOUR) << 1);
+                if (state_idx != b->state_idx || policy != next_policy) {
+                    outline_bind_state(st, b->kind, highlight, ctx, &live, &matrix);
+                    state_idx = b->state_idx;
+                    policy = next_policy;
+                }
+                outline_bind_matrix(b->matrix_idx, &matrix);
+                int flip = highlight && single && ctx->highlight_clipped_culled && st->gl.cull_enabled &&
+                    b->mode == GL_TRIANGLE_STRIP && (ctx->cursor_poly_first & 1);
+                if (flip) glFrontFace(overlay_front_face_opposite(st->gl.front_face));
+                /* A phase has one width. Keep it live across batches to avoid
+                 * flushing the driver's wide-line state between highlights. */
+                if (!width_set) {
+                    glLineWidth(highlight ? VERTEX_OUTLINE_ACTIVE_WIDTH : vertex_outline_width(ctx, VERTEX_OUTLINE_EDGE_WIDTH));
+                    width_set = drew = 1;
+                }
+                if (highlight) render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
+                else vertex_outline_color(ctx, RENDER3D_CLR_OUTLINE_EDGE);
+                if (b->kind == OUTLINE_GLUT) repl_executor_draw_glut_solid(&ctx->program.cmds[b->head]);
+                else {
+                    glBegin(b->mode);
+                    int ord = 0;
+                    for (int v = b->first; v >= 0; v = c->vertices[v].next, ord++) {
+                        if (highlight && single) {
+                            if (ord > ctx->cursor_poly_last) break;
+                            if (!cursor_poly_contains_ordinal(ctx, ord)) continue;
+                        }
+                        const GLCmd *cmd = &ctx->program.cmds[c->vertices[v].cmd_idx];
+                        if (b->kind == OUTLINE_CONTOUR) glVertex3f(cmd->args[0], cmd->args[1], cmd->args[2]);
+                        else overlay_emit_immediate_vertex(cmd);
+                    }
+                    glEnd();
+                }
+                if (flip) glFrontFace(st->gl.front_face);
+            }
+        }
+    }
+    if (drew) glLineWidth(1.0f);
+    /* Leave the same final authored equations/modes for subsequent overlays. */
+    outline_bind_state(&c->states[c->state_idx], OUTLINE_IMMEDIATE, 0, ctx, &live, &matrix);
+    overlay_gl_reset(&live.gl);
     glPopMatrix();
 }
+
 
 /* The manual vertex-point walk below only sees REPL-authored glVertex*
  * commands. glutSolid* meshes are generated inside GLUT, so redraw those
@@ -1151,27 +1210,8 @@ void edit_overlays_render_outlines(const OverlayWalkCtx *ctx,
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     if (ctx->show_vertex_outlines || ctx->highlight_current_poly) {
-        OutlineSelection sel;
-
-        /* The heads come from GL-free walks; resolving them for every scope
-         * (not only the one-instance ones) is what tells the highlight phase
-         * which passes have anything to draw. */
-        sel.one_instance = cursor_scope_selects_one_instance(ctx);
-        sel.begin_head = last_selected_block_head(ctx, CMD_BEGIN, 0);
-        sel.tess_head = last_selected_block_head(ctx, CMD_TESS_BEGIN_POLYGON, 1);
-        sel.glut_shape = last_selected_glut_shape(ctx);
-
-        if (ctx->show_vertex_outlines) {
-            render_outlines_glbegin_pass(ctx, OUTLINE_PHASE_PLAIN, &sel);
-            render_outlines_tess_pass(ctx, OUTLINE_PHASE_PLAIN, &sel);
-            render_outlines_glut_pass(ctx, OUTLINE_PHASE_PLAIN, &sel);
-        }
-        if (sel.begin_head >= 0)
-            render_outlines_glbegin_pass(ctx, OUTLINE_PHASE_HIGHLIGHT, &sel);
-        if (sel.tess_head >= 0)
-            render_outlines_tess_pass(ctx, OUTLINE_PHASE_HIGHLIGHT, &sel);
-        if (sel.glut_shape >= 0)
-            render_outlines_glut_pass(ctx, OUTLINE_PHASE_HIGHLIGHT, &sel);
+        outline_collect(ctx);
+        outline_draw_batches(ctx);
     }
 
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);

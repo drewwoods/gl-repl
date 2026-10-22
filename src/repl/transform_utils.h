@@ -190,21 +190,18 @@ static inline void mat4_post_mul(float m[16], const float rhs[16]) {
 }
 
 static inline void mat4_apply_translate(float m[16], float x, float y, float z) {
-    float t[16];
-    mat4_identity(t);
-    t[12] = x;
-    t[13] = y;
-    t[14] = z;
-    mat4_post_mul(m, t);
+    /* Post-translation changes column 3, including a projective fourth row. */
+    for (int row = 0; row < 4; row++)
+        m[12 + row] = m[row] * x + m[4 + row] * y + m[8 + row] * z + m[12 + row];
 }
 
 static inline void mat4_apply_scale(float m[16], float x, float y, float z) {
-    float s[16];
-    mat4_identity(s);
-    s[0]  = x;
-    s[5]  = y;
-    s[10] = z;
-    mat4_post_mul(m, s);
+    /* Post-scaling scales the first three columns; translation is unchanged. */
+    for (int row = 0; row < 4; row++) {
+        m[row] *= x;
+        m[4 + row] *= y;
+        m[8 + row] *= z;
+    }
 }
 
 static inline void mat4_apply_rotate(float m[16], float angle_deg,
@@ -255,6 +252,31 @@ static inline void mat4_stack_init(Mat4Stack *st) {
     st->overflow = 0;
 }
 
+/* Apply a non-stack transform to a CPU matrix. Push/pop belong to the
+ * caller's stack; this also supports bounded snapshot/index stacks. */
+static inline void mat4_apply_cmd(float m[16], const GLCmd *cmd) {
+    switch (cmd->type) {
+    case CMD_LOAD_IDENTITY:
+        mat4_identity(m);
+        break;
+    case CMD_TRANSLATE3F:
+        mat4_apply_translate(m, cmd->args[0], cmd->args[1], cmd->args[2]);
+        break;
+    case CMD_SCALEF:
+        mat4_apply_scale(m, cmd->args[0], cmd->args[1], cmd->args[2]);
+        break;
+    case CMD_ROTATEF:
+        mat4_apply_rotate(m, cmd->args[0], cmd->args[1],
+                          cmd->args[2], cmd->args[3]);
+        break;
+    case CMD_MULT_MATRIXF:
+        mat4_post_mul(m, cmd->payload.matrix.m);
+        break;
+    default:
+        break;
+    }
+}
+
 /* Apply one flat command to `st`, mirroring apply_tracked_transform's
  * command set exactly - glMultMatrixf included, which reads the 4x4 that
  * flatten baked onto the command (see GLCmd.payload.matrix). Non-transform
@@ -279,23 +301,9 @@ static inline void mat4_stack_apply_cmd(Mat4Stack *st, const GLCmd *cmd) {
             mat4_copy(st->top, st->saved[st->depth]);
         }
         break;
-    case CMD_LOAD_IDENTITY:
-        mat4_identity(st->top);
-        break;
-    case CMD_TRANSLATE3F:
-        mat4_apply_translate(st->top, cmd->args[0], cmd->args[1], cmd->args[2]);
-        break;
-    case CMD_SCALEF:
-        mat4_apply_scale(st->top, cmd->args[0], cmd->args[1], cmd->args[2]);
-        break;
-    case CMD_ROTATEF:
-        mat4_apply_rotate(st->top, cmd->args[0], cmd->args[1],
-                          cmd->args[2], cmd->args[3]);
-        break;
-    case CMD_MULT_MATRIXF:
-        mat4_post_mul(st->top, cmd->payload.matrix.m);
-        break;
+
     default:
+        mat4_apply_cmd(st->top, cmd);
         break;
     }
 }

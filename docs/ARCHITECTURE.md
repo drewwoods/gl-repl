@@ -931,41 +931,46 @@ sets the shared overlay GL state once - lighting off, depth test on with
 `glEnable(GL_POLYGON_OFFSET_LINE)` with the negative
 `REPL_OUTLINE_POLYGON_OFFSET_{FACTOR,UNITS}` (pulls the wireframe in
 front of the filled surface so edges read cleanly without z-fighting) -
-then runs **three** walk passes over the flat program, each tracking the
-modelview with `apply_tracked_transform` / `unwind_transform_stack`:
+then collects the flat program once in `outline_collect`. The collector
+records immediate blocks, GLU contours, and
+GLUT shapes, with linked vertex streams so a strip nested in a contour keeps
+both families in authored order. Contours draw as `GL_POLYGON` under line
+polygon mode, which applies polygon offset to their boundary. Their culling
+is lifted because hole winding cannot stand in for the tessellated face's
+orientation.
 
-1. `render_outlines_glbegin_pass` - re-issues `glBegin`/`glVertex` blocks
-   as line geometry from the REPL-tracked vertices.
-2. `render_outlines_tess_pass` - the same for tessellated polygons: each
-   `gluTess*` contour is drawn as a `GL_POLYGON` under the line polygon mode,
-   so the polygon offset applies to it exactly as to a `glBegin` block (it
-   would not to a `GL_LINE_LOOP`, and a contour's edges sit on the tessellated
-   face's own). Culling is lifted around contour draws: a hole is usually
-   wound against its outer contour, so contour winding cannot stand in for
-   face orientation.
-3. `render_outlines_glut_pass` - for `glutSolid*` shapes.
+Two loops draw the collected batches: **every plain outline first, then every
+highlight**, preserving the immediate/GLU/GLUT order within each phase. Shared
+edges therefore retain the highlight. Selection uses collected scope matches
+and batch provenance, including empty and unterminated blocks; it performs no
+additional flat-program scan. Single polygon selects vertices from a batch's
+stream, retaining fan anchors and odd triangle-strip winding.
 
-The three passes run in **two phases**: every plain outline first, then every
-current-polygon highlight. All outline overlays sit at one depth (same polygon
-offset, no depth writes), so on an edge two of them share, the last draw wins;
-drawing the highlights last is what keeps them on top of the single-polygon
-block's own plain outline, a later block sharing an edge (the next row of a
-strip surface), and a later pass (a GLU contour over a `glBegin` wall). The
-block or shape each pass highlights is resolved once per render, and the
-highlight phase skips any pass with nothing current - so with the highlight
-on, the extra cost is usually one more walk (`make bench`, the
-`outlines_*` rows of `overlay_outlines`).
+The collector uses bounded static storage: at most `MAX_FLAT_COMMANDS` batches,
+vertices, scopes and matrix pushes, with baseline slots for matrices/state and
+inherited planes. It keeps CPU model matrices relative to the entry camera;
+`glLoadIdentity` marks a matrix absolute. Draws replay snapshots under a saved
+entry matrix, without `glGetFloatv`. The shared `mat4_apply_cmd` helper in
+[`transform_utils.h`](../src/repl/transform_utils.h) supplies non-stack transforms.
 
-These passes consume `OverlayWalkCtx.program`, populated once per frame from
-`repl_state_flat_program_view()` by the controller's overlay snapshot pack
-(`glr_ctrl_fill_overlay_walk_ctx`, which `bench_repl` reuses).
-With accumulation AA the outline hook runs once per jitter sample, so the flat
-program walks repeat per sample, but the source interpreter, expression
-evaluator, and flattener are not re-entered.
+Clip records retain each equation and its **set-time matrix**, replayed together
+when that state changes. This avoids an inverse for singular matrices.
+`glPushAttrib` saves CPU state; pops restore only the groups named by the mask,
+using `repl_attrib_bits_for_type`. A needed inherited plane baseline is captured
+once per collection, never per batch or attribute frame. Geometry snapshots
+retain clip enables, cull/front-face modes, stencil tests, and the RGB-write
+gate. Drawing changes state only when its snapshot or highlight/culling policy
+changes, sets line width once per phase, and keeps stencil writes disabled
+throughout. Transforms and state
+between immediate blocks inside a GLU contour affect those blocks; the
+contour itself retains its opening snapshot.
 
-The third pass exists because **GLUT solid shapes emit no REPL-tracked
-vertices** - the geometry is generated inside GLU/freeglut, so the first
-two passes have nothing to trace. Instead, each shape is *re-drawn* under
+`OverlayWalkCtx.program` is populated once per frame from
+`repl_state_flat_program_view()` by `glr_ctrl_fill_overlay_walk_ctx`, which
+`bench_repl` also uses. With accumulation AA, collection and drawing repeat per
+jitter sample; the interpreter, evaluator, and flattener are not re-entered.
+
+**GLUT solid shapes emit no REPL-tracked vertices**, so each shape is re-drawn under
 the already-active `glPolygonMode(GL_LINE)` + polygon offset, letting the
 GL pipeline rasterize the wireframe itself. The actual `glutSolid*` call
 goes through [`repl_executor_draw_glut_solid()`](../src/repl/executor.h#L340) (shared with the live

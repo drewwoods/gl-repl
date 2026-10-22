@@ -1,6 +1,6 @@
 ## Scope and Overlay Maintainability - one cursor-scope query, one vertex numbering, one outline walk
 
-## Status - NOT STARTED (items 2, 5, 6 and 10 are done)
+## Status - NOT STARTED (items 2, 4, 5, 6 and 10 are done)
 
 No runtime item has started, so the plan stays in `not-started/`. Item 10
 completed 2026-10-22: the
@@ -42,7 +42,7 @@ and 3, items 10 and 11, and additions to items 6 and 7.
 | 1 | One cursor-block query | removes the drift behind most of the GLU bugs | ~1 day | - |
 | 2 | Shared GLU depth helper everywhere, with a guard | stops the contour/polygon `gluEnd()` mix-up recurring | 2-3 h | - |
 | 3 | Vertex numbering computed once | gutter, labels, filters cannot disagree | 2-3 days | 1 |
-| 4 | Collect outlines once, draw twice | removes three near-copy passes; highlight cost back near plain | 2-3 days | - (measure first) |
+| 4 | Collect outlines once, draw twice - DONE | removes three near-copy passes; measured costs below | 2-3 days | - (measure first) |
 | 5 | Doc links stop churning on line numbers - DONE | no more anchor-only diffs and gate failures | 0.5 h / 0.5 day | - |
 | 6 | Build traps: make version, bench `--only`, single-test target - DONE | no stale binaries, no silent no-ops | ~1 h each | - |
 | 7 | Test fixtures from real flatten output; named GL enums in traces | fixtures cannot drift from production | ongoing | - |
@@ -333,16 +333,16 @@ listed above deleted.
 
 ---
 
-### 4. Collect outlines once, draw them twice
+### 4. Collect outlines once, draw them twice - DONE
 
-#### Today
+#### Previous implementation
 
-`edit_overlays.c` has three near-copy walkers - `render_outlines_glbegin_pass`,
+`edit_overlays.c` had three near-copy walkers - `render_outlines_glbegin_pass`,
 `render_outlines_tess_pass`, `render_outlines_glut_pass` - each re-applying
 tracked transforms and replaying clip / cull / stencil / color-mask state.
-Since `4058f9fa` each runs in two phases (plain, then highlight) so a
-highlight always wins its edges, and selection (`last_matching_block_head`,
-`last_selected_glut_shape`) makes further GL-free walks.
+Since `4058f9fa` each ran in two phases (plain, then highlight) so a
+highlight always won its edges, and selection (`last_matching_block_head`,
+`last_selected_glut_shape`) made further GL-free walks.
 
 Cost, from the `overlay_outlines` rows of `bench_repl` (native macOS, real GL,
 us/frame, before -> after `4058f9fa`):
@@ -357,45 +357,72 @@ Minor in a 16.7 ms frame, but the duplication is the larger problem: GLU
 outlines drifted from GL outlines in primitive, offset, width, color and
 highlight scope until five separate commits pulled them back together.
 
-#### Design
+#### Implementation
 
-One walk records **outline batches**, then two loops draw them:
+`outline_collect` replaces the three walkers and their selection scans.
+Bounded static arrays hold batches, linked vertex streams, scope records,
+CPU matrices, and scoped GL state. Empty polygons retain scope records so
+an empty final instance still suppresses earlier highlights. Interleaved
+immediate blocks and GLU contours retain separate vertex streams.
 
-```c
-typedef struct {
-    unsigned char kind;        /* glBegin block, tess contour, glut shape */
-    GLenum        mode;        /* glBegin mode; GL_POLYGON for a contour */
-    int           first, count;/* range in a collected vertex array */
-    int           flat_head;   /* for one-instance selection */
-    int           contour_first_ord;
-    unsigned char is_current;  /* resolved after the walk */
-    int           matrix_idx;  /* into a matrix table */
-    int           state_idx;   /* into an OverlayGlState table */
-} OutlineBatch;
-```
+Matrices stay relative to the entry camera until `glLoadIdentity` makes them
+absolute. Shared CPU translate/scale helpers update all four rows, including
+projective matrices. There is no modelview readback. Clip records pair an
+equation with its set-time matrix; inherited equations are acquired at most
+once per collection. Attribute pops restore only the mask's state groups.
 
-- Selection resolves after the walk, from the batch list itself (the last
-  matching copy is simply the last matching batch), replacing the extra
-  selection walks.
-- Draw: every plain batch, then every highlight batch, changing GL state only
-  between batches whose `state_idx` differs.
+Drawing visits every plain batch before every highlight, retaining the
+immediate/GLU/GLUT family order and changing GL state only when needed.
+Line width stays live across each phase instead of resetting between batches.
+Single-polygon draws retain fan anchors and odd strip winding; contours lift
+culling; stencil writes stay disabled. Replay preview, homogeneous vertices,
+RGB masking, and unfinished blocks retain their existing behavior.
 
-**Risks to settle in a spike first:**
-
-- *Matrices.* Today the walk applies transforms to the live GL stack. Batches
-  need the modelview captured CPU-side; do **not** read it back with
-  `glGetFloatv` per batch (a sync point under gl4es, see the gl4es WebGL
-  stall notes). Track the matrix in C alongside the existing
-  `apply_tracked_transform`.
-- *Clip planes.* `glClipPlane` equations are transformed by the modelview in
-  effect when they are set. A batch's state must carry the eye-space
-  equations, or replay them under their own matrix.
-- *Storage.* Up to `MAX_FLAT_COMMANDS` batches and vertices; static buffers,
-  like the label pass's.
+Validation: local and isolated GCC ASan/UBSan stub suites passed all 89
+binaries; the focused overlay suite passed 579/579;
+C99 and ownership guards passed. A native driver differential passed
+524/524 checks. An independent native rendering comparison covered nine
+fixtures, four scopes, and three highlight modes: 108/108 images matched
+byte for byte, with no GL errors.
 
 Acceptance: every outline trace test in `tests/test_edit_overlays.c` green
 (ordering, culling lift, clip suspend, GL/GLU parity); `overlay_outlines`
 highlight rows within ~10% of the plain row.
+
+#### Benchmark verification
+
+Initial macOS timings were discarded because a software update was active.
+The reported comparison used quiet Gracemont: Intel N95, GCC 14.2.0, Mesa
+25.2.8 hardware GL through X11/GLX, vendored freeglut, release `-O2`.
+Baseline: `1c633050`. Both versions used the unchanged frozen benchmark
+corpus and `bench_repl --only overlay_outlines --iters 50 --csv`.
+
+One warm-up per binary preceded five alternating before/after pairs, each
+iteration drawing 50 frames. No builds or tests overlapped timing. A
+30-second idle check preceded warm-up; quiet intervals between pairs and
+afterward measured at least 97.7% CPU idle and at most 0.13 MB/s disk traffic.
+During timing, other processes used at most 2.42% of total CPU and 0.58 MB/s
+disk traffic.
+
+Values below are microseconds/frame: the median of five minimum 50-frame
+batch times, divided by 50. This measures steady submission cost without
+first-use driver initialization skewing the small scenes' means. Each cell
+is **before -> after**.
+
+| Scene | Plain | Last instance | Single polygon | All instances | Whole scene |
+|---|---|---|---|---|---|
+| Wave | 33.82 -> 16.14 | 53.85 -> 17.51 | 54.30 -> 17.65 | 52.84 -> 16.53 | 52.85 -> 16.51 |
+| Torus | 61.03 -> 28.03 | 97.82 -> 29.49 | 98.49 -> 29.72 | 96.80 -> 28.44 | 96.83 -> 28.33 |
+| Sponge | 475.20 -> 372.76 | 499.59 -> 374.38 | 499.96 -> 376.92 | 513.39 -> 371.54 | 514.11 -> 372.18 |
+| Extrusion | 3.17 -> 4.53 | 6.44 -> 4.99 | 6.87 -> 5.16 | 6.44 -> 4.96 | 6.43 -> 4.94 |
+
+Highlight submission improved 23-70%. The approximate 10% target holds
+except for single-polygon extrusion: 14.0% above plain, an extra 0.63 us
+for the selected-primitive redraw. Collection adds 1.36 us to that scene's
+plain row; its highlight rows still improve 23-25%. These small-scene costs
+remain a measured tradeoff of collecting batches. The width assertions
+count draws under the expected width, preserving style coverage when one
+setter serves several batches.
 
 ---
 
