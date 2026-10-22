@@ -83,7 +83,8 @@
  *   overlay_outlines  - edit_overlays_render_outlines() (vertex outlines +
  *                       current-polygon highlight) over loop-unrolled strips,
  *                       glutSolid* cubes, and a GLU extrusion, with the
- *                       highlight off / last-instance / single-polygon. The
+ *                       highlight off / last-instance / single-polygon /
+ *                       all-instances / whole-scene. The
  *                       walk context comes from glr_ctrl_fill_overlay_walk_ctx,
  *                       the frame's own fill. CPU submission cost only: no
  *                       glFinish, so GPU execution is not in the number.
@@ -1780,6 +1781,13 @@ static void bench_overlay_outlines(int iters) {
         { "plain",  POLY_HIGHLIGHT_OFF, OVERLAY_SCOPE_LAST_INSTANCE },
         { "last",   POLY_HIGHLIGHT_ON,  OVERLAY_SCOPE_LAST_INSTANCE },
         { "single", POLY_HIGHLIGHT_ON,  OVERLAY_SCOPE_SINGLE_POLYGON },
+        /* Every unrolled copy of the cursor's block is current: on a
+         * loop-built surface that is every row, the most highlight there is.
+         * Whole-scene widens only the label / normal walks, so its outline
+         * work matches all-instances; it gets a row because it is the scope
+         * a user reaches for "show me everything". */
+        { "all",    POLY_HIGHLIGHT_ON,  OVERLAY_SCOPE_ALL_INSTANCES },
+        { "scene",  POLY_HIGHLIGHT_ON,  OVERLAY_SCOPE_WHOLE_SCENE },
     };
     enum { N_SCENES = (int)(sizeof(k_scenes) / sizeof(k_scenes[0])),
            N_MODES = (int)(sizeof(k_modes) / sizeof(k_modes[0])),
@@ -2659,7 +2667,8 @@ static void usage(const char *prog) {
         "                      nesting-guard A/B, frame tick, stats readback\n"
         "    getenv            libc getenv miss / cached / hit (GL_STATE_DUMP tax)\n"
         "    fade_batches      replay fade-batch rendering with late old_pcs\n"
-        "    overlay_outlines  vertex outlines + polygon highlight (off/last/single)\n",
+        "    overlay_outlines  vertex outlines + polygon highlight\n"
+        "                      (off/last/single/all/scene)\n",
         prog);
 }
 
