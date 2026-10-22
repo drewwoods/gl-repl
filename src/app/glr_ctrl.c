@@ -2528,6 +2528,56 @@ static int glr_ctrl_current_begin_block_source_extent(int edit_line,
     return 0;
 }
 
+/* The tessellator twin of the glBegin extent above: gluBegin(GLU_POLYGON)
+ * through its matching gluEnd(). Contours open with gluBegin(GLU_CONTOUR) and
+ * close with the same gluEnd() spelling as the polygon, so the match is
+ * depth-counted - matching the first gluEnd() would end the block at the
+ * first contour. The whole polygon is one block, as it is for the 3D vertex
+ * labels. Feeds only the code panel's gutter numbers; the overlay pack keeps
+ * the glBegin-only extent. */
+static int glr_ctrl_current_tess_block_source_extent(int edit_line,
+                                                     int *out_start,
+                                                     int *out_end) {
+    const GLCmd *cmds = repl_state_document_cmds();
+    int count = repl_state_document_count();
+    int open_poly = -1;
+    int depth = 0;
+
+    if (out_start) *out_start = -1;
+    if (out_end) *out_end = -1;
+    if (edit_line < 0 || edit_line >= count)
+        return 0;
+
+    for (int i = 0; i < count; i++) {
+        if (!cmds[i].valid)
+            continue;
+
+        if (cmds[i].type == CMD_TESS_BEGIN_POLYGON) {
+            if (depth == 0)
+                open_poly = i;
+            depth++;
+        } else if (cmds[i].type == CMD_TESS_BEGIN_CONTOUR && depth > 0) {
+            depth++;
+        } else if (cmds[i].type == CMD_TESS_END && depth > 0) {
+            if (--depth > 0)
+                continue;
+            if (edit_line >= open_poly && edit_line <= i) {
+                if (out_start) *out_start = open_poly;
+                if (out_end) *out_end = i;
+                return 1;
+            }
+            open_poly = -1;
+        }
+    }
+
+    if (open_poly >= 0 && edit_line >= open_poly) {
+        if (out_start) *out_start = open_poly;
+        if (out_end) *out_end = count - 1;
+        return 1;
+    }
+    return 0;
+}
+
 /* Label for one assignment-plot series: the left-hand side of its row, as
  * the user wrote it ("angle", "A[i]"). Derived from the editor buffer rather
  * than from the GLCmd because per-line canonical text lives there and nowhere
@@ -2788,6 +2838,11 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
             snap->edit_line,
             &snap->current_begin_block_start,
             &snap->current_begin_block_end);
+    snap->current_tess_block_valid =
+        glr_ctrl_current_tess_block_source_extent(
+            snap->edit_line,
+            &snap->current_tess_block_start,
+            &snap->current_tess_block_end);
 
     /* Resolve the dynamic reshape() projection ONCE here so the panel's
      * row-count and render passes (which straddle render3d_draw_scene)

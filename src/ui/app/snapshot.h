@@ -262,6 +262,13 @@ typedef struct UiRenderSnapshot {
     int                         current_begin_block_valid;
     int                         current_begin_block_start;
     int                         current_begin_block_end;
+    /* The cursor's gluBegin(GLU_POLYGON) ... gluEnd() extent, contours
+     * included. Separate from the glBegin extent because the two nest (a
+     * glBegin strip inside a tess contour) and each gates its own vertex
+     * family's gutter numbers. */
+    int                         current_tess_block_valid;
+    int                         current_tess_block_start;
+    int                         current_tess_block_end;
 
     /* Reshape() projection body, resolved once per frame by the
      * controller from the scene's nearest-steady projection (see

@@ -1044,18 +1044,12 @@ static int repl_code_panel_line_in_current_begin_block(const UiRenderSnapshot *s
            line_idx <= snap->current_begin_block_end;
 }
 
-static void repl_code_panel_set_vertex_label(UiTextPanelRow *row,
-                                             const UiRenderSnapshot *snap,
-                                             int line_idx,
-                                             int is_vertex, int vnum,
-                                             int primitive_vnums_exact) {
-    if (!row || !snap || !is_vertex)
-        return;
-    if (!repl_code_panel_line_in_current_begin_block(snap, line_idx))
-        return;
-
-    snprintf(row->left_aux_label, sizeof(row->left_aux_label),
-             primitive_vnums_exact ? "v%d" : "vn", vnum);
+static int repl_code_panel_line_in_current_tess_block(const UiRenderSnapshot *snap,
+                                                      int line_idx) {
+    return snap &&
+           snap->current_tess_block_valid &&
+           line_idx >= snap->current_tess_block_start &&
+           line_idx <= snap->current_tess_block_end;
 }
 
 /* Auto-generated rows (synthesized normals) read as machine output, not as
@@ -2128,9 +2122,7 @@ static void repl_code_panel_add_placeholder_row(ReplCodePanelBuilder *builder,
 
 static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,
                                             int line_idx,
-                                            int is_vertex,
-                                            int vnum,
-                                            int primitive_vnums_exact) {
+                                            const char *vertex_label) {
     UiTextPanelRow *row = repl_code_panel_push_row(builder);
     const char *display_text;
     char *decorated;
@@ -2157,8 +2149,9 @@ static void repl_code_panel_add_command_row(ReplCodePanelBuilder *builder,
     row->color = repl_code_panel_category_color(
         builder->snap->document_cmds[line_idx].type);
     row->hit_eligible = 1;
-    repl_code_panel_set_vertex_label(row, builder->snap, line_idx, is_vertex, vnum,
-                                     primitive_vnums_exact);
+    if (vertex_label && vertex_label[0])
+        snprintf(row->left_aux_label, sizeof(row->left_aux_label), "%s",
+                 vertex_label);
     repl_code_panel_set_auto_label(row, builder->snap, line_idx);
     repl_code_panel_set_right_action(row, builder->snap, line_idx);
     repl_code_panel_apply_command_overlays(builder, line_idx, row);
@@ -2578,13 +2571,20 @@ static void repl_code_panel_add_virtual_rows(ReplCodePanelBuilder *builder,
 
 /* One-pass row emission carries a small source-order state machine for
  * vertex numbering and "exact vs maybe-loop-expanded" labels. Keep it
- * local to the builder path so the begin/end ordering stays obvious. */
+ * local to the builder path so the begin/end ordering stays obvious.
+ *
+ * glVertex and gluVertex are numbered separately: each counts within its
+ * own primitive (glBegin block / tess polygon), and the two nest - the
+ * extrusion example interleaves both inside one contour - so a shared
+ * counter would number them as one run that matches neither. */
 typedef struct {
-    int vnum;
+    int vnum;                   /* glVertex* within the current glBegin */
+    int vnums_exact;
+    int tess_vnum;              /* gluVertex within the current polygon */
+    int tess_vnums_exact;
     int loop_depth;
     int tess_depth;
     int in_tess_poly;
-    int primitive_vnums_exact;
 } ReplCodePanelWalkState;
 
 static void repl_code_panel_add_static_null_terminated_lines(
@@ -2752,59 +2752,77 @@ static void repl_code_panel_begin_walk_line(ReplCodePanelWalkState *state,
      * already see the new numbering regime. */
     if (cmd->type == CMD_BEGIN) {
         state->vnum = 0;
-        state->primitive_vnums_exact = (state->loop_depth == 0);
+        state->vnums_exact = (state->loop_depth == 0);
     } else if (cmd->type == CMD_TESS_BEGIN_POLYGON) {
-        state->vnum = 0;
+        state->tess_vnum = 0;
         state->in_tess_poly = 1;
         state->tess_depth = 1;
-        state->primitive_vnums_exact = (state->loop_depth == 0);
+        state->tess_vnums_exact = (state->loop_depth == 0);
     }
 }
 
+/* Each family is gated on the block that owns it, not on whichever block
+ * is innermost: a gluVertex inside a nested glBegin strip still belongs to
+ * the tess polygon, and is labelled whenever the cursor is in that polygon. */
 static void repl_code_panel_vertex_aux_label(const UiRenderSnapshot *snap,
                                              const ReplCodePanelWalkState *state,
                                              int line_idx,
-                                             int is_vertex,
+                                             const GLCmd *cmd,
                                              char out_label[8]) {
+    int num;
+    int exact;
+
     if (!out_label)
         return;
 
     out_label[0] = '\0';
-    if (!snap || !state || !is_vertex)
-        return;
-    if (!repl_code_panel_line_in_current_begin_block(snap, line_idx))
+    if (!snap || !state || !cmd || !cmd->valid)
         return;
 
-    snprintf(out_label, 8,
-             state->primitive_vnums_exact ? "v%d" : "vn",
-             state->vnum);
+    if (repl_cmd_emits_immediate_vertex(cmd->type)) {
+        if (!repl_code_panel_line_in_current_begin_block(snap, line_idx))
+            return;
+        num = state->vnum;
+        exact = state->vnums_exact;
+    } else if (cmd->type == CMD_TESS_VERTEX) {
+        if (!repl_code_panel_line_in_current_tess_block(snap, line_idx))
+            return;
+        num = state->tess_vnum;
+        exact = state->tess_vnums_exact;
+    } else {
+        return;
+    }
+
+    snprintf(out_label, 8, exact ? "v%d" : "vn", num);
 }
 
 static void repl_code_panel_end_walk_line(ReplCodePanelWalkState *state,
-                                          const GLCmd *cmd,
-                                          int is_vertex) {
-    if (!state || !cmd)
+                                          const GLCmd *cmd) {
+    if (!state || !cmd || !cmd->valid)
         return;
 
-    if (is_vertex)
+    if (repl_cmd_emits_immediate_vertex(cmd->type))
         state->vnum++;
-    if (!cmd->valid)
-        return;
+    else if (cmd->type == CMD_TESS_VERTEX)
+        state->tess_vnum++;
 
     /* Closing/unwinding commands advance after the row is emitted: the
      * line itself still belongs to the old context, and only later rows
      * should see the unwound state. */
     switch (cmd->type) {
     case CMD_FOR_BEGIN:
+        /* The loop sits inside whichever blocks are open, so both counts
+         * stop being exact; each recovers when its own block next opens. */
         state->loop_depth++;
-        state->primitive_vnums_exact = 0;
+        state->vnums_exact = 0;
+        state->tess_vnums_exact = 0;
         break;
     case CMD_FOR_END:
         if (state->loop_depth > 0)
             state->loop_depth--;
         break;
     case CMD_END:
-        state->primitive_vnums_exact = 1;
+        state->vnums_exact = 1;
         break;
     case CMD_TESS_BEGIN_CONTOUR:
         if (state->in_tess_poly)
@@ -2816,7 +2834,7 @@ static void repl_code_panel_end_walk_line(ReplCodePanelWalkState *state,
                 state->tess_depth--;
             if (state->tess_depth == 0) {
                 state->in_tess_poly = 0;
-                state->primitive_vnums_exact = 1;
+                state->tess_vnums_exact = 1;
             }
         }
         break;
@@ -2859,7 +2877,6 @@ static void repl_code_panel_add_rows_for_line(ReplCodePanelBuilder *builder,
     const UiRenderSnapshot *snap;
     const GLCmd *cmd;
     int is_edit;
-    int is_vertex;
     char aux_label[8];
 
     if (!builder || !builder->snap || !state)
@@ -2879,26 +2896,23 @@ static void repl_code_panel_add_rows_for_line(ReplCodePanelBuilder *builder,
     repl_code_panel_begin_walk_line(state, cmd);
 
     is_edit = (!snap->editor_input.insert_mode && line_idx == snap->edit_line);
-    is_vertex = cmd->valid && repl_cmd_emits_vertex(cmd->type);
-    repl_code_panel_vertex_aux_label(snap, state, line_idx, is_vertex, aux_label);
-    /* Parking the cursor on an auto row keeps the label (it is still an
-     * auto row until the edit commits); the dim is deliberately not applied
-     * to the live input row, which stays at full brightness. */
-    if (!aux_label[0] && repl_code_panel_line_is_auto(snap, line_idx))
-        snprintf(aux_label, sizeof(aux_label), "auto");
+    repl_code_panel_vertex_aux_label(snap, state, line_idx, cmd, aux_label);
 
     if (is_edit) {
+        /* Parking the cursor on an auto row keeps the label (it is still
+         * an auto row until the edit commits); the dim is deliberately not
+         * applied to the live input row, which stays at full brightness. */
+        if (!aux_label[0] && repl_code_panel_line_is_auto(snap, line_idx))
+            snprintf(aux_label, sizeof(aux_label), "auto");
         repl_code_panel_add_input_row(builder, line_idx, -1,
                                       snap->active_indent_chars, line_idx,
                                       aux_label[0] ? aux_label : NULL);
     } else {
-        repl_code_panel_add_command_row(builder, line_idx, is_vertex,
-                                        state->vnum,
-                                        state->primitive_vnums_exact);
+        repl_code_panel_add_command_row(builder, line_idx, aux_label);
     }
 
     repl_code_panel_add_virtual_rows(builder, line_idx);
-    repl_code_panel_end_walk_line(state, cmd, is_vertex);
+    repl_code_panel_end_walk_line(state, cmd);
 }
 
 static void repl_code_panel_add_trailing_document_row(
@@ -2922,7 +2936,7 @@ static void repl_code_panel_add_trailing_document_row(
 
 static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
     const UiRenderSnapshot *snap;
-    ReplCodePanelWalkState walk = { .primitive_vnums_exact = 1 };
+    ReplCodePanelWalkState walk = { .vnums_exact = 1, .tess_vnums_exact = 1 };
 
     if (!builder || !builder->snap)
         return;

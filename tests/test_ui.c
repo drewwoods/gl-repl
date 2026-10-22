@@ -2094,6 +2094,157 @@ static void test_vertex_gutter_labels_follow_cursor_begin_block(void) {
                 label[0] == '\0');
 }
 
+/* Shared setup for the tessellator gutter tests below: a wide left code
+ * panel, so every row of the short test programs is built. */
+static void tess_gutter_reset(void) {
+    glr_ctrl_reset_all();
+    ui_state_viewport_set_size(4000, 600);
+    glr_state_presentation_mut()->code_panel_layout = CODE_PANEL_LAYOUT_LEFT;
+    glr_ctrl_sync_ui_chrome();
+    ui_state_code_panel_mut()->panel_frac = 0.4f;
+}
+
+static void tess_gutter_render_at(int edit_line) {
+    UiRenderSnapshot snap;
+
+    editor_state_edit_line_set(edit_line);
+    ui_repl_code_panel_invalidate_row_cache_for_test();
+    make_test_ui_snapshot(&snap);
+    ui_repl_code_panel_render_with_chrome(&snap, NULL);
+}
+
+/* `want` is the expected gutter label, "" for none. */
+static void tess_gutter_expect(int line_idx, const char *want,
+                               const char *what) {
+    char label[8];
+    char msg[160];
+    int found = ui_repl_code_panel_row_aux_label_for_test(line_idx, label);
+
+    snprintf(msg, sizeof msg, "%s: row %d built", what, line_idx);
+    ASSERT_TRUE(msg, found);
+    snprintf(msg, sizeof msg, "%s: row %d label '%s' (got '%s')", what,
+             line_idx, want, found ? label : "?");
+    ASSERT_TRUE(msg, found && strcmp(label, want) == 0);
+}
+
+/* Regression: gluBegin(GLU_POLYGON) ... gluEnd() is a block for the gutter's
+ * vertex numbers exactly as glBegin/glEnd is. The gate used to recognize only
+ * CMD_BEGIN/CMD_END, so a tessellated polygon never showed v0, v1, ... (the
+ * glu-concave-arrow and -cutout examples). Numbering runs on across contours,
+ * matching the 3D vertex labels: the polygon is one block, the contours are
+ * not separate ones. */
+static void test_vertex_gutter_labels_tess_polygon(void) {
+    printf("Testing tessellated-polygon vertex gutter labels...\n");
+
+    tess_gutter_reset();
+    editor_feed_line("gluBegin(GLU_POLYGON);");   /* 0 */
+    editor_feed_line("gluBegin(GLU_CONTOUR);");   /* 1 */
+    editor_feed_line("gluVertex(0, 0, 0);");      /* 2 */
+    editor_feed_line("gluVertex(1, 0, 0);");      /* 3 */
+    editor_feed_line("gluVertex(0, 1, 0);");      /* 4 */
+    editor_feed_line("gluEnd();");                /* 5 */
+    editor_feed_line("gluBegin(GLU_CONTOUR);");   /* 6 */
+    editor_feed_line("gluVertex(0.2, 0.2, 0);");  /* 7 */
+    editor_feed_line("gluVertex(0.4, 0.2, 0);");  /* 8 */
+    editor_feed_line("gluVertex(0.2, 0.4, 0);");  /* 9 */
+    editor_feed_line("gluEnd();");                /* 10 */
+    editor_feed_line("gluEnd();");                /* 11 */
+    editor_feed_line("glBegin(GL_POINTS);");      /* 12 */
+    editor_feed_line("glVertex3f(5, 5, 5);");     /* 13 */
+    editor_feed_line("glEnd();");                 /* 14 */
+
+    /* Cursor on the polygon's closing gluEnd: every vertex is a plain
+     * command row, and both contours are in scope. */
+    tess_gutter_render_at(11);
+    tess_gutter_expect(2, "v0", "outer contour, cursor on polygon gluEnd");
+    tess_gutter_expect(3, "v1", "outer contour, cursor on polygon gluEnd");
+    tess_gutter_expect(4, "v2", "outer contour, cursor on polygon gluEnd");
+    tess_gutter_expect(7, "v3", "inner contour continues the numbering");
+    tess_gutter_expect(8, "v4", "inner contour continues the numbering");
+    tess_gutter_expect(9, "v5", "inner contour continues the numbering");
+    tess_gutter_expect(13, "", "glBegin block outside the cursor's polygon");
+
+    /* Cursor on the first contour's gluEnd: a contour's gluEnd must not be
+     * mistaken for the polygon's, or the second contour would drop out. */
+    tess_gutter_render_at(5);
+    tess_gutter_expect(2, "v0", "cursor on a contour gluEnd");
+    tess_gutter_expect(9, "v5", "cursor on a contour gluEnd keeps later contour");
+
+    /* Cursor on an inner-contour vertex: the edit row carries its own label
+     * and the outer contour stays labelled. */
+    tess_gutter_render_at(8);
+    tess_gutter_expect(8, "v4", "edit row inside inner contour");
+    tess_gutter_expect(2, "v0", "outer contour while editing inner contour");
+
+    /* Cursor in the following glBegin block: the polygon is out of scope. */
+    tess_gutter_render_at(14);
+    tess_gutter_expect(2, "", "polygon vertex with cursor in later glBegin");
+    tess_gutter_expect(9, "", "polygon vertex with cursor in later glBegin");
+    tess_gutter_expect(13, "v0", "glBegin vertex with cursor on its glEnd");
+}
+
+/* glVertex and gluVertex count separately. The extrusion example nests a
+ * glBegin(GL_QUAD_STRIP) inside a tess contour and interleaves the two
+ * families; one shared counter used to number them as a single run (the
+ * first gluVertex read "v2"), matching neither primitive. */
+static void test_vertex_gutter_labels_glbegin_inside_tess_polygon(void) {
+    printf("Testing interleaved glVertex/gluVertex gutter labels...\n");
+
+    tess_gutter_reset();
+    editor_feed_line("gluBegin(GLU_POLYGON);");   /* 0 */
+    editor_feed_line("gluBegin(GLU_CONTOUR);");   /* 1 */
+    editor_feed_line("glBegin(GL_QUAD_STRIP);");  /* 2 */
+    editor_feed_line("glVertex3f(0, 0, 0);");     /* 3 */
+    editor_feed_line("glVertex3f(0, 0, 1);");     /* 4 */
+    editor_feed_line("gluVertex(0, 0, 0);");      /* 5 */
+    editor_feed_line("glVertex3f(1, 0, 0);");     /* 6 */
+    editor_feed_line("glVertex3f(1, 0, 1);");     /* 7 */
+    editor_feed_line("gluVertex(1, 0, 0);");      /* 8 */
+    editor_feed_line("glVertex3f(0, 1, 0);");     /* 9 */
+    editor_feed_line("glVertex3f(0, 1, 1);");     /* 10 */
+    editor_feed_line("gluVertex(0, 1, 0);");      /* 11 */
+    editor_feed_line("glEnd();");                 /* 12 */
+    editor_feed_line("gluEnd();");                /* 13 */
+    editor_feed_line("gluEnd();");                /* 14 */
+
+    /* Cursor on glEnd: inside both the glBegin block and the polygon. */
+    tess_gutter_render_at(12);
+    tess_gutter_expect(3, "v0", "quad strip vertex");
+    tess_gutter_expect(4, "v1", "quad strip vertex");
+    tess_gutter_expect(6, "v2", "quad strip skips the gluVertex rows");
+    tess_gutter_expect(10, "v5", "quad strip skips the gluVertex rows");
+    tess_gutter_expect(5, "v0", "tess vertex skips the glVertex rows");
+    tess_gutter_expect(8, "v1", "tess vertex skips the glVertex rows");
+    tess_gutter_expect(11, "v2", "tess vertex skips the glVertex rows");
+
+    /* Cursor on the polygon's gluEnd: outside the quad strip, so only the
+     * tess vertices are in scope. */
+    tess_gutter_render_at(14);
+    tess_gutter_expect(3, "", "quad strip vertex with cursor past its glEnd");
+    tess_gutter_expect(5, "v0", "tess vertex with cursor on polygon gluEnd");
+    tess_gutter_expect(11, "v2", "tess vertex with cursor on polygon gluEnd");
+}
+
+/* A loop inside the polygon makes the source-order count a guess, so the
+ * tess vertices it touches read "vn" - the same rule as a glBegin block. */
+static void test_vertex_gutter_labels_tess_polygon_loop(void) {
+    printf("Testing loop-expanded tess vertex gutter labels...\n");
+
+    tess_gutter_reset();
+    editor_feed_line("gluBegin(GLU_POLYGON);");   /* 0 */
+    editor_feed_line("gluVertex(0, 0, 0);");      /* 1 */
+    editor_feed_line("for(i, 0, 3) {");           /* 2 */
+    editor_feed_line("gluVertex(i, 1, 0);");      /* 3 */
+    editor_feed_line("}");                        /* 4 */
+    editor_feed_line("gluVertex(0, 2, 0);");      /* 5 */
+    editor_feed_line("gluEnd();");                /* 6 */
+
+    tess_gutter_render_at(6);
+    tess_gutter_expect(1, "v0", "tess vertex before the loop is exact");
+    tess_gutter_expect(3, "vn", "tess vertex inside the loop");
+    tess_gutter_expect(5, "vn", "tess vertex after the loop");
+}
+
 /* Auto-generated normals must be distinguishable from hand-typed ones. The
  * signal is entirely render-side (is_auto rides the document command; nothing
  * is written into the source text, which the autonormal pass rewrites on
@@ -2715,6 +2866,9 @@ int main(void) {
     test_statusbar_perf_hint();
     test_vertex2f_gutter_labels();
     test_vertex_gutter_labels_follow_cursor_begin_block();
+    test_vertex_gutter_labels_tess_polygon();
+    test_vertex_gutter_labels_glbegin_inside_tess_polygon();
+    test_vertex_gutter_labels_tess_polygon_loop();
     test_auto_normal_rows_are_labelled_and_dimmed();
     test_statusbar_action_tooltips();
     test_tutorial_fade_math_uses_snapshot_view();
