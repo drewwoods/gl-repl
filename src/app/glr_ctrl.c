@@ -697,59 +697,62 @@ void glr_ctrl_cursor_block_state_for_test(int edit_line,
     glr_ctrl_fill_cursor_block_state(edit_line, out);
 }
 
-static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3dRenderConfig *cfg) {
+void glr_ctrl_fill_overlay_walk_ctx(int edit_line, OverlayWalkCtx *out) {
     GlrPresentationState presentation = glr_state_presentation();
     int replaying = replay_active();
     int replay_mode_vertex = replaying && (replay_mode() == REPLAY_MODE_VERTEX);
 
-    pack->walk.program = repl_state_flat_program_view();
-    glr_ctrl_fill_cursor_block_state(editor_state_edit_line(),
-                                     &pack->walk.cursor);
-    pack->walk.cursor_overlay_scope = presentation.overlay_scope;
+    if (!out)
+        return;
+    memset(out, 0, sizeof(*out));
+    out->program = repl_state_flat_program_view();
+    glr_ctrl_fill_cursor_block_state(edit_line, &out->cursor);
+    out->cursor_overlay_scope = presentation.overlay_scope;
 
-    pack->walk.cursor_poly_valid = 0;
-    pack->walk.cursor_poly_first = 0;
-    pack->walk.cursor_poly_last = 0;
-    pack->walk.cursor_poly_fan_anchor = 0;
-    pack->walk.cursor_contour_valid = 0;
-    pack->walk.cursor_contour_first = 0;
-    pack->walk.cursor_contour_last = 0;
+    /* cursor_poly_* / cursor_contour_* stay zero (= whole block) outside
+     * single-polygon scope. */
     if (presentation.overlay_scope == OVERLAY_SCOPE_SINGLE_POLYGON) {
         ReplCursorPolygon poly =
-            repl_flatten_cursor_polygon(pack->walk.cursor.edit_line_idx);
-        pack->walk.cursor_poly_valid = poly.valid;
-        pack->walk.cursor_poly_first = poly.first;
-        pack->walk.cursor_poly_last = poly.last;
-        pack->walk.cursor_poly_fan_anchor = poly.fan_anchor;
+            repl_flatten_cursor_polygon(out->cursor.edit_line_idx);
+        out->cursor_poly_valid = poly.valid;
+        out->cursor_poly_first = poly.first;
+        out->cursor_poly_last = poly.last;
+        out->cursor_poly_fan_anchor = poly.fan_anchor;
 
         ReplCursorPolygon contour =
-            repl_flatten_cursor_tess_contour(pack->walk.cursor.edit_line_idx);
-        pack->walk.cursor_contour_valid = contour.valid;
-        pack->walk.cursor_contour_first = contour.first;
-        pack->walk.cursor_contour_last = contour.last;
+            repl_flatten_cursor_tess_contour(out->cursor.edit_line_idx);
+        out->cursor_contour_valid = contour.valid;
+        out->cursor_contour_first = contour.first;
+        out->cursor_contour_last = contour.last;
     }
 
     /* Silhouette outlines only make sense over filled geometry; in any
      * wireframe mode the fill is replaced by edges, so suppress them. */
-    pack->walk.show_vertex_outlines = presentation.show_vertex_outlines &&
-                                      presentation.wireframe == WIREFRAME_OFF;
-    pack->walk.vertex_outline_style = presentation.vertex_outline_style;
-    pack->walk.highlight_current_poly =
+    out->show_vertex_outlines = presentation.show_vertex_outlines &&
+                                presentation.wireframe == WIREFRAME_OFF;
+    out->vertex_outline_style = presentation.vertex_outline_style;
+    out->highlight_current_poly =
         presentation.highlight_current_poly != POLY_HIGHLIGHT_OFF && !replaying;
-    pack->walk.highlight_clipped_culled =
+    out->highlight_clipped_culled =
         presentation.highlight_current_poly == POLY_HIGHLIGHT_CLIPPED_CULLED &&
         !replaying;
-    pack->walk.replay_tess_preview = replay_mode_vertex;
-    pack->walk.show_vertex_points = presentation.show_vertex_points;
-    pack->walk.replay_vertex_points = replay_mode_vertex;
-    pack->walk.replay_vertex_label = replay_mode_vertex && replay_vertex_label();
-    pack->walk.show_normal_vectors = presentation.show_normal_vectors;
-    pack->walk.replay_normal_display = replay_mode_vertex
-                                       ? replay_normal_display()
-                                       : REPLAY_NORMAL_DISPLAY_OFF;
-    pack->walk.replay_anchor_flat_idx = replay_mode_vertex
-                                        ? replay_focus_anchor_flat_idx() : -1;
-    pack->walk.xform_guide_mode = presentation.xform_guide_mode;
+    out->replay_tess_preview = replay_mode_vertex;
+    out->show_vertex_points = presentation.show_vertex_points;
+    out->replay_vertex_points = replay_mode_vertex;
+    out->replay_vertex_label = replay_mode_vertex && replay_vertex_label();
+    out->show_normal_vectors = presentation.show_normal_vectors;
+    out->replay_normal_display = replay_mode_vertex
+                                 ? replay_normal_display()
+                                 : REPLAY_NORMAL_DISPLAY_OFF;
+    out->replay_anchor_flat_idx = replay_mode_vertex
+                                  ? replay_focus_anchor_flat_idx() : -1;
+    out->xform_guide_mode = presentation.xform_guide_mode;
+}
+
+static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3dRenderConfig *cfg) {
+    GlrPresentationState presentation = glr_state_presentation();
+
+    glr_ctrl_fill_overlay_walk_ctx(editor_state_edit_line(), &pack->walk);
 
     pack->snapshot = glr_ctrl_build_guide_snapshot(cfg);
     pack->vertex_label_mode = (OverlayVertexLabelMode)presentation.show_vertex_labels;

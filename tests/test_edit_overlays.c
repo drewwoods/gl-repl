@@ -141,6 +141,34 @@ static void trace_bitmap_text(const TraceLog *log, char *out, size_t out_sz) {
     }
 }
 
+/* The outline highlight color, RENDER3D_CLR_OUTLINE_ACTIVE, as traced. */
+#define TRACE_HIGHLIGHT_COLOR "glColor4f 0 0.9 0.9 1"
+
+/* Highlights draw last: scan the trace tracking the current color and count
+ * outline geometry (a glVertex* or a glutSolid* redraw) drawn in any other
+ * color AFTER the first geometry drawn in the highlight color. 0 means every
+ * plain outline came before every highlight, which is what lets a highlight
+ * win the edges it shares - all overlays sit at one depth, so on a shared
+ * edge the last draw wins. */
+static int trace_plain_draws_after_highlight(const TraceLog *log) {
+    int in_highlight_color = 0;
+    int highlight_seen = 0;
+    int late_plain = 0;
+    for (int i = 0; i < log->n; i++) {
+        const char *ln = log->lines[i];
+        if (strncmp(ln, "glColor4f ", 10) == 0) {
+            in_highlight_color = strcmp(ln, TRACE_HIGHLIGHT_COLOR) == 0;
+        } else if (strncmp(ln, "glVertex", 8) == 0 ||
+                   strncmp(ln, "glutSolid", 9) == 0) {
+            if (in_highlight_color)
+                highlight_seen = 1;
+            else if (highlight_seen)
+                late_plain++;
+        }
+    }
+    return late_plain;
+}
+
 /* Initialize one valid GLCmd of `type` with up to three float args. */
 static void mk_cmd(GLCmd *c, CmdType type, float a0, float a1, float a2) {
     memset(c, 0, sizeof(*c));
@@ -1242,8 +1270,10 @@ static void test_highlight_clip_planes(void) {
     trace_begin();
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
-    ASSERT_INT("the plane equation is replayed once per outline pass",
-               trace_count_line(&log, "glClipPlane 12288 1 0 0 -0.5"), 3);
+    /* Outlines are off, so only the highlight phase's glBegin pass walks
+     * (the tess and glut passes have nothing current and are skipped). */
+    ASSERT_INT("the plane equation is replayed once per pass that walks",
+               trace_count_line(&log, "glClipPlane 12288 1 0 0 -0.5"), 1);
     ASSERT_INT("On mode draws the highlight with the plane suspended",
                trace_clip_cap_state_at(&log, "glVertex3f 1 0 0"), 0);
     ASSERT_INT("On mode still highlights the cursor's block",
@@ -1347,14 +1377,13 @@ static void test_single_polygon_highlight_fan_anchor(void) {
     ASSERT_INT("fan triangle draws v3", trace_count_line(&log, "glVertex3f 3 0 0"), 1);
 }
 
-/* Bold vertex-outline style scales VERTEX_OUTLINE_EDGE_WIDTH by
- * VERTEX_OUTLINE_BOLD_SCALE (1.2 * 2.5 = 3.0), an exact tie with the
- * unscaled VERTEX_OUTLINE_ACTIVE_WIDTH (3.0f). SINGLE_POLYGON's highlight
- * fires, then falls through to the plain-outline pass (show_vertex_outlines
- * redraws the whole block, including the selected primitive, at edge
- * width/color) - so an unscaled highlight width was an exact tie with that
- * later redraw and got fully overwritten. The highlight width must scale
- * the same way so it stays strictly thicker than the bold edge redraw. */
+/* SINGLE_POLYGON with outlines on: the block's plain outline covers every
+ * primitive, the selected one included, so the highlight has to come AFTER
+ * it to win the selected primitive's edges. It used to come first, which
+ * left a black core down every highlighted edge - and under Bold, whose edge
+ * width (1.2 * 2.5 = 3.0) ties the active width, swallowed the highlight
+ * outright unless the highlight was Bold-scaled too. Drawn last, it needs no
+ * scaling: the plain VERTEX_OUTLINE_ACTIVE_WIDTH in every style. */
 static void test_single_polygon_highlight_bold_style(void) {
     printf("--- edit_overlays single-polygon highlight (bold style) ---\n");
 
@@ -1396,14 +1425,138 @@ static void test_single_polygon_highlight_bold_style(void) {
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
 
-    float bold_active = VERTEX_OUTLINE_ACTIVE_WIDTH * VERTEX_OUTLINE_BOLD_SCALE;
-    float bold_edge = VERTEX_OUTLINE_EDGE_WIDTH * VERTEX_OUTLINE_BOLD_SCALE;
-    ASSERT_INT("bold single-polygon highlight scales past the bold edge redraw",
-               trace_count_line_width_near(&log, bold_active), 1);
-    ASSERT_INT("bold edge redraw still present at its own (lower) width",
-               trace_count_line_width_near(&log, bold_edge), 1);
+    ASSERT_INT("bold single-polygon highlight is not scaled",
+               trace_count_line_width_near(
+                   &log, VERTEX_OUTLINE_ACTIVE_WIDTH * VERTEX_OUTLINE_BOLD_SCALE), 0);
+    ASSERT_INT("bold: plain block outline + highlight both at 3.0",
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 2);
     ASSERT_INT("highlight draws the selected quad's v4",
                trace_count_line(&log, "glVertex3f 4 0 0"), 2);
+    ASSERT_INT("bold: no plain outline drawn after the highlight",
+               trace_plain_draws_after_highlight(&log), 0);
+
+    /* Default style: the reported black core. */
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT;
+    trace_begin();
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    trace_end(&log);
+    ASSERT_INT("default: plain block outline drawn at the edge width",
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_EDGE_WIDTH), 1);
+    ASSERT_INT("default: highlight drawn at the active width",
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
+    ASSERT_INT("default: no plain outline drawn after the highlight",
+               trace_plain_draws_after_highlight(&log), 0);
+}
+
+/* Highlights win edges shared ACROSS blocks and passes too. Two glBegin
+ * blocks share the edge (1,0,0)-(1,1,0) - two rows of a strip surface, or
+ * two faces of a cube - and a GLU contour later in the program traces the
+ * same square. With the cursor in the first block, the second block's plain
+ * outline and the contour's plain outline both come later in program order;
+ * each used to land on top of the highlight. */
+static void test_highlight_drawn_after_all_plain_outlines(void) {
+    printf("--- edit_overlays highlights drawn after every plain outline ---\n");
+
+    GLCmd cmds[19];
+    int n = 0;
+    mk_cmd(&cmds[n++], CMD_BEGIN, (float)GL_QUADS, 0, 0);
+    mk_cmd(&cmds[n], CMD_VERTEX3F, 0, 0, 0); cmds[n++].src_cmd_idx = 1;
+    mk_cmd(&cmds[n++], CMD_VERTEX3F, 1, 0, 0);
+    mk_cmd(&cmds[n++], CMD_VERTEX3F, 1, 1, 0);
+    mk_cmd(&cmds[n++], CMD_VERTEX3F, 0, 1, 0);
+    mk_cmd(&cmds[n++], CMD_END, 0, 0, 0);
+    mk_cmd(&cmds[n++], CMD_BEGIN, (float)GL_QUADS, 0, 0);
+    mk_cmd(&cmds[n], CMD_VERTEX3F, 1, 0, 0); cmds[n++].src_cmd_idx = 7;
+    mk_cmd(&cmds[n++], CMD_VERTEX3F, 2, 0, 0);
+    mk_cmd(&cmds[n++], CMD_VERTEX3F, 2, 1, 0);
+    mk_cmd(&cmds[n++], CMD_VERTEX3F, 1, 1, 0);
+    mk_cmd(&cmds[n++], CMD_END, 0, 0, 0);
+    mk_cmd(&cmds[n++], CMD_TESS_BEGIN_POLYGON, 0, 0, 0);
+    mk_cmd(&cmds[n++], CMD_TESS_BEGIN_CONTOUR, 0, 0, 0);
+    mk_cmd(&cmds[n++], CMD_TESS_VERTEX, 0, 0, 0);
+    mk_cmd(&cmds[n++], CMD_TESS_VERTEX, 1, 0, 0);
+    mk_cmd(&cmds[n++], CMD_TESS_VERTEX, 1, 1, 0);
+    mk_cmd(&cmds[n++], CMD_TESS_END, 0, 0, 0);
+    mk_cmd(&cmds[n++], CMD_TESS_END, 0, 0, 0);
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = n;
+    ctx.cursor.edit_line_idx = 1;          /* first block's v0 */
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.highlight_current_poly = 1;
+    ctx.show_vertex_outlines = 1;
+
+    static const int k_scopes[] = {
+        OVERLAY_SCOPE_LAST_INSTANCE, OVERLAY_SCOPE_ALL_INSTANCES,
+        OVERLAY_SCOPE_SINGLE_POLYGON,
+    };
+    for (int sc = 0; sc < 3; sc++) {
+        char lbl[96];
+        TraceLog log;
+        ctx.cursor_overlay_scope = k_scopes[sc];
+        /* Single-polygon: the first block's one quad is the primitive. */
+        ctx.cursor_poly_valid = k_scopes[sc] == OVERLAY_SCOPE_SINGLE_POLYGON;
+        ctx.cursor_poly_first = 0;
+        ctx.cursor_poly_last = 3;
+        trace_begin();
+        edit_overlays_render_outlines(&ctx, 0, 0);
+        trace_end(&log);
+        snprintf(lbl, sizeof lbl, "scope %d: highlight drawn", k_scopes[sc]);
+        ASSERT_INT(lbl, trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
+        snprintf(lbl, sizeof lbl, "scope %d: second block's plain outline drawn",
+                 k_scopes[sc]);
+        ASSERT_INT(lbl, trace_count_line(&log, "glVertex3f 2 0 0"), 1);
+        snprintf(lbl, sizeof lbl, "scope %d: contour's plain outline drawn",
+                 k_scopes[sc]);
+        ASSERT_INT(lbl, trace_count_line(&log, "glVertex3f 1 1 0") >= 3, 1);
+        snprintf(lbl, sizeof lbl,
+                 "scope %d: no plain outline drawn after the highlight",
+                 k_scopes[sc]);
+        ASSERT_INT(lbl, trace_plain_draws_after_highlight(&log), 0);
+    }
+
+    /* glutSolid* shapes follow the same rule: a current shape is drawn in
+     * the highlight phase, after a later shape's plain wireframe. */
+    GLCmd glut[2];
+    mk_cmd(&glut[0], CMD_GLUT_CUBE, 1, 0, 0); glut[0].src_cmd_idx = 0;
+    glut[0].num_args = 1;
+    mk_cmd(&glut[1], CMD_GLUT_CUBE, 2, 0, 0); glut[1].src_cmd_idx = 1;
+    glut[1].num_args = 1;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = glut;
+    ctx.program.cmd_count = 2;
+    ctx.cursor.edit_line_idx = 0;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.highlight_current_poly = 1;
+    ctx.show_vertex_outlines = 1;
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE;
+    {
+        TraceLog log;
+        trace_begin();
+        edit_overlays_render_outlines(&ctx, 0, 0);
+        trace_end(&log);
+        ASSERT_INT("glut: both cubes redrawn once",
+                   trace_count_sym(&log, "glutSolidCube"), 2);
+        ASSERT_INT("glut: no plain wireframe drawn after the highlight",
+                   trace_plain_draws_after_highlight(&log), 0);
+    }
+
+    /* Highlight off: a single plain phase, no highlight walk at all. */
+    ctx.highlight_current_poly = 0;
+    {
+        TraceLog log;
+        trace_begin();
+        edit_overlays_render_outlines(&ctx, 0, 0);
+        trace_end(&log);
+        ASSERT_INT("highlight off: each cube drawn once",
+                   trace_count_sym(&log, "glutSolidCube"), 2);
+        ASSERT_INT("highlight off: nothing in the highlight color",
+                   trace_count_line(&log, TRACE_HIGHLIGHT_COLOR), 0);
+    }
 }
 
 /* render_outlines_tess_pass: draws each tess contour as a GL_POLYGON under
@@ -3721,6 +3874,7 @@ int main(void) {
     test_single_polygon_highlight_fan_anchor();
     test_single_polygon_highlight_bold_style();
     test_render_outlines_tess();
+    test_highlight_drawn_after_all_plain_outlines();
     test_tess_outlines_lift_culling();
     test_render_outlines_glut();
     test_find_next_vertex_args();

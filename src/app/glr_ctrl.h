@@ -218,6 +218,15 @@ void glr_ctrl_set_depth_readback_supported_for_test(int supported);
 void glr_ctrl_cursor_block_state_for_test(int edit_line,
                                           CursorBlockState *out);
 
+/* The whole OverlayWalkCtx the 3D overlay passes walk with for `edit_line`,
+ * under the current presentation settings (scope, outlines, highlight).
+ * Reads the flat block cache as-is: the frame path refreshes it before
+ * building the overlay pack, and other callers must call
+ * repl_flatten_refresh_current_block_highlight(edit_line) first. One fill
+ * for the frame and for bench_repl's outline rows, so the benchmark times
+ * exactly what a frame draws. */
+void glr_ctrl_fill_overlay_walk_ctx(int edit_line, OverlayWalkCtx *out);
+
 /* Vertex-label occlusion depth snapshot (see glr_ctrl.c for the full rationale
  * and docs/plans/in-review/vertex-label-depth-readback-stall.md for why it is
  * shaped this way).

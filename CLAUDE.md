@@ -138,8 +138,8 @@ gitignored, survives `make clean`).
   `make bench-web` runs `bench_repl` as wasm under node: wasm cost is **not**
   a fixed multiple of native (1.2x-2.2x per-op across sub-benchmarks), so
   `make bench` alone mis-ranks web hot spots. CPU pipeline only - no GPU
-  under node, so `fade_batches` skips and the gl4es→WebGL2 draw cost is
-  invisible. See `packaging/web/README.md`.
+  under node, so the GL rows (`fade_batches`, `overlay_outlines`) skip and
+  the gl4es→WebGL2 draw cost is invisible. See `packaging/web/README.md`.
   `make test-web` is the wasm twin of `make test-stubs` - `WEB=1
   USE_GL_STUBS=1`, so **emcc against the no-op GL stubs, no gl4es, no
   `web-deps.sh`, no browser**. 74 of the 76 test binaries run there; the 2 in
@@ -371,7 +371,7 @@ follows is the trip-wire list.
 
 ### Frame & rendering
 
-[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L323) drives each frame: rebuild autonormals + flat
+[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L332) drives each frame: rebuild autonormals + flat
 program if dirty → build [`Render3dRenderConfig`](src/render3d/render_types.h#L139) → clear chrome + load camera
 + scissor (all **controller** policy - render3d owns no camera type, sets no
 scissor, clears no color/depth) → [`render3d_draw_scene()`](src/render3d/render.h#L139) (projection → user

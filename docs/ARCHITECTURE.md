@@ -178,9 +178,9 @@ is checked every frame by the guard described in
 **The profiled frame is the display callback, and the application owns it.**
 The FPS cadence is wider: it is the interval from one callback start to the
 next. The three
-[`glr_frame_begin()`](../src/app/glr_ctrl.h#L302) /
-[`glr_frame_work_end()`](../src/app/glr_ctrl.h#L303) /
-[`glr_frame_ended()`](../src/app/glr_ctrl.h#L304) calls bracket `gl_repl.c`'s
+[`glr_frame_begin()`](../src/app/glr_ctrl.h#L311) /
+[`glr_frame_work_end()`](../src/app/glr_ctrl.h#L312) /
+[`glr_frame_ended()`](../src/app/glr_ctrl.h#L313) calls bracket `gl_repl.c`'s
 callback and also own the staleness/FPS tick, the GPU query-slot rotation and
 the capture-mode simulation tick. They carry the plain `glr_` prefix rather
 than `glr_ctrl_` because the controller is one stage inside a frame, not the
@@ -838,8 +838,20 @@ modelview with `apply_tracked_transform` / `unwind_transform_stack`:
    face orientation.
 3. `render_outlines_glut_pass` - for `glutSolid*` shapes.
 
+The three passes run in **two phases**: every plain outline first, then every
+current-polygon highlight. All outline overlays sit at one depth (same polygon
+offset, no depth writes), so on an edge two of them share, the last draw wins;
+drawing the highlights last is what keeps them on top of the single-polygon
+block's own plain outline, a later block sharing an edge (the next row of a
+strip surface), and a later pass (a GLU contour over a `glBegin` wall). The
+block or shape each pass highlights is resolved once per render, and the
+highlight phase skips any pass with nothing current - so with the highlight
+on, the extra cost is usually one more walk (`make bench`, the
+`outlines_*` rows of `overlay_outlines`).
+
 These passes consume `OverlayWalkCtx.program`, populated once per frame from
-`repl_state_flat_program_view()` by the controller's overlay snapshot pack.
+`repl_state_flat_program_view()` by the controller's overlay snapshot pack
+(`glr_ctrl_fill_overlay_walk_ctx`, which `bench_repl` reuses).
 With accumulation AA the outline hook runs once per jitter sample, so the flat
 program walks repeat per sample, but the source interpreter, expression
 evaluator, and flattener are not re-entered.
@@ -1987,7 +1999,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L139) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L323) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L332) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame - here a 2D/3D switch would let row-count see one

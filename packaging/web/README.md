@@ -394,8 +394,8 @@ which is enough to reorder what looks expensive - so `make bench` alone can
 point at the wrong hot spot for this target.
 
 It measures the C pipeline only. node has no GPU and no WebGL context, so
-`fade_batches` skips itself and nothing here observes the
-gl4es -> WebGL2 -> browser-GL cost of real draw calls. A regression in the
+the GL rows (`fade_batches`, `overlay_outlines`) skip themselves and nothing
+here observes the gl4es -> WebGL2 -> browser-GL cost of real draw calls. A regression in the
 draw path needs an in-browser harness instead; note that `scripts/web-serve.py`
 sends no COOP/COEP headers, so a page it serves has `performance.now()`
 clamped to 100 µs and cannot resolve sub-100 µs work. Read the header comment

@@ -80,6 +80,13 @@
  *                       batch buffer whose old_pcs sit deep in a long flat
  *                       command stream (exercises the per-batch prefix
  *                       walk that dominates late-replay fade-in cost).
+ *   overlay_outlines  - edit_overlays_render_outlines() (vertex outlines +
+ *                       current-polygon highlight) over loop-unrolled strips,
+ *                       glutSolid* cubes, and a GLU extrusion, with the
+ *                       highlight off / last-instance / single-polygon. The
+ *                       walk context comes from glr_ctrl_fill_overlay_walk_ctx,
+ *                       the frame's own fill. CPU submission cost only: no
+ *                       glFinish, so GPU execution is not in the number.
  *
  * Output is one line per sub-benchmark with mean / min / iterations / per-op
  * cost. CSV mode (`--csv`) is suitable for diffing across machines.
@@ -117,6 +124,7 @@
 #include "support/cpuprof.h"     /* PROF_FLATTEN_* phase readback */
 #include "support/histogram.h"   /* sampler-overhead rows */
 #include "app/glr_ctrl.h"
+#include "app/glr_state.h"       /* presentation: outlines / highlight / scope */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1736,6 +1744,100 @@ static BenchResult bench_fade_batches(int iters) {
     return r;
 }
 
+/* ---- bench: vertex-outline + current-polygon highlight overlay --------- */
+
+/* One outline render is one frame's outline work (once more per accumulation
+ * sample). Each scene parks the cursor on its first vertex-emitting or
+ * glutSolid* row, the way an edit would, so the highlight has a block to
+ * select. The plain row (highlight off) is the floor the highlight rows are
+ * read against. */
+typedef struct {
+    const char *suffix;
+    int         highlight;   /* PolyHighlightMode */
+    int         scope;       /* OverlayScope */
+} OutlineBenchMode;
+
+static int first_geometry_row(void) {
+    const GLCmd *cmds = repl_state_document_cmds();
+    int n = repl_state_document_count();
+    for (int i = 0; i < n; i++) {
+        if (!cmds[i].valid) continue;
+        if (repl_cmd_emits_vertex(cmds[i].type) ||
+            repl_cmd_is_glut_solid(cmds[i].type))
+            return i;
+    }
+    return -1;
+}
+
+static void bench_overlay_outlines(int iters) {
+    static const struct { const char *tag; const char *display_name; } k_scenes[] = {
+        { "wave",    "Wave surface" },
+        { "torus",   "Parametric torus (nested for)" },
+        { "sponge",  "Sierpinski sponge (3D recursion)" },
+        { "extrude", "GLU concave arrow extrusion" },
+    };
+    static const OutlineBenchMode k_modes[] = {
+        { "plain",  POLY_HIGHLIGHT_OFF, OVERLAY_SCOPE_LAST_INSTANCE },
+        { "last",   POLY_HIGHLIGHT_ON,  OVERLAY_SCOPE_LAST_INSTANCE },
+        { "single", POLY_HIGHLIGHT_ON,  OVERLAY_SCOPE_SINGLE_POLYGON },
+    };
+    enum { N_SCENES = (int)(sizeof(k_scenes) / sizeof(k_scenes[0])),
+           N_MODES = (int)(sizeof(k_modes) / sizeof(k_modes[0])),
+           INNER = 50 };
+    static char names[N_SCENES * N_MODES][48];
+
+    for (int sc = 0; sc < N_SCENES; sc++) {
+        int idx = example_index_by_name(k_scenes[sc].display_name);
+        int row;
+        if (idx < 0)
+            continue;
+
+        fresh_repl();
+        repl_load_example_lines(bench_example_lines(idx));
+        repl_flatten_commands(editor_state_edit_line());
+        row = first_geometry_row();
+        if (row < 0) {
+            fprintf(stderr, "ERROR: overlay_outlines: \"%s\" has no geometry row\n",
+                    k_scenes[sc].display_name);
+            g_case_missing = 1;
+            continue;
+        }
+
+        for (int m = 0; m < N_MODES; m++) {
+            char *name = names[sc * N_MODES + m];
+            BenchResult r = { .name = name, .unit = "frames", .min_sec = 1e18 };
+            GlrPresentationState *pres = glr_state_presentation_mut();
+            OverlayWalkCtx ctx;
+
+            snprintf(name, sizeof(names[0]), "outlines_%s_%s",
+                     k_scenes[sc].tag, k_modes[m].suffix);
+            pres->show_vertex_outlines = 1;
+            pres->wireframe = WIREFRAME_OFF;
+            pres->highlight_current_poly = k_modes[m].highlight;
+            pres->overlay_scope = k_modes[m].scope;
+            repl_flatten_refresh_current_block_highlight(row);
+            glr_ctrl_fill_overlay_walk_ctx(row, &ctx);
+
+            for (int it = 0; it < iters; it++) {
+                double t0 = now_seconds();
+                for (int k = 0; k < INNER; k++)
+                    edit_overlays_render_outlines(&ctx, 0, 0);
+                double dt = now_seconds() - t0;
+                if (dt < r.min_sec) r.min_sec = dt;
+                r.total_sec += dt;
+                r.ops += INNER;
+                r.iters++;
+            }
+            report(r);
+        }
+        if (!g_csv)
+            fprintf(stderr, "  (overlay_outlines %s: \"%s\" flat_cmds=%d, cursor row=%d)\n",
+                    k_scenes[sc].tag, k_scenes[sc].display_name,
+                    repl_state_flat_program_count(), row);
+    }
+    fresh_repl();
+}
+
 /* ---- bench: source-scope prefix-depth queries ------------------------- */
 
 /* Feed a large, deeply-nested document directly through the lean loader
@@ -2556,7 +2658,8 @@ static void usage(const char *prog) {
         "                      dependency-chained on one), live begin/end pair,\n"
         "                      nesting-guard A/B, frame tick, stats readback\n"
         "    getenv            libc getenv miss / cached / hit (GL_STATE_DUMP tax)\n"
-        "    fade_batches      replay fade-batch rendering with late old_pcs\n",
+        "    fade_batches      replay fade-batch rendering with late old_pcs\n"
+        "    overlay_outlines  vertex outlines + polygon highlight (off/last/single)\n",
         prog);
 }
 
@@ -2598,7 +2701,8 @@ static int bench_gl_context_init(int *argc, char **argv) {
 #if defined(__EMSCRIPTEN__)
     (void)argc; (void)argv;
     fprintf(stderr,
-            "bench_repl: no GL context under node; skipping fade_batches\n");
+            "bench_repl: no GL context under node; skipping GL rows "
+            "(fade_batches, overlay_outlines)\n");
     return 0;
 #elif !defined(GL_STUBS)
     static int glut_inited = 0;
@@ -2609,8 +2713,8 @@ static int bench_gl_context_init(int *argc, char **argv) {
         if (CGGetActiveDisplayList(0, NULL, &display_count) != kCGErrorSuccess ||
             display_count == 0) {
             fprintf(stderr,
-                    "bench_repl: no active macOS display; skipping "
-                    "fade_batches\n");
+                    "bench_repl: no active macOS display; skipping GL rows "
+                    "(fade_batches, overlay_outlines)\n");
             return 0;
         }
     }
@@ -2719,6 +2823,10 @@ int main(int argc, char **argv) {
     if (wants(only, "fade_batches")) {
         if (bench_gl_context_init(&argc, argv))
             report(bench_fade_batches(iters));
+    }
+    if (wants(only, "overlay_outlines")) {
+        if (bench_gl_context_init(&argc, argv))
+            bench_overlay_outlines(iters);
     }
 
     /* A named case that no longer resolves in the frozen corpus, or a Whale
