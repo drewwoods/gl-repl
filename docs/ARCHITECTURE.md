@@ -479,7 +479,17 @@ version=1
 name=Demo
 scene=lantern.c
 scene=torus.c
+active=torus.c
 ```
+
+The optional `active=` row names the scene that was selected when the
+workspace was saved; opening the workspace selects it again (Open Workspace and
+the `./gl-repl <workspace>` bootstrap both go through
+`repl_scenes_activate_loaded_slot()`). The writer only records a listed scene.
+The reader treats one that names no listed scene as absent, so the load falls
+back to the first scene instead of failing over a selection. A manifest without
+the row selects the first scene, as before. Builds that predate the row reject
+it as an unknown field.
 
 [`src/repl/workspace_io.c`](../src/repl/workspace_io.c) validates and commits
 this filesystem format. [`src/repl/scenes.c`](../src/repl/scenes.c) owns the
@@ -1764,7 +1774,7 @@ what they *could* plausibly cover, and the lines between them are load-bearing:
 
 | Pair | Owns | Excludes (intentionally) |
 |---|---|---|
-| [`repl_state_capture`](../src/repl/state.h#L29) / [`_restore`](../src/repl/state.h#L30) | The REPL slices on [`ReplRuntimeState`](../src/repl/state.h#L18): source document, flat program, predef vars + scratch arrays, executor-mutated render tail, scene/workspace identity, import/export buffers. | Editor session state; the user-scene catalog slots, which have their own [`repl_scenes_snapshot_capture`](../src/repl/scenes.h#L292). |
+| [`repl_state_capture`](../src/repl/state.h#L29) / [`_restore`](../src/repl/state.h#L30) | The REPL slices on [`ReplRuntimeState`](../src/repl/state.h#L18): source document, flat program, predef vars + scratch arrays, executor-mutated render tail, scene/workspace identity, import/export buffers. | Editor session state; the user-scene catalog slots, which have their own [`repl_scenes_snapshot_capture`](../src/repl/scenes.h#L301). |
 | [`editor_state_capture`](../src/editor/state.h#L234) / [`_restore`](../src/editor/state.h#L235) | The editor session on [`EditorState`](../src/editor/state.h#L207): line buffer, input buffer, edit-line cursor, selection anchor, clipboard, search, autocomplete, scroll, cursor blink, and the per-frame overlay lists. | The REPL document. |
 | [`editor_undo_snapshot_save`](../src/editor/undo.h#L112) / [`_restore`](../src/editor/undo.h#L113) | One [`EditorUndoSnapshot`](../src/editor/undo.h#L60) ring entry: source commands, editor-buffer text, edit_line, predef names + values, scratch arrays, funcN aliases. | Input-buffer bytes, selection anchor, clipboard, search, autocomplete, scroll. Restore rebuilds the input row from the restored source via [`editor_load_line_to_input()`](../src/editor/input.h#L203). |
 
@@ -1779,7 +1789,7 @@ narrower than either, by the rule below.
 **The undo subset is a rule, not an omission.**
 [`editor_undo_push_snapshot()`](../src/editor/undo.h#L126) is the
 auto-promotion hook - it is where
-[`repl_promote_transient_if_needed()`](../src/repl/scenes.h#L71) fires - so
+[`repl_promote_transient_if_needed()`](../src/repl/scenes.h#L75) fires - so
 anything undo snapshots becomes a thing that promotes a viewed example into a
 user scene. Because the snapshot is document-only, input-buffer-only edits
 (typed characters, partial-line cut, partial-line paste) have nothing to

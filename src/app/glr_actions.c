@@ -1445,7 +1445,7 @@ int glr_action_open_workspace_path(const char *path) {
     editor_undo_note_wholesale_replacement();
     glr_camera_clear_scene_default();
     if (loaded.scenes_loaded > 0)
-        repl_scenes_activate_first_loaded_slot();
+        repl_scenes_activate_loaded_slot(loaded.active_slot);
     else if (repl_scenes_create_empty_user_scene() < 0)
         return 0;
     editor_load_line_to_input(editor_state_edit_line());

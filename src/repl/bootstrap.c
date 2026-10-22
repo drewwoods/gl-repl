@@ -82,14 +82,16 @@ int repl_load_initial_commands(const char *import_file) {
 
         struct stat st;
         if (stat(import_file, &st) == 0 && S_ISDIR(st.st_mode)) {
-            if (repl_load_workspace(import_file) > 0) {
-                /* repl_load_workspace leaves the active slot at -1 so
-                 * the live document is the pre-load stash (empty at
-                 * startup). On a CLI bootstrap that strands the user on
-                 * an empty buffer with all the workspace tabs visible
-                 * but none of them active. Land on the first occupied
-                 * slot. */
-                repl_scenes_activate_first_loaded_slot();
+            ReplWorkspaceLoadResult loaded =
+                repl_load_workspace_ex(import_file);
+            if (loaded.ok && loaded.scenes_loaded > 0) {
+                /* The load leaves the active slot at -1 so the live
+                 * document is the pre-load stash (empty at startup). On a
+                 * CLI bootstrap that strands the user on an empty buffer
+                 * with all the workspace tabs visible but none of them
+                 * active. Land on the scene that was selected when the
+                 * workspace was saved, else the first. */
+                repl_scenes_activate_loaded_slot(loaded.active_slot);
                 scroll_to_display_function();
                 return repl_state_document_count();
             }

@@ -22,6 +22,12 @@ typedef struct {
     char name[WORKSPACE_IO_NAME_MAX];
     int scene_count;
     char scene_files[WORKSPACE_IO_MAX_SCENES][WORKSPACE_IO_FILE_MAX];
+    /* Optional `active=` row: the scene file that was selected when the
+     * workspace was saved, reopened selected. "" = none recorded. The writer
+     * only emits a listed file; the reader treats one that names no listed
+     * scene as absent (the load falls back to the first scene) rather than
+     * failing the whole workspace over a selection. */
+    char active_scene_file[WORKSPACE_IO_FILE_MAX];
 } WorkspaceManifest;
 
 /* Recursively create `dir` (mkdir -p semantics). Returns 1 on success or when

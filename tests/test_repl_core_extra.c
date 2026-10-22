@@ -1,5 +1,6 @@
 #include "editor/state.h"
 #include "app/glr_ctrl.h"
+#include "app/glr_actions.h"
 #ifndef _DEFAULT_SOURCE
 #define _DEFAULT_SOURCE
 #endif
@@ -702,6 +703,228 @@ void test_workspace_initial_load_activates_first_slot() {
         closedir(d);
         rmdir(dir);
     }
+}
+
+/* ---- The workspace remembers which scene was selected ------------------ */
+
+static void remove_workspace_dir(const char *dir) {
+    DIR *d = opendir(dir);
+    if (d) {
+        struct dirent *ent;
+        while ((ent = readdir(d))) {
+            if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, ".."))
+                continue;
+            char p[512];
+            snprintf(p, sizeof(p), "%s/%s", dir, ent->d_name);
+            unlink(p);
+        }
+        closedir(d);
+    }
+    rmdir(dir);
+}
+
+/* Three scenes, one per built-in example, the middle one selected. Returns 0
+ * when the catalog is too small or a promotion fails. */
+static int stage_three_scene_workspace(int select_slot) {
+    if (repl_example_count() < 3)
+        return 0;
+    for (int i = 0; i < 3; i++) {
+        repl_load_example(i);
+        if (repl_promote_transient_if_needed() != i)
+            return 0;
+    }
+    return repl_load_user_scene_idx(select_slot) == 1 &&
+           repl_active_user_scene() == select_slot;
+}
+
+void test_workspace_remembers_active_scene() {
+    printf("--- Workspace remembers the selected scene ---\n");
+    glr_ctrl_reset_all(); declare_test_vars();
+
+    char temp_dir[] = "/tmp/repl_workspace_active.XXXXXX";
+    char *dir = mkdtemp(temp_dir);
+    ASSERT_TRUE("active-scene workspace dir created", dir != NULL);
+    if (!dir) return;
+
+    ASSERT_TRUE("three scenes staged, slot 1 selected",
+                stage_three_scene_workspace(1));
+    char selected_name[USER_SCENE_NAME_MAX];
+    snprintf(selected_name, sizeof(selected_name), "%s",
+             repl_user_scene_name(1));
+    char selected_file[WORKSPACE_IO_FILE_MAX];
+
+    ASSERT_INT("workspace saved all three scenes",
+               repl_save_workspace(dir, NULL), 3);
+    snprintf(selected_file, sizeof(selected_file), "%s",
+             repl_user_scene_file_name(1));
+
+    WorkspaceManifest manifest;
+    char err[256] = "";
+    ASSERT_TRUE("saved manifest reads back",
+                workspace_io_manifest_read(dir, &manifest, err, sizeof(err)));
+    ASSERT_TRUE("manifest records the selected scene's file",
+                strcmp(manifest.active_scene_file, selected_file) == 0);
+    ASSERT_TRUE("selected scene is not the first one listed",
+                strcmp(manifest.scene_files[0], selected_file) != 0);
+
+    /* CLI bootstrap (`./gl-repl <workspace>`). */
+    glr_ctrl_reset_all(); declare_test_vars();
+    repl_load_initial_commands(dir);
+    ASSERT_INT("bootstrap reopens all three scenes", repl_user_scene_count(), 3);
+    ASSERT_INT("bootstrap selects the saved scene", repl_active_user_scene(), 1);
+    ASSERT_TRUE("bootstrap's selected scene is the one that was selected",
+                strcmp(repl_user_scene_name(repl_active_user_scene()),
+                       selected_name) == 0);
+
+    /* Load + activate, as File -> Open Workspace does. */
+    glr_ctrl_reset_all(); declare_test_vars();
+    ReplWorkspaceLoadResult loaded = repl_load_workspace_ex(dir);
+    ASSERT_INT("load reports the saved selection's slot", loaded.active_slot, 1);
+    ASSERT_INT("load leaves activation to the caller",
+               repl_active_user_scene(), -1);
+    ASSERT_INT("activation lands on the saved selection",
+               repl_scenes_activate_loaded_slot(loaded.active_slot), 1);
+
+    /* Change the selection and save again: the manifest follows it. */
+    ASSERT_TRUE("select the last scene", repl_load_user_scene_idx(2) == 1);
+    ASSERT_INT("re-save keeps three scenes", repl_save_workspace(dir, NULL), 3);
+    glr_ctrl_reset_all(); declare_test_vars();
+    loaded = repl_load_workspace_ex(dir);
+    ASSERT_INT("re-saved selection reloads", loaded.active_slot, 2);
+    ASSERT_INT("open-workspace path lands on the re-saved selection",
+               repl_scenes_activate_loaded_slot(loaded.active_slot), 2);
+
+    remove_workspace_dir(dir);
+    glr_ctrl_reset_all(); declare_test_vars();
+}
+
+/* The File -> Open Workspace action itself, not just the helpers it calls. */
+void test_open_workspace_action_selects_saved_scene() {
+    printf("--- Open Workspace action selects the saved scene ---\n");
+    glr_ctrl_reset_all(); declare_test_vars();
+
+    char temp_dir[] = "/tmp/repl_workspace_open_active.XXXXXX";
+    char *dir = mkdtemp(temp_dir);
+    ASSERT_TRUE("open-action workspace dir created", dir != NULL);
+    if (!dir) return;
+
+    ASSERT_TRUE("three scenes staged, slot 2 selected",
+                stage_three_scene_workspace(2));
+    ASSERT_INT("workspace saved", repl_save_workspace(dir, NULL), 3);
+
+    glr_ctrl_reset_all(); declare_test_vars();
+    ASSERT_INT("open-workspace action succeeds",
+               glr_action_open_workspace_path(dir), 1);
+    ASSERT_INT("open-workspace action selects the saved scene",
+               repl_active_user_scene(), 2);
+
+    remove_workspace_dir(dir);
+    glr_ctrl_reset_all(); declare_test_vars();
+}
+
+/* Manifest-level rules for the optional `active=` row. */
+static int write_manifest_text(const char *dir, const char *text) {
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s", dir, WORKSPACE_IO_MANIFEST_FILE);
+    FILE *f = fopen(path, "w");
+    if (!f)
+        return 0;
+    fputs(text, f);
+    fclose(f);
+    return 1;
+}
+
+void test_workspace_manifest_active_row() {
+    printf("--- Workspace manifest active= row ---\n");
+    glr_ctrl_reset_all(); declare_test_vars();
+
+    char temp_dir[] = "/tmp/repl_manifest_active.XXXXXX";
+    char *dir = mkdtemp(temp_dir);
+    ASSERT_TRUE("manifest dir created", dir != NULL);
+    if (!dir) return;
+
+    WorkspaceManifest m;
+    char err[256];
+
+    /* active= may come before the scene rows it names. */
+    ASSERT_TRUE("manifest with leading active= written",
+                write_manifest_text(dir, "version=1\nname=A\nactive=b.c\n"
+                                         "scene=a.c\nscene=b.c\n"));
+    err[0] = '\0';
+    ASSERT_TRUE("leading active= reads",
+                workspace_io_manifest_read(dir, &m, err, sizeof(err)));
+    ASSERT_TRUE("leading active= kept", strcmp(m.active_scene_file, "b.c") == 0);
+
+    /* A selection naming no listed scene is dropped, not fatal. */
+    ASSERT_TRUE("manifest with stale active= written",
+                write_manifest_text(dir, "version=1\nname=A\nscene=a.c\n"
+                                         "active=gone.c\n"));
+    ASSERT_TRUE("stale active= still reads",
+                workspace_io_manifest_read(dir, &m, err, sizeof(err)));
+    ASSERT_INT("stale active= dropped", m.active_scene_file[0], 0);
+
+    /* No active= row: nothing recorded (older manifests). */
+    ASSERT_TRUE("manifest without active= written",
+                write_manifest_text(dir, "version=1\nname=A\nscene=a.c\n"));
+    ASSERT_TRUE("manifest without active= reads",
+                workspace_io_manifest_read(dir, &m, err, sizeof(err)));
+    ASSERT_INT("no active= means no selection", m.active_scene_file[0], 0);
+
+    /* Duplicate and malformed rows are rejected like the other fields. */
+    ASSERT_TRUE("duplicate active= written",
+                write_manifest_text(dir, "version=1\nname=A\nscene=a.c\n"
+                                         "active=a.c\nactive=a.c\n"));
+    ASSERT_INT("duplicate active= rejected",
+               workspace_io_manifest_read(dir, &m, err, sizeof(err)), 0);
+    ASSERT_TRUE("malformed active= written",
+                write_manifest_text(dir, "version=1\nname=A\nscene=a.c\n"
+                                         "active=a.txt\n"));
+    ASSERT_INT("malformed active= rejected",
+               workspace_io_manifest_read(dir, &m, err, sizeof(err)), 0);
+
+    /* The writer never records a selection it does not list... */
+    memset(&m, 0, sizeof(m));
+    m.version = 1;
+    snprintf(m.name, sizeof(m.name), "A");
+    m.scene_count = 1;
+    snprintf(m.scene_files[0], sizeof(m.scene_files[0]), "a.c");
+    snprintf(m.active_scene_file, sizeof(m.active_scene_file), "b.c");
+    ASSERT_INT("writer rejects an unlisted active scene",
+               workspace_io_manifest_write(dir, &m, err, sizeof(err)), 0);
+
+    /* ...and round-trips one it does. */
+    snprintf(m.active_scene_file, sizeof(m.active_scene_file), "a.c");
+    ASSERT_TRUE("writer accepts a listed active scene",
+                workspace_io_manifest_write(dir, &m, err, sizeof(err)));
+    WorkspaceManifest back;
+    ASSERT_TRUE("written manifest reads back",
+                workspace_io_manifest_read(dir, &back, err, sizeof(err)));
+    ASSERT_TRUE("active scene round-trips",
+                strcmp(back.active_scene_file, "a.c") == 0);
+
+    /* Loading a workspace whose selection is stale falls back to the first
+     * scene; the scene file itself is needed for the load. */
+    {
+        char scene_path[512];
+        snprintf(scene_path, sizeof(scene_path), "%s/a.c", dir);
+        FILE *f = fopen(scene_path, "w");
+        ASSERT_TRUE("scene file written", f != NULL);
+        if (f) {
+            fputs("glColor3f(1, 0, 0);\n", f);
+            fclose(f);
+        }
+        ASSERT_TRUE("stale-selection manifest written",
+                    write_manifest_text(dir, "version=1\nname=A\nscene=a.c\n"
+                                             "active=gone.c\n"));
+        ReplWorkspaceLoadResult r = repl_load_workspace_ex(dir);
+        ASSERT_INT("stale selection loads", r.ok, 1);
+        ASSERT_INT("stale selection reports none", r.active_slot, -1);
+        ASSERT_INT("activation falls back to the first scene",
+                   repl_scenes_activate_loaded_slot(r.active_slot), 0);
+    }
+
+    remove_workspace_dir(dir);
+    glr_ctrl_reset_all(); declare_test_vars();
 }
 
 void test_markerless_raw_scene_import() {
@@ -2574,6 +2797,9 @@ int main(int argc, char **argv) {
     test_workspace_manifest_capacity_rejected();
     test_workspace_manifest_long_scene_name_rejected();
     test_workspace_initial_load_activates_first_slot();
+    test_workspace_remembers_active_scene();
+    test_open_workspace_action_selects_saved_scene();
+    test_workspace_manifest_active_row();
     test_markerless_raw_scene_import();
     test_initial_missing_file_starts_new_scene();
     test_initial_load_reads_stdin_pipe();

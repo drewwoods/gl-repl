@@ -1646,7 +1646,8 @@ inside the File menu, and the window title (`gl-repl - Workspace:
 A workspace is a directory holding your scene files plus a `.glr-workspace`
 manifest that lists them in tab order. gl-repl opens exactly the files the
 manifest names, in that order, and leaves any other `.c` file in the folder
-alone. A directory without a manifest is declined; use **Load Scene** for a
+alone. The manifest also remembers which scene tab was selected when you saved,
+and opening the workspace selects that tab again. A directory without a manifest is declined; use **Load Scene** for a
 loose file.
 
 Opening a workspace is all-or-nothing: every scene is read and checked before

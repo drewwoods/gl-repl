@@ -150,6 +150,7 @@ int workspace_io_manifest_read(const char *dir, WorkspaceManifest *out,
     FILE *f;
     int saw_version = 0;
     int saw_name = 0;
+    int saw_active = 0;
     if (!out || !workspace_io_path_join(dir, WORKSPACE_IO_MANIFEST_FILE,
                                         path, sizeof(path))) {
         manifest_err(err, err_sz, "Invalid workspace path");
@@ -215,6 +216,19 @@ int workspace_io_manifest_read(const char *dir, WorkspaceManifest *out,
             snprintf(out->scene_files[out->scene_count], WORKSPACE_IO_FILE_MAX,
                      "%.*s", WORKSPACE_IO_FILE_MAX - 1, leaf);
             out->scene_count++;
+        } else if (!strncmp(line, "active=", 7)) {
+            const char *leaf = line + 7;
+            if (saw_active || !manifest_scene_file_valid(leaf)) {
+                fclose(f);
+                manifest_err(err, err_sz,
+                             "Workspace manifest has an invalid active scene");
+                return 0;
+            }
+            /* Length-validated above; the precision silences
+             * -Wformat-truncation. */
+            snprintf(out->active_scene_file, WORKSPACE_IO_FILE_MAX,
+                     "%.*s", WORKSPACE_IO_FILE_MAX - 1, leaf);
+            saw_active = 1;
         } else if (line[0] && line[0] != '#') {
             fclose(f);
             manifest_err(err, err_sz, "Workspace manifest has an unknown field");
@@ -235,6 +249,11 @@ int workspace_io_manifest_read(const char *dir, WorkspaceManifest *out,
         manifest_err(err, err_sz, "Workspace manifest is missing a name");
         return 0;
     }
+    /* `active=` may precede the scene rows, so it is checked once all are in.
+     * A selection naming no listed scene is dropped, not fatal. */
+    if (out->active_scene_file[0] &&
+        !manifest_has_scene(out, out->active_scene_file))
+        out->active_scene_file[0] = '\0';
     return 1;
 }
 
@@ -266,6 +285,12 @@ int workspace_io_manifest_write(const char *dir,
             }
         }
     }
+    if (manifest->active_scene_file[0] &&
+        !manifest_has_scene(manifest, manifest->active_scene_file)) {
+        manifest_err(err, err_sz,
+                     "Workspace manifest active scene is not listed");
+        return 0;
+    }
     int n = snprintf(tmp, sizeof(tmp), "%s.tmp", path);
     if (n < 0 || n >= (int)sizeof(tmp)) {
         manifest_err(err, err_sz, "Workspace manifest path is too long");
@@ -279,6 +304,8 @@ int workspace_io_manifest_write(const char *dir,
     fprintf(f, "version=1\nname=%s\n", manifest->name);
     for (int i = 0; i < manifest->scene_count; i++)
         fprintf(f, "scene=%s\n", manifest->scene_files[i]);
+    if (manifest->active_scene_file[0])
+        fprintf(f, "active=%s\n", manifest->active_scene_file);
     int write_failed = fflush(f) != 0;
     if (!write_failed && fsync(fileno(f)) != 0)
         write_failed = 1;

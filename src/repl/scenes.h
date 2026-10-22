@@ -52,6 +52,10 @@ typedef struct {
     int scenes_loaded;
     int files_failed;
     int capacity_exceeded;
+    /* Slot holding the manifest's `active=` scene - the one selected when the
+     * workspace was saved - or -1 when none was recorded. Hand it to
+     * repl_scenes_activate_loaded_slot(). */
+    int active_slot;
 } ReplWorkspaceLoadResult;
 
 /* Called before any mutation: if the live document is a promotable
@@ -273,6 +277,11 @@ void repl_set_workspace_dir(const char *dir);
 /* Activate the first occupied slot after repl_load_workspace (which leaves
  * active == -1 and the pre-load document live). Returns the slot, or -1. */
 int  repl_scenes_activate_first_loaded_slot(void);
+
+/* Activate `preferred_slot` (ReplWorkspaceLoadResult.active_slot, the scene
+ * that was selected when the workspace was saved) when it is occupied, else
+ * the first occupied slot. Returns the activated slot, or -1. */
+int  repl_scenes_activate_loaded_slot(int preferred_slot);
 
 /* Drop all user-scene state. Called from glr_ctrl_reset_all. */
 void repl_scenes_reset(void);

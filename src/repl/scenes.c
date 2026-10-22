@@ -652,6 +652,12 @@ int repl_save_workspace(const char *dir, const ReplExportLayout *layout) {
         written++;
     }
 
+    /* Remember which scene was selected, so reopening lands on it. */
+    if (g_active_user_scene >= 0 && g_active_user_scene < MAX_USER_SCENES &&
+        g_user_scenes[g_active_user_scene].used)
+        snprintf(manifest.active_scene_file, WORKSPACE_IO_FILE_MAX, "%s",
+                 g_user_scenes[g_active_user_scene].file_name);
+
     for (int i = 0; i < manifest.scene_count; i++) {
         char path[REPL_WORKSPACE_DIR_MAX + WORKSPACE_IO_FILE_MAX + 8];
         char tmp_path[REPL_WORKSPACE_DIR_MAX + WORKSPACE_IO_FILE_MAX + 16];
@@ -982,6 +988,7 @@ ReplWorkspaceLoadResult repl_load_workspace_ex(const char *dir) {
     WorkspaceManifest manifest;
     char err[REPL_STATUS_TEXT_MAX];
     memset(&result, 0, sizeof(result));
+    result.active_slot = -1;
     if (!dir || !*dir) {
         repl_set_status_error("Workspace load: no folder provided");
         return result;
@@ -1047,6 +1054,8 @@ ReplWorkspaceLoadResult repl_load_workspace_ex(const char *dir) {
         }
         snprintf(g_user_scenes[slot].file_name,
                  sizeof(g_user_scenes[slot].file_name), "%s", name);
+        if (strcmp(name, manifest.active_scene_file) == 0)
+            result.active_slot = slot;
         result.scenes_loaded++;
     }
 
@@ -1059,6 +1068,7 @@ ReplWorkspaceLoadResult repl_load_workspace_ex(const char *dir) {
         repl_scenes_snapshot_destroy(catalog_stash);
         scene_snapshot_scratch_free(stash);
         repl_set_status_error("Workspace load failed; previous workspace restored");
+        result.active_slot = -1;
         return result;
     }
 
@@ -1097,6 +1107,15 @@ int repl_scenes_activate_first_loaded_slot(void) {
         }
     }
     return -1;
+}
+
+int repl_scenes_activate_loaded_slot(int preferred_slot) {
+    if (preferred_slot >= 0 && preferred_slot < MAX_USER_SCENES &&
+        g_user_scenes[preferred_slot].used) {
+        repl_load_user_scene_idx(preferred_slot);
+        return preferred_slot;
+    }
+    return repl_scenes_activate_first_loaded_slot();
 }
 
 static int reserve_user_scene_slot_for_new(void) {
