@@ -1,6 +1,6 @@
 ## Scope and Overlay Maintainability - one cursor-scope query, one vertex numbering, one outline walk
 
-## Status - NOT STARTED (items 2, 5 and 10 are done)
+## Status - NOT STARTED (items 2, 5, 6 and 10 are done)
 
 No runtime item has started, so the plan stays in `not-started/`. Item 10
 completed 2026-10-22: the
@@ -44,7 +44,7 @@ and 3, items 10 and 11, and additions to items 6 and 7.
 | 3 | Vertex numbering computed once | gutter, labels, filters cannot disagree | 2-3 days | 1 |
 | 4 | Collect outlines once, draw twice | removes three near-copy passes; highlight cost back near plain | 2-3 days | - (measure first) |
 | 5 | Doc links stop churning on line numbers - DONE | no more anchor-only diffs and gate failures | 0.5 h / 0.5 day | - |
-| 6 | Build traps: make version, bench `--only`, single-test target | no stale binaries, no silent no-ops | ~1 h each | - |
+| 6 | Build traps: make version, bench `--only`, single-test target - DONE | no stale binaries, no silent no-ops | ~1 h each | - |
 | 7 | Test fixtures from real flatten output; named GL enums in traces | fixtures cannot drift from production | ongoing | - |
 | 8 | Overlay setup out of `glr_ctrl.c` | smaller controller, fewer `_for_test` seams | ~0.5 day | best after 1 |
 | 9 | Habits: present-tense comments, one worktree per session | less comment rot, clean benchmarks | - | - |
@@ -378,7 +378,22 @@ Recommend **A** now; revisit B if anchors keep producing noise.
 
 ---
 
-### 6. Build traps
+### 6. Build traps - DONE
+
+- GNU make < 4 prints a warning once per top-level run (`MAKE_VERSION_WARN=0`
+  silences it). Measured on macOS's 3.81: a prerequisite touched 0.3 s after
+  its target is reported up to date. It stays a warning because make 4.x on
+  APFS has not been confirmed to compare sub-second mtimes on this machine.
+- `bench_extedit` accepts `--only` with bench_repl's semantics; its rows
+  answer to `extedit_small` / `extedit_typical` / `extedit_large` or the
+  group `extedit`, and a filter that selects none prints nothing.
+- `make check` runs every guard and lists the red ones at the end;
+  `test-stubs` runs the tests even when the gate is red, repeats the red
+  guard names after the test output, and fails if either failed.
+- `make test-one T=test_edit_overlays [ARGS=...]` builds the binary in
+  `build/debug-nosan-gl-stubs/` and runs it; documented in CLAUDE.md.
+
+Original notes:
 
 - **GNU make version.** macOS ships GNU make 3.81, whose timestamps are
   whole seconds: a source restored in the same second a build finished is

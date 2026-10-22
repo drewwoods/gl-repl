@@ -443,9 +443,34 @@ static void pick_cases(int *small_idx, int *typical_idx, int *large_idx) {
     free(len);
 }
 
+/* `--only NAME[,NAME...]`, with bench_repl's semantics so `make bench
+ * ARGS='--only ...'` can pass one filter to every BENCH_BINS binary: run the
+ * cases named, none if none match. A case answers to its row name
+ * (extedit_small, extedit_typical, extedit_large) or to the group name
+ * `extedit`. */
+static int wants(const char *filter, const char *name) {
+    const char *p = filter;
+    size_t nlen = strlen(name);
+    if (!filter || !*filter)
+        return 1;
+    while (*p) {
+        const char *comma = strchr(p, ',');
+        size_t seg = comma ? (size_t)(comma - p) : strlen(p);
+        if ((seg == nlen && strncmp(p, name, seg) == 0) ||
+            (seg == 7 && strncmp(p, "extedit", 7) == 0))
+            return 1;
+        if (!comma)
+            break;
+        p = comma + 1;
+    }
+    return 0;
+}
+
 int main(int argc, char **argv) {
     int iters = 200;
     int small_idx, typical_idx, large_idx;
+    int run_small, run_typical, run_large;
+    const char *only = NULL;
     int i;
 
     for (i = 1; i < argc; i++) {
@@ -459,12 +484,26 @@ int main(int argc, char **argv) {
                 iters = BENCH_MAX_SAMPLES;
         } else if (strcmp(argv[i], "--saved") == 0) {
             g_saved = 1;
+        } else if (strcmp(argv[i], "--only") == 0 && i + 1 < argc) {
+            only = argv[++i];
         } else {
-            fprintf(stderr, "usage: %s [--csv] [--iters N] [--saved]\n",
+            fprintf(stderr,
+                    "usage: %s [--csv] [--iters N] [--saved] "
+                    "[--only NAME[,NAME...]]\n"
+                    "  NAME: extedit (all cases), extedit_small, "
+                    "extedit_typical, extedit_large\n",
                     argv[0]);
             return 2;
         }
     }
+
+    run_small   = wants(only, "extedit_small");
+    run_typical = wants(only, "extedit_typical");
+    run_large   = wants(only, "extedit_large");
+    /* A filter naming only other binaries' rows selects nothing here: stay
+     * silent rather than print a header over no rows. */
+    if (!run_small && !run_typical && !run_large)
+        return 0;
 
     pick_cases(&small_idx, &typical_idx, &large_idx);
     if (small_idx < 0) {
@@ -479,9 +518,12 @@ int main(int argc, char **argv) {
                "(BYOE stage-2.5 gate, %s path, budget 8.000 ms) ===\n",
                g_saved ? "saved-file" : "WIP sidecar");
 
-    run_case("small", small_idx, iters);
-    run_case("typical", typical_idx, iters);
-    run_case("large", large_idx, iters);
+    if (run_small)
+        run_case("small", small_idx, iters);
+    if (run_typical)
+        run_case("typical", typical_idx, iters);
+    if (run_large)
+        run_case("large", large_idx, iters);
 
     (void)unlink(BENCH_SCENE_PATH);
     (void)unlink(BENCH_WIP_PATH);

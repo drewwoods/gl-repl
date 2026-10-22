@@ -120,7 +120,9 @@ green:
 - **No trailing whitespace** - enforced on commits since `origin/main`
   (also wired into `test-stubs` and the pre-push hook).
 
-`make test` / `make test-stubs` run the `make check` gate first. Doc-link `#L<n>`
+`make test` / `make test-stubs` run the whole `make check` gate first, but a
+red guard does not stop them: every guard runs, the tests run anyway, and
+the red guards are listed again after the test output. Doc-link `#L<n>`
 anchors that an unrelated edit shifted are repaired in place by that gate
 (`DOC_LINKS_FIX=1`, the default outside CI) - commit the repair with the
 change that caused it. CI and the pre-push hook check strictly

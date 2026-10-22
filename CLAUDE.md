@@ -226,11 +226,15 @@ make test                  # All tests
 make test-eval             # Expression evaluator
 make test-format           # Indentation/formatting
 make test-repl-core-parse test-repl-core-format test-repl-core-commit test-repl-core-io
+make test-one T=test_edit_overlays  # Build ONE binary in the test-stubs objdir and run it (ARGS=... passes through)
 ```
 
-The `make test` gate repoints drifted doc-link `#L<n>` anchors in place
-(`DOC_LINKS_FIX=0` for strict, as CI and pre-push do) - commit those repairs
-with your change.
+The `make test` gate runs every guard and then the tests even when a guard is
+red (the red ones are re-listed at the end), and repoints drifted doc-link
+`#L<n>` anchors in place (`DOC_LINKS_FIX=0` for strict, as CI and pre-push
+do) - commit those repairs with your change. macOS `/usr/bin/make` is 3.81
+(whole-second mtimes, so same-second edits can leave stale binaries); the
+Makefile warns, `gmake` from `brew install make` avoids it.
 
 Test sources under `tests/`, shared helpers `tests/support/`; binaries land
 at the repo root (`./test_eval`, …).

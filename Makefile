@@ -52,6 +52,22 @@ NC := $(ESC)[0m
 
 UNAME_S := $(shell uname -s)
 
+# GNU make 3.81 (what macOS ships as /usr/bin/make) compares whole-second
+# mtimes: a source restored or edited in the same second a build finished is
+# treated as up to date, and the stale binary runs. Measured: a prerequisite
+# touched 0.3 s after its target is reported "up to date" by 3.81. A warning,
+# not an error, until make 4.x on APFS is confirmed to compare sub-second
+# mtimes. Printed once per top-level invocation, not per recursive make.
+#? MAKE_VERSION_WARN: 0 silences the warning printed when GNU make is older than 4 (whole-second mtimes).
+MAKE_VERSION_WARN ?= 1
+ifeq ($(MAKELEVEL),0)
+ifeq ($(MAKE_VERSION_WARN),1)
+ifneq ($(filter 1 2 3,$(firstword $(subst ., ,$(MAKE_VERSION)))),)
+$(warning GNU make $(MAKE_VERSION) compares whole-second mtimes; an edit in the same second as a build can leave a stale binary. Use make >= 4: `brew install make`, then run `gmake` (MAKE_VERSION_WARN=0 silences this))
+endif
+endif
+endif
+
 # Declared (empty by default) so `make --warn-undefined-variables` stays
 # quiet; empty still fails the `ifeq ($(USE_GL_STUBS),1)` gates below.
 #? USE_GL_STUBS: 1 compiles against the bundled no-op GL/GLU/GLUT headers (no GL libs needed).
@@ -2774,8 +2790,8 @@ CHECK_TARGETS = \
 	check-make-fix-pairs \
 	check-make-target-grammar
 
-check: ## Run all checks.
-	@set -e; \
+check: ## Run all checks (every guard runs; the red ones are listed at the end).
+	@failed=""; \
 	for target in $(CHECK_TARGETS); do \
 		desc=$$(awk -v target="$$target" 'BEGIN {FS = ":.*## "} $$1 == target { print $$2; exit }' $(firstword $(MAKEFILE_LIST))); \
 		run=$$target; \
@@ -2784,8 +2800,13 @@ check: ## Run all checks.
 			desc="$$desc (repointing drifted anchors in place; DOC_LINKS_FIX=0 checks strictly)"; \
 		fi; \
 		printf "$(CYAN)\n==> %s$(NC)\n" "$$desc"; \
-		$(MAKE) --no-print-directory $$run || exit $$?; \
-	done
+		$(MAKE) --no-print-directory $$run || failed="$$failed $$target"; \
+	done; \
+	if [ -n "$(CHECK_REPORT)" ]; then printf '%s\n' $$failed > "$(CHECK_REPORT)"; fi; \
+	if [ -n "$$failed" ]; then \
+		printf "$(RED)\n==> red guards:%s$(NC)\n" "$$failed"; \
+		exit 1; \
+	fi
 
 # The developer gates repair the one guard failure that is pure bookkeeping:
 # a `#L<n>` doc anchor shifted by an unrelated edit above its target. Only
@@ -2795,6 +2816,8 @@ check: ## Run all checks.
 # what it publishes, never rewrite the tree it is pushing from.
 #? DOC_LINKS_FIX: 1 (default; 0 when CI is set) lets the check gate repoint drifted doc-link anchors in place; 0 checks strictly.
 DOC_LINKS_FIX ?= $(if $(CI),0,1)
+# Internal: file `check` writes its red guard names to (set by test-stubs).
+CHECK_REPORT ?=
 
 internal-heal-doc-links:
 	@out=$$(python3 scripts/check/check-doc-links.py --rewrite-paths --repoint 2>&1); \
@@ -2812,7 +2835,7 @@ internal-heal-doc-links:
 # question for the duration of a test run and leaves the next interactive
 # `make gl-repl` free to ask.
 TEST_MUSIC_TARGETS := test test-detailed test-scenes test-stubs test-msan \
-                      test-web test-full gl-tests
+                      test-web test-full test-one gl-tests
 $(TEST_MUSIC_TARGETS): export NO_MUSIC := 1
 
 # `make test` is the portable, headless contract: one check gate followed by
@@ -2845,6 +2868,26 @@ $(RUN_TEST_FILE_TARGETS): run-%:
 
 #? TEST_CASE: binary name selected by internal-test-case (set by the test-<name> pattern rules).
 TEST_CASE ?=
+
+# One test binary, built in test-stubs' own objdir (debug, no sanitizers, GL
+# stubs) so it reuses that run's objects, then run. The run-test-* runners
+# build in whatever BUILD the goal selects, and the hyphenated test-* twins
+# only link. T accepts either spelling: test_edit_overlays or
+# test-edit-overlays. ARGS passes through to the binary.
+#? T: test binary for test-one, e.g. T=test_edit_overlays (hyphenated spelling accepted).
+T ?=
+
+test-one: ## Build one test binary in the test-stubs objdir and run it (T=test_edit_overlays [ARGS=...]).
+	@if [ -z "$(T)" ]; then \
+		echo "usage: make test-one T=<test_binary> [ARGS=...]   e.g. T=test_edit_overlays" >&2; \
+		exit 2; \
+	fi
+	@case " $(TEST_BINS) " in *" $(subst -,_,$(T)) "*) ;; *) \
+		echo "test-one: unknown test binary '$(T)' (see TEST_BINS; e.g. test_edit_overlays)" >&2; \
+		exit 2;; \
+	esac
+	+$(MAKE) --no-print-directory internal-test-case \
+		USE_GL_STUBS=1 BUILD=debug NO_SAN=1 TEST_CASE=$(subst -,_,$(T))
 
 internal-test-case: $$(BINDIR)/$$(TEST_CASE)
 	@REPL_EXPORT_CC="$(CC)" \
@@ -2883,10 +2926,25 @@ rebuild-golden: ## Rebuild all golden examples from test_repl_core_examples.
 internal-rebuild-golden: $(BINDIR)/test_repl_core_examples
 	@$(BINDIR)/test_repl_core_examples --update-golden
 
-test-stubs: $(if $(filter 1,$(SKIP_CHECKS)),,check) ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs (SKIP_CHECKS=1 drops the check gate).
-	+$(MAKE) --no-print-directory internal-test-suite \
+# A red guard does not stop the run: guards and tests both run, so one
+# shifted doc anchor cannot hide every test result. The red guards are
+# repeated after the test output, and either failing fails the target.
+test-stubs: ## Build and run tests using local GL/GLU/GLUT stubs, without GL libs (SKIP_CHECKS=1 drops the check gate).
+	+@check_status=0; red=""; \
+	if [ "$(SKIP_CHECKS)" != 1 ]; then \
+		report=$$(mktemp "$${TMPDIR:-/tmp}/glr-check.XXXXXX"); \
+		$(MAKE) --no-print-directory check CHECK_REPORT="$$report" || check_status=$$?; \
+		red=$$(tr '\n' ' ' < "$$report" | sed 's/ *$$//'); rm -f "$$report"; \
+	fi; \
+	$(MAKE) --no-print-directory internal-test-suite \
 		USE_GL_STUBS=1 BUILD=$(BUILD) \
-		NO_SAN=$(if $(filter undefined,$(origin NO_SAN)),1,$(NO_SAN))
+		NO_SAN=$(if $(filter undefined,$(origin NO_SAN)),1,$(NO_SAN)); \
+	test_status=$$?; \
+	if [ $$check_status -ne 0 ]; then \
+		printf "$(RED)\n==> check gate red (tests ran anyway): %s$(NC)\n" "$${red:-see the check output above}"; \
+	fi; \
+	if [ $$test_status -ne 0 ]; then exit $$test_status; fi; \
+	exit $$check_status
 
 test-asan-ubsan: ## Build and run the stubbed test suite under AddressSanitizer + UBSan (forces sanitizers on regardless of environment).
 	+$(MAKE) --no-print-directory internal-test-suite \
@@ -3803,9 +3861,9 @@ PUBLIC_MAKE_VARS := \
 	DOC_LINKS_FIX ENTRY EXAMPLES_CATALOG FORMAT \
 	FREEGLUT_DEMOS_SRC FREEGLUT_INCLUDE_DIR FREEGLUT_LIB_PATH FREEGLUT_OSMESA \
 	FREEGLUT_VENDOR FREEGLUT_VENDOR_LINUX \
-	GLUT_BITMAP_BENCH_ARGS MACOS_UNIVERSAL MSAN_CC MUSIC_DEST MUSIC_TAG \
+	GLUT_BITMAP_BENCH_ARGS MACOS_UNIVERSAL MAKE_VERSION_WARN MSAN_CC MUSIC_DEST MUSIC_TAG \
 	NO_MUSIC NOSAN NO_SAN \
-	SAMPLE SAN SINCE SKIP_CHECKS TEST_CASE TEST_JOBS TEST_VERBOSE \
+	SAMPLE SAN SINCE SKIP_CHECKS T TEST_CASE TEST_JOBS TEST_VERBOSE \
 	USE_GL_STUBS V VERBOSE VERTEX_LABEL_BENCH_ARGS WEB WEB_PAGES_BRANCH \
 	ZSHRC
 
