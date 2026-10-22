@@ -621,6 +621,34 @@ static int last_selected_glut_shape(const OverlayWalkCtx *ctx) {
     return found;
 }
 
+/* SINGLE_POLYGON narrowing of one walked vertex, for the labels and the
+ * normal arrows. Each family is narrowed by its own primitive: a glVertex to
+ * the cursor's glBegin primitive (glVertex-only ordinals, the space GL builds
+ * the strip in), a gluVertex to the cursor's contour (polygon-local gluVertex
+ * ordinals, the space the contour highlight uses). A gluVertex inside a
+ * glBegin strip nested in a contour is in that contour but in no quad, so it
+ * follows the contour - with the cursor on it, it labels. An unresolved range
+ * keeps that family's whole block. */
+static int single_polygon_keeps_vertex(const ReplayVertexWalkState *state,
+                                       int poly_valid, int poly_first,
+                                       int poly_last, int poly_fan_anchor,
+                                       int contour_valid, int contour_first,
+                                       int contour_last) {
+    int ord;
+
+    if (state->immediate_idx_in_block >= 0) {
+        ord = state->immediate_idx_in_block;
+        if (!poly_valid || state->primitive_mode == 0)
+            return 1;
+        return (ord >= poly_first && ord <= poly_last) ||
+               (poly_fan_anchor && ord == 0);
+    }
+    if (!contour_valid)
+        return 1;
+    ord = state->tess_idx_in_polygon;
+    return ord >= contour_first && ord <= contour_last;
+}
+
 /* SINGLE_POLYGON scope with a resolved primitive range: does block-local
  * vertex ordinal `ord` belong to the cursor's primitive? */
 static int cursor_poly_contains_ordinal(const OverlayWalkCtx *ctx, int ord) {
@@ -1542,23 +1570,12 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
     }
     global_num = ctx->labelable_seen++;
 
-    /* The primitive range is in glVertex-only ordinals; a gluVertex inside
-     * the block (-1) belongs to no glBegin primitive and drops out. */
     if (ctx->scope == OVERLAY_SCOPE_SINGLE_POLYGON &&
-        ctx->poly_valid && state->primitive_mode != 0) {
-        int ord = state->immediate_idx_in_block;
-        if (ord < 0 ||
-            !((ord >= ctx->poly_first && ord <= ctx->poly_last) ||
-              (ctx->poly_fan_anchor && ord == 0)))
-            return;
-    }
-    /* in_block with no primitive mode = inside a tess polygon. */
-    if (ctx->scope == OVERLAY_SCOPE_SINGLE_POLYGON && ctx->contour_valid &&
-        state->in_block && state->primitive_mode == 0) {
-        int ord = state->vertex_idx_in_block;
-        if (ord < ctx->contour_first || ord > ctx->contour_last)
-            return;
-    }
+        !single_polygon_keeps_vertex(state, ctx->poly_valid, ctx->poly_first,
+                                     ctx->poly_last, ctx->poly_fan_anchor,
+                                     ctx->contour_valid, ctx->contour_first,
+                                     ctx->contour_last))
+        return;
     if (ctx->count >= VERTEX_LABEL_MAX)
         return;
 
@@ -1894,10 +1911,13 @@ static int normal_vector_in_scope(const NormalVectorRenderCtx *ctx,
     if (ctx->target_head >= 0 && ctx->cur_head != ctx->target_head)
         return 0;
     if (ctx->scope == OVERLAY_SCOPE_SINGLE_POLYGON && ctx->walk &&
-        ctx->walk->cursor_poly_valid && state->primitive_mode != 0 &&
-        (state->immediate_idx_in_block < 0 ||
-         !cursor_poly_contains_ordinal(ctx->walk,
-                                       state->immediate_idx_in_block)))
+        !single_polygon_keeps_vertex(state, ctx->walk->cursor_poly_valid,
+                                     ctx->walk->cursor_poly_first,
+                                     ctx->walk->cursor_poly_last,
+                                     ctx->walk->cursor_poly_fan_anchor,
+                                     ctx->walk->cursor_contour_valid,
+                                     ctx->walk->cursor_contour_first,
+                                     ctx->walk->cursor_contour_last))
         return 0;
     return 1;
 }

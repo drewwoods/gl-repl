@@ -179,6 +179,7 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
         .block_selected      = selected_block_only ? 0 : 1,
         .vertex_idx_in_block = 0,
         .immediate_idx_in_block = 0,
+        .tess_idx_in_polygon = 0,
         .lighting_enabled    = 0,
         .normal              = { 0.0f, 0.0f, 1.0f },
         .tess_normal         = { 0.0f, 0.0f, 1.0f },
@@ -244,6 +245,7 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
                 : 1;
             state.vertex_idx_in_block = 0;
             state.immediate_idx_in_block = 0;
+            state.tess_idx_in_polygon = 0;
             tess_depth = repl_tess_advance_depth(cmd->type, tess_depth);
             state.normal[0] = 0.0f; state.normal[1] = 0.0f; state.normal[2] = 1.0f;
             state.tess_normal[0] = 0.0f; state.tess_normal[1] = 0.0f; state.tess_normal[2] = 1.0f;
@@ -285,9 +287,12 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
                 ? (state.in_block && state.block_selected)
                 : 1;
             if (visit && cb->on_vertex) {
+                int saved_tess_idx = state.tess_idx_in_polygon;
+                state.tess_idx_in_polygon = -1;
                 cb->on_vertex(&state,
                               cmd->args[0], cmd->args[1], cmd->args[2],
                               user_data);
+                state.tess_idx_in_polygon = saved_tess_idx;
             }
             state.vertex_idx_in_block++;
             state.immediate_idx_in_block++;
@@ -315,6 +320,7 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
                 state.immediate_idx_in_block = saved_immediate_idx;
             }
             state.vertex_idx_in_block++;
+            state.tess_idx_in_polygon++;
             break;
         }
         default:

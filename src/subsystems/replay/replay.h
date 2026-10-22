@@ -131,6 +131,11 @@ typedef struct ReplayVertexWalkState {
      * a glBegin block (a strip nested in a tess contour); -1 while on_vertex
      * fires for such a gluVertex, which belongs to no glBegin primitive. */
     int    immediate_idx_in_block;
+    /* gluVertex-only ordinal in the current tess polygon, running on across
+     * contours - the ordinal space repl_flatten_cursor_tess_contour ranges
+     * use. Not reset by a glBegin nested in a contour. -1 while on_vertex
+     * fires for a glVertex. */
+    int    tess_idx_in_polygon;
     int    lighting_enabled;   /* current GL_LIGHTING state before this vertex */
     float  normal[3];          /* most recent CMD_NORMAL3F value */
     float  tess_normal[3];     /* most recent CMD_TESS_NORMAL value */
