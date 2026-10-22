@@ -672,6 +672,58 @@ static void test_exec_cursor_step_tracks_state(void) {
     repl_executor_destroy_resources();
 }
 
+static void test_exec_cursor_tess_restarts_and_cleanup(void) {
+    static const CmdType types[] = {
+        CMD_TESS_BEGIN_CONTOUR, /* No polygon: ignored. */
+        CMD_TESS_END,
+        CMD_TESS_BEGIN_POLYGON,
+        CMD_TESS_BEGIN_POLYGON, /* Same depth still restarts GLU. */
+        CMD_TESS_BEGIN_CONTOUR,
+        CMD_TESS_BEGIN_CONTOUR, /* Already in a contour: ignored. */
+    };
+    enum { CMD_COUNT = sizeof(types) / sizeof(types[0]) };
+    GLCmd cmds[CMD_COUNT];
+    ReplExecutionOptions opts = {0};
+    memset(cmds, 0, sizeof(cmds));
+    for (int i = 0; i < CMD_COUNT; i++) {
+        cmds[i].type = types[i];
+        cmds[i].valid = 1;
+    }
+    opts.program.cmds = cmds;
+    opts.program.cmd_count = CMD_COUNT;
+    opts.flat_cmd_count = CMD_COUNT;
+    repl_executor_init_resources();
+    for (int suppress = 0; suppress <= 1; suppress++) {
+        opts.suppress_tess_finalize = suppress;
+        gl_stub_counts_reset();
+        ReplExecCursor cursor = repl_exec_cursor_begin(&opts);
+        while (repl_exec_cursor_step(&cursor)) {}
+        ASSERT_TRUE("cursor restarts every polygon begin",
+                    gl_stub_counts[GL_STUB_gluTessBeginPolygon] == 2);
+        ASSERT_TRUE("cursor opens only the first valid contour",
+                    gl_stub_counts[GL_STUB_gluTessBeginContour] == 1);
+        ASSERT_TRUE("cursor ignores stray tess end",
+                    gl_stub_counts[GL_STUB_gluTessEndPolygon] == 0);
+        ASSERT_TRUE("cursor ends inside the contour", cursor.tess_depth == 2);
+        repl_exec_cursor_end(&cursor);
+        ASSERT_TRUE("cursor cleanup honors contour finalization suppression",
+                    gl_stub_counts[GL_STUB_gluTessEndContour] == (unsigned)!suppress);
+        ASSERT_TRUE("cursor cleanup honors polygon finalization suppression",
+                    gl_stub_counts[GL_STUB_gluTessEndPolygon] == (unsigned)!suppress);
+        ASSERT_TRUE("cursor cleanup releases tess ownership", cursor.tess_depth == 0);
+    }
+    repl_executor_destroy_resources();
+    gl_stub_counts_reset();
+    ReplExecCursor cursor = repl_exec_cursor_begin(&opts);
+    while (repl_exec_cursor_step(&cursor)) {}
+    ASSERT_TRUE("missing tess resource does not advance depth", cursor.tess_depth == 0);
+    repl_exec_cursor_end(&cursor);
+    ASSERT_TRUE("missing tess resource emits no polygon begin",
+                gl_stub_counts[GL_STUB_gluTessBeginPolygon] == 0);
+    ASSERT_TRUE("missing tess resource emits no cleanup",
+                gl_stub_counts[GL_STUB_gluTessEndPolygon] == 0);
+}
+
 static void test_exec_cursor_advance_skips_without_state(void) {
     repl_executor_init_resources();
 
@@ -1946,6 +1998,7 @@ int main(void) {
     test_vertex4f_end_to_end_trace();
     test_execute_edge_cases();
     test_exec_cursor_step_tracks_state();
+    test_exec_cursor_tess_restarts_and_cleanup();
     test_exec_cursor_advance_skips_without_state();
     test_attrib_stack();
     test_background_observation();

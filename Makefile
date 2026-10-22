@@ -2502,6 +2502,9 @@ check-ui-no-repl-state-read: ## Verify UI renderers consume the UiRenderSnapshot
 check-state-ownership: ## Run state-ownership contract checks (new + tightened existing checks).
 	@$(RUN_STATE_OWNERSHIP_CHECKS)
 
+check-tess-depth: ## Verify tessellation depth transitions use repl_tess_advance_depth().
+	@python3 scripts/check/check-tess-depth.py
+
 check-prof-sections-instrumented: ## Hard guard: every prof_sections.h catalog row has a prof_begin() site (no zombie profiler rows).
 	@bash scripts/check/check-prof-sections-instrumented.sh
 

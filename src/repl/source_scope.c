@@ -119,8 +119,7 @@ static void source_scope_view_build(ReplSourceScopeView *view) {
             if (t == CMD_BEGIN) begin_depth++;
             else if (t == CMD_END) begin_depth--;
 
-            if (t == CMD_TESS_BEGIN_POLYGON || t == CMD_TESS_BEGIN_CONTOUR) tess_depth++;
-            else if (t == CMD_TESS_END) tess_depth--;
+            tess_depth = repl_tess_advance_depth(t, tess_depth);
 
             if (t == CMD_PUSH_MATRIX) matrix_depth++;
             else if (t == CMD_POP_MATRIX) matrix_depth--;
@@ -128,7 +127,6 @@ static void source_scope_view_build(ReplSourceScopeView *view) {
 
         if (block_depth < 0)  block_depth = 0;
         if (begin_depth < 0)  begin_depth = 0;
-        if (tess_depth < 0)   tess_depth = 0;
         if (matrix_depth < 0) matrix_depth = 0;
 
         view->block_depth_prefix[i + 1]  = block_depth;

@@ -469,20 +469,22 @@ static void write_canonical_cmd_as_c(FILE *f, const GLCmd *cmd, int cmd_idx,
         break;
     case CMD_TESS_BEGIN_POLYGON:
         fprintf(f, "  { _tv_n = 0; gluTessBeginPolygon(g_tess, NULL); }\n");
-        *tess_depth = 1;
+        *tess_depth = repl_tess_advance_depth(cmd->type, *tess_depth);
         break;
     case CMD_TESS_BEGIN_CONTOUR:
+        /* A function can emit a contour inside its caller's polygon. */
+        if (*tess_depth == 0)
+            *tess_depth = repl_tess_advance_depth(CMD_TESS_BEGIN_POLYGON, *tess_depth);
         fprintf(f, "    gluTessBeginContour(g_tess);\n");
-        *tess_depth = 2;
+        *tess_depth = repl_tess_advance_depth(cmd->type, *tess_depth);
         break;
     case CMD_TESS_END:
         if (*tess_depth == 2) {
             fprintf(f, "    gluTessEndContour(g_tess);\n");
-            *tess_depth = 1;
         } else {
             fprintf(f, "  gluTessEndPolygon(g_tess);\n");
-            *tess_depth = 0;
         }
+        *tess_depth = repl_tess_advance_depth(cmd->type, *tess_depth);
         break;
     case CMD_NORMAL3F:
         write_normal_as_c(f, cmd, source_text, for_depth > 0 || cmd->has_vars);

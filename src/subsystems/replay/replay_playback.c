@@ -52,7 +52,7 @@ static int replay_find_open_tess_polygon_before(int limit, int *out_depth) {
         CmdType type = flat_cmds[flat_idx].type;
         if (type == CMD_TESS_BEGIN_POLYGON) {
             poly_start = flat_idx;
-            tess_depth = 1;
+            tess_depth = repl_tess_advance_depth(type, tess_depth);
         } else {
             int old_depth = tess_depth;
             tess_depth = repl_tess_advance_depth(type, tess_depth);
@@ -196,12 +196,12 @@ static int replay_next_polygon_limit(int start, int *fade_begin, int *fade_end) 
             if (fade_end) *fade_end = flat_idx;
             return flat_idx + 1;
         case CMD_TESS_BEGIN_POLYGON: {
-            int tess_depth = 1;
+            int tess_depth = repl_tess_advance_depth(CMD_TESS_BEGIN_POLYGON, 0);
             for (int tess_idx = flat_idx + 1; tess_idx < num_flat_cmds; tess_idx++) {
                 if (!flat_cmds[tess_idx].valid) continue;
                 CmdType type = flat_cmds[tess_idx].type;
                 if (type == CMD_TESS_BEGIN_POLYGON) {
-                    tess_depth = 1;
+                    tess_depth = repl_tess_advance_depth(type, tess_depth);
                 } else if (type == CMD_TESS_BEGIN_CONTOUR) {
                     tess_depth = repl_tess_advance_depth(type, tess_depth);
                 } else if (type == CMD_TESS_END) {
@@ -258,7 +258,7 @@ static int replay_next_vertex_limit(int start, int *fade_begin, int *fade_end) {
             break;
         case CMD_TESS_BEGIN_POLYGON:
             open_tess_poly = flat_idx;
-            tess_depth = 1;
+            tess_depth = repl_tess_advance_depth(t, tess_depth);
             break;
         case CMD_TESS_BEGIN_CONTOUR:
             tess_depth = repl_tess_advance_depth(t, tess_depth);

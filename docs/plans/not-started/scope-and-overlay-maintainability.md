@@ -158,7 +158,18 @@ remains outside `source_scope.c`.
 
 ---
 
-### 2. Shared GLU depth helper everywhere
+### 2. Shared GLU depth helper everywhere - DONE
+
+Source depth, executor/export transitions, hidden-line cleanup, and replay
+polygon entries use `repl_tess_advance_depth()`. Transition actions and
+caller-owned polygons in contour-only functions are preserved. Regression
+coverage includes malformed source rows, polygon restarts, suppressed cursor
+cleanup, multi-contour hidden-line passes, and contour-function export parity.
+
+`check-tess-depth` runs in `check-state-ownership`. It permits helper calls,
+zero initialization, and exact cache copies/lifecycle resets; it rejects
+manual depth arithmetic even in files with an allowed copy or reset. The
+walker's immediate-block resets remain item 1's work.
 
 #### Today
 
@@ -191,9 +202,9 @@ if (prev == 1 && depth == 0) { /* polygon closed  */ }
 ```
 
 Then add `check-tess-depth` to the `check-state-ownership` aggregate: fail on
-assignments or increments of a variable named `*tess_depth*` outside
-`command.h` and `source_scope.c`'s prefix builder (allowlist), the same shape
-as the other grep guards.
+assignments or increments of a production variable named `*tess_depth*` that
+bypass the helper. Allow zero initialization and exact cache copies/lifecycle
+resets, rather than exempting whole files or the source prefix builder.
 
 Acceptance: export trace parity (`tests/test_export_trace_parity.c`) and the
 hidden-line tests unchanged; the guard red on a reintroduced `tess_depth++`.

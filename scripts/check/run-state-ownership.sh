@@ -385,6 +385,10 @@ check_palette() {
     python3 scripts/check/check-palette.py
 }
 
+check_tess_depth() {
+    python3 scripts/check/check-tess-depth.py
+}
+
 # Emit a check's captured output with the same header + coloring the serial
 # path used. Reads $target / $out / already-run status from the caller.
 emit_check_output() {
@@ -616,6 +620,7 @@ else
     run_check check-no-test-default-output check_no_test_default_output
     run_check check-keymap-no-dup check_keymap_no_dup
     run_check check-palette check_palette
+    run_check check-tess-depth check_tess_depth
     PARALLEL_COLLECT=
     dispatch_queue
 fi

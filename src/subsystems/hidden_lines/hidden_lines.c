@@ -127,27 +127,25 @@ static void hidden_lines_execute_tess_cmd(const GLCmd *cmd, int *tess_depth) {
 
     switch (cmd->type) {
     case CMD_TESS_BEGIN_POLYGON:
-        if (hidden_lines_ensure_tess()) {
+    case CMD_TESS_BEGIN_CONTOUR:
+    case CMD_TESS_END: {
+        if (cmd->type == CMD_TESS_BEGIN_POLYGON && !hidden_lines_ensure_tess())
+            break;
+        if (!g_hidden_tess) break;
+        int prev_depth = *tess_depth;
+        *tess_depth = repl_tess_advance_depth(cmd->type, *tess_depth);
+        if (cmd->type == CMD_TESS_BEGIN_POLYGON) {
             g_hidden_tess_vert_count = 0;
             gluTessBeginPolygon(g_hidden_tess, NULL);
-            *tess_depth = 1;
-        }
-        break;
-    case CMD_TESS_BEGIN_CONTOUR:
-        if (g_hidden_tess && *tess_depth == 1) {
+        } else if (prev_depth == 1 && *tess_depth == 2) {
             gluTessBeginContour(g_hidden_tess);
-            *tess_depth = 2;
-        }
-        break;
-    case CMD_TESS_END:
-        if (g_hidden_tess && *tess_depth == 2) {
+        } else if (prev_depth == 2 && *tess_depth == 1) {
             gluTessEndContour(g_hidden_tess);
-            *tess_depth = 1;
-        } else if (g_hidden_tess && *tess_depth == 1) {
+        } else if (prev_depth == 1 && *tess_depth == 0) {
             gluTessEndPolygon(g_hidden_tess);
-            *tess_depth = 0;
         }
         break;
+    }
     case CMD_TESS_VERTEX:
         if (g_hidden_tess &&
             *tess_depth == 2 &&
@@ -172,11 +170,12 @@ static void hidden_lines_finish_tess(int *tess_depth) {
         return;
     if (*tess_depth == 2) {
         gluTessEndContour(g_hidden_tess);
-        *tess_depth = 1;
+        *tess_depth = repl_tess_advance_depth(CMD_TESS_END, *tess_depth);
     }
-    if (*tess_depth == 1)
+    if (*tess_depth == 1) {
         gluTessEndPolygon(g_hidden_tess);
-    *tess_depth = 0;
+        *tess_depth = repl_tess_advance_depth(CMD_TESS_END, *tess_depth);
+    }
 }
 
 /* The program's glClear IS the frame's clear for the scene rect - the host

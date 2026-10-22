@@ -162,6 +162,46 @@ int main() {
         ASSERT_INT("repl_source_scope_nearest_open_block_at(1)", repl_source_scope_nearest_open_block_at(1), CMD_FOR_BEGIN);
     }
 
+    /* The source cache follows GLU transitions, including malformed rows. */
+    {
+        static const struct {
+            CmdType type;
+            int valid;
+            int depth_after;
+        } rows[] = {
+            {CMD_TESS_BEGIN_CONTOUR, 1, 0},
+            {CMD_TESS_END, 1, 0},
+            {CMD_TESS_BEGIN_POLYGON, 1, 1},
+            {CMD_TESS_BEGIN_CONTOUR, 0, 1},
+            {CMD_TESS_BEGIN_CONTOUR, 1, 2},
+            {CMD_TESS_VERTEX, 1, 2},
+            {CMD_TESS_END, 1, 1},
+            {CMD_TESS_BEGIN_CONTOUR, 1, 2},
+            {CMD_TESS_END, 1, 1},
+            {CMD_TESS_END, 1, 0},
+            {CMD_TESS_BEGIN_POLYGON, 1, 1},
+            {CMD_TESS_BEGIN_POLYGON, 1, 1},
+            {CMD_TESS_BEGIN_CONTOUR, 1, 2},
+            {CMD_TESS_BEGIN_CONTOUR, 1, 2},
+            {CMD_TESS_BEGIN_POLYGON, 1, 1},
+            {CMD_TESS_END, 1, 0},
+        };
+        enum { ROW_COUNT = sizeof(rows) / sizeof(rows[0]) };
+        GLCmd cmds[ROW_COUNT];
+        ReplSourceScopeView view;
+        memset(cmds, 0, sizeof(cmds));
+        memset(&view, 0, sizeof(view));
+        for (int i = 0; i < ROW_COUNT; i++) {
+            cmds[i].type = rows[i].type;
+            cmds[i].valid = rows[i].valid;
+        }
+        repl_source_scope_view_bind(&view, cmds, ROW_COUNT);
+        ASSERT_INT("tess prefix starts outside", repl_source_scope_view_tess_scope_depth_at(&view, 0), 0);
+        for (int i = 0; i < ROW_COUNT; i++)
+            ASSERT_INT("tess prefix follows shared transition",
+                       repl_source_scope_view_tess_scope_depth_at(&view, i + 1), rows[i].depth_after);
+    }
+
     /* 6c. Function-navigation queries: enclosing includes the header and
      * closer; nested for/if is transparent; next/prev are strict. */
     {

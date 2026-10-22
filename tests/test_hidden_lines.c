@@ -239,6 +239,44 @@ static void test_no_clear_line_emits_no_clear(void) {
                clears_emitted_by(RENDER3D_EXEC_WIREFRAME_DEPTH_FILL), 0);
 }
 
+/* Every wireframe pass preserves each contour and closes unfinished scopes. */
+static void test_tess_transitions_and_cleanup(void) {
+    static const Render3dExecutePurpose purposes[] = {
+        RENDER3D_EXEC_WIREFRAME_DEPTH_FILL,
+        RENDER3D_EXEC_WIREFRAME_HIDDEN_LINES,
+        RENDER3D_EXEC_WIREFRAME_VISIBLE_LINES,
+    };
+    static const char *const lines[] = {
+        "gluBegin(GLU_POLYGON);",
+        "gluBegin(GLU_CONTOUR);",
+        "gluVertex(0, 0, 0);",
+        "gluVertex(1, 0, 0);",
+        "gluVertex(0, 1, 0);",
+        "gluEnd();",
+        "gluBegin(GLU_CONTOUR);",
+        "gluVertex(0.1, 0.1, 0);",
+        "gluVertex(0.1, 0.2, 0);",
+        "gluVertex(0.2, 0.1, 0);",
+        "gluEnd();",
+        "gluEnd();",
+    };
+    enum { LINE_COUNT = sizeof(lines) / sizeof(lines[0]) };
+    for (int omitted_closes = 0; omitted_closes <= 2; omitted_closes++) {
+        glr_ctrl_reset_all(); declare_test_vars();
+        for (int i = 0; i < LINE_COUNT - omitted_closes; i++)
+            editor_feed_line(lines[i]);
+        for (size_t pass = 0; pass < sizeof(purposes) / sizeof(purposes[0]); pass++) {
+            gl_stub_counts_reset();
+            run_walk(purposes[pass]);
+            ASSERT_INT("tess walk opens one polygon", (int)gl_stub_counts[GL_STUB_gluTessBeginPolygon], 1);
+            ASSERT_INT("tess walk opens both contours", (int)gl_stub_counts[GL_STUB_gluTessBeginContour], 2);
+            ASSERT_INT("tess walk emits both contours' vertices", (int)gl_stub_counts[GL_STUB_gluTessVertex], 6);
+            ASSERT_INT("tess walk closes both contours", (int)gl_stub_counts[GL_STUB_gluTessEndContour], 2);
+            ASSERT_INT("tess walk finalizes polygon once", (int)gl_stub_counts[GL_STUB_gluTessEndPolygon], 1);
+        }
+    }
+}
+
 int main(void) {
     repl_eval_init_predef_vars();
     hidden_lines_init_resources();
@@ -250,6 +288,7 @@ int main(void) {
     test_depth_fill_clear_lifts_color_mask();
     test_depth_fill_reports_its_forced_full_mask_clear();
     test_no_clear_line_emits_no_clear();
+    test_tess_transitions_and_cleanup();
 
     hidden_lines_destroy_resources();
 

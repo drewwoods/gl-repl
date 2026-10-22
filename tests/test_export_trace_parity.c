@@ -268,6 +268,22 @@ static const char *prog_material_branch[] = {
     NULL
 };
 
+/* Source functions inherit the caller's open polygon after flattening. */
+static const char *prog_tess_contour_function[] = {
+    "func0(x) {",
+    "gluBegin(GLU_CONTOUR);",
+    "gluVertex(x, 0, 0);",
+    "gluVertex(x + 1, 0, 0);",
+    "gluVertex(x, 1, 0);",
+    "gluEnd();",
+    "}",
+    "gluBegin(GLU_POLYGON);",
+    "func0(0);",
+    "func0(2);",
+    "gluEnd();",
+    NULL
+};
+
 static const TraceProgram g_curated[] = {
     { "triangle",            prog_triangle,        NULL },
     { "loop_in_begin",       prog_loop_in_begin,   NULL },
@@ -275,6 +291,7 @@ static const TraceProgram g_curated[] = {
     { "transforms",          prog_transforms,      NULL },
     { "glut_cube",           prog_glut_cube,       NULL },
     { "function_call",       prog_function_call,   NULL },
+    { "tess_contour_function", prog_tess_contour_function, NULL },
     { "label_rasterpos",     prog_label_rasterpos, NULL },
     { "stencil_mask",        prog_stencil_mask,    NULL },
     { "func_locals",         prog_func_locals,     NULL },

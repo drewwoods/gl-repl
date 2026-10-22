@@ -903,27 +903,24 @@ int repl_exec_cursor_step(ReplExecCursor *cursor) {
          * program by the console subsystem. */
         break;
     case CMD_TESS_BEGIN_POLYGON:
-        if (g_tess) {
+    case CMD_TESS_BEGIN_CONTOUR:
+    case CMD_TESS_END: {
+        if (!g_tess) break;
+        int prev_depth = cursor->tess_depth;
+        cursor->tess_depth = repl_tess_advance_depth(cmd->type, cursor->tess_depth);
+        /* A polygon begin also restarts malformed, already-open polygons. */
+        if (cmd->type == CMD_TESS_BEGIN_POLYGON) {
             g_tess_vert_count = 0;
             gluTessBeginPolygon(g_tess, NULL);
-            cursor->tess_depth = 1;
-        }
-        break;
-    case CMD_TESS_BEGIN_CONTOUR:
-        if (g_tess && cursor->tess_depth == 1) {
+        } else if (prev_depth == 1 && cursor->tess_depth == 2) {
             gluTessBeginContour(g_tess);
-            cursor->tess_depth = 2;
-        }
-        break;
-    case CMD_TESS_END:
-        if (g_tess && cursor->tess_depth == 2) {
+        } else if (prev_depth == 2 && cursor->tess_depth == 1) {
             gluTessEndContour(g_tess);
-            cursor->tess_depth = 1;
-        } else if (g_tess && cursor->tess_depth == 1) {
+        } else if (prev_depth == 1 && cursor->tess_depth == 0) {
             gluTessEndPolygon(g_tess);
-            cursor->tess_depth = 0;
         }
         break;
+    }
     case CMD_TESS_NORMAL:
         cursor->tess_current_normal[0] = cmd->args[0];
         cursor->tess_current_normal[1] = cmd->args[1];
@@ -1143,7 +1140,7 @@ void repl_exec_cursor_end(ReplExecCursor *cursor) {
     if (!cursor->options.suppress_tess_finalize) {
         if (cursor->tess_depth == 2 && g_tess) {
             gluTessEndContour(g_tess);
-            cursor->tess_depth = 1;
+            cursor->tess_depth = repl_tess_advance_depth(CMD_TESS_END, cursor->tess_depth);
         }
         if (cursor->tess_depth == 1 && g_tess)
             gluTessEndPolygon(g_tess);
