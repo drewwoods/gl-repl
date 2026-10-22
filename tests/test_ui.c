@@ -10,6 +10,9 @@
 #include "repl/color_limits.h"
 #include "subsystems/replay/replay_state.h"
 #include "repl/example_loader.h"
+#include "repl/examples.h"                  /* repl_example_name/count */
+#include "repl/flatten.h"                   /* repl_flatten_commands */
+#include "subsystems/replay/replay.h"       /* replay_walk_user_vertices */
 #include "editor/input.h"
 #include "editor/help_session.h"
 #include "ui/core/tabbed_overlay.h"
@@ -2183,46 +2186,146 @@ static void test_vertex_gutter_labels_tess_polygon(void) {
     tess_gutter_expect(13, "v0", "glBegin vertex with cursor on its glEnd");
 }
 
-/* glVertex and gluVertex count separately. The extrusion example nests a
- * glBegin(GL_QUAD_STRIP) inside a tess contour and interleaves the two
- * families; one shared counter used to number them as a single run (the
- * first gluVertex read "v2"), matching neither primitive. */
+/* glVertex and gluVertex share one run, owned by the innermost open head -
+ * the numbering the 3D vertex labels use, so a row and its vertex in the
+ * scene read the same. The extrusion example nests a glBegin(GL_QUAD_STRIP)
+ * inside a tess contour and interleaves both families: the strip owns every
+ * vertex row inside it, so its gluVertex rows continue the strip's run, and
+ * a gluVertex before the strip opens belongs to the polygon's own run. */
 static void test_vertex_gutter_labels_glbegin_inside_tess_polygon(void) {
     printf("Testing interleaved glVertex/gluVertex gutter labels...\n");
 
     tess_gutter_reset();
     editor_feed_line("gluBegin(GLU_POLYGON);");   /* 0 */
     editor_feed_line("gluBegin(GLU_CONTOUR);");   /* 1 */
-    editor_feed_line("glBegin(GL_QUAD_STRIP);");  /* 2 */
-    editor_feed_line("glVertex3f(0, 0, 0);");     /* 3 */
-    editor_feed_line("glVertex3f(0, 0, 1);");     /* 4 */
-    editor_feed_line("gluVertex(0, 0, 0);");      /* 5 */
-    editor_feed_line("glVertex3f(1, 0, 0);");     /* 6 */
-    editor_feed_line("glVertex3f(1, 0, 1);");     /* 7 */
-    editor_feed_line("gluVertex(1, 0, 0);");      /* 8 */
-    editor_feed_line("glVertex3f(0, 1, 0);");     /* 9 */
-    editor_feed_line("glVertex3f(0, 1, 1);");     /* 10 */
-    editor_feed_line("gluVertex(0, 1, 0);");      /* 11 */
-    editor_feed_line("glEnd();");                 /* 12 */
-    editor_feed_line("gluEnd();");                /* 13 */
-    editor_feed_line("gluEnd();");                /* 14 */
+    editor_feed_line("gluVertex(0, 0, 0);");      /* 2  polygon run v0 */
+    editor_feed_line("glBegin(GL_QUAD_STRIP);");  /* 3  strip run restarts */
+    editor_feed_line("glVertex3f(0, 0, 0);");     /* 4  v0 */
+    editor_feed_line("glVertex3f(0, 0, 1);");     /* 5  v1 */
+    editor_feed_line("gluVertex(0, 0, 0);");      /* 6  v2 */
+    editor_feed_line("glVertex3f(1, 0, 0);");     /* 7  v3 */
+    editor_feed_line("glVertex3f(1, 0, 1);");     /* 8  v4 */
+    editor_feed_line("gluVertex(1, 0, 0);");      /* 9  v5 */
+    editor_feed_line("glEnd();");                 /* 10 */
+    editor_feed_line("gluEnd();");                /* 11 */
+    editor_feed_line("gluEnd();");                /* 12 */
 
-    /* Cursor on glEnd: inside both the glBegin block and the polygon. */
+    /* Cursor on glEnd: inside the strip and the polygon. */
+    tess_gutter_render_at(10);
+    tess_gutter_expect(4, "v0", "strip vertex");
+    tess_gutter_expect(5, "v1", "strip vertex");
+    tess_gutter_expect(6, "v2", "gluVertex inside the strip continues its run");
+    tess_gutter_expect(7, "v3", "strip run counts the gluVertex row");
+    tess_gutter_expect(9, "v5", "gluVertex inside the strip continues its run");
+    tess_gutter_expect(2, "v0", "gluVertex before the strip, polygon run");
+
+    /* Cursor in the polygon but outside the strip: the polygon's own rows
+     * label, the strip's do not (the scene selects the strip separately). */
     tess_gutter_render_at(12);
-    tess_gutter_expect(3, "v0", "quad strip vertex");
-    tess_gutter_expect(4, "v1", "quad strip vertex");
-    tess_gutter_expect(6, "v2", "quad strip skips the gluVertex rows");
-    tess_gutter_expect(10, "v5", "quad strip skips the gluVertex rows");
-    tess_gutter_expect(5, "v0", "tess vertex skips the glVertex rows");
-    tess_gutter_expect(8, "v1", "tess vertex skips the glVertex rows");
-    tess_gutter_expect(11, "v2", "tess vertex skips the glVertex rows");
+    tess_gutter_expect(2, "v0", "polygon row with cursor on polygon gluEnd");
+    tess_gutter_expect(4, "", "strip row with cursor outside the strip");
+    tess_gutter_expect(6, "", "strip-owned gluVertex with cursor outside strip");
+}
 
-    /* Cursor on the polygon's gluEnd: outside the quad strip, so only the
-     * tess vertices are in scope. */
-    tess_gutter_render_at(14);
-    tess_gutter_expect(3, "", "quad strip vertex with cursor past its glEnd");
-    tess_gutter_expect(5, "v0", "tess vertex with cursor on polygon gluEnd");
-    tess_gutter_expect(11, "v2", "tess vertex with cursor on polygon gluEnd");
+/* The gutter's vertex numbers ARE the scene's: for every cursor line of the
+ * three GLU concave-arrow examples, each row's gutter label must equal what
+ * the 3D vertex-label walk assigns that row's vertex (vertex_idx_in_block,
+ * last-instance scope), and rows the walk leaves unlabelled must be blank.
+ * The walk runs with the controller's own CursorBlockState fill, so this
+ * fails if either side's block selection or counting drifts. */
+#define PARITY_MAX_LINES 512
+
+static void parity_record_vertex(const ReplayVertexWalkState *state,
+                                 float x, float y, float z, void *user) {
+    int *labels = (int *)user;
+    (void)x; (void)y; (void)z;
+    if (state->src_cmd_idx >= 0 && state->src_cmd_idx < PARITY_MAX_LINES)
+        labels[state->src_cmd_idx] = state->vertex_idx_in_block;
+}
+
+static int find_example_by_name(const char *name) {
+    for (int i = 0; i < repl_example_count(); i++) {
+        const char *n = repl_example_name(i);
+        if (n && strcmp(n, name) == 0)
+            return i;
+    }
+    return -1;
+}
+
+static void test_vertex_gutter_labels_match_scene_labels(void) {
+    static const char *const examples[] = {
+        "GLU concave arrow",
+        "GLU concave arrow cutout",
+        "GLU concave arrow extrusion",
+    };
+
+    printf("Testing gutter vertex labels match the scene's...\n");
+
+    for (size_t e = 0; e < sizeof examples / sizeof examples[0]; e++) {
+        int idx = find_example_by_name(examples[e]);
+        int doc_count;
+        int mismatches = 0;
+        int labelled_rows = 0;
+        char msg[200];
+
+        snprintf(msg, sizeof msg, "%s: example in catalog", examples[e]);
+        ASSERT_TRUE(msg, idx >= 0);
+        if (idx < 0)
+            continue;
+
+        tess_gutter_reset();
+        repl_load_example(idx);
+        repl_flatten_commands(editor_state_edit_line());
+        doc_count = repl_state_document_count();
+        snprintf(msg, sizeof msg, "%s: document fits the parity table",
+                 examples[e]);
+        ASSERT_TRUE(msg, doc_count > 0 && doc_count <= PARITY_MAX_LINES);
+        if (doc_count <= 0 || doc_count > PARITY_MAX_LINES)
+            continue;
+
+        for (int cursor = 0; cursor < doc_count; cursor++) {
+            int scene[PARITY_MAX_LINES];
+            ReplayVertexWalkContext walk;
+            static const ReplayVertexWalkCallbacks cb = {
+                .on_vertex = parity_record_vertex,
+            };
+
+            for (int r = 0; r < doc_count; r++)
+                scene[r] = -1;
+            memset(&walk, 0, sizeof walk);
+            walk.program = repl_state_flat_program_view();
+            glr_ctrl_cursor_block_state_for_test(cursor, &walk.cursor);
+            walk.selected_block_only = 1;
+            replay_walk_user_vertices(&walk, &cb, scene);
+
+            tess_gutter_render_at(cursor);
+            for (int r = 0; r < doc_count; r++) {
+                char want[8] = "";
+                char got[8];
+
+                if (scene[r] >= 0)
+                    snprintf(want, sizeof want, "v%d", scene[r]);
+                if (!ui_repl_code_panel_row_aux_label_for_test(r, got))
+                    continue;
+                if (got[0])
+                    labelled_rows++;
+                if (strcmp(want, got) != 0) {
+                    if (mismatches++ < 5) {
+                        snprintf(msg, sizeof msg,
+                                 "%s: cursor %d, row %d: gutter '%s' == scene '%s'",
+                                 examples[e], cursor, r, got, want);
+                        ASSERT_TRUE(msg, 0);
+                    }
+                }
+            }
+        }
+        snprintf(msg, sizeof msg, "%s: gutter matches scene on every row",
+                 examples[e]);
+        ASSERT_INT(msg, mismatches, 0);
+        snprintf(msg, sizeof msg, "%s: the sweep labelled something",
+                 examples[e]);
+        ASSERT_TRUE(msg, labelled_rows > 0);
+    }
 }
 
 /* A loop inside the polygon makes the source-order count a guess, so the
@@ -2869,6 +2972,7 @@ int main(void) {
     test_vertex_gutter_labels_tess_polygon();
     test_vertex_gutter_labels_glbegin_inside_tess_polygon();
     test_vertex_gutter_labels_tess_polygon_loop();
+    test_vertex_gutter_labels_match_scene_labels();
     test_auto_normal_rows_are_labelled_and_dimmed();
     test_statusbar_action_tooltips();
     test_tutorial_fade_math_uses_snapshot_view();

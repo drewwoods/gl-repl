@@ -154,8 +154,25 @@ typedef struct {
     int          cursor_source_block_valid;
     int          cursor_source_block_begin;
     int          cursor_source_block_end;
+    /* The cursor's gluBegin(GLU_POLYGON) ... gluEnd() source extent, contours
+     * included. A tess polygon is otherwise selected only through flat
+     * provenance, which a comment line between two contours never reaches -
+     * so this is what keeps the polygon current there, as the glBegin source
+     * extent does for comments inside a glBegin block. */
+    int          cursor_source_tess_valid;
+    int          cursor_source_tess_begin;
+    int          cursor_source_tess_end;
     unsigned int cursor_func_scope_mask;
 } CursorBlockState;
+
+/* Is `head` (a flat CMD_TESS_BEGIN_POLYGON) an instance of the cursor's
+ * source polygon? Every unrolled copy shares the head's src_cmd_idx. */
+static inline int repl_cursor_source_tess_head_matches(
+        const CursorBlockState *cursor, const GLCmd *head) {
+    return cursor && head && cursor->cursor_source_tess_valid &&
+           head->valid && head->type == CMD_TESS_BEGIN_POLYGON &&
+           head->src_cmd_idx == cursor->cursor_source_tess_begin;
+}
 
 /* Input: source program to expand. Caller provides the source command array,
  * a target flat buffer (with capacity), an editor-text view for the

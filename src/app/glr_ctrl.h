@@ -212,6 +212,12 @@ void glr_ctrl_set_accum(int mode);
 const char *glr_ctrl_depth_readback_unsupported_reason(void);
 void glr_ctrl_set_depth_readback_supported_for_test(int supported);
 
+/* The CursorBlockState the 3D overlays would walk with for `edit_line`
+ * (refreshes the flat block cache first). Lets a test run the vertex-label
+ * walker and compare it with the code panel's gutter numbers. */
+void glr_ctrl_cursor_block_state_for_test(int edit_line,
+                                          CursorBlockState *out);
+
 /* Vertex-label occlusion depth snapshot (see glr_ctrl.c for the full rationale
  * and docs/plans/in-review/vertex-label-depth-readback-stall.md for why it is
  * shaped this way).

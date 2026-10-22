@@ -125,6 +125,12 @@ typedef struct ReplayVertexWalkState {
     int    in_block;           /* inside CMD_BEGIN..CMD_END or tess polygon */
     int    block_selected;     /* current block matches the cursor */
     int    vertex_idx_in_block;
+    /* glVertex-only ordinal in the current glBegin block - the ordinal space
+     * GL assembles primitives in, and the one ReplCursorPolygon ranges use.
+     * Differs from vertex_idx_in_block only when gluVertex calls sit inside
+     * a glBegin block (a strip nested in a tess contour); -1 while on_vertex
+     * fires for such a gluVertex, which belongs to no glBegin primitive. */
+    int    immediate_idx_in_block;
     int    lighting_enabled;   /* current GL_LIGHTING state before this vertex */
     float  normal[3];          /* most recent CMD_NORMAL3F value */
     float  tess_normal[3];     /* most recent CMD_TESS_NORMAL value */

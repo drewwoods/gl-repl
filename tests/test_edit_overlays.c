@@ -279,6 +279,22 @@ static void test_outline_block_matches_cursor(void) {
     ctx.cursor.edit_line_idx = 8;
     ASSERT_INT("tess no match past the polygon's gluEnd",
                outline_block_matches_cursor(0, 1, &ctx), 0);
+
+    /* A comment line between contours reaches no flat command, so only the
+     * source extent can select the polygon - as it does for a comment inside
+     * a glBegin block. Source lines: polygon 10..19, cursor on comment 14. */
+    cmds[0].src_cmd_idx = 10;
+    ctx.cursor.edit_line_idx = 14;
+    ASSERT_INT("tess comment line: no flat match without source extent",
+               outline_block_matches_cursor(0, 1, &ctx), 0);
+    ctx.cursor.cursor_source_tess_valid = 1;
+    ctx.cursor.cursor_source_tess_begin = 10;
+    ctx.cursor.cursor_source_tess_end = 19;
+    ASSERT_INT("tess comment line: source extent selects the polygon",
+               outline_block_matches_cursor(0, 1, &ctx), 1);
+    ctx.cursor.cursor_source_tess_begin = 30;
+    ASSERT_INT("tess source extent of another polygon does not match",
+               outline_block_matches_cursor(0, 1, &ctx), 0);
 }
 
 static void test_build_vertex_walk_context(void) {
@@ -2268,6 +2284,7 @@ static void test_single_polygon_label_scope(void) {
     state.primitive_mode = GL_QUADS;
     for (int i = 0; i < 8; i++) {
         state.vertex_idx_in_block = i;
+        state.immediate_idx_in_block = i;
         on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &quad);
     }
     ASSERT_INT("single-polygon labels only the selected quad's 4 vertices",
@@ -2294,6 +2311,7 @@ static void test_single_polygon_label_scope(void) {
     state.primitive_mode = 0;
     for (int i = 0; i < 8; i++) {
         state.vertex_idx_in_block = i;
+        state.immediate_idx_in_block = i;
         on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &tess);
     }
     ASSERT_INT("tess (primitive_mode 0) bypasses the per-primitive filter",
@@ -2316,6 +2334,7 @@ static void test_single_polygon_label_scope(void) {
     state.in_block = 1;
     for (int i = 0; i < 8; i++) {
         state.vertex_idx_in_block = i;
+        state.immediate_idx_in_block = i;
         on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &contour);
     }
     ASSERT_INT("single-polygon tess labels only the cursor contour",
@@ -2332,6 +2351,7 @@ static void test_single_polygon_label_scope(void) {
     state.primitive_mode = GL_POLYGON;
     for (int i = 0; i < 8; i++) {
         state.vertex_idx_in_block = i;
+        state.immediate_idx_in_block = i;
         on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &contour);
     }
     ASSERT_INT("contour range ignored for a glBegin block", contour.count, 8);
@@ -2343,11 +2363,49 @@ static void test_single_polygon_label_scope(void) {
     state.primitive_mode = 0;
     for (int i = 0; i < 8; i++) {
         state.vertex_idx_in_block = i;
+        state.immediate_idx_in_block = i;
         on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &contour);
     }
     ASSERT_INT("contour range ignored outside single-polygon scope",
                contour.count, 8);
     state.in_block = 0;
+
+    /* A GL_QUAD_STRIP with a gluVertex after every pair (the extrusion
+     * example's strip inside a tess contour). Labels number by the shared run
+     * (vertex_idx_in_block), but the quad is picked in glVertex-only ordinals
+     * - the space GL assembles the strip in - and the gluVertex rows (-1)
+     * belong to no quad. Quad 1 = glVertex ordinals [2, 5] = run 3, 4, 6, 7. */
+    {
+        const int run_imm[8] = { 0, 1, -1, 2, 3, -1, 4, 5 };
+        VertexLabelCtx strip;
+        memset(&strip, 0, sizeof(strip));
+        strip.mode = OVERLAY_VERTEX_LABEL_INDEX;
+        strip.scope = OVERLAY_SCOPE_SINGLE_POLYGON;
+        strip.poly_valid = 1;
+        strip.poly_first = 2;
+        strip.poly_last = 5;
+        memcpy(strip.proj, id, sizeof(id));
+        strip.vw = 1024;
+        strip.vh = 768;
+        state.primitive_mode = GL_QUAD_STRIP;
+        state.in_block = 1;
+        for (int i = 0; i < 8; i++) {
+            state.vertex_idx_in_block = i;
+            state.immediate_idx_in_block = run_imm[i];
+            on_vertex_number_label(&state, verts[i][0], verts[i][1],
+                                   verts[i][2], &strip);
+        }
+        ASSERT_INT("nested strip: only the quad's four glVertex label",
+                   strip.count, 4);
+        ASSERT_TRUE("nested strip: quad labels keep the shared-run numbers",
+                    strip.count == 4 &&
+                    strcmp(strip.labels[0].idx, " v3") == 0 &&
+                    strcmp(strip.labels[1].idx, " v4") == 0 &&
+                    strcmp(strip.labels[2].idx, " v6") == 0 &&
+                    strcmp(strip.labels[3].idx, " v7") == 0);
+        state.in_block = 0;
+        state.immediate_idx_in_block = 0;
+    }
 
     /* GL_TRIANGLE_FAN: the fan center (ordinal 0) labels alongside the
      * selected [first, last] pair. */
@@ -2365,6 +2423,7 @@ static void test_single_polygon_label_scope(void) {
     state.primitive_mode = GL_TRIANGLE_FAN;
     for (int i = 0; i < 4; i++) {
         state.vertex_idx_in_block = i;
+        state.immediate_idx_in_block = i;
         on_vertex_number_label(&state, verts[i][0], verts[i][1], verts[i][2], &fan);
     }
     ASSERT_INT("fan anchor labels center + selected pair (3 vertices)",
@@ -2831,6 +2890,72 @@ static void test_tess_contour_vertex_labels(void) {
                  "single-polygon, cursor on polygon gluEnd: %s drawn",
                  all_labels[v]);
         ASSERT_INT(lbl, count_label_text(text, all_labels[v]), 1);
+    }
+}
+
+/* End-to-end, single-polygon scope over a strip nested in a tess contour
+ * (the glu-concave-arrow-extrusion shape), with the primitive resolved the
+ * way the controller resolves it. Cursor on the strip's fifth glVertex: GL's
+ * quad 1 is glVertex ordinals 2..5, which the shared run numbers v3, v4, v6,
+ * v7 - the gluVertex rows between them (v5) are not part of the quad. */
+static void test_nested_strip_single_polygon_labels(void) {
+    printf("--- edit_overlays single-polygon labels in a nested strip ---\n");
+
+    float idm[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
+    extern float g_gl_stub_modelview_matrix[16];
+    memcpy(g_gl_stub_modelview_matrix, idm, sizeof(idm));
+
+    glr_ctrl_reset_all();
+    editor_feed_line("gluBegin(GLU_POLYGON);");          /* 0 */
+    editor_feed_line("gluBegin(GLU_CONTOUR);");          /* 1 */
+    editor_feed_line("glBegin(GL_QUAD_STRIP);");         /* 2 */
+    editor_feed_line("glVertex3f(-0.8, -0.8, 0);");      /* 3  v0 */
+    editor_feed_line("glVertex3f(-0.8, -0.8, -0.5);");   /* 4  v1 */
+    editor_feed_line("gluVertex(-0.8, -0.8, 0);");       /* 5  v2 */
+    editor_feed_line("glVertex3f(0.8, -0.8, 0);");       /* 6  v3 */
+    editor_feed_line("glVertex3f(0.8, -0.8, -0.5);");    /* 7  v4 */
+    editor_feed_line("gluVertex(0.8, -0.8, 0);");        /* 8  v5 */
+    editor_feed_line("glVertex3f(0, 0.8, 0);");          /* 9  v6 */
+    editor_feed_line("glVertex3f(0, 0.8, -0.5);");       /* 10 v7 */
+    editor_feed_line("gluVertex(0, 0.8, 0);");           /* 11 v8 */
+    editor_feed_line("glEnd();");                        /* 12 */
+    editor_feed_line("gluEnd();");                       /* 13 */
+    editor_feed_line("gluEnd();");                       /* 14 */
+    repl_flatten_commands(editor_state_edit_line());
+
+    const int cursor = 9;
+    OverlayWalkCtx walk;
+    ReplCursorPolygon poly;
+    TraceLog log;
+    char text[512];
+    char lbl[96];
+    static const char *const labels[9] = {
+        " v0", " v1", " v2", " v3", " v4", " v5", " v6", " v7", " v8"
+    };
+    static const int want[9] = { 0, 0, 0, 1, 1, 0, 1, 1, 0 };
+
+    memset(&walk, 0, sizeof(walk));
+    glr_ctrl_cursor_block_state_for_test(cursor, &walk.cursor);
+    walk.program = repl_state_flat_program_view();
+    poly = repl_flatten_cursor_polygon(cursor);
+    ASSERT_TRUE("nested strip: quad 1 resolved in glVertex ordinals",
+                poly.valid && poly.first == 2 && poly.last == 5);
+    walk.cursor_poly_valid = poly.valid;
+    walk.cursor_poly_first = poly.first;
+    walk.cursor_poly_last = poly.last;
+    walk.cursor_poly_fan_anchor = poly.fan_anchor;
+
+    trace_begin();
+    edit_overlays_render_vertex_numbers(&walk, OVERLAY_VERTEX_LABEL_INDEX, 0,
+                                        OVERLAY_SCOPE_SINGLE_POLYGON,
+                                        OVERLAY_LABEL_PLACEMENT_AT_VERTEX,
+                                        NULL);
+    trace_end(&log);
+    trace_bitmap_text(&log, text, sizeof text);
+    for (int v = 0; v < 9; v++) {
+        snprintf(lbl, sizeof lbl, "nested strip, single-polygon: %s %s",
+                 labels[v], want[v] ? "drawn" : "hidden");
+        ASSERT_INT(lbl, count_label_text(text, labels[v]), want[v]);
     }
 }
 
@@ -3377,6 +3502,7 @@ int main(void) {
     test_vertex_numbers_use_source_begin_block();
     test_render_via_repl_program();
     test_tess_contour_vertex_labels();
+    test_nested_strip_single_polygon_labels();
     test_cursor_guides_render_for_unterminated_begin();
     test_cursor_guides_follow_last_instance();
     test_cursor_guides_render_for_raster_pos();

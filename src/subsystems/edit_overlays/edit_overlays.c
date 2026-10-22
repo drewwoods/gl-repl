@@ -558,6 +558,9 @@ static int outline_block_matches_cursor(int begin_idx, int is_tess,
     int cmd_count = ctx->program.cmd_count;
     int depth = 1;
 
+    if (is_tess && begin_idx >= 0 && begin_idx < cmd_count &&
+        repl_cursor_source_tess_head_matches(&ctx->cursor, &cmds[begin_idx]))
+        return 1;
     for (int i = begin_idx; i < cmd_count; i++) {
         if (!cmds[i].valid) continue;
         if (outline_cmd_matches_cursor(i, ctx)) return 1;
@@ -1510,10 +1513,13 @@ static void on_vertex_number_label(const ReplayVertexWalkState *state,
     }
     global_num = ctx->labelable_seen++;
 
+    /* The primitive range is in glVertex-only ordinals; a gluVertex inside
+     * the block (-1) belongs to no glBegin primitive and drops out. */
     if (ctx->scope == OVERLAY_SCOPE_SINGLE_POLYGON &&
         ctx->poly_valid && state->primitive_mode != 0) {
-        int ord = state->vertex_idx_in_block;
-        if (!((ord >= ctx->poly_first && ord <= ctx->poly_last) ||
+        int ord = state->immediate_idx_in_block;
+        if (ord < 0 ||
+            !((ord >= ctx->poly_first && ord <= ctx->poly_last) ||
               (ctx->poly_fan_anchor && ord == 0)))
             return;
     }
@@ -1860,7 +1866,9 @@ static int normal_vector_in_scope(const NormalVectorRenderCtx *ctx,
         return 0;
     if (ctx->scope == OVERLAY_SCOPE_SINGLE_POLYGON && ctx->walk &&
         ctx->walk->cursor_poly_valid && state->primitive_mode != 0 &&
-        !cursor_poly_contains_ordinal(ctx->walk, state->vertex_idx_in_block))
+        (state->immediate_idx_in_block < 0 ||
+         !cursor_poly_contains_ordinal(ctx->walk,
+                                       state->immediate_idx_in_block)))
         return 0;
     return 1;
 }

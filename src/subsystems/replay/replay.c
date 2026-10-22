@@ -178,6 +178,7 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
         .in_block            = 0,
         .block_selected      = selected_block_only ? 0 : 1,
         .vertex_idx_in_block = 0,
+        .immediate_idx_in_block = 0,
         .lighting_enabled    = 0,
         .normal              = { 0.0f, 0.0f, 1.0f },
         .tess_normal         = { 0.0f, 0.0f, 1.0f },
@@ -220,6 +221,7 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
                     : 1;
             }
             state.vertex_idx_in_block = 0;
+            state.immediate_idx_in_block = 0;
             tess_depth = 0;
             state.normal[0] = 0.0f; state.normal[1] = 0.0f; state.normal[2] = 1.0f;
             break;
@@ -233,13 +235,15 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
             state.in_block = 1;
             state.primitive_mode = 0;
             state.block_selected = selected_block_only
-                ? replay_walk_block_matches_cursor(i, 1, edit_line_idx,
-                                                   cursor_block_begin,
-                                                   cursor_block_end,
-                                                   cursor_func_scope_mask,
-                                                   program)
+                ? (repl_cursor_source_tess_head_matches(&ctx->cursor, cmd) ||
+                   replay_walk_block_matches_cursor(i, 1, edit_line_idx,
+                                                    cursor_block_begin,
+                                                    cursor_block_end,
+                                                    cursor_func_scope_mask,
+                                                    program))
                 : 1;
             state.vertex_idx_in_block = 0;
+            state.immediate_idx_in_block = 0;
             tess_depth = repl_tess_advance_depth(cmd->type, tess_depth);
             state.normal[0] = 0.0f; state.normal[1] = 0.0f; state.normal[2] = 1.0f;
             state.tess_normal[0] = 0.0f; state.tess_normal[1] = 0.0f; state.tess_normal[2] = 1.0f;
@@ -286,6 +290,7 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
                               user_data);
             }
             state.vertex_idx_in_block++;
+            state.immediate_idx_in_block++;
             break;
         }
         case CMD_TESS_VERTEX: {
@@ -294,9 +299,11 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
                 : 1;
             if (visit && cb->on_vertex) {
                 float saved_normal[3] = { state.normal[0], state.normal[1], state.normal[2] };
+                int saved_immediate_idx = state.immediate_idx_in_block;
                 state.normal[0] = state.tess_normal[0];
                 state.normal[1] = state.tess_normal[1];
                 state.normal[2] = state.tess_normal[2];
+                state.immediate_idx_in_block = -1;
 
                 cb->on_vertex(&state,
                               cmd->args[0], cmd->args[1], cmd->args[2],
@@ -305,6 +312,7 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
                 state.normal[0] = saved_normal[0];
                 state.normal[1] = saved_normal[1];
                 state.normal[2] = saved_normal[2];
+                state.immediate_idx_in_block = saved_immediate_idx;
             }
             state.vertex_idx_in_block++;
             break;

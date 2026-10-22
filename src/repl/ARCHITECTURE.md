@@ -709,7 +709,7 @@ rather than inserting a second set.
 
 ### 5.2 Flatten - lowering source to flat
 
-[`repl_flatten_program()`](flatten.h#L240) ([`flatten.c`](flatten.c)) expands the source array into the
+[`repl_flatten_program()`](flatten.h#L257) ([`flatten.c`](flatten.c)) expands the source array into the
 flat array:
 
 - **for-loops** iterate `[start, end)` by `step`, half-open, re-parsing
@@ -847,7 +847,7 @@ There are three intentional disable/reference modes:
 | Scope | Mechanism | What remains enabled |
 |---|---|---|
 | Live application/benchmark process | Start with `GLR_NO_FLATTEN_CACHE=1` | Literal and direct-evaluation fast paths remain; every relevant value change full-flattens and no rebake is attempted. |
-| One [`repl_flatten_program()`](flatten.h#L240) call | Set `ReplFlattenOptions.expr_cache = NULL` | Same cache-free direct/text behavior, without changing the live cache or other callers. |
+| One [`repl_flatten_program()`](flatten.h#L257) call | Set `ReplFlattenOptions.expr_cache = NULL` | Same cache-free direct/text behavior, without changing the live cache or other callers. |
 | Strong differential reference | Set `force_reparse = 1` (normally with `expr_cache = NULL`) | Disables the literal/direct paths as well as compiled evaluation and forces the legacy general-parser path. |
 
 `GLR_NO_FLATTEN_CACHE` is a diagnostic/startup switch, not a live toggle: it
@@ -1365,7 +1365,7 @@ each re-flatten knows to re-evaluate it from text (§5.2).
 
 ### Stage 3 - flatten  (`repl_flatten_commands`)
 
-[`repl_flatten_program()`](flatten.h#L240) (§5.2) lowers the nine source commands to eleven
+[`repl_flatten_program()`](flatten.h#L257) (§5.2) lowers the nine source commands to eleven
 flat ones - the loop body unrolled into six vertices, the `CMD_FOR_BEGIN`
 / `CMD_FOR_END` / `CMD_VAR_DECLARE` markers consumed:
 

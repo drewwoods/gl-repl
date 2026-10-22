@@ -660,8 +660,42 @@ static void glr_ctrl_build_replay_fade_plan(FlatProgramView flat_program, int re
 static int glr_ctrl_current_begin_block_source_extent(int edit_line,
                                                       int *out_start,
                                                       int *out_end);
+static int glr_ctrl_current_tess_block_source_extent(int edit_line,
+                                                     int *out_start,
+                                                     int *out_end);
 
 static OverlaySnapshotPack g_overlay_pack;
+
+/* The cursor half of the overlay walk context: which flat / source block the
+ * 3D overlays (outline highlight, vertex labels) treat as the cursor's. One
+ * fill for the frame and the test seam, so the gutter/scene label parity test
+ * walks with exactly what the label pass walks with. Reads the flat block
+ * cache as-is; the frame path refreshes it before the pack is built. */
+static void glr_ctrl_fill_cursor_block_state(int edit_line,
+                                             CursorBlockState *out) {
+    out->edit_line_idx = edit_line;
+    out->cursor_block_begin = repl_state_flat_program_current_block_begin();
+    out->cursor_block_end = repl_state_flat_program_current_block_end();
+    out->cursor_source_block_valid =
+        glr_ctrl_current_begin_block_source_extent(
+            edit_line,
+            &out->cursor_source_block_begin,
+            &out->cursor_source_block_end);
+    out->cursor_source_tess_valid =
+        glr_ctrl_current_tess_block_source_extent(
+            edit_line,
+            &out->cursor_source_tess_begin,
+            &out->cursor_source_tess_end);
+    out->cursor_func_scope_mask = 0;
+}
+
+void glr_ctrl_cursor_block_state_for_test(int edit_line,
+                                          CursorBlockState *out) {
+    if (!out)
+        return;
+    repl_flatten_refresh_current_block_highlight(edit_line);
+    glr_ctrl_fill_cursor_block_state(edit_line, out);
+}
 
 static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3dRenderConfig *cfg) {
     GlrPresentationState presentation = glr_state_presentation();
@@ -669,15 +703,8 @@ static void glr_ctrl_build_overlay_pack(OverlaySnapshotPack *pack, const Render3
     int replay_mode_vertex = replaying && (replay_mode() == REPLAY_MODE_VERTEX);
 
     pack->walk.program = repl_state_flat_program_view();
-    pack->walk.cursor.edit_line_idx = editor_state_edit_line();
-    pack->walk.cursor.cursor_block_begin = repl_state_flat_program_current_block_begin();
-    pack->walk.cursor.cursor_block_end = repl_state_flat_program_current_block_end();
-    pack->walk.cursor.cursor_source_block_valid =
-        glr_ctrl_current_begin_block_source_extent(
-            pack->walk.cursor.edit_line_idx,
-            &pack->walk.cursor.cursor_source_block_begin,
-            &pack->walk.cursor.cursor_source_block_end);
-    pack->walk.cursor.cursor_func_scope_mask = 0;
+    glr_ctrl_fill_cursor_block_state(editor_state_edit_line(),
+                                     &pack->walk.cursor);
     pack->walk.cursor_overlay_scope = presentation.overlay_scope;
 
     pack->walk.cursor_poly_valid = 0;
@@ -2542,8 +2569,8 @@ static int glr_ctrl_current_begin_block_source_extent(int edit_line,
  * close with the same gluEnd() spelling as the polygon, so the match is
  * depth-counted - matching the first gluEnd() would end the block at the
  * first contour. The whole polygon is one block, as it is for the 3D vertex
- * labels. Feeds only the code panel's gutter numbers; the overlay pack keeps
- * the glBegin-only extent. */
+ * labels. Feeds both the code panel's gutter numbers and the overlays'
+ * CursorBlockState, so the two select the same polygon. */
 static int glr_ctrl_current_tess_block_source_extent(int edit_line,
                                                      int *out_start,
                                                      int *out_end) {

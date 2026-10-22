@@ -2573,18 +2573,26 @@ static void repl_code_panel_add_virtual_rows(ReplCodePanelBuilder *builder,
  * vertex numbering and "exact vs maybe-loop-expanded" labels. Keep it
  * local to the builder path so the begin/end ordering stays obvious.
  *
- * glVertex and gluVertex are numbered separately: each counts within its
- * own primitive (glBegin block / tess polygon), and the two nest - the
- * extrusion example interleaves both inside one contour - so a shared
- * counter would number them as one run that matches neither. */
+ * The numbers are the 3D vertex labels' numbers (vertex_idx_in_block from
+ * replay_walk_user_vertices), so a row and its vertex in the scene always
+ * read the same: one run per block, counting glVertex and gluVertex alike,
+ * restarted by the most recently opened head - glBegin or
+ * gluBegin(GLU_POLYGON) - and owned by it until its end. A glBegin strip
+ * nested in a tess contour (the extrusion example) therefore takes over the
+ * contour's gluVertex rows too, and every vertex in the strip gets a unique
+ * number. tests/test_ui.c holds a parity test against the walker. */
+typedef enum {
+    REPL_CODE_PANEL_VOWNER_NONE = 0,
+    REPL_CODE_PANEL_VOWNER_BEGIN,   /* glBegin ... glEnd */
+    REPL_CODE_PANEL_VOWNER_TESS     /* gluBegin(GLU_POLYGON) ... gluEnd */
+} ReplCodePanelVertexOwner;
+
 typedef struct {
-    int vnum;                   /* glVertex* within the current glBegin */
+    int vnum;
     int vnums_exact;
-    int tess_vnum;              /* gluVertex within the current polygon */
-    int tess_vnums_exact;
+    ReplCodePanelVertexOwner owner;
     int loop_depth;
     int tess_depth;
-    int in_tess_poly;
 } ReplCodePanelWalkState;
 
 static void repl_code_panel_add_static_null_terminated_lines(
@@ -2753,47 +2761,46 @@ static void repl_code_panel_begin_walk_line(ReplCodePanelWalkState *state,
     if (cmd->type == CMD_BEGIN) {
         state->vnum = 0;
         state->vnums_exact = (state->loop_depth == 0);
+        state->owner = REPL_CODE_PANEL_VOWNER_BEGIN;
     } else if (cmd->type == CMD_TESS_BEGIN_POLYGON) {
-        state->tess_vnum = 0;
-        state->in_tess_poly = 1;
-        state->tess_depth = 1;
-        state->tess_vnums_exact = (state->loop_depth == 0);
+        state->vnum = 0;
+        state->vnums_exact = (state->loop_depth == 0);
+        state->owner = REPL_CODE_PANEL_VOWNER_TESS;
     }
 }
 
-/* Each family is gated on the block that owns it, not on whichever block
- * is innermost: a gluVertex inside a nested glBegin strip still belongs to
- * the tess polygon, and is labelled whenever the cursor is in that polygon. */
+/* A vertex row is labelled when the cursor is inside the block that owns it
+ * - the same block whose selection decides whether the scene labels it. */
 static void repl_code_panel_vertex_aux_label(const UiRenderSnapshot *snap,
                                              const ReplCodePanelWalkState *state,
                                              int line_idx,
                                              const GLCmd *cmd,
                                              char out_label[8]) {
-    int num;
-    int exact;
+    int in_scope;
 
     if (!out_label)
         return;
 
     out_label[0] = '\0';
-    if (!snap || !state || !cmd || !cmd->valid)
+    if (!snap || !state || !cmd || !cmd->valid ||
+        !repl_cmd_emits_vertex(cmd->type))
         return;
 
-    if (repl_cmd_emits_immediate_vertex(cmd->type)) {
-        if (!repl_code_panel_line_in_current_begin_block(snap, line_idx))
-            return;
-        num = state->vnum;
-        exact = state->vnums_exact;
-    } else if (cmd->type == CMD_TESS_VERTEX) {
-        if (!repl_code_panel_line_in_current_tess_block(snap, line_idx))
-            return;
-        num = state->tess_vnum;
-        exact = state->tess_vnums_exact;
-    } else {
-        return;
+    switch (state->owner) {
+    case REPL_CODE_PANEL_VOWNER_BEGIN:
+        in_scope = repl_code_panel_line_in_current_begin_block(snap, line_idx);
+        break;
+    case REPL_CODE_PANEL_VOWNER_TESS:
+        in_scope = repl_code_panel_line_in_current_tess_block(snap, line_idx);
+        break;
+    default:
+        in_scope = 0;  /* outside every block: the scene labels none */
+        break;
     }
+    if (!in_scope)
+        return;
 
-    snprintf(out_label, 8, exact ? "v%d" : "vn", num);
+    snprintf(out_label, 8, state->vnums_exact ? "v%d" : "vn", state->vnum);
 }
 
 static void repl_code_panel_end_walk_line(ReplCodePanelWalkState *state,
@@ -2801,41 +2808,34 @@ static void repl_code_panel_end_walk_line(ReplCodePanelWalkState *state,
     if (!state || !cmd || !cmd->valid)
         return;
 
-    if (repl_cmd_emits_immediate_vertex(cmd->type))
+    if (repl_cmd_emits_vertex(cmd->type))
         state->vnum++;
-    else if (cmd->type == CMD_TESS_VERTEX)
-        state->tess_vnum++;
+    state->tess_depth = repl_tess_advance_depth(cmd->type, state->tess_depth);
 
     /* Closing/unwinding commands advance after the row is emitted: the
      * line itself still belongs to the old context, and only later rows
      * should see the unwound state. */
     switch (cmd->type) {
     case CMD_FOR_BEGIN:
-        /* The loop sits inside whichever blocks are open, so both counts
-         * stop being exact; each recovers when its own block next opens. */
         state->loop_depth++;
         state->vnums_exact = 0;
-        state->tess_vnums_exact = 0;
         break;
     case CMD_FOR_END:
         if (state->loop_depth > 0)
             state->loop_depth--;
         break;
     case CMD_END:
+        /* The walker leaves the block here even when a tess contour is
+         * still open around it, so nothing after it is labelled until the
+         * next head - including the contour's remaining gluVertex rows. */
+        state->owner = REPL_CODE_PANEL_VOWNER_NONE;
         state->vnums_exact = 1;
         break;
-    case CMD_TESS_BEGIN_CONTOUR:
-        if (state->in_tess_poly)
-            state->tess_depth++;
-        break;
     case CMD_TESS_END:
-        if (state->in_tess_poly) {
-            if (state->tess_depth > 0)
-                state->tess_depth--;
-            if (state->tess_depth == 0) {
-                state->in_tess_poly = 0;
-                state->tess_vnums_exact = 1;
-            }
+        if (state->tess_depth == 0 &&
+            state->owner == REPL_CODE_PANEL_VOWNER_TESS) {
+            state->owner = REPL_CODE_PANEL_VOWNER_NONE;
+            state->vnums_exact = 1;
         }
         break;
     default:
@@ -2936,7 +2936,7 @@ static void repl_code_panel_add_trailing_document_row(
 
 static void repl_code_panel_build_rows(ReplCodePanelBuilder *builder) {
     const UiRenderSnapshot *snap;
-    ReplCodePanelWalkState walk = { .vnums_exact = 1, .tess_vnums_exact = 1 };
+    ReplCodePanelWalkState walk = { .vnums_exact = 1 };
 
     if (!builder || !builder->snap)
         return;
