@@ -308,6 +308,8 @@ Load-bearing single-source-of-truth files: [`src/app/glr_defaults.h`](src/app/gl
 
 ## Conventions
 
+- Bug-fix commits lead with `fix(<area>):` (e.g. `fix(overlays): ...`), not
+  `<area>:` - `make show-hotspots` counts them to find rework candidates.
 - File-private statics use `g_` prefix. Cross-module runtime state goes
   through typed facades: [`src/repl/state.h`](src/repl/state.h) (REPL),
   [`src/editor/state.h`](src/editor/state.h) (editor), peer accessors

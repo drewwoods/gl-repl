@@ -3184,6 +3184,10 @@ $(TOOLS_GL_BINDIR)/%: $(TOOLS_DIR)/%.c
 show-capacity: $(TOOLS_BINDIR)/capacity_matrix ## Print state-scaling matrix: per-tunable bytes-per-unit, current totals, and undo/redo ring footprint.
 	@$< $(ARGS)
 
+#? SINCE: start date for show-hotspots (anything git log --since accepts; default "3 months ago").
+show-hotspots: ## Rework signals: fix-heavy files and functions, co-change pairs, keep-in-sync comments and agreement tests (SINCE=<date>, ARGS=--report fixes|cochange|mirrors).
+	@python3 -I scripts/hotspots.py $(if $(SINCE),--since "$(SINCE)") $(ARGS)
+
 run-stroke-fonts: $(if $(TOOLS_GL_OK),$(TOOLS_GL_BINDIR)/compare_stroke_fonts) ## Compare the four vendored stroke fonts side by side (opens a window; Tab cycles modes, 1-4 pick a font).
 ifdef TOOLS_GL_OK
 	$< $(ARGS)
@@ -3778,7 +3782,7 @@ PUBLIC_MAKE_VARS := \
 	FREEGLUT_VENDOR FREEGLUT_VENDOR_LINUX \
 	GLUT_BITMAP_BENCH_ARGS MACOS_UNIVERSAL MSAN_CC MUSIC_DEST MUSIC_TAG \
 	NO_MUSIC NOSAN NO_SAN \
-	SAMPLE SAN SKIP_CHECKS TEST_CASE TEST_JOBS TEST_VERBOSE \
+	SAMPLE SAN SINCE SKIP_CHECKS TEST_CASE TEST_JOBS TEST_VERBOSE \
 	USE_GL_STUBS V VERBOSE VERTEX_LABEL_BENCH_ARGS WEB WEB_PAGES_BRANCH \
 	ZSHRC
 

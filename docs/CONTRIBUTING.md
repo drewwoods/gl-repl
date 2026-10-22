@@ -224,6 +224,12 @@ the plan provides.
 - New behavior gets a test next to its peers under `tests/`.
 - Match the surrounding code's style; the guards enforce the load-bearing
   parts.
+- A commit that fixes a bug says so in its subject: `fix(<area>): <what was
+  wrong>`, with the area you would otherwise lead with (`fix(overlays): ...`,
+  `fix(import): ...`). Other commits keep their `<area>: ...` subject.
+  `make show-hotspots` counts these explicit fixes per file and function to
+  find code worth reworking; without the prefix it can only guess from the
+  wording.
 
 ### AI-assisted contributions
 
