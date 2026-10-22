@@ -144,6 +144,9 @@ static void trace_bitmap_text(const TraceLog *log, char *out, size_t out_sz) {
 /* The outline highlight color, RENDER3D_CLR_OUTLINE_ACTIVE, as traced. */
 #define TRACE_HIGHLIGHT_COLOR "glColor4f 0 0.9 0.9 1"
 
+/* The plain outline color in the non-inverted styles, as traced. */
+#define TRACE_PLAIN_COLOR "glColor4f 0 0 0 1"
+
 /* Highlights draw last: scan the trace tracking the current color and count
  * outline geometry (a glVertex* or a glutSolid* redraw) drawn in any other
  * color AFTER the first geometry drawn in the highlight color. 0 means every
@@ -1589,8 +1592,8 @@ static void test_render_outlines_tess(void) {
                trace_count_line(&log, "glVertex3f 1.5 2.5 3.5"), 1);
     ASSERT_INT("tess contour vertex 1 traced",
                trace_count_line(&log, "glVertex3f -1 -2 0"), 1);
-    ASSERT_INT("contour outline width applied",
-               trace_count_line_width_near(&log, VERTEX_OUTLINE_TESS_WIDTH), 1);
+    ASSERT_INT("plain contour uses the GL outline width",
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_EDGE_WIDTH), 1);
     ASSERT_INT("plain contour uses the GL outline color (black)",
                trace_count_line(&log, "glColor4f 0 0 0 1"), 1);
 
@@ -1600,7 +1603,7 @@ static void test_render_outlines_tess(void) {
     trace_end(&log);
     ASSERT_INT("bold tess contour outline applies scale",
                trace_count_line_width_near(
-                   &log, VERTEX_OUTLINE_TESS_WIDTH * VERTEX_OUTLINE_BOLD_SCALE), 1);
+                   &log, VERTEX_OUTLINE_EDGE_WIDTH * VERTEX_OUTLINE_BOLD_SCALE), 1);
 
     ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_INVERTED;
     trace_begin();
@@ -1609,7 +1612,7 @@ static void test_render_outlines_tess(void) {
     ASSERT_INT("inverted plain contour inverts like a GL outline (white)",
                trace_count_line(&log, "glColor4f 1 1 1 1"), 1);
     ASSERT_INT("inverted tess contour keeps default width",
-               trace_count_line_width_near(&log, VERTEX_OUTLINE_TESS_WIDTH), 1);
+               trace_count_line_width_near(&log, VERTEX_OUTLINE_EDGE_WIDTH), 1);
 
     ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT;
 
@@ -1650,16 +1653,17 @@ static void test_render_outlines_tess(void) {
     ASSERT_INT("first contour vertex traced", trace_count_sym(&log, "glVertex3f") >= 2, 1);
     ASSERT_TRUE("multi-contour highlights both contours at the active width",
                 trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH) >= 2);
-    ASSERT_INT("tess current-poly highlight ignores bold outline width",
-               trace_count_line_width_near(
-                   &log, VERTEX_OUTLINE_TESS_WIDTH * VERTEX_OUTLINE_BOLD_SCALE), 0);
+    /* Bold's plain width (1.2 * 2.5) ties the active width, so the color
+     * is what tells a highlight from a plain outline here. */
+    ASSERT_TRUE("tess current-poly highlight draws in the highlight color",
+                trace_count_line(&log, TRACE_HIGHLIGHT_COLOR) >= 2);
     ASSERT_INT("tess current-poly highlight ignores inverted outline color",
                trace_count_line(&log, "glColor4f 1 1 1 1"), 0);
 
     /* Two closed contours (the real flat form: each contour has its own
-     * gluEnd). The current-poly highlight draws at the active width while a
-     * non-current contour under Bold draws at the scaled tess width, so the
-     * widths tell the two apart. A contour's gluEnd() used to clear "current", so the second
+     * gluEnd). Under Bold a plain contour's width ties the highlight's, so
+     * the trace's colors tell the two apart: one highlight color set per
+     * highlighted contour, one plain color per plain one. A contour's gluEnd() used to clear "current", so the second
      * contour fell back to a plain outline - and with the cursor in the
      * second contour, neither contour was current. */
     GLCmd two[10];
@@ -1692,14 +1696,11 @@ static void test_render_outlines_tess(void) {
             trace_end(&log);
             snprintf(lbl, sizeof lbl,
                      "cursor in contour %d: both contours highlighted", c + 1);
-            ASSERT_INT(lbl, trace_count_line_width_near(
-                                &log, VERTEX_OUTLINE_ACTIVE_WIDTH), 2);
+            ASSERT_INT(lbl, trace_count_line(&log, TRACE_HIGHLIGHT_COLOR), 2);
             snprintf(lbl, sizeof lbl,
                      "cursor in contour %d: no contour drawn as plain outline",
                      c + 1);
-            ASSERT_INT(lbl, trace_count_line_width_near(
-                                &log, VERTEX_OUTLINE_TESS_WIDTH *
-                                          VERTEX_OUTLINE_BOLD_SCALE), 0);
+            ASSERT_INT(lbl, trace_count_line(&log, TRACE_PLAIN_COLOR), 0);
         }
     }
 
@@ -1749,10 +1750,9 @@ static void test_render_outlines_tess(void) {
     edit_overlays_render_outlines(&tctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("single-polygon, outlines on: one highlighted contour",
-               trace_count_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
+               trace_count_line(&log, TRACE_HIGHLIGHT_COLOR), 1);
     ASSERT_INT("single-polygon, outlines on: one plain contour",
-               trace_count_line_width_near(
-                   &log, VERTEX_OUTLINE_TESS_WIDTH * VERTEX_OUTLINE_BOLD_SCALE), 1);
+               trace_count_line(&log, TRACE_PLAIN_COLOR), 1);
 
     /* No resolved contour (cursor on the polygon's own begin/end line), or a
      * scope other than single-polygon: the whole polygon stays highlighted. */
@@ -1779,16 +1779,19 @@ static void test_render_outlines_tess(void) {
                trace_count_line(&log, "glPolygonMode 1032 6913"), 1);
 }
 
-/* Color in effect at the first trace line equal to `vertex_line`, or "" when
- * that vertex is never drawn. */
-static void trace_color_at_vertex(const TraceLog *log, const char *vertex_line,
+/* The state call (`state_prefix`, e.g. "glColor4f " or "glLineWidth ") in
+ * effect at the first trace line equal to `vertex_line`, or "" when that
+ * vertex is never drawn. */
+static void trace_state_at_vertex(const TraceLog *log, const char *state_prefix,
+                                  const char *vertex_line,
                                   char *out, size_t out_sz) {
-    const char *color = "";
+    size_t plen = strlen(state_prefix);
+    const char *state = "";
     for (int i = 0; i < log->n; i++) {
-        if (strncmp(log->lines[i], "glColor4f ", 10) == 0) {
-            color = log->lines[i];
+        if (strncmp(log->lines[i], state_prefix, plen) == 0) {
+            state = log->lines[i];
         } else if (strcmp(log->lines[i], vertex_line) == 0) {
-            snprintf(out, out_sz, "%s", color);
+            snprintf(out, out_sz, "%s", state);
             return;
         }
     }
@@ -1796,9 +1799,10 @@ static void trace_color_at_vertex(const TraceLog *log, const char *vertex_line,
         out[0] = '\0';
 }
 
-/* Plain outlines are one color whatever drew the geometry: a GLU contour's
- * plain outline matches a glBegin block's in every outline style, inverted
- * ones included. Only the highlight singles geometry out. */
+/* Plain outlines look the same whatever drew the geometry: a GLU contour's
+ * plain outline matches a glBegin block's color and width in every outline
+ * style, Bold and inverted ones included. Only the highlight singles
+ * geometry out. */
 static void test_tess_plain_outline_matches_gl_color(void) {
     printf("--- edit_overlays GLU plain outlines match GL ---\n");
 
@@ -1825,19 +1829,29 @@ static void test_tess_plain_outline_matches_gl_color(void) {
     ctx.show_vertex_outlines = 1;
 
     for (int style = 0; style < VERTEX_OUTLINE_STYLE_COUNT; style++) {
-        char gl_color[128], glu_color[128], lbl[96];
+        char gl_color[128], glu_color[128], gl_width[128], glu_width[128];
+        char lbl[160];
         TraceLog log;
         ctx.vertex_outline_style = style;
         trace_begin();
         edit_overlays_render_outlines(&ctx, 0, 0);
         trace_end(&log);
-        trace_color_at_vertex(&log, "glVertex3f 0.25 0 0", gl_color, sizeof gl_color);
-        trace_color_at_vertex(&log, "glVertex3f 5 5 0", glu_color, sizeof glu_color);
+        trace_state_at_vertex(&log, "glColor4f ", "glVertex3f 0.25 0 0",
+                              gl_color, sizeof gl_color);
+        trace_state_at_vertex(&log, "glColor4f ", "glVertex3f 5 5 0",
+                              glu_color, sizeof glu_color);
+        trace_state_at_vertex(&log, "glLineWidth ", "glVertex3f 0.25 0 0",
+                              gl_width, sizeof gl_width);
+        trace_state_at_vertex(&log, "glLineWidth ", "glVertex3f 5 5 0",
+                              glu_width, sizeof glu_width);
         snprintf(lbl, sizeof lbl, "style %d: both plain outlines drawn", style);
         ASSERT_INT(lbl, gl_color[0] != '\0' && glu_color[0] != '\0', 1);
         snprintf(lbl, sizeof lbl, "style %d: GLU plain color == GL (%s vs %s)",
                  style, glu_color, gl_color);
         ASSERT_INT(lbl, strcmp(gl_color, glu_color), 0);
+        snprintf(lbl, sizeof lbl, "style %d: GLU plain width == GL (%s vs %s)",
+                 style, glu_width, gl_width);
+        ASSERT_INT(lbl, gl_width[0] != '\0' && strcmp(gl_width, glu_width) == 0, 1);
     }
 }
 

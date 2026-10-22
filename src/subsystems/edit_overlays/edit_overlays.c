@@ -975,10 +975,10 @@ static void render_outlines_tess_pass(const OverlayWalkCtx *ctx,
                     glLineWidth(VERTEX_OUTLINE_ACTIVE_WIDTH);
                     render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
                 } else {
-                    /* Same color as a glBegin / glut plain outline (and
-                     * the same inversion under the inverted styles):
+                    /* Same width and color as a glBegin / glut plain
+                     * outline (and the same Bold scaling and inversion):
                      * only the highlight singles geometry out. */
-                    glLineWidth(vertex_outline_width(ctx, VERTEX_OUTLINE_TESS_WIDTH));
+                    glLineWidth(vertex_outline_width(ctx, VERTEX_OUTLINE_EDGE_WIDTH));
                     vertex_outline_color(ctx, RENDER3D_CLR_OUTLINE_EDGE);
                 }
                 if (trk.st.cull_enabled) {

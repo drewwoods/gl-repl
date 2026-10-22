@@ -113,8 +113,7 @@ typedef enum VertexOutlineStyle {
 } VertexOutlineStyle;
 
 #define VERTEX_OUTLINE_BOLD_SCALE 2.5f
-#define VERTEX_OUTLINE_EDGE_WIDTH 1.2f
-#define VERTEX_OUTLINE_TESS_WIDTH 1.5f
+#define VERTEX_OUTLINE_EDGE_WIDTH 1.2f   /* plain outline, GL and GLU alike */
 #define VERTEX_OUTLINE_ACTIVE_WIDTH 3.0f
 
 /* Vertex-point overlay styling, in pixels: line-mode vertices get the
