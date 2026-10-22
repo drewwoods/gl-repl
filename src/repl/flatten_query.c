@@ -4,52 +4,77 @@
 #include "repl/flatten_query.h"
 
 #include "repl/command.h"
+#include "repl/source_scope.h"
 #include "repl/state_owners.h"
 
 #define FLAT_QUERY_FUNC_SCOPE_MASK_BITS 32
 #define FLAT_QUERY_SCOPE_STACK_MAX 128
 
-/* Find the source-level immediate-mode block that owns edit_line_idx.
- *
- * This deliberately walks the source document only. A previous version tried
- * to walk source and flat commands in lockstep, but a single source command can
- * expand to many flat commands once loops/functions are involved. Keeping this
- * as a source-only query gives us stable begin/end provenance to look up in the
- * flat stream afterward. */
-static int flatten_current_begin_block_source_extent(int edit_line_idx,
-                                                     int *out_begin,
-                                                     int *out_end) {
-    const GLCmd *document_cmds = repl_state_document_cmds();
-    int document_count = repl_state_document_count();
-    int open_begin = -1;
+int repl_cursor_flat_cmd_matches(FlatProgramView program,
+                                 const CursorBlockState *cursor, int flat_idx) {
+    if (!cursor || cursor->edit_line_idx < 0 || !program.cmds ||
+        flat_idx < 0 || flat_idx >= program.cmd_count) return 0;
+    const GLCmd *cmd = &program.cmds[flat_idx];
+    if (!cmd->valid) return 0;
+    if (cmd->call_src_cmd_idx == cursor->edit_line_idx ||
+        cmd->root_call_src_cmd_idx == cursor->edit_line_idx) return 1;
+    if (cursor->cursor_func_scope_mask != 0 &&
+        (cmd->func_scope_mask & cursor->cursor_func_scope_mask) != 0) return 1;
+    if (cursor->cursor_block_begin >= 0 &&
+        flat_idx >= cursor->cursor_block_begin &&
+        flat_idx <= cursor->cursor_block_end) return 1;
+    return cmd->src_cmd_idx == cursor->edit_line_idx;
+}
 
-    if (out_begin) *out_begin = -1;
-    if (out_end) *out_end = -1;
-    if (edit_line_idx < 0 || edit_line_idx >= document_count)
+int repl_cursor_source_begin_matches(const CursorBlockState *cursor,
+                                     const GLCmd *head, const GLCmd *end) {
+    if (!cursor || !cursor->cursor_source_block_valid || !head ||
+        !head->valid || head->type != CMD_BEGIN ||
+        head->src_cmd_idx != cursor->cursor_source_block_begin) return 0;
+    if (end)
+        return end->valid && end->type == CMD_END &&
+               end->src_cmd_idx == cursor->cursor_source_block_end;
+    return cursor->cursor_source_block_end >= cursor->cursor_source_block_begin;
+}
+
+int repl_cursor_source_begin_head_matches(FlatProgramView program,
+                                          const CursorBlockState *cursor,
+                                          int begin_idx) {
+    if (!program.cmds || begin_idx < 0 || begin_idx >= program.cmd_count) return 0;
+    const GLCmd *head = &program.cmds[begin_idx];
+    if (!repl_cursor_source_begin_matches(cursor, head, NULL)) return 0;
+    for (int i = begin_idx + 1; i < program.cmd_count; i++) {
+        const GLCmd *cmd = &program.cmds[i];
+        if (!cmd->valid) continue;
+        if (cmd->type == CMD_END)
+            return repl_cursor_source_begin_matches(cursor, head, cmd);
+        if (cmd->type == CMD_BEGIN) break;
+    }
+    return 1;
+}
+
+int repl_cursor_flat_block_matches(FlatProgramView program,
+                                   const CursorBlockState *cursor,
+                                   int begin_idx, int is_tess) {
+    if (!cursor || !program.cmds || begin_idx < 0 || begin_idx >= program.cmd_count)
         return 0;
-
-    for (int i = 0; i < document_count; i++) {
-        if (!document_cmds[i].valid)
-            continue;
-
-        if (document_cmds[i].type == CMD_BEGIN) {
-            open_begin = i;
-        } else if (document_cmds[i].type == CMD_END && open_begin >= 0) {
-            if (open_begin <= edit_line_idx && edit_line_idx < i) {
-                if (out_begin) *out_begin = open_begin;
-                if (out_end) *out_end = i;
-                return 1;
-            }
-            open_begin = -1;
+    const GLCmd *head = &program.cmds[begin_idx];
+    if (!head->valid || head->type != (is_tess ? CMD_TESS_BEGIN_POLYGON : CMD_BEGIN))
+        return 0;
+    if (!is_tess && cursor->cursor_source_block_valid)
+        return repl_cursor_source_begin_head_matches(program, cursor, begin_idx);
+    if (is_tess && repl_cursor_source_tess_head_matches(cursor, head)) return 1;
+    int depth = 1;
+    for (int i = begin_idx; i < program.cmd_count; i++) {
+        const GLCmd *cmd = &program.cmds[i];
+        if (!cmd->valid) continue;
+        if (repl_cursor_flat_cmd_matches(program, cursor, i)) return 1;
+        if (!is_tess && i > begin_idx && cmd->type == CMD_END) break;
+        if (is_tess && i > begin_idx) {
+            depth = repl_tess_advance_depth(cmd->type, depth);
+            if (depth == 0) break;
         }
     }
-
-    if (open_begin >= 0 && open_begin <= edit_line_idx) {
-        if (out_begin) *out_begin = open_begin;
-        if (out_end) *out_end = -1;
-        return 1;
-    }
-
     return 0;
 }
 
@@ -79,7 +104,8 @@ static int flatten_find_flat_begin_block_extent(int source_begin,
             flat_cmds[i].src_cmd_idx != source_begin)
             continue;
 
-        for (int j = i + 1; j < flat_cmd_count; j++) {
+        int j;
+        for (j = i + 1; j < flat_cmd_count; j++) {
             if (!flat_cmds[j].valid)
                 continue;
             if (flat_cmds[j].type != CMD_END)
@@ -92,7 +118,7 @@ static int flatten_find_flat_begin_block_extent(int source_begin,
             break;
         }
 
-        if (source_end < 0) {
+        if (j == flat_cmd_count) {
             if (out_begin) *out_begin = i;
             if (out_end) *out_end = flat_cmd_count - 1;
             return 1;
@@ -113,8 +139,7 @@ static int flatten_find_flat_begin_block_extent(int source_begin,
 void repl_flatten_refresh_current_block_highlight(int edit_line_idx) {
     int current_block_begin = -1;
     int current_block_end = -1;
-    int source_begin = -1;
-    int source_end = -1;
+    ReplCursorScope scope;
 
     /* Two-step lookup:
      *   1. identify the source glBegin/glEnd block under the cursor;
@@ -122,10 +147,10 @@ void repl_flatten_refresh_current_block_highlight(int edit_line_idx) {
      *
      * This avoids assuming flat/source alignment across unrolled loops and
      * inlined function bodies. */
-    if (flatten_current_begin_block_source_extent(edit_line_idx,
-                                                  &source_begin,
-                                                  &source_end))
-        flatten_find_flat_begin_block_extent(source_begin, source_end,
+    repl_source_scope_cursor_scope(edit_line_idx, &scope);
+    if (scope.begin_block.valid)
+        flatten_find_flat_begin_block_extent(scope.begin_block.start,
+                                             scope.begin_block.end,
                                              &current_block_begin,
                                              &current_block_end);
 
@@ -346,49 +371,19 @@ static int cursor_polygon_group_range(GLenum mode, int ord, int count,
 
 /* Source line of the gluBegin(GLU_CONTOUR) whose contour holds
  * edit_line_idx (begin and gluEnd() lines included), or -1. */
-static int cursor_tess_contour_source_begin(int edit_line_idx) {
-    const GLCmd *doc = repl_state_document_cmds();
-    int doc_count = repl_state_document_count();
-    int depth = 0;
-    int open = -1;
-
-    for (int i = 0; i < doc_count; i++) {
-        int prev;
-
-        if (open < 0 && i > edit_line_idx)
-            break;  /* no later contour can start at or before the cursor */
-        if (!doc[i].valid)
-            continue;
-        prev = depth;
-        depth = repl_tess_advance_depth(doc[i].type, depth);
-        if (prev == 1 && depth == 2) {
-            open = i;
-        } else if (prev == 2 && depth < 2) {
-            if (open >= 0 && edit_line_idx >= open && edit_line_idx <= i)
-                return open;
-            open = -1;
-        }
-    }
-
-    /* Unterminated contour (the user is still typing it). */
-    if (open >= 0 && edit_line_idx >= open)
-        return open;
-    return -1;
-}
-
 ReplCursorPolygon repl_flatten_cursor_tess_contour(int edit_line_idx) {
     ReplCursorPolygon out = { 0, 0, 0, 0 };
     const GLCmd *flat_cmds = repl_state_flat_program_cmds();
     int flat_cmd_count = repl_state_flat_program_count();
-    int src_begin;
+    ReplCursorScope scope;
     int depth = 0;
     int ord = 0;
     int first = -1;
 
     if (edit_line_idx < 0 || edit_line_idx >= repl_state_document_count())
         return out;
-    src_begin = cursor_tess_contour_source_begin(edit_line_idx);
-    if (src_begin < 0)
+    repl_source_scope_cursor_scope(edit_line_idx, &scope);
+    if (!scope.tess_contour.valid)
         return out;
 
     for (int i = 0; i < flat_cmd_count; i++) {
@@ -405,7 +400,7 @@ ReplCursorPolygon repl_flatten_cursor_tess_contour(int edit_line_idx) {
         }
         prev = depth;
         depth = repl_tess_advance_depth(t, depth);
-        if (prev == 1 && depth == 2 && flat_cmds[i].src_cmd_idx == src_begin) {
+        if (prev == 1 && depth == 2 && flat_cmds[i].src_cmd_idx == scope.tess_contour.start) {
             first = ord;
         } else if (prev == 2 && depth < 2 && first >= 0) {
             break;

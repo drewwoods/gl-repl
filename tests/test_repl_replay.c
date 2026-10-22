@@ -908,44 +908,52 @@ static void test_replay_cursor_sync_and_unrecognized_keys(void) {
     printf("--- replay cursor sync and unrecognized keys ---\n");
     glr_ctrl_reset_all();
 
-    // Test replay_walk_flat_cmd_matches_cursor
+    // Shared cursor provenance predicates
     GLCmd cmds[5];
     memset(cmds, 0, sizeof(cmds));
     for (int i = 0; i < 5; i++) {
         cmds[i].valid = 1;
     }
     FlatProgramView program = { cmds, NULL, 5 };
+    CursorBlockState cursor = {.edit_line_idx = 10,
+        .cursor_block_begin = -1, .cursor_block_end = -1};
 
     // Match via call_src_cmd_idx
     cmds[0].call_src_cmd_idx = 10;
     ASSERT_TRUE("replay matches call_src_cmd_idx",
-                replay_walk_flat_cmd_matches_cursor(0, 10, -1, -1, 0, program));
+                repl_cursor_flat_cmd_matches(program, &cursor, 0));
     cmds[0].call_src_cmd_idx = 0;
 
     // Match via root_call_src_cmd_idx
     cmds[0].root_call_src_cmd_idx = 10;
     ASSERT_TRUE("replay matches root_call_src_cmd_idx",
-                replay_walk_flat_cmd_matches_cursor(0, 10, -1, -1, 0, program));
+                repl_cursor_flat_cmd_matches(program, &cursor, 0));
     cmds[0].root_call_src_cmd_idx = -1;
 
     // Match via func_scope_mask
     cmds[0].func_scope_mask = 2;
+    cursor.cursor_func_scope_mask = 2;
     ASSERT_TRUE("replay matches func_scope_mask",
-                replay_walk_flat_cmd_matches_cursor(0, 10, -1, -1, 2, program));
+                repl_cursor_flat_cmd_matches(program, &cursor, 0));
     cmds[0].func_scope_mask = 0;
 
     // Match via cursor block bounds
+    cursor.cursor_func_scope_mask = 0;
+    cursor.cursor_block_begin = 1;
+    cursor.cursor_block_end = 3;
     ASSERT_TRUE("replay matches cursor block bounds",
-                replay_walk_flat_cmd_matches_cursor(2, 10, 1, 3, 0, program));
+                repl_cursor_flat_cmd_matches(program, &cursor, 2));
 
-    // Test replay_walk_block_matches_cursor
+    // Shared geometry-block predicate
     memset(cmds, 0, sizeof(cmds));
     cmds[0].valid = 1; cmds[0].type = CMD_BEGIN;
     cmds[1].valid = 1; cmds[1].type = CMD_VERTEX3F; cmds[1].src_cmd_idx = 5;
     cmds[2].valid = 1; cmds[2].type = CMD_END;
     program.cmd_count = 3;
+    cursor.edit_line_idx = 5;
+    cursor.cursor_block_begin = cursor.cursor_block_end = -1;
     ASSERT_TRUE("replay block matches cursor",
-                replay_walk_block_matches_cursor(0, 0, 5, -1, -1, 0, program));
+                repl_cursor_flat_block_matches(program, &cursor, 0, 0));
 
     // Test KEY_CTRL_K jump
     glr_ctrl_reset_all();

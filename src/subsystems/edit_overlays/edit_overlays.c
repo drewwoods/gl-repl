@@ -1,6 +1,7 @@
 #include "subsystems/edit_overlays/edit_overlays.h"
 #include "gl_includes.h"
 #include "repl/flatten.h"
+#include "repl/flatten_query.h"
 #include "subsystems/replay/replay.h"
 #include "repl/executor.h"
 #include "render3d/palette.h"
@@ -532,47 +533,6 @@ static int outline_begin_mode_has_overlay(GLenum mode) {
     }
 }
 
-static int outline_cmd_matches_cursor(int flat_idx,
-                                      const OverlayWalkCtx *ctx) {
-    if (flat_idx < 0 || flat_idx >= ctx->program.cmd_count) return 0;
-    const GLCmd *cmd = &ctx->program.cmds[flat_idx];
-    if (!cmd->valid) return 0;
-    if (ctx->cursor.edit_line_idx < 0) return 0;
-
-    if (cmd->call_src_cmd_idx == ctx->cursor.edit_line_idx ||
-        cmd->root_call_src_cmd_idx == ctx->cursor.edit_line_idx)
-        return 1;
-    if (ctx->cursor.cursor_func_scope_mask != 0 &&
-        (cmd->func_scope_mask & ctx->cursor.cursor_func_scope_mask) != 0)
-        return 1;
-    if (ctx->cursor.cursor_block_begin >= 0 &&
-        flat_idx >= ctx->cursor.cursor_block_begin &&
-        flat_idx <= ctx->cursor.cursor_block_end)
-        return 1;
-    return cmd->src_cmd_idx == ctx->cursor.edit_line_idx;
-}
-
-static int outline_block_matches_cursor(int begin_idx, int is_tess,
-                                        const OverlayWalkCtx *ctx) {
-    const GLCmd *cmds = ctx->program.cmds;
-    int cmd_count = ctx->program.cmd_count;
-    int depth = 1;
-
-    if (is_tess && begin_idx >= 0 && begin_idx < cmd_count &&
-        repl_cursor_source_tess_head_matches(&ctx->cursor, &cmds[begin_idx]))
-        return 1;
-    for (int i = begin_idx; i < cmd_count; i++) {
-        if (!cmds[i].valid) continue;
-        if (outline_cmd_matches_cursor(i, ctx)) return 1;
-        if (!is_tess && i > begin_idx && cmds[i].type == CMD_END) break;
-        if (is_tess && i > begin_idx) {
-            depth = repl_tess_advance_depth(cmds[i].type, depth);
-            if (depth == 0) break;
-        }
-    }
-    return 0;
-}
-
 /* Does the scope highlight exactly one unrolled copy of the cursor's block?
  * SINGLE_POLYGON narrows LAST_INSTANCE, so it shares the gate (tess and glut
  * shapes, which the per-primitive filter deliberately excludes, degrade to
@@ -594,7 +554,7 @@ static int last_matching_block_head(const OverlayWalkCtx *ctx,
 
     for (int i = 0; i < ctx->program.cmd_count; i++) {
         if (!cmds[i].valid || cmds[i].type != head_type) continue;
-        if (outline_block_matches_cursor(i, is_tess, ctx)) found = i;
+        if (repl_cursor_flat_block_matches(ctx->program, &ctx->cursor, i, is_tess)) found = i;
     }
     return found;
 }
@@ -857,17 +817,24 @@ static int outline_scope_begin(int head, int is_tess, const OverlayWalkCtx *ctx)
     scope->kind = is_tess ? OUTLINE_CONTOUR : OUTLINE_IMMEDIATE;
     scope->prefix = c->match_prefix;
     scope->matches = is_tess && repl_cursor_source_tess_head_matches(&ctx->cursor, &ctx->program.cmds[head]);
-    if (ctx->highlight_current_poly && !scope->matches) c->unmatched_scopes++;
+    if (ctx->highlight_current_poly && !scope->matches &&
+        (is_tess || !ctx->cursor.cursor_source_block_valid)) c->unmatched_scopes++;
     scope->next = is_tess ? c->pending_tess : c->pending_begin;
     if (is_tess) c->pending_tess = idx;
     else c->pending_begin = idx;
     return idx;
 }
 
-static void outline_scope_end(int *pending) {
+static void outline_scope_end(int *pending, const GLCmd *end,
+                               const OverlayWalkCtx *ctx) {
     OutlineCollection *c = &g_outlines;
     for (int idx = *pending; idx >= 0; idx = c->scopes[idx].next) {
         OutlineScope *scope = &c->scopes[idx];
+        if (scope->kind == OUTLINE_IMMEDIATE && ctx->cursor.cursor_source_block_valid) {
+            scope->matches = repl_cursor_source_begin_matches(
+                &ctx->cursor, &ctx->program.cmds[scope->head], end);
+            continue;
+        }
         scope->matches |= c->match_prefix > scope->prefix;
         if (!scope->matches && c->unmatched_scopes > 0) c->unmatched_scopes--;
     }
@@ -936,6 +903,10 @@ static void outline_collect(const OverlayWalkCtx *ctx) {
         const GLCmd *cmd = &ctx->program.cmds[i];
         if (!cmd->valid) continue;
         if (cmd->type == CMD_BEGIN) {
+            /* A restart closes the previous source-owned head without a GL
+             * closer, matching the shared flat matcher without rescanning. */
+            if (ctx->cursor.cursor_source_block_valid)
+                outline_scope_end(&c->pending_begin, NULL, ctx);
             int scope = outline_scope_begin(i, 0, ctx);
             begin = outline_batch_begin(OUTLINE_IMMEDIATE, (GLenum)cmd->args[0], i, scope, 0);
         }
@@ -947,7 +918,7 @@ static void outline_collect(const OverlayWalkCtx *ctx) {
          * add membership; only a new head can need another cursor query. */
         int matches_cursor = -1;
         if (c->unmatched_scopes > 0) {
-            matches_cursor = outline_cmd_matches_cursor(i, ctx);
+            matches_cursor = repl_cursor_flat_cmd_matches(ctx->program, &ctx->cursor, i);
             if (matches_cursor) {
                 c->match_prefix++;
                 c->unmatched_scopes = 0;
@@ -961,7 +932,7 @@ static void outline_collect(const OverlayWalkCtx *ctx) {
         switch (cmd->type) {
         case CMD_END:
             begin = -1;
-            outline_scope_end(&c->pending_begin);
+            outline_scope_end(&c->pending_begin, cmd, ctx);
             break;
         case CMD_TESS_BEGIN_CONTOUR:
             contour = ctx->replay_tess_preview ? -1 :
@@ -970,7 +941,7 @@ static void outline_collect(const OverlayWalkCtx *ctx) {
         case CMD_TESS_END:
             contour = -1;
             if (tess_depth == 0) {
-                outline_scope_end(&c->pending_tess);
+                outline_scope_end(&c->pending_tess, cmd, ctx);
                 polygon_scope = -1;
             }
             break;
@@ -983,13 +954,13 @@ static void outline_collect(const OverlayWalkCtx *ctx) {
             else if (repl_cmd_is_glut_solid(cmd->type)) {
                 int b = outline_batch_begin(OUTLINE_GLUT, 0, i, -1, 0);
                 c->batches[b].is_current = ctx->highlight_current_poly &&
-                    (matches_cursor >= 0 ? matches_cursor : outline_cmd_matches_cursor(i, ctx));
+                    (matches_cursor >= 0 ? matches_cursor : repl_cursor_flat_cmd_matches(ctx->program, &ctx->cursor, i));
             } else if (begin < 0) outline_state_cmd(cmd);
             break;
         }
     }
-    outline_scope_end(&c->pending_begin);
-    outline_scope_end(&c->pending_tess);
+    outline_scope_end(&c->pending_begin, NULL, ctx);
+    outline_scope_end(&c->pending_tess, NULL, ctx);
     int last[OUTLINE_KIND_COUNT] = {-1, -1, -1};
     /* Empty polygons still own the last matching instance. */
     for (int i = 0; i < c->scope_count; i++) {
@@ -1966,6 +1937,9 @@ typedef struct NormalVectorRenderCtx {
     int target_head;
     int cur_head;
     int cur_head_matches;
+    int tess_head;
+    int tess_head_matches;
+    int in_begin_block;
     int tess_depth;   /* repl_tess_advance_depth() over the walk */
 } NormalVectorRenderCtx;
 
@@ -1987,18 +1961,33 @@ static void on_normal_vector_cmd(const ReplayVertexWalkState *state,
      * inherit the previous block's verdict. A tess polygon is left only at its
      * own gluEnd(): a contour closes with the same command, and clearing at
      * that one would leave every later contour's vertices out of scope. */
-    if (cmd->type == CMD_END ||
-        (cmd->type == CMD_TESS_END && ctx->tess_depth == 0)) {
-        ctx->cur_head = -1;
-        ctx->cur_head_matches = 0;
+    if (cmd->type == CMD_END) {
+        ctx->in_begin_block = 0;
+        ctx->cur_head = ctx->tess_depth > 0 ? ctx->tess_head : -1;
+        ctx->cur_head_matches = ctx->tess_depth > 0 ? ctx->tess_head_matches : 0;
+        return;
+    }
+    if (cmd->type == CMD_TESS_END && ctx->tess_depth == 0) {
+        ctx->tess_head = -1;
+        ctx->tess_head_matches = 0;
+        if (!ctx->in_begin_block) {
+            ctx->cur_head = -1;
+            ctx->cur_head_matches = 0;
+        }
         return;
     }
     if (cmd->type != CMD_BEGIN && cmd->type != CMD_TESS_BEGIN_POLYGON)
         return;
 
     ctx->cur_head = state->flat_cmd_idx;
-    ctx->cur_head_matches = outline_block_matches_cursor(
-        state->flat_cmd_idx, cmd->type == CMD_TESS_BEGIN_POLYGON, ctx->walk);
+    ctx->cur_head_matches = repl_cursor_flat_block_matches(
+        *ctx->program, &ctx->walk->cursor, state->flat_cmd_idx,
+        cmd->type == CMD_TESS_BEGIN_POLYGON);
+    if (cmd->type == CMD_BEGIN) ctx->in_begin_block = 1;
+    else {
+        ctx->tess_head = ctx->cur_head;
+        ctx->tess_head_matches = ctx->cur_head_matches;
+    }
 }
 
 /* Does this vertex fall inside the overlay scope? Whole-scene takes every
@@ -2377,6 +2366,7 @@ static void edit_overlays_render_normal_vectors_with_sink(
         .target_head = -1,
         .cur_head = -1,
         .cur_head_matches = 0,
+        .tess_head = -1,
     };
     if (walk_ctx && cursor_scope_selects_one_instance(walk_ctx)) {
         int head = last_matching_block_head(walk_ctx, CMD_BEGIN, 0);

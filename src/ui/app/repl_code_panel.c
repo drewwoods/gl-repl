@@ -2593,6 +2593,8 @@ typedef struct {
     ReplCodePanelVertexOwner owner;
     int loop_depth;
     int tess_depth;
+    int tess_vnum;
+    int tess_vnums_exact;
 } ReplCodePanelWalkState;
 
 static void repl_code_panel_add_static_null_terminated_lines(
@@ -2759,10 +2761,16 @@ static void repl_code_panel_begin_walk_line(ReplCodePanelWalkState *state,
      * is emitted so the current source line and the following vertices
      * already see the new numbering regime. */
     if (cmd->type == CMD_BEGIN) {
+        if (state->owner == REPL_CODE_PANEL_VOWNER_TESS) {
+            state->tess_vnum = state->vnum;
+            state->tess_vnums_exact = state->vnums_exact;
+        }
         state->vnum = 0;
         state->vnums_exact = (state->loop_depth == 0);
         state->owner = REPL_CODE_PANEL_VOWNER_BEGIN;
     } else if (cmd->type == CMD_TESS_BEGIN_POLYGON) {
+        state->tess_vnum = 0;
+        state->tess_vnums_exact = (state->loop_depth == 0);
         state->vnum = 0;
         state->vnums_exact = (state->loop_depth == 0);
         state->owner = REPL_CODE_PANEL_VOWNER_TESS;
@@ -2819,17 +2827,23 @@ static void repl_code_panel_end_walk_line(ReplCodePanelWalkState *state,
     case CMD_FOR_BEGIN:
         state->loop_depth++;
         state->vnums_exact = 0;
+        if (state->tess_depth > 0) state->tess_vnums_exact = 0;
         break;
     case CMD_FOR_END:
         if (state->loop_depth > 0)
             state->loop_depth--;
         break;
     case CMD_END:
-        /* The walker leaves the block here even when a tess contour is
-         * still open around it, so nothing after it is labelled until the
-         * next head - including the contour's remaining gluVertex rows. */
-        state->owner = REPL_CODE_PANEL_VOWNER_NONE;
-        state->vnums_exact = 1;
+        if (state->tess_depth > 0) {
+            if (state->owner == REPL_CODE_PANEL_VOWNER_BEGIN) {
+                state->vnum = state->tess_vnum;
+                state->vnums_exact = state->tess_vnums_exact && state->loop_depth == 0;
+            }
+            state->owner = REPL_CODE_PANEL_VOWNER_TESS;
+        } else {
+            state->owner = REPL_CODE_PANEL_VOWNER_NONE;
+            state->vnums_exact = 1;
+        }
         break;
     case CMD_TESS_END:
         if (state->tess_depth == 0 &&

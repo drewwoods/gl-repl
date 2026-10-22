@@ -4,6 +4,25 @@
 #ifndef REPL_FLATTEN_QUERY_H
 #define REPL_FLATTEN_QUERY_H
 
+#include "repl/flatten.h"
+
+/* Shared provenance and geometry-block membership for overlays/replay.
+ * A valid immediate source extent decides alone; tess polygons also accept
+ * flat provenance so comment rows between contours retain their polygon. */
+int repl_cursor_flat_cmd_matches(FlatProgramView program,
+                                 const CursorBlockState *cursor, int flat_idx);
+int repl_cursor_source_begin_head_matches(FlatProgramView program,
+                                          const CursorBlockState *cursor,
+                                          int begin_idx);
+int repl_cursor_flat_block_matches(FlatProgramView program,
+                                   const CursorBlockState *cursor,
+                                   int begin_idx, int is_tess);
+
+/* The same source-boundary check for collectors that already know the close.
+ * NULL end means an unterminated block or a restart before its close. */
+int repl_cursor_source_begin_matches(const CursorBlockState *cursor,
+                                     const GLCmd *head, const GLCmd *end);
+
 /* Refresh the current-block highlight by scanning the flat program to find
  * the innermost BEGIN/END block containing the current edit line. Called
  * before building scene config to ensure cursor block bounds are current. */

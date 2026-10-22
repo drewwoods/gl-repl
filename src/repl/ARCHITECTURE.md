@@ -294,6 +294,15 @@ spent on the line under the cursor?" (a loop body counts once per
 iteration; a function counts across all call sites). `--flat-histogram`
 surfaces it on the CLI.
 
+Cursor geometry extents come from
+[`repl_source_scope_cursor_scope()`](source_scope.h): immediate block, GLU
+polygon, and GLU contour together, with inclusive closing rows. Flatten
+queries map these source boundaries to flat provenance. The shared block
+matchers in `flatten_query.c` also serve replay and edit overlays; a valid
+immediate source extent decides alone, while a tess polygon accepts its
+source-head match or flat provenance. The outline collector checks its
+recorded boundaries through the same rules without another flat walk.
+
 ### 3.4 Per-flat-command local variable snapshots
 
 Loop counters, function parameters and function-scoped locals don't exist in

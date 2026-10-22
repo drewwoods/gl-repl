@@ -900,7 +900,63 @@ static void test_walker_tracks_lighting_state_for_vertices(void) {
                rec.lighting_at_vertex[2], 0);
 }
 
+typedef struct {
+    int count;
+    int display[4], tess[4];
+    unsigned translates[4], translate_base;
+} NestedTessRecorder;
+
+static void capture_nested_tess(const ReplayVertexWalkState *state,
+                                 float x, float y, float z, void *user) {
+    NestedTessRecorder *rec = user;
+    (void)x; (void)y; (void)z;
+    if (rec->count >= 4) return;
+    rec->display[rec->count] = state->vertex_idx_in_block;
+    rec->tess[rec->count] = state->tess_idx_in_polygon;
+#ifdef GL_STUBS
+    rec->translates[rec->count] = gl_stub_counts[GL_STUB_glTranslatef] - rec->translate_base;
+#endif
+    rec->count++;
+}
+
+static void test_walker_restores_enclosing_tess_scope(void) {
+    static const char *const lines[] = {
+        "gluBegin(GLU_POLYGON);", "gluBegin(GLU_CONTOUR);", "gluVertex(0, 0, 0);",
+        "glPushMatrix();", "glTranslatef(2, 3, 0);", "glBegin(GL_POINTS);",
+        "glVertex3f(1, 0, 0);", "gluVertex(1, 0, 0);", "glEnd();",
+        "glPopMatrix();", "gluVertex(0, 1, 0);", "gluEnd();", "gluEnd();"
+    };
+    const ReplayVertexWalkCallbacks cb = {.on_vertex = capture_nested_tess};
+    for (int has_prefix_vertex = 0; has_prefix_vertex <= 1; has_prefix_vertex++) {
+        glr_ctrl_reset_all();
+        for (size_t i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) {
+            if (i == 2 && !has_prefix_vertex) continue;
+            editor_feed_line(lines[i]);
+        }
+        int cursor = repl_state_document_count() - 1;
+        repl_flatten_commands(cursor);
+        ReplayVertexWalkContext ctx = make_ctx(cursor);
+        glr_ctrl_cursor_block_state_for_test(cursor, &ctx.cursor);
+        ctx.selected_block_only = 1;
+        NestedTessRecorder rec = {0};
+#ifdef GL_STUBS
+        rec.translate_base = gl_stub_counts[GL_STUB_glTranslatef];
+#endif
+        replay_walk_user_vertices(&ctx, &cb, &rec);
+        ASSERT_INT("only polygon-owned vertices survive the strip's separate selection",
+                   rec.count, has_prefix_vertex + 1);
+        if (rec.count == 0) continue;
+        ASSERT_INT("tail resumes saved polygon display index", rec.display[rec.count - 1], has_prefix_vertex);
+        ASSERT_INT("tess ordinal also counts the strip's gluVertex", rec.tess[rec.count - 1], has_prefix_vertex + 1);
+#ifdef GL_STUBS
+        ASSERT_INT("legal transform inside contour is applied", rec.translates[rec.count - 1], 1);
+#endif
+        if (has_prefix_vertex) ASSERT_INT("polygon's first vertex is v0", rec.display[0], 0);
+    }
+}
+
 int main(void) {
+    test_walker_restores_enclosing_tess_scope();
     test_walker_resolves_funcn_args_at_cursor();
     test_walker_fires_on_each_cmd_at_cursor();
     test_walker_stop_flag_halts();

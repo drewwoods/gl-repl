@@ -2186,6 +2186,16 @@ static void test_vertex_gutter_labels_tess_polygon(void) {
     tess_gutter_expect(13, "v0", "glBegin vertex with cursor on its glEnd");
 }
 
+#define PARITY_MAX_LINES 512
+
+static void parity_record_vertex(const ReplayVertexWalkState *state,
+                                 float x, float y, float z, void *user) {
+    int *labels = (int *)user;
+    (void)x; (void)y; (void)z;
+    if (state->src_cmd_idx >= 0 && state->src_cmd_idx < PARITY_MAX_LINES)
+        labels[state->src_cmd_idx] = state->vertex_idx_in_block;
+}
+
 /* glVertex and gluVertex share one run, owned by the innermost open head -
  * the numbering the 3D vertex labels use, so a row and its vertex in the
  * scene read the same. The extrusion example nests a glBegin(GL_QUAD_STRIP)
@@ -2207,8 +2217,9 @@ static void test_vertex_gutter_labels_glbegin_inside_tess_polygon(void) {
     editor_feed_line("glVertex3f(1, 0, 1);");     /* 8  v4 */
     editor_feed_line("gluVertex(1, 0, 0);");      /* 9  v5 */
     editor_feed_line("glEnd();");                 /* 10 */
-    editor_feed_line("gluEnd();");                /* 11 */
+    editor_feed_line("gluVertex(1, 1, 0);");      /* 11 polygon run resumes at v1 */
     editor_feed_line("gluEnd();");                /* 12 */
+    editor_feed_line("gluEnd();");                /* 13 */
 
     /* Cursor on glEnd: inside the strip and the polygon. */
     tess_gutter_render_at(10);
@@ -2218,13 +2229,28 @@ static void test_vertex_gutter_labels_glbegin_inside_tess_polygon(void) {
     tess_gutter_expect(7, "v3", "strip run counts the gluVertex row");
     tess_gutter_expect(9, "v5", "gluVertex inside the strip continues its run");
     tess_gutter_expect(2, "v0", "gluVertex before the strip, polygon run");
+    tess_gutter_expect(11, "v1", "polygon numbering resumes after the nested strip");
 
     /* Cursor in the polygon but outside the strip: the polygon's own rows
      * label, the strip's do not (the scene selects the strip separately). */
-    tess_gutter_render_at(12);
+    tess_gutter_render_at(13);
     tess_gutter_expect(2, "v0", "polygon row with cursor on polygon gluEnd");
     tess_gutter_expect(4, "", "strip row with cursor outside the strip");
     tess_gutter_expect(6, "", "strip-owned gluVertex with cursor outside strip");
+    tess_gutter_expect(11, "v1", "polygon tail remains selected after the strip");
+
+    int scene[PARITY_MAX_LINES];
+    for (int r = 0; r < PARITY_MAX_LINES; r++) scene[r] = -1;
+    ReplayVertexWalkContext walk = {0};
+    const ReplayVertexWalkCallbacks cb = {.on_vertex = parity_record_vertex};
+    repl_flatten_commands(13);
+    walk.program = repl_state_flat_program_view();
+    glr_ctrl_cursor_block_state_for_test(13, &walk.cursor);
+    walk.selected_block_only = 1;
+    replay_walk_user_vertices(&walk, &cb, scene);
+    ASSERT_INT("scene polygon head keeps v0", scene[2], 0);
+    ASSERT_INT("scene polygon tail resumes v1", scene[11], 1);
+    ASSERT_INT("scene leaves the unselected nested strip out", scene[4], -1);
 }
 
 /* The gutter's vertex numbers ARE the scene's: for every cursor line of the
@@ -2233,16 +2259,6 @@ static void test_vertex_gutter_labels_glbegin_inside_tess_polygon(void) {
  * last-instance scope), and rows the walk leaves unlabelled must be blank.
  * The walk runs with the controller's own CursorBlockState fill, so this
  * fails if either side's block selection or counting drifts. */
-#define PARITY_MAX_LINES 512
-
-static void parity_record_vertex(const ReplayVertexWalkState *state,
-                                 float x, float y, float z, void *user) {
-    int *labels = (int *)user;
-    (void)x; (void)y; (void)z;
-    if (state->src_cmd_idx >= 0 && state->src_cmd_idx < PARITY_MAX_LINES)
-        labels[state->src_cmd_idx] = state->vertex_idx_in_block;
-}
-
 static int find_example_by_name(const char *name) {
     for (int i = 0; i < repl_example_count(); i++) {
         const char *n = repl_example_name(i);

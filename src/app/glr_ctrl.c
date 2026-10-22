@@ -657,13 +657,6 @@ static void glr_ctrl_build_replay_fade_plan(FlatProgramView flat_program, int re
     g_replay_fade_plan.active = 1;
 }
 
-static int glr_ctrl_current_begin_block_source_extent(int edit_line,
-                                                      int *out_start,
-                                                      int *out_end);
-static int glr_ctrl_current_tess_block_source_extent(int edit_line,
-                                                     int *out_start,
-                                                     int *out_end);
-
 static OverlaySnapshotPack g_overlay_pack;
 
 /* The cursor half of the overlay walk context: which flat / source block the
@@ -676,16 +669,14 @@ static void glr_ctrl_fill_cursor_block_state(int edit_line,
     out->edit_line_idx = edit_line;
     out->cursor_block_begin = repl_state_flat_program_current_block_begin();
     out->cursor_block_end = repl_state_flat_program_current_block_end();
-    out->cursor_source_block_valid =
-        glr_ctrl_current_begin_block_source_extent(
-            edit_line,
-            &out->cursor_source_block_begin,
-            &out->cursor_source_block_end);
-    out->cursor_source_tess_valid =
-        glr_ctrl_current_tess_block_source_extent(
-            edit_line,
-            &out->cursor_source_tess_begin,
-            &out->cursor_source_tess_end);
+    ReplCursorScope scope;
+    repl_source_scope_cursor_scope(edit_line, &scope);
+    out->cursor_source_block_valid = scope.begin_block.valid;
+    out->cursor_source_block_begin = scope.begin_block.start;
+    out->cursor_source_block_end = scope.begin_block.end;
+    out->cursor_source_tess_valid = scope.tess_polygon.valid;
+    out->cursor_source_tess_begin = scope.tess_polygon.start;
+    out->cursor_source_tess_end = scope.tess_polygon.end;
     out->cursor_func_scope_mask = 0;
 }
 
@@ -2531,92 +2522,6 @@ static void glr_ctrl_populate_numeric_swatch(UiRenderSnapshot *snap) {
     snap->numeric_swatch.anchor_y  = anchor_y;
 }
 
-static int glr_ctrl_current_begin_block_source_extent(int edit_line,
-                                                      int *out_start,
-                                                      int *out_end) {
-    const GLCmd *cmds = repl_state_document_cmds();
-    int count = repl_state_document_count();
-    int open_begin = -1;
-
-    if (out_start) *out_start = -1;
-    if (out_end) *out_end = -1;
-    if (edit_line < 0 || edit_line >= count)
-        return 0;
-
-    for (int i = 0; i < count; i++) {
-        if (!cmds[i].valid)
-            continue;
-
-        if (cmds[i].type == CMD_BEGIN) {
-            open_begin = i;
-        } else if (cmds[i].type == CMD_END && open_begin >= 0) {
-            if (edit_line >= open_begin && edit_line <= i) {
-                if (out_start) *out_start = open_begin;
-                if (out_end) *out_end = i;
-                return 1;
-            }
-            open_begin = -1;
-        }
-    }
-
-    if (open_begin >= 0 && edit_line >= open_begin) {
-        if (out_start) *out_start = open_begin;
-        if (out_end) *out_end = count - 1;
-        return 1;
-    }
-    return 0;
-}
-
-/* The tessellator twin of the glBegin extent above: gluBegin(GLU_POLYGON)
- * through its matching gluEnd(). Contours open with gluBegin(GLU_CONTOUR) and
- * close with the same gluEnd() spelling as the polygon, so the match is
- * depth-counted - matching the first gluEnd() would end the block at the
- * first contour. The whole polygon is one block, as it is for the 3D vertex
- * labels. Feeds both the code panel's gutter numbers and the overlays'
- * CursorBlockState, so the two select the same polygon. */
-static int glr_ctrl_current_tess_block_source_extent(int edit_line,
-                                                     int *out_start,
-                                                     int *out_end) {
-    const GLCmd *cmds = repl_state_document_cmds();
-    int count = repl_state_document_count();
-    int open_poly = -1;
-    int depth = 0;
-
-    if (out_start) *out_start = -1;
-    if (out_end) *out_end = -1;
-    if (edit_line < 0 || edit_line >= count)
-        return 0;
-
-    for (int i = 0; i < count; i++) {
-        if (!cmds[i].valid)
-            continue;
-
-        if (cmds[i].type == CMD_TESS_BEGIN_POLYGON) {
-            if (depth == 0)
-                open_poly = i;
-            depth++;
-        } else if (cmds[i].type == CMD_TESS_BEGIN_CONTOUR && depth > 0) {
-            depth++;
-        } else if (cmds[i].type == CMD_TESS_END && depth > 0) {
-            if (--depth > 0)
-                continue;
-            if (edit_line >= open_poly && edit_line <= i) {
-                if (out_start) *out_start = open_poly;
-                if (out_end) *out_end = i;
-                return 1;
-            }
-            open_poly = -1;
-        }
-    }
-
-    if (open_poly >= 0 && edit_line >= open_poly) {
-        if (out_start) *out_start = open_poly;
-        if (out_end) *out_end = count - 1;
-        return 1;
-    }
-    return 0;
-}
-
 /* Label for one assignment-plot series: the left-hand side of its row, as
  * the user wrote it ("angle", "A[i]"). Derived from the editor buffer rather
  * than from the GLCmd because per-line canonical text lives there and nowhere
@@ -2872,16 +2777,14 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->display_body_start    = repl_source_scope_display_body_start();
     snap->in_begin_block        = repl_source_scope_in_begin_block();
     snap->current_begin_mode    = repl_current_begin_mode();
-    snap->current_begin_block_valid =
-        glr_ctrl_current_begin_block_source_extent(
-            snap->edit_line,
-            &snap->current_begin_block_start,
-            &snap->current_begin_block_end);
-    snap->current_tess_block_valid =
-        glr_ctrl_current_tess_block_source_extent(
-            snap->edit_line,
-            &snap->current_tess_block_start,
-            &snap->current_tess_block_end);
+    ReplCursorScope scope;
+    repl_source_scope_cursor_scope(snap->edit_line, &scope);
+    snap->current_begin_block_valid = scope.begin_block.valid;
+    snap->current_begin_block_start = scope.begin_block.start;
+    snap->current_begin_block_end = scope.begin_block.end;
+    snap->current_tess_block_valid = scope.tess_polygon.valid;
+    snap->current_tess_block_start = scope.tess_polygon.start;
+    snap->current_tess_block_end = scope.tess_polygon.end;
 
     /* Resolve the dynamic reshape() projection ONCE here so the panel's
      * row-count and render passes (which straddle render3d_draw_scene)

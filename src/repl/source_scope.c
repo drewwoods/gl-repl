@@ -172,6 +172,41 @@ ReplSourceScopeLiveView repl_source_scope_live_view(void) {
     return view;
 }
 
+/* Before/after depths include both heads and closers without crossing the
+ * zero-depth boundary between adjacent scopes. */
+static ReplSourceExtent source_scope_extent_from_prefix(
+        const int *prefix, int count, int line_idx, int min_depth) {
+    ReplSourceExtent ext = { 0, -1, -1 };
+    if (!prefix || line_idx < 0 || line_idx >= count) return ext;
+    if (prefix[line_idx] < min_depth && prefix[line_idx + 1] < min_depth)
+        return ext;
+    int start = line_idx, end = line_idx;
+    while (start > 0 && prefix[start] >= min_depth) start--;
+    while (end + 1 < count && prefix[end + 1] >= min_depth) end++;
+    ext.valid = 1;
+    ext.start = start;
+    ext.end = end;
+    return ext;
+}
+
+void repl_source_scope_view_cursor_scope(const ReplSourceScopeView *view,
+                                         int line_idx, ReplCursorScope *out) {
+    if (!out) return;
+    const ReplSourceExtent invalid = { 0, -1, -1 };
+    out->begin_block = out->tess_polygon = out->tess_contour = invalid;
+    if (!view || !view->built) return;
+    out->begin_block = source_scope_extent_from_prefix(
+        view->begin_depth_prefix, view->count, line_idx, 1);
+    out->tess_polygon = source_scope_extent_from_prefix(
+        view->tess_depth_prefix, view->count, line_idx, 1);
+    out->tess_contour = source_scope_extent_from_prefix(
+        view->tess_depth_prefix, view->count, line_idx, 2);
+}
+
+void repl_source_scope_cursor_scope(int line_idx, ReplCursorScope *out) {
+    repl_source_scope_view_cursor_scope(live_source_scope_view(), line_idx, out);
+}
+
 int repl_source_scope_view_in_begin_block_at(const ReplSourceScopeView *view,
                                              int line_idx) {
     if (!view || !view->built) return 0;

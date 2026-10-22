@@ -70,8 +70,114 @@ static void declare_test_vars(void) {
     repl_eval_declare_predef_var("n", err, sizeof(err));
 }
 
+static void test_cursor_source_scopes(void) {
+    enum { BEGIN_SCOPE, POLYGON_SCOPE, CONTOUR_SCOPE, SCOPE_COUNT, MAX_ROWS = 20, MAX_RANGES = 6 };
+    static const struct {
+        const char *name;
+        CmdType rows[MAX_ROWS];
+        int count;
+        struct { int kind, start, end; } ranges[MAX_RANGES];
+        int range_count;
+        unsigned invalid_rows;
+    } cases[] = {
+        {"cutout", {CMD_COMMENT, CMD_TESS_BEGIN_POLYGON, CMD_TESS_BEGIN_CONTOUR,
+            CMD_TESS_VERTEX, CMD_TESS_END, CMD_COMMENT, CMD_TESS_BEGIN_CONTOUR,
+            CMD_TESS_VERTEX, CMD_TESS_END, CMD_TESS_END, CMD_COMMENT}, 11,
+            {{POLYGON_SCOPE, 1, 9}, {CONTOUR_SCOPE, 2, 4}, {CONTOUR_SCOPE, 6, 8}}, 3, 0},
+        {"extrusion", {CMD_TESS_BEGIN_POLYGON, CMD_TESS_BEGIN_CONTOUR, CMD_TESS_VERTEX,
+            CMD_BEGIN, CMD_VERTEX3F, CMD_TESS_VERTEX, CMD_END, CMD_TESS_VERTEX,
+            CMD_TESS_END, CMD_TESS_END}, 10,
+            {{BEGIN_SCOPE, 3, 6}, {POLYGON_SCOPE, 0, 9}, {CONTOUR_SCOPE, 1, 8}}, 3, 0},
+        {"single contour", {CMD_TESS_BEGIN_POLYGON, CMD_TESS_BEGIN_CONTOUR,
+            CMD_TESS_VERTEX, CMD_TESS_END, CMD_TESS_END}, 5,
+            {{POLYGON_SCOPE, 0, 4}, {CONTOUR_SCOPE, 1, 3}}, 2, 0},
+        {"polygon in loop", {CMD_FOR_BEGIN, CMD_TESS_BEGIN_POLYGON, CMD_TESS_BEGIN_CONTOUR,
+            CMD_TESS_VERTEX, CMD_TESS_END, CMD_TESS_END, CMD_FOR_END}, 7,
+            {{POLYGON_SCOPE, 1, 5}, {CONTOUR_SCOPE, 2, 4}}, 2, 0},
+        {"open begin", {CMD_BEGIN, CMD_VERTEX3F, CMD_COMMENT}, 3,
+            {{BEGIN_SCOPE, 0, 2}}, 1, 0},
+        {"open polygon", {CMD_TESS_BEGIN_POLYGON, CMD_COMMENT}, 2,
+            {{POLYGON_SCOPE, 0, 1}}, 1, 0},
+        {"open contour", {CMD_TESS_BEGIN_POLYGON, CMD_TESS_BEGIN_CONTOUR, CMD_TESS_VERTEX}, 3,
+            {{POLYGON_SCOPE, 0, 2}, {CONTOUR_SCOPE, 1, 2}}, 2, 0},
+        {"orphan contour", {CMD_TESS_BEGIN_CONTOUR, CMD_TESS_VERTEX, CMD_TESS_END}, 3,
+            {{0, 0, 0}}, 0, 0},
+        {"nested polygon", {CMD_TESS_BEGIN_POLYGON, CMD_TESS_BEGIN_POLYGON,
+            CMD_TESS_VERTEX, CMD_TESS_END, CMD_COMMENT}, 5,
+            {{POLYGON_SCOPE, 0, 3}}, 1, 0},
+        {"merged begins", {CMD_BEGIN, CMD_BEGIN, CMD_VERTEX3F, CMD_END, CMD_END, CMD_COMMENT}, 6,
+            {{BEGIN_SCOPE, 0, 4}}, 1, 0},
+        {"adjacent scopes", {CMD_BEGIN, CMD_VERTEX3F, CMD_END, CMD_BEGIN, CMD_VERTEX3F,
+            CMD_END, CMD_COMMENT, CMD_TESS_BEGIN_POLYGON, CMD_TESS_BEGIN_CONTOUR,
+            CMD_TESS_VERTEX, CMD_TESS_END, CMD_TESS_END, CMD_TESS_BEGIN_POLYGON,
+            CMD_TESS_BEGIN_CONTOUR, CMD_TESS_VERTEX, CMD_TESS_END, CMD_TESS_END}, 17,
+            {{BEGIN_SCOPE, 0, 2}, {BEGIN_SCOPE, 3, 5}, {POLYGON_SCOPE, 7, 11},
+             {CONTOUR_SCOPE, 8, 10}, {POLYGON_SCOPE, 12, 16}, {CONTOUR_SCOPE, 13, 15}}, 6, 0},
+        {"invalid closer", {CMD_TESS_BEGIN_POLYGON, CMD_TESS_BEGIN_CONTOUR,
+            CMD_TESS_VERTEX, CMD_TESS_END, CMD_TESS_END}, 5,
+            {{POLYGON_SCOPE, 0, 4}, {CONTOUR_SCOPE, 1, 4}}, 2, 1u << 3},
+    };
+    ReplSourceScopeView view;
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        GLCmd cmds[MAX_ROWS];
+        memset(cmds, 0, sizeof(cmds));
+        for (int row = 0; row < cases[i].count; row++) {
+            cmds[row].type = cases[i].rows[row];
+            cmds[row].valid = !(cases[i].invalid_rows & (1u << row));
+        }
+        repl_source_scope_view_bind(&view, cmds, cases[i].count);
+        for (int row = -1; row <= cases[i].count; row++) {
+            ReplCursorScope scope;
+            ReplSourceExtent want[SCOPE_COUNT] = {{0, -1, -1}, {0, -1, -1}, {0, -1, -1}};
+            for (int r = 0; r < cases[i].range_count; r++) {
+                if (row < cases[i].ranges[r].start || row > cases[i].ranges[r].end) continue;
+                want[cases[i].ranges[r].kind] = (ReplSourceExtent){
+                    1, cases[i].ranges[r].start, cases[i].ranges[r].end};
+            }
+            repl_source_scope_view_cursor_scope(&view, row, &scope);
+            ReplSourceExtent got[] = {scope.begin_block, scope.tess_polygon, scope.tess_contour};
+            for (int kind = 0; kind < SCOPE_COUNT; kind++) {
+                char msg[128];
+                snprintf(msg, sizeof(msg), "%s row %d scope %d", cases[i].name, row, kind);
+                ASSERT_INT(msg, got[kind].valid, want[kind].valid);
+                ASSERT_INT(msg, got[kind].start, want[kind].start);
+                ASSERT_INT(msg, got[kind].end, want[kind].end);
+            }
+        }
+    }
+    ReplCursorScope scope;
+    memset(&view, 0, sizeof(view));
+    repl_source_scope_view_cursor_scope(&view, 0, &scope);
+    ASSERT_INT("unbuilt view has invalid extent", scope.begin_block.start, -1);
+    repl_source_scope_view_cursor_scope(NULL, 0, &scope);
+    ASSERT_INT("null view has invalid extent", scope.tess_polygon.end, -1);
+    repl_source_scope_view_cursor_scope(NULL, 0, NULL);
+    repl_source_scope_view_bind(&view, NULL, 0);
+    repl_source_scope_view_cursor_scope(&view, 0, &scope);
+    ASSERT_INT("empty view has invalid extent", scope.tess_contour.valid, 0);
+
+    glr_ctrl_reset_all();
+    editor_feed_line("glBegin(GL_QUADS);");
+    repl_source_scope_cursor_scope(0, &scope);
+    ASSERT_INT("live open scope ends at last row", scope.begin_block.end, 0);
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    repl_source_scope_cursor_scope(1, &scope);
+    ASSERT_INT("live cache follows inserted row", scope.begin_block.end, 1);
+    editor_feed_line("glEnd();");
+    repl_source_scope_cursor_scope(2, &scope);
+    ASSERT_INT("live closing row remains in scope", scope.begin_block.valid, 1);
+    ASSERT_INT("live closer is inclusive", scope.begin_block.end, 2);
+    editor_feed_line("glColor3f(1, 0, 0);");
+    repl_source_scope_cursor_scope(3, &scope);
+    ASSERT_INT("row after live close is outside", scope.begin_block.start, -1);
+    glr_ctrl_reset_all();
+    repl_source_scope_cursor_scope(0, &scope);
+    ASSERT_INT("live cache follows document reset", scope.begin_block.valid, 0);
+}
+
 int main() {
     repl_eval_init_predef_vars();
+    test_cursor_source_scopes();
     printf("--- repl_core internal tests ---\n");
 
     /* 1. trim_in_place */
@@ -1665,7 +1771,10 @@ int main() {
          * cursor sitting exactly on glEnd() resolves no block at all,
          * same as the pre-existing LAST_INSTANCE/ALL_INSTANCES behavior. */
         p = repl_flatten_cursor_polygon(14);
-        ASSERT_INT("glEnd line itself is outside the block", p.valid, 0);
+        /* Closing lines select the final primitive, as the gutter does. */
+        ASSERT_INT("glEnd line belongs to its block", p.valid, 1);
+        ASSERT_INT("glEnd selects final quad first", p.first, 4);
+        ASSERT_INT("glEnd selects final quad last", p.last, 7);
         ASSERT_INT("no fan anchor for GL_QUADS", p.fan_anchor, 0);
 
         /* Outside any glBegin block: invalid. */

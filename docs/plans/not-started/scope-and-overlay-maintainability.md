@@ -1,14 +1,13 @@
 ## Scope and Overlay Maintainability - one cursor-scope query, one vertex numbering, one outline walk
 
-## Status - NOT STARTED (items 2, 4, 5, 6 and 10 are done)
+## Status - PARTIALLY IMPLEMENTED (items 1, 2, 4, 5, 6 and 10 are done)
 
-No runtime item has started, so the plan stays in `not-started/`. Item 10
-completed 2026-10-22: the
-[overlay scope contract](../../ARCHITECTURE.md#overlay-scope-contract) defines
-the four scopes, primitive-specific rules, numbering, and current gaps;
+Items 1, 2, and 4 implement the shared cursor-scope and outline paths.
+Item 10's [overlay scope contract](../../ARCHITECTURE.md#overlay-scope-contract)
+defines the four scopes, primitive-specific rules, and numbering;
 [the user guide](../../USER_GUIDE.md#cursor-guides--vertex-overlays) summarizes
-the behavior. Closing lines are inclusive; a nested `glEnd()` must preserve
-the enclosing GLU context. The runtime changes remain in item 1.
+the behavior. Closing lines are inclusive, and a nested `glEnd()` restores
+its enclosing GLU context. Remaining items are listed below.
 
 Written 2026-10-22, after a day of GLU-tessellator overlay fixes. The scope is
 deliberately narrow: only the code that work touched - cursor block
@@ -39,7 +38,7 @@ and 3, items 10 and 11, and additions to items 6 and 7.
 
 | # | Item | Payoff | Size | Depends on |
 |---|---|---|---|---|
-| 1 | One cursor-block query | removes the drift behind most of the GLU bugs | ~1 day | - |
+| 1 | One cursor-block query - DONE | removes the drift behind most of the GLU bugs | ~1 day | - |
 | 2 | Shared GLU depth helper everywhere, with a guard | stops the contour/polygon `gluEnd()` mix-up recurring | 2-3 h | - |
 | 3 | Vertex numbering computed once | gutter, labels, filters cannot disagree | 2-3 days | 1 |
 | 4 | Collect outlines once, draw twice - DONE | removes three near-copy passes; measured costs below | 2-3 days | - (measure first) |
@@ -58,11 +57,11 @@ along with whichever item next touches a test; item 11 is independent.
 
 ---
 
-### 1. One cursor-block query
+### 1. One cursor-block query - DONE
 
-#### Today
+#### Previous implementation
 
-Five places compute "the block around this source line", each with its own
+Five places computed "the block around this source line", each with its own
 scan:
 
 - `src/app/glr_ctrl.c` - `glr_ctrl_current_begin_block_source_extent()`
@@ -137,7 +136,7 @@ never seen. The gutter copies this on purpose for parity (`05f2c7a9`:
 `glEnd()` closes only the strip and must restore the enclosing GLU context.
 Fix the walker and gutter in one commit, or the gutter/scene parity test fails.
 
-#### Migration
+#### Migration (implemented)
 
 1. **Source-scope API and unit tests (`src/repl/source_scope.h`, `src/repl/source_scope.c`, `tests/test_repl_core_internal.c`).**
    - Declare `ReplSourceExtent`, `ReplCursorScope`, `repl_source_scope_view_cursor_scope()`, and the live-document wrapper `repl_source_scope_cursor_scope(int line_idx, ReplCursorScope *out)`. Invalid extents initialize to `{ 0, -1, -1 }` so callers that copy `start`/`end` unconditionally keep `-1` when out of scope.
@@ -211,6 +210,30 @@ Fix the walker and gutter in one commit, or the gutter/scene parity test fails.
    - Replace `outline_cmd_matches_cursor()` / `outline_block_matches_cursor()` in `edit_overlays.c` and `replay_walk_flat_cmd_matches_cursor()` / `replay_walk_source_block_matches_cursor()` / `replay_walk_block_matches_cursor()` in `replay.c` with calls to those helpers.
    - **Visible change:** the outline highlight adopts the `glBegin` source-extent rule the labels already follow, so highlight and labels select the same copies. Extend the gutter/scene parity sweep (or add a sibling) to assert that the outline-highlighted blocks and the labelled blocks agree for every cursor line of the GLU concave-arrow examples, and keep `test_vertex_numbers_use_source_begin_block()` passing unchanged.
 
+#### Implementation notes
+
+`repl_source_scope_view_cursor_scope()` and its live wrapper return all three
+inclusive extents from the existing prefix arrays. No arrays were added to
+`ReplSourceScopeView`. The controller scanners and both flatten-query source
+scanners are removed. Unterminated flat blocks map through the last flat row.
+
+Shared flat matchers now serve replay, outlines, and normal arrows. Item 4's
+collector uses the additional `repl_cursor_source_begin_matches()` primitive
+with its recorded head/close, so source-authoritative matching adds no flat
+rescan. Restarts and unfinished blocks use the same fallback as the walker.
+
+The walker, gutter, and normal-arrow gate restore the enclosing GLU context
+after a nested strip. The walker applies transforms outside immediate blocks,
+including inside contours. Tests cover source boundaries and malformed input,
+live-cache invalidation, stale flat ranges, tail vertices with and without
+polygon vertices before the strip, and every cursor line of the three GLU
+arrow examples. The existing source-extent label regression stays unchanged.
+
+Validation: all 89 ASan/UBSan test binaries pass locally and under GCC on
+Gracemont. The native application builds; C99 and the ownership/contract
+guards pass on both platforms. The old replay immediate-block reset exception
+is removed from `check-tess-depth`.
+
 Acceptance: the full stub gate (`make test-stubs`, including `check-tess-depth` without the `replay.c` exception) plus the new unit tests; no other scan of `CMD_BEGIN`/`CMD_END` or `CMD_TESS_*` pairs for "the block around a line" remains outside `source_scope.c` and the shared flat-side matchers. The code panel's gutter walk still steps through `CMD_BEGIN`/`CMD_END` after this item, but to **number** vertices (step 4 adjusts it), not to find the cursor's block; replacing that walk is item 3.
 
 ---
@@ -226,7 +249,7 @@ cleanup, multi-contour hidden-line passes, and contour-function export parity.
 `check-tess-depth` runs in `check-state-ownership`. It permits helper calls,
 zero initialization, and exact cache copies/lifecycle resets; it rejects
 manual depth arithmetic even in files with an allowed copy or reset. The
-walker's immediate-block resets remain item 1's work.
+walker's former immediate-block reset exception was removed by item 1.
 
 #### Today
 

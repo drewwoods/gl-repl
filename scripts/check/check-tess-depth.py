@@ -16,8 +16,6 @@ EXCEPTIONS = {
     ("src/repl/source_scope.c", "view->tess_depth_prefix[0]", "0"): 1,
     ("src/repl/source_scope.c", "tess_depth", "view->tess_depth_prefix[i]"): 1,
     ("src/repl/source_scope.c", "view->tess_depth_prefix[i+1]", "tess_depth"): 1,
-    # Item 1 removes the walker's immediate-block resets when restoring GLU scope.
-    ("src/subsystems/replay/replay.c", "tess_depth", "0"): 2,
     # Cursor teardown clears ownership even when GLU finalization is suppressed.
     ("src/repl/executor.c", "cursor->tess_depth", "0"): 1,
 }

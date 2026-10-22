@@ -20,7 +20,8 @@
  *
  * Caching: ReplSourceScopeView owns prefix-depth arrays for the document it is
  * bound to. Callers that already have an explicit command-array snapshot bind a
- * view once and then query it in O(1). The legacy live wrappers keep a
+ * view once and then query depths in O(1); cursor extents search the surrounding
+ * prefix range. The legacy live wrappers keep a
  * process-wide view and invalidate it whenever the source command array changes
  * (via repl_source_scope_depth_cache_invalidate).
  *
@@ -42,6 +43,18 @@
  * display-body boundary carry 0 instead - see
  * repl_source_scope_view_base_indent. */
 #define REPL_SOURCE_SCOPE_BODY_BASE_INDENT 2
+
+typedef struct {
+    int valid;
+    int start;
+    int end; /* Inclusive; last document row when unterminated. */
+} ReplSourceExtent;
+
+typedef struct {
+    ReplSourceExtent begin_block;
+    ReplSourceExtent tess_polygon;
+    ReplSourceExtent tess_contour;
+} ReplCursorScope;
 
 typedef struct ReplSourceScopeView {
     const GLCmd *cmds;
@@ -73,6 +86,12 @@ void repl_source_scope_view_bind(ReplSourceScopeView *view,
  * valid until the next source-scope invalidation. Prefer explicit
  * ReplSourceScopeView instances for snapshot/non-live documents. */
 ReplSourceScopeLiveView repl_source_scope_live_view(void);
+
+/* All enclosing geometry scopes, including their head/closing rows.
+ * Invalid extents have start == end == -1. Uses the bound prefix cache. */
+void repl_source_scope_view_cursor_scope(const ReplSourceScopeView *view,
+                                         int line_idx, ReplCursorScope *out);
+void repl_source_scope_cursor_scope(int line_idx, ReplCursorScope *out);
 
 int  repl_source_scope_view_in_begin_block_at(const ReplSourceScopeView *view,
                                               int line_idx);

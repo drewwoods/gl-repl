@@ -821,7 +821,7 @@ the **cursor outline highlight**. Compose the two tables below: select
 instances first, then narrow primitives only in Single polygon. This is the
 acceptance contract for items 1, 3, 4, and 7 of
 [Scope and Overlay Maintainability](plans/not-started/scope-and-overlay-maintainability.md);
-the implementation gaps listed below remain work for item 1.
+its source and flat queries are shared by the controller, replay, and overlays.
 
 An *instance* is a flat-program copy of a source block or shape from loop
 unrolling or function inlining; *last* means last in execution order. Cursor
@@ -879,7 +879,14 @@ must agree. Immediate-only and tess-only
 ordinals are for filtering, never substitute display indices. Tess-only
 ordinals continue across contours, including vertices inside nested strips.
 
-Two boundary decisions govern item 1:
+A valid immediate `glBegin` source extent decides block membership alone;
+flat provenance is the fallback when no source extent exists. This prevents
+an outdated flat range from selecting an earlier block. A GLU polygon
+matches its source head **or** flat provenance, retaining selection on
+comment rows between contours. These rules live in `flatten_query.c`; the
+outline collector supplies known head/closing records to avoid rescanning.
+
+Source geometry boundaries follow two rules:
 
 - **Closing lines belong to the block they close.** Source extents include
   heads and matching `glEnd()` / `gluEnd()` rows. A contour's close selects
@@ -892,18 +899,13 @@ Two boundary decisions govern item 1:
   continues through the strip. Clearing the enclosing tess state is an
   implementation artifact, not a scope rule.
 
-Current implementation gaps must be changed together with their tests:
-
-- The controller/gutter include `glEnd()`, but
-  `flatten_current_begin_block_source_extent()` in
-  [`flatten_query.c`](../src/repl/flatten_query.c) excludes it. Single polygon
-  therefore keeps the whole block on that row; `test_repl_core_internal`
-  pins the exclusive result.
-- `replay_walk_user_vertices()` in
-  [`replay.c`](../src/subsystems/replay/replay.c) resets tess depth and block
-  selection at `glBegin` / `glEnd`. The gutter mirrors it: after the nested
-  `glEnd`, cursor-scoped labels stay absent until another block head. Restore
-  the enclosing context in both consumers together.
+`repl_source_scope_cursor_scope()` returns the immediate block, polygon, and
+contour together from the document's prefix cache. The controller and flatten
+queries consume these same extents. The vertex walker and gutter save the
+polygon's display counter while an immediate strip owns the run. At its
+`glEnd()` they resume that counter; the walker and normal-arrow gate also
+restore polygon selection.
+Transforms remain legal outside immediate blocks, including inside a contour.
 
 Scope membership precedes visibility and layout: in-scope labels can be
 off-screen, depth-occluded, or omitted by decluttering. Highlight Off / On /
@@ -916,7 +918,9 @@ Coverage: [`test_edit_overlays.c`](../tests/test_edit_overlays.c) checks scopes,
 primitive/contour narrowing, cursor-vertex retention, and outline ordering;
 [`test_ui.c`](../tests/test_ui.c) checks gutter/scene numbering parity;
 [`test_repl_core_internal.c`](../tests/test_repl_core_internal.c) checks ranges.
-The parity sweep currently covers Last instance only; the cursor-vertex sweep
+The gutter/scene numbering sweep covers Last instance; an outline/label
+block-selection sweep covers All instances over every cursor row of the
+three GLU arrow examples. The cursor-vertex sweep
 exercises the shared predicate, not the normal-arrow pass's own block gate,
 which a two-contour arrow test covers separately. Item 7 extends
 coverage across all four scopes and three consumers with real catalog scenes.

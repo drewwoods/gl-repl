@@ -201,8 +201,8 @@ static void test_outline_begin_mode_has_overlay(void) {
     ASSERT_INT("GL_POLYGON has overlay", outline_begin_mode_has_overlay(GL_POLYGON), 1);
 }
 
-static void test_outline_cmd_matches_cursor(void) {
-    printf("--- edit_overlays outline_cmd_matches_cursor ---\n");
+static void test_cursor_flat_cmd_matches(void) {
+    printf("--- shared flat command cursor matching ---\n");
     GLCmd cmds[5];
     memset(cmds, 0, sizeof(cmds));
     for (int i = 0; i < 5; i++) {
@@ -218,50 +218,50 @@ static void test_outline_cmd_matches_cursor(void) {
     ctx.cursor.cursor_block_end = -1;
 
     // Out of bounds check
-    ASSERT_INT("OOB index negative", outline_cmd_matches_cursor(-1, &ctx), 0);
-    ASSERT_INT("OOB index too large", outline_cmd_matches_cursor(5, &ctx), 0);
+    ASSERT_INT("OOB index negative", repl_cursor_flat_cmd_matches(ctx.program, &ctx.cursor, -1), 0);
+    ASSERT_INT("OOB index too large", repl_cursor_flat_cmd_matches(ctx.program, &ctx.cursor, 5), 0);
 
     // Invalid command
     cmds[0].valid = 0;
     cmds[0].src_cmd_idx = 10;
-    ASSERT_INT("invalid command", outline_cmd_matches_cursor(0, &ctx), 0);
+    ASSERT_INT("invalid command", repl_cursor_flat_cmd_matches(ctx.program, &ctx.cursor, 0), 0);
     cmds[0].valid = 1;
 
     // Valid matching src_cmd_idx
     cmds[0].src_cmd_idx = 10;
-    ASSERT_INT("matches src_cmd_idx", outline_cmd_matches_cursor(0, &ctx), 1);
+    ASSERT_INT("matches src_cmd_idx", repl_cursor_flat_cmd_matches(ctx.program, &ctx.cursor, 0), 1);
 
     // Valid mismatching src_cmd_idx
     cmds[0].src_cmd_idx = 9;
-    ASSERT_INT("mismatching src_cmd_idx", outline_cmd_matches_cursor(0, &ctx), 0);
+    ASSERT_INT("mismatching src_cmd_idx", repl_cursor_flat_cmd_matches(ctx.program, &ctx.cursor, 0), 0);
 
     // Match via call_src_cmd_idx
     cmds[0].call_src_cmd_idx = 10;
-    ASSERT_INT("matches call_src_cmd_idx", outline_cmd_matches_cursor(0, &ctx), 1);
+    ASSERT_INT("matches call_src_cmd_idx", repl_cursor_flat_cmd_matches(ctx.program, &ctx.cursor, 0), 1);
     cmds[0].call_src_cmd_idx = 0;
 
     // Match via root_call_src_cmd_idx
     cmds[0].root_call_src_cmd_idx = 10;
-    ASSERT_INT("matches root_call_src_cmd_idx", outline_cmd_matches_cursor(0, &ctx), 1);
+    ASSERT_INT("matches root_call_src_cmd_idx", repl_cursor_flat_cmd_matches(ctx.program, &ctx.cursor, 0), 1);
     cmds[0].root_call_src_cmd_idx = -1;
 
     // Match via func_scope_mask
     ctx.cursor.cursor_func_scope_mask = 2;
     cmds[0].func_scope_mask = 2;
-    ASSERT_INT("matches func_scope_mask", outline_cmd_matches_cursor(0, &ctx), 1);
+    ASSERT_INT("matches func_scope_mask", repl_cursor_flat_cmd_matches(ctx.program, &ctx.cursor, 0), 1);
     cmds[0].func_scope_mask = 4;
-    ASSERT_INT("mismatching func_scope_mask", outline_cmd_matches_cursor(0, &ctx), 0);
+    ASSERT_INT("mismatching func_scope_mask", repl_cursor_flat_cmd_matches(ctx.program, &ctx.cursor, 0), 0);
     ctx.cursor.cursor_func_scope_mask = 0;
 
     // Match via cursor block bounds
     ctx.cursor.cursor_block_begin = 1;
     ctx.cursor.cursor_block_end = 3;
-    ASSERT_INT("matches within cursor block", outline_cmd_matches_cursor(2, &ctx), 1);
-    ASSERT_INT("mismatch outside cursor block", outline_cmd_matches_cursor(0, &ctx), 0);
+    ASSERT_INT("matches within cursor block", repl_cursor_flat_cmd_matches(ctx.program, &ctx.cursor, 2), 1);
+    ASSERT_INT("mismatch outside cursor block", repl_cursor_flat_cmd_matches(ctx.program, &ctx.cursor, 0), 0);
 }
 
-static void test_outline_block_matches_cursor(void) {
-    printf("--- edit_overlays outline_block_matches_cursor ---\n");
+static void test_cursor_flat_block_matches(void) {
+    printf("--- shared flat block cursor matching ---\n");
     GLCmd cmds[10];
     memset(cmds, 0, sizeof(cmds));
 
@@ -279,11 +279,11 @@ static void test_outline_block_matches_cursor(void) {
     cmds[2].valid = 1; cmds[2].type = CMD_END;
 
     // cursor.edit_line_idx is 5, block contains only src_cmd_idx 4, so no match
-    ASSERT_INT("no match in block", outline_block_matches_cursor(0, 0, &ctx), 0);
+    ASSERT_INT("no match in block", repl_cursor_flat_block_matches(ctx.program, &ctx.cursor, 0, 0), 0);
 
     // Now make it match
     cmds[1].src_cmd_idx = 5;
-    ASSERT_INT("match in block", outline_block_matches_cursor(0, 0, &ctx), 1);
+    ASSERT_INT("match in block", repl_cursor_flat_block_matches(ctx.program, &ctx.cursor, 0, 0), 1);
 
     // Setup a tessellation block: TESS_BEGIN_POLYGON, TESS_BEGIN_CONTOUR, TESS_VERTEX, TESS_END
     memset(cmds, 0, sizeof(cmds));
@@ -292,10 +292,10 @@ static void test_outline_block_matches_cursor(void) {
     cmds[2].valid = 1; cmds[2].type = CMD_TESS_VERTEX; cmds[2].src_cmd_idx = 4;
     cmds[3].valid = 1; cmds[3].type = CMD_TESS_END;
 
-    ASSERT_INT("tess no match", outline_block_matches_cursor(0, 1, &ctx), 0);
+    ASSERT_INT("tess no match", repl_cursor_flat_block_matches(ctx.program, &ctx.cursor, 0, 1), 0);
 
     cmds[2].src_cmd_idx = 5;
-    ASSERT_INT("tess match", outline_block_matches_cursor(0, 1, &ctx), 1);
+    ASSERT_INT("tess match", repl_cursor_flat_block_matches(ctx.program, &ctx.cursor, 0, 1), 1);
 
     /* Two closed contours, cursor on the second. The first contour's
      * gluEnd() is not the polygon's: the scan used to stop there, so a cursor
@@ -311,11 +311,11 @@ static void test_outline_block_matches_cursor(void) {
     cmds[7].valid = 1; cmds[7].type = CMD_TESS_END;
     cmds[8].valid = 1; cmds[8].type = CMD_TESS_VERTEX; cmds[8].src_cmd_idx = 8;
     ASSERT_INT("tess match in second contour",
-               outline_block_matches_cursor(0, 1, &ctx), 1);
+               repl_cursor_flat_block_matches(ctx.program, &ctx.cursor, 0, 1), 1);
     /* ...but the scan still ends at the polygon's own gluEnd(). */
     ctx.cursor.edit_line_idx = 8;
     ASSERT_INT("tess no match past the polygon's gluEnd",
-               outline_block_matches_cursor(0, 1, &ctx), 0);
+               repl_cursor_flat_block_matches(ctx.program, &ctx.cursor, 0, 1), 0);
 
     /* A comment line between contours reaches no flat command, so only the
      * source extent can select the polygon - as it does for a comment inside
@@ -323,15 +323,157 @@ static void test_outline_block_matches_cursor(void) {
     cmds[0].src_cmd_idx = 10;
     ctx.cursor.edit_line_idx = 14;
     ASSERT_INT("tess comment line: no flat match without source extent",
-               outline_block_matches_cursor(0, 1, &ctx), 0);
+               repl_cursor_flat_block_matches(ctx.program, &ctx.cursor, 0, 1), 0);
     ctx.cursor.cursor_source_tess_valid = 1;
     ctx.cursor.cursor_source_tess_begin = 10;
     ctx.cursor.cursor_source_tess_end = 19;
     ASSERT_INT("tess comment line: source extent selects the polygon",
-               outline_block_matches_cursor(0, 1, &ctx), 1);
+               repl_cursor_flat_block_matches(ctx.program, &ctx.cursor, 0, 1), 1);
     ctx.cursor.cursor_source_tess_begin = 30;
     ASSERT_INT("tess source extent of another polygon does not match",
-               outline_block_matches_cursor(0, 1, &ctx), 0);
+               repl_cursor_flat_block_matches(ctx.program, &ctx.cursor, 0, 1), 0);
+}
+
+static void test_outline_source_extent_authority(void) {
+    GLCmd cmds[6];
+    for (int i = 0; i < 6; i++) {
+        mk_cmd(&cmds[i], i % 3 == 0 ? CMD_BEGIN : i % 3 == 1 ? CMD_VERTEX3F : CMD_END,
+               (float)GL_TRIANGLES, 0, 0);
+        cmds[i].src_cmd_idx = (i < 3 ? 10 : 17) + i;
+    }
+    OverlayWalkCtx ctx = {0};
+    ctx.program = (FlatProgramView){.cmds = cmds, .cmd_count = 6};
+    ctx.cursor = (CursorBlockState){.edit_line_idx = 21,
+        .cursor_block_begin = 1, .cursor_block_end = 1,
+        .cursor_source_block_valid = 1, .cursor_source_block_begin = 20,
+        .cursor_source_block_end = 22};
+    ctx.highlight_current_poly = ctx.show_vertex_outlines = 1;
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
+    ASSERT_INT("source extent rejects stale flat range",
+               repl_cursor_flat_block_matches(ctx.program, &ctx.cursor, 0, 0), 0);
+    ASSERT_INT("source extent selects the later block",
+               repl_cursor_flat_block_matches(ctx.program, &ctx.cursor, 3, 0), 1);
+    outline_collect(&ctx);
+    ASSERT_INT("collector rejects the stale earlier block", g_outlines.batches[0].is_current, 0);
+    ASSERT_INT("collector highlights the source-owned block", g_outlines.batches[1].is_current, 1);
+    ctx.cursor.cursor_source_block_end = 23;
+    ASSERT_INT("source closer must agree",
+               repl_cursor_source_begin_head_matches(ctx.program, &ctx.cursor, 3), 0);
+    outline_collect(&ctx);
+    ASSERT_INT("collector checks the same source closer", g_outlines.batches[1].is_current, 0);
+    cmds[5].valid = 0;
+    ASSERT_INT("unterminated source-owned block still matches",
+               repl_cursor_source_begin_head_matches(ctx.program, &ctx.cursor, 3), 1);
+    outline_collect(&ctx);
+    ASSERT_INT("collector retains unterminated source match", g_outlines.batches[1].is_current, 1);
+    ctx.cursor.cursor_source_block_valid = 0;
+    ASSERT_INT("without a source extent flat provenance decides",
+               repl_cursor_flat_block_matches(ctx.program, &ctx.cursor, 0, 0), 1);
+    ASSERT_INT("null program cannot match",
+               repl_cursor_flat_block_matches((FlatProgramView){0}, &ctx.cursor, 0, 0), 0);
+    ASSERT_INT("null cursor cannot match",
+               repl_cursor_flat_cmd_matches(ctx.program, NULL, 0), 0);
+    ASSERT_INT("invalid block index cannot match",
+               repl_cursor_flat_block_matches(ctx.program, &ctx.cursor, -1, 0), 0);
+}
+
+typedef struct {
+    FlatProgramView program;
+    int selected[MAX_FLAT_COMMANDS];
+    int pending;
+} ScopeSelectionSweep;
+
+/* on_each_cmd runs before the next command: the preceding head's selection
+ * is now observable, even for a polygon immediately followed by a strip. */
+static void scope_sweep_finish_head(const ReplayVertexWalkState *state, void *user) {
+    ScopeSelectionSweep *sw = user;
+    if (sw->pending >= 0) sw->selected[sw->pending] = state->block_selected;
+    sw->pending = -1;
+}
+
+static void scope_sweep_each(const ReplayVertexWalkState *state, void *user) {
+    ScopeSelectionSweep *sw = user;
+    scope_sweep_finish_head(state, user);
+    CmdType type = sw->program.cmds[state->flat_cmd_idx].type;
+    if (type == CMD_BEGIN || type == CMD_TESS_BEGIN_POLYGON)
+        sw->pending = state->flat_cmd_idx;
+}
+
+static void test_outline_and_label_scope_parity(void) {
+    static const char *const names[] = {
+        "GLU concave arrow", "GLU concave arrow cutout", "GLU concave arrow extrusion"
+    };
+    const ReplayVertexWalkCallbacks cb = {
+        .on_each_cmd = scope_sweep_each, .on_end = scope_sweep_finish_head
+    };
+    for (size_t e = 0; e < sizeof(names) / sizeof(names[0]); e++) {
+        int idx = -1, checked = 0, selected = 0, mismatches = 0;
+        for (int i = 0; i < repl_example_count(); i++)
+            if (strcmp(repl_example_name(i), names[e]) == 0) idx = i;
+        ASSERT_TRUE("scope parity example exists", idx >= 0);
+        if (idx < 0) continue;
+        glr_ctrl_reset_all();
+        repl_load_example(idx);
+        repl_flatten_commands(editor_state_edit_line());
+        for (int row = 0; row < repl_state_document_count(); row++) {
+            OverlayWalkCtx ctx;
+            ScopeSelectionSweep sw;
+            repl_flatten_refresh_current_block_highlight(row);
+            glr_ctrl_fill_overlay_walk_ctx(row, &ctx);
+            ctx.highlight_current_poly = 1;
+            ctx.cursor_overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
+            sw.program = ctx.program;
+            sw.pending = -1;
+            for (int i = 0; i < ctx.program.cmd_count; i++) sw.selected[i] = -1;
+            ReplayVertexWalkContext walk = edit_overlays_build_vertex_walk_context(&ctx, 1);
+            replay_walk_user_vertices(&walk, &cb, &sw);
+            outline_collect(&ctx);
+            for (int i = 0; i < g_outlines.scope_count; i++) {
+                const OutlineScope *scope = &g_outlines.scopes[i];
+                checked++;
+                selected += scope->matches;
+                if (scope->matches == sw.selected[scope->head]) continue;
+                if (mismatches++ < 5) {
+                    char msg[160];
+                    snprintf(msg, sizeof(msg), "%s cursor %d head %d: highlight equals labels",
+                             names[e], row, scope->head);
+                    ASSERT_INT(msg, scope->matches, sw.selected[scope->head]);
+                }
+            }
+        }
+        ASSERT_INT("highlight and label selection agree for every cursor line", mismatches, 0);
+        ASSERT_TRUE("scope sweep compared real heads", checked > 0);
+        ASSERT_TRUE("scope sweep selected real geometry", selected > 0);
+    }
+}
+
+static void test_normal_scope_resumes_polygon(void) {
+    GLCmd cmds[6];
+    const CmdType types[] = {CMD_TESS_BEGIN_POLYGON, CMD_BEGIN, CMD_VERTEX3F,
+                            CMD_END, CMD_TESS_VERTEX, CMD_TESS_END};
+    for (int i = 0; i < 6; i++) {
+        mk_cmd(&cmds[i], types[i], (float)GL_TRIANGLES, 0, 0);
+        cmds[i].src_cmd_idx = i;
+    }
+    OverlayWalkCtx ctx = {0};
+    ctx.program = (FlatProgramView){.cmds = cmds, .cmd_count = 6};
+    ctx.cursor = (CursorBlockState){.edit_line_idx = 5, .cursor_block_begin = -1,
+        .cursor_block_end = -1, .cursor_source_tess_valid = 1,
+        .cursor_source_tess_begin = 0, .cursor_source_tess_end = 5};
+    NormalVectorRenderCtx normal = {.program = &ctx.program, .walk = &ctx,
+        .scope = OVERLAY_SCOPE_ALL_INSTANCES, .target_head = -1, .tess_head = -1};
+    ReplayVertexWalkState state = {.in_block = 1};
+    state.flat_cmd_idx = 0;
+    on_normal_vector_cmd(&state, &normal);
+    state.flat_cmd_idx = 1;
+    on_normal_vector_cmd(&state, &normal);
+    ASSERT_INT("nested strip is outside the cursor's polygon-owned rows", normal.cur_head_matches, 0);
+    state.flat_cmd_idx = 3;
+    on_normal_vector_cmd(&state, &normal);
+    state.flat_cmd_idx = 4;
+    ASSERT_INT("normal arrows restore the enclosing polygon head", normal.cur_head, 0);
+    ASSERT_INT("normal arrows retain polygon selection after glEnd",
+               normal_vector_in_scope(&normal, &state), 1);
 }
 
 static void test_build_vertex_walk_context(void) {
@@ -4240,6 +4382,9 @@ static void test_projective_cpu_translate_scale(void) {
 }
 
 int main(void) {
+    test_outline_source_extent_authority();
+    test_outline_and_label_scope_parity();
+    test_normal_scope_resumes_polygon();
     test_projective_cpu_translate_scale();
     test_outline_inherited_plane_revisit();
     test_outline_wall_inside_contour();
@@ -4247,8 +4392,8 @@ int main(void) {
     test_outline_snapshot_frames();
     printf("--- edit_overlays tests ---\n");
     test_outline_begin_mode_has_overlay();
-    test_outline_cmd_matches_cursor();
-    test_outline_block_matches_cursor();
+    test_cursor_flat_cmd_matches();
+    test_cursor_flat_block_matches();
     test_build_vertex_walk_context();
     test_render_vertex_points();
     test_render_vertex_points_glut();
