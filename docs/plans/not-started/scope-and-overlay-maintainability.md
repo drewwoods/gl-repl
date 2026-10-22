@@ -22,6 +22,11 @@ Most of those were the *same* bug class: one question ("which block is the
 cursor in?", "which vertex is this?", "how is this outline drawn?") answered
 in several places that drifted apart.
 
+Reviewed the same day by the session that made `c48e392e`, `fb2cc2a8`,
+`05f2c7a9`, `7a6b03f3` and `7568f1aa`. Its corrections are folded in below:
+item 3's display rule, the flat-side matchers and walker quirk in items 1
+and 3, items 10 and 11, and additions to items 6 and 7.
+
 ### Summary
 
 | # | Item | Payoff | Size | Depends on |
@@ -35,10 +40,13 @@ in several places that drifted apart.
 | 7 | Test fixtures from real flatten output; named GL enums in traces | fixtures cannot drift from production | ongoing | - |
 | 8 | Overlay setup out of `glr_ctrl.c` | smaller controller, fewer `_for_test` seams | ~0.5 day | best after 1 |
 | 9 | Habits: present-tense comments, one worktree per session | less comment rot, clean benchmarks | - | - |
+| 10 | Written spec: overlay scope per primitive kind | one source of truth for items 1, 3, 4 and their tests | 1-2 h | - |
+| 11 | Adjacent: workspace manifest forward compatibility | new builds' workspaces stay readable by older builds | ~1 h | - |
 
-Suggested order: **2, 5, 6** first (independent quick wins), then **1**, then
+Suggested order: **10, 2, 5, 6** first (10 is the spec items 1, 3 and 4 are
+checked against; the rest are independent quick wins), then **1**, then
 **8**, then **3** and **4** (4 can go any time; benchmark first). Item 7 rides
-along with whichever item next touches a test.
+along with whichever item next touches a test; item 11 is independent.
 
 ---
 
@@ -58,7 +66,16 @@ scan:
 - `src/ui/app/repl_code_panel.c` - the gutter walk's own begin/end state
   machine (`ReplCodePanelWalkState`).
 
-They already **disagree** on one rule: the controller counts the `glEnd()`
+Two more answer the same question on the **flat** side - is this flat block or
+polygon the cursor's? - and are near-duplicates of each other:
+`outline_block_matches_cursor()` in `edit_overlays.c` and
+`replay_walk_block_matches_cursor()` in `src/subsystems/replay/replay.c`. Both
+had the same contour-`gluEnd()` bug fixed in `fb2cc2a8`, and both now also
+accept a polygon whose source extent holds the cursor
+(`repl_cursor_source_tess_head_matches()` in `src/repl/flatten.h`, from
+`05f2c7a9`), because a comment line between contours reaches no flat command.
+
+The source-side scanners already **disagree** on one rule: the controller counts the `glEnd()`
 line as inside its block (`edit_line <= i`), the flatten query does not
 (`edit_line_idx < i`). Both behaviors are pinned by tests -
 `test_vertex_gutter_labels_follow_cursor_begin_block` ("first block vertex
@@ -94,11 +111,22 @@ All three extents in one call, built on the existing prefix caches so a
 cursor move is a lookup, not a document scan. Nested cases (a `glBegin`
 strip inside a GLU contour, as in the extrusion example) report both.
 
-**Decision to make first:** is the closing line inside its block? Recommend
+**Decisions to make first** (record both in the item 10 spec):
+
+*Is the closing line inside its block?* Recommend
 **inclusive**: a cursor parked on `glEnd()` / `gluEnd()` belongs to the block
 it closes, which is what the gutter, the contour resolver, and users already
 expect. That changes the flat-cache behavior the core-internal test pins;
 update that test deliberately, in the same commit, with the reason.
+
+*What does a `glEnd()` inside a GLU contour end?* The replay walker resets
+`tess_depth` and `in_block` at `CMD_BEGIN` and `CMD_END`. In a strip nested in
+a contour (the extrusion example), any `gluVertex` after the strip's
+`glEnd()` is therefore unlabelled, and the enclosing polygon's own close is
+never seen. The gutter copies this on purpose for parity (`05f2c7a9`:
+"nothing after a glEnd is labelled until the next head"). Decide whether that
+is intended or an artifact. If it is fixed, fix the walker and the gutter in
+one commit, or the gutter/scene parity test fails.
 
 #### Migration
 
@@ -110,6 +138,10 @@ update that test deliberately, in the same commit, with the reason.
 3. Switch the two `flatten_query.c` scanners; delete them.
 4. Switch the code panel's gutter gate to the snapshot fields filled from the
    query (`current_begin_block_*`, `current_tess_block_*`).
+5. Fold the two flat-side matchers into one helper next to the query. Keep
+   the rule that a cursor on any source line inside a block's extent -
+   comment lines included - selects that block, as the `glBegin` source
+   extent and the tess-head match do today.
 
 Acceptance: the full stub gate plus the new test; no other scan of
 `CMD_BEGIN`/`CMD_END` or `CMD_TESS_*` pairs for "the block around a line"
@@ -165,7 +197,8 @@ hidden-line tests unchanged; the guard red on a reintroduced `tess_depth++`.
 
 At least five independent counters assign "the Nth vertex":
 
-- the gutter walk in `src/ui/app/repl_code_panel.c`;
+- the gutter walk in `src/ui/app/repl_code_panel.c`, which since `05f2c7a9`
+  replays the walker's numbering rule;
 - the replay vertex walker's `vertex_idx_in_block`, `immediate_idx_in_block`
   and `tess_idx_in_polygon` (`src/subsystems/replay/replay.h`);
 - `repl_flatten_cursor_polygon()` (glBegin primitive ordinals) and
@@ -178,21 +211,45 @@ test that now guards it (`glr_ctrl_cursor_block_state_for_test` driven from
 `tests/test_ui.c` and `tests/test_edit_overlays.c`) is the right acceptance
 check for this item.
 
+#### The displayed number is the shared run - a user decision
+
+**Do not "simplify" display numbers to per-family counts.** `c48e392e` did
+exactly that in the gutter (glVertex and gluVertex in separate runs), and the
+user rejected it: the gutter must show the scene's number, so that every
+vertex in a block is unique. `05f2c7a9` reverted the gutter to that rule.
+
+The displayed number is the replay walker's `vertex_idx_in_block`: **one run
+per block, counting glVertex and gluVertex together, restarted by the
+innermost head** (`glBegin` or `gluBegin(GLU_POLYGON)`). A `glBegin` strip
+nested in a contour owns the contour's `gluVertex` rows.
+
+Per-family ordinals exist too, but only for single-polygon **filtering**:
+`immediate_idx_in_block` (glVertex-only) against the cursor quad's range, and
+`tess_idx_in_polygon` (gluVertex-only, continuous across contours) against
+the cursor contour's range.
+
 #### Design
 
 Number vertices once, when the flat program is built: a parallel array beside
 the flat command array (not a new `GLCmd` field - the command struct is large
-and `MAX_FLAT_COMMANDS` is 8192), holding for each flat vertex command its
-ordinal within its own primitive, counted per family (glVertex within its
-`glBegin`, gluVertex within its polygon, continuous across contours).
+and `MAX_FLAT_COMMANDS` is 8192), holding **three ordinals per flat vertex
+command**:
+
+| ordinal | counts | used for |
+|---|---|---|
+| shared run | both families, per innermost head | **display**: gutter and scene labels |
+| immediate | glVertex only, per `glBegin` block | single-polygon filter against the cursor primitive |
+| tess | gluVertex only, per polygon, across contours | single-polygon filter against the cursor contour; contour highlight |
 
 - A full flatten recomputes it; a value-only rebake cannot change topology,
   so it stays valid.
 - The walker, resolvers, label filter and tess pass read it instead of
   counting.
-- The gutter maps a source row to its flat instance's ordinal. That also lets
-  it show exact numbers for the selected loop instance where it shows `vn`
-  today.
+- The gutter maps a source row to its flat instance's **shared-run** ordinal.
+  That also lets it show exact numbers for the selected loop instance where
+  it shows `vn` today.
+- Whatever item 1 decides about a `glEnd()` inside a contour is applied here,
+  in the one place the shared run is computed.
 
 Acceptance: the gutter/scene parity test unchanged and green; the counters
 listed above deleted.
@@ -306,6 +363,12 @@ Recommend **A** now; revisit B if anchors keep producing noise.
   `BENCH_BINS`, and `bench_extedit` rejects `--only`, so the target exits 2
   after `bench_repl` succeeded. Teach `bench_extedit` to accept `--only` with
   the same semantics (run the rows named, none if none match).
+- **A red guard hides the test results.** The `test-stubs` check gate stops
+  at the first red guard, before the tests and before the later guards. A
+  doc-anchor shift from a header edit (item 5) is enough to hide every test
+  result in the run. Unless option A from item 5 makes that guard heal
+  itself, change the gate to run every guard, run the tests anyway, and
+  report all the red guards at the end.
 - **One test binary.** The stub objdir only resolves with `NO_SAN=1`, and the
   hyphenated twins only link. Add `make test-one T=test_edit_overlays`, which
   builds `build/debug-nosan-gl-stubs/$(T)` with `USE_GL_STUBS=1 BUILD=debug
@@ -313,8 +376,20 @@ Recommend **A** now; revisit B if anchors keep producing noise.
 
 ---
 
-### 7. Test fixtures
+### 7. Test policy and fixtures
 
+- **UX behavior gets an invariant sweep over real scenes.** Hand-picked
+  assertions can lock in a design choice as if it were a requirement:
+  `05f2c7a9`'s nested-strip tests asserted "gluVertex hidden", which was the
+  bug the user reported next (fixed in `7a6b03f3`). The tests that actually
+  guarded behavior were sweeps over the real GLU catalog examples - every
+  cursor line's gutter label equals the scene label (`tests/test_ui.c`), and
+  the cursor's own vertex always stays in single-polygon scope
+  (`test_single_polygon_keeps_cursor_vertex` in
+  `tests/test_edit_overlays.c`). Make that the rule: a UX behavior gets an
+  invariant sweep over catalog scenes, and example assertions only add to it.
+- **Widen the gutter/scene parity sweep to all four scopes.** It runs in the
+  default scope only (last-instance).
 - **Fixtures from real flatten output.** Overlay tests hand-build flat
   command arrays with `mk_cmd`. One existing tess fixture had two contours
   sharing a single `TESS_END`, a shape flatten never produces. Add a helper
@@ -331,8 +406,10 @@ Recommend **A** now; revisit B if anchors keep producing noise.
 
 ### 8. Overlay setup out of `glr_ctrl.c`
 
-`src/app/glr_ctrl.c` is ~5,600 lines. Its overlay setup - the cursor block
-fill, `glr_ctrl_fill_overlay_walk_ctx()`, the overlay pack builder, and (until
+`src/app/glr_ctrl.c` is ~5,600 lines. Its overlay setup -
+`glr_ctrl_fill_cursor_block_state()` (static) and its test seam
+`glr_ctrl_cursor_block_state_for_test()`, `glr_ctrl_fill_overlay_walk_ctx()`
+(public, used by `bench_repl`), the overlay pack builder, and (until
 item 1 deletes them) the extent scanners - is a self-contained unit that
 tests and `bench_repl` now call directly. Move it to its own file under
 `src/app/` and drop `glr_ctrl_cursor_block_state_for_test` in favor of the
@@ -359,6 +436,55 @@ e.g. `REPL_DEMO_DEP_SRCS`), and the `check-app-boot-band` /
   broke, but benchmark comparisons and gate runs assume nobody else is
   rebuilding the tree. `git worktree add ../gl-repl-<topic> -b <topic>` per
   session, integrated with `push HEAD:main` as the worktree notes describe.
+
+---
+
+### 10. Written spec: overlay scope per primitive kind
+
+The single-polygon rules grew piecemeal across `fb2cc2a8`, `3388794c`,
+`05f2c7a9` and `7a6b03f3`, and live only in code and test names. Today:
+
+- a glVertex is narrowed to the cursor's GL primitive, compared in
+  glVertex-only ordinals;
+- a gluVertex is narrowed to the cursor's contour, compared in gluVertex-only
+  ordinals - including one inside a nested strip;
+- a cursor in no contour (the polygon's own begin/end line, between
+  contours) keeps the whole polygon;
+- the cursor's own vertex always stays in scope;
+- labels and normal arrows share one predicate,
+  `single_polygon_keeps_vertex()` in `edit_overlays.c`; the outline
+  highlight follows the contour.
+
+Write it down once - a table in `docs/ARCHITECTURE.md` (implementation
+facts) with the user-facing summary in `docs/USER_GUIDE.md` - covering
+`glBegin` blocks, tess polygons and contours, a strip nested in a contour,
+and `glutSolid*` shapes, across all four scopes (last instance, all
+instances, whole scene, single polygon) and all three consumers (labels,
+normal arrows, outline highlight). Record item 1's two decisions there. Items
+1, 3 and 4 are then checked against this table, and item 7's sweeps assert
+it.
+
+---
+
+### 11. Adjacent: workspace manifest forward compatibility
+
+Outside this plan's cursor/overlay scope, but found the same day
+(`7568f1aa`, which added the workspace's active scene). The `.glr-workspace`
+reader in `src/repl/workspace_io.c` rejects unknown fields ("Workspace
+manifest has an unknown field"). So every new manifest field makes a
+workspace saved by a newer build unreadable by an older one - `active=`
+already did.
+
+Pick one policy and write it next to the reader:
+
+- **Ignore unknown keys** (warn once). Older builds load what they understand
+  and drop the rest. That suits optional metadata such as the active scene.
+- **Explicit version bump.** A `version=` line, with older builds refusing
+  only newer *major* versions. That suits a field whose absence would change
+  what loads.
+
+Recommend ignoring unknown keys, plus a version line reserved for a future
+breaking change. Add a round-trip test with an extra unknown field.
 
 ### Out of scope
 
