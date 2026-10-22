@@ -2413,6 +2413,25 @@ int glr_audio_get_cfg_mode(void) {
 
 #endif  /* !__EMSCRIPTEN__ */
 
+/* Platform-neutral: built on the per-platform track accessors above. */
+const char *glr_audio_track_group_label(int idx) {
+    const char *group = glr_audio_track_group(idx);
+    return (group && group[0]) ? group : "Music";
+}
+
+int glr_audio_menu_group_count(void) {
+    int count = glr_audio_track_count();
+    int groups = 0;
+    const char *prev = NULL;
+    for (int i = 0; i < count; i++) {
+        const char *group = glr_audio_track_group_label(i);
+        if (i == 0 || strcmp(group, prev) != 0)
+            groups++;
+        prev = group;
+    }
+    return groups;
+}
+
 int glr_audio_bootstrap(const char *assets_override,
                         GlrAudioTraceFn trace,
                         GlrAudioTraceFn trace_detail) {

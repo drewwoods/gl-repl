@@ -182,38 +182,12 @@ int ui_menu_bar_tutorial_parent_row_for_tag(int tag_idx) {
     return -1;
 }
 
-static const char *audio_group_label_for_track(int track_idx) {
-    const char *group = glr_audio_track_group(track_idx);
-    return (group && group[0]) ? group : "Music";
-}
-
 static int audio_group_differs(const char *a, const char *b) {
     if (a == b)
         return 0;
     if (!a || !b)
         return 1;
     return strcmp(a, b) != 0;
-}
-
-/* Number of consecutive distinct source groups in the playlist. This is
- * the count of Audio-menu parent rows; the control rows (Play/Next/Prev/
- * Loop) sit at offsets past it. INVARIANT: glr_actions.c's
- * audio_menu_group_count() must compute the identical value - it turns a
- * clicked top-level item_idx back into a control-row offset by subtracting
- * this count, so if the two ever disagree the control clicks misfire. Both
- * read the same glr_audio_track_* accessors on the main thread, so they
- * cannot diverge; keep them in lockstep if the grouping rule changes. */
-static int audio_visible_group_count(void) {
-    int count = glr_audio_track_count();
-    int groups = 0;
-    const char *prev = NULL;
-    for (int i = 0; i < count; i++) {
-        const char *group = audio_group_label_for_track(i);
-        if (i == 0 || audio_group_differs(group, prev))
-            groups++;
-        prev = group;
-    }
-    return groups;
 }
 
 static int audio_group_start_for_parent_row(int row) {
@@ -223,7 +197,7 @@ static int audio_group_start_for_parent_row(int row) {
     if (row < 0)
         return -1;
     for (int i = 0; i < count; i++) {
-        const char *group = audio_group_label_for_track(i);
+        const char *group = glr_audio_track_group_label(i);
         if (i == 0 || audio_group_differs(group, prev)) {
             group_ord++;
             if (group_ord == row)
@@ -240,9 +214,9 @@ static int audio_group_end_for_parent_row(int row) {
     const char *group;
     if (start < 0)
         return -1;
-    group = audio_group_label_for_track(start);
+    group = glr_audio_track_group_label(start);
     for (int i = start + 1; i < count; i++)
-        if (audio_group_differs(audio_group_label_for_track(i), group))
+        if (audio_group_differs(glr_audio_track_group_label(i), group))
             return i;
     return count;
 }
@@ -409,7 +383,7 @@ static int menu_item_count(int menu_id, const UiRenderSnapshot *snap) {
          * owned by this menu layer. */
         return glr_config_section_count() + 1;
     case MENU_AUDIO: {
-        int group_count = audio_visible_group_count();
+        int group_count = glr_audio_menu_group_count();
         return group_count > 0 ? group_count + GLR_AUDIO_FIXED_COUNT : 0;
     }
     }
@@ -516,10 +490,10 @@ static const char *menu_item_label(int menu_id, int i) {
     }
     if (menu_id == MENU_AUDIO) {
         static char loop_label[32];
-        int group_count = audio_visible_group_count();
+        int group_count = glr_audio_menu_group_count();
         if (i >= 0 && i < group_count) {
             int start = audio_group_start_for_parent_row(i);
-            return start >= 0 ? audio_group_label_for_track(start) : NULL;
+            return start >= 0 ? glr_audio_track_group_label(start) : NULL;
         }
         if (group_count <= 0)
             return NULL;
@@ -592,7 +566,7 @@ static const char *menu_item_shortcut(int menu_id, int i) {
         return NULL;
     }
     if (menu_id == MENU_AUDIO) {
-        int group_count = audio_visible_group_count();
+        int group_count = glr_audio_menu_group_count();
         if (i == group_count + GLR_AUDIO_OFF_PLAY)
             return keymap_binding_to_string(buf, (int)sizeof(buf),
                                             KM_KEY(GLR_AUDIO),

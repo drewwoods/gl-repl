@@ -96,6 +96,17 @@ int  glr_audio_seek_relative(float offset_secs);
 int         glr_audio_track_count(void);
 const char *glr_audio_track_display_name(int idx);
 const char *glr_audio_track_group(int idx);
+
+/* Audio-menu grouping, defined once. The menu draws one parent row per run
+ * of consecutive tracks sharing a group label, then the control rows
+ * (Play/Next/Prev/Loop...) after them; the action router subtracts the group
+ * count from a clicked row to find which control was hit. Both sides call
+ * these, so they cannot disagree on where the control rows start.
+ *
+ * glr_audio_track_group_label() is glr_audio_track_group() with the menu's
+ * fallback applied: "Music" for an ungrouped track, never NULL. */
+const char *glr_audio_track_group_label(int idx);
+int         glr_audio_menu_group_count(void);
 int         glr_audio_current_index(void);
 float       glr_audio_current_cursor_seconds(void);
 float       glr_audio_track_duration_seconds(int idx);

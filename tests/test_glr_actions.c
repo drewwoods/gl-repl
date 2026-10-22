@@ -29,6 +29,7 @@
 #include "subsystems/tutorial/tutorial_state.h"
 #include "app/glr_tours.h"
 #include "app/glr_pointer_script.h"
+#include "ui/app/menu_bar.h"          /* menu row labels for the audio parity */
 #include "app/glr_camera_export.h"  /* stand in for the display frame's pose drain */
 #include "source_document.h"
 #include "keymap.h"
@@ -1580,6 +1581,72 @@ static void test_replay_expand_mode_names(void) {
                    GLR_CONFIG_REPLAY_EXPAND, REPLAY_EXPAND_EXPANDED), "Expanded");
     ASSERT_STR("replay expand mode 2", glr_config_state_name(
                    GLR_CONFIG_REPLAY_EXPAND, REPLAY_EXPAND_VERBOSE), "Verbose");
+}
+
+/* The Audio menu draws one parent row per run of consecutive tracks sharing
+ * a group label, then the control rows; a click maps back to a control by
+ * subtracting the same group count. Several groups - including a label that
+ * recurs after another (its own run) and an ungrouped track ("Music") - so
+ * the rows the menu draws and the rows a click hits have to agree beyond the
+ * single-group case test_audio_menu_actions covers. */
+static void test_audio_menu_groups_match_menu_rows(void) {
+    GlrAudioTrackSpec tracks[] = {
+        { "assets/a.mp3", "Assets", "A" },
+        { "assets/b.mp3", "Assets", "B" },
+        { "user/c.mp3",   "User",   "C" },
+        { "assets/d.mp3", "Assets", "D" },
+        { "e.mp3",        "",       "E" },
+    };
+    static const char *const k_groups[] = { "Assets", "User", "Assets", "Music" };
+    int group_count;
+    int saved_loop = glr_audio_get_loop_mode();
+
+    glr_ctrl_reset_all();
+    ASSERT_INT("grouped playlist loads",
+               glr_audio_set_playlist_specs(tracks, 5), 5);
+
+    group_count = glr_audio_menu_group_count();
+    ASSERT_INT("consecutive runs make four groups", group_count, 4);
+    ASSERT_STR("ungrouped track labelled Music",
+               glr_audio_track_group_label(4), "Music");
+
+    for (int g = 0; g < 4; g++) {
+        char lbl[64];
+        snprintf(lbl, sizeof lbl, "menu parent row %d is group %s", g, k_groups[g]);
+        ASSERT_STR(lbl, ui_menu_bar_menu_item_label_for_test(GLR_MENU_AUDIO, g),
+                   k_groups[g]);
+        snprintf(lbl, sizeof lbl, "parent row %d click is inert", g);
+        ASSERT_INT(lbl, glr_action_menu_item_activate(GLR_MENU_AUDIO, g), 0);
+    }
+    ASSERT_STR("menu separator follows the last group",
+               ui_menu_bar_menu_item_label_for_test(
+                   GLR_MENU_AUDIO, group_count + GLR_AUDIO_OFF_SEP), "---");
+    ASSERT_STR("menu draws Next Track where the action expects it",
+               ui_menu_bar_menu_item_label_for_test(
+                   GLR_MENU_AUDIO, group_count + GLR_AUDIO_OFF_NEXT),
+               "Next Track");
+
+    /* A click on the drawn Loop row reaches the loop control. */
+    glr_audio_set_loop_mode(GLR_AUDIO_LOOP_OFF);
+    ASSERT_INT("loop row click stays open",
+               glr_action_menu_item_activate(GLR_MENU_AUDIO,
+                                             group_count + GLR_AUDIO_OFF_LOOP),
+               0);
+    ASSERT_INT("loop row click cycles the loop mode",
+               glr_audio_get_loop_mode(), GLR_AUDIO_LOOP_SONG);
+
+    /* The Play/Pause row's label and its click read the same config. */
+    glr_config_set(GLR_CONFIG_AUDIO_MODE, 1);
+    ASSERT_STR("play row labelled Pause while playing",
+               ui_menu_bar_menu_item_label_for_test(
+                   GLR_MENU_AUDIO, group_count + GLR_AUDIO_OFF_PLAY), "Pause");
+    glr_action_menu_item_activate(GLR_MENU_AUDIO, group_count + GLR_AUDIO_OFF_PLAY);
+    ASSERT_INT("play row click pauses", glr_config_get(GLR_CONFIG_AUDIO_MODE), 0);
+
+    /* The audio module's play and loop settings outlive glr_ctrl_reset_all();
+     * leave them as found for the tests after this one. */
+    glr_action_menu_item_activate(GLR_MENU_AUDIO, group_count + GLR_AUDIO_OFF_PLAY);
+    glr_audio_set_loop_mode(saved_loop);
 }
 
 static void test_audio_menu_actions(void) {
@@ -3240,6 +3307,7 @@ int main(void) {
     test_replay_expand_mode_names();
     test_audio_config_direct_set();
     test_audio_menu_actions();
+    test_audio_menu_groups_match_menu_rows();
     test_scene_menu_cycle_actions();
     test_config_slug_table();
     test_config_keys_are_unique();

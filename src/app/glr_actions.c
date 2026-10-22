@@ -221,35 +221,6 @@ static const char *poly_highlight_names[POLY_HIGHLIGHT_COUNT] = {
     POLY_HIGHLIGHT_LIST(POLY_HIGHLIGHT_NAME_ENTRY)
 };
 
-static int audio_menu_group_differs(const char *a, const char *b) {
-    if (a == b)
-        return 0;
-    if (!a || !b)
-        return 1;
-    return strcmp(a, b) != 0;
-}
-
-/* Mirror of menu_bar.c's audio_visible_group_count(): the number of
- * source-group parent rows the Audio dropdown renders. glr_action_menu_
- * item_activate subtracts this from the clicked item_idx to recover the
- * control-row offset (Play/Next/Prev/Loop), so it MUST match the menu's
- * layout count exactly. Both read the same glr_audio_track_* accessors on
- * the main thread; keep the two in lockstep if the grouping rule changes. */
-static int audio_menu_group_count(void) {
-    int count = glr_audio_track_count();
-    int groups = 0;
-    const char *prev = NULL;
-    for (int i = 0; i < count; i++) {
-        const char *group = glr_audio_track_group(i);
-        if (!group || !group[0])
-            group = "Music";
-        if (i == 0 || audio_menu_group_differs(group, prev))
-            groups++;
-        prev = group;
-    }
-    return groups;
-}
-
 static const char *audio_loop_status_label(int mode) {
     if (mode == GLR_AUDIO_LOOP_OFF)
         return "Off";
@@ -1914,7 +1885,7 @@ int glr_action_menu_item_activate(int menu_id, int item_idx) {
         return 0;
 
     case GLR_MENU_AUDIO: {
-        int group_count = audio_menu_group_count();
+        int group_count = glr_audio_menu_group_count();
         int rel = item_idx - group_count;
         char msg[48];
 
