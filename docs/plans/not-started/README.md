@@ -16,5 +16,6 @@ begun. They move to `plans/active/` once implementation starts.
 | `one-scene-loader.md` | Retire the catalog's own `.glr` walk and make `import.c` the single scene reader, so format - not arrival route - picks the loader; plus the F12 hard block on a failed catalog load |
 | `repl-capability-gaps.md` | Prioritized index of the REPL's language + GL-surface gaps, derived from the four stencil-shadow-volume scenes: what each unlocks, effort, and sequencing (indexes `float-returning-repl-functions.md` and `stencil-buffer-support.md` Phase 3 rather than restating them). Carries the measured z-fail / far-plane result arguing why `glMatrixMode` stays out of scope |
 | `scene-close-capability.md` | Close/remove a user scene (design brief) |
+| `scope-and-overlay-maintainability.md` | From the 2026-10-22 GLU overlay fixes: one cursor-block query in `source_scope`, the shared GLU depth helper everywhere (with a guard), vertex numbering computed once at flatten, one outline walk drawn in two phases, doc links that stop churning on line numbers, build traps (make 3.81, `bench --only`, single-test target), fixture and comment habits |
 | `smooth-autonormals-with-loop-support.md` | Smooth autonormals with loop awareness |
 | `streamed-numeric-input.md` | Framed stdin float groups consumed by a baked `input` expression atom |
