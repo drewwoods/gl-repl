@@ -21,7 +21,10 @@ refs=$(cat)
 
 cd "$(git rev-parse --show-toplevel)"
 make --no-print-directory check-trailing-whitespace
-make --no-print-directory test-stubs BUILD=quick TEST_JOBS=6
+# DOC_LINKS_FIX=0: check doc anchors strictly. The developer gate repoints
+# drifted anchors in place, but a push must verify what it publishes, never
+# rewrite the working tree it is pushing from.
+make --no-print-directory test-stubs BUILD=quick TEST_JOBS=6 DOC_LINKS_FIX=0
 
 # No git-lfs on this machine means no LFS filters either, so the clone has
 # no pointers to back — warn rather than block an otherwise fine push.

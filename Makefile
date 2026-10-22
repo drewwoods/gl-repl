@@ -2778,9 +2778,32 @@ check: ## Run all checks.
 	@set -e; \
 	for target in $(CHECK_TARGETS); do \
 		desc=$$(awk -v target="$$target" 'BEGIN {FS = ":.*## "} $$1 == target { print $$2; exit }' $(firstword $(MAKEFILE_LIST))); \
+		run=$$target; \
+		if [ "$$target" = check-doc-links ] && [ "$(DOC_LINKS_FIX)" = 1 ]; then \
+			run=internal-heal-doc-links; \
+			desc="$$desc (repointing drifted anchors in place; DOC_LINKS_FIX=0 checks strictly)"; \
+		fi; \
 		printf "$(CYAN)\n==> %s$(NC)\n" "$$desc"; \
-		$(MAKE) --no-print-directory $$target || exit $$?; \
+		$(MAKE) --no-print-directory $$run || exit $$?; \
 	done
+
+# The developer gates repair the one guard failure that is pure bookkeeping:
+# a `#L<n>` doc anchor shifted by an unrelated edit above its target. Only
+# the lossless repairs run here (--rewrite-paths, --repoint); links whose label
+# is gone still fail, and `make fix-doc-links` (which may strip) stays a
+# deliberate act. Strict under CI and in .githooks/pre-push: a push must check
+# what it publishes, never rewrite the tree it is pushing from.
+#? DOC_LINKS_FIX: 1 (default; 0 when CI is set) lets the check gate repoint drifted doc-link anchors in place; 0 checks strictly.
+DOC_LINKS_FIX ?= $(if $(CI),0,1)
+
+internal-heal-doc-links:
+	@out=$$(python3 scripts/check/check-doc-links.py --rewrite-paths --repoint 2>&1); \
+	status=$$?; \
+	printf '%s\n' "$$out"; \
+	case "$$out" in *"repointed "*|*"rewrote "*) \
+		printf "$(YELLOW)    note: doc-link repairs are in the working tree - commit them with the change that shifted them.$(NC)\n";; \
+	esac; \
+	exit $$status
 
 # Test targets never answer the optional music-pack prompt. `export` so the
 # recursive $(MAKE) invocations these targets fan out into inherit it, and so
@@ -3777,7 +3800,7 @@ test-only: ## Deprecated spelling of: make test-stubs SKIP_CHECKS=1.
 PUBLIC_MAKE_VARS := \
 	ARGS ASAN BUILD CALLGRAPH_FILES_GROUP_CONFIG CC CFLAGS \
 	CODE_PANEL_STENCIL_BENCH_ARGS CODE_PANEL_TEXT_BENCH_ARGS \
-	ENTRY EXAMPLES_CATALOG FORMAT \
+	DOC_LINKS_FIX ENTRY EXAMPLES_CATALOG FORMAT \
 	FREEGLUT_DEMOS_SRC FREEGLUT_INCLUDE_DIR FREEGLUT_LIB_PATH FREEGLUT_OSMESA \
 	FREEGLUT_VENDOR FREEGLUT_VENDOR_LINUX \
 	GLUT_BITMAP_BENCH_ARGS MACOS_UNIVERSAL MSAN_CC MUSIC_DEST MUSIC_TAG \

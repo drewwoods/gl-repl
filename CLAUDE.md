@@ -228,6 +228,10 @@ make test-format           # Indentation/formatting
 make test-repl-core-parse test-repl-core-format test-repl-core-commit test-repl-core-io
 ```
 
+The `make test` gate repoints drifted doc-link `#L<n>` anchors in place
+(`DOC_LINKS_FIX=0` for strict, as CI and pre-push do) - commit those repairs
+with your change.
+
 Test sources under `tests/`, shared helpers `tests/support/`; binaries land
 at the repo root (`./test_eval`, …).
 

@@ -1,6 +1,6 @@
 ## Scope and Overlay Maintainability - one cursor-scope query, one vertex numbering, one outline walk
 
-## Status - NOT STARTED (item 10, the written spec, is done)
+## Status - NOT STARTED (items 2, 5 and 10 are done)
 
 No runtime item has started, so the plan stays in `not-started/`. Item 10
 completed 2026-10-22: the
@@ -43,7 +43,7 @@ and 3, items 10 and 11, and additions to items 6 and 7.
 | 2 | Shared GLU depth helper everywhere, with a guard | stops the contour/polygon `gluEnd()` mix-up recurring | 2-3 h | - |
 | 3 | Vertex numbering computed once | gutter, labels, filters cannot disagree | 2-3 days | 1 |
 | 4 | Collect outlines once, draw twice | removes three near-copy passes; highlight cost back near plain | 2-3 days | - (measure first) |
-| 5 | Doc links stop churning on line numbers | no more anchor-only diffs and gate failures | 0.5 h / 0.5 day | - |
+| 5 | Doc links stop churning on line numbers - DONE | no more anchor-only diffs and gate failures | 0.5 h / 0.5 day | - |
 | 6 | Build traps: make version, bench `--only`, single-test target | no stale binaries, no silent no-ops | ~1 h each | - |
 | 7 | Test fixtures from real flatten output; named GL enums in traces | fixtures cannot drift from production | ongoing | - |
 | 8 | Overlay setup out of `glr_ctrl.c` | smaller controller, fewer `_for_test` seams | ~0.5 day | best after 1 |
@@ -342,7 +342,15 @@ highlight rows within ~10% of the plain row.
 
 ---
 
-### 5. Doc links stop churning on line numbers
+### 5. Doc links stop churning on line numbers - DONE (option A)
+
+`make check` (and so `test` / `test-stubs`) runs
+`check-doc-links.py --rewrite-paths --repoint` in place of the strict check
+when `DOC_LINKS_FIX=1` - the default, except when `CI` is set. Only the
+lossless repairs run; a link whose label is gone still fails, and
+`make fix-doc-links` (which may strip) stays a deliberate act. The gate
+prints a note when it repaired something. `.githooks/pre-push` passes
+`DOC_LINKS_FIX=0`, so a push checks strictly.
 
 #### Today
 

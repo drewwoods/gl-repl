@@ -120,6 +120,13 @@ green:
 - **No trailing whitespace** - enforced on commits since `origin/main`
   (also wired into `test-stubs` and the pre-push hook).
 
+`make test` / `make test-stubs` run the `make check` gate first. Doc-link `#L<n>`
+anchors that an unrelated edit shifted are repaired in place by that gate
+(`DOC_LINKS_FIX=1`, the default outside CI) - commit the repair with the
+change that caused it. CI and the pre-push hook check strictly
+(`DOC_LINKS_FIX=0`); links whose label is gone still need
+`make fix-doc-links`.
+
 Portability conventions the guards can't fully machine-check: use
 `STATIC_ASSERT(expr, msg)` from [`include/c_compat.h`](../include/c_compat.h) (never raw
 `_Static_assert`), plain `, __VA_ARGS__` (no GNU `##`), and prototyped
