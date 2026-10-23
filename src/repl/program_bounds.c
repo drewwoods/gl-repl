@@ -45,12 +45,12 @@ typedef struct BoundsAccum {
  * fallback scale.
  *
  * Filtering here rather than checking the finished box is what makes the two
- * poisons behave alike. NaN was already being dropped, but by accident: it
- * compares false against both bounds, so it silently failed to widen them -
- * except as the FIRST point, where it seeded min and max directly and the
- * box came back malformed. An infinity had the opposite problem, comparing
- * perfectly well and widening the box to unbounded size, which a consumer
- * scaling itself to the scene turns into an infinite radius. */
+ * poisons behave alike. Left unfiltered, NaN is dropped only by accident: it
+ * compares false against both bounds, so it silently fails to widen them -
+ * except as the FIRST point, where it seeds min and max directly and the
+ * box comes back malformed. An infinity compares perfectly well and widens
+ * the box to unbounded size, which a consumer scaling itself to the scene
+ * turns into an infinite radius. */
 static int point_is_finite(const float p[3]) {
     return isfinite(p[0]) && isfinite(p[1]) && isfinite(p[2]);
 }

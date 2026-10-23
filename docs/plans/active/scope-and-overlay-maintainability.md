@@ -1,6 +1,6 @@
 ## Scope and Overlay Maintainability - one cursor-scope query, one vertex numbering, one outline walk
 
-## Status - PARTIALLY IMPLEMENTED (items 1, 2, 3, 4, 5, 6, 7, 8 and 10 are done)
+## Status - PARTIALLY IMPLEMENTED (items 1, 2, 3, 4, 5, 6, 7, 8 and 10 are done; item 9's comment clean-up is done)
 
 Items 1, 2, and 4 implement the shared cursor-scope and outline paths.
 Item 10's [overlay scope contract](../../ARCHITECTURE.md#overlay-scope-contract)
@@ -46,7 +46,7 @@ and 3, items 10 and 11, and additions to items 6 and 7.
 | 6 | Build traps: make version, bench `--only`, single-test target - DONE | no stale binaries, no silent no-ops | ~1 h each | - |
 | 7 | Test fixtures from real flatten output; named GL enums in traces - DONE | fixtures cannot drift from production | ongoing | - |
 | 8 | Overlay setup out of `glr_ctrl.c` - DONE | smaller controller, fewer `_for_test` seams | ~0.5 day | best after 1 |
-| 9 | Habits: present-tense comments, one worktree per session | less comment rot, clean benchmarks | - | - |
+| 9 | Habits: present-tense comments (clean-up DONE), one worktree per session | less comment rot, clean benchmarks | - | - |
 | 10 | Written spec: overlay scope per primitive kind - DONE | one source of truth for items 1, 3, 4 and their tests | 1-2 h | - |
 | 11 | Adjacent: workspace manifest forward compatibility | new builds' workspaces stay readable by older builds | ~1 h | - |
 
@@ -724,7 +724,10 @@ used to include all of `glr_ctrl.c` for the same helper.
   Clean-up candidates from 2026-10-22: the comment on
   `render_single_polygon_highlight` and the `OutlinePhase` comment in
   `edit_overlays.c`, and the Bold-style test comment in
-  `tests/test_edit_overlays.c`.
+  `tests/test_edit_overlays.c`. Done: the history-narrating comments in the
+  overlay, scope, replay, code-panel and overlay-test code now state present
+  behaviour and the reason for it. The CONTRIBUTING.md extension was
+  deliberately not made.
 - **One worktree per parallel session.** On 2026-10-22 a forked session
   committed to the same `main` checkout between this work's commits. Nothing
   broke, but benchmark comparisons and gate runs assume nobody else is

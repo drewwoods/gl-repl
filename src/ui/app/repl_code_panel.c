@@ -895,10 +895,10 @@ static int repl_code_panel_line_replay_call_chain_colors(
  * reserved, and UI_TEXT_PANEL_CHROME_AUX_COL is always set to match - the
  * renderer draws the column at text_x - 6 * FONT_W, so reserving and
  * painting it must never disagree or the labels land on the line-number
- * gutter. It was previously conditional on a `show_vertex_indices` flag
- * that had no GlrConfigKey, no menu row and no binding: nothing outside
- * tests could turn it off, so the conditional layout only ever produced
- * duplicated width arithmetic in test helpers. */
+ * gutter. There is no `show_vertex_indices` toggle (no GlrConfigKey, menu row
+ * or binding): nothing outside the tests could turn the column off, so a
+ * conditional layout would only duplicate the width arithmetic in test
+ * helpers. */
 int ui_repl_code_panel_compute_text_x(const UiRenderSnapshot *snap) {
     if (!snap)
         return 0;
@@ -1151,7 +1151,7 @@ typedef enum {
     MARKER_PRIORITY_MATCHING_PUSH,
     MARKER_PRIORITY_FEEDING_NORMAL,
     MARKER_PRIORITY_FEEDING_COLOR,
-    /* Above the feeding markers: the affecting-transform set now resolves
+    /* Above the feeding markers: the affecting-transform set resolves
      * through the flat program and can land on a line that also carries a
      * feeding-color/normal marker for a different cursor query, so it must
      * win rather than be masked (req 4). */
@@ -2658,7 +2658,7 @@ static void repl_code_panel_add_header_rows(ReplCodePanelBuilder *builder) {
 
     /* Scratch decoration row: panel-only (the exporter emits the arrays as
      * file-scope statics on demand instead). It decorates the global
-     * declarations, which now sit above display() themselves, so it
+     * declarations, which sit above display() themselves, so it
      * belongs with the file-scope chrome rather than below the frame. */
     repl_code_panel_add_static_row(
         builder, REPL_CODE_PANEL_SCRATCH_DECL_LINE);

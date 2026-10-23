@@ -372,8 +372,8 @@ void repl_source_scope_cmd_indent(int pos, char *buf, int buf_sz) {
  * begin-depth deliberately EXCLUDED (the glBegin/glEnd lines are not
  * indented by the block they open). Matrix depth IS included so a
  * glBegin/glEnd nested inside a glPushMatrix block lands at the right
- * level. Uses the same public depth queries the parser previously
- * open-coded at two sites. */
+ * level. Shares repl_source_scope_view_base_indent() with the normal indent,
+ * so the two cannot drift apart. */
 void repl_source_scope_view_begin_indent(const ReplSourceScopeView *view,
                                          int pos, char *buf, int buf_sz) {
     int td = repl_source_scope_view_tess_scope_depth_at(view, pos);

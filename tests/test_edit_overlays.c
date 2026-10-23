@@ -309,8 +309,8 @@ static void test_cursor_flat_block_matches(void) {
     ASSERT_INT("tess match", repl_cursor_flat_block_matches(ctx.program, &ctx.cursor, 0, 1), 1);
 
     /* Two closed contours, cursor on the second. The first contour's
-     * gluEnd() is not the polygon's: the scan used to stop there, so a cursor
-     * in any later contour never matched its own polygon. */
+     * gluEnd() is not the polygon's: the scan must not stop there, or a cursor
+     * in any later contour would never match its own polygon. */
     memset(cmds, 0, sizeof(cmds));
     cmds[0].valid = 1; cmds[0].type = CMD_TESS_BEGIN_POLYGON;
     cmds[1].valid = 1; cmds[1].type = CMD_TESS_BEGIN_CONTOUR;
@@ -426,8 +426,8 @@ typedef struct {
     int pending;
 } ScopeSelectionSweep;
 
-/* on_each_cmd runs before the next command: the preceding head's selection
- * is now observable, even for a polygon immediately followed by a strip. */
+/* on_each_cmd runs before the next command, so the preceding head's selection
+ * is observable even for a polygon immediately followed by a strip. */
 static void scope_sweep_finish_head(const ReplayVertexWalkState *state, void *user) {
     ScopeSelectionSweep *sw = user;
     if (sw->pending >= 0) sw->selected[sw->pending] = state->block_selected;
@@ -1571,12 +1571,13 @@ static void test_single_polygon_highlight_fan_anchor(void) {
 }
 
 /* SINGLE_POLYGON with outlines on: the block's plain outline covers every
- * primitive, the selected one included, so the highlight has to come AFTER
- * it to win the selected primitive's edges. It used to come first, which
- * left a black core down every highlighted edge - and under Bold, whose edge
- * width (1.2 * 2.5 = 3.0) ties the active width, swallowed the highlight
- * outright unless the highlight was Bold-scaled too. Drawn last, it needs no
- * scaling: the plain VERTEX_OUTLINE_ACTIVE_WIDTH in every style. */
+ * primitive, the selected one included, so the highlight is drawn after it to
+ * win the selected primitive's edges. Drawn first, the plain outline would
+ * leave a black core down every highlighted edge - and under Bold, whose edge
+ * width (1.2 * 2.5 = 3.0) ties the active width, it would swallow the
+ * highlight outright unless the highlight were Bold-scaled too. Drawn last,
+ * the highlight needs no scaling: the plain VERTEX_OUTLINE_ACTIVE_WIDTH in
+ * every style. */
 static void test_single_polygon_highlight_bold_style(void) {
     printf("--- edit_overlays single-polygon highlight (bold style) ---\n");
 
@@ -1645,8 +1646,9 @@ static void test_single_polygon_highlight_bold_style(void) {
  * blocks share the edge (1,0,0)-(1,1,0) - two rows of a strip surface, or
  * two faces of a cube - and a GLU contour later in the program traces the
  * same square. With the cursor in the first block, the second block's plain
- * outline and the contour's plain outline both come later in program order;
- * each used to land on top of the highlight. */
+ * outline and the contour's plain outline both come later in program order,
+ * so drawing the highlight in program order would let either one land on top
+ * of it. */
 static void test_highlight_drawn_after_all_plain_outlines(void) {
     printf("--- edit_overlays highlights drawn after every plain outline ---\n");
 
@@ -2573,8 +2575,8 @@ static void test_on_vertex_number_label_callback(void) {
     on_vertex_number_label(&state, 0.0f, 0.0f, 0.0f, NULL);
     ASSERT_INT("off / NULL ctx collects nothing", off_ctx.count, 0);
 
-    /* A vertex that projects outside the viewport is culled (the old direct
-     * glRasterPos3f would have been invalid there too). */
+    /* A vertex that projects outside the viewport is culled: a direct
+     * glRasterPos3f would be invalid there too. */
     VertexLabelCtx cull_ctx;
     memset(&cull_ctx, 0, sizeof(cull_ctx));
     cull_ctx.mode = OVERLAY_VERTEX_LABEL_INDEX;
@@ -2587,8 +2589,9 @@ static void test_on_vertex_number_label_callback(void) {
 }
 
 /* Overlay scope: last-instance mode labels only the last unrolled copy of a
- * looped primitive (the parametric-torus duplicate-label fix), while
- * all-instances mode labels every vertex with a globally-unique number. The
+ * looped primitive, so a parametric torus is not labeled v0..vN once per
+ * ring, while all-instances mode labels every vertex with a globally-unique
+ * number. The
  * walk resets vertex_idx_in_block to 0 at each block, which is how the callback
  * detects block (loop-iteration) boundaries - and how the forward-only walk
  * knows to discard the copy it had collected so far. */
@@ -2675,8 +2678,8 @@ static void test_overlay_scope(void) {
 
     /* At-vertex placement keeps the collection rule of whatever scope it runs
      * under (here all-instances: every vertex) but numbers in-block, because
-     * a label sitting on its own vertex has nothing to disambiguate. That is
-     * what the retired at-vertex *scope* did, now reachable under any scope. */
+     * a label sitting on its own vertex has nothing to disambiguate. At-vertex
+     * is a placement, not a scope, so it applies under any scope. */
     VertexLabelCtx at_vert;
     memset(&at_vert, 0, sizeof(at_vert));
     at_vert.mode = OVERLAY_VERTEX_LABEL_INDEX;
@@ -2964,7 +2967,7 @@ static void test_vertex_label_visible_occlusion(void) {
         ctx.vw = 4;
         ctx.vh = 4;
         ctx.depthbuf = depth;
-        /* The snapshot carries its own dimensions now: the consumer refuses one
+        /* The snapshot carries its own dimensions: the consumer refuses one
          * that disagrees with the live viewport rather than indexing it. */
         ctx.depth_vw = 4;
         ctx.depth_vh = 4;
@@ -3480,8 +3483,8 @@ static void test_tess_contour_vertex_labels(void) {
  * resolved the way the controller resolves them. The cursor is inside both
  * primitives, so each family shows its own current piece: the glVertex calls
  * of GL's quad under the cursor, and every gluVertex of the cursor's contour
- * - including the one the cursor is on (the bug: a gluVertex in the strip was
- * dropped because it is in no quad). */
+ * - including the one the cursor is on. That vertex is in no quad, so a
+ * quad-only filter would drop it. */
 /* The single-polygon walk context, filled the way glr_overlay_build_pack
  * fills it for this cursor line. */
 static void build_single_polygon_walk(int cursor, OverlayWalkCtx *walk) {
@@ -3523,8 +3526,8 @@ static void render_nested_strip_labels(int cursor, char *out, size_t out_sz) {
  * label and normal arrow. Swept over every vertex row of the three GLU
  * concave-arrow examples, with the controller's own walk context and the
  * shared single_polygon_keeps_vertex() rule. A gluVertex inside the
- * extrusion example's nested strip used to fail this: it is in no quad, and
- * was dropped even with the cursor on it. */
+ * extrusion example's nested strip is in no quad, so it is the case a
+ * quad-only filter would fail: it must stay in scope with the cursor on it. */
 #define SP_SWEEP_MAX_LINES 512
 
 typedef struct {
@@ -3613,8 +3616,8 @@ static void test_single_polygon_keeps_cursor_vertex(void) {
 }
 
 /* Normal arrows on a two-contour polygon. The arrow pass keeps its own "is
- * the current block the cursor's" verdict, and it cleared that verdict at
- * every gluEnd() - so the first contour's close dropped the arrows of the
+ * the current block the cursor's" verdict, which a contour's gluEnd() must
+ * not clear: otherwise the first contour's close would drop the arrows of the
  * second contour in every cursor scope. Real flatten output, cursor in each
  * contour. Arrows are drawn from each vertex position, so a traced
  * "glVertex3f x y z" at a vertex means its arrow was drawn. */
@@ -3800,13 +3803,13 @@ static void test_render_via_repl_program(void) {
     /* This pass must issue NO glReadPixels at all: the occlusion depth is
      * captured by the controller after the previous frame's glFinish and
      * handed in. A readback here would be a whole-pipeline sync in the middle
-     * of the frame, which is the ~14 ms bug this arrangement removed. */
+     * of the frame, which costs ~14 ms. */
     ASSERT_INT("label pass performs no depth readback of its own",
                trace_count_sym(&log, "glReadPixels"), 0);
 
     /* A label mode that is on but has nothing in scope must not ask for depth:
      * that flag is what the controller's capture gate reads, and it is what
-     * preserves the old lazy read's "empty scope costs nothing" property. */
+     * keeps a label mode with nothing in scope free. */
     OverlayWalkCtx empty_walk = walk;
     empty_walk.cursor.cursor_block_begin = 0;
     empty_walk.cursor.cursor_block_end = 0;   /* glNormal3f row: no vertices */
@@ -3924,7 +3927,7 @@ static void test_render_via_repl_program(void) {
                trace_count_sym(&log, "glPushAttrib"), 0);
 
     /* post_overlays orchestrator: runs outlines + points + guides + normals
-     * in one pass (labels moved to the post-resolve hook below). Build the
+     * in one pass (labels run in the post-resolve hook below). Build the
      * snapshot pack and verify it emits the flattened vertices through at
      * least one overlay path. */
     OverlaySnapshotPack pack;
@@ -3945,8 +3948,8 @@ static void test_render_via_repl_program(void) {
     trace_end(&log);
     ASSERT_TRUE("post_overlays emits the flattened vertices",
                 trace_count_line(&log, "glVertex3f 0.25 0.5 0.75") >= 1);
-    /* The per-pass orchestrator must NOT draw the bitmap-text labels any
-     * more - inside the accumulation loop they'd ghost across sub-passes. */
+    /* The per-pass orchestrator must NOT draw the bitmap-text labels - inside
+     * the accumulation loop they'd ghost across sub-passes. */
     ASSERT_INT("post_overlays draws no vertex-number labels",
                trace_count_sym(&log, "glRasterPos2f"), 0);
 
@@ -3956,8 +3959,8 @@ static void test_render_via_repl_program(void) {
     trace_end(&log);
     ASSERT_INT("post_resolve_overlays draws vertex-number labels",
                trace_count_sym(&log, "glRasterPos2f") >= 1, 1);
-    /* The label pass owns no readback any more - the controller captures it
-     * after the frame's glFinish (see glr_ctrl_capture_depth_snapshot). */
+    /* The label pass issues no readback - the controller captures it after
+     * the frame's glFinish (see glr_ctrl_capture_depth_snapshot). */
     ASSERT_INT("post_resolve label pass reads no depth itself",
                trace_count_sym(&log, "glReadPixels"), 0);
 

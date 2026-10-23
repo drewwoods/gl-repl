@@ -615,7 +615,8 @@ static void overlay_emit_immediate_vertex(const GLCmd *cmd) {
         glVertex4f(cmd->args[0], cmd->args[1], cmd->args[2], cmd->args[3]);
 }
 
-/* One CPU collection feeds both outline phases. */
+/* One CPU collection feeds both the plain and the highlight draws in
+ * outline_draw_batches(). */
 typedef enum {
     OUTLINE_IMMEDIATE,
     OUTLINE_CONTOUR,
@@ -1224,8 +1225,8 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
     /* Desktop GL rasterizes points as circles under multisample rasterization,
      * so the native build barely needs this - gl4es has no such implicit path
      * and honours GL_POINT_SMOOTH only when it is explicitly enabled (its
-     * fixed-pipeline shader derives coverage from gl_PointCoord; upstream
-     * since gl4es#522). */
+     * fixed-pipeline shader derives coverage from gl_PointCoord; see
+     * gl4es#522). */
     glEnable(GL_POINT_SMOOTH);
     glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
 
@@ -1269,10 +1270,9 @@ void edit_overlays_render_vertex_points(const OverlayWalkCtx *ctx) {
         }
         /* No glPointSize(1) reset here: the enclosing
          * glPushAttrib(GL_ALL_ATTRIB_BITS) restores the size, so the call
-         * would be redundant - and on web, gl4es applies the last size set
-         * before its flush to the whole pending batch, so resetting here
-         * used to shrink every marker this walk had just drawn to one pixel
-         * (fixed upstream in gl4es#522). */
+         * would be redundant. Without gl4es#522, gl4es applies the size
+         * current at its flush to the whole pending point batch, and a reset
+         * here would shrink every marker already drawn to one pixel. */
         /* Drop them before the glut pass re-applies the program's clip state
          * from scratch: a cap left on here is not in that walk's mask, so it
          * would clip shapes drawn before the program ever enabled it. */
@@ -1400,7 +1400,8 @@ typedef struct {
     float view_inv[16];
     int   view_inv_ok;
     /* Projection + viewport snapshotted before the walk (the walker only
-     * touches the modelview), used to project each vertex to screen space. */
+     * touches the modelview); the pass projects each vertex to screen space
+     * with them. */
     float proj[16];
     int   vw, vh;
     VertexLabel labels[VERTEX_LABEL_MAX];
@@ -1434,8 +1435,8 @@ typedef struct {
      *
      * wanted_depth records whether any vertex actually reached the cull. The
      * controller's capture gate reads it to decide whether next frame's
-     * snapshot is worth taking, which is what preserves the old lazy read's
-     * property that a label mode with nothing in scope costs nothing. */
+     * snapshot is worth taking, which is what keeps a label mode with nothing
+     * in scope free. */
     const float *depthbuf;
     int    depth_vw, depth_vh;
     int    wanted_depth;
@@ -1778,9 +1779,9 @@ static void vertex_labels_layout_and_draw(VertexLabelCtx *ctx) {
         /* Place in collection (walk) order - a camera-independent priority - so two
          * labels competing for the same screen region never swap which one claims
          * the anchor vs. gets nudged/dropped as the camera moves. Sorting by depth
-         * instead made near-equal depths flip every frame (a z-fighting-like
-         * shimmer). The trade is that the kept subset is the earlier-in-walk one
-         * rather than strictly the closest.
+         * instead would make near-equal depths flip every frame (a
+         * z-fighting-like shimmer). The trade is that the kept subset is the
+         * earlier-in-walk one rather than strictly the closest.
          *
          * On top of that ordering, each label's placement is temporally
          * sticky across frames (see the TEMPORALLY STICKY note above). */

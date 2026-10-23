@@ -729,10 +729,10 @@ static void test_color_picker(void) {
 
 /* Regression: when the color picker edits the line the cursor is parked
  * on, the editor input buffer is a live shadow of that line. The
- * writeback used to update the command store + editor buffer text but
- * not the shadow, so the code panel kept showing the pre-edit color and
- * a later navigation re-committed the stale input over the picker's
- * change (commit_before_navigation), silently reverting it. */
+ * writeback must update the shadow as well as the command store and editor
+ * buffer text; otherwise the code panel keeps showing the pre-edit color, and
+ * a later navigation re-commits the stale input over the picker's change
+ * (commit_before_navigation), silently reverting it. */
 static void test_color_picker_active_line_no_revert(void) {
     printf("Testing Color Picker active-line writeback...\n");
 
@@ -746,7 +746,8 @@ static void test_color_picker_active_line_no_revert(void) {
     ASSERT_TRUE("found a glColor3f line", ci >= 0);
 
     /* Park the cursor on the color line so its text is loaded into the
-     * input buffer (the shadow). This is the precondition for the bug. */
+     * input buffer (the shadow). This is the precondition for the
+     * regression. */
     editor_navigate_to_line(ci);
     ASSERT_INT("cursor parked on color line", editor_state_edit_line(), ci);
 
@@ -1273,7 +1274,7 @@ static void test_ui_menu_bar_hit_test(void) {
 
     /* Top-level menu button (File at left edge, my within bar). The
      * J2.1 split emits UI_HIT_MENU_BUTTON for top-level labels with
-     * cmd_idx = menu_id; the controller no longer reads ui_menu_bar
+     * cmd_idx = menu_id; the controller does not read ui_menu_bar
      * state to distinguish a top-level click from a dropdown row. */
     ui_menu_bar_close();
     UiHit h_menu = ui_menu_bar_hit_test(20, 10);
@@ -1394,7 +1395,7 @@ static void test_ui_variable_panel_hit_test(void) {
     /* The collapse chip's hit cell must cover the glyphs that are actually
      * drawn - the top text row of the panel, right-aligned - and not the
      * empty lower part of the nominal title band. Sizing the cell to
-     * VAR_TITLE_H once put the clickable area below the visible "[-]". */
+     * VAR_TITLE_H would put the clickable area below the visible "[-]". */
     int chip_mx = px + pw - 10;               /* inside the 3-char chip column */
     int glyph_my = ui_state_viewport().window_h - (py + ph - 8);
     UiHit h_chip = vp_hit_test(1, chip_mx, glyph_my);
@@ -1639,12 +1640,12 @@ static void test_tour_hud_compact_expand_hit_routing(void) {
 
 /* Sweep both sides of a divider edge one pixel past the grab band and
  * assert the click classification and the hover-cursor predicate agree at
- * every pixel. The regression this pins: the code panel's statusbar strip
+ * every pixel. This pins the case where the code panel's statusbar strip
  * runs along the same edge as the divider in the default TOP layout (and
- * across it in LEFT), so classifying the strip first left the band's
- * panel-interior half hitting the statusbar - the resize cursor appeared
- * over ~3px that started no drag, and the effective grab area collapsed to
- * the outermost pixel or two.
+ * across it in LEFT). Classifying the strip first would send the band's
+ * panel-interior half to the statusbar: the resize cursor would appear over
+ * ~3px that starts no drag, and the effective grab area collapses to the
+ * outermost pixel or two.
  *
  * `vertical` selects the sweep axis; `edge` is the divider coordinate on
  * that axis (window x, or GL bottom-left y); `fixed` is the other axis's
@@ -1794,7 +1795,7 @@ static void code_panel_first_row_text_click(int *out_mx, int *out_my) {
      * re-deriving its y from panel geometry. The derived-C chrome is no
      * longer all above the document: `void display(void) {` is spliced at
      * the display-body boundary and `}` follows the trailing row, so
-     * "scroll past header_rows, take vis 0" no longer names a document
+     * "scroll past header_rows, take vis 0" does not name a document
      * row - and when the whole panel fits, editor_scroll clamps to 0 and
      * that scroll cannot happen at all.
      *
@@ -1931,9 +1932,9 @@ static int find_code_panel_text_row(int want_line, int want_char_neg1,
 static void test_ui_panels_hit_test_trailing_blank_row_kind(void) {
     /* Both code-focus modes, pinned explicitly: the trailing blank row
      * must resolve to UI_HIT_CODE_TEXT @ document_count regardless of
-     * CFG_DEFAULT_CODE_FOCUS. b472592 flipped that default and broke
-     * this - the row's y was hand-computed and the scroll clamps
-     * differently once focus collapses the header chrome. */
+     * CFG_DEFAULT_CODE_FOCUS. The row's y is hand-computed, and the scroll
+     * clamps differently once focus collapses the header chrome, so a flip of
+     * that default (b472592) breaks this. */
     for (int cf = 0; cf <= 1; cf++) {
         const char *mode = cf ? " [focus]" : " [full]";
         char lbl[96];
@@ -1966,7 +1967,7 @@ static void test_ui_panels_hit_test_trailing_blank_row_kind(void) {
 }
 
 static void test_ui_panels_hit_test_virtual_row_routes_to_source(void) {
-    /* Both code-focus modes, pinned explicitly (same b472592 hazard as
+    /* Both code-focus modes, pinned explicitly (same default-flip hazard as
      * the trailing-blank-row test above). */
     for (int cf = 0; cf <= 1; cf++) {
         const char *mode = cf ? " [focus]" : " [full]";
@@ -1997,8 +1998,8 @@ static void test_ui_panels_hit_test_virtual_row_routes_to_source(void) {
 
         /* line 0 + char_idx == -1 uniquely identifies the virtual row;
          * the real glBegin row is line 0 with char_idx >= 0. This one
-         * predicate covers the old "hit kind", "rewrites to source
-         * line", and "clears char index" assertions. */
+         * predicate covers the "hit kind", "rewrites to source line", and
+         * "clears char index" assertions together. */
         found = find_code_panel_text_row(0, 1, &h, &mx, &my);
         snprintf(lbl, sizeof lbl,
                  "virtual row -> CODE_TEXT, src line 0, char -1%s", mode);
@@ -2016,11 +2017,9 @@ static void test_ui_panels_hit_test_virtual_row_routes_to_source(void) {
 /* Regression: glVertex2f commands should generate gutter vertex-index labels
  * (v0, v1, ...) just like glVertex3f.
  *
- * This used to measure a glRasterPos2f delta between renders with the
- * vertex-index column off and on. That column is now unconditional (the
- * `show_vertex_indices` flag it toggled was unreachable outside tests), so
- * the label is read off the built row instead - which pins the label text
- * rather than merely that one more string was drawn. */
+ * The vertex-index column is always present (there is no show_vertex_indices
+ * toggle outside the tests), so the label is read off the built row. That
+ * pins the label text rather than merely that one more string was drawn. */
 static void test_vertex2f_gutter_labels(void) {
     UiRenderSnapshot snap;
     char label[8];
@@ -2142,8 +2141,8 @@ static void tess_gutter_expect(int line_idx, const char *want,
 }
 
 /* Regression: gluBegin(GLU_POLYGON) ... gluEnd() is a block for the gutter's
- * vertex numbers exactly as glBegin/glEnd is. The gate used to recognize only
- * CMD_BEGIN/CMD_END, so a tessellated polygon never showed v0, v1, ... (the
+ * vertex numbers exactly as glBegin/glEnd is. A gate that recognizes only
+ * CMD_BEGIN/CMD_END never shows v0, v1, ... on a tessellated polygon (the
  * glu-concave-arrow and -cutout examples). Numbering runs on across contours,
  * matching the 3D vertex labels: the polygon is one block, the contours are
  * not separate ones. */
@@ -3049,7 +3048,7 @@ static void test_tutorial_fade_handles_wrapped_lines(void) {
                 fading_alpha_calls > 0);
 }
 
-/* Audit #49 (Tier C, commit f9abd33) regression: ui_repl_code_panel_hit_test
+/* Regression guard for the row-builder cache: ui_repl_code_panel_hit_test
  * caches the row builder from the prior ui_repl_code_panel_render_with_chrome
  * call, keyed on the snapshot pointer. A stale cache (or a cache that
  * doesn't refresh after the document mutates) would silently miss-route
@@ -3137,10 +3136,10 @@ static void test_render_then_hit_test_row_consistency(void) {
                 (mask_b & (1 << 5)) != 0);
 }
 
-/* Audit #6 (Bug, fd70b4e) regression: the gutter left-marker color used to
- * depend on the silent ORDER of `if (highlight_*) marker = color;` blocks.
- * The fix introduced an explicit MarkerPriority enum
- * (TUTORIAL_INSERTION > FEEDING_COLOR > FEEDING_NORMAL > REPLAY). Walk
+/* Regression guard for the gutter left-marker color: it comes from an explicit
+ * MarkerPriority enum, not from the order of `if (highlight_*) marker = color;`
+ * blocks. The order is TUTORIAL_INSERTION > FEEDING_COLOR > FEEDING_NORMAL >
+ * REPLAY. Walk
  * the priority matrix: for each pair of overlapping signals on the same
  * line, the marker color must match the higher-priority signal. A revert
  * to assignment-order would silently flip pairs and break this. */

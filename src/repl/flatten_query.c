@@ -102,10 +102,10 @@ void repl_flatten_vertex_runs_by_row(int *out, int row_count, int lo, int hi) {
 /* Map a source glBegin/glEnd pair to the flat program by provenance.
  *
  * For loops there may be several flat begin/end pairs with the same source
- * indices; returning the first one preserves the long-standing "one instance"
- * cursor-block behavior. The important part is that we no longer infer the
- * flat index by counting source rows, which is what let earlier loop-expanded
- * geometry get selected for later source blocks. */
+ * indices; returning the first one gives the "one instance" cursor-block
+ * behavior. The flat index is matched by provenance, never inferred by
+ * counting source rows: counting lets earlier loop-expanded geometry get
+ * selected for later source blocks. */
 static int flatten_find_flat_begin_block_extent(int source_begin,
                                                 int source_end,
                                                 int *out_begin,
@@ -224,7 +224,7 @@ static int flat_scope_member(const GLCmd *fc, int lo, int hi) {
  * inner loop reports one enclosing-iteration's worth (e.g. sea()'s inner
  * strip loop), while the outer loop - invoked once - still reports its
  * whole run. A top-level or singly-invoked block's first run equals its
- * frame total, so those readouts are unchanged. */
+ * frame total, so for those blocks the readout is the frame total. */
 static int flat_cost_count_first_run(int lo, int hi) {
     const GLCmd *flat = repl_state_flat_program_cmds();
     int n = repl_state_flat_program_count();

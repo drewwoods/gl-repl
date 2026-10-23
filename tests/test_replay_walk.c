@@ -5,15 +5,15 @@
  * on:
  *
  *   1. The walker fires `on_each_cmd` at the cursor's first flat
- *      occurrence even when no transform guide is active. Earlier a
- *      fast-path in glr_ctrl_render_cursor_guides skipped the walk in
- *      that case, so the geometry guide ran with the caller's
- *      (un-transformed) modelview - guide marker landed at world
- *      origin instead of at the vertex.
+ *      occurrence even when no transform guide is active. A fast path in
+ *      glr_ctrl_render_cursor_guides that skipped the walk in that case
+ *      would run the geometry guide with the caller's (un-transformed)
+ *      modelview, so the guide marker lands at world origin instead of
+ *      at the vertex.
  *
  *   2. The flat command's `args[]` carry the *evaluated* coordinates
  *      after funcN inlining (with the call site's parameter values
- *      substituted in). The cursor-guide fix overrides the input-text
+ *      substituted in). The cursor guide overrides the input-text
  *      snapshot args with these, which is only correct if the flat
  *      args are real numeric positions, not zeros.
  *
@@ -166,7 +166,7 @@ static int find_source_line(const char *prefix) {
  *
  * If those came back as (0, 0, 0) - which is what the input-text
  * parser produces for funcN locals - the cursor guide would render
- * at the local origin and we'd be back in the bug.
+ * at the local origin.
  */
 static void test_walker_resolves_funcn_args_at_cursor(void) {
     glr_ctrl_reset_all();
@@ -226,10 +226,9 @@ static void test_walker_resolves_funcn_args_at_cursor(void) {
 
 /* --- 2. on_each_cmd fires at cursor even with no transform guide -------
  *
- * Guards the 23c9e1a fast-path regression: a program with no transform
- * cursor and no replay would previously short-circuit the walker.
- * The cursor-guide path now always walks, so on_each_cmd MUST fire at
- * the cursor's flat-cmd index.
+ * Guards the cursor-guide walk: a program with no transform cursor and no
+ * replay must still walk, so on_each_cmd MUST fire at the cursor's flat-cmd
+ * index. A fast path that skipped the walk there would drop the guide.
  */
 static void test_walker_fires_on_each_cmd_at_cursor(void) {
     glr_ctrl_reset_all();
@@ -345,7 +344,7 @@ static void test_walker_stop_flag_halts(void) {
  *
  * Direct unit test of the helper that the cursor-guide path uses to
  * fix up vertex_args before handing them to
- * render3d_geometry_guides_render_for_cursor. This is the actual fix for the
+ * render3d_geometry_guides_render_for_cursor. This guards the
  * "guide rendered at object center" bug: if someone reverts the helper
  * to just `return *snapshot`, this test fails.
  */
@@ -401,8 +400,8 @@ static void test_cursor_guide_snapshot_override(void) {
     ASSERT_NEAR("TESS_VERTEX: z", snap3.vertex_args[2], -0.5f);
 
     /* NORMAL3F: override normal_args (not vertex_args) since cursor is
-     * on a glNormal3f line. Same root cause as the vertex bug - text
-     * parser collapses funcN-local refs to 0; we recover from flat
+     * on a glNormal3f line. The cause is the same as for the vertex case:
+     * the text parser collapses funcN-local refs to 0, so we recover from flat
      * cmd's evaluated args. */
     GLCmd nrm = {0};
     nrm.type = CMD_NORMAL3F;
@@ -501,11 +500,11 @@ static void test_cursor_guide_snapshot_override(void) {
 
 /* --- 5. parse_arg_slots handles nested parens ------------------
  *
- * Regression for the "wrong guide branch on funcN locals" bug:
+ * Guards the "wrong guide branch on funcN locals" case:
  * glVertex3f(cos(i*TAU/sides + phase)*radius,
  *            sin(i*TAU/sides + phase)*radius, 0)
  * collapses to n_filled=1 if the slot scanner stops at the first inner
- * `)`. The cursor guide then takes the n==1 branch and draws the YZ
+ * `)`. The cursor guide would then take the n==1 branch and draw the YZ
  * plane instead of a red point at the vertex.
  *
  * Note: this tests parse_arg_slots (static in glr_overlay_setup.c, reached

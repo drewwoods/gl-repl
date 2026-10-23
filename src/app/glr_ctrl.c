@@ -1366,15 +1366,15 @@ static int g_stencil_clear_warning_active = 0;
  * Vertex-label occlusion depth snapshot.
  *
  * The label pass culls labels whose vertex the scene drew over, which needs
- * the frame's depth buffer. It used to read that itself, mid-pass. On a driver
+ * the frame's depth buffer. Reading that mid-pass is a stall: on a driver
  * that renders ahead (NVIDIA by default) a synchronous glReadPixels blocks
- * until the whole queued, vsync-throttled pipeline retires, so that read cost
- * ~14 ms and consumed the entire frame budget - not in transfer (0.7-2.5 ms)
+ * until the whole queued, vsync-throttled pipeline retires, so the read costs
+ * ~14 ms and consumes the entire frame budget - not in transfer (0.7-2.5 ms)
  * but in drain. See docs/plans/in-review/vertex-label-depth-readback-stall.md
  * and `make bench-vertex-labels`, which reproduces every variant that does not
  * work (a different buffer, a different position, a PBO, a PBO plus a fence).
  *
- * So the read moved here: the host takes it after the glFinish it already
+ * So the read happens here: the host takes it after the glFinish it already
  * performs at end of frame, where the queue is drained and the wait is already
  * paid, and the *next* frame's label pass consumes it. The cull is therefore
  * one frame stale, which at 60 fps is not perceptible.
@@ -1407,11 +1407,10 @@ static GlrDepthSnapshot g_depth_snapshot;
 
 /* Did last frame's label pass actually reach the occlusion cull? The capture
  * gate reads this so that labels-on-but-nothing-in-scope keeps costing
- * nothing, which is the property the old lazy read had and the one thing an
- * end-of-frame capture cannot work out for itself - it runs before the pass
- * that would need the pixels. The cost is one frame of latency when labels
- * first come into scope, during which the pass sees no snapshot and draws
- * every label, which is the same fallback an unsupported context gets. */
+ * nothing. Only the pass can answer that: an end-of-frame capture runs before
+ * the pass that would need the pixels. The cost is one frame of latency when
+ * labels first come into scope, during which the pass sees no snapshot and
+ * draws every label, which is the same fallback an unsupported context gets. */
 static int g_depth_snapshot_wanted = 0;
 
 void glr_ctrl_invalidate_depth_snapshot(void) {
@@ -1863,7 +1862,7 @@ static void glr_ctrl_build_scene_config(FlatProgramView flat_program, Render3dRe
 
     /* --- Replay-mode overlay state ---
      * post_fill_fn / post_overlays_fn read these directly from REPL
-     * state; scene config no longer carries them. */
+     * state; scene config does not carry them. */
     int replaying = replay_active();
 
     /* --- Focus marker --- */

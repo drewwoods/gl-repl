@@ -1,7 +1,7 @@
 /*
  * replay.c - Replay vertex/tessellation walkers.
  *
- * Core replay machine logic has been split into:
+ * Core replay machine logic is split across:
  *   - replay_fade.c: Fade batch ring
  *   - replay_input.c: Key handlers
  *   - replay_playback.c: Seek, advance, and speed control
