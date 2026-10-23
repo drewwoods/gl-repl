@@ -11,6 +11,7 @@
 #include "repl/example_loader.h"
 #include "repl/pipeline.h"
 #include "app/glr_ctrl.h"
+#include "app/glr_overlay_setup.h"
 #include "subsystems/edit_overlays/edit_overlays.h"
 #include "support/test_harness.h"
 #include <math.h>
@@ -419,7 +420,7 @@ static void test_outline_and_label_scope_parity(void) {
             OverlayWalkCtx ctx;
             ScopeSelectionSweep sw;
             repl_flatten_refresh_current_block_highlight(row);
-            glr_ctrl_fill_overlay_walk_ctx(row, &ctx);
+            glr_overlay_fill_walk_ctx(row, &ctx);
             ctx.highlight_current_poly = 1;
             ctx.cursor_overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
             sw.program = ctx.program;
@@ -3382,14 +3383,15 @@ static void test_tess_contour_vertex_labels(void) {
  * of GL's quad under the cursor, and every gluVertex of the cursor's contour
  * - including the one the cursor is on (the bug: a gluVertex in the strip was
  * dropped because it is in no quad). */
-/* The single-polygon walk context, filled the way glr_ctrl_build_overlay_pack
+/* The single-polygon walk context, filled the way glr_overlay_build_pack
  * fills it for this cursor line. */
 static void build_single_polygon_walk(int cursor, OverlayWalkCtx *walk) {
     ReplCursorPolygon poly;
     ReplCursorPolygon contour;
 
     memset(walk, 0, sizeof(*walk));
-    glr_ctrl_cursor_block_state_for_test(cursor, &walk->cursor);
+    repl_flatten_refresh_current_block_highlight(cursor);
+    glr_overlay_fill_cursor_block_state(cursor, &walk->cursor);
     walk->program = repl_state_flat_program_view();
     walk->cursor_overlay_scope = OVERLAY_SCOPE_SINGLE_POLYGON;
     poly = repl_flatten_cursor_polygon(cursor);

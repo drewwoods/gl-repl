@@ -178,9 +178,9 @@ is checked every frame by the guard described in
 **The profiled frame is the display callback, and the application owns it.**
 The FPS cadence is wider: it is the interval from one callback start to the
 next. The three
-[`glr_frame_begin()`](../src/app/glr_ctrl.h#L311) /
-[`glr_frame_work_end()`](../src/app/glr_ctrl.h#L312) /
-[`glr_frame_ended()`](../src/app/glr_ctrl.h#L313) calls bracket `gl_repl.c`'s
+[`glr_frame_begin()`](../src/app/glr_ctrl.h#L296) /
+[`glr_frame_work_end()`](../src/app/glr_ctrl.h#L297) /
+[`glr_frame_ended()`](../src/app/glr_ctrl.h#L298) calls bracket `gl_repl.c`'s
 callback and also own the staleness/FPS tick, the GPU query-slot rotation and
 the capture-mode simulation tick. They carry the plain `glr_` prefix rather
 than `glr_ctrl_` because the controller is one stage inside a frame, not the
@@ -820,7 +820,7 @@ Overlay scope selects geometry for **vertex labels**, **normal arrows**, and
 the **cursor outline highlight**. Compose the two tables below: select
 instances first, then narrow primitives only in Single polygon. This is the
 acceptance contract for items 1, 3, 4, and 7 of
-[Scope and Overlay Maintainability](plans/not-started/scope-and-overlay-maintainability.md);
+[Scope and Overlay Maintainability](plans/active/scope-and-overlay-maintainability.md);
 its source and flat queries are shared by the controller, replay, and overlays.
 
 An *instance* is a flat-program copy of a source block or shape from loop
@@ -984,7 +984,8 @@ between immediate blocks inside a GLU contour affect those blocks; the
 contour itself retains its opening snapshot.
 
 `OverlayWalkCtx.program` is populated once per frame from
-`repl_state_flat_program_view()` by `glr_ctrl_fill_overlay_walk_ctx`, which
+`repl_state_flat_program_view()` by
+[`glr_overlay_fill_walk_ctx()`](../src/app/glr_overlay_setup.h), which
 `bench_repl` also uses. With accumulation AA, collection and drawing repeat per
 jitter sample; the interpreter, evaluator, and flattener are not re-entered.
 
@@ -1017,7 +1018,8 @@ single current authored anchor" rather than "every generated mesh vertex."
 
 The vertex/normal guides drawn at the cursor line
 ([`src/render3d/guides/geometry_guides.c`](../src/render3d/guides/geometry_guides.c)) render from a [`Render3dGuideSnapshot`](../src/render3d/guides/guides_shared.h#L53).
-The snapshot initially comes from `glr_ctrl_build_guide_snapshot()`, but text
+The snapshot initially comes from `glr_overlay_build_guide_snapshot()` in
+[`glr_overlay_setup.c`](../src/app/glr_overlay_setup.c), but text
 parsing the input line can only evaluate predefined variables. It cannot resolve
 funcN-local parameters or loop-assigned values, so the controller must override
 cursor arguments from the **flat** command stream before rendering guides inside
@@ -1042,7 +1044,7 @@ Transform guides ([`src/render3d/guides/transform_guides.c`](../src/render3d/gui
 line is committed - the same render-while-typing affordance the vertex guides
 have. The split mirrors the vertex path: the controller pre-evaluates the
 partial input into `Render3dGuideSnapshot.xform_args[4]` / `xform_filled[4]`
-(`parse_arg_slots()` in [`glr_ctrl.c`](../src/app/glr_ctrl.c), no eval in the render3d module), and the
+(`parse_arg_slots()` in [`glr_overlay_setup.c`](../src/app/glr_overlay_setup.c), no eval in the render3d module), and the
 render3d module re-derives the transform *kind* from the input prefix
 (`transform_input_kind()`, a strncmp like `input_is_vertex_kind`) and fills the
 untyped slots with the transform identity - **0 for translate/rotate, 1 for
@@ -2129,7 +2131,7 @@ state and (b) read by more than one consumer in the frame loop:
 The reason is structural, not specific to any one value: the code
 panel's row-count/follow-scroll pass and its render pass sit on
 *opposite sides* of [`render3d_draw_scene()`](../src/render3d/render.h#L139) in
-[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L332) (snapshot/follow-scroll → render3d render →
+[`glr_ctrl_display_frame()`](../src/app/glr_ctrl.h#L317) (snapshot/follow-scroll → render3d render →
 panel render). Anything resolved live in both passes can observe two
 different values across that boundary whenever a transition lands on
 that frame - here a 2D/3D switch would let row-count see one

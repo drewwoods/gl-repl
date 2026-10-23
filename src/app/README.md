@@ -64,7 +64,7 @@ type.
 ## In the REPL app
 
 Inside the full app this is **layer 0** of the ownership map. Per frame,
-[`glr_ctrl_display_frame()`](glr_ctrl.h#L332):
+[`glr_ctrl_display_frame()`](glr_ctrl.h#L317):
 
 1. rebuilds autonormals / the flat program if dirty, and prepares replay /
    export / camera strings;
@@ -100,7 +100,7 @@ different worlds:
   [`gl_repl.c`](../../gl_repl.c)** (plus their tests and sibling boot modules) -
   never from the controller.
 - **Frame-time controller band - the files directly in `src/app/`.** The
-  controller ([`glr_ctrl`](glr_ctrl.c)), its router / view-transition / snapshot
+  controller ([`glr_ctrl`](glr_ctrl.c)), its router / view-transition / overlay-setup / snapshot
   satellites, and the app-level services (camera, audio, config, actions,
   completion, tours, pointer-script). These assume a **live GL context and a
   running frame loop**.
@@ -132,6 +132,7 @@ formatters free of any boot dependency.
 | File | Responsibility |
 |---|---|
 | [`glr_ctrl.c`](glr_ctrl.c) / `.h` | App-frame controller + input router: display/reshape/init-GL, snapshot builders, `glr_ctrl_router_*` non-editor routing |
+| [`glr_overlay_setup.c`](glr_overlay_setup.c) / `.h` | Per-frame setup for the 3D edit overlays: the cursor block state and `OverlayWalkCtx` fills (`glr_overlay_fill_*`), the cursor-line guide snapshot, and the frame's `OverlaySnapshotPack` handed to the render3d post-overlay hooks |
 | [`glr_camera.c`](glr_camera.c) / `.h` | Orbit/pan/zoom camera state, drag transactions, momentum, eased targets |
 | [`glr_camera_export.c`](glr_camera_export.c) | Camera state ↔ exported `glTranslatef`/`glRotatef` text |
 | [`glr_audio.c`](glr_audio.c) / `.h` | App-level playlist engine and persisted audio config (`glr_audio_*`) |

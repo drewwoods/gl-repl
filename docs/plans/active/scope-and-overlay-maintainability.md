@@ -1,6 +1,6 @@
 ## Scope and Overlay Maintainability - one cursor-scope query, one vertex numbering, one outline walk
 
-## Status - PARTIALLY IMPLEMENTED (items 1, 2, 4, 5, 6 and 10 are done)
+## Status - PARTIALLY IMPLEMENTED (items 1, 2, 4, 5, 6, 8 and 10 are done)
 
 Items 1, 2, and 4 implement the shared cursor-scope and outline paths.
 Item 10's [overlay scope contract](../../ARCHITECTURE.md#overlay-scope-contract)
@@ -45,7 +45,7 @@ and 3, items 10 and 11, and additions to items 6 and 7.
 | 5 | Doc links stop churning on line numbers - DONE | no more anchor-only diffs and gate failures | 0.5 h / 0.5 day | - |
 | 6 | Build traps: make version, bench `--only`, single-test target - DONE | no stale binaries, no silent no-ops | ~1 h each | - |
 | 7 | Test fixtures from real flatten output; named GL enums in traces | fixtures cannot drift from production | ongoing | - |
-| 8 | Overlay setup out of `glr_ctrl.c` | smaller controller, fewer `_for_test` seams | ~0.5 day | best after 1 |
+| 8 | Overlay setup out of `glr_ctrl.c` - DONE | smaller controller, fewer `_for_test` seams | ~0.5 day | best after 1 |
 | 9 | Habits: present-tense comments, one worktree per session | less comment rot, clean benchmarks | - | - |
 | 10 | Written spec: overlay scope per primitive kind - DONE | one source of truth for items 1, 3, 4 and their tests | 1-2 h | - |
 | 11 | Adjacent: workspace manifest forward compatibility | new builds' workspaces stay readable by older builds | ~1 h | - |
@@ -307,7 +307,7 @@ At least five independent counters assign "the Nth vertex":
 - the tess outline pass's `tess_ord` in `edit_overlays.c`.
 
 `05f2c7a9` and `7a6b03f3` were two rounds of making these agree. The parity
-test that now guards it (`glr_ctrl_cursor_block_state_for_test` driven from
+test that now guards it (`glr_overlay_fill_cursor_block_state` driven from
 `tests/test_ui.c` and `tests/test_edit_overlays.c`) is the right acceptance
 check for this item.
 
@@ -545,7 +545,7 @@ Original notes:
   sharing a single `TESS_END`, a shape flatten never produces. Add a helper
   in `tests/support/` that takes source lines and a cursor line, runs
   `glr_ctrl_reset_all` + `editor_feed_line` + `repl_flatten_commands`, and
-  fills an `OverlayWalkCtx` through `glr_ctrl_fill_overlay_walk_ctx`. Default
+  fills an `OverlayWalkCtx` through `glr_overlay_fill_walk_ctx`. Default
   to it; keep hand-built arrays for shapes the parser cannot produce.
 - **Named enums in traces.** Expectations such as `"glBegin 9"` and
   `"glEnable 2884"` need a lookup to read. A small formatting helper
@@ -554,20 +554,44 @@ Original notes:
 
 ---
 
-### 8. Overlay setup out of `glr_ctrl.c`
+### 8. Overlay setup out of `glr_ctrl.c` - DONE
 
-`src/app/glr_ctrl.c` is ~5,600 lines. Its overlay setup -
-`glr_ctrl_fill_cursor_block_state()` (static) and its test seam
-`glr_ctrl_cursor_block_state_for_test()`, `glr_ctrl_fill_overlay_walk_ctx()`
-(public, used by `bench_repl`), the overlay pack builder, and (until
-item 1 deletes them) the extent scanners - is a self-contained unit that
-tests and `bench_repl` now call directly. Move it to its own file under
-`src/app/` and drop `glr_ctrl_cursor_block_state_for_test` in favor of the
-public fill.
+`src/app/glr_ctrl.c` was ~5,500 lines. Its overlay setup - the cursor block
+fill and its `_for_test` seam, the `OverlayWalkCtx` fill (used by
+`bench_repl`), the cursor-line guide snapshot with its live-input arg-slot
+parser, and the overlay pack builder - is a self-contained unit that tests and
+`bench_repl` call directly. It lives in its own file under `src/app/`, and the
+test seam is gone.
 
-Check before moving: the Makefile source lists (some lists are hand-maintained,
-e.g. `REPL_DEMO_DEP_SRCS`), and the `check-app-boot-band` /
-`check-state-ownership` guards. Do it after item 1 so less code moves.
+#### Implementation notes
+
+[`glr_overlay_setup.{c,h}`](../../../src/app/glr_overlay_setup.h) owns the unit
+and gives its public functions the file's `glr_overlay_` prefix.
+`glr_overlay_fill_cursor_block_state()` and `glr_overlay_fill_walk_ctx()` are
+the two fills. The file-static `glr_overlay_build_guide_snapshot()`,
+`fill_guide_arg_slots()` and `parse_arg_slots()` build the guide snapshot. The
+frame's `OverlaySnapshotPack` is file-static behind `glr_overlay_pack()` (the
+stable pointer the scene-config builder installs as `user_data` on the two
+post-overlay hooks) and `glr_overlay_build_pack(cfg)` (called last in the
+builder, after the config fields it copies are assigned). The extent scanners
+went with item 1, so they are not part of the move; `light_slot_from_text()` and
+`glr_ctrl_build_focus_vertex()` feed the render config rather than the pack and
+stay in the controller. The move changes no behavior.
+
+`glr_ctrl_cursor_block_state_for_test()` is deleted. Its callers
+(`tests/test_ui.c`, `tests/test_edit_overlays.c`, `tests/test_replay_walk.c`)
+want only the `CursorBlockState`, and `glr_overlay_fill_walk_ctx()` would also
+resolve the single-polygon ranges and presentation toggles they ignore, so the
+cursor fill is public instead. The seam refreshed the flat block cache itself;
+callers now call `repl_flatten_refresh_current_block_highlight()` first, the
+contract the walk-context fill, `bench_repl` and the frame path already follow.
+
+The Makefile source lists need no entry: `src/app/*.c` is a wildcard, and no
+demo list links the controller (`REPL_DEMO_DEP_SRCS` and the other demo lists
+name no `src/app` file). `test_replay_walk` includes `glr_overlay_setup.c` as a
+unit to reach `parse_arg_slots` and filters that object out of its link; it
+used to include all of `glr_ctrl.c` for the same helper.
+`check-app-boot-band` and the rest of `check-state-ownership` pass unchanged.
 
 ---
 

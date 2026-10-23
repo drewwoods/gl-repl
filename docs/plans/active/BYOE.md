@@ -782,10 +782,10 @@ forbids pipeline TUs from touching the input row (`src/editor/input.h:160`).
 
 - `editor_input_set_text()` (`state.c:364`), `editor_cursor_pos_set()`
   (`:404`, clamped), `editor_state_edit_line_set()` (`state.h:391`).
-- Overlays read the **live input text**: `glr_ctrl_build_guide_snapshot()`
-  (`glr_ctrl.c:560`) pulls `editor_state_input()`; `fill_guide_arg_slots()`
-  (`:449-552`) prefix-matches with `strncmp` and needs no closing paren;
-  `parse_arg_slots()` (`:402-431`) records a per-slot `filled[]` bitmask.
+- Overlays read the **live input text**: `glr_overlay_build_guide_snapshot()`
+  (`glr_overlay_setup.c`) pulls `editor_state_input()`; `fill_guide_arg_slots()`
+  prefix-matches with `strncmp` and needs no closing paren;
+  `parse_arg_slots()` records a per-slot `filled[]` bitmask.
 - **Unconfirmed:** the "renderer fills unset slots with the identity" contract
   is the **transform** guide's (`xform_filled`, `guides_shared.h:104-111`),
   *not* the vertex guide's. For vertex args the documented contract is only

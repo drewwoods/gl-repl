@@ -1,6 +1,8 @@
 #include "editor/state.h"
 #include "app/glr_state.h"
 #include "app/glr_ctrl.h"
+#include "app/glr_overlay_setup.h"
+#include "repl/flatten_query.h"   /* repl_flatten_refresh_current_block_highlight */
 #define STATUSBAR_H 22
 #include "ui/core/metrics.h"
 #include "ui/app/state.h"
@@ -2245,7 +2247,8 @@ static void test_vertex_gutter_labels_glbegin_inside_tess_polygon(void) {
     const ReplayVertexWalkCallbacks cb = {.on_vertex = parity_record_vertex};
     repl_flatten_commands(13);
     walk.program = repl_state_flat_program_view();
-    glr_ctrl_cursor_block_state_for_test(13, &walk.cursor);
+    repl_flatten_refresh_current_block_highlight(13);
+    glr_overlay_fill_cursor_block_state(13, &walk.cursor);
     walk.selected_block_only = 1;
     replay_walk_user_vertices(&walk, &cb, scene);
     ASSERT_INT("scene polygon head keeps v0", scene[2], 0);
@@ -2310,7 +2313,8 @@ static void test_vertex_gutter_labels_match_scene_labels(void) {
                 scene[r] = -1;
             memset(&walk, 0, sizeof walk);
             walk.program = repl_state_flat_program_view();
-            glr_ctrl_cursor_block_state_for_test(cursor, &walk.cursor);
+            repl_flatten_refresh_current_block_highlight(cursor);
+            glr_overlay_fill_cursor_block_state(cursor, &walk.cursor);
             walk.selected_block_only = 1;
             replay_walk_user_vertices(&walk, &cb, scene);
 

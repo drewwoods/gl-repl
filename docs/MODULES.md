@@ -463,6 +463,7 @@ The application shell bootstrap, event routing, frame/snapshot coordination, and
 | `src/app/glr_ctrl_cycle` | Scene / tutorial cycling policy behind F12 / F11, the Scene + Tutorials menu rows and the menu bar's Prev/Next steppers: the catalog walk, skip-on-load-failure reporting, origin restore, the parked example place and the retained tutorial index. `glr_ctrl_cycle_peek()` (the stepper tooltip's prediction) and `glr_ctrl_cycle_selects_tutorials()` (which catalog a step walks) live here so neither can drift from the walk they describe |
 | `src/app/glr_ctrl_recovery` | Quit-time recovery persistence carved out of [`glr_ctrl_router.c`](../src/app/glr_ctrl_router.c): the deferred-quit flag SIGINT sets, what counts as user work worth rescuing (an unpromoted built-in example is not), and the two writers - the live scene to `QUIT_RECOVERY_FILE`, or every occupied slot to a recovery workspace. Shared by Ctrl+Q, File > Quit, SIGINT, window close and Open Workspace |
 | `src/app/glr_ctrl_view_transition` | 2D/3D view-mode transition state machine carved out of [`glr_ctrl.c`](../src/app/glr_ctrl.c): the projection blend + camera easing when View mode toggles. Camera + presentation state only (no scene/ui/repl/editor), ticked by the controller |
+| `src/app/glr_overlay_setup` | Per-frame setup for the 3D edit overlays, split out of [`glr_ctrl.c`](../src/app/glr_ctrl.c): resolves the cursor's block ([`glr_overlay_fill_cursor_block_state()`](../src/app/glr_overlay_setup.h)), the presentation toggles into the `OverlayWalkCtx` (`glr_overlay_fill_walk_ctx()`, the same fill `bench_repl` and tests call so they time and assert exactly what a frame draws), the cursor-line guide snapshot (`glr_overlay_build_guide_snapshot()` and its live-input arg-slot parser), and the frame's `OverlaySnapshotPack` that becomes `user_data` on the render3d post-overlay hooks. The `edit_overlays` peer reads no controller state - everything it sees crosses this seam |
 | `src/app/glr_actions` | Menu/action dispatch and the `g_cfg_items[]` config-descriptor table: scene + workspace load/save flows, rename, example/scene switching, config-row cycling. Translates menu ids + item indices into app operations |
 | `src/app/glr_modal` | App-level text prompts and delete confirmation. Owns modal state/key capture; delegates commits to `glr_actions` so filesystem mutations retain one controller |
 | `src/app/glr_workspaces` | Sorted catalog of managed workspaces under the resolved app workspace root, plus exclusive named-workspace creation |
@@ -869,6 +870,7 @@ flowchart LR
         ctrl["src/app/glr_ctrl.c<br/>broad frame/snapshot coordinator · timer tick<br/>target: route/coordinate, not own feature behavior"]
         router["src/app/glr_ctrl_router.c<br/>GLUT dispatch shims · UiHit routing<br/>(runs before the editor dispatch)"]
         viewtrans["src/app/glr_ctrl_view_transition.c<br/>2D↔3D projection blend + camera ease"]
+        ovsetup["src/app/glr_overlay_setup.c<br/>overlay walk ctx · guide snapshot · frame pack"]
         glrstate["src/app/glr_state.c<br/>app presentation/render state<br/>(app-owned, not REPL runtime)"]
         glrsrcdoc["src/app/glr_source_document.c<br/>source_document port → EditorState"]
         glrcamexport["src/app/glr_camera_export.c<br/>camera ↔ export-text bridge"]
@@ -1173,6 +1175,8 @@ flowchart LR
     %% render3d overlay primitives at each visited vertex/normal. Neither
     %% glr_ctrl nor render3d owns that walk.
     ctrl i74@--> edit_overlays
+    ctrl i80@--> ovsetup
+    ovsetup -.-> edit_overlays
     edit_overlays i75@--> soverlays
     edit_overlays -.-> flatten
 
@@ -1223,7 +1227,7 @@ flowchart LR
     classDef animateF stroke:#5f0,stroke-dasharray: 9\,5,stroke-dashoffset: 900,animation: dash 90s linear infinite;
 
     class e1,e3,e4,e5,e6,e7,e8,e10,e11,e12,e13 animateE
-    class i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i33,i34,i35,i36,i37,i38,i39,i40,i41,i42,i43,i44,i45,i46,i47,i48,i49,i50,i51,i52,i53,i54,i55,i56,i57,i58,i59,i60,i61,i62,i63,i64,i65,i66,i67,i68,i69,i70,i71,i72,i73,i74,i75,i76,i77,i78,i79 animateF
+    class i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i33,i34,i35,i36,i37,i38,i39,i40,i41,i42,i43,i44,i45,i46,i47,i48,i49,i50,i51,i52,i53,i54,i55,i56,i57,i58,i59,i60,i61,i62,i63,i64,i65,i66,i67,i68,i69,i70,i71,i72,i73,i74,i75,i76,i77,i78,i79,i80 animateF
 ```
 
 Reading the diagram:

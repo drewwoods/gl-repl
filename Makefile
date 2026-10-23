@@ -1402,10 +1402,10 @@ test_repl_export_all_commands_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_export_all_
 
 test_repl_replay_OBJS = $(OBJDIR)/$(TEST_DIR)/test_repl_replay.o $(filter-out $(OBJDIR)/src/subsystems/replay/replay.o,$(CORE_TEST_OBJS))
 
-# test_replay_walk includes app/glr_ctrl.c as a translation unit to reach
-# the static cursor_guide_snapshot_with_flat_args helper, so the object
-# must be filtered out the same way test_glr_ctrl does.
-test_replay_walk_OBJS = $(OBJDIR)/$(TEST_DIR)/test_replay_walk.o $(filter-out $(OBJDIR)/src/app/glr_ctrl.o,$(CORE_TEST_OBJS))
+# test_replay_walk includes app/glr_overlay_setup.c as a translation unit to
+# reach the static parse_arg_slots helper, so the object must be filtered out
+# the same way test_glr_ctrl does for glr_ctrl.o.
+test_replay_walk_OBJS = $(OBJDIR)/$(TEST_DIR)/test_replay_walk.o $(filter-out $(OBJDIR)/src/app/glr_overlay_setup.o,$(CORE_TEST_OBJS))
 
 test_edit_overlays_OBJS = $(OBJDIR)/$(TEST_DIR)/test_edit_overlays.o $(filter-out $(OBJDIR)/src/subsystems/edit_overlays/edit_overlays.o,$(CORE_TEST_OBJS))
 

@@ -27,6 +27,9 @@
  * the Makefile.
  */
 #include "app/glr_ctrl.h"
+#include "app/glr_overlay_setup.h"
+#include "repl/flatten_query.h"   /* repl_flatten_refresh_current_block_highlight */
+#include "repl/executor.h"        /* repl_executor_apply_tracked_transform_cmd */
 #include "repl/command_spec.h"
 #include <math.h>
 #include "repl/pipeline.h"
@@ -44,10 +47,10 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Pulled in as a translation unit so we can call the static
- * cursor_guide_snapshot_with_flat_args helper directly. Same pattern
- * used by tests/test_glr_ctrl.c. */
-#include "app/glr_ctrl.c"
+/* Pulled in as a translation unit so we can call the static parse_arg_slots
+ * helper directly. Same pattern used by tests/test_glr_ctrl.c; the Makefile
+ * keeps glr_overlay_setup.o out of this binary's link. */
+#include "app/glr_overlay_setup.c"
 
 static TestHarness g_harness = TEST_HARNESS_INIT;
 
@@ -505,7 +508,7 @@ static void test_cursor_guide_snapshot_override(void) {
  * `)`. The cursor guide then takes the n==1 branch and draws the YZ
  * plane instead of a red point at the vertex.
  *
- * Note: this tests parse_arg_slots (static in glr_ctrl.c, reached
+ * Note: this tests parse_arg_slots (static in glr_overlay_setup.c, reached
  * via the include-as-unit pattern at the top of this file). With no
  * predefined-variable values, the args evaluate to 0 - that's the
  * normal outcome for funcN-local references; n_filled=3 is what we
@@ -936,7 +939,8 @@ static void test_walker_restores_enclosing_tess_scope(void) {
         int cursor = repl_state_document_count() - 1;
         repl_flatten_commands(cursor);
         ReplayVertexWalkContext ctx = make_ctx(cursor);
-        glr_ctrl_cursor_block_state_for_test(cursor, &ctx.cursor);
+        repl_flatten_refresh_current_block_highlight(cursor);
+        glr_overlay_fill_cursor_block_state(cursor, &ctx.cursor);
         ctx.selected_block_only = 1;
         NestedTessRecorder rec = {0};
 #ifdef GL_STUBS

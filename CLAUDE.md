@@ -381,7 +381,7 @@ follows is the trip-wire list.
 
 ### Frame & rendering
 
-[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L332) drives each frame: rebuild autonormals + flat
+[`glr_ctrl_display_frame()`](src/app/glr_ctrl.h#L317) drives each frame: rebuild autonormals + flat
 program if dirty → build [`Render3dRenderConfig`](src/render3d/render_types.h#L139) → clear chrome + load camera
 + scissor (all **controller** policy - render3d owns no camera type, sets no
 scissor, clears no color/depth) → [`render3d_draw_scene()`](src/render3d/render.h#L139) (projection → user
@@ -606,7 +606,7 @@ auto-promotion hook.
 
 ### Cursor edit guides
 
-`glr_ctrl_build_guide_snapshot()` text-parses the input line with a
+`glr_overlay_build_guide_snapshot()` text-parses the input line with a
 **predef-only** evaluator - funcN-locals/loop vars evaluate to 0. Fix path:
 the render always walks the flat program (`replay_walk_user_vertices`, with
 `ctx.stop_flag` for early-out) and overrides `vertex_args`/`normal_args`

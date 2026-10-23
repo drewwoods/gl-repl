@@ -85,7 +85,7 @@
  *                       glutSolid* cubes, and a GLU extrusion, with the
  *                       highlight off / last-instance / single-polygon /
  *                       all-instances / whole-scene. The
- *                       walk context comes from glr_ctrl_fill_overlay_walk_ctx,
+ *                       walk context comes from glr_overlay_fill_walk_ctx,
  *                       the frame's own fill. CPU submission cost only: no
  *                       glFinish, so GPU execution is not in the number.
  *
@@ -125,6 +125,7 @@
 #include "support/cpuprof.h"     /* PROF_FLATTEN_* phase readback */
 #include "support/histogram.h"   /* sampler-overhead rows */
 #include "app/glr_ctrl.h"
+#include "app/glr_overlay_setup.h"
 #include "app/glr_state.h"       /* presentation: outlines / highlight / scope */
 
 #include <stdio.h>
@@ -1824,7 +1825,7 @@ static void bench_overlay_outlines(int iters) {
             pres->highlight_current_poly = k_modes[m].highlight;
             pres->overlay_scope = k_modes[m].scope;
             repl_flatten_refresh_current_block_highlight(row);
-            glr_ctrl_fill_overlay_walk_ctx(row, &ctx);
+            glr_overlay_fill_walk_ctx(row, &ctx);
 
             for (int it = 0; it < iters; it++) {
                 double t0 = now_seconds();
