@@ -820,7 +820,7 @@ Overlay scope selects geometry for **vertex labels**, **normal arrows**, and
 the **cursor outline highlight**. Compose the two tables below: select
 instances first, then narrow primitives only in Single polygon. This is the
 acceptance contract for items 1, 3, 4, and 7 of
-[Scope and Overlay Maintainability](plans/active/scope-and-overlay-maintainability.md);
+[Scope and Overlay Maintainability](plans/done/scope-and-overlay-maintainability.md);
 its source and flat queries are shared by the controller, replay, and overlays.
 
 An *instance* is a flat-program copy of a source block or shape from loop

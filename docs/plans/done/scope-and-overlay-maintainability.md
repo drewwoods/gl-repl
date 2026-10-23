@@ -1,13 +1,18 @@
 ## Scope and Overlay Maintainability - one cursor-scope query, one vertex numbering, one outline walk
 
-## Status - PARTIALLY IMPLEMENTED (items 1, 2, 3, 4, 5, 6, 7, 8 and 10 are done; item 9's comment clean-up is done)
+## Status - DONE (landed 2026-10-23)
 
-Items 1, 2, and 4 implement the shared cursor-scope and outline paths.
-Item 10's [overlay scope contract](../../ARCHITECTURE.md#overlay-scope-contract)
+Items 1 to 10 are done. Item 1 gives one cursor-scope query, item 3 numbers
+vertices once at flatten, and item 4 collects outlines in one pass. Item 10's
+[overlay scope contract](../../ARCHITECTURE.md#overlay-scope-contract)
 defines the four scopes, primitive-specific rules, and numbering;
 [the user guide](../../USER_GUIDE.md#cursor-guides--vertex-overlays) summarizes
-the behavior. Closing lines are inclusive, and a nested `glEnd()` restores
-its enclosing GLU context. Remaining items are listed below.
+the behavior. Item 9's comment clean-up is done; its CONTRIBUTING.md
+extension was deliberately not made, and the one-worktree-per-session habit
+stays guidance.
+
+Item 11 (workspace manifest forward compatibility) is **not done**. It sits
+outside this plan's cursor/overlay scope and remains open.
 
 Written 2026-10-22, after a day of GLU-tessellator overlay fixes. The scope is
 deliberately narrow: only the code that work touched - cursor block
@@ -39,7 +44,7 @@ and 3, items 10 and 11, and additions to items 6 and 7.
 | # | Item | Payoff | Size | Depends on |
 |---|---|---|---|---|
 | 1 | One cursor-block query - DONE | removes the drift behind most of the GLU bugs | ~1 day | - |
-| 2 | Shared GLU depth helper everywhere, with a guard | stops the contour/polygon `gluEnd()` mix-up recurring | 2-3 h | - |
+| 2 | Shared GLU depth helper everywhere, with a guard - DONE | stops the contour/polygon `gluEnd()` mix-up recurring | 2-3 h | - |
 | 3 | Vertex numbering computed once - DONE | gutter, labels, filters cannot disagree | 2-3 days | 1 |
 | 4 | Collect outlines once, draw twice - DONE | removes three near-copy passes; measured costs below | 2-3 days | - (measure first) |
 | 5 | Doc links stop churning on line numbers - DONE | no more anchor-only diffs and gate failures | 0.5 h / 0.5 day | - |
@@ -48,7 +53,7 @@ and 3, items 10 and 11, and additions to items 6 and 7.
 | 8 | Overlay setup out of `glr_ctrl.c` - DONE | smaller controller, fewer `_for_test` seams | ~0.5 day | best after 1 |
 | 9 | Habits: present-tense comments (clean-up DONE), one worktree per session | less comment rot, clean benchmarks | - | - |
 | 10 | Written spec: overlay scope per primitive kind - DONE | one source of truth for items 1, 3, 4 and their tests | 1-2 h | - |
-| 11 | Adjacent: workspace manifest forward compatibility | new builds' workspaces stay readable by older builds | ~1 h | - |
+| 11 | Adjacent: workspace manifest forward compatibility - NOT DONE (open) | new builds' workspaces stay readable by older builds | ~1 h | - |
 
 Suggested order: **10, 2, 5, 6** first (10 is the spec items 1, 3 and 4 are
 checked against; the rest are independent quick wins), then **1**, then
