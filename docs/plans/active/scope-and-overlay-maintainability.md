@@ -1,6 +1,6 @@
 ## Scope and Overlay Maintainability - one cursor-scope query, one vertex numbering, one outline walk
 
-## Status - PARTIALLY IMPLEMENTED (items 1, 2, 4, 5, 6, 7, 8 and 10 are done)
+## Status - PARTIALLY IMPLEMENTED (items 1, 2, 3, 4, 5, 6, 7, 8 and 10 are done)
 
 Items 1, 2, and 4 implement the shared cursor-scope and outline paths.
 Item 10's [overlay scope contract](../../ARCHITECTURE.md#overlay-scope-contract)
@@ -40,7 +40,7 @@ and 3, items 10 and 11, and additions to items 6 and 7.
 |---|---|---|---|---|
 | 1 | One cursor-block query - DONE | removes the drift behind most of the GLU bugs | ~1 day | - |
 | 2 | Shared GLU depth helper everywhere, with a guard | stops the contour/polygon `gluEnd()` mix-up recurring | 2-3 h | - |
-| 3 | Vertex numbering computed once | gutter, labels, filters cannot disagree | 2-3 days | 1 |
+| 3 | Vertex numbering computed once - DONE | gutter, labels, filters cannot disagree | 2-3 days | 1 |
 | 4 | Collect outlines once, draw twice - DONE | removes three near-copy passes; measured costs below | 2-3 days | - (measure first) |
 | 5 | Doc links stop churning on line numbers - DONE | no more anchor-only diffs and gate failures | 0.5 h / 0.5 day | - |
 | 6 | Build traps: make version, bench `--only`, single-test target - DONE | no stale binaries, no silent no-ops | ~1 h each | - |
@@ -291,7 +291,85 @@ hidden-line tests unchanged; the guard red on a reintroduced `tess_depth++`.
 
 ---
 
-### 3. Vertex numbering computed once
+### 3. Vertex numbering computed once - DONE
+
+#### Implementation notes
+
+[`vertex_ordinals.{h,c}`](../../../src/repl/vertex_ordinals.h) owns the numbering.
+`repl_flat_number_vertices()` is one pass over a flat stream that writes a
+`ReplVertexOrdinal { run, imm, tess }` per command into an array parallel to it
+(`FlatProgramView.vertex_ord`; storage in `ReplFlatProgramState`, 12 B x
+`MAX_FLAT_COMMANDS`; not a `GLCmd` field). A non-vertex command holds -1 in all
+three, a glVertex -1 in `tess`, a gluVertex -1 in `imm`.
+
+- `run` is the displayed number: glVertex and gluVertex count together, one
+  zero-based run per innermost head (`glBegin` or `gluBegin(GLU_POLYGON)`, never
+  a contour). A `glBegin` strip opened inside a polygon owns the run, its
+  gluVertex rows included; its `glEnd()` resumes the polygon's run at the
+  index it had when the strip opened. The display rule stays the shared run;
+  nothing was simplified to per-family runs.
+- `imm` counts glVertex per `glBegin`; `tess` counts gluVertex per polygon,
+  across contours and through a nested strip.
+
+`repl_flatten_program()` runs the pass once at the end of a successful flatten
+when the caller supplies `ReplFlattenOptions.flat_vertex_ord`; the live wrapper
+always does, tests that flatten into temporary buffers may not. A value-only
+rebake re-bakes arguments, assignments and matrix payloads and never the type,
+validity, order or provenance of a command, so the array stays valid; every
+other change to the flat program is a full flatten, which rewrites it. An
+ordinal depends only on the commands before it, so a clamped count (replay, the
+controller's motion-blur count restore) reads a numbered prefix. A failed
+flatten publishes count 0, so nothing reads a stale array.
+`test_repl_flatten_deps.c` checks the live array against a fresh numbering
+after a rebake, after a structural reflatten, under every count clamp, and over
+every catalog scene.
+
+Readers, all counters deleted:
+
+- The replay vertex walker hands the three values to `on_vertex` through the
+  `ReplayVertexWalkState` fields (kept for callbacks; -1 outside a vertex
+  callback). `vertex_idx_in_block++`, `immediate_idx_in_block++`,
+  `tess_idx_in_polygon++` and the saved `tess_poly_vertex_idx` are gone from
+  `replay.c`.
+- `repl_flatten_cursor_polygon()` and `repl_flatten_cursor_tess_contour()` read
+  the `imm` / `tess` ordinals (`flatten_query.c`); their `vtx_count` / `ord`
+  counters are gone.
+- The outline collector takes a contour's first `tess` ordinal from the first
+  vertex it adds; `tess_ord` is gone from `edit_overlays.c`.
+- The code-panel gutter takes each row's number from
+  `UiRenderSnapshot.vertex_run_by_row`, filled by the controller from
+  `repl_flatten_vertex_runs_by_row()` (the `run` of the row's last flat
+  instance, for the rows of the two cursor blocks only). The UI stays pure over
+  the snapshot. The gutter's `vnum` / `tess_vnum` counters are gone. Its
+  loop-exactness state (`vnums_exact`, which makes a row after a `for` read
+  `vn`) is source structure and stays, so the visible output is unchanged.
+
+A row the flatten never emitted (a branch not taken, a function nobody calls)
+has no number and the gutter leaves it blank; the source-order counter used to
+label it with a number the scene does not have.
+
+Verified: the gutter/scene parity sweep (item 7) is unchanged and green, and
+gains `parity_contract_runs()`, an independent statement of the display rule,
+plus a nested-strip scene with polygon-owned vertices before and after the
+strip; dropping the resume at the strip's `glEnd()` fails the sweep.
+
+Cost: one pass of about 1.5 ns per flat command (12 us for 8192 commands, timed
+in isolation), 1-3% of a full flatten on the benchmark scenes; rebakes and the
+overlay rows are unchanged within noise. The gutter query adds the same scan
+per frame, only while the cursor is inside a block.
+
+Not done, on purpose: the array would allow an exact number on a loop row
+(each instance has one), where the gutter still says `vn`. That is a visible
+change and is left for its own commit.
+
+Found on the way: Last instance and Single polygon recognise "a new copy of
+the block" in the label pass by a display number of 0, which a `glBegin` strip
+nested beside polygon-owned `gluVertex` rows also produces, so the labels
+collected before the strip are dropped. The catalog's extrusion example avoids it
+by putting every `gluVertex` inside the strip. The numbering is not at fault;
+instance detection in `on_vertex_number_label` should key on the outermost head.
+
+#### Original notes
 
 #### Today
 

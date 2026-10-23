@@ -2507,6 +2507,28 @@ void glr_ctrl_build_ui_snapshot(UiRenderSnapshot *snap) {
     snap->current_tess_block_valid = scope.tess_polygon.valid;
     snap->current_tess_block_start = scope.tess_polygon.start;
     snap->current_tess_block_end = scope.tess_polygon.end;
+    {
+        /* The gutter labels only rows of the cursor's two blocks: resolve
+         * numbers for their hull, and nothing (hi < lo) outside a block. */
+        int lo = 0, hi = -1;
+        if (scope.begin_block.valid) {
+            lo = scope.begin_block.start;
+            hi = scope.begin_block.end;
+        }
+        if (scope.tess_polygon.valid) {
+            if (hi < lo) {
+                lo = scope.tess_polygon.start;
+                hi = scope.tess_polygon.end;
+            } else {
+                if (scope.tess_polygon.start < lo)
+                    lo = scope.tess_polygon.start;
+                if (scope.tess_polygon.end > hi)
+                    hi = scope.tess_polygon.end;
+            }
+        }
+        repl_flatten_vertex_runs_by_row(snap->vertex_run_by_row,
+                                        snap->document_count, lo, hi);
+    }
 
     /* Resolve the dynamic reshape() projection ONCE here so the panel's
      * row-count and render passes (which straddle render3d_draw_scene)

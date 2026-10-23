@@ -23,6 +23,16 @@ int repl_cursor_flat_block_matches(FlatProgramView program,
 int repl_cursor_source_begin_matches(const CursorBlockState *cursor,
                                      const GLCmd *head, const GLCmd *end);
 
+/* Display number of each source row's vertex, from the flat program's own
+ * numbering (vertex_ordinals.h). out[row] is the shared glVertex/gluVertex run
+ * of the LAST flat instance of that row - the copy the Last-instance scope
+ * labels - or REPL_VERTEX_ORDINAL_NONE for a row that is no vertex or that the
+ * flatten never emitted (a branch not taken, a function nobody calls). Only
+ * rows lo..hi are resolved (lo > hi: none, and the flat program is not
+ * scanned); the rest read NONE. Loop rows have no single number: the caller
+ * decides how to show them. */
+void repl_flatten_vertex_runs_by_row(int *out, int row_count, int lo, int hi);
+
 /* Refresh the current-block highlight by scanning the flat program to find
  * the innermost BEGIN/END block containing the current edit line. Called
  * before building scene config to ensure cursor block bounds are current. */
@@ -71,7 +81,8 @@ ReplFlatCost repl_flatten_cost_at_line(int line_idx);
  * cursor's position between vertex lines picks the polygon being built
  * there: any line after glBegin up to the Nth vertex of a primitive
  * belongs to that primitive; the line after its last vertex starts the
- * next one. The result is a block-local vertex-ordinal range resolved
+ * next one. The result is a block-local vertex-ordinal range - in the
+ * flat program's glVertex-only numbering (vertex_ordinals.h) - resolved
  * against the cursor's cached flat block. Unrolled copies of a block
  * share their ordinal layout, so the overlay applies the range to
  * whichever copy its scope selects.
@@ -106,7 +117,8 @@ ReplCursorPolygon repl_flatten_cursor_polygon(int edit_line_idx);
  * behavior: cursor outside every contour (on the polygon's own begin/end
  * line, between contours, outside any polygon), or an empty contour.
  * Resolved against the first flat instance of the contour; unrolled copies
- * of a polygon share their ordinal layout. fan_anchor is always 0. */
+ * of a polygon share their ordinal layout. fan_anchor is always 0. The
+ * ordinals are the program's gluVertex-only numbering (vertex_ordinals.h). */
 ReplCursorPolygon repl_flatten_cursor_tess_contour(int edit_line_idx);
 
 #endif /* REPL_FLATTEN_QUERY_H */

@@ -890,7 +890,6 @@ static void outline_collect(const OverlayWalkCtx *ctx) {
     OutlineCollection *c = &g_outlines;
     int begin = -1, contour = -1, polygon_scope = -1, polygon_batch = -1;
     int tess_depth = 0;
-    int tess_ord = 0;
     int count = ctx->program.cmds ? ctx->program.cmd_count : 0;
     if (count > MAX_FLAT_COMMANDS) count = MAX_FLAT_COMMANDS;
     c->batch_count = c->vertex_count = c->scope_count = 0;
@@ -925,7 +924,6 @@ static void outline_collect(const OverlayWalkCtx *ctx) {
         if (cmd->type == CMD_TESS_BEGIN_POLYGON) {
             polygon_scope = outline_scope_begin(i, 1, ctx);
             polygon_batch = c->batch_count;
-            tess_ord = 0;
         }
         /* One match resolves every scope already open. Later vertices cannot
          * add membership; only a new head can need another cursor query. */
@@ -949,7 +947,7 @@ static void outline_collect(const OverlayWalkCtx *ctx) {
             break;
         case CMD_TESS_BEGIN_CONTOUR:
             contour = ctx->replay_tess_preview ? -1 :
-                outline_batch_begin(OUTLINE_CONTOUR, GL_POLYGON, i, polygon_scope, tess_ord);
+                outline_batch_begin(OUTLINE_CONTOUR, GL_POLYGON, i, polygon_scope, -1);
             break;
         case CMD_TESS_END:
             contour = -1;
@@ -960,8 +958,12 @@ static void outline_collect(const OverlayWalkCtx *ctx) {
             }
             break;
         case CMD_TESS_VERTEX:
-            if (tess_depth > 0) tess_ord++;
             outline_vertex_add(contour, i);
+            /* The contour's polygon-local tess ordinal range starts at its
+             * first vertex, as numbered by the flatten. */
+            if (contour >= 0 && c->batches[contour].count == 1)
+                c->batches[contour].contour_first = repl_vertex_ordinal_at(
+                    ctx->program.vertex_ord, ctx->program.cmd_count, i).tess;
             break;
         default:
             if (repl_cmd_emits_immediate_vertex(cmd->type)) outline_vertex_add(begin, i);

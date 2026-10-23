@@ -328,6 +328,7 @@ FlatProgramView repl_state_flat_program_view(void) {
         .cmd_count = g_repl_state.flat_program.cmd_count,
         .overflow_cmd_count = g_repl_state.flat_program.overflow_cmd_count,
         .call_frame_idx = g_repl_state.flat_program.call_frame_idx,
+        .vertex_ord = g_repl_state.flat_program.vertex_ord,
         .call_frames = g_repl_state.flat_program.call_frames,
         .call_frame_count = g_repl_state.flat_program.call_frame_count,
         .call_frame_args = g_repl_state.flat_program.call_frame_args,

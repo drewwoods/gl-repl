@@ -819,6 +819,7 @@ REPL_DEMO_DEP_SRCS = src/repl/format.c \
                      src/repl/text_helpers.c \
                      src/repl/time.c \
                      src/repl/tutorials.c \
+                     src/repl/vertex_ordinals.c \
                      src/repl/visible_vars.c \
                      src/repl/workspace_io.c \
                      tools/repl_demo/source_document.c \

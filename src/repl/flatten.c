@@ -1937,6 +1937,12 @@ int repl_flatten_program(const ReplFlattenOptions *options,
     result->user_lighting_enabled = result->ok
         ? flatten_flat_lighting_enabled(ctx.flat_cmds, ctx.flat_count)
         : 0;
+    /* The one numbering pass: every consumer of "the Nth vertex" reads this
+     * array. Only a successful flatten publishes a count, so a failed one
+     * leaves nothing numbered that anything could read. */
+    if (result->ok && options && options->flat_vertex_ord)
+        repl_flat_number_vertices(ctx.flat_cmds, ctx.flat_count,
+                                  options->flat_vertex_ord);
     if (!result->ok) {
         /* A failed expansion (depth/budget/capacity overflow) leaves an empty
          * flat program; report all-bits so any predef change retries a full
@@ -2215,7 +2221,8 @@ void repl_flatten_commands(int edit_line_idx) {
         .call_frames = flat_program->call_frames,
         .call_frame_capacity = MAX_CALL_FRAMES,
         .call_frame_args = flat_program->call_frame_args,
-        .call_frame_arg_capacity = MAX_CALL_FRAME_ARGS
+        .call_frame_arg_capacity = MAX_CALL_FRAME_ARGS,
+        .flat_vertex_ord = flat_program->vertex_ord
     };
     ReplFlattenResult result;
     int was_frame_overflow = flat_program->call_frame_overflow;

@@ -137,8 +137,19 @@ void replay_walk_tess_preview(const ReplayTessPreviewCallbacks *cb,
     glPopMatrix();
 }
 
+/* The vertex's three ordinals, from the numbering the flatten made, onto the
+ * state a callback sees. The walker keeps no counters of its own. */
+static void walk_state_set_ordinals(ReplayVertexWalkState *state,
+                                    ReplVertexOrdinal ord) {
+    state->vertex_idx_in_block = ord.run;
+    state->immediate_idx_in_block = ord.imm;
+    state->tess_idx_in_polygon = ord.tess;
+}
+
 /* Walk authored vertices using the shared flat/source cursor predicates.
- * Immediate blocks temporarily own the display run inside a GLU polygon. */
+ * Vertex callbacks receive the program's own vertex numbering
+ * (FlatProgramView.vertex_ord). The rule that a glBegin strip owns the display
+ * run inside a GLU polygon lives in that numbering, not in the walk. */
 void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
                              const ReplayVertexWalkCallbacks *cb,
                              void *user_data) {
@@ -154,9 +165,9 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
         .primitive_mode      = 0,
         .in_block            = 0,
         .block_selected      = selected_block_only ? 0 : 1,
-        .vertex_idx_in_block = 0,
-        .immediate_idx_in_block = 0,
-        .tess_idx_in_polygon = 0,
+        .vertex_idx_in_block = REPL_VERTEX_ORDINAL_NONE,
+        .immediate_idx_in_block = REPL_VERTEX_ORDINAL_NONE,
+        .tess_idx_in_polygon = REPL_VERTEX_ORDINAL_NONE,
         .lighting_enabled    = 0,
         .normal              = { 0.0f, 0.0f, 1.0f },
         .tess_normal         = { 0.0f, 0.0f, 1.0f },
@@ -165,7 +176,6 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
     int tess_depth   = 0;
     int in_begin_block = 0;
     int tess_poly_selected = selected_block_only ? 0 : 1;
-    int tess_poly_vertex_idx = 0;
     float tess_close_mv[16];
     int tess_close_valid = 0;
 
@@ -197,22 +207,17 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
 
         switch (cmd->type) {
         case CMD_BEGIN:
-            if (tess_depth > 0 && !in_begin_block)
-                tess_poly_vertex_idx = state.vertex_idx_in_block;
             in_begin_block = 1;
             state.in_block = 1;
             state.primitive_mode = (GLenum)cmd->args[0];
             state.block_selected = selected_block_only
                 ? repl_cursor_flat_block_matches(program, &ctx->cursor, i, 0) : 1;
-            state.vertex_idx_in_block = 0;
-            state.immediate_idx_in_block = 0;
             state.normal[0] = 0.0f; state.normal[1] = 0.0f; state.normal[2] = 1.0f;
             break;
         case CMD_END:
             if (tess_depth > 0) {
                 state.in_block = 1;
                 state.block_selected = tess_poly_selected;
-                if (in_begin_block) state.vertex_idx_in_block = tess_poly_vertex_idx;
             } else {
                 state.in_block = 0;
                 state.block_selected = selected_block_only ? 0 : 1;
@@ -228,11 +233,7 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
             /* Save the polygon verdict before a nested immediate head can
              * replace it, including when its vertices start inside a strip. */
             tess_poly_selected = state.block_selected;
-            tess_poly_vertex_idx = 0;
             tess_close_valid = replay_tess_close_modelview(program, i, tess_close_mv);
-            state.vertex_idx_in_block = 0;
-            state.immediate_idx_in_block = 0;
-            state.tess_idx_in_polygon = 0;
             tess_depth = repl_tess_advance_depth(cmd->type, tess_depth);
             state.normal[0] = 0.0f; state.normal[1] = 0.0f; state.normal[2] = 1.0f;
             state.tess_normal[0] = 0.0f; state.tess_normal[1] = 0.0f; state.tess_normal[2] = 1.0f;
@@ -244,7 +245,7 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
             int old_depth = tess_depth;
             tess_depth = repl_tess_advance_depth(cmd->type, tess_depth);
             if (old_depth == 1 && tess_depth == 0) {
-                tess_poly_selected = tess_poly_vertex_idx = 0;
+                tess_poly_selected = 0;
                 tess_close_valid = 0;
                 if (!in_begin_block) {
                     state.in_block = 0;
@@ -278,15 +279,13 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
                 ? (state.in_block && state.block_selected)
                 : 1;
             if (visit && cb->on_vertex) {
-                int saved_tess_idx = state.tess_idx_in_polygon;
-                state.tess_idx_in_polygon = -1;
+                walk_state_set_ordinals(&state,
+                    repl_vertex_ordinal_at(program.vertex_ord, program.cmd_count, i));
                 cb->on_vertex(&state,
                               cmd->args[0], cmd->args[1], cmd->args[2],
                               user_data);
-                state.tess_idx_in_polygon = saved_tess_idx;
+                walk_state_set_ordinals(&state, repl_vertex_ordinal_none());
             }
-            state.vertex_idx_in_block++;
-            state.immediate_idx_in_block++;
             break;
         }
         case CMD_TESS_VERTEX: {
@@ -295,11 +294,11 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
                 : 1;
             if (visit && cb->on_vertex) {
                 float saved_normal[3] = { state.normal[0], state.normal[1], state.normal[2] };
-                int saved_immediate_idx = state.immediate_idx_in_block;
                 state.normal[0] = state.tess_normal[0];
                 state.normal[1] = state.tess_normal[1];
                 state.normal[2] = state.tess_normal[2];
-                state.immediate_idx_in_block = -1;
+                walk_state_set_ordinals(&state,
+                    repl_vertex_ordinal_at(program.vertex_ord, program.cmd_count, i));
 
                 cb->on_vertex(&state,
                               cmd->args[0], cmd->args[1], cmd->args[2],
@@ -308,10 +307,8 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
                 state.normal[0] = saved_normal[0];
                 state.normal[1] = saved_normal[1];
                 state.normal[2] = saved_normal[2];
-                state.immediate_idx_in_block = saved_immediate_idx;
+                walk_state_set_ordinals(&state, repl_vertex_ordinal_none());
             }
-            state.vertex_idx_in_block++;
-            state.tess_idx_in_polygon++;
             break;
         }
         default:

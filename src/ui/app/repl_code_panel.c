@@ -2569,18 +2569,23 @@ static void repl_code_panel_add_virtual_rows(ReplCodePanelBuilder *builder,
     }
 }
 
-/* One-pass row emission carries a small source-order state machine for
- * vertex numbering and "exact vs maybe-loop-expanded" labels. Keep it
- * local to the builder path so the begin/end ordering stays obvious.
+/* One-pass row emission carries a small source-order state machine for the
+ * vertex gutter: which block owns a row, and whether its label is exact or
+ * "maybe loop-expanded". Keep it local to the builder path so the begin/end
+ * ordering stays obvious.
  *
- * The numbers are the 3D vertex labels' numbers (vertex_idx_in_block from
- * replay_walk_user_vertices), so a row and its vertex in the scene always
- * read the same: one run per block, counting glVertex and gluVertex alike,
- * restarted by the most recently opened head - glBegin or
- * gluBegin(GLU_POLYGON) - and owned by it until its end. A glBegin strip
- * nested in a tess contour (the extrusion example) therefore takes over the
- * contour's gluVertex rows too, and every vertex in the strip gets a unique
- * number. tests/test_ui.c holds a parity test against the walker. */
+ * The NUMBER is not counted here. It is the 3D vertex labels' number, read
+ * from the flat program's own numbering (snap->vertex_run_by_row), so a row
+ * and its vertex in the scene always read the same: one run per block,
+ * counting glVertex and gluVertex alike, restarted by the most recently
+ * opened head - glBegin or gluBegin(GLU_POLYGON) - and owned by it until its
+ * end. A glBegin strip nested in a tess contour (the extrusion example)
+ * therefore takes over the contour's gluVertex rows too, and every vertex in
+ * the strip gets a unique number. tests/test_ui.c holds a parity sweep against
+ * the label pass.
+ *
+ * What this walk owns is source structure: a row inside a `for`, or after one
+ * in its block, stands for several vertices and reads "vn". */
 typedef enum {
     REPL_CODE_PANEL_VOWNER_NONE = 0,
     REPL_CODE_PANEL_VOWNER_BEGIN,   /* glBegin ... glEnd */
@@ -2588,13 +2593,11 @@ typedef enum {
 } ReplCodePanelVertexOwner;
 
 typedef struct {
-    int vnum;
     int vnums_exact;
     ReplCodePanelVertexOwner owner;
     int loop_depth;
     int tess_depth;
-    int tess_vnum;
-    int tess_vnums_exact;
+    int tess_vnums_exact;   /* the polygon's exactness while a nested strip owns the run */
 } ReplCodePanelWalkState;
 
 static void repl_code_panel_add_static_null_terminated_lines(
@@ -2761,17 +2764,12 @@ static void repl_code_panel_begin_walk_line(ReplCodePanelWalkState *state,
      * is emitted so the current source line and the following vertices
      * already see the new numbering regime. */
     if (cmd->type == CMD_BEGIN) {
-        if (state->owner == REPL_CODE_PANEL_VOWNER_TESS) {
-            state->tess_vnum = state->vnum;
+        if (state->owner == REPL_CODE_PANEL_VOWNER_TESS)
             state->tess_vnums_exact = state->vnums_exact;
-        }
-        state->vnum = 0;
         state->vnums_exact = (state->loop_depth == 0);
         state->owner = REPL_CODE_PANEL_VOWNER_BEGIN;
     } else if (cmd->type == CMD_TESS_BEGIN_POLYGON) {
-        state->tess_vnum = 0;
         state->tess_vnums_exact = (state->loop_depth == 0);
-        state->vnum = 0;
         state->vnums_exact = (state->loop_depth == 0);
         state->owner = REPL_CODE_PANEL_VOWNER_TESS;
     }
@@ -2785,6 +2783,7 @@ static void repl_code_panel_vertex_aux_label(const UiRenderSnapshot *snap,
                                              const GLCmd *cmd,
                                              char out_label[8]) {
     int in_scope;
+    int run;
 
     if (!out_label)
         return;
@@ -2808,7 +2807,14 @@ static void repl_code_panel_vertex_aux_label(const UiRenderSnapshot *snap,
     if (!in_scope)
         return;
 
-    snprintf(out_label, 8, state->vnums_exact ? "v%d" : "vn", state->vnum);
+    /* No number: the flatten emitted no vertex for this row (a branch not
+     * taken, a function nobody calls), so the scene labels nothing here. */
+    run = (line_idx >= 0 && line_idx < snap->document_count)
+        ? snap->vertex_run_by_row[line_idx] : REPL_VERTEX_ORDINAL_NONE;
+    if (run < 0)
+        return;
+
+    snprintf(out_label, 8, state->vnums_exact ? "v%d" : "vn", run);
 }
 
 static void repl_code_panel_end_walk_line(ReplCodePanelWalkState *state,
@@ -2816,8 +2822,6 @@ static void repl_code_panel_end_walk_line(ReplCodePanelWalkState *state,
     if (!state || !cmd || !cmd->valid)
         return;
 
-    if (repl_cmd_emits_vertex(cmd->type))
-        state->vnum++;
     state->tess_depth = repl_tess_advance_depth(cmd->type, state->tess_depth);
 
     /* Closing/unwinding commands advance after the row is emitted: the
@@ -2835,10 +2839,8 @@ static void repl_code_panel_end_walk_line(ReplCodePanelWalkState *state,
         break;
     case CMD_END:
         if (state->tess_depth > 0) {
-            if (state->owner == REPL_CODE_PANEL_VOWNER_BEGIN) {
-                state->vnum = state->tess_vnum;
+            if (state->owner == REPL_CODE_PANEL_VOWNER_BEGIN)
                 state->vnums_exact = state->tess_vnums_exact && state->loop_depth == 0;
-            }
             state->owner = REPL_CODE_PANEL_VOWNER_TESS;
         } else {
             state->owner = REPL_CODE_PANEL_VOWNER_NONE;

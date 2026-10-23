@@ -78,6 +78,27 @@ int repl_cursor_flat_block_matches(FlatProgramView program,
     return 0;
 }
 
+void repl_flatten_vertex_runs_by_row(int *out, int row_count, int lo, int hi) {
+    FlatProgramView program = repl_state_flat_program_view();
+
+    if (!out || row_count <= 0)
+        return;
+    for (int r = 0; r < row_count; r++)
+        out[r] = REPL_VERTEX_ORDINAL_NONE;
+    if (lo > hi || !program.vertex_ord)
+        return;
+    for (int i = 0; i < program.cmd_count; i++) {
+        const GLCmd *cmd = &program.cmds[i];
+        int row = cmd->src_cmd_idx;
+
+        if (!cmd->valid || !repl_cmd_emits_vertex(cmd->type) ||
+            row < lo || row > hi || row >= row_count)
+            continue;
+        if (program.vertex_ord[i].run >= 0)
+            out[row] = program.vertex_ord[i].run;   /* a later copy wins */
+    }
+}
+
 /* Map a source glBegin/glEnd pair to the flat program by provenance.
  *
  * For loops there may be several flat begin/end pairs with the same source
@@ -369,16 +390,17 @@ static int cursor_polygon_group_range(GLenum mode, int ord, int count,
     return 1;
 }
 
-/* Source line of the gluBegin(GLU_CONTOUR) whose contour holds
- * edit_line_idx (begin and gluEnd() lines included), or -1. */
+/* The contour holding edit_line_idx (begin and gluEnd() lines included), as
+ * the polygon-local tess ordinals of its gluVertex rows - read from the
+ * program's numbering, a nested strip's rows included. */
 ReplCursorPolygon repl_flatten_cursor_tess_contour(int edit_line_idx) {
     ReplCursorPolygon out = { 0, 0, 0, 0 };
-    const GLCmd *flat_cmds = repl_state_flat_program_cmds();
-    int flat_cmd_count = repl_state_flat_program_count();
+    FlatProgramView program = repl_state_flat_program_view();
     ReplCursorScope scope;
     int depth = 0;
-    int ord = 0;
+    int in_contour = 0;
     int first = -1;
+    int last = -1;
 
     if (edit_line_idx < 0 || edit_line_idx >= repl_state_document_count())
         return out;
@@ -386,43 +408,49 @@ ReplCursorPolygon repl_flatten_cursor_tess_contour(int edit_line_idx) {
     if (!scope.tess_contour.valid)
         return out;
 
-    for (int i = 0; i < flat_cmd_count; i++) {
+    for (int i = 0; i < program.cmd_count; i++) {
         CmdType t;
         int prev;
 
-        if (!flat_cmds[i].valid)
+        if (!program.cmds[i].valid)
             continue;
-        t = flat_cmds[i].type;
-        if (t == CMD_TESS_BEGIN_POLYGON) {
-            if (first >= 0)
-                break;  /* unterminated contour: its polygon ended here */
-            ord = 0;
-        }
+        t = program.cmds[i].type;
+        if (t == CMD_TESS_BEGIN_POLYGON && in_contour)
+            break;  /* unterminated contour: its polygon ended here */
         prev = depth;
         depth = repl_tess_advance_depth(t, depth);
-        if (prev == 1 && depth == 2 && flat_cmds[i].src_cmd_idx == scope.tess_contour.start) {
-            first = ord;
-        } else if (prev == 2 && depth < 2 && first >= 0) {
+        if (prev == 1 && depth == 2 &&
+            program.cmds[i].src_cmd_idx == scope.tess_contour.start) {
+            in_contour = 1;
+        } else if (prev == 2 && depth < 2 && in_contour) {
             break;
         }
-        if (t == CMD_TESS_VERTEX && depth > 0)
-            ord++;
+        if (in_contour && t == CMD_TESS_VERTEX) {
+            int ord = repl_vertex_ordinal_at(program.vertex_ord,
+                                             program.cmd_count, i).tess;
+            if (ord >= 0) {
+                if (first < 0)
+                    first = ord;
+                last = ord;
+            }
+        }
     }
 
-    if (first < 0 || ord <= first)
+    if (first < 0)
         return out;  /* contour not in the flat program, or vertex-less */
     out.valid = 1;
     out.first = first;
-    out.last = ord - 1;
+    out.last = last;
     return out;
 }
 
 ReplCursorPolygon repl_flatten_cursor_polygon(int edit_line_idx) {
     ReplCursorPolygon out = { 0, 0, 0, 0 };
-    const GLCmd *flat_cmds = repl_state_flat_program_cmds();
-    int flat_cmd_count = repl_state_flat_program_count();
+    FlatProgramView program = repl_state_flat_program_view();
+    const GLCmd *flat_cmds = program.cmds;
+    int flat_cmd_count = program.cmd_count;
     int begin, end;
-    int vtx_count = 0;
+    int block_vertices = 0;
     int cursor_ord = -1;
 
     if (edit_line_idx < 0 || edit_line_idx >= repl_state_document_count())
@@ -448,23 +476,29 @@ ReplCursorPolygon repl_flatten_cursor_polygon(int edit_line_idx) {
      * line is at or after the cursor; a cursor past the last vertex line
      * builds the block's final primitive. Matching in emission order
      * resolves a cursor inside an inner loop body against the cached
-     * (first) unrolled iteration; the ordinals are block-local, so they
-     * address the same primitive in every copy. */
+     * (first) unrolled iteration; the ordinals are the program's glVertex-only
+     * block-local numbering, so they address the same primitive in every
+     * copy. */
     for (int i = begin + 1; i < end; i++) {
+        int ord;
+
         if (!flat_cmds[i].valid) continue;
         if (!repl_cmd_emits_immediate_vertex(flat_cmds[i].type))
             continue;
+        ord = repl_vertex_ordinal_at(program.vertex_ord, flat_cmd_count, i).imm;
+        if (ord < 0)
+            continue;
         if (cursor_ord < 0 && flat_cmds[i].src_cmd_idx >= edit_line_idx)
-            cursor_ord = vtx_count;
-        vtx_count++;
+            cursor_ord = ord;
+        block_vertices = ord + 1;
     }
-    if (vtx_count <= 0)
+    if (block_vertices <= 0)
         return out;
     if (cursor_ord < 0)
-        cursor_ord = vtx_count - 1;
+        cursor_ord = block_vertices - 1;
 
     out.valid = cursor_polygon_group_range((GLenum)flat_cmds[begin].args[0],
-                                           cursor_ord, vtx_count, &out);
+                                           cursor_ord, block_vertices, &out);
     return out;
 }
 

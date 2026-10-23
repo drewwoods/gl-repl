@@ -1024,7 +1024,88 @@ static void test_walker_places_tess_vertices_at_polygon_close(void) {
 }
 #endif
 
+/* The walker keeps no vertex counters: a callback sees the program's own
+ * numbering for the vertex it is delivered, and -1 for every ordinal elsewhere
+ * (on_each_cmd, on_end). A hand-built view with no numbering numbers nothing. */
+typedef struct {
+    const ReplVertexOrdinal *ord;
+    int vertices, wrong, leaked;
+} OrdinalRecorder;
+
+static void ordinal_each_cmd(const ReplayVertexWalkState *state, void *user) {
+    OrdinalRecorder *rec = user;
+    rec->leaked += state->vertex_idx_in_block != -1 ||
+                   state->immediate_idx_in_block != -1 ||
+                   state->tess_idx_in_polygon != -1;
+}
+
+static void ordinal_vertex(const ReplayVertexWalkState *state,
+                           float x, float y, float z, void *user) {
+    OrdinalRecorder *rec = user;
+    const ReplVertexOrdinal *want = &rec->ord[state->flat_cmd_idx];
+    (void)x; (void)y; (void)z;
+    rec->vertices++;
+    rec->wrong += state->vertex_idx_in_block != want->run ||
+                  state->immediate_idx_in_block != want->imm ||
+                  state->tess_idx_in_polygon != want->tess;
+}
+
+static void unnumbered_vertex(const ReplayVertexWalkState *state,
+                              float x, float y, float z, void *user) {
+    OrdinalRecorder *rec = user;
+    (void)x; (void)y; (void)z;
+    rec->vertices++;
+    rec->wrong += state->vertex_idx_in_block != -1 ||
+                  state->immediate_idx_in_block != -1 ||
+                  state->tess_idx_in_polygon != -1;
+}
+
+static void test_walker_delivers_the_program_numbering(void) {
+    static const char *const lines[] = {
+        "gluBegin(GLU_POLYGON);", "gluBegin(GLU_CONTOUR);", "gluVertex(0, 0, 0);",
+        "glBegin(GL_QUAD_STRIP);", "glVertex3f(1, 0, 0);", "gluVertex(1, 0, 0);",
+        "glEnd();", "gluVertex(0, 1, 0);", "gluEnd();", "gluEnd();",
+        "glBegin(GL_POINTS);", "glVertex3f(5, 5, 5);", "glEnd();",
+    };
+    const ReplayVertexWalkCallbacks cb = {
+        .on_each_cmd = ordinal_each_cmd, .on_vertex = ordinal_vertex,
+    };
+    ReplayVertexWalkContext ctx;
+    OrdinalRecorder rec;
+
+    glr_ctrl_reset_all();
+    for (size_t i = 0; i < sizeof(lines) / sizeof(lines[0]); i++)
+        editor_feed_line(lines[i]);
+    repl_flatten_commands(0);
+
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program = repl_state_flat_program_view();
+    rec = (OrdinalRecorder){ .ord = ctx.program.vertex_ord };
+    ASSERT_TRUE("the live program is numbered", rec.ord != NULL);
+    replay_walk_user_vertices(&ctx, &cb, &rec);
+    ASSERT_INT("every vertex is delivered", rec.vertices, 5);
+    ASSERT_INT("each vertex carries its own ordinals", rec.wrong, 0);
+    ASSERT_INT("no ordinal is visible outside a vertex callback", rec.leaked, 0);
+
+    /* The resume after the nested strip, as the callback sees it. */
+    ASSERT_INT("polygon tail takes the run it had before the strip",
+               ctx.program.vertex_ord[7].run, 1);
+
+    /* A view with no numbering still walks; its vertices carry no ordinal. */
+    {
+        const ReplayVertexWalkCallbacks plain = { .on_vertex = unnumbered_vertex };
+
+        ctx.program.vertex_ord = NULL;
+        rec = (OrdinalRecorder){ .ord = NULL };
+        replay_walk_user_vertices(&ctx, &plain, &rec);
+        ASSERT_INT("an unnumbered program still delivers its vertices",
+                   rec.vertices, 5);
+        ASSERT_INT("...with no ordinal on any of them", rec.wrong, 0);
+    }
+}
+
 int main(void) {
+    test_walker_delivers_the_program_numbering();
 #ifdef GL_STUBS
     test_walker_places_tess_vertices_at_polygon_close();
 #endif

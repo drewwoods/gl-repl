@@ -175,8 +175,171 @@ static void test_cursor_source_scopes(void) {
     ASSERT_INT("live cache follows document reset", scope.begin_block.valid, 0);
 }
 
+/* ---- Vertex numbering (src/repl/vertex_ordinals.c) ----------------------
+ *
+ * The rules are the overlay scope contract's "Display indices" paragraph. The
+ * table is the extrusion shape (a glBegin strip nested in a GLU contour,
+ * interleaving both vertex families) followed by a plain block and a second
+ * polygon: the strip owns the run while open, the polygon's run resumes at its
+ * glEnd(), the tess run keeps counting through the strip and across contours,
+ * and each head restarts what it owns. {run, imm, tess}; -1 = none. */
+static void test_vertex_numbering(void) {
+    static const struct {
+        CmdType type;
+        int run, imm, tess;
+    } k_stream[] = {
+        /*  0 */ { CMD_TESS_BEGIN_POLYGON, -1, -1, -1 },
+        /*  1 */ { CMD_TESS_BEGIN_CONTOUR, -1, -1, -1 },
+        /*  2 */ { CMD_TESS_VERTEX,         0, -1,  0 },
+        /*  3 */ { CMD_BEGIN,              -1, -1, -1 },
+        /*  4 */ { CMD_VERTEX3F,            0,  0, -1 },
+        /*  5 */ { CMD_VERTEX3F,            1,  1, -1 },
+        /*  6 */ { CMD_TESS_VERTEX,         2, -1,  1 },
+        /*  7 */ { CMD_VERTEX2F,            3,  2, -1 },
+        /*  8 */ { CMD_TESS_VERTEX,         4, -1,  2 },
+        /*  9 */ { CMD_END,                -1, -1, -1 },
+        /* 10 */ { CMD_TESS_VERTEX,         1, -1,  3 },
+        /* 11 */ { CMD_TESS_END,           -1, -1, -1 },
+        /* 12 */ { CMD_TESS_BEGIN_CONTOUR, -1, -1, -1 },
+        /* 13 */ { CMD_TESS_VERTEX,         2, -1,  4 },
+        /* 14 */ { CMD_TESS_END,           -1, -1, -1 },
+        /* 15 */ { CMD_TESS_END,           -1, -1, -1 },
+        /* 16 */ { CMD_BEGIN,              -1, -1, -1 },
+        /* 17 */ { CMD_VERTEX4F,            0,  0, -1 },
+        /* 18 */ { CMD_VERTEX3F,            1,  1, -1 },
+        /* 19 */ { CMD_END,                -1, -1, -1 },
+        /* 20 */ { CMD_TESS_BEGIN_POLYGON, -1, -1, -1 },
+        /* 21 */ { CMD_TESS_BEGIN_CONTOUR, -1, -1, -1 },
+        /* 22 */ { CMD_TESS_VERTEX,         0, -1,  0 },
+        /* 23 */ { CMD_TESS_END,           -1, -1, -1 },
+        /* 24 */ { CMD_TESS_END,           -1, -1, -1 },
+    };
+    enum { N = (int)(sizeof k_stream / sizeof k_stream[0]) };
+    GLCmd cmds[N];
+    ReplVertexOrdinal ord[N];
+    ReplVertexOrdinal prefix[N];
+    char lbl[96];
+
+    printf("--- vertex numbering ---\n");
+    memset(cmds, 0, sizeof cmds);
+    for (int i = 0; i < N; i++) {
+        cmds[i].type = k_stream[i].type;
+        cmds[i].valid = 1;
+    }
+    repl_flat_number_vertices(cmds, N, ord);
+    for (int i = 0; i < N; i++) {
+        snprintf(lbl, sizeof lbl, "cmd %d run/imm/tess", i);
+        ASSERT_TRUE(lbl, ord[i].run == k_stream[i].run &&
+                         ord[i].imm == k_stream[i].imm &&
+                         ord[i].tess == k_stream[i].tess);
+    }
+
+    /* An ordinal depends only on the commands before it, so a clamped prefix
+     * (replay) is numbered as the full stream was. */
+    for (int n = 0; n <= N; n++) {
+        int same = 1;
+        repl_flat_number_vertices(cmds, n, prefix);
+        for (int i = 0; i < n; i++)
+            same = same && prefix[i].run == ord[i].run &&
+                   prefix[i].imm == ord[i].imm && prefix[i].tess == ord[i].tess;
+        snprintf(lbl, sizeof lbl, "prefix of %d commands is numbered alike", n);
+        ASSERT_TRUE(lbl, same);
+    }
+
+    /* An invalid command numbers nothing and counts for nothing. */
+    cmds[5].valid = 0;
+    repl_flat_number_vertices(cmds, N, ord);
+    ASSERT_TRUE("invalid vertex holds no ordinal",
+                ord[5].run == -1 && ord[5].imm == -1 && ord[5].tess == -1);
+    ASSERT_INT("the next strip vertex takes its place in the run", ord[6].run, 1);
+    ASSERT_INT("glVertex-only ordinal skips it too", ord[7].imm, 1);
+    cmds[5].valid = 1;
+
+    /* The same shape from source: what the pipeline flattens is numbered. */
+    glr_ctrl_reset_all();
+    editor_feed_line("gluBegin(GLU_POLYGON);");
+    editor_feed_line("gluBegin(GLU_CONTOUR);");
+    editor_feed_line("gluVertex(0, 0, 0);");
+    editor_feed_line("glBegin(GL_QUAD_STRIP);");
+    editor_feed_line("glVertex3f(0, 0, 0);");
+    editor_feed_line("gluVertex(1, 0, 0);");
+    editor_feed_line("glEnd();");
+    editor_feed_line("gluVertex(2, 0, 0);");
+    editor_feed_line("gluEnd();");
+    editor_feed_line("gluEnd();");
+    repl_flatten_commands(0);
+    {
+        FlatProgramView view = repl_state_flat_program_view();
+        static ReplVertexOrdinal fresh[MAX_FLAT_COMMANDS];
+        int same = view.vertex_ord != NULL;
+
+        repl_flat_number_vertices(view.cmds, view.cmd_count, fresh);
+        for (int i = 0; same && i < view.cmd_count; i++)
+            same = view.vertex_ord[i].run == fresh[i].run &&
+                   view.vertex_ord[i].imm == fresh[i].imm &&
+                   view.vertex_ord[i].tess == fresh[i].tess;
+        ASSERT_INT("a flatten numbers its result", same, 1);
+        ASSERT_INT("the polygon's run resumes after the strip",
+                   view.vertex_ord[7].run, 1);
+    }
+}
+
+/* repl_flatten_vertex_runs_by_row: the gutter's number for each source row is
+ * the shared run of the row's last flat instance, resolved only inside the
+ * requested rows, and absent for a row the flatten never emitted. */
+static void test_vertex_runs_by_row(void) {
+    int out[16];
+    int copies;
+
+    printf("--- vertex runs by row ---\n");
+    glr_ctrl_reset_all();
+    editor_feed_line("glBegin(GL_TRIANGLES);");        /* 0 */
+    editor_feed_line("glVertex3f(0, 0, 0);");          /* 1  run 0 */
+    editor_feed_line("for(i, 0, 3) {");                /* 2 */
+    editor_feed_line("glVertex3f(i, 1, 0);");          /* 3  one instance per pass */
+    editor_feed_line("}");                             /* 4 */
+    editor_feed_line("if(0) {");                       /* 5 */
+    editor_feed_line("glVertex3f(5, 5, 5);");          /* 6  never emitted */
+    editor_feed_line("}");                             /* 7 */
+    editor_feed_line("glVertex3f(0, 2, 0);");          /* 8 */
+    editor_feed_line("glEnd();");                      /* 9 */
+    editor_feed_line("glBegin(GL_POINTS);");           /* 10 */
+    editor_feed_line("glVertex3f(9, 9, 9);");          /* 11 */
+    editor_feed_line("glEnd();");                      /* 12 */
+    repl_flatten_commands(0);
+
+    copies = 0;
+    {
+        FlatProgramView view = repl_state_flat_program_view();
+        for (int i = 0; i < view.cmd_count; i++)
+            copies += view.cmds[i].valid && view.cmds[i].type == CMD_VERTEX3F &&
+                      view.cmds[i].src_cmd_idx == 3;
+    }
+    ASSERT_TRUE("the loop row unrolls into several instances", copies >= 2);
+
+    repl_flatten_vertex_runs_by_row(out, 13, 0, 9);
+    ASSERT_INT("first vertex of the block is v0", out[1], 0);
+    ASSERT_INT("a loop row reports its last instance", out[3], copies);
+    ASSERT_INT("a row after the loop follows every instance", out[8], copies + 1);
+    ASSERT_INT("a branch not taken has no number", out[6], REPL_VERTEX_ORDINAL_NONE);
+    ASSERT_INT("a head row has no number", out[0], REPL_VERTEX_ORDINAL_NONE);
+    ASSERT_INT("a row outside the requested rows has none", out[11],
+               REPL_VERTEX_ORDINAL_NONE);
+
+    repl_flatten_vertex_runs_by_row(out, 13, 10, 12);
+    ASSERT_INT("the second block restarts at v0", out[11], 0);
+    ASSERT_INT("the first block is outside these rows", out[1],
+               REPL_VERTEX_ORDINAL_NONE);
+
+    repl_flatten_vertex_runs_by_row(out, 13, 1, 0);
+    ASSERT_INT("an empty row range resolves nothing", out[1],
+               REPL_VERTEX_ORDINAL_NONE);
+}
+
 int main() {
     repl_eval_init_predef_vars();
+    test_vertex_numbering();
+    test_vertex_runs_by_row();
     test_cursor_source_scopes();
     printf("--- repl_core internal tests ---\n");
 

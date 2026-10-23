@@ -90,7 +90,7 @@ The editor owns text-document behavior; UI renders its 2D view.
 The controller translates REPL state into per-frame view inputs.
 ```
 
-Render3d modules may consume [`FlatProgramView`](../src/repl/flatten.h#L59), [`CmdType`](../src/repl/command.h#L48), and other
+Render3d modules may consume [`FlatProgramView`](../src/repl/flatten.h#L60), [`CmdType`](../src/repl/command.h#L48), and other
 command-domain data when that data is already present in the
 [`Render3dRenderConfig`](../src/render3d/render_types.h#L139) or a derived frame snapshot. They should not fetch REPL
 globals or call `repl_state_*` APIs directly during rendering.
@@ -364,7 +364,7 @@ Source commands are the editing model.
 
 Flattened commands are the execution, replay, export, and 3D annotation model.
 
-Code outside the command pipeline should use [`FlatProgramView`](../src/repl/flatten.h#L59) or a snapshot
+Code outside the command pipeline should use [`FlatProgramView`](../src/repl/flatten.h#L60) or a snapshot
 derived from it instead of poking raw global arrays.
 
 ### Flatten cache and render-pass reuse
@@ -395,7 +395,7 @@ before returning. While animation is playing, advancing `t` is routed by its
 dependency bit: stable value-only scenes rebake, while `t`-dependent loops or
 conditions full-flatten. Ordinary jitter AA, replay overlay passes, and vertex
 outlines reuse the same frame-level
-[`FlatProgramView`](../src/repl/flatten.h#L59)/snapshot instead of reparsing, reflattening, or re-evaluating
+[`FlatProgramView`](../src/repl/flatten.h#L60)/snapshot instead of reparsing, reflattening, or re-evaluating
 expressions per sample. Those passes may reapply precomputed assignment
 commands from `args[]` while walking the flat stream, but the frame/probe
 side-effect brackets restore predefined variables and scratch arrays so
@@ -879,6 +879,22 @@ must agree. Immediate-only and tess-only
 ordinals are for filtering, never substitute display indices. Tess-only
 ordinals continue across contours, including vertices inside nested strips.
 
+All three ordinals are computed **once**, by the flatten that builds the flat
+program: `repl_flat_number_vertices()` in
+[`vertex_ordinals.c`](../src/repl/vertex_ordinals.c) fills an array parallel to
+the flat commands (`FlatProgramView.vertex_ord`, a `ReplVertexOrdinal` of
+shared run, immediate and tess ordinal per vertex command). Nothing else
+counts vertices: the replay vertex walker hands the three values to its
+callbacks, `repl_flatten_cursor_polygon()` and
+`repl_flatten_cursor_tess_contour()` read the immediate and tess ordinals, the
+outline collector reads the tess ordinal that starts each contour, and the
+code-panel gutter takes each source row's shared run from the row's last flat
+instance (`repl_flatten_vertex_runs_by_row()`, delivered through the UI
+snapshot). A value-only rebake re-bakes arguments and assignments but never
+the order or presence of a command, so the array stays valid; every full
+flatten rewrites it, and an ordinal depends only on the commands before it, so a
+replay clamp reads a numbered prefix.
+
 A valid immediate `glBegin` source extent decides block membership alone;
 flat provenance is the fallback when no source extent exists. This prevents
 an outdated flat range from selecting an earlier block. A GLU polygon
@@ -901,10 +917,10 @@ Source geometry boundaries follow two rules:
 
 `repl_source_scope_cursor_scope()` returns the immediate block, polygon, and
 contour together from the document's prefix cache. The controller and flatten
-queries consume these same extents. The vertex walker and gutter save the
-polygon's display counter while an immediate strip owns the run. At its
-`glEnd()` they resume that counter; the walker and normal-arrow gate also
-restore polygon selection.
+queries consume these same extents. The numbering saves the polygon's display
+run while an immediate strip owns it and resumes that run at the strip's
+`glEnd()`; the walker and normal-arrow gate also restore polygon selection,
+and the gutter's loop-exactness state restores with them.
 
 Transforms remain legal outside immediate blocks, including inside a contour,
 but **a GLU polygon is placed by the state current at its closing
@@ -1028,7 +1044,7 @@ funcN-local parameters or loop-assigned values, so the controller must override
 cursor arguments from the **flat** command stream before rendering guides inside
 functions or loops.
 
-[`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L232) walks the current [`FlatProgramView`](../src/repl/flatten.h#L59) via
+[`edit_overlays_render_cursor_guides()`](../src/subsystems/edit_overlays/edit_overlays.h#L232) walks the current [`FlatProgramView`](../src/repl/flatten.h#L60) via
 the replay/user-vertex walkers while tracking the modelview with
 `apply_tracked_transform` / `unwind_transform_stack`. At the cursor's chosen
 flat command - its first expansion, or its last when the snapshot's
@@ -1118,10 +1134,10 @@ signature for audited renderers.
   and most render config live **app-side**
   on `glr_state` ([`src/app/glr_state.c`](../src/app/glr_state.c)), not on [`ReplRuntimeState`](../src/repl/state.h#L18); the
   controller reads them from there when filling the snapshot. Only the
-  REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L133): the light-enable
+  REPL-owned render *tail* ([`ReplRenderState`](../src/repl/state_views.h#L139): the light-enable
   bitmask) remains a REPL slice.
-* pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L110), [`EditorInputView`](../src/editor/state.h#L74),
-  [`ReplImportExportView`](../src/repl/state_views.h#L186), [`FlatProgramView`](../src/repl/flatten.h#L59), [`ReplPredefView`](../src/repl/eval.h#L179))
+* pointer-shaped read-only views ([`ReplVariableView`](../src/repl/state_views.h#L116), [`EditorInputView`](../src/editor/state.h#L74),
+  [`ReplImportExportView`](../src/repl/state_views.h#L192), [`FlatProgramView`](../src/repl/flatten.h#L60), [`ReplPredefView`](../src/repl/eval.h#L179))
 * document/flat metadata (`document_cmds`, `document_count`, `edit_line`
   - sourced editor-side via [`editor_state_edit_line()`](../src/editor/state.h#L400),
   `flat_program_count`, …)
@@ -1908,7 +1924,7 @@ Scene-presentation policy and most render config live in the app-side owner
 [`src/app/glr_state.c`](../src/app/glr_state.c). REPL-pipeline translation units do not include
 [`glr_state.h`](../src/app/glr_state.h); `check-repl-state-no-glr-state` enforces that boundary.
 App, editor, UI, and render3d code may consume it. Only the REPL-owned render
-tail-[`ReplRenderState`](../src/repl/state_views.h#L133), containing the light-enable
+tail-[`ReplRenderState`](../src/repl/state_views.h#L139), containing the light-enable
 bitmask-remains a REPL slice.
 
 ### Capture/restore boundaries
@@ -2350,7 +2366,7 @@ passes + stripped tess are the load-bearing reason here); reach for
 **Side effects across auxiliary passes.** Both mechanisms can run the program
 more than once per frame (the wireframe's three passes; a depth probe).
 `scene_execute_adapter` in [`src/app/glr_ctrl.c`](../src/app/glr_ctrl.c)
-snapshots and restores predef vars / scratch arrays / [`ReplRenderState`](../src/repl/state_views.h#L133)
+snapshots and restores predef vars / scratch arrays / [`ReplRenderState`](../src/repl/state_views.h#L139)
 around any pass whose [`Render3dExecutePurpose`](../src/render3d/render_types.h#L75) is *not* the one
 side-effecting fill - so `t = t + 1` style assignment animation advances
 exactly once per frame. `RENDER3D_EXEC_MAIN_FILL`, the wireframe's visible-

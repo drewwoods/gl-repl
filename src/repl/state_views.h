@@ -82,6 +82,12 @@ typedef struct {
      * command after the overflow latch. Topology + argument arena are
      * rebuilt by a full flatten and left untouched by in-place rebake. */
     int              call_frame_idx[MAX_FLAT_COMMANDS];
+    /* Vertex numbering, parallel to cmds[] (see vertex_ordinals.h): written
+     * once by a full flatten, never by an in-place rebake, which re-bakes
+     * values only and so cannot move or add a vertex. cmd_count clamps what a
+     * reader may use, and an ordinal depends only on the commands before it,
+     * so a clamped prefix stays numbered. */
+    ReplVertexOrdinal vertex_ord[MAX_FLAT_COMMANDS];
     ReplCallFrame    call_frames[MAX_CALL_FRAMES];
     int              call_frame_count;
     float            call_frame_args[MAX_CALL_FRAME_ARGS];

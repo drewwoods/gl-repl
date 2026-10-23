@@ -26,6 +26,7 @@
 #include "repl/command.h"
 #include "repl/eval.h"
 #include "repl/expr_program.h" /* ReplExprCache (optional compiled-expression cache) */
+#include "repl/vertex_ordinals.h" /* ReplVertexOrdinal (the flat program's vertex numbering) */
 #include "source_document.h"  /* SourceTextView */
 #include "config.h"           /* REPL_DIAG_TEXT_MAX */
 
@@ -103,6 +104,11 @@ typedef struct {
     const float          *call_frame_args;
     int                   call_frame_arg_count;
     int                   call_frame_overflow; /* latch: later calls unindexed */
+    /* Vertex numbering, parallel to cmds (see vertex_ordinals.h), or NULL when
+     * the stream was not numbered: a hand-built view, or a flatten that was
+     * given no buffer. The vertex walker, the outline collector and the
+     * cursor-primitive resolvers read it; a NULL array numbers nothing. */
+    const ReplVertexOrdinal *vertex_ord;
 } FlatProgramView;
 
 static inline int repl_call_frame_ok(const FlatProgramView *view, int frame) {
@@ -215,6 +221,11 @@ typedef struct {
     int               call_frame_capacity;
     float            *call_frame_args;
     int               call_frame_arg_capacity;
+    /* Optional vertex numbering, parallel to flat_cmds. NULL skips it. When
+     * set, a successful flatten numbers [0, flat_cmd_count) once at the end
+     * (repl_flat_number_vertices); a rebake leaves it alone because it cannot
+     * change which commands exist or their order. */
+    ReplVertexOrdinal *flat_vertex_ord;
 } ReplFlattenOptions;
 
 /* Result: whether flattening succeeded, how many commands were generated,

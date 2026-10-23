@@ -124,6 +124,12 @@ typedef struct ReplayVertexWalkState {
     GLenum primitive_mode;     /* current BEGIN's mode (0 if not in a block) */
     int    in_block;           /* inside CMD_BEGIN..CMD_END or tess polygon */
     int    block_selected;     /* current block matches the cursor */
+    /* The three vertex ordinals below are the program's own numbering
+     * (FlatProgramView.vertex_ord, repl/vertex_ordinals.h), set for the
+     * duration of an on_vertex callback and -1 everywhere else. The walker
+     * keeps no counters. */
+    /* Display number: glVertex and gluVertex in one run per innermost head;
+     * what the vertex labels and the code-panel gutter show. */
     int    vertex_idx_in_block;
     /* glVertex-only ordinal in the current glBegin block - the ordinal space
      * GL assembles primitives in, and the one ReplCursorPolygon ranges use.

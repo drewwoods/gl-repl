@@ -269,6 +269,13 @@ typedef struct UiRenderSnapshot {
     int                         current_tess_block_valid;
     int                         current_tess_block_start;
     int                         current_tess_block_end;
+    /* The display number (REPL_VERTEX_ORDINAL_NONE = none) the gutter shows on
+     * each vertex row, taken from the flat program's own numbering: the shared
+     * glVertex/gluVertex run of the row's last flat instance. Filled only for
+     * rows of the two cursor blocks above - the only rows the gutter labels -
+     * and NONE elsewhere and for a row the flatten never emitted (a branch
+     * not taken, a function nobody calls). */
+    int                         vertex_run_by_row[MAX_EDITOR_COMMANDS];
 
     /* Reshape() projection body, resolved once per frame by the
      * controller from the scene's nearest-steady projection (see
