@@ -903,7 +903,7 @@ static void test_walker_tracks_lighting_state_for_vertices(void) {
 typedef struct {
     int count;
     int display[4], tess[4];
-    unsigned translates[4], translate_base;
+    unsigned loads[4], load_base;
 } NestedTessRecorder;
 
 static void capture_nested_tess(const ReplayVertexWalkState *state,
@@ -914,7 +914,7 @@ static void capture_nested_tess(const ReplayVertexWalkState *state,
     rec->display[rec->count] = state->vertex_idx_in_block;
     rec->tess[rec->count] = state->tess_idx_in_polygon;
 #ifdef GL_STUBS
-    rec->translates[rec->count] = gl_stub_counts[GL_STUB_glTranslatef] - rec->translate_base;
+    rec->loads[rec->count] = gl_stub_counts[GL_STUB_glLoadMatrixf] - rec->load_base;
 #endif
     rec->count++;
 }
@@ -940,7 +940,7 @@ static void test_walker_restores_enclosing_tess_scope(void) {
         ctx.selected_block_only = 1;
         NestedTessRecorder rec = {0};
 #ifdef GL_STUBS
-        rec.translate_base = gl_stub_counts[GL_STUB_glTranslatef];
+        rec.load_base = gl_stub_counts[GL_STUB_glLoadMatrixf];
 #endif
         replay_walk_user_vertices(&ctx, &cb, &rec);
         ASSERT_INT("only polygon-owned vertices survive the strip's separate selection",
@@ -949,13 +949,81 @@ static void test_walker_restores_enclosing_tess_scope(void) {
         ASSERT_INT("tail resumes saved polygon display index", rec.display[rec.count - 1], has_prefix_vertex);
         ASSERT_INT("tess ordinal also counts the strip's gluVertex", rec.tess[rec.count - 1], has_prefix_vertex + 1);
 #ifdef GL_STUBS
-        ASSERT_INT("legal transform inside contour is applied", rec.translates[rec.count - 1], 1);
+        ASSERT_TRUE("tail gluVertex is placed with the polygon's close matrix",
+                    rec.loads[rec.count - 1] > 0);
 #endif
         if (has_prefix_vertex) ASSERT_INT("polygon's first vertex is v0", rec.display[0], 0);
     }
 }
 
+#ifdef GL_STUBS
+typedef struct {
+    int count;
+    unsigned loads[4], reads[4], translates[4];
+} TessCloseRecorder;
+
+static void capture_tess_close(const ReplayVertexWalkState *state,
+                               float x, float y, float z, void *user) {
+    TessCloseRecorder *rec = user;
+    (void)state; (void)x; (void)y; (void)z;
+    if (rec->count >= 4) return;
+    rec->loads[rec->count] = gl_stub_counts[GL_STUB_glLoadMatrixf];
+    rec->reads[rec->count] = gl_stub_counts[GL_STUB_glGetFloatv];
+    rec->translates[rec->count] = gl_stub_counts[GL_STUB_glTranslatef];
+    rec->count++;
+}
+
+/* GLU draws a polygon at its closing gluEnd(), so the walker hands each
+ * gluVertex to its callbacks under the matrix current there. */
+static void test_walker_places_tess_vertices_at_polygon_close(void) {
+    static const char *const lines[] = {
+        "gluBegin(GLU_POLYGON);", "gluBegin(GLU_CONTOUR);", "gluVertex(0, 0, 0);",
+        "glTranslatef(2, 3, 0);", "gluVertex(1, 0, 0);", "gluEnd();", "gluEnd();",
+        "glBegin(GL_POINTS);", "glVertex3f(9, 9, 9);", "glEnd();",
+    };
+    const ReplayVertexWalkCallbacks cb = {.on_vertex = capture_tess_close};
+    glr_ctrl_reset_all();
+    for (size_t i = 0; i < sizeof(lines) / sizeof(lines[0]); i++)
+        editor_feed_line(lines[i]);
+    repl_flatten_commands(-1);
+    ReplayVertexWalkContext ctx = make_ctx(-1);
+    TessCloseRecorder rec = {0};
+    gl_stub_counts_reset();
+    replay_walk_user_vertices(&ctx, &cb, &rec);
+    ASSERT_INT("three vertices walked", rec.count, 3);
+    ASSERT_INT("close matrix read once, with the translate applied first",
+               rec.reads[0] * 10 + rec.translates[0], 11);
+    ASSERT_INT("vertex before the translate uses the close matrix", rec.loads[0], 1);
+    ASSERT_INT("vertex after the translate uses the close matrix", rec.loads[1], 2);
+    ASSERT_INT("immediate vertex after the polygon keeps the running matrix", rec.loads[2], 2);
+    ASSERT_INT("the real translate still applies after the polygon", rec.translates[2], 2);
+    ASSERT_INT("walk leaves the matrix stack balanced",
+               gl_stub_counts[GL_STUB_glPushMatrix], gl_stub_counts[GL_STUB_glPopMatrix]);
+
+    static const char *const plain[] = {
+        "gluBegin(GLU_POLYGON);", "gluBegin(GLU_CONTOUR);", "gluVertex(0, 0, 0);",
+        "gluVertex(1, 0, 0);", "gluVertex(0, 1, 0);", "gluEnd();", "gluEnd();",
+    };
+    glr_ctrl_reset_all();
+    for (size_t i = 0; i < sizeof(plain) / sizeof(plain[0]); i++)
+        editor_feed_line(plain[i]);
+    repl_flatten_commands(-1);
+    ctx = make_ctx(-1);
+    memset(&rec, 0, sizeof(rec));
+    gl_stub_counts_reset();
+    replay_walk_user_vertices(&ctx, &cb, &rec);
+    ASSERT_INT("polygon without inner transforms walks all vertices", rec.count, 3);
+    ASSERT_INT("polygon without inner transforms reads no matrix",
+               gl_stub_counts[GL_STUB_glGetFloatv], 0);
+    ASSERT_INT("polygon without inner transforms loads no matrix",
+               gl_stub_counts[GL_STUB_glLoadMatrixf], 0);
+}
+#endif
+
 int main(void) {
+#ifdef GL_STUBS
+    test_walker_places_tess_vertices_at_polygon_close();
+#endif
     test_walker_restores_enclosing_tess_scope();
     test_walker_resolves_funcn_args_at_cursor();
     test_walker_fires_on_each_cmd_at_cursor();

@@ -17,52 +17,121 @@
 #include "repl/transform_utils.h" /* apply_tracked_transform / unwind_transform_stack */
 #include "subsystems/replay/replay_state.h"
 
+/* GLU tessellates a polygon at its closing gluEnd() - or at the end of the
+ * program when it is left open - so every gluVertex in it is drawn with the
+ * modelview current there, not at its own row. Writes that matrix to out
+ * when a transform inside the polygon makes it differ from the one current
+ * at the head. Returns 0 when no transform does, when a restart abandons the
+ * polygon, or when the polygon pops a matrix pushed before it (unreachable
+ * without unwinding the caller's stack; vertices then keep the running
+ * matrix). */
+static int replay_tess_close_modelview(FlatProgramView program, int head,
+                                       float out[16]) {
+    int depth = 1, push_depth = 0, moved = 0, close = program.cmd_count;
+
+    for (int j = head + 1; j < program.cmd_count; j++) {
+        const GLCmd *cmd = &program.cmds[j];
+        if (!cmd->valid) continue;
+        if (cmd->type == CMD_TESS_BEGIN_POLYGON) return 0;
+        if (repl_cmd_is_transform(cmd->type)) {
+            if (cmd->type == CMD_PUSH_MATRIX) push_depth++;
+            else if (cmd->type == CMD_POP_MATRIX && --push_depth < 0) return 0;
+            moved = 1;
+            continue;
+        }
+        depth = repl_tess_advance_depth(cmd->type, depth);
+        if (depth == 0) { close = j; break; }
+    }
+    if (!moved) return 0;
+
+    int local_depth = 0;
+    glPushMatrix();
+    for (int j = head + 1; j < close; j++) {
+        const GLCmd *cmd = &program.cmds[j];
+        if (cmd->valid && repl_cmd_is_transform(cmd->type))
+            apply_tracked_transform(cmd, &local_depth);
+    }
+    glGetFloatv(GL_MODELVIEW_MATRIX, out);
+    unwind_transform_stack(&local_depth);
+    glPopMatrix();
+    return 1;
+}
+
+/* Close the preview's live strip, then apply the transforms GL could not
+ * take while it was open. */
+static void tess_preview_end_contour(const ReplayTessPreviewCallbacks *cb,
+                                     void *user_data, FlatProgramView program,
+                                     int contour_head, int end_idx,
+                                     int close_valid, int *matrix_depth) {
+    if (cb->end_contour)
+        cb->end_contour(user_data);
+    if (close_valid) glPopMatrix();
+    for (int k = contour_head + 1; k < end_idx; k++)
+        if (program.cmds[k].valid && repl_cmd_is_transform(program.cmds[k].type))
+            apply_tracked_transform(&program.cmds[k], matrix_depth);
+}
+
 void replay_walk_tess_preview(const ReplayTessPreviewCallbacks *cb,
                                    void *user_data) {
     if (!cb) return;
 
     FlatProgramView program = repl_state_flat_program_view();
     int in_contour = 0;
+    int contour_head = -1;
     int matrix_depth = 0;
+    int tess_depth = 0;
+    float close_mv[16];
+    int close_valid = 0;
 
     glPushMatrix();
     for (int i = 0; i < program.cmd_count; i++) {
         const GLCmd *cmd = &program.cmds[i];
         if (!cmd->valid) continue;
 
+        /* A contour is a live line strip, where GL accepts no matrix
+         * change; its transforms are applied once the strip ends. */
         if (repl_cmd_is_transform(cmd->type)) {
-            /* Contour vertices are stored in polygon-local coordinates;
-             * transform commands between BEGIN_CONTOUR and END still
-             * belong to the surrounding polygon frame, so only apply
-             * them while not walking a live contour payload. */
             if (!in_contour)
                 apply_tracked_transform(cmd, &matrix_depth);
             continue;
         }
 
+        int old_depth = tess_depth;
+        tess_depth = repl_tess_advance_depth(cmd->type, tess_depth);
         switch (cmd->type) {
+        case CMD_TESS_BEGIN_POLYGON:
+            if (in_contour)
+                tess_preview_end_contour(cb, user_data, program, contour_head,
+                                         i, close_valid, &matrix_depth);
+            in_contour = 0;
+            close_valid = replay_tess_close_modelview(program, i, close_mv);
+            break;
         case CMD_TESS_BEGIN_CONTOUR:
-            if (in_contour && cb->end_contour)
-                cb->end_contour(user_data);
+            if (old_depth != 1 || tess_depth != 2) break;
+            if (close_valid) { glPushMatrix(); glLoadMatrixf(close_mv); }
             if (cb->begin_contour)
                 cb->begin_contour(user_data);
             in_contour = 1;
+            contour_head = i;
             break;
         case CMD_TESS_VERTEX:
             if (in_contour && cb->vertex)
                 cb->vertex(cmd->args[0], cmd->args[1], cmd->args[2], user_data);
             break;
         case CMD_TESS_END:
-            if (in_contour && cb->end_contour)
-                cb->end_contour(user_data);
+            if (in_contour)
+                tess_preview_end_contour(cb, user_data, program, contour_head,
+                                         i, close_valid, &matrix_depth);
             in_contour = 0;
+            if (tess_depth == 0) close_valid = 0;
             break;
         default:
             break;
         }
     }
-    if (in_contour && cb->end_contour)
-        cb->end_contour(user_data);
+    if (in_contour)
+        tess_preview_end_contour(cb, user_data, program, contour_head,
+                                 program.cmd_count, close_valid, &matrix_depth);
 
     unwind_transform_stack(&matrix_depth);
     glPopMatrix();
@@ -97,6 +166,8 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
     int in_begin_block = 0;
     int tess_poly_selected = selected_block_only ? 0 : 1;
     int tess_poly_vertex_idx = 0;
+    float tess_close_mv[16];
+    int tess_close_valid = 0;
 
     glPushMatrix();
     for (int i = 0; i < program.cmd_count; i++) {
@@ -106,9 +177,18 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
         state.flat_cmd_idx = i;
         state.src_cmd_idx  = cmd->src_cmd_idx;
 
+        /* Callbacks see a gluVertex where the tessellator draws it. */
+        int at_tess_close = tess_close_valid && cmd->type == CMD_TESS_VERTEX;
+        if (at_tess_close) {
+            glPushMatrix();
+            glLoadMatrixf(tess_close_mv);
+        }
         if (cb->on_each_cmd)
             cb->on_each_cmd(&state, user_data);
-        if (stop_flag && *stop_flag) break;
+        if (stop_flag && *stop_flag) {
+            if (at_tess_close) glPopMatrix();
+            break;
+        }
 
         if (!in_begin_block && repl_cmd_is_transform(cmd->type)) {
             apply_tracked_transform(cmd, &matrix_depth);
@@ -149,6 +229,7 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
              * replace it, including when its vertices start inside a strip. */
             tess_poly_selected = state.block_selected;
             tess_poly_vertex_idx = 0;
+            tess_close_valid = replay_tess_close_modelview(program, i, tess_close_mv);
             state.vertex_idx_in_block = 0;
             state.immediate_idx_in_block = 0;
             state.tess_idx_in_polygon = 0;
@@ -164,6 +245,7 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
             tess_depth = repl_tess_advance_depth(cmd->type, tess_depth);
             if (old_depth == 1 && tess_depth == 0) {
                 tess_poly_selected = tess_poly_vertex_idx = 0;
+                tess_close_valid = 0;
                 if (!in_begin_block) {
                     state.in_block = 0;
                     state.block_selected = selected_block_only ? 0 : 1;
@@ -235,6 +317,7 @@ void replay_walk_user_vertices(const ReplayVertexWalkContext *ctx,
         default:
             break;
         }
+        if (at_tess_close) glPopMatrix();
         if (stop_flag && *stop_flag) break;
     }
     if ((!stop_flag || !*stop_flag) && cb->on_end) {

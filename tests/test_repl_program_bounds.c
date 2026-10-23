@@ -345,19 +345,66 @@ static void test_solid_and_vertices_share_one_box(void) {
 /* --- tess ----------------------------------------------------------- */
 
 static void test_tess_vertices_count_inside_a_polygon(void) {
-    GLCmd cmds[5];
+    GLCmd cmds[8];
     ReplSceneBounds b;
 
-    /* A tess vertex outside a polygon buffers nothing, exactly like a
-     * stray glVertex outside glBegin. */
+    /* Only contour vertices reach the tessellator; one outside a polygon,
+     * or in a polygon but outside a contour, buffers nothing - exactly like
+     * a stray glVertex outside glBegin. */
     cmds[0] = cmd(CMD_TESS_VERTEX, 40.0f, 40.0f, 40.0f, 0);
     cmds[1] = cmd(CMD_TESS_BEGIN_POLYGON, 0, 0, 0, 0);
-    cmds[2] = cmd(CMD_TESS_VERTEX, -2.0f, 0.0f, 1.0f, 0);
-    cmds[3] = cmd(CMD_TESS_VERTEX, 2.0f, 1.0f, -1.0f, 0);
-    cmds[4] = cmd(CMD_TESS_END, 0, 0, 0, 0);
+    cmds[2] = cmd(CMD_TESS_VERTEX, 30.0f, 30.0f, 30.0f, 0);
+    cmds[3] = cmd(CMD_TESS_BEGIN_CONTOUR, 0, 0, 0, 0);
+    cmds[4] = cmd(CMD_TESS_VERTEX, -2.0f, 0.0f, 1.0f, 0);
+    cmds[5] = cmd(CMD_TESS_VERTEX, 2.0f, 1.0f, -1.0f, 0);
+    cmds[6] = cmd(CMD_TESS_END, 0, 0, 0, 0);
+    cmds[7] = cmd(CMD_TESS_END, 0, 0, 0, 0);
 
-    b = repl_program_bounds(view_of(cmds, 5), 5);
+    b = repl_program_bounds(view_of(cmds, 8), 8);
     check_box("tess polygon", &b, -2.0f, 0.0f, -1.0f, 2.0f, 1.0f, 1.0f);
+}
+
+static void test_tess_later_contours_count(void) {
+    GLCmd cmds[9];
+    ReplSceneBounds b;
+
+    /* A contour's gluEnd() closes the contour, not the polygon. */
+    cmds[0] = cmd(CMD_TESS_BEGIN_POLYGON, 0, 0, 0, 0);
+    cmds[1] = cmd(CMD_TESS_BEGIN_CONTOUR, 0, 0, 0, 0);
+    cmds[2] = cmd(CMD_TESS_VERTEX, 0.0f, 0.0f, 0.0f, 0);
+    cmds[3] = cmd(CMD_TESS_VERTEX, 1.0f, 1.0f, 0.0f, 0);
+    cmds[4] = cmd(CMD_TESS_END, 0, 0, 0, 0);
+    cmds[5] = cmd(CMD_TESS_BEGIN_CONTOUR, 0, 0, 0, 0);
+    cmds[6] = cmd(CMD_TESS_VERTEX, 5.0f, 6.0f, 0.0f, 0);
+    cmds[7] = cmd(CMD_TESS_END, 0, 0, 0, 0);
+    cmds[8] = cmd(CMD_TESS_END, 0, 0, 0, 0);
+
+    b = repl_program_bounds(view_of(cmds, 9), 9);
+    check_box("second contour", &b, 0.0f, 0.0f, 0.0f, 5.0f, 6.0f, 0.0f);
+}
+
+static void test_tess_polygon_uses_its_close_matrix(void) {
+    GLCmd cmds[8];
+    ReplSceneBounds b;
+
+    /* GLU draws at the polygon's gluEnd(), so the translate after the
+     * first vertex moves all three. */
+    cmds[0] = cmd(CMD_TESS_BEGIN_POLYGON, 0, 0, 0, 0);
+    cmds[1] = cmd(CMD_TESS_BEGIN_CONTOUR, 0, 0, 0, 0);
+    cmds[2] = cmd(CMD_TESS_VERTEX, 0.0f, 0.0f, 0.0f, 0);
+    cmds[3] = cmd(CMD_TRANSLATE3F, 10.0f, 0.0f, 0.0f, 0);
+    cmds[4] = cmd(CMD_TESS_VERTEX, 1.0f, 0.0f, 0.0f, 0);
+    cmds[5] = cmd(CMD_TESS_VERTEX, 0.0f, 1.0f, 0.0f, 0);
+    cmds[6] = cmd(CMD_TESS_END, 0, 0, 0, 0);
+    cmds[7] = cmd(CMD_TESS_END, 0, 0, 0, 0);
+
+    b = repl_program_bounds(view_of(cmds, 8), 8);
+    check_box("closed polygon", &b, 10.0f, 0.0f, 0.0f, 11.0f, 1.0f, 0.0f);
+
+    /* Left open, the executor finalizes it at the end of the program. */
+    cmds[6] = cmd(CMD_TRANSLATE3F, 0.0f, 5.0f, 0.0f, 0);
+    b = repl_program_bounds(view_of(cmds, 7), 7);
+    check_box("open polygon", &b, 10.0f, 5.0f, 0.0f, 11.0f, 6.0f, 0.0f);
 }
 
 /* --- degenerate ----------------------------------------------------- */
@@ -525,6 +572,8 @@ int main(void) {
     test_sphere_box_always_contains_the_sphere();
     test_solid_and_vertices_share_one_box();
     test_tess_vertices_count_inside_a_polygon();
+    test_tess_later_contours_count();
+    test_tess_polygon_uses_its_close_matrix();
     test_empty_and_geometryless_programs_are_invalid();
     test_non_finite_vertices_are_dropped();
     test_count_is_clamped_to_the_view();

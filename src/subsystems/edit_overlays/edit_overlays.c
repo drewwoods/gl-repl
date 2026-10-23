@@ -874,9 +874,21 @@ static void outline_vertex_add(int batch, int cmd_idx) {
     b->count++;
 }
 
+/* GLU draws a polygon at its closing gluEnd() (or at program end when left
+ * open), so its contours take the matrix and GL state current there. */
+static void outline_bind_polygon_close(int first_batch, int scope) {
+    OutlineCollection *c = &g_outlines;
+    for (int b = first_batch; b >= 0 && b < c->batch_count; b++) {
+        if (c->batches[b].kind != OUTLINE_CONTOUR || c->batches[b].scope != scope)
+            continue;
+        c->batches[b].matrix_idx = c->matrix_idx;
+        c->batches[b].state_idx = c->state_idx;
+    }
+}
+
 static void outline_collect(const OverlayWalkCtx *ctx) {
     OutlineCollection *c = &g_outlines;
-    int begin = -1, contour = -1, polygon_scope = -1;
+    int begin = -1, contour = -1, polygon_scope = -1, polygon_batch = -1;
     int tess_depth = 0;
     int tess_ord = 0;
     int count = ctx->program.cmds ? ctx->program.cmd_count : 0;
@@ -912,6 +924,7 @@ static void outline_collect(const OverlayWalkCtx *ctx) {
         }
         if (cmd->type == CMD_TESS_BEGIN_POLYGON) {
             polygon_scope = outline_scope_begin(i, 1, ctx);
+            polygon_batch = c->batch_count;
             tess_ord = 0;
         }
         /* One match resolves every scope already open. Later vertices cannot
@@ -941,8 +954,9 @@ static void outline_collect(const OverlayWalkCtx *ctx) {
         case CMD_TESS_END:
             contour = -1;
             if (tess_depth == 0) {
+                outline_bind_polygon_close(polygon_batch, polygon_scope);
                 outline_scope_end(&c->pending_tess, cmd, ctx);
-                polygon_scope = -1;
+                polygon_scope = polygon_batch = -1;
             }
             break;
         case CMD_TESS_VERTEX:
@@ -959,6 +973,7 @@ static void outline_collect(const OverlayWalkCtx *ctx) {
             break;
         }
     }
+    outline_bind_polygon_close(polygon_batch, polygon_scope);
     outline_scope_end(&c->pending_begin, NULL, ctx);
     outline_scope_end(&c->pending_tess, NULL, ctx);
     int last[OUTLINE_KIND_COUNT] = {-1, -1, -1};

@@ -4329,10 +4329,40 @@ static void test_outline_wall_inside_contour(void) {
     ASSERT_INT("nested wall tracks cull state inside contour",
                trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884", "glVertex3f 4 5 6"), 1);
     ASSERT_TRUE("contour draws separately", trace_frame_at(&log, "glVertex3f 0 0 0", entry, mv, plane));
-    ASSERT_FLOAT("contour retains its head matrix x", mv[12], 0);
-    ASSERT_FLOAT("contour retains its head matrix y", mv[13], 0);
+    ASSERT_FLOAT("contour takes the popped close matrix x", mv[12], 0);
+    ASSERT_FLOAT("contour takes the popped close matrix y", mv[13], 0);
     ASSERT_INT("contour lifts wall culling",
                trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884", "glVertex3f 0 0 0"), 0);
+}
+
+/* GLU draws a polygon at its closing gluEnd(), so a transform left applied
+ * inside it moves every contour, including vertices given before it. */
+static void test_outline_contour_uses_polygon_close_matrix(void) {
+    static const char *const lines[] = {
+        "gluBegin(GLU_POLYGON);", "gluBegin(GLU_CONTOUR);", "gluVertex(0, 0, 0);",
+        "glTranslatef(2, 3, 0);", "gluVertex(1, 0, 0);", "gluVertex(0, 1, 0);", "gluEnd();",
+        "gluBegin(GLU_CONTOUR);", "gluVertex(7, 7, 0);", "gluVertex(8, 7, 0);",
+        "gluVertex(7, 8, 0);", "gluEnd();", "glTranslatef(0, 0, 4);", "gluEnd();",
+    };
+    glr_ctrl_reset_all();
+    for (size_t i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) editor_feed_line(lines[i]);
+    repl_flatten_commands(-1);
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program = repl_state_flat_program_view();
+    ctx.cursor.edit_line_idx = -1;
+    ctx.show_vertex_outlines = 1;
+    TraceLog log;
+    trace_begin(); edit_overlays_render_outlines(&ctx, 0, 0); trace_end(&log);
+    float entry[16], mv[16], plane[4];
+    mat4_identity(entry);
+    ASSERT_TRUE("first contour draws", trace_frame_at(&log, "glVertex3f 0 0 0", entry, mv, plane));
+    ASSERT_FLOAT("first contour close matrix x", mv[12], 2);
+    ASSERT_FLOAT("first contour close matrix y", mv[13], 3);
+    ASSERT_FLOAT("first contour close matrix z", mv[14], 4);
+    ASSERT_TRUE("second contour draws", trace_frame_at(&log, "glVertex3f 7 7 0", entry, mv, plane));
+    ASSERT_FLOAT("second contour close matrix x", mv[12], 2);
+    ASSERT_FLOAT("second contour close matrix z", mv[14], 4);
 }
 
 /* The highlight phase can revisit an inherited plane after the plain phase
@@ -4388,6 +4418,7 @@ int main(void) {
     test_projective_cpu_translate_scale();
     test_outline_inherited_plane_revisit();
     test_outline_wall_inside_contour();
+    test_outline_contour_uses_polygon_close_matrix();
     test_outline_collected_streams();
     test_outline_snapshot_frames();
     printf("--- edit_overlays tests ---\n");

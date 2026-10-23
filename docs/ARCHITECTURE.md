@@ -905,7 +905,21 @@ queries consume these same extents. The vertex walker and gutter save the
 polygon's display counter while an immediate strip owns the run. At its
 `glEnd()` they resume that counter; the walker and normal-arrow gate also
 restore polygon selection.
-Transforms remain legal outside immediate blocks, including inside a contour.
+
+Transforms remain legal outside immediate blocks, including inside a contour,
+but **a GLU polygon is placed by the state current at its closing
+`gluEnd()`**: the tessellator buffers `gluVertex` rows and draws them all
+there (or at program end, where the executor finalizes an open polygon). A
+transform left applied inside a polygon therefore moves every contour,
+including vertices given before it, while a nested `glBegin` strip draws
+immediately under the matrix at its own rows. The vertex walker hands each
+`gluVertex` to its callbacks under the polygon's close matrix, the outline
+collector binds each contour to the close matrix and GL state, and the
+scene-bounds walk places the polygon there; the replay tess preview follows
+the same rule. A polygon with no transform inside costs nothing extra. One
+gap: a polygon that pops a matrix pushed before it keeps the running matrix
+in the walker and preview, which cannot reach that matrix without unwinding
+their own stack.
 
 Scope membership precedes visibility and layout: in-scope labels can be
 off-screen, depth-occluded, or omitted by decluttering. Highlight Off / On /

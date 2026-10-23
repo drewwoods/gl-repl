@@ -139,12 +139,29 @@ static int glut_solid_box(const GLCmd *cmd, float lo[3], float hi[3]) {
     }
 }
 
+/* GLU draws a polygon at its closing gluEnd() (or at program end when left
+ * open), so its vertices take the matrix current there, not at their rows.
+ * Counts what the executor hands the tessellator: vertices inside a contour. */
+static void accum_tess_polygon(BoundsAccum *acc, const float m[16],
+                               FlatProgramView program, int head, int close) {
+    int depth = 1;
+    for (int j = head + 1; j < close; j++) {
+        const GLCmd *cmd = &program.cmds[j];
+        if (!cmd->valid)
+            continue;
+        depth = repl_tess_advance_depth(cmd->type, depth);
+        if (cmd->type == CMD_TESS_VERTEX && depth == 2)
+            accum_local_point(acc, m, cmd->args[0], cmd->args[1], cmd->args[2]);
+    }
+}
+
 ReplSceneBounds repl_program_bounds(FlatProgramView program, int cmd_count) {
     ReplSceneBounds out;
     BoundsAccum acc;
     Mat4Stack st;
     int in_begin = 0;   /* inside glBegin/glEnd */
-    int in_tess = 0;    /* inside a tess polygon */
+    int tess_depth = 0;
+    int tess_head = -1; /* open tess polygon's head */
 
     for (int i = 0; i < 3; i++)
         out.min[i] = out.max[i] = 0.0f;
@@ -177,10 +194,19 @@ ReplSceneBounds repl_program_bounds(FlatProgramView program, int cmd_count) {
             in_begin = 0;
             break;
         case CMD_TESS_BEGIN_POLYGON:
-            in_tess = 1;
+            /* A restart abandons the open polygon, as GLU does. */
+            tess_depth = repl_tess_advance_depth(cmd->type, tess_depth);
+            tess_head = i;
+            break;
+        case CMD_TESS_BEGIN_CONTOUR:
+            tess_depth = repl_tess_advance_depth(cmd->type, tess_depth);
             break;
         case CMD_TESS_END:
-            in_tess = 0;
+            tess_depth = repl_tess_advance_depth(cmd->type, tess_depth);
+            if (tess_depth == 0 && tess_head >= 0) {
+                accum_tess_polygon(&acc, st.top, program, tess_head, i);
+                tess_head = -1;
+            }
             break;
         /* The executor drops vertices outside a block, so they contribute
          * nothing on screen and must not widen the box either. */
@@ -207,16 +233,16 @@ ReplSceneBounds repl_program_bounds(FlatProgramView program, int cmd_count) {
             }
             break;
         case CMD_TESS_VERTEX:
-            if (in_tess)
-                accum_local_point(&acc, st.top,
-                                  cmd->args[0], cmd->args[1], cmd->args[2]);
-            break;
+            break;  /* placed when its polygon closes */
         default:
             if (glut_solid_box(cmd, lo, hi))
                 accum_local_box(&acc, st.top, lo, hi);
             break;
         }
     }
+
+    if (tess_head >= 0)
+        accum_tess_polygon(&acc, st.top, program, tess_head, cmd_count);
 
     /* An overflowed matrix stack means every command after the overflow was
      * placed by the wrong matrix. Report nothing rather than something
