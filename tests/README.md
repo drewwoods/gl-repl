@@ -164,7 +164,7 @@ answer "is our model of GL wrong?" rather than "did we regress?". Both need
 | Path | What |
 |------|------|
 | `test_*.c` | one binary each; sources sit flat in this directory |
-| [`support/`](support/) | [`test_harness.h`](support/test_harness.h) (`TEST_ASSERT_*` + report), [`repl_test_support.h`](support/repl_test_support.h), [`scene_corpus.h`](support/scene_corpus.h) (the `REPL_SCENE_CORPUS` gate — read it nowhere else), [`camera_bridge_stub.h`](support/camera_bridge_stub.h), `prof_sections_wide.h` |
+| [`support/`](support/) | [`test_harness.h`](support/test_harness.h) (`TEST_ASSERT_*` + report), [`repl_test_support.h`](support/repl_test_support.h), [`scene_corpus.h`](support/scene_corpus.h) (the `REPL_SCENE_CORPUS` gate — read it nowhere else), [`overlay_fixture.h`](support/overlay_fixture.h) (source rows → the `OverlayWalkCtx` a frame fills, for overlay tests), [`gl_trace.h`](support/gl_trace.h) (`trace_fmt`: named GL values in stub-trace expectations), [`camera_bridge_stub.h`](support/camera_bridge_stub.h), `prof_sections_wide.h` |
 | [`gl-stubs/`](gl-stubs/README.md) | no-op GL/GLU/GLUT headers + the counter/trace TU |
 | [`testdata/`](testdata/) | goldens: `repl_examples_ui/NN.golden.txt`, `camera-order/` |
 | [`scenes/stress/`](scenes/stress/), `scenes/general/` | opt-in `.glr` corpora, loaded as runtime catalogs (`make test-scenes`) |

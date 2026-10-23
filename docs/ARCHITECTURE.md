@@ -932,12 +932,15 @@ Coverage: [`test_edit_overlays.c`](../tests/test_edit_overlays.c) checks scopes,
 primitive/contour narrowing, cursor-vertex retention, and outline ordering;
 [`test_ui.c`](../tests/test_ui.c) checks gutter/scene numbering parity;
 [`test_repl_core_internal.c`](../tests/test_repl_core_internal.c) checks ranges.
-The gutter/scene numbering sweep covers Last instance; an outline/label
-block-selection sweep covers All instances over every cursor row of the
-three GLU arrow examples. The cursor-vertex sweep
-exercises the shared predicate, not the normal-arrow pass's own block gate,
-which a two-contour arrow test covers separately. Item 7 extends
-coverage across all four scopes and three consumers with real catalog scenes.
+The gutter/scene numbering sweep covers all four scopes at both placements
+over every cursor row of the three GLU arrow examples, applying the rules
+above (the label pass's own numbers against the gutter's), and an unrolled
+loop covers the copy rules the single-instance scenes cannot. An outline/label
+block-selection sweep covers All instances over the same rows. The
+cursor-vertex sweep exercises the shared predicate, not the normal-arrow
+pass's own block gate, which a two-contour arrow test covers separately.
+Outline-highlight selection is swept in All instances only; the other scope
+and consumer pairs rest on example assertions.
 
 #### Edit Overlays: polygon outlines on geometry
 

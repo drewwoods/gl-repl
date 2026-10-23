@@ -1,6 +1,6 @@
 ## Scope and Overlay Maintainability - one cursor-scope query, one vertex numbering, one outline walk
 
-## Status - PARTIALLY IMPLEMENTED (items 1, 2, 4, 5, 6, 8 and 10 are done)
+## Status - PARTIALLY IMPLEMENTED (items 1, 2, 4, 5, 6, 7, 8 and 10 are done)
 
 Items 1, 2, and 4 implement the shared cursor-scope and outline paths.
 Item 10's [overlay scope contract](../../ARCHITECTURE.md#overlay-scope-contract)
@@ -44,7 +44,7 @@ and 3, items 10 and 11, and additions to items 6 and 7.
 | 4 | Collect outlines once, draw twice - DONE | removes three near-copy passes; measured costs below | 2-3 days | - (measure first) |
 | 5 | Doc links stop churning on line numbers - DONE | no more anchor-only diffs and gate failures | 0.5 h / 0.5 day | - |
 | 6 | Build traps: make version, bench `--only`, single-test target - DONE | no stale binaries, no silent no-ops | ~1 h each | - |
-| 7 | Test fixtures from real flatten output; named GL enums in traces | fixtures cannot drift from production | ongoing | - |
+| 7 | Test fixtures from real flatten output; named GL enums in traces - DONE | fixtures cannot drift from production | ongoing | - |
 | 8 | Overlay setup out of `glr_ctrl.c` - DONE | smaller controller, fewer `_for_test` seams | ~0.5 day | best after 1 |
 | 9 | Habits: present-tense comments, one worktree per session | less comment rot, clean benchmarks | - | - |
 | 10 | Written spec: overlay scope per primitive kind - DONE | one source of truth for items 1, 3, 4 and their tests | 1-2 h | - |
@@ -526,7 +526,49 @@ Original notes:
 
 ---
 
-### 7. Test policy and fixtures
+### 7. Test policy and fixtures - DONE
+
+The policy is in [`docs/CONTRIBUTING.md`](../../CONTRIBUTING.md#test-policy).
+The pieces below are implemented; the original notes follow them.
+
+#### Implementation notes
+
+- [`tests/support/overlay_fixture.h`](../../../tests/support/overlay_fixture.h)
+  turns source rows into an `OverlayWalkCtx` through the frame's own steps:
+  `glr_ctrl_reset_all`, `editor_feed_line`, `repl_flatten_commands`,
+  `repl_flatten_refresh_current_block_highlight`, then
+  `glr_overlay_fill_walk_ctx`. `overlay_fixture_load` /
+  `overlay_fixture_fill` split the load from the per-cursor, per-scope fill
+  for sweeps, and `OVERLAY_FIXTURE(&ctx, cursor, scope, "row;", ...)` does both.
+  The fill leaves the live presentation scope as it found it.
+- The GLU outline tests in `tests/test_edit_overlays.c` use it: the contour
+  outline test, plain-outline parity, culling lift, and highlight-after-plain
+  ordering. The two-contours-share-one-`gluEnd()` fixture is gone; its
+  assertions run on a real two-contour polygon, whose single-polygon contour
+  ranges now come from the pipeline (and are asserted) instead of being typed
+  in. A comment row between two contours has a real-source test beside the
+  hand-built matcher test. Hand-built arrays remain where the test needs a
+  flat range that deliberately disagrees with the source extent, or two flat
+  instances of one source row.
+- [`tests/support/gl_trace.h`](../../../tests/support/gl_trace.h) provides
+  `trace_fmt()` / `TRACE_FMT()`; every enum literal in the overlay trace
+  expectations (`glBegin 9`, `glEnable 2884`, the stencil and clip-plane
+  codes) names its constant.
+- The gutter/scene sweep in `tests/test_ui.c` runs every cursor row of the
+  three GLU arrow examples through all four scopes at both placements. The
+  scene side is the real label pass, read from the stub trace, so the
+  placement-dependent numbering is the production formula. Per the contract:
+  Last instance and All instances at vertex draw the gutter's numbers; a
+  decluttered Last instance draws some of them (decluttering may omit a
+  crowded label, never renumber one); Whole scene at vertex draws every
+  vertex, the gutter's numbers among them, whatever the cursor; Single polygon
+  draws a subsequence of the gutter's numbers; decluttered All instances and
+  Whole scene are one global run. The Last-instance default is still checked
+  row by row against the vertex walker. These scenes hold one copy of each
+  block, so `test_label_numbers_over_unrolled_copies` in
+  `tests/test_edit_overlays.c` covers the copy rules on a real unrolled loop.
+
+#### Original notes
 
 - **UX behavior gets an invariant sweep over real scenes.** Hand-picked
   assertions can lock in a design choice as if it were a requirement:

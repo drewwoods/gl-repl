@@ -104,6 +104,25 @@ just regression gates.
 sourced yet) builds the Emscripten/wasm browser target; see
 [`packaging/web/README.md`](../packaging/web/README.md).
 
+### Test policy
+
+- **UX behavior gets an invariant sweep over catalog scenes.** A hand-picked
+  assertion can lock a design choice in as if it were a requirement. A sweep
+  over the real scenes states the property instead - every cursor row's gutter
+  number agrees with the scene's in each overlay scope, the cursor's own
+  vertex stays in Single polygon scope - and example assertions only add to
+  it. The overlay sweeps live in `tests/test_ui.c` and
+  `tests/test_edit_overlays.c`; the rules they assert are the
+  [overlay scope contract](ARCHITECTURE.md#overlay-scope-contract).
+- **Fixtures come from real pipeline output.** Overlay tests commit source
+  rows, flatten them and fill the walk context the way a frame does
+  (`tests/support/overlay_fixture.h`), so a fixture cannot describe a flat
+  program the parser never produces. A hand-built `mk_cmd` array is for a
+  shape the parser cannot produce, with the reason written beside it.
+- **Trace expectations name their GL values.** The stub headers trace enums as
+  integer codes; `trace_fmt(buf, sizeof buf, "glBegin %u", GL_POLYGON)`
+  (`tests/support/gl_trace.h`) writes the expectation from the constant.
+
 ## The guard suite
 
 CI-grade checks live in the Makefile, and a PR is expected to keep them

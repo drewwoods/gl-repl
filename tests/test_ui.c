@@ -41,11 +41,14 @@
 #include "subsystems/tutorial/tutorial.h"
 #include "subsystems/tutorial/tutorial_state.h"
 #include "repl/tutorials.h"
+#include "support/gl_trace.h"
+#include "support/overlay_fixture.h"
 #include "support/test_harness.h"
 #include <GL/gl_stub_counts.h>
 #include "ui/core/gl_2d.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 
@@ -2256,12 +2259,31 @@ static void test_vertex_gutter_labels_glbegin_inside_tess_polygon(void) {
     ASSERT_INT("scene leaves the unselected nested strip out", scene[4], -1);
 }
 
-/* The gutter's vertex numbers ARE the scene's: for every cursor line of the
- * three GLU concave-arrow examples, each row's gutter label must equal what
- * the 3D vertex-label walk assigns that row's vertex (vertex_idx_in_block,
- * last-instance scope), and rows the walk leaves unlabelled must be blank.
- * The walk runs with the controller's own CursorBlockState fill, so this
- * fails if either side's block selection or counting drifts. */
+/* The gutter's vertex numbers ARE the scene's, in every overlay scope the
+ * contract ("Overlay scope contract", docs/ARCHITECTURE.md) says they must be.
+ * Swept over every cursor row of the three GLU concave-arrow examples (a plain
+ * polygon, a polygon with a hole, a glBegin strip nested in a contour), with
+ * the walk context the frame fills (overlay_fixture_fill).
+ *
+ * The scene side runs the real 3D label pass and reads the numbers it draws,
+ * in draw order, so the placement-dependent numbering is the production
+ * formula and not a copy of it. What the contract requires of each scope:
+ *
+ *   Last instance      the gutter's numbers, exactly, at vertex; decluttered,
+ *                      some of them (a crowded label may be omitted, none is
+ *                      renumbered).
+ *   All instances      the same at vertex; decluttered labels take a global
+ *                      run so unrolled copies stay distinguishable.
+ *   Whole scene        every authored vertex, whatever the cursor: at vertex,
+ *                      the gutter's numbers are among them; decluttered, a
+ *                      global run.
+ *   Single polygon     the cursor's primitive and contour only, numbered as
+ *                      the block is: a subsequence of the gutter's numbers.
+ *
+ * A global run is one increasing sequence with no repeats. These scenes hold
+ * one instance of every block, so All instances at vertex equals Last
+ * instance. The Last-instance default is also checked row by row against the
+ * vertex walker, so a wrong number on the right count still fails. */
 static int find_example_by_name(const char *name) {
     for (int i = 0; i < repl_example_count(); i++) {
         const char *n = repl_example_name(i);
@@ -2271,12 +2293,128 @@ static int find_example_by_name(const char *name) {
     return -1;
 }
 
+typedef struct {
+    int n;
+    int num[PARITY_MAX_LINES];
+} ParitySeq;
+
+#define PARITY_TRACE_PATH "build/test_ui_parity_trace.txt"
+
+/* The numbers the label pass draws for `walk`, in draw order. The pass writes
+ * each label as bitmap characters (" v12"), which the stub traces one per
+ * line. */
+static void parity_scene_numbers(const OverlayWalkCtx *walk, OverlayScope scope,
+                                 OverlayLabelPlacement placement, ParitySeq *out) {
+    char text[4096];
+    size_t used = 0;
+    char line[160];
+    FILE *trace;
+
+    out->n = 0;
+    gl_stub_counts_reset();
+    gl_stub_trace_open(PARITY_TRACE_PATH);
+    edit_overlays_render_vertex_numbers(walk, OVERLAY_VERTEX_LABEL_INDEX, 0,
+                                        scope, placement, NULL);
+    gl_stub_trace_close();
+
+    trace = fopen(PARITY_TRACE_PATH, "r");
+    if (!trace)
+        return;
+    while (fgets(line, sizeof line, trace) && used + 1 < sizeof text) {
+        int ch;
+        if (sscanf(line, "glutBitmapCharacter %d", &ch) == 1)
+            text[used++] = (char)ch;
+    }
+    fclose(trace);
+    text[used] = '\0';
+
+    for (size_t i = 0; i + 1 < used; i++) {
+        if (text[i] == 'v' && text[i + 1] >= '0' && text[i + 1] <= '9' &&
+            out->n < PARITY_MAX_LINES)
+            out->num[out->n++] = atoi(&text[i + 1]);
+    }
+}
+
+static int parity_seq_equal(const ParitySeq *a, const ParitySeq *b) {
+    if (a->n != b->n)
+        return 0;
+    for (int i = 0; i < a->n; i++)
+        if (a->num[i] != b->num[i])
+            return 0;
+    return 1;
+}
+
+/* Is `part` in `whole`, in order? */
+static int parity_seq_within(const ParitySeq *part, const ParitySeq *whole) {
+    int at = 0;
+    for (int i = 0; i < part->n; i++) {
+        while (at < whole->n && whole->num[at] != part->num[i])
+            at++;
+        if (at == whole->n)
+            return 0;
+        at++;
+    }
+    return 1;
+}
+
+static int parity_seq_global_run(const ParitySeq *s) {
+    for (int i = 1; i < s->n; i++)
+        if (s->num[i] <= s->num[i - 1])
+            return 0;
+    return 1;
+}
+
+typedef enum {
+    PARITY_EQUAL,            /* the scene draws the gutter's numbers */
+    PARITY_SCENE_IN_GUTTER,  /* the scene draws some of the gutter's numbers */
+    PARITY_GUTTER_IN_SCENE,  /* the scene draws all of them, and more */
+    PARITY_GLOBAL_RUN        /* decluttered copies: a global run, not the gutter's */
+} ParityRule;
+
+static ParityRule parity_rule(OverlayScope scope, OverlayLabelPlacement placement) {
+    int copies_share_index = placement == OVERLAY_LABEL_PLACEMENT_AT_VERTEX;
+
+    switch (scope) {
+    case OVERLAY_SCOPE_ALL_INSTANCES:
+        return copies_share_index ? PARITY_EQUAL : PARITY_GLOBAL_RUN;
+    case OVERLAY_SCOPE_WHOLE_SCENE:
+        return copies_share_index ? PARITY_GUTTER_IN_SCENE : PARITY_GLOBAL_RUN;
+    case OVERLAY_SCOPE_SINGLE_POLYGON:
+        return PARITY_SCENE_IN_GUTTER;
+    case OVERLAY_SCOPE_LAST_INSTANCE:
+    default:
+        /* Decluttering may omit a crowded label; it never renumbers one. */
+        return copies_share_index ? PARITY_EQUAL : PARITY_SCENE_IN_GUTTER;
+    }
+}
+
+static const char *parity_scope_name(OverlayScope scope) {
+    switch (scope) {
+    case OVERLAY_SCOPE_LAST_INSTANCE:  return "last instance";
+    case OVERLAY_SCOPE_ALL_INSTANCES:  return "all instances";
+    case OVERLAY_SCOPE_WHOLE_SCENE:    return "whole scene";
+    case OVERLAY_SCOPE_SINGLE_POLYGON: return "single polygon";
+    default:                           return "?";
+    }
+}
+
 static void test_vertex_gutter_labels_match_scene_labels(void) {
     static const char *const examples[] = {
         "GLU concave arrow",
         "GLU concave arrow cutout",
         "GLU concave arrow extrusion",
     };
+    static const OverlayScope scopes[] = {
+        OVERLAY_SCOPE_LAST_INSTANCE, OVERLAY_SCOPE_ALL_INSTANCES,
+        OVERLAY_SCOPE_WHOLE_SCENE, OVERLAY_SCOPE_SINGLE_POLYGON,
+    };
+    static const OverlayLabelPlacement placements[] = {
+        OVERLAY_LABEL_PLACEMENT_AT_VERTEX, OVERLAY_LABEL_PLACEMENT_DECLUTTERED,
+    };
+    extern float g_gl_stub_modelview_matrix[16];
+    /* The stub projection is the identity, so scale the examples (vertices out
+     * to +-1.3) into the unit cube or the pass drops their labels as off-screen. */
+    static const float scaled[16] = { 0.2f,0,0,0, 0,0.2f,0,0, 0,0,0.2f,0, 0,0,0,1 };
 
     printf("Testing gutter vertex labels match the scene's...\n");
 
@@ -2285,6 +2423,8 @@ static void test_vertex_gutter_labels_match_scene_labels(void) {
         int doc_count;
         int mismatches = 0;
         int labelled_rows = 0;
+        int scene_labels[4] = { 0, 0, 0, 0 };
+        ParitySeq whole_scene;
         char msg[200];
 
         snprintf(msg, sizeof msg, "%s: example in catalog", examples[e]);
@@ -2295,30 +2435,36 @@ static void test_vertex_gutter_labels_match_scene_labels(void) {
         tess_gutter_reset();
         repl_load_example(idx);
         repl_flatten_commands(editor_state_edit_line());
+        memcpy(g_gl_stub_modelview_matrix, scaled, sizeof scaled);
         doc_count = repl_state_document_count();
         snprintf(msg, sizeof msg, "%s: document fits the parity table",
                  examples[e]);
         ASSERT_TRUE(msg, doc_count > 0 && doc_count <= PARITY_MAX_LINES);
         if (doc_count <= 0 || doc_count > PARITY_MAX_LINES)
             continue;
+        whole_scene.n = -1;
 
         for (int cursor = 0; cursor < doc_count; cursor++) {
             int scene[PARITY_MAX_LINES];
+            ParitySeq gutter;
+            OverlayWalkCtx ctx;
             ReplayVertexWalkContext walk;
             static const ReplayVertexWalkCallbacks cb = {
                 .on_vertex = parity_record_vertex,
             };
 
+            /* The Last-instance default, row by row against the walker. */
             for (int r = 0; r < doc_count; r++)
                 scene[r] = -1;
+            overlay_fixture_fill(cursor, OVERLAY_SCOPE_LAST_INSTANCE, &ctx);
             memset(&walk, 0, sizeof walk);
-            walk.program = repl_state_flat_program_view();
-            repl_flatten_refresh_current_block_highlight(cursor);
-            glr_overlay_fill_cursor_block_state(cursor, &walk.cursor);
+            walk.program = ctx.program;
+            walk.cursor = ctx.cursor;
             walk.selected_block_only = 1;
             replay_walk_user_vertices(&walk, &cb, scene);
 
             tess_gutter_render_at(cursor);
+            gutter.n = 0;
             for (int r = 0; r < doc_count; r++) {
                 char want[8] = "";
                 char got[8];
@@ -2329,6 +2475,8 @@ static void test_vertex_gutter_labels_match_scene_labels(void) {
                     continue;
                 if (got[0])
                     labelled_rows++;
+                if (got[0] == 'v' && got[1] >= '0' && got[1] <= '9')
+                    gutter.num[gutter.n++] = atoi(got + 1);
                 if (strcmp(want, got) != 0) {
                     if (mismatches++ < 5) {
                         snprintf(msg, sizeof msg,
@@ -2338,13 +2486,64 @@ static void test_vertex_gutter_labels_match_scene_labels(void) {
                     }
                 }
             }
+
+            /* Every scope, at both placements, by the contract's rule. */
+            for (size_t s = 0; s < sizeof scopes / sizeof scopes[0]; s++) {
+                overlay_fixture_fill(cursor, scopes[s], &ctx);
+                for (size_t p = 0; p < sizeof placements / sizeof placements[0]; p++) {
+                    ParitySeq seq;
+                    ParityRule rule = parity_rule(scopes[s], placements[p]);
+                    int ok = 0;
+
+                    parity_scene_numbers(&ctx, scopes[s], placements[p], &seq);
+                    scene_labels[s] += seq.n;
+                    switch (rule) {
+                    case PARITY_EQUAL:
+                        ok = parity_seq_equal(&seq, &gutter);
+                        break;
+                    case PARITY_SCENE_IN_GUTTER:
+                        ok = parity_seq_within(&seq, &gutter);
+                        break;
+                    case PARITY_GUTTER_IN_SCENE:
+                        ok = parity_seq_within(&gutter, &seq);
+                        /* Whole scene is not anchored to the cursor: every
+                         * cursor row draws the same labels. */
+                        if (whole_scene.n < 0)
+                            whole_scene = seq;
+                        else
+                            ok = ok && parity_seq_equal(&seq, &whole_scene);
+                        break;
+                    case PARITY_GLOBAL_RUN:
+                        ok = parity_seq_global_run(&seq);
+                        break;
+                    }
+                    if (!ok && mismatches++ < 5) {
+                        snprintf(msg, sizeof msg,
+                                 "%s: cursor %d, %s, %s: scene numbers follow the contract (%d scene, %d gutter)",
+                                 examples[e], cursor, parity_scope_name(scopes[s]),
+                                 placements[p] == OVERLAY_LABEL_PLACEMENT_AT_VERTEX
+                                     ? "at vertex" : "decluttered",
+                                 seq.n, gutter.n);
+                        ASSERT_TRUE(msg, 0);
+                    }
+                }
+            }
         }
-        snprintf(msg, sizeof msg, "%s: gutter matches scene on every row",
+        snprintf(msg, sizeof msg, "%s: gutter matches scene on every row and scope",
                  examples[e]);
         ASSERT_INT(msg, mismatches, 0);
         snprintf(msg, sizeof msg, "%s: the sweep labelled something",
                  examples[e]);
         ASSERT_TRUE(msg, labelled_rows > 0);
+        for (size_t s = 0; s < sizeof scopes / sizeof scopes[0]; s++) {
+            snprintf(msg, sizeof msg, "%s: %s drew labels", examples[e],
+                     parity_scope_name(scopes[s]));
+            ASSERT_TRUE(msg, scene_labels[s] > 0);
+        }
+    }
+    {
+        static const float identity[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
+        memcpy(g_gl_stub_modelview_matrix, identity, sizeof identity);
     }
 }
 

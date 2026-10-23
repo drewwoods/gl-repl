@@ -13,9 +13,12 @@
 #include "app/glr_ctrl.h"
 #include "app/glr_overlay_setup.h"
 #include "subsystems/edit_overlays/edit_overlays.h"
+#include "support/gl_trace.h"
+#include "support/overlay_fixture.h"
 #include "support/test_harness.h"
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* Include the .c file directly to test its static functions */
@@ -115,9 +118,16 @@ static int trace_cap_state_at(const TraceLog *log, const char *enable_line,
     return before ? -1 : state;
 }
 
-/* GL_CLIP_PLANE0 = 12288. */
+/* trace_cap_state_at() for GL capability `cap`, named rather than as the
+ * integer code the stub traces. */
+static int trace_cap_state_for(const TraceLog *log, GLenum cap, const char *before) {
+    char on[TRACE_FMT_MAX], off[TRACE_FMT_MAX];
+    return trace_cap_state_at(log, trace_fmt(on, sizeof on, "glEnable %u", cap),
+                              trace_fmt(off, sizeof off, "glDisable %u", cap), before);
+}
+
 static int trace_clip_cap_state_at(const TraceLog *log, const char *before) {
-    return trace_cap_state_at(log, "glEnable 12288", "glDisable 12288", before);
+    return trace_cap_state_for(log, GL_CLIP_PLANE0, before);
 }
 
 /* Count trace lines whose symbol is `sym` (args ignored). */
@@ -333,6 +343,38 @@ static void test_cursor_flat_block_matches(void) {
     ctx.cursor.cursor_source_tess_begin = 30;
     ASSERT_INT("tess source extent of another polygon does not match",
                repl_cursor_flat_block_matches(ctx.program, &ctx.cursor, 0, 1), 0);
+}
+
+/* The same comment-between-contours case as above, from committed source: the
+ * pipeline's own source extent and flat provenance, not hand-set fields. */
+static void test_tess_comment_row_selects_polygon(void) {
+    printf("--- tess polygon selected from a comment row (real source) ---\n");
+
+    OverlayWalkCtx ctx;
+    ASSERT_TRUE("polygon with a comment between its contours loads",
+        OVERLAY_FIXTURE(&ctx, 5, OVERLAY_SCOPE_LAST_INSTANCE,
+                        "gluBegin(GLU_POLYGON);",           /* 0 */
+                        "gluBegin(GLU_CONTOUR);",           /* 1 */
+                        "gluVertex(0, 0, 0);",              /* 2 */
+                        "gluVertex(1, 0, 0);",              /* 3 */
+                        "gluEnd();",                        /* 4 */
+                        "// hole",                          /* 5 */
+                        "gluBegin(GLU_CONTOUR);",           /* 6 */
+                        "gluVertex(0.2, 0.2, 0);",          /* 7 */
+                        "gluVertex(0.4, 0.2, 0);",          /* 8 */
+                        "gluEnd();",                        /* 9 */
+                        "gluEnd();"));                      /* 10 */
+    int flat_matches = 0;
+
+    for (int i = 0; i < ctx.program.cmd_count; i++)
+        flat_matches += repl_cursor_flat_cmd_matches(ctx.program, &ctx.cursor, i);
+    ASSERT_INT("a comment row reaches no flat command", flat_matches, 0);
+    ASSERT_INT("the source extent of the polygon holds the comment row",
+               ctx.cursor.cursor_source_tess_valid &&
+               ctx.cursor.cursor_source_tess_begin == 0 &&
+               ctx.cursor.cursor_source_tess_end == 10, 1);
+    ASSERT_INT("the comment row selects its polygon through the source extent",
+               repl_cursor_flat_block_matches(ctx.program, &ctx.cursor, 0, 1), 1);
 }
 
 static void test_outline_source_extent_authority(void) {
@@ -858,16 +900,16 @@ static void test_overlays_honor_culling(void) {
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("collected outlines replay the cull cap once",
-               trace_count_line(&log, "glEnable 2884"), 1);
+               trace_count_line(&log, TRACE_FMT("glEnable %u", GL_CULL_FACE)), 1);
     ASSERT_INT("outlines replay the culled face",
-               trace_count_line(&log, "glCullFace 1028"), 1);
+               trace_count_line(&log, TRACE_FMT("glCullFace %u", GL_FRONT)), 1);
     ASSERT_INT("outlines replay the winding rule",
-               trace_count_line(&log, "glFrontFace 2304"), 1);
+               trace_count_line(&log, TRACE_FMT("glFrontFace %u", GL_CW)), 1);
     ASSERT_INT("outlines are drawn with culling live",
-               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884",
+               trace_cap_state_for(&log, GL_CULL_FACE,
                                   "glVertex3f 1 0 0"), 1);
     ASSERT_INT("the pass leaves culling off for later overlays",
-               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884", NULL), 0);
+               trace_cap_state_for(&log, GL_CULL_FACE, NULL), 0);
 
     /* Vertex points track the state but keep drawing: GL never culls
      * GL_POINTS, and the walk does not second-guess it. */
@@ -887,7 +929,7 @@ static void test_overlays_honor_culling(void) {
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("On mode draws the highlight with culling suspended",
-               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884",
+               trace_cap_state_for(&log, GL_CULL_FACE,
                                   "glVertex3f 1 0 0"), 0);
 
     /* ...and follows the program under Clipped & culled. */
@@ -896,7 +938,7 @@ static void test_overlays_honor_culling(void) {
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("Clipped & culled draws the highlight with culling live",
-               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884",
+               trace_cap_state_for(&log, GL_CULL_FACE,
                                   "glVertex3f 1 0 0"), 1);
 }
 
@@ -946,12 +988,12 @@ static void test_overlays_honor_stencil_test(void) {
     trace_end(&log);
 
     ASSERT_TRUE("outlines replay the stencil comparison",
-                trace_count_line(&log, "glStencilFunc 514 1 255") >= 1);
+                trace_count_line(&log, TRACE_FMT("glStencilFunc %u 1 255", GL_EQUAL)) >= 1);
     ASSERT_INT("outlines are drawn with the stencil test live",
-               trace_cap_state_at(&log, "glEnable 2960", "glDisable 2960",
+               trace_cap_state_for(&log, GL_STENCIL_TEST,
                                   "glVertex3f 1 0 0"), 1);
     ASSERT_INT("the pass leaves the stencil test off for later overlays",
-               trace_cap_state_at(&log, "glEnable 2960", "glDisable 2960",
+               trace_cap_state_for(&log, GL_STENCIL_TEST,
                                   NULL), 0);
 
     /* One drawing baseline shuts writes for both phases; the program's
@@ -961,9 +1003,9 @@ static void test_overlays_honor_stencil_test(void) {
     ASSERT_INT("the walk never reopens stencil writes",
                trace_count_line(&log, "glStencilMask 255"), 0);
     ASSERT_INT("every walk pins the stencil op to KEEP/KEEP/KEEP",
-               trace_count_line(&log, "glStencilOp 7680 7680 7680"), 1);
+               trace_count_line(&log, TRACE_FMT("glStencilOp %u %u %u", GL_KEEP, GL_KEEP, GL_KEEP)), 1);
     ASSERT_INT("the program's mask-building op is never replayed",
-               trace_count_line(&log, "glStencilOp 7680 7680 7681"), 0);
+               trace_count_line(&log, TRACE_FMT("glStencilOp %u %u %u", GL_KEEP, GL_KEEP, GL_REPLACE)), 0);
 
     /* Vertex points take the same policy through their own walker. */
     ctx.show_vertex_outlines = 0;
@@ -972,7 +1014,7 @@ static void test_overlays_honor_stencil_test(void) {
     edit_overlays_render_vertex_points(&ctx);
     trace_end(&log);
     ASSERT_INT("vertex points are drawn with the stencil test live",
-               trace_cap_state_at(&log, "glEnable 2960", "glDisable 2960",
+               trace_cap_state_for(&log, GL_STENCIL_TEST,
                                   "glVertex3f 1 0 0"), 1);
     ASSERT_INT("vertex points never reopen stencil writes",
                trace_count_line(&log, "glStencilMask 255"), 0);
@@ -986,7 +1028,7 @@ static void test_overlays_honor_stencil_test(void) {
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("On mode draws the highlight with the stencil test suspended",
-               trace_cap_state_at(&log, "glEnable 2960", "glDisable 2960",
+               trace_cap_state_for(&log, GL_STENCIL_TEST,
                                   "glVertex3f 1 0 0"), 0);
 
     /* ...and follows the program under Clipped & culled. */
@@ -995,7 +1037,7 @@ static void test_overlays_honor_stencil_test(void) {
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("Clipped & culled draws the highlight with the stencil live",
-               trace_cap_state_at(&log, "glEnable 2960", "glDisable 2960",
+               trace_cap_state_for(&log, GL_STENCIL_TEST,
                                   "glVertex3f 1 0 0"), 1);
 
     /* A GL_ENABLE_BIT scope reverts the stencil-test enable at the pop,
@@ -1028,7 +1070,7 @@ static void test_overlays_honor_stencil_test(void) {
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("a GL_ENABLE_BIT pop restores the stencil-test enable",
-               trace_cap_state_at(&log, "glEnable 2960", "glDisable 2960",
+               trace_cap_state_for(&log, GL_STENCIL_TEST,
                                   "glVertex3f 8 0 0"), 1);
 }
 
@@ -1072,7 +1114,7 @@ static void test_overlays_scope_push_pop_attrib(void) {
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("outline pass: cull re-enabled by the pop before the draw",
-               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884",
+               trace_cap_state_for(&log, GL_CULL_FACE,
                                   "glVertex3f 1 0 0"), 1);
 
     /* Same scope followed by a glutSolid shape: the glut outline pass is its
@@ -1089,7 +1131,7 @@ static void test_overlays_scope_push_pop_attrib(void) {
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("glut outline pass: cull re-enabled by the pop before the shape",
-               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884",
+               trace_cap_state_for(&log, GL_CULL_FACE,
                                   "glutSolidSphere 0.5 8 6"), 1);
 
     /* A scoped glColorMask(0,0,0,...) reverts at the pop: the vertex-point
@@ -1167,7 +1209,7 @@ static void test_overlays_scope_push_pop_attrib(void) {
     ASSERT_TRUE("pop restores captured equations under identity modelview",
                 trace_count_sym(&log, "glLoadIdentity") >= 1);
     ASSERT_TRUE("pop re-issues the captured (stub-zero) plane equation",
-                trace_count_line(&log, "glClipPlane 12288 0 0 0 0") >= 1);
+                trace_count_line(&log, TRACE_FMT("glClipPlane %u 0 0 0 0", GL_CLIP_PLANE0)) >= 1);
 }
 
 /* GL reverses the winding of odd-numbered GL_TRIANGLE_STRIP triangles. A
@@ -1208,9 +1250,9 @@ static void test_single_polygon_highlight_strip_winding(void) {
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("an odd strip triangle flips the winding for the highlight",
-               trace_count_line(&log, "glFrontFace 2304"), 1);   /* GL_CW */
+               trace_count_line(&log, TRACE_FMT("glFrontFace %u", GL_CW)), 1);
     ASSERT_INT("...and restores the program's winding after",
-               trace_count_line(&log, "glFrontFace 2305"), 1);   /* GL_CCW */
+               trace_count_line(&log, TRACE_FMT("glFrontFace %u", GL_CCW)), 1);
 
     /* Even strip triangle (index 2: ordinals 2..4) - no compensation. */
     ctx.cursor_poly_first = 2;
@@ -1424,7 +1466,7 @@ static void test_highlight_clip_planes(void) {
     /* Outlines are off, so only the highlight phase's glBegin pass walks
      * (the tess and glut passes have nothing current and are skipped). */
     ASSERT_INT("the plane equation is replayed once per pass that walks",
-               trace_count_line(&log, "glClipPlane 12288 1 0 0 -0.5"), 1);
+               trace_count_line(&log, TRACE_FMT("glClipPlane %u 1 0 0 -0.5", GL_CLIP_PLANE0)), 1);
     ASSERT_INT("On mode draws the highlight with the plane suspended",
                trace_clip_cap_state_at(&log, "glVertex3f 1 0 0"), 0);
     ASSERT_INT("On mode still highlights the cursor's block",
@@ -1469,7 +1511,7 @@ static void test_highlight_clip_planes(void) {
         ASSERT_INT("vertex points are drawn with the plane live",
                    trace_clip_cap_state_at(&log, "glVertex3f 1 0 0"), 1);
         ASSERT_INT("vertex points replay the plane equation",
-                   trace_count_line(&log, "glClipPlane 12288 1 0 0 -0.5"), 1);
+                   trace_count_line(&log, TRACE_FMT("glClipPlane %u 1 0 0 -0.5", GL_CLIP_PLANE0)), 1);
         ASSERT_INT("vertex points leave no clip cap enabled",
                    trace_clip_cap_state_at(&log, NULL), 0);
     }
@@ -1483,7 +1525,7 @@ static void test_highlight_clip_planes(void) {
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("a disabled plane is mirrored, not enabled",
-               trace_count_line(&log, "glEnable 12288"), 0);
+               trace_count_line(&log, TRACE_FMT("glEnable %u", GL_CLIP_PLANE0)), 0);
     ASSERT_INT("outlines under a disabled plane draw unclipped",
                trace_clip_cap_state_at(&log, "glVertex3f 1 0 0"), 0);
 }
@@ -1608,50 +1650,44 @@ static void test_single_polygon_highlight_bold_style(void) {
 static void test_highlight_drawn_after_all_plain_outlines(void) {
     printf("--- edit_overlays highlights drawn after every plain outline ---\n");
 
-    GLCmd cmds[19];
-    int n = 0;
-    mk_cmd(&cmds[n++], CMD_BEGIN, (float)GL_QUADS, 0, 0);
-    mk_cmd(&cmds[n], CMD_VERTEX3F, 0, 0, 0); cmds[n++].src_cmd_idx = 1;
-    mk_cmd(&cmds[n++], CMD_VERTEX3F, 1, 0, 0);
-    mk_cmd(&cmds[n++], CMD_VERTEX3F, 1, 1, 0);
-    mk_cmd(&cmds[n++], CMD_VERTEX3F, 0, 1, 0);
-    mk_cmd(&cmds[n++], CMD_END, 0, 0, 0);
-    mk_cmd(&cmds[n++], CMD_BEGIN, (float)GL_QUADS, 0, 0);
-    mk_cmd(&cmds[n], CMD_VERTEX3F, 1, 0, 0); cmds[n++].src_cmd_idx = 7;
-    mk_cmd(&cmds[n++], CMD_VERTEX3F, 2, 0, 0);
-    mk_cmd(&cmds[n++], CMD_VERTEX3F, 2, 1, 0);
-    mk_cmd(&cmds[n++], CMD_VERTEX3F, 1, 1, 0);
-    mk_cmd(&cmds[n++], CMD_END, 0, 0, 0);
-    mk_cmd(&cmds[n++], CMD_TESS_BEGIN_POLYGON, 0, 0, 0);
-    mk_cmd(&cmds[n++], CMD_TESS_BEGIN_CONTOUR, 0, 0, 0);
-    mk_cmd(&cmds[n++], CMD_TESS_VERTEX, 0, 0, 0);
-    mk_cmd(&cmds[n++], CMD_TESS_VERTEX, 1, 0, 0);
-    mk_cmd(&cmds[n++], CMD_TESS_VERTEX, 1, 1, 0);
-    mk_cmd(&cmds[n++], CMD_TESS_END, 0, 0, 0);
-    mk_cmd(&cmds[n++], CMD_TESS_END, 0, 0, 0);
+    static const char *const rows[] = {
+        "glBegin(GL_QUADS);",               /* 0 */
+        "glVertex3f(0, 0, 0);",             /* 1  first block's v0 */
+        "glVertex3f(1, 0, 0);",
+        "glVertex3f(1, 1, 0);",
+        "glVertex3f(0, 1, 0);",
+        "glEnd();",                         /* 5 */
+        "glBegin(GL_QUADS);",               /* 6 */
+        "glVertex3f(1, 0, 0);",
+        "glVertex3f(2, 0, 0);",
+        "glVertex3f(2, 1, 0);",
+        "glVertex3f(1, 1, 0);",
+        "glEnd();",                         /* 11 */
+        "gluBegin(GLU_POLYGON);",           /* 12 */
+        "gluBegin(GLU_CONTOUR);",
+        "gluVertex(0, 0, 0);",
+        "gluVertex(1, 0, 0);",
+        "gluVertex(1, 1, 0);",
+        "gluEnd();",
+        "gluEnd();",
+    };
+    const int row_count = (int)(sizeof rows / sizeof rows[0]);
 
-    OverlayWalkCtx ctx;
-    memset(&ctx, 0, sizeof(ctx));
-    ctx.program.cmds = cmds;
-    ctx.program.cmd_count = n;
-    ctx.cursor.edit_line_idx = 1;          /* first block's v0 */
-    ctx.cursor.cursor_block_begin = -1;
-    ctx.cursor.cursor_block_end = -1;
-    ctx.highlight_current_poly = 1;
-    ctx.show_vertex_outlines = 1;
-
-    static const int k_scopes[] = {
+    static const OverlayScope k_scopes[] = {
         OVERLAY_SCOPE_LAST_INSTANCE, OVERLAY_SCOPE_ALL_INSTANCES,
         OVERLAY_SCOPE_SINGLE_POLYGON,
     };
     for (int sc = 0; sc < 3; sc++) {
+        OverlayWalkCtx ctx;
         char lbl[96];
         TraceLog log;
-        ctx.cursor_overlay_scope = k_scopes[sc];
-        /* Single-polygon: the first block's one quad is the primitive. */
-        ctx.cursor_poly_valid = k_scopes[sc] == OVERLAY_SCOPE_SINGLE_POLYGON;
-        ctx.cursor_poly_first = 0;
-        ctx.cursor_poly_last = 3;
+
+        /* Cursor on the first block's v0. Single-polygon: the first block's
+         * one quad is the primitive. */
+        ASSERT_TRUE("shared-edge program loads",
+                    overlay_fixture_build(rows, row_count, 1, k_scopes[sc], &ctx));
+        ctx.highlight_current_poly = 1;
+        ctx.show_vertex_outlines = 1;
         trace_begin();
         edit_overlays_render_outlines(&ctx, 0, 0);
         trace_end(&log);
@@ -1671,20 +1707,12 @@ static void test_highlight_drawn_after_all_plain_outlines(void) {
 
     /* glutSolid* shapes follow the same rule: a current shape is drawn in
      * the highlight phase, after a later shape's plain wireframe. */
-    GLCmd glut[2];
-    mk_cmd(&glut[0], CMD_GLUT_CUBE, 1, 0, 0); glut[0].src_cmd_idx = 0;
-    glut[0].num_args = 1;
-    mk_cmd(&glut[1], CMD_GLUT_CUBE, 2, 0, 0); glut[1].src_cmd_idx = 1;
-    glut[1].num_args = 1;
-    memset(&ctx, 0, sizeof(ctx));
-    ctx.program.cmds = glut;
-    ctx.program.cmd_count = 2;
-    ctx.cursor.edit_line_idx = 0;
-    ctx.cursor.cursor_block_begin = -1;
-    ctx.cursor.cursor_block_end = -1;
+    OverlayWalkCtx ctx;
+    ASSERT_TRUE("two-cube program loads",
+                OVERLAY_FIXTURE(&ctx, 0, OVERLAY_SCOPE_LAST_INSTANCE,
+                                "glutSolidCube(1);", "glutSolidCube(2);"));
     ctx.highlight_current_poly = 1;
     ctx.show_vertex_outlines = 1;
-    ctx.cursor_overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE;
     {
         TraceLog log;
         trace_begin();
@@ -1710,28 +1738,27 @@ static void test_highlight_drawn_after_all_plain_outlines(void) {
     }
 }
 
-/* render_outlines_tess_pass: draws each tess contour as a GL_POLYGON under
- * the pass's line polygon mode, like the glBegin pass. */
+/* The GLU contour outline path: each contour is drawn as a GL_POLYGON under
+ * the pass's line polygon mode. The programs are committed source rows run
+ * through the real flatten, so every shape is one the parser produces. */
 static void test_render_outlines_tess(void) {
     printf("--- edit_overlays render_outlines (tess pass) ---\n");
 
-    GLCmd cmds[5];
-    mk_cmd(&cmds[0], CMD_TESS_BEGIN_POLYGON, 0, 0, 0);
-    mk_cmd(&cmds[1], CMD_TESS_BEGIN_CONTOUR, 0, 0, 0);
-    mk_cmd(&cmds[2], CMD_TESS_VERTEX, 1.5f, 2.5f, 3.5f);
-    mk_cmd(&cmds[3], CMD_TESS_VERTEX, -1.0f, -2.0f, 0.0f);
-    mk_cmd(&cmds[4], CMD_TESS_END, 0, 0, 0);
-
     OverlayWalkCtx ctx;
-    memset(&ctx, 0, sizeof(ctx));
-    ctx.program.cmds = cmds;
-    ctx.program.cmd_count = 5;
-    ctx.cursor.edit_line_idx = -1;
-    ctx.cursor.cursor_block_begin = -1;
-    ctx.cursor.cursor_block_end = -1;
-    ctx.show_vertex_outlines = 1;
-
+    char buf[TRACE_FMT_MAX];
     TraceLog log;
+
+    ASSERT_TRUE("one-contour polygon loads",
+        OVERLAY_FIXTURE(&ctx, -1, OVERLAY_SCOPE_LAST_INSTANCE,
+                        "gluBegin(GLU_POLYGON);",
+                        "gluBegin(GLU_CONTOUR);",
+                        "gluVertex(1.5, 2.5, 3.5);",
+                        "gluVertex(-1, -2, 0);",
+                        "gluEnd();",
+                        "gluEnd();"));
+    ctx.show_vertex_outlines = 1;
+    ctx.highlight_current_poly = 0;
+
     trace_begin();
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
@@ -1772,33 +1799,34 @@ static void test_render_outlines_tess(void) {
     ASSERT_INT("tess preview suppresses contour vertices",
                trace_count_sym(&log, "glVertex3f"), 0);
 
-    /* A two-contour polygon with the polygon matching the cursor: the
-     * second BEGIN_CONTOUR closes the first loop, and the active-poly
-     * highlight color is used. */
-    GLCmd poly[7];
-    mk_cmd(&poly[0], CMD_TESS_BEGIN_POLYGON, 0, 0, 0);
-    poly[0].src_cmd_idx = 3;
-    mk_cmd(&poly[1], CMD_TESS_BEGIN_CONTOUR, 0, 0, 0);
-    mk_cmd(&poly[2], CMD_TESS_VERTEX, 0.0f, 0.0f, 0.0f);
-    mk_cmd(&poly[3], CMD_TESS_BEGIN_CONTOUR, 0, 0, 0);
-    mk_cmd(&poly[4], CMD_TESS_VERTEX, 1.0f, 1.0f, 1.0f);
-    mk_cmd(&poly[5], CMD_TESS_END, 0, 0, 0);
-    poly[6] = poly[5]; /* unused padding */
+    /* A two-contour polygon, each contour with its own gluEnd(). */
+    static const char *const two_contours[] = {
+        "gluBegin(GLU_POLYGON);",           /* 0 */
+        "gluBegin(GLU_CONTOUR);",           /* 1 */
+        "gluVertex(0, 0, 0);",              /* 2  tess ordinal 0 */
+        "gluVertex(1, 0, 0);",              /* 3  tess ordinal 1 */
+        "gluEnd();",                        /* 4 */
+        "gluBegin(GLU_CONTOUR);",           /* 5 */
+        "gluVertex(0.2, 0.2, 0);",          /* 6  tess ordinal 2 */
+        "gluVertex(0.4, 0.2, 0);",          /* 7  tess ordinal 3 */
+        "gluEnd();",                        /* 8 */
+        "gluEnd();",                        /* 9 */
+    };
+    const int two_count = (int)(sizeof two_contours / sizeof two_contours[0]);
 
-    OverlayWalkCtx tctx;
-    memset(&tctx, 0, sizeof(tctx));
-    tctx.program.cmds = poly;
-    tctx.program.cmd_count = 6;
-    tctx.cursor.edit_line_idx = 3;     /* matches the polygon's src line */
-    tctx.cursor.cursor_block_begin = -1;
-    tctx.cursor.cursor_block_end = -1;
-    tctx.highlight_current_poly = 1;
-    tctx.show_vertex_outlines = 1;
-    tctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD_INVERTED;
+    /* The cursor on the polygon's own gluBegin: the active-poly highlight
+     * color is used for both contours, and Bold Inverted's white plain color
+     * never appears for the highlighted polygon. */
+    ASSERT_TRUE("two-contour polygon loads",
+                overlay_fixture_build(two_contours, two_count, 0,
+                                      OVERLAY_SCOPE_LAST_INSTANCE, &ctx));
+    ctx.highlight_current_poly = 1;
+    ctx.show_vertex_outlines = 1;
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD_INVERTED;
     trace_begin();
-    edit_overlays_render_outlines(&tctx, 0, 0);
+    edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
-    ASSERT_INT("first contour vertex traced", trace_count_sym(&log, "glVertex3f") >= 2, 1);
+    ASSERT_INT("both contours' vertices traced", trace_count_sym(&log, "glVertex3f"), 4);
     ASSERT_TRUE("multi-contour highlights both contours at the active width",
                 trace_count_draws_with_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH) >= 2);
     /* Bold's plain width (1.2 * 2.5) ties the active width, so the color
@@ -1808,39 +1836,21 @@ static void test_render_outlines_tess(void) {
     ASSERT_INT("tess current-poly highlight ignores inverted outline color",
                trace_count_line(&log, "glColor4f 1 1 1 1"), 0);
 
-    /* Two closed contours (the real flat form: each contour has its own
-     * gluEnd). Under Bold a plain contour's width ties the highlight's, so
-     * the trace's colors tell the two apart: one highlight color set per
-     * highlighted contour, one plain color per plain one. A contour's gluEnd() used to clear "current", so the second
-     * contour fell back to a plain outline - and with the cursor in the
-     * second contour, neither contour was current. */
-    GLCmd two[10];
-    mk_cmd(&two[0], CMD_TESS_BEGIN_POLYGON, 0, 0, 0); two[0].src_cmd_idx = 0;
-    mk_cmd(&two[1], CMD_TESS_BEGIN_CONTOUR, 0, 0, 0); two[1].src_cmd_idx = 1;
-    mk_cmd(&two[2], CMD_TESS_VERTEX, 0.0f, 0.0f, 0.0f); two[2].src_cmd_idx = 2;
-    mk_cmd(&two[3], CMD_TESS_VERTEX, 1.0f, 0.0f, 0.0f); two[3].src_cmd_idx = 3;
-    mk_cmd(&two[4], CMD_TESS_END, 0, 0, 0);           two[4].src_cmd_idx = 4;
-    mk_cmd(&two[5], CMD_TESS_BEGIN_CONTOUR, 0, 0, 0); two[5].src_cmd_idx = 5;
-    mk_cmd(&two[6], CMD_TESS_VERTEX, 0.2f, 0.2f, 0.0f); two[6].src_cmd_idx = 6;
-    mk_cmd(&two[7], CMD_TESS_VERTEX, 0.4f, 0.2f, 0.0f); two[7].src_cmd_idx = 7;
-    mk_cmd(&two[8], CMD_TESS_END, 0, 0, 0);           two[8].src_cmd_idx = 8;
-    mk_cmd(&two[9], CMD_TESS_END, 0, 0, 0);           two[9].src_cmd_idx = 9;
-
-    memset(&tctx, 0, sizeof(tctx));
-    tctx.program.cmds = two;
-    tctx.program.cmd_count = 10;
-    tctx.cursor.cursor_block_begin = -1;
-    tctx.cursor.cursor_block_end = -1;
-    tctx.highlight_current_poly = 1;
-    tctx.show_vertex_outlines = 1;
-    tctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD;
+    /* Under Bold a plain contour's width ties the highlight's, so the trace's
+     * colors tell the two apart: one highlight color set per highlighted
+     * contour, one plain color per plain one. A contour's gluEnd() must not
+     * clear "current": the second contour would fall back to a plain outline,
+     * and with the cursor in the second contour neither would be current. */
     {
-        const int cursor_lines[2] = { 3, 7 };
+        const int cursor_rows[2] = { 3, 7 };
         for (int c = 0; c < 2; c++) {
             char lbl[96];
-            tctx.cursor.edit_line_idx = cursor_lines[c];
+            overlay_fixture_fill(cursor_rows[c], OVERLAY_SCOPE_LAST_INSTANCE, &ctx);
+            ctx.highlight_current_poly = 1;
+            ctx.show_vertex_outlines = 1;
+            ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD;
             trace_begin();
-            edit_overlays_render_outlines(&tctx, 0, 0);
+            edit_overlays_render_outlines(&ctx, 0, 0);
             trace_end(&log);
             snprintf(lbl, sizeof lbl,
                      "cursor in contour %d: both contours highlighted", c + 1);
@@ -1855,17 +1865,17 @@ static void test_render_outlines_tess(void) {
     /* Single-polygon scope with a resolved cursor contour highlights that
      * contour alone - the tess counterpart of a glBegin block highlighting
      * only the cursor's primitive. Plain outlines off, so the only vertices
-     * in the trace are the highlighted contour's. Contour 2 owns ordinals
-     * [2, 3]. */
-    tctx.show_vertex_outlines = 0;
-    tctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT;
-    tctx.cursor_overlay_scope = OVERLAY_SCOPE_SINGLE_POLYGON;
-    tctx.cursor_contour_valid = 1;
-    tctx.cursor_contour_first = 2;
-    tctx.cursor_contour_last = 3;
-    tctx.cursor.edit_line_idx = 7;
+     * in the trace are the highlighted contour's. The pipeline resolves the
+     * cursor contour's polygon-local tess ordinals: contour 2 owns [2, 3]. */
+    overlay_fixture_fill(7, OVERLAY_SCOPE_SINGLE_POLYGON, &ctx);
+    ASSERT_INT("cursor row 7 resolves a contour", ctx.cursor_contour_valid, 1);
+    ASSERT_INT("inner contour starts at tess ordinal 2", ctx.cursor_contour_first, 2);
+    ASSERT_INT("inner contour ends at tess ordinal 3", ctx.cursor_contour_last, 3);
+    ctx.highlight_current_poly = 1;
+    ctx.show_vertex_outlines = 0;
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_DEFAULT;
     trace_begin();
-    edit_overlays_render_outlines(&tctx, 0, 0);
+    edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("single-polygon: one contour highlighted",
                trace_count_draws_with_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
@@ -1878,11 +1888,14 @@ static void test_render_outlines_tess(void) {
                trace_count_line(&log, "glVertex3f 1 0 0"), 0);
 
     /* Cursor in the first contour: the highlight follows it. */
-    tctx.cursor_contour_first = 0;
-    tctx.cursor_contour_last = 1;
-    tctx.cursor.edit_line_idx = 3;
+    overlay_fixture_fill(3, OVERLAY_SCOPE_SINGLE_POLYGON, &ctx);
+    ASSERT_INT("cursor row 3 resolves the outer contour",
+               ctx.cursor_contour_valid && ctx.cursor_contour_first == 0 &&
+               ctx.cursor_contour_last == 1, 1);
+    ctx.highlight_current_poly = 1;
+    ctx.show_vertex_outlines = 0;
     trace_begin();
-    edit_overlays_render_outlines(&tctx, 0, 0);
+    edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("single-polygon, first contour: outer vertices drawn",
                trace_count_line(&log, "glVertex3f 0 0 0") +
@@ -1892,10 +1905,10 @@ static void test_render_outlines_tess(void) {
 
     /* With plain outlines on, the other contour still draws - as a plain
      * outline, never in the highlight. */
-    tctx.show_vertex_outlines = 1;
-    tctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD;
+    ctx.show_vertex_outlines = 1;
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD;
     trace_begin();
-    edit_overlays_render_outlines(&tctx, 0, 0);
+    edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("single-polygon, outlines on: one highlighted contour",
                trace_count_line(&log, TRACE_HIGHLIGHT_COLOR), 1);
@@ -1904,27 +1917,38 @@ static void test_render_outlines_tess(void) {
 
     /* No resolved contour (cursor on the polygon's own begin/end line), or a
      * scope other than single-polygon: the whole polygon stays highlighted. */
-    tctx.cursor_contour_valid = 0;
+    overlay_fixture_fill(9, OVERLAY_SCOPE_SINGLE_POLYGON, &ctx);
+    ASSERT_INT("polygon gluEnd row is in no contour", ctx.cursor_contour_valid, 0);
+    ctx.highlight_current_poly = 1;
+    ctx.show_vertex_outlines = 1;
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD;
     trace_begin();
-    edit_overlays_render_outlines(&tctx, 0, 0);
+    edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("single-polygon, no cursor contour: both contours highlighted",
                trace_count_draws_with_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 2);
-    tctx.cursor_contour_valid = 1;
-    tctx.cursor_overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE;
+
+    overlay_fixture_fill(7, OVERLAY_SCOPE_SINGLE_POLYGON, &ctx);
+    ctx.cursor_overlay_scope = OVERLAY_SCOPE_LAST_INSTANCE;
+    ctx.highlight_current_poly = 1;
+    ctx.show_vertex_outlines = 1;
+    ctx.vertex_outline_style = VERTEX_OUTLINE_STYLE_BOLD;
     trace_begin();
-    edit_overlays_render_outlines(&tctx, 0, 0);
+    edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("last-instance ignores the cursor contour",
                trace_count_draws_with_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 2);
 
-    /* Contours are GL_POLYGONs (9) in line mode, never GL_LINE_LOOPs (2):
-     * only a polygon is moved by GL_POLYGON_OFFSET_LINE, and the contour's
-     * edges sit exactly on the tessellated face's. */
-    ASSERT_INT("contours drawn as GL_POLYGON", trace_count_line(&log, "glBegin 9"), 2);
-    ASSERT_INT("no contour drawn as GL_LINE_LOOP", trace_count_line(&log, "glBegin 2"), 0);
+    /* Contours are GL_POLYGONs in line mode, never GL_LINE_LOOPs: only a
+     * polygon is moved by GL_POLYGON_OFFSET_LINE, and the contour's edges sit
+     * exactly on the tessellated face's. */
+    ASSERT_INT("contours drawn as GL_POLYGON",
+               trace_count_line(&log, trace_fmt(buf, sizeof buf, "glBegin %u", GL_POLYGON)), 2);
+    ASSERT_INT("no contour drawn as GL_LINE_LOOP",
+               trace_count_line(&log, trace_fmt(buf, sizeof buf, "glBegin %u", GL_LINE_LOOP)), 0);
     ASSERT_INT("contours drawn under line polygon mode",
-               trace_count_line(&log, "glPolygonMode 1032 6913"), 1);
+               trace_count_line(&log, trace_fmt(buf, sizeof buf, "glPolygonMode %u %u",
+                                                GL_FRONT_AND_BACK, GL_LINE)), 1);
 }
 
 /* The state call (`state_prefix`, e.g. "glColor4f " or "glLineWidth ") in
@@ -1954,27 +1978,23 @@ static void trace_state_at_vertex(const TraceLog *log, const char *state_prefix,
 static void test_tess_plain_outline_matches_gl_color(void) {
     printf("--- edit_overlays GLU plain outlines match GL ---\n");
 
-    GLCmd cmds[11];
-    mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
-    mk_cmd(&cmds[1], CMD_VERTEX3F, 0.25f, 0, 0);
-    mk_cmd(&cmds[2], CMD_VERTEX3F, 1, 0, 0);
-    mk_cmd(&cmds[3], CMD_VERTEX3F, 0, 1, 0);
-    mk_cmd(&cmds[4], CMD_END, 0, 0, 0);
-    mk_cmd(&cmds[5], CMD_TESS_BEGIN_POLYGON, 0, 0, 0);
-    mk_cmd(&cmds[6], CMD_TESS_BEGIN_CONTOUR, 0, 0, 0);
-    mk_cmd(&cmds[7], CMD_TESS_VERTEX, 5, 5, 0);
-    mk_cmd(&cmds[8], CMD_TESS_VERTEX, 6, 5, 0);
-    mk_cmd(&cmds[9], CMD_TESS_VERTEX, 5, 6, 0);
-    mk_cmd(&cmds[10], CMD_TESS_END, 0, 0, 0);
-
     OverlayWalkCtx ctx;
-    memset(&ctx, 0, sizeof(ctx));
-    ctx.program.cmds = cmds;
-    ctx.program.cmd_count = 11;
-    ctx.cursor.edit_line_idx = -1;
-    ctx.cursor.cursor_block_begin = -1;
-    ctx.cursor.cursor_block_end = -1;
+    ASSERT_TRUE("GL triangle + GLU polygon load",
+        OVERLAY_FIXTURE(&ctx, -1, OVERLAY_SCOPE_LAST_INSTANCE,
+                        "glBegin(GL_TRIANGLES);",
+                        "glVertex3f(0.25, 0, 0);",
+                        "glVertex3f(1, 0, 0);",
+                        "glVertex3f(0, 1, 0);",
+                        "glEnd();",
+                        "gluBegin(GLU_POLYGON);",
+                        "gluBegin(GLU_CONTOUR);",
+                        "gluVertex(5, 5, 0);",
+                        "gluVertex(6, 5, 0);",
+                        "gluVertex(5, 6, 0);",
+                        "gluEnd();",
+                        "gluEnd();"));
     ctx.show_vertex_outlines = 1;
+    ctx.highlight_current_poly = 0;
 
     for (int style = 0; style < VERTEX_OUTLINE_STYLE_COUNT; style++) {
         char gl_color[128], glu_color[128], gl_width[128], glu_width[128];
@@ -2011,56 +2031,51 @@ static void test_tess_plain_outline_matches_gl_color(void) {
 static void test_tess_outlines_lift_culling(void) {
     printf("--- edit_overlays tess outlines ignore culling ---\n");
 
-    GLCmd cmds[11];
-    mk_cmd(&cmds[0], CMD_ENABLE, (float)GL_CULL_FACE, 0, 0);
-    cmds[0].num_args = 1;
-    mk_cmd(&cmds[1], CMD_TESS_BEGIN_POLYGON, 0, 0, 0);    cmds[1].src_cmd_idx = 1;
-    mk_cmd(&cmds[2], CMD_TESS_BEGIN_CONTOUR, 0, 0, 0);    cmds[2].src_cmd_idx = 2;
-    mk_cmd(&cmds[3], CMD_TESS_VERTEX, 0.0f, 0.0f, 0.0f);  cmds[3].src_cmd_idx = 3;
-    mk_cmd(&cmds[4], CMD_TESS_VERTEX, 1.0f, 0.0f, 0.0f);  cmds[4].src_cmd_idx = 4;
-    mk_cmd(&cmds[5], CMD_TESS_VERTEX, 0.0f, 1.0f, 0.0f);  cmds[5].src_cmd_idx = 5;
-    mk_cmd(&cmds[6], CMD_TESS_END, 0, 0, 0);              cmds[6].src_cmd_idx = 6;
-    mk_cmd(&cmds[7], CMD_TESS_END, 0, 0, 0);              cmds[7].src_cmd_idx = 7;
-    mk_cmd(&cmds[8], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0);
-    mk_cmd(&cmds[9], CMD_VERTEX3F, 5, 0, 0);
-    mk_cmd(&cmds[10], CMD_END, 0, 0, 0);
-
+    static const char *const rows[] = {
+        "glEnable(GL_CULL_FACE);",          /* 0 */
+        "gluBegin(GLU_POLYGON);",           /* 1 */
+        "gluBegin(GLU_CONTOUR);",           /* 2 */
+        "gluVertex(0, 0, 0);",              /* 3 */
+        "gluVertex(1, 0, 0);",              /* 4 */
+        "gluVertex(0, 1, 0);",              /* 5 */
+        "gluEnd();",                        /* 6 */
+        "gluEnd();",                        /* 7 */
+        "glBegin(GL_TRIANGLES);",           /* 8 */
+        "glVertex3f(5, 0, 0);",             /* 9 */
+        "glEnd();",                         /* 10 */
+    };
     OverlayWalkCtx ctx;
-    memset(&ctx, 0, sizeof(ctx));
-    ctx.program.cmds = cmds;
-    ctx.program.cmd_count = 11;
-    ctx.cursor.edit_line_idx = -1;
-    ctx.cursor.cursor_block_begin = -1;
-    ctx.cursor.cursor_block_end = -1;
+    ASSERT_TRUE("cull + GLU polygon + GL block load",
+                overlay_fixture_build(rows, (int)(sizeof rows / sizeof rows[0]),
+                                      -1, OVERLAY_SCOPE_ALL_INSTANCES, &ctx));
     ctx.show_vertex_outlines = 1;
-    ctx.cursor_overlay_scope = OVERLAY_SCOPE_ALL_INSTANCES;
+    ctx.highlight_current_poly = 0;
 
-    /* GL_CULL_FACE = 2884. */
     TraceLog log;
     trace_begin();
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("plain contour outline drawn with culling off",
-               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884",
-                                  "glVertex3f 0 1 0"), 0);
+               trace_cap_state_for(&log, GL_CULL_FACE,
+                                   "glVertex3f 0 1 0"), 0);
     ASSERT_INT("glBegin outlines keep the program's culling",
-               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884",
-                                  "glVertex3f 5 0 0"), 1);
+               trace_cap_state_for(&log, GL_CULL_FACE,
+                                   "glVertex3f 5 0 0"), 1);
 
     /* Clipped & culled keeps the program's culling for glBegin highlights,
      * but a contour has no face orientation to cull by. */
+    overlay_fixture_fill(4, OVERLAY_SCOPE_ALL_INSTANCES, &ctx);
     ctx.show_vertex_outlines = 0;
     ctx.highlight_current_poly = 1;
     ctx.highlight_clipped_culled = 1;
-    ctx.cursor.edit_line_idx = 4;
     trace_begin();
     edit_overlays_render_outlines(&ctx, 0, 0);
     trace_end(&log);
     ASSERT_INT("Clipped & culled contour highlight drawn",
                trace_count_line(&log, "glVertex3f 0 1 0"), 1);
     ASSERT_INT("Clipped & culled contour highlight drawn with culling off",
-               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884",
-                                  "glVertex3f 0 1 0"), 0);
+               trace_cap_state_for(&log, GL_CULL_FACE,
+                                   "glVertex3f 0 1 0"), 0);
 }
 
 /* render_outlines_glut_pass: re-draws glutSolid* shapes in wireframe under
@@ -3307,6 +3322,90 @@ static int count_label_text(const char *text, const char *label) {
     return n;
 }
 
+/* The numbers in a bitmap label string such as " v0 v1 v12", in order. */
+static int label_text_numbers(const char *text, int *out, int max) {
+    int n = 0;
+    for (const char *p = text; *p && n < max; p++) {
+        if (p[0] == 'v' && p[1] >= '0' && p[1] <= '9')
+            out[n++] = atoi(p + 1);
+    }
+    return n;
+}
+
+/* The copies half of the label-numbering contract, over a real unrolled loop
+ * (the gutter/scene sweep in test_ui.c covers scenes with one copy of every
+ * block): Last instance keeps only the final copy, numbered by the block;
+ * All instances and Whole scene keep every copy; at vertex a copy repeats
+ * v0..v2, decluttered the copies share one global run. Single polygon is
+ * Last instance narrowed to the cursor's triangle. */
+static void test_label_numbers_over_unrolled_copies(void) {
+    printf("--- edit_overlays label numbers over unrolled copies ---\n");
+
+    float idm[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
+    extern float g_gl_stub_modelview_matrix[16];
+    memcpy(g_gl_stub_modelview_matrix, idm, sizeof(idm));
+
+    OverlayWalkCtx ctx;
+    ASSERT_TRUE("looped triangle loads",
+        OVERLAY_FIXTURE(&ctx, 2, OVERLAY_SCOPE_LAST_INSTANCE,
+                        "for(i, 0, 3) {",                       /* 0 */
+                        "glBegin(GL_TRIANGLES);",               /* 1 */
+                        "glVertex3f(i * 0.1, 0.1, 0);",         /* 2 */
+                        "glVertex3f(i * 0.1 + 0.05, 0.3, 0);",  /* 3 */
+                        "glVertex3f(i * 0.1 - 0.05, 0.3, 0);",  /* 4 */
+                        "glEnd();",                             /* 5 */
+                        "}"));                                  /* 6 */
+    int copies = 0;
+    for (int i = 0; i < ctx.program.cmd_count; i++)
+        copies += ctx.program.cmds[i].valid && ctx.program.cmds[i].type == CMD_BEGIN;
+    ASSERT_TRUE("the loop unrolls into several copies", copies >= 2);
+    if (copies < 2 || copies > 8)
+        return;
+
+    static const OverlayScope scopes[] = {
+        OVERLAY_SCOPE_LAST_INSTANCE, OVERLAY_SCOPE_ALL_INSTANCES,
+        OVERLAY_SCOPE_WHOLE_SCENE, OVERLAY_SCOPE_SINGLE_POLYGON,
+    };
+    static const char *const scope_names[] = {
+        "last instance", "all instances", "whole scene", "single polygon"
+    };
+    for (int placement = 0; placement < 2; placement++) {
+        int at_vertex = placement == OVERLAY_LABEL_PLACEMENT_AT_VERTEX;
+        for (int s = 0; s < 4; s++) {
+            char text[1024];
+            int got[64], want[64], got_n, want_n = 0;
+            char lbl[160];
+            TraceLog log;
+
+            overlay_fixture_fill(2, scopes[s], &ctx);
+            trace_begin();
+            edit_overlays_render_vertex_numbers(
+                &ctx, OVERLAY_VERTEX_LABEL_INDEX, 0, scopes[s],
+                at_vertex ? OVERLAY_LABEL_PLACEMENT_AT_VERTEX
+                          : OVERLAY_LABEL_PLACEMENT_DECLUTTERED, NULL);
+            trace_end(&log);
+            trace_bitmap_text(&log, text, sizeof text);
+            got_n = label_text_numbers(text, got, 64);
+
+            if (scopes[s] == OVERLAY_SCOPE_LAST_INSTANCE ||
+                scopes[s] == OVERLAY_SCOPE_SINGLE_POLYGON) {
+                for (int v = 0; v < 3; v++) want[want_n++] = v;
+            } else {
+                for (int c = 0; c < copies; c++)
+                    for (int v = 0; v < 3; v++)
+                        want[want_n++] = at_vertex ? v : c * 3 + v;
+            }
+            snprintf(lbl, sizeof lbl, "%s, %s: label count", scope_names[s],
+                     at_vertex ? "at vertex" : "decluttered");
+            ASSERT_INT(lbl, got_n, want_n);
+            snprintf(lbl, sizeof lbl, "%s, %s: label numbers", scope_names[s],
+                     at_vertex ? "at vertex" : "decluttered");
+            ASSERT_TRUE(lbl, got_n == want_n &&
+                             memcmp(got, want, (size_t)want_n * sizeof got[0]) == 0);
+        }
+    }
+}
+
 static void test_tess_contour_vertex_labels(void) {
     printf("--- edit_overlays tess vertex labels per contour ---\n");
 
@@ -4248,7 +4347,7 @@ static void test_outline_snapshot_frames(void) {
     ASSERT_INT("attrib pop restores color writes before the triangle", trace_count_sym(&log, "glVertex4f"), 1);
     ASSERT_INT("masked solid is absent from plain outlines", trace_count_line(&log, "glutSolidCube 1"), 0);
     ASSERT_INT("polygon attrib restores cull enable before triangle",
-               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884", "glVertex4f 1 2 0 2"), 0);
+               trace_cap_state_for(&log, GL_CULL_FACE, "glVertex4f 1 2 0 2"), 0);
     ASSERT_TRUE("trace locates solid under absolute modelview",
                 trace_frame_at(&log, "glutSolidCube 0.5", entry, mv, plane));
     ASSERT_FLOAT("load identity drops incoming camera translation", mv[12], 0);
@@ -4329,12 +4428,12 @@ static void test_outline_wall_inside_contour(void) {
     ASSERT_FLOAT("nested wall tracks translate inside contour x", mv[12], 2);
     ASSERT_FLOAT("nested wall tracks translate inside contour y", mv[13], 3);
     ASSERT_INT("nested wall tracks cull state inside contour",
-               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884", "glVertex3f 4 5 6"), 1);
+               trace_cap_state_for(&log, GL_CULL_FACE, "glVertex3f 4 5 6"), 1);
     ASSERT_TRUE("contour draws separately", trace_frame_at(&log, "glVertex3f 0 0 0", entry, mv, plane));
     ASSERT_FLOAT("contour takes the popped close matrix x", mv[12], 0);
     ASSERT_FLOAT("contour takes the popped close matrix y", mv[13], 0);
     ASSERT_INT("contour lifts wall culling",
-               trace_cap_state_at(&log, "glEnable 2884", "glDisable 2884", "glVertex3f 0 0 0"), 0);
+               trace_cap_state_for(&log, GL_CULL_FACE, "glVertex3f 0 0 0"), 0);
 }
 
 /* GLU draws a polygon at its closing gluEnd(), so a transform left applied
@@ -4390,10 +4489,14 @@ static void test_outline_inherited_plane_revisit(void) {
     trace_begin(); edit_overlays_render_outlines(&ctx, 0, 0); trace_end(&log);
     ASSERT_INT("inherited enabled plane captured once without an attrib push", trace_count_sym(&log, "glGetClipPlane"), 6);
     char equation[128];
-    trace_state_at_vertex(&log, "glClipPlane 12288 ", "glVertex3f 20 0 0", equation, sizeof(equation));
-    ASSERT_TRUE("later plain batch uses its authored equation", strcmp(equation, "glClipPlane 12288 1 0 0 0.5") == 0);
-    trace_state_at_vertex(&log, "glClipPlane 12288 ", "glVertex3f 10 0 0", equation, sizeof(equation));
-    ASSERT_TRUE("highlight revisit restores inherited (stub-zero) equation", strcmp(equation, "glClipPlane 12288 0 0 0 0") == 0);
+    char plane_prefix[TRACE_FMT_MAX], want[TRACE_FMT_MAX];
+    trace_fmt(plane_prefix, sizeof plane_prefix, "glClipPlane %u ", GL_CLIP_PLANE0);
+    trace_state_at_vertex(&log, plane_prefix, "glVertex3f 20 0 0", equation, sizeof(equation));
+    trace_fmt(want, sizeof want, "glClipPlane %u 1 0 0 0.5", GL_CLIP_PLANE0);
+    ASSERT_TRUE("later plain batch uses its authored equation", strcmp(equation, want) == 0);
+    trace_state_at_vertex(&log, plane_prefix, "glVertex3f 10 0 0", equation, sizeof(equation));
+    trace_fmt(want, sizeof want, "glClipPlane %u 0 0 0 0", GL_CLIP_PLANE0);
+    ASSERT_TRUE("highlight revisit restores inherited (stub-zero) equation", strcmp(equation, want) == 0);
     ASSERT_INT("revisited clipped highlight keeps the plane enabled",
                trace_clip_cap_state_at(&log, "glVertex3f 10 0 0"), 1);
 }
@@ -4414,6 +4517,7 @@ static void test_projective_cpu_translate_scale(void) {
 }
 
 int main(void) {
+    test_tess_comment_row_selects_polygon();
     test_outline_source_extent_authority();
     test_outline_and_label_scope_parity();
     test_normal_scope_resumes_polygon();
@@ -4463,6 +4567,7 @@ int main(void) {
     test_vertex_numbers_use_source_begin_block();
     test_render_via_repl_program();
     test_tess_contour_vertex_labels();
+    test_label_numbers_over_unrolled_copies();
     test_nested_strip_single_polygon_labels();
     test_single_polygon_keeps_cursor_vertex();
     test_normal_vectors_reach_later_contours();
