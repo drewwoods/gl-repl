@@ -134,6 +134,14 @@ typedef struct OverlayWalkCtx {
      * (POLY_HIGHLIGHT_ON) draws the highlighted shape as authored - the one
      * overlay that may show geometry the frame doesn't. */
     int              highlight_clipped_culled;
+    /* Animate the cursor highlight: it fades in under a glow flare when the
+     * highlighted geometry changes, then rests with a slow halo breath and a
+     * sheen travelling in vertex order. 0 draws the plain single-pass
+     * highlight - the zeroed ctx the overlay tests build; the controller
+     * always sets it. anim_time is the free-running clock (seconds) it runs
+     * on: sim-tick driven, so captures stay deterministic. */
+    int              highlight_glow;
+    float            anim_time;
     int              replay_tess_preview;
     int              show_vertex_points;
     int              replay_vertex_points;

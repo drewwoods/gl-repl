@@ -272,6 +272,8 @@ void glr_overlay_fill_walk_ctx(int edit_line, OverlayWalkCtx *out) {
     out->highlight_clipped_culled =
         presentation.highlight_current_poly == POLY_HIGHLIGHT_CLIPPED_CULLED &&
         !replaying;
+    out->highlight_glow = 1;
+    out->anim_time = repl_state_variables().anim_time;
     out->replay_tess_preview = replay_mode_vertex;
     out->show_vertex_points = presentation.show_vertex_points;
     out->replay_vertex_points = replay_mode_vertex;

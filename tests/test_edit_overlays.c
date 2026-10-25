@@ -1424,6 +1424,159 @@ static void test_single_polygon_highlight(void) {
                trace_count_draws_with_line_width_near(&log, VERTEX_OUTLINE_ACTIVE_WIDTH), 1);
 }
 
+/* Index of the first trace line equal to `exact`, or log->n. */
+static int trace_first_index(const TraceLog *log, const char *exact) {
+    for (int i = 0; i < log->n; i++)
+        if (strcmp(log->lines[i], exact) == 0) return i;
+    return log->n;
+}
+
+/* Widest glLineWidth the trace sets. */
+static float trace_max_line_width(const TraceLog *log) {
+    float widest = 0.0f;
+    for (int i = 0; i < log->n; i++) {
+        float w;
+        char tail;
+        if (sscanf(log->lines[i], "glLineWidth %f %c", &w, &tail) == 1 && w > widest)
+            widest = w;
+    }
+    return widest;
+}
+
+/* glColor4f calls from the last glLineWidth `width` to the end of the trace. */
+static int trace_colors_after_last_width(const TraceLog *log, float width) {
+    int start = -1, c = 0;
+    for (int i = 0; i < log->n; i++) {
+        float w;
+        char tail;
+        if (sscanf(log->lines[i], "glLineWidth %f %c", &w, &tail) == 1 &&
+            fabsf(w - width) < 0.0005f) start = i;
+    }
+    for (int i = start + 1; start >= 0 && i < log->n; i++)
+        if (strncmp(log->lines[i], "glColor4f ", 10) == 0) c++;
+    return c;
+}
+
+/* highlight_glow: a highlight arriving draws nothing on its first frame, then
+ * the core eases in under two wider halo layers drawn beneath it, flaring
+ * wide before it settles. The core keeps the plain highlight's width and
+ * colors each vertex (the sheen). The arrival is keyed on source identity:
+ * moving the cursor inside the block stays settled, a different block
+ * arrives afresh while the one it left fades out, and a clock set backward
+ * does not replay the arrival. */
+static void test_highlight_glow(void) {
+    printf("--- edit_overlays highlight glow ---\n");
+    const float core = VERTEX_OUTLINE_ACTIVE_WIDTH;
+    const float halo_inner = core * 2.0f, halo_outer = core * 3.4f;
+
+    GLCmd cmds[10];
+    mk_cmd(&cmds[0], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0); cmds[0].src_cmd_idx = 1;
+    mk_cmd(&cmds[1], CMD_VERTEX3F, 0, 0, 0); cmds[1].src_cmd_idx = 2;
+    mk_cmd(&cmds[2], CMD_VERTEX3F, 1, 0, 0); cmds[2].src_cmd_idx = 3;
+    mk_cmd(&cmds[3], CMD_VERTEX3F, 0, 1, 0); cmds[3].src_cmd_idx = 4;
+    mk_cmd(&cmds[4], CMD_END, 0, 0, 0);      cmds[4].src_cmd_idx = 5;
+    mk_cmd(&cmds[5], CMD_BEGIN, (float)GL_TRIANGLES, 0, 0); cmds[5].src_cmd_idx = 6;
+    mk_cmd(&cmds[6], CMD_VERTEX3F, 5, 0, 0); cmds[6].src_cmd_idx = 7;
+    mk_cmd(&cmds[7], CMD_VERTEX3F, 6, 0, 0); cmds[7].src_cmd_idx = 8;
+    mk_cmd(&cmds[8], CMD_VERTEX3F, 5, 1, 0); cmds[8].src_cmd_idx = 9;
+    mk_cmd(&cmds[9], CMD_END, 0, 0, 0);      cmds[9].src_cmd_idx = 10;
+
+    OverlayWalkCtx ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.program.cmds = cmds;
+    ctx.program.cmd_count = 10;
+    ctx.cursor.edit_line_idx = 3;
+    ctx.cursor.cursor_block_begin = -1;
+    ctx.cursor.cursor_block_end = -1;
+    ctx.highlight_current_poly = 1;
+    ctx.highlight_glow = 1;
+
+    TraceLog log;
+    ctx.anim_time = 100.0f;
+    trace_begin(); edit_overlays_render_outlines(&ctx, 0, 0); trace_end(&log);
+    ASSERT_INT("arrival frame draws nothing yet", trace_count_sym(&log, "glBegin"), 0);
+
+    ctx.anim_time = 100.3f;
+    trace_begin(); edit_overlays_render_outlines(&ctx, 0, 0); trace_end(&log);
+    ASSERT_TRUE("mid-arrival halo flares wider than it rests",
+                trace_max_line_width(&log) > halo_outer + 0.01f);
+    ASSERT_INT("mid-arrival core drawn once",
+               trace_count_draws_with_line_width_near(&log, core), 1);
+
+    ctx.anim_time = 102.0f;
+    trace_begin(); edit_overlays_render_outlines(&ctx, 0, 0); trace_end(&log);
+    ASSERT_INT("settled outer halo", trace_count_draws_with_line_width_near(&log, halo_outer), 1);
+    ASSERT_INT("settled inner halo", trace_count_draws_with_line_width_near(&log, halo_inner), 1);
+    ASSERT_INT("settled core keeps the plain highlight width",
+               trace_count_draws_with_line_width_near(&log, core), 1);
+    ASSERT_INT("core is the last layer, one color per vertex plus the batch's",
+               trace_colors_after_last_width(&log, core), 4);
+    ASSERT_INT("only the cursor's block is highlighted",
+               trace_count_line(&log, "glVertex3f 5 0 0"), 0);
+
+    ctx.cursor.edit_line_idx = 4;   /* another vertex of the same block */
+    ctx.anim_time = 102.1f;
+    trace_begin(); edit_overlays_render_outlines(&ctx, 0, 0); trace_end(&log);
+    ASSERT_INT("moving inside the block stays settled",
+               trace_count_draws_with_line_width_near(&log, halo_inner), 1);
+
+    ctx.anim_time = 50.0f;          /* clock set backward */
+    trace_begin(); edit_overlays_render_outlines(&ctx, 0, 0); trace_end(&log);
+    ASSERT_INT("a rewound clock stays settled",
+               trace_count_draws_with_line_width_near(&log, halo_inner), 1);
+
+    /* Moving to the other block: it arrives afresh while the block it left
+     * fades out, full strength at first, gone after the fade. */
+    ctx.cursor.edit_line_idx = 8;
+    ctx.anim_time = 50.1f;
+    trace_begin(); edit_overlays_render_outlines(&ctx, 0, 0); trace_end(&log);
+    ASSERT_INT("a different block arrives afresh",
+               trace_count_line(&log, "glVertex3f 5 0 0"), 0);
+    ASSERT_INT("the block it left departs in all three layers",
+               trace_count_line(&log, "glVertex3f 0 0 0"), 3);
+    ASSERT_TRUE("departing core at full strength first",
+                trace_count_line(&log, "glColor4f 0 0.9 0.9 1") > 0);
+
+    ctx.anim_time = 50.2f;
+    trace_begin(); edit_overlays_render_outlines(&ctx, 0, 0); trace_end(&log);
+    ASSERT_INT("mid-crossfade: the arrival draws",
+               trace_count_line(&log, "glVertex3f 5 0 0"), 3);
+    ASSERT_INT("mid-crossfade: the departure still draws",
+               trace_count_line(&log, "glVertex3f 0 0 0"), 3);
+    ASSERT_INT("departure draws before the arrival, so the arrival sits on top",
+               trace_first_index(&log, "glVertex3f 0 0 0") <
+               trace_first_index(&log, "glVertex3f 5 0 0"), 1);
+
+    ctx.anim_time = 51.0f;
+    trace_begin(); edit_overlays_render_outlines(&ctx, 0, 0); trace_end(&log);
+    ASSERT_INT("the departure is gone once faded",
+               trace_count_line(&log, "glVertex3f 0 0 0"), 0);
+
+    /* A departure is trusted only while its head still names the same
+     * command: after a reflatten moves things, it is dropped, not misdrawn. */
+    ctx.cursor.edit_line_idx = 3;
+    ctx.anim_time = 52.0f;
+    trace_begin(); edit_overlays_render_outlines(&ctx, 0, 0); trace_end(&log);
+    ctx.anim_time = 53.0f;
+    trace_begin(); edit_overlays_render_outlines(&ctx, 0, 0); trace_end(&log);
+    ctx.cursor.edit_line_idx = 8;
+    cmds[0].src_cmd_idx = 11;       /* block A's head now names another row */
+    ctx.anim_time = 53.05f;
+    trace_begin(); edit_overlays_render_outlines(&ctx, 0, 0); trace_end(&log);
+    ASSERT_INT("a departure whose head moved is dropped",
+               trace_count_line(&log, "glVertex3f 0 0 0"), 0);
+    cmds[0].src_cmd_idx = 1;
+
+    /* Points take no halo: a point is its own size whatever the line width. */
+    mk_cmd(&cmds[5], CMD_BEGIN, (float)GL_POINTS, 0, 0); cmds[5].src_cmd_idx = 6;
+    ctx.anim_time = 60.0f;
+    edit_overlays_render_outlines(&ctx, 0, 0);
+    ctx.anim_time = 61.0f;
+    trace_begin(); edit_overlays_render_outlines(&ctx, 0, 0); trace_end(&log);
+    ASSERT_INT("points: no halo", trace_count_draws_with_line_width_near(&log, halo_inner), 0);
+    ASSERT_INT("points: core still drawn", trace_count_draws_with_line_width_near(&log, core), 1);
+}
+
 /* Every overlay pass replays the program's own glClipPlane / clip-cap enables
  * so it traces the geometry the frame actually shows, and drops them again
  * before returning. POLY_HIGHLIGHT_ON is the one opt-out: the cursor's
@@ -4546,6 +4699,7 @@ int main(void) {
     test_single_polygon_highlight_strip_winding();
     test_overlays_honor_color_mask();
     test_single_polygon_highlight();
+    test_highlight_glow();
     test_single_polygon_highlight_fan_anchor();
     test_single_polygon_highlight_bold_style();
     test_render_outlines_tess();

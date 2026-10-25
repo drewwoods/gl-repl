@@ -60,6 +60,10 @@ static inline void overlay_fixture_fill(int cursor, OverlayScope scope,
     presentation->overlay_scope = (int)scope;
     repl_flatten_refresh_current_block_highlight(cursor);
     glr_overlay_fill_walk_ctx(cursor, out);
+    /* The selection is what these fixtures pin. The glow's arrival would make
+     * a fresh highlight draw nothing on its first frame, so draw it plain;
+     * the glow has its own tests. */
+    out->highlight_glow = 0;
     presentation->overlay_scope = saved_scope;
 }
 

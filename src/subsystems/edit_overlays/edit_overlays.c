@@ -17,6 +17,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 #define NORMAL_FRAME_EPS 1e-8f
 
 static int vertex_outline_style_bold(const OverlayWalkCtx *ctx) {
@@ -587,13 +591,6 @@ static int single_polygon_keeps_vertex(const ReplayVertexWalkState *state,
     return ord >= contour_first && ord <= contour_last;
 }
 
-/* SINGLE_POLYGON scope with a resolved primitive range: does block-local
- * vertex ordinal `ord` belong to the cursor's primitive? */
-static int cursor_poly_contains_ordinal(const OverlayWalkCtx *ctx, int ord) {
-    return (ord >= ctx->cursor_poly_first && ord <= ctx->cursor_poly_last) ||
-           (ctx->cursor_poly_fan_anchor && ord == 0);
-}
-
 /* A selected odd triangle-strip triangle needs its original winding when
  * reissued as triangle zero; quad strips and fans keep their winding. */
 static GLenum overlay_front_face_opposite(GLenum front_face) {
@@ -1051,12 +1048,316 @@ static void outline_bind_state(const OutlineState *want, OutlineKind kind, int h
     live->cull_face = want->cull_face;
 }
 
+/* Cursor highlight glow (ctx->highlight_glow). The core line keeps the plain
+ * highlight's width and color, so the shape stays exactly as legible; all
+ * motion lives in what surrounds it:
+ *
+ *   - arrival: when the highlighted geometry changes, the core eases in while
+ *     the halo flares wider and brighter, then settles;
+ *   - departure: the geometry it left fades out over a shorter span, so a
+ *     moving highlight crossfades instead of jumping;
+ *   - rest: the halo breathes slowly, and a soft sheen travels along the core
+ *     in vertex-emission order - a quiet read of the winding.
+ *
+ * The glow is layered wide lines under alpha blending - no FBO or shader, so
+ * it runs on the same fixed-function path as everything else (gl4es too).
+ * Everything is a function of anim_time minus the moment the highlight key
+ * last changed, so the look is the same at any frame rate. */
+#define HL_FADE_IN_S      0.15f /* core eases in (fast start)               */
+#define HL_FADE_OUT_S     0.20f /* a departed highlight fades away          */
+#define HL_FLARE_S        0.80f /* halo settles from its arrival flare      */
+#define HL_FLARE_GAIN     0.90f /* extra halo alpha at the flare's peak     */
+#define HL_FLARE_SPREAD   0.45f /* extra halo width at the flare's peak     */
+#define HL_BREATHE_S      3.60f /* halo breath period                       */
+#define HL_BREATHE_DEPTH  0.35f /* halo alpha the breath gives up at trough */
+#define HL_SHEEN_LAP_S    3.20f /* one lap of the batch's vertices          */
+#define HL_SHEEN_SPAN     0.20f /* sheen half-width, fraction of a lap      */
+#define HL_SHEEN_GAIN     0.55f /* lift toward white at the sheen's center  */
+#define HL_LAYER_MAX      3
+/* Departures still fading at once. Holding an arrow key in single-polygon
+ * scope can leave several in flight; a newer one evicts the oldest, which
+ * is the faintest by then. */
+#define HL_DEPART_SLOTS   4
+/* A selection larger than this (all instances of a big loop) departs
+ * without a fade rather than being remembered. */
+#define HL_SEL_MAX        512
+
+typedef struct {
+    float width;
+    float alpha; /* multiplies RENDER3D_CLR_OUTLINE_ACTIVE's alpha */
+    int   halo;  /* soft surround: skipped for points               */
+    int   sheen; /* per-vertex travelling lift                     */
+} HighlightLayer;
+
+/* SINGLE_POLYGON narrowing of a selection's glBegin batches (valid == 0:
+ * whole batches). */
+typedef struct {
+    int valid, first, last, fan_anchor;
+} HighlightRange;
+
+/* A highlighted selection remembered by its batch heads, so it can still be
+ * drawn after the cursor has left it. The head's source identity is kept
+ * too: flat indices are only trusted while they still name the same command
+ * (an edit that reflattens can move them). */
+typedef struct {
+    int   count; /* -1: too large to remember */
+    int   head[HL_SEL_MAX], src[HL_SEL_MAX], call_src[HL_SEL_MAX];
+    HighlightRange range;
+    float level; /* opacity it had when it departed */
+    float since; /* anim_time it departed           */
+} HighlightSel;
+
+static const struct { float width_scale, alpha; } k_hl_halo[] = {
+    { 3.4f, 0.11f },
+    { 2.0f, 0.24f },
+};
+
+static unsigned     g_hl_key = 0;     /* 0 = nothing highlighted */
+static float        g_hl_since = 0.0f;
+static HighlightSel g_hl_prev;         /* last frame's selection */
+static HighlightSel g_hl_depart[HL_DEPART_SLOTS];
+static int          g_hl_depart_next = 0;
+static int          g_hl_cur[MAX_FLAT_COMMANDS];       /* current batch indices */
+static int          g_hl_batch_of_head[MAX_FLAT_COMMANDS];
+
+static float hl_ease(float u) {
+    if (u <= 0.0f) return 0.0f;
+    if (u >= 1.0f) return 1.0f;
+    return 0.5f - 0.5f * cosf(u * (float)M_PI);
+}
+
+/* Arrival curve: fast start, soft landing, so a highlight that is only on
+ * screen for a few frames (a cursor moving quickly) still reads. */
+static float hl_ease_out(float u) {
+    if (u <= 0.0f) return 0.0f;
+    if (u >= 1.0f) return 1.0f;
+    return 1.0f - (1.0f - u) * (1.0f - u) * (1.0f - u);
+}
+
+static unsigned hl_mix(unsigned h, int v) {
+    return (h ^ (unsigned)v) * 16777619u;
+}
+
+/* What is highlighted, by source identity: the first and last current batch
+ * plus the single-polygon/contour narrowing. Source indices (not flat ones)
+ * keep a commit inside the block from re-triggering the arrival. */
+static unsigned highlight_key(const OverlayWalkCtx *ctx, const int *cur, int n) {
+    if (n == 0) return 0;
+    unsigned h = 2166136261u;
+    const int ends[2] = { cur[0], cur[n - 1] };
+    for (int e = 0; e < 2; e++) {
+        const OutlineBatch *b = &g_outlines.batches[ends[e]];
+        const GLCmd *head = &ctx->program.cmds[b->head];
+        h = hl_mix(h, (int)b->kind);
+        h = hl_mix(h, head->src_cmd_idx);
+        h = hl_mix(h, head->call_src_cmd_idx);
+    }
+    if (ctx->cursor_overlay_scope == OVERLAY_SCOPE_SINGLE_POLYGON) {
+        h = hl_mix(h, ctx->cursor_poly_valid ? ctx->cursor_poly_first : -1);
+        h = hl_mix(h, ctx->cursor_poly_valid ? ctx->cursor_poly_last : -1);
+        h = hl_mix(h, ctx->cursor_contour_valid ? ctx->cursor_contour_first : -1);
+    }
+    return h | 1u;
+}
+
+static void highlight_sel_capture(const OverlayWalkCtx *ctx, const int *cur, int n,
+                                  const HighlightRange *range, HighlightSel *out) {
+    out->range = *range;
+    if (n > HL_SEL_MAX) { out->count = -1; return; }
+    out->count = n;
+    for (int i = 0; i < n; i++) {
+        int head = g_outlines.batches[cur[i]].head;
+        out->head[i] = head;
+        out->src[i] = ctx->program.cmds[head].src_cmd_idx;
+        out->call_src[i] = ctx->program.cmds[head].call_src_cmd_idx;
+    }
+}
+
+/* Track the highlight key across frames: on a change, the previous frame's
+ * selection departs at the opacity it had reached, and the arrival clock
+ * restarts. Idempotent within a frame (accumulation passes repeat it). */
+static void highlight_track(const OverlayWalkCtx *ctx, const int *cur, int n,
+                            const HighlightRange *range) {
+    unsigned key = highlight_key(ctx, cur, n);
+    if (key != g_hl_key) {
+        if (g_hl_key != 0 && g_hl_prev.count > 0) {
+            HighlightSel *slot = &g_hl_depart[g_hl_depart_next];
+            g_hl_depart_next = (g_hl_depart_next + 1) % HL_DEPART_SLOTS;
+            *slot = g_hl_prev;
+            slot->level = hl_ease_out((ctx->anim_time - g_hl_since) / HL_FADE_IN_S);
+            slot->since = ctx->anim_time;
+        }
+        g_hl_key = key;
+        g_hl_since = ctx->anim_time;
+    } else if (ctx->anim_time < g_hl_since) {
+        /* The clock was set backward (time reset): stay settled, and drop
+         * departures whose clock no longer means anything. */
+        g_hl_since = ctx->anim_time - HL_FLARE_S;
+        for (int s = 0; s < HL_DEPART_SLOTS; s++) g_hl_depart[s].level = 0.0f;
+    }
+    highlight_sel_capture(ctx, cur, n, range, &g_hl_prev);
+}
+
+/* Fill draw layers for a highlight at opacity `level` and arrival flare
+ * `flare` (1 at arrival, 0 settled), outermost first; the last is the core.
+ * Without glow that is the one plain pass. */
+static int highlight_layers(const OverlayWalkCtx *ctx, float level, float flare,
+                            HighlightLayer *out) {
+    const float core = VERTEX_OUTLINE_ACTIVE_WIDTH;
+    int n = 0;
+    if (!ctx->highlight_glow) {
+        out[0] = (HighlightLayer){ core, 1.0f, 0, 0 };
+        return 1;
+    }
+    float breathe = 0.5f + 0.5f * cosf(ctx->anim_time * (float)(2.0 * M_PI) / HL_BREATHE_S);
+    float halo_alpha = level * (1.0f + HL_FLARE_GAIN * flare) *
+                       (1.0f - HL_BREATHE_DEPTH * (1.0f - breathe));
+    float halo_width = 1.0f + HL_FLARE_SPREAD * flare;
+    for (size_t i = 0; i < sizeof(k_hl_halo) / sizeof(k_hl_halo[0]); i++)
+        out[n++] = (HighlightLayer){ core * k_hl_halo[i].width_scale * halo_width,
+                                     k_hl_halo[i].alpha * halo_alpha, 1, 0 };
+    out[n++] = (HighlightLayer){ core, level, 0, 1 };
+    return n;
+}
+
+/* Core color at lap position `pos`: the active color lifted toward white
+ * near the sheen. */
+static void highlight_sheen_color(float alpha, float pos, float phase) {
+    Render3dRgba c = render3d_rgba(RENDER3D_CLR_OUTLINE_ACTIVE);
+    float d = fabsf(pos - phase);
+    if (d > 0.5f) d = 1.0f - d;
+    float lift = d < HL_SHEEN_SPAN ? HL_SHEEN_GAIN * hl_ease(1.0f - d / HL_SHEEN_SPAN) : 0.0f;
+    glColor4f(c.r + (1.0f - c.r) * lift, c.g + (1.0f - c.g) * lift,
+              c.b + (1.0f - c.b) * lift, c.a * alpha);
+}
+
+/* Does block-local vertex ordinal `ord` belong to the narrowed primitive? */
+static int highlight_range_contains(const HighlightRange *r, int ord) {
+    return (ord >= r->first && ord <= r->last) || (r->fan_anchor && ord == 0);
+}
+
+/* GL state shared by every batch draw in one outline_draw_batches() call:
+ * binds are skipped while they would repeat, and one width stays live per
+ * layer (re-setting it flushes the driver's wide-line state). */
+typedef struct {
+    OutlineState live;
+    int matrix, state_idx, policy;
+    int width_set, drew;
+    float sheen_phase;
+} OutlineDrawState;
+
+/* Draw batch `b` plainly (layer == NULL) or as one highlight layer, narrowed
+ * to `range` when it is valid. */
+static void outline_draw_batch(const OverlayWalkCtx *ctx, const OutlineBatch *b,
+                               const HighlightLayer *layer, const HighlightRange *range,
+                               OutlineDrawState *ds) {
+    const OutlineCollection *c = &g_outlines;
+    const OutlineState *st = &c->states[b->state_idx];
+    int highlight = layer != NULL;
+    int single = highlight && b->kind == OUTLINE_IMMEDIATE && range->valid;
+    int next_policy = (highlight && !ctx->highlight_clipped_culled) |
+                      ((b->kind == OUTLINE_CONTOUR) << 1);
+    if (ds->state_idx != b->state_idx || ds->policy != next_policy) {
+        outline_bind_state(st, b->kind, highlight, ctx, &ds->live, &ds->matrix);
+        ds->state_idx = b->state_idx;
+        ds->policy = next_policy;
+    }
+    outline_bind_matrix(b->matrix_idx, &ds->matrix);
+    int flip = single && ctx->highlight_clipped_culled && st->gl.cull_enabled &&
+        b->mode == GL_TRIANGLE_STRIP && (range->first & 1);
+    if (flip) glFrontFace(overlay_front_face_opposite(st->gl.front_face));
+    if (!ds->width_set) {
+        glLineWidth(highlight ? layer->width : vertex_outline_width(ctx, VERTEX_OUTLINE_EDGE_WIDTH));
+        if (highlight && layer->sheen) glShadeModel(GL_SMOOTH);
+        ds->width_set = ds->drew = 1;
+    }
+    if (highlight) render3d_clr_a(RENDER3D_CLR_OUTLINE_ACTIVE, layer->alpha);
+    else vertex_outline_color(ctx, RENDER3D_CLR_OUTLINE_EDGE);
+    if (b->kind == OUTLINE_GLUT) repl_executor_draw_glut_solid(&ctx->program.cmds[b->head]);
+    else {
+        int sheen = highlight && layer->sheen;
+        int emitted = 0, emit_count = b->count;
+        if (sheen && single) {
+            emit_count = 0;
+            for (int ord = 0; ord < b->count && ord <= range->last; ord++)
+                emit_count += highlight_range_contains(range, ord);
+        }
+        glBegin(b->mode);
+        int ord = 0;
+        for (int v = b->first; v >= 0; v = c->vertices[v].next, ord++) {
+            if (single) {
+                if (ord > range->last) break;
+                if (!highlight_range_contains(range, ord)) continue;
+            }
+            if (sheen && emit_count > 0)
+                highlight_sheen_color(layer->alpha, (float)emitted++ / (float)emit_count, ds->sheen_phase);
+            const GLCmd *cmd = &ctx->program.cmds[c->vertices[v].cmd_idx];
+            if (b->kind == OUTLINE_CONTOUR) glVertex3f(cmd->args[0], cmd->args[1], cmd->args[2]);
+            else overlay_emit_immediate_vertex(cmd);
+        }
+        glEnd();
+    }
+    if (flip) glFrontFace(st->gl.front_face);
+}
+
+/* Draw a selection (batch indices) once per layer, outermost layer first. */
+static void highlight_draw_sel(const OverlayWalkCtx *ctx, const int *batches, int n,
+                               const HighlightLayer *layers, int layer_count,
+                               const HighlightRange *range, OutlineDrawState *ds) {
+    for (int l = 0; l < layer_count; l++) {
+        if (layers[l].alpha <= 0.0f) continue;
+        ds->width_set = 0;
+        for (int i = 0; i < n; i++) {
+            const OutlineBatch *b = &g_outlines.batches[batches[i]];
+            if (layers[l].halo && b->kind == OUTLINE_IMMEDIATE && b->mode == GL_POINTS) continue;
+            outline_draw_batch(ctx, b, &layers[l], range, ds);
+        }
+    }
+}
+
+/* Departing selections, oldest first so the newest sits on top. A head that
+ * no longer names the command it did (the program reflattened) is skipped. */
+static void highlight_draw_departures(const OverlayWalkCtx *ctx, OutlineDrawState *ds) {
+    const OutlineCollection *c = &g_outlines;
+    int count = ctx->program.cmd_count < MAX_FLAT_COMMANDS ? ctx->program.cmd_count : MAX_FLAT_COMMANDS;
+    int mapped = 0;
+    for (int k = 0; k < HL_DEPART_SLOTS; k++) {
+        HighlightSel *sel = &g_hl_depart[(g_hl_depart_next + k) % HL_DEPART_SLOTS];
+        float u = (ctx->anim_time - sel->since) / HL_FADE_OUT_S;
+        if (sel->level <= 0.0f || sel->count <= 0 || u >= 1.0f) {
+            sel->level = 0.0f;
+            continue;
+        }
+        if (!mapped) {
+            for (int i = 0; i < count; i++) g_hl_batch_of_head[i] = -1;
+            for (int i = 0; i < c->batch_count; i++)
+                if (c->batches[i].head < count) g_hl_batch_of_head[c->batches[i].head] = i;
+            mapped = 1;
+        }
+        int batches[HL_SEL_MAX], n = 0;
+        for (int i = 0; i < sel->count; i++) {
+            int head = sel->head[i];
+            if (head >= count || !ctx->program.cmds[head].valid ||
+                ctx->program.cmds[head].src_cmd_idx != sel->src[i] ||
+                ctx->program.cmds[head].call_src_cmd_idx != sel->call_src[i] ||
+                g_hl_batch_of_head[head] < 0) continue;
+            batches[n++] = g_hl_batch_of_head[head];
+        }
+        /* Quick drop, soft tail. */
+        float level = sel->level * (1.0f - u) * (1.0f - u);
+        HighlightLayer layers[HL_LAYER_MAX];
+        int layer_count = highlight_layers(ctx, level, 0.0f, layers);
+        highlight_draw_sel(ctx, batches, n, layers, layer_count, &sel->range, ds);
+    }
+}
+
 static void outline_draw_batches(const OverlayWalkCtx *ctx) {
     OutlineCollection *c = &g_outlines;
-    OutlineState live = c->states[0];
-    int matrix = 0, state_idx = -1, policy = -1;
-    int drew = 0;
-    overlay_gl_reset(&live.gl);
+    OutlineDrawState ds;
+    memset(&ds, 0, sizeof(ds));
+    ds.live = c->states[0];
+    ds.state_idx = ds.policy = -1;
+    overlay_gl_reset(&ds.live.gl);
     for (int i = 0; i < OUTLINE_CLIP_PLANE_COUNT; i++)
         glDisable((GLenum)(GL_CLIP_PLANE0 + i));
     glDisable(GL_CULL_FACE);
@@ -1064,63 +1365,47 @@ static void outline_draw_batches(const OverlayWalkCtx *ctx) {
     glStencilFunc(GL_ALWAYS, 0, 0xFFu);
     glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP); glStencilMask(0);
     glPushMatrix();
-    for (int highlight = 0; highlight <= 1; highlight++) {
-        if (highlight ? !ctx->highlight_current_poly : !ctx->show_vertex_outlines) continue;
-        int width_set = 0;
+    const HighlightRange range = {
+        ctx->cursor_overlay_scope == OVERLAY_SCOPE_SINGLE_POLYGON && ctx->cursor_poly_valid,
+        ctx->cursor_poly_first, ctx->cursor_poly_last, ctx->cursor_poly_fan_anchor,
+    };
+    if (ctx->show_vertex_outlines) {
         for (int kind = 0; kind < OUTLINE_KIND_COUNT; kind++) {
             for (int idx = c->first[kind]; idx >= 0; idx = c->batches[idx].next) {
                 const OutlineBatch *b = &c->batches[idx];
-                const OutlineState *st = &c->states[b->state_idx];
-                int single = b->kind == OUTLINE_IMMEDIATE && b->is_current &&
-                    ctx->cursor_overlay_scope == OVERLAY_SCOPE_SINGLE_POLYGON && ctx->cursor_poly_valid;
-                if (highlight ? !b->is_current :
-                    ((b->is_current && !single) || !st->gl.color_writes ||
-                     (b->kind == OUTLINE_IMMEDIATE && !outline_begin_mode_has_overlay(b->mode)))) continue;
-                int next_policy = (highlight && !ctx->highlight_clipped_culled) |
-                                  ((b->kind == OUTLINE_CONTOUR) << 1);
-                if (state_idx != b->state_idx || policy != next_policy) {
-                    outline_bind_state(st, b->kind, highlight, ctx, &live, &matrix);
-                    state_idx = b->state_idx;
-                    policy = next_policy;
-                }
-                outline_bind_matrix(b->matrix_idx, &matrix);
-                int flip = highlight && single && ctx->highlight_clipped_culled && st->gl.cull_enabled &&
-                    b->mode == GL_TRIANGLE_STRIP && (ctx->cursor_poly_first & 1);
-                if (flip) glFrontFace(overlay_front_face_opposite(st->gl.front_face));
-                /* A phase has one width. Keep it live across batches to avoid
-                 * flushing the driver's wide-line state between highlights. */
-                if (!width_set) {
-                    glLineWidth(highlight ? VERTEX_OUTLINE_ACTIVE_WIDTH : vertex_outline_width(ctx, VERTEX_OUTLINE_EDGE_WIDTH));
-                    width_set = drew = 1;
-                }
-                if (highlight) render3d_clr(RENDER3D_CLR_OUTLINE_ACTIVE);
-                else vertex_outline_color(ctx, RENDER3D_CLR_OUTLINE_EDGE);
-                if (b->kind == OUTLINE_GLUT) repl_executor_draw_glut_solid(&ctx->program.cmds[b->head]);
-                else {
-                    glBegin(b->mode);
-                    int ord = 0;
-                    for (int v = b->first; v >= 0; v = c->vertices[v].next, ord++) {
-                        if (highlight && single) {
-                            if (ord > ctx->cursor_poly_last) break;
-                            if (!cursor_poly_contains_ordinal(ctx, ord)) continue;
-                        }
-                        const GLCmd *cmd = &ctx->program.cmds[c->vertices[v].cmd_idx];
-                        if (b->kind == OUTLINE_CONTOUR) glVertex3f(cmd->args[0], cmd->args[1], cmd->args[2]);
-                        else overlay_emit_immediate_vertex(cmd);
-                    }
-                    glEnd();
-                }
-                if (flip) glFrontFace(st->gl.front_face);
+                int single = b->kind == OUTLINE_IMMEDIATE && range.valid;
+                if ((b->is_current && !single) || !c->states[b->state_idx].gl.color_writes ||
+                    (b->kind == OUTLINE_IMMEDIATE && !outline_begin_mode_has_overlay(b->mode))) continue;
+                outline_draw_batch(ctx, b, NULL, &range, &ds);
             }
         }
     }
-    if (drew) glLineWidth(1.0f);
+    /* Every highlight draws after every plain outline, so it wins the edges
+     * they share. */
+    if (ctx->highlight_current_poly) {
+        int n = 0;
+        for (int kind = 0; kind < OUTLINE_KIND_COUNT; kind++)
+            for (int idx = c->first[kind]; idx >= 0; idx = c->batches[idx].next)
+                if (c->batches[idx].is_current) g_hl_cur[n++] = idx;
+        float level = 1.0f, flare = 0.0f;
+        if (ctx->highlight_glow) {
+            highlight_track(ctx, g_hl_cur, n, &range);
+            float age = ctx->anim_time - g_hl_since;
+            level = hl_ease_out(age / HL_FADE_IN_S);
+            flare = 1.0f - hl_ease(age / HL_FLARE_S);
+            ds.sheen_phase = fmodf(ctx->anim_time / HL_SHEEN_LAP_S, 1.0f);
+            highlight_draw_departures(ctx, &ds);
+        }
+        HighlightLayer layers[HL_LAYER_MAX];
+        int layer_count = highlight_layers(ctx, level, flare, layers);
+        highlight_draw_sel(ctx, g_hl_cur, n, layers, layer_count, &range, &ds);
+    }
+    if (ds.drew) glLineWidth(1.0f);
     /* Leave the same final authored equations/modes for subsequent overlays. */
-    outline_bind_state(&c->states[c->state_idx], OUTLINE_IMMEDIATE, 0, ctx, &live, &matrix);
-    overlay_gl_reset(&live.gl);
+    outline_bind_state(&c->states[c->state_idx], OUTLINE_IMMEDIATE, 0, ctx, &ds.live, &ds.matrix);
+    overlay_gl_reset(&ds.live.gl);
     glPopMatrix();
 }
-
 
 /* The manual vertex-point walk below only sees REPL-authored glVertex*
  * commands. glutSolid* meshes are generated inside GLUT, so redraw those
