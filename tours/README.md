@@ -162,7 +162,7 @@ top-left), or one of these symbolic tokens:
 | `item:<label>` | A row in the currently open dropdown, such as `item:new_scene`. |
 | `subenter:<parent>` | The safe horizontal entry point into a dropdown row's flyout. |
 | `sub:<parent>:<label>` | A row in that parent's flyout. |
-| `pin:<label>` | A pinned menu-bar control: `search`, `view`, or `replay`. |
+| `pin:<label>` | A pinned menu-bar control: `search`, `prev`, `next`, `view`, `replay`, or `replay_stop` (the Stop cell at Replay's right end, shown while a replay runs). |
 | `scene:<x>,<y>` | A fraction of the live scene viewport, measured from its top-left. For example, `scene:0.5,0.5` is its center. |
 | `shell:<label>` | An Emscripten browser-shell control outside the canvas. Currently `shell:new` targets the top **New** button. |
 | `helptab:<label>` | A tab of the F1 help overlay: `overview`, `commands`, `keys`, `about`. Only resolves while the overlay is open. |

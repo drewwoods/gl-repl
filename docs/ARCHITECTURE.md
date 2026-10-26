@@ -1570,7 +1570,7 @@ Runtime shape:
 
 * **Virtual clock vs rendered frames.** The host schedules
   `glr_ctrl_run_scripted_input_frame()` once per rendered frame; that controller
-  stage drives [`glr_pointer_script_frame()`](../src/app/glr_pointer_script.h#L260),
+  stage drives [`glr_pointer_script_frame()`](../src/app/glr_pointer_script.h#L261),
   which forks on run kind. A playing tour accumulates
   `frame_credit += speed` and spends whole credits as *virtual tour frames*
   (`0.25×`-`16×` discrete ladder), so speed rescales pointer-script timing
@@ -1615,7 +1615,7 @@ Runtime shape:
   playback (only the most-recent still-live echo/ripple shows), so rewinding
   into a caption's on-screen window brings the caption back.
 * **HUD.** The controller populates `snap->tour` from
-  [`glr_pointer_script_tour_view()`](../src/app/glr_pointer_script.h#L181) and renders
+  [`glr_pointer_script_tour_view()`](../src/app/glr_pointer_script.h#L182) and renders
   [`src/ui/subsystems/tour_hud.c`](../src/ui/subsystems/tour_hud.c) at the top
   of the scene, before the compositor pass and separate from the bottom replay
   HUD, so a tour demonstrating replay shows both. It defaults to a compact

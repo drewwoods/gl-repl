@@ -41,7 +41,8 @@
  *                         (enter at the parent's y - a diagonal glide would
  *                         cross sibling rows and swap the flyout)
  *   sub:overlays:vertex_points   flyout row: parent label + row label
- *   pin:replay            pinned button: replay / search / view (2D-3D)
+ *   pin:replay            pinned button: replay / replay_stop / search /
+ *                         prev / next / view (2D-3D)
  *   helptab:commands      tab of the open F1 help overlay, by label
  *                         (unresolvable while the overlay is closed)
  *   code:glrotatef        code-panel row, by normalized prefix of its

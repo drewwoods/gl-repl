@@ -181,14 +181,22 @@ int    replay_focus_anchor_flat_idx(void);
 /* --- Handler API ---
  *
  * Small routing surface for controller/editor input code. UI hit handling calls
- * replay_handle_pin_clicked(); keyboard dispatch forwards to replay_handle_key()
+ * replay_handle_pin_clicked() / replay_handle_stop_pin_clicked(); keyboard
+ * dispatch forwards to replay_handle_key()
  * / replay_handle_special() while replay is active. Implementations delegate to
  * the main replay state machine in replay.c.
  */
 
-/* Handle a Replay-pin button click: starts replay when stopped, pauses when
- * playing, resumes when paused, and stops replay when the button shows DONE. */
+/* Handle a Replay-pin button click - the mouse twin of Space: starts replay
+ * when stopped, pauses when playing, resumes when paused, and restarts from
+ * the beginning when the button shows DONE. */
 void replay_handle_pin_clicked(void);
+
+/* Handle a Stop-cell click - the mouse twin of Escape: ends an active replay.
+ * The cell shares the Replay pin's fixed-width block and is painted as part
+ * of Replay while no replay runs, so a click there with replay off starts
+ * one, exactly as a Replay-pin click would. */
+void replay_handle_stop_pin_clicked(void);
 
 
 

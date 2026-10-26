@@ -6952,14 +6952,55 @@ static void test_mouse_routing_and_hit_testing(void) {
     ASSERT_INT("pin button hit consumed", rc, 1);
     ASSERT_INT("replay state toggled to PLAYING", replay_state_view().state, REPLAY_PLAYING);
 
-    /* Clicking the pinned Replay button after playback completes dismisses
-     * the Done state instead of restarting the replay. */
+    /* The pinned Replay button is the mouse twin of Space: once playback
+     * completes it restarts from the beginning - ending the replay is the
+     * Stop cell's job. */
     replay_state_mut()->active = 1;
     replay_state_mut()->state = REPLAY_DONE;
+    replay_state_mut()->pc = 3;
     rc = route_pin_button_hit(&hit);
     ASSERT_INT("Done pin button hit consumed", rc, 1);
-    ASSERT_TRUE("Done pin button stops replay", !replay_state_view().active);
-    ASSERT_INT("Done pin button enters OFF", replay_state_view().state, REPLAY_OFF);
+    ASSERT_TRUE("Done pin button keeps replay active", replay_state_view().active);
+    ASSERT_INT("Done pin button restarts playback",
+               replay_state_view().state, REPLAY_PLAYING);
+    ASSERT_INT("Done pin button rewinds to the start", replay_state_view().pc, 0);
+
+    /* The Stop cell is the mouse twin of Escape: it ends a replay from any
+     * running state. */
+    {
+        static const int running[] = { REPLAY_PLAYING, REPLAY_PAUSED,
+                                       REPLAY_DONE };
+        hit.item_idx = UI_MENU_BAR_PIN_REPLAY_STOP;
+        for (size_t i = 0; i < sizeof running / sizeof running[0]; i++) {
+            replay_state_mut()->active = 1;
+            replay_state_mut()->state = running[i];
+            rc = route_pin_button_hit(&hit);
+            ASSERT_INT("Stop cell hit consumed", rc, 1);
+            ASSERT_TRUE("Stop cell ends the replay", !replay_state_view().active);
+            ASSERT_INT("Stop cell enters OFF", replay_state_view().state, REPLAY_OFF);
+        }
+    }
+
+    /* With no replay running the Stop cell is painted as part of Replay, so
+     * a click there starts a replay exactly as a Replay click does. */
+    {
+        int via_replay_active, via_replay_state;
+        hit.item_idx = UI_MENU_BAR_PIN_REPLAY;
+        route_pin_button_hit(&hit);
+        via_replay_active = replay_state_view().active;
+        via_replay_state = replay_state_view().state;
+        replay_stop();
+
+        hit.item_idx = UI_MENU_BAR_PIN_REPLAY_STOP;
+        rc = route_pin_button_hit(&hit);
+        ASSERT_INT("idle Stop cell hit consumed", rc, 1);
+        ASSERT_TRUE("idle Replay click starts a replay", via_replay_active);
+        ASSERT_INT("idle Stop cell click starts a replay too",
+                   replay_state_view().active, via_replay_active);
+        ASSERT_INT("idle Stop cell click matches a Replay click",
+                   replay_state_view().state, via_replay_state);
+        replay_stop();
+    }
 
     // Test route_pin_button_hit for view mode swatch toggle
     hit.kind = UI_HIT_PIN_BUTTON;

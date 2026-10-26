@@ -3,6 +3,7 @@
  */
 #include "app/glr_actions.h"
 #include <ctype.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -64,18 +65,34 @@ static int menu_visible(int menu_id) {
  * constant per theme.h's "named constant" bucket, not a token. */
 static const float k_menubar_bottom_rule[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 
-/* Right-to-left the pins render from highest index first, so PIN_REPLAY sits
- * at the far right matching the design. PIN_SEARCH fills the gap between the
- * last menu on the left and PIN_REPLAY. */
+/* Right-to-left the pins render from highest index first, so the replay
+ * transport (PIN_REPLAY + PIN_REPLAY_STOP) sits at the far right matching the
+ * design. PIN_SEARCH fills the gap between the last menu on the left and
+ * PIN_PREV. */
 enum { PIN_SEARCH = 0, PIN_PREV, PIN_NEXT, PIN_VIEW_MODE, PIN_REPLAY,
-       NUM_PIN_BTNS };
+       PIN_REPLAY_STOP, NUM_PIN_BTNS };
 static const char *g_pin_btn_labels[NUM_PIN_BTNS] = {
-    "search...", "< Prev", "Next >", "2D/3D", "Replay"
+    "search...", "< Prev", "Next >", "2D/3D", "Replay", "Stop"
+};
+
+/* Replay transport block: the Replay button plus the Stop cell at its right.
+ * The block's width is fixed (9 label chars + a 12px icon + 22px pads - what
+ * the old "Replaying" label needed) and the split inside it is unconditional:
+ * layout reads no replay state, so starting or stopping a replay can never
+ * move Search / Prev / Next / 2D-3D. With no replay running the renderer
+ * paints the whole block as one Replay button, and the router treats a
+ * Stop-cell click as a Replay click. */
+enum {
+    REPLAY_BLOCK_W     = 9 * FONT_SMALL_W + 12 + 22,
+    REPLAY_STOP_CELL_W = 22,
+    REPLAY_ICON_X      = 8,    /* icon left edge, from the cell's left */
+    REPLAY_TEXT_X      = 22,   /* label left edge: icon + 6px gap */
+    REPLAY_ICON_SZ     = 8
 };
 
 #define PIN_SEARCH_MIN_W 140
 
-/* Field separator inside the stepper tooltip - the same 8x13 vertical-rule
+/* Field separator inside the pin tooltips - the same 8x13 vertical-rule
  * glyph the statusbar chip tooltips use. */
 #define MENUBAR_TOOLTIP_VRULE_GLYPH 0x19
 
@@ -673,11 +690,12 @@ static void menubar_rects(int menu_x[NUM_MENUS], int menu_w[NUM_MENUS],
 
     int right_edge = cp_x + cp_w - CODE_MARGIN_X;
 
-    /* PIN_REPLAY - width reserves room for the widest state label plus a
-     * 12px state icon (triangle / pause-bars) and padding. */
-    int replay_label_w = (int)strlen("Replaying") * FONT_SMALL_W;
-    pin_w[PIN_REPLAY] = replay_label_w + 12 /* icon */ + 22 /* pads */;
-    pin_x[PIN_REPLAY] = right_edge - pin_w[PIN_REPLAY];
+    /* PIN_REPLAY + PIN_REPLAY_STOP - the fixed-width transport block (see
+     * REPLAY_BLOCK_W): Stop takes the right end, Replay the rest. */
+    pin_w[PIN_REPLAY_STOP] = REPLAY_STOP_CELL_W;
+    pin_x[PIN_REPLAY_STOP] = right_edge - REPLAY_STOP_CELL_W;
+    pin_w[PIN_REPLAY] = REPLAY_BLOCK_W - REPLAY_STOP_CELL_W;
+    pin_x[PIN_REPLAY] = right_edge - REPLAY_BLOCK_W;
 
     /* PIN_VIEW_MODE - the 2D/3D toggle swatch, fixed width, left of Replay. */
     pin_w[PIN_VIEW_MODE] = ui_view_mode_swatch_label_width();
@@ -1423,6 +1441,9 @@ int ui_menu_bar_target_pin(const char *name, int *mx, int *my) {
     else if (target_label_matches("next", name))   pin = PIN_NEXT;
     else if (target_label_matches("view", name))   pin = PIN_VIEW_MODE;
     else if (target_label_matches("replay", name)) pin = PIN_REPLAY;
+    /* "replay" is a prefix of "replay stop", so the bare word has to be
+     * tried first or it would land on the Stop cell. */
+    else if (target_label_matches("replay stop", name)) pin = PIN_REPLAY_STOP;
     if (pin < 0)
         return 0;
     menubar_rects(menu_x, menu_w, pin_x, pin_w, &by, &bh);
@@ -2646,6 +2667,40 @@ static void paint_menu_labels(const int *menu_x, const int *menu_w,
     }
 }
 
+/* Restart glyph for the Done state: a filled ring open on its right side,
+ * with an arrowhead on the upper-right end pointing clockwise, down into the
+ * opening. Filled like the play / pause shapes it alternates with, so all
+ * three read at one weight. At 8px the opening has to stay clear of the
+ * arrowhead or the ring reads as a closed "o". */
+static void draw_restart_glyph(float cx, float cy, float sz) {
+    const float r_out = sz * 0.5f, r_in = r_out - 1.5f;
+    const float a_head = 0.75f;            /* ~43 deg: upper right */
+    const float a_tail = a_head + 4.66f;   /* ~310 deg: lower right */
+    const int segs = 16;
+    float ux, uy, tx, ty, r_mid;
+    int k;
+
+    glBegin(GL_TRIANGLE_STRIP);
+    for (k = 0; k <= segs; k++) {
+        float a = a_head + (a_tail - a_head) * (float)k / (float)segs;
+        glVertex2f(cx + cosf(a) * r_out, cy + sinf(a) * r_out);
+        glVertex2f(cx + cosf(a) * r_in,  cy + sinf(a) * r_in);
+    }
+    glEnd();
+
+    /* Clockwise tangent at the head end, (sin a, -cos a). */
+    ux = cosf(a_head);
+    uy = sinf(a_head);
+    tx = uy;
+    ty = -ux;
+    r_mid = (r_out + r_in) * 0.5f;
+    glBegin(GL_TRIANGLES);
+    glVertex2f(cx + ux * (r_in - 1.5f),  cy + uy * (r_in - 1.5f));
+    glVertex2f(cx + ux * (r_out + 1.5f), cy + uy * (r_out + 1.5f));
+    glVertex2f(cx + ux * r_mid + tx * 3.0f, cy + uy * r_mid + ty * 3.0f);
+    glEnd();
+}
+
 static void paint_pin_buttons(const UiRenderSnapshot *snap,
                               const int *pin_x, const int *pin_w,
                               int by, int bh, int hover_pin,
@@ -2653,9 +2708,10 @@ static void paint_pin_buttons(const UiRenderSnapshot *snap,
     int i;
     for (i = 0; i < NUM_PIN_BTNS; i++) {
         int hover;
-        if (pin_w[i] <= 0) continue;   /* collapsed stepper - not present */
+        if (pin_w[i] <= 0) continue;   /* collapsed pin - not present */
         hover = (hover_pin == i);
-        int active = (i == PIN_REPLAY && replay.active);
+        int active = ((i == PIN_REPLAY || i == PIN_REPLAY_STOP) &&
+                      replay.active);
         if (hover) {
             ui_clr(UI_TOK_MENU_LABEL_HOVER_BG);
             glRectf((float)pin_x[i], (float)by, (float)pin_x[i] + (float)pin_w[i], (float)by + (float)bh);
@@ -2686,15 +2742,17 @@ static void paint_pin_buttons(const UiRenderSnapshot *snap,
                                        snap->view_ortho_mode,
                                        snap->view_projection_mix);
         } else if (i == PIN_REPLAY) {
+            /* The icon is what a click does (the Space key's job), the word
+             * is the state: pause bars while playing, restart once done,
+             * play otherwise. */
             const char *label = "Replay";
-            int icon_x = pin_x[i] + 10;
+            int icon_x = pin_x[i] + REPLAY_ICON_X;
             /* Center the state icon on the *label*, not the bar. The glyph
              * row sits low in the bar (baseline at MENUBAR_TEXT_BASE_Y), so
              * a bar-centered icon floats above the word it belongs to. */
             int icon_cy = by + MENUBAR_TEXT_BASE_Y + MENUBAR_CAP_H / 2;
-            int icon_sz = 8;
-            int tx;
-            if (replay.state == REPLAY_PLAYING) label = "Replaying";
+            int icon_sz = REPLAY_ICON_SZ;
+            if (replay.state == REPLAY_PLAYING) label = "Playing";
             else if (replay.state == REPLAY_PAUSED) label = "Paused";
             else if (replay.state == REPLAY_DONE)   label = "Done";
 
@@ -2707,9 +2765,8 @@ static void paint_pin_buttons(const UiRenderSnapshot *snap,
                 glRectf((float)icon_x,            by0, (float)icon_x + bw, by0 + bh0);
                 glRectf((float)icon_x + bw + gap, by0, (float)icon_x + bw + gap + bw, by0 + bh0);
             } else if (replay.state == REPLAY_DONE) {
-                float sx = (float)icon_x;
-                float sy = (float)icon_cy - (float)icon_sz * 0.5f;
-                glRectf(sx, sy, sx + (float)icon_sz, sy + (float)icon_sz);
+                draw_restart_glyph((float)icon_x + (float)icon_sz * 0.5f,
+                                   (float)icon_cy, (float)icon_sz);
             } else {
                 float x0 = (float)icon_x;
                 float cy = (float)icon_cy;
@@ -2720,8 +2777,17 @@ static void paint_pin_buttons(const UiRenderSnapshot *snap,
                 glEnd();
             }
 
-            tx = icon_x + 12 + 6;
-            gl2d_draw_string((float)tx, (float)(by + MENUBAR_TEXT_BASE_Y), label, FONT_SMALL);
+            gl2d_draw_string((float)(pin_x[i] + REPLAY_TEXT_X),
+                             (float)(by + MENUBAR_TEXT_BASE_Y), label, FONT_SMALL);
+        } else if (i == PIN_REPLAY_STOP) {
+            /* Stop square, centered in its cell on the label row like the
+             * Replay icon beside it. Present only while a replay runs. */
+            float sz = (float)REPLAY_ICON_SZ;
+            float sx = (float)pin_x[i] + ((float)pin_w[i] - sz) * 0.5f;
+            float sy = (float)(by + MENUBAR_TEXT_BASE_Y + MENUBAR_CAP_H / 2) -
+                       sz * 0.5f;
+            ui_clr(UI_TOK_ACCENT);
+            glRectf(sx, sy, sx + sz, sy + sz);
         } else {
             /* The pin band right of the search slot is drawn in the accent
              * (view-mode swatch, Replay icon + label); UI_TOK_TEXT_PRIMARY is
@@ -2741,31 +2807,67 @@ static void paint_pin_buttons(const UiRenderSnapshot *snap,
     }
 }
 
-/* Hover tooltip for the Prev / Next steppers, hanging under the bar: names
- * where the step lands ("Next Example <vrule> Rotating cube <vrule> F12").
- * Same box as the statusbar chip tooltips (RAISED fill, BORDER outline) so
- * the two read as one affordance; the destination strings are resolved by
- * the controller (snapshot `step_target`), since only it knows the cycle
- * order. Suppressed when that step has nowhere to go. */
-static void paint_stepper_tooltip(const UiRenderSnapshot *snap,
-                                  const int *pin_x, const int *pin_w,
-                                  int by, int hover_pin, int cp_x, int cp_w) {
+/* Tooltip text for a hovered pin, or 0 when that pin has none.
+ *
+ * Prev / Next name where the step lands ("Next Example <vrule> Rotating cube
+ * <vrule> F12"); the destination strings are resolved by the controller
+ * (snapshot `step_target`), since only it knows the cycle order, and the
+ * tooltip is suppressed when that step has nowhere to go.
+ *
+ * The replay transport names what a click does and the key that does the
+ * same: the Replay button follows Space (pause / resume / restart) once a
+ * replay runs and GLR_REPLAY before, the Stop cell follows Escape. Space and
+ * Escape are replay_input.c's own bytes, not keymap.h pairs. */
+static int pin_tooltip_text(const UiRenderSnapshot *snap, int pin,
+                            char *out, size_t out_size) {
+    char key[KEYMAP_SHORTCUT_LABEL_MAX];
+    const char *verb;
+
+    if (pin == PIN_PREV || pin == PIN_NEXT) {
+        int slot = (pin == PIN_PREV) ? 0 : 1;
+        if (!snap->step_target[slot].name[0])
+            return 0;
+        snprintf(out, out_size, "%s %s %c %s %c %s",
+                 (pin == PIN_PREV) ? "Prev" : "Next",
+                 snap->step_target[slot].noun,
+                 MENUBAR_TOOLTIP_VRULE_GLYPH, snap->step_target[slot].name,
+                 MENUBAR_TOOLTIP_VRULE_GLYPH, snap->step_target[slot].shortcut);
+        return 1;
+    }
+    if (pin == PIN_REPLAY && !snap->replay.active) {
+        keymap_binding_to_string(key, (int)sizeof key, KM_KEY(GLR_REPLAY),
+                                 KM_MODS(GLR_REPLAY), 0);
+        verb = "Start replay";
+    } else if (pin == PIN_REPLAY) {
+        keymap_binding_to_string(key, (int)sizeof key, ' ', 0, 0);
+        verb = (snap->replay.state == REPLAY_PLAYING) ? "Pause"
+             : (snap->replay.state == REPLAY_DONE)    ? "Restart"
+                                                      : "Resume";
+    } else if (pin == PIN_REPLAY_STOP && snap->replay.active) {
+        keymap_binding_to_string(key, (int)sizeof key, KEY_ESC, 0, 0);
+        verb = "Stop replay";
+    } else {
+        return 0;
+    }
+    snprintf(out, out_size, "%s %c %s", verb, MENUBAR_TOOLTIP_VRULE_GLYPH, key);
+    return 1;
+}
+
+/* Hover tooltip for a pin, hanging under the bar, centered on the pin and
+ * clamped inside the code panel. Same box as the statusbar chip tooltips
+ * (RAISED fill, BORDER outline) so the two read as one affordance. */
+static void paint_pin_tooltip(const UiRenderSnapshot *snap,
+                              const int *pin_x, const int *pin_w,
+                              int by, int hover_pin, int cp_x, int cp_w) {
     char text[UI_STEP_TARGET_NAME_MAX + KEYMAP_SHORTCUT_LABEL_MAX + 32];
-    int slot = (hover_pin == PIN_PREV) ? 0 : 1;
     int tw, th = FONT_SMALL_H + 8;
     int tx, ty = by - (FONT_SMALL_H + 8) - 4;
     int min_x = cp_x + 4, max_x;
 
-    if (hover_pin != PIN_PREV && hover_pin != PIN_NEXT)
+    if (hover_pin < 0 || pin_w[hover_pin] <= 0)
         return;
-    if (!snap->step_target[slot].name[0])
+    if (!pin_tooltip_text(snap, hover_pin, text, sizeof text))
         return;
-
-    snprintf(text, sizeof text, "%s %s %c %s %c %s",
-             (hover_pin == PIN_PREV) ? "Prev" : "Next",
-             snap->step_target[slot].noun,
-             MENUBAR_TOOLTIP_VRULE_GLYPH, snap->step_target[slot].name,
-             MENUBAR_TOOLTIP_VRULE_GLYPH, snap->step_target[slot].shortcut);
 
     tw = (int)strlen(text) * FONT_SMALL_W + 12;
     tx = pin_x[hover_pin] + (pin_w[hover_pin] - tw) / 2;
@@ -2811,6 +2913,15 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap) {
     hover_menu = ui_menu_bar_menu_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
     hover_pin  = ui_menu_bar_pin_hit(snap->pointer.mouse_x, snap->pointer.mouse_y);
 
+    /* No replay running: the transport block paints as one Replay button,
+     * and hovering its Stop end is hovering Replay (see REPLAY_BLOCK_W). */
+    if (!snap->replay.active) {
+        pin_w[PIN_REPLAY] += pin_w[PIN_REPLAY_STOP];
+        pin_w[PIN_REPLAY_STOP] = 0;
+        if (hover_pin == PIN_REPLAY_STOP)
+            hover_pin = PIN_REPLAY;
+    }
+
     prof_begin(PROF_CODE_PANEL_OVERLAY_MENU_LABELS);
     paint_menu_labels(menu_x, menu_w, by, bh, hover_menu);
     prof_end(PROF_CODE_PANEL_OVERLAY_MENU_LABELS);
@@ -2822,7 +2933,7 @@ void ui_menu_bar_render(const UiRenderSnapshot *snap) {
 
     prof_begin(PROF_CODE_PANEL_OVERLAY_MENU_PINS);
     paint_pin_buttons(snap, pin_x, pin_w, by, bh, hover_pin, snap->replay);
-    paint_stepper_tooltip(snap, pin_x, pin_w, by, hover_pin, cp_x, cp_w);
+    paint_pin_tooltip(snap, pin_x, pin_w, by, hover_pin, cp_x, cp_w);
     prof_end(PROF_CODE_PANEL_OVERLAY_MENU_PINS);
 
     glColor4fv(k_menubar_bottom_rule);

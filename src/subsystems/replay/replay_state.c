@@ -94,9 +94,18 @@ int replay_total_flat(void) {
 
 void replay_handle_pin_clicked(void) {
     if (replay_active() && replay_machine_state() == REPLAY_DONE) {
-        replay_stop();
-        repl_set_status("Replay: off");
+        replay_restart_from_beginning();
+        repl_set_status("Replay: restarted");
         return;
     }
     replay_toggle_play_pause();
+}
+
+void replay_handle_stop_pin_clicked(void) {
+    if (!replay_active()) {
+        replay_handle_pin_clicked();
+        return;
+    }
+    replay_stop();
+    repl_set_status("Replay: off");
 }

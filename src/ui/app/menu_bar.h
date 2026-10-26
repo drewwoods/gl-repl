@@ -22,13 +22,17 @@
  * emits its internal index as item_idx and the router switches on these.
  * Search opens search, Prev/Next step the active catalog (examples+user
  * scenes, or tutorial lessons while a tutorial runs), View-mode toggles
- * 2D/3D, Replay toggles replay. */
+ * 2D/3D, Replay starts / pauses / resumes / restarts replay, Replay-stop
+ * ends it. The Replay + Replay-stop cells share one fixed-width block whose
+ * split never depends on replay state, so Replay-stop is hit even with no
+ * replay running (it is painted as part of Replay then, and routes as one). */
 enum {
     UI_MENU_BAR_PIN_SEARCH = 0,
     UI_MENU_BAR_PIN_PREV,
     UI_MENU_BAR_PIN_NEXT,
     UI_MENU_BAR_PIN_VIEW_MODE,
     UI_MENU_BAR_PIN_REPLAY,
+    UI_MENU_BAR_PIN_REPLAY_STOP,
     UI_MENU_BAR_PIN_COUNT
 };
 
@@ -196,7 +200,8 @@ int  ui_menu_bar_handle_wheel_scroll(int mx, int my, int delta);
 /* Top-level menu button by label ("file", "scene", ...). */
 int  ui_menu_bar_target_menu(const char *name, int *mx, int *my);
 
-/* Pinned right-side button: "search", "view" (the 2D/3D swatch), "replay". */
+/* Pinned right-side button: "search", "prev", "next", "view" (the 2D/3D
+ * swatch), "replay", "replay_stop". */
 int  ui_menu_bar_target_pin(const char *name, int *mx, int *my);
 
 /* Row of the currently open dropdown by label ("new_scene", "3d", ...). */

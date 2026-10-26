@@ -23,11 +23,13 @@
 #include "editor/help_session.h"
 #include "editor/input.h"
 #include "editor/state.h"
+#include "keys.h"
 #include "support/test_harness.h"
 #include <ui/core/gl_2d.h>
 #ifdef GL_STUBS
 #include <GL/gl_stub_counts.h>
 #endif
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -186,14 +188,23 @@ static int file_menu_mx(void) {
     return cp_x + CODE_MARGIN_X + FONT_SMALL_W;
 }
 
-static int replay_pin_mx(void) {
+/* Mirrors of menu_bar.c's replay transport geometry (REPLAY_BLOCK_W /
+ * REPLAY_STOP_CELL_W): a fixed-width block at the bar's right end, the Stop
+ * cell taking its rightmost 22px and the Replay button the rest. */
+#define TEST_REPLAY_BLOCK_W     (9 * FONT_SMALL_W + 12 + 22)
+#define TEST_REPLAY_STOP_CELL_W 22
+
+static int bar_right_edge(void) {
     int cp_x, cp_y, cp_w, cp_h;
-    int right_edge;
 
     (void)cp_y;
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
-    right_edge = cp_x + cp_w - CODE_MARGIN_X;
-    return right_edge - 10;
+    return cp_x + cp_w - CODE_MARGIN_X;
+}
+
+/* A point inside the Replay button, clear of the Stop cell at its right. */
+static int replay_pin_mx(void) {
+    return bar_right_edge() - TEST_REPLAY_STOP_CELL_W - 10;
 }
 
 /* Pixel step for the exhaustive hit-test probes below. Must stay strictly
@@ -356,7 +367,7 @@ static void test_top_level_hits(void) {
 
     /* Test hit-testing the new View Mode pin (PIN_VIEW_MODE) */
     view_mode_w = ui_view_mode_swatch_label_width();
-    replay_w = (int)strlen("Replaying") * FONT_SMALL_W + 12 + 22;
+    replay_w = TEST_REPLAY_BLOCK_W;
     ui_layout_code_panel_rect(&cp_x, &cp_y, &cp_w, &cp_h);
     right_edge = cp_x + cp_w - CODE_MARGIN_X;
     swatch_x = right_edge - replay_w - view_mode_w;
@@ -434,6 +445,42 @@ static void test_stepper_pins(void) {
     ASSERT_INT_EQ("File menu still reachable in a narrow panel",
                   h.kind == UI_HIT_MENU_BUTTON ? h.cmd_idx : -1,
                   GLR_MENU_FILE);
+}
+
+/* The replay transport block splits at a fixed x: Replay on the left, the
+ * Stop cell in the rightmost TEST_REPLAY_STOP_CELL_W px, and the 2D/3D swatch
+ * immediately left of the block. Layout reads no replay state, so this one
+ * sweep holds in every replay state. */
+static void test_replay_transport_hits(void) {
+    int my, right_edge, x;
+    int replay_px = 0, stop_px = 0, stray = 0;
+    UiHit h;
+
+    reset_menu_bar_fixture(1600, 900);
+    ui_state_code_panel_mut()->panel_frac = 0.6f;
+    my = menu_bar_center_my();
+    right_edge = bar_right_edge();
+
+    for (x = right_edge - TEST_REPLAY_BLOCK_W; x < right_edge; x++) {
+        int want = (x >= right_edge - TEST_REPLAY_STOP_CELL_W)
+                       ? UI_MENU_BAR_PIN_REPLAY_STOP : UI_MENU_BAR_PIN_REPLAY;
+        h = ui_menu_bar_hit_test(x, my);
+        if (h.kind != UI_HIT_PIN_BUTTON || h.item_idx != want)
+            stray++;
+        else if (want == UI_MENU_BAR_PIN_REPLAY)
+            replay_px++;
+        else
+            stop_px++;
+    }
+    ASSERT_INT_EQ("every block pixel hits Replay or Stop", stray, 0);
+    ASSERT_INT_EQ("Replay button width",
+                  replay_px, TEST_REPLAY_BLOCK_W - TEST_REPLAY_STOP_CELL_W);
+    ASSERT_INT_EQ("Stop cell width", stop_px, TEST_REPLAY_STOP_CELL_W);
+
+    h = ui_menu_bar_hit_test(right_edge - TEST_REPLAY_BLOCK_W - 1, my);
+    ASSERT_INT_EQ("2D/3D swatch sits flush left of the block",
+                  h.kind == UI_HIT_PIN_BUTTON ? h.item_idx : -1,
+                  UI_MENU_BAR_PIN_VIEW_MODE);
 }
 
 static void test_dropdown_and_config_press(void) {
@@ -1163,6 +1210,172 @@ static void test_render_paths_with_stubs(void) {
     ui_menu_bar_render_search_overlay(&snap);
     ASSERT_TRUE("search overlay renders cursor and count", gl_stub_counts[GL_STUB_glRectf] > 0);
 }
+
+#define MENU_BAR_TRACE_PATH "build/test_ui_menu_bar_trace.txt"
+
+/* One menu-bar render, read back from the GL-stub trace: every string it
+ * printed (each glRasterPos2f opens one and the glyph bytes that follow fill
+ * it - both text paths, since which one gl2d_draw_string takes is a build
+ * flag), and whether it drew an 8x8 rect inside [stop_x0, stop_x1) - the Stop
+ * square, the only rect of that size in that span. */
+typedef struct {
+    float x;
+    char  text[48];
+} BarText;
+
+typedef struct {
+    BarText texts[48];
+    int     count;
+    int     stop_square;
+} BarRender;
+
+static void render_bar(const UiRenderSnapshot *snap, float stop_x0,
+                       float stop_x1, BarRender *out) {
+    FILE *trace;
+    char line[128];
+    int len = 0;
+
+    memset(out, 0, sizeof(*out));
+    gl_stub_trace_open(MENU_BAR_TRACE_PATH);
+    ui_menu_bar_render(snap);
+    gl_stub_trace_close();
+
+    trace = fopen(MENU_BAR_TRACE_PATH, "r");
+    if (!trace) return;
+    while (fgets(line, sizeof(line), trace)) {
+        float x0, y0, x1, y1;
+        int ch;
+        if (sscanf(line, "glRasterPos2f %f %f", &x0, &y0) == 2) {
+            if (out->count < (int)(sizeof out->texts / sizeof out->texts[0])) {
+                out->texts[out->count].x = x0;
+                out->texts[out->count].text[0] = '\0';
+                out->count++;
+                len = 0;
+            } else {
+                len = -1;           /* past capacity: drop this string */
+            }
+        } else if (sscanf(line, "glutBitmapCharacter %d", &ch) == 1 ||
+                   sscanf(line, "glutBitmapStringByte %d", &ch) == 1) {
+            if (out->count > 0 && len >= 0 &&
+                len < (int)sizeof out->texts[0].text - 1) {
+                out->texts[out->count - 1].text[len++] = (char)ch;
+                out->texts[out->count - 1].text[len] = '\0';
+            }
+        } else if (sscanf(line, "glRectf %f %f %f %f",
+                          &x0, &y0, &x1, &y1) == 4) {
+            if (x0 >= stop_x0 && x1 <= stop_x1 &&
+                fabsf((x1 - x0) - 8.0f) < 0.01f &&
+                fabsf((y1 - y0) - 8.0f) < 0.01f)
+                out->stop_square = 1;
+        }
+    }
+    fclose(trace);
+}
+
+static const BarText *bar_text(const BarRender *r, const char *want) {
+    for (int i = 0; i < r->count; i++)
+        if (strcmp(r->texts[i].text, want) == 0) return &r->texts[i];
+    return NULL;
+}
+
+/* Replay transport rendering, in every replay state: the Search / Prev /
+ * Next text never moves (the block's width is fixed and its split reads no
+ * state), the state label fits left of the Stop cell, the Stop square is
+ * drawn exactly while a replay runs, and each control's hover tooltip names
+ * the action a click takes plus the key that does the same. */
+static void test_replay_transport_render(void) {
+    static const struct {
+        int active, state;
+        const char *label, *verb;
+    } k_states[] = {
+        { 0, REPLAY_OFF,     "Replay",  "Start replay" },
+        { 1, REPLAY_PLAYING, "Playing", "Pause" },
+        { 1, REPLAY_PAUSED,  "Paused",  "Resume" },
+        { 1, REPLAY_DONE,    "Done",    "Restart" },
+    };
+    static const char *const k_fixed[] = { "search...", "< Prev", "Next >" };
+    UiRenderSnapshot snap;
+    BarRender r;
+    float base_x[3];
+    float stop_x0, stop_x1;
+    int replay_mx = -1, stop_mx = -1, my = -1;
+    char key_start[KEYMAP_SHORTCUT_LABEL_MAX];
+    char key_space[KEYMAP_SHORTCUT_LABEL_MAX];
+    char key_esc[KEYMAP_SHORTCUT_LABEL_MAX];
+    char want[96];
+
+    reset_menu_bar_fixture(1600, 900);
+    ui_state_code_panel_mut()->panel_frac = 0.6f;
+    make_test_ui_snapshot(&snap);
+    stop_x1 = (float)bar_right_edge();
+    stop_x0 = stop_x1 - (float)TEST_REPLAY_STOP_CELL_W;
+    ASSERT_TRUE("pin:replay resolves for the render test",
+                glr_pointer_script_resolve_target("pin:replay",
+                                                  &replay_mx, &my));
+    ASSERT_TRUE("pin:replay_stop resolves for the render test",
+                glr_pointer_script_resolve_target("pin:replay_stop",
+                                                  &stop_mx, &my));
+    keymap_binding_to_string(key_start, (int)sizeof key_start,
+                             KM_KEY(GLR_REPLAY), KM_MODS(GLR_REPLAY), 0);
+    keymap_binding_to_string(key_space, (int)sizeof key_space, ' ', 0, 0);
+    keymap_binding_to_string(key_esc, (int)sizeof key_esc, KEY_ESC, 0, 0);
+
+    /* Baseline: no replay, pointer off the bar. */
+    snap.pointer.mouse_x = 0;
+    snap.pointer.mouse_y = 0;
+    render_bar(&snap, stop_x0, stop_x1, &r);
+    for (int f = 0; f < 3; f++) {
+        const BarText *t = bar_text(&r, k_fixed[f]);
+        ASSERT_TRUE("fixed pin text drawn at baseline", t != NULL);
+        base_x[f] = t ? t->x : -1.0f;
+    }
+
+    for (size_t i = 0; i < sizeof k_states / sizeof k_states[0]; i++) {
+        const BarText *label;
+        float right_limit = k_states[i].active ? stop_x0 : stop_x1;
+
+        snap.replay.active = k_states[i].active;
+        snap.replay.state = k_states[i].state;
+        snap.pointer.mouse_x = 0;
+        snap.pointer.mouse_y = 0;
+        render_bar(&snap, stop_x0, stop_x1, &r);
+
+        for (int f = 0; f < 3; f++) {
+            const BarText *t = bar_text(&r, k_fixed[f]);
+            ASSERT_TRUE("fixed pin text still drawn", t != NULL);
+            ASSERT_TRUE("fixed pin text does not move with replay state",
+                        t && t->x == base_x[f]);
+        }
+
+        label = bar_text(&r, k_states[i].label);
+        ASSERT_TRUE("replay state label drawn", label != NULL);
+        ASSERT_TRUE("replay state label fits left of the Stop cell",
+                    label && label->x + (float)(strlen(label->text) *
+                                                FONT_SMALL_W) <= right_limit);
+        ASSERT_INT_EQ("Stop square drawn exactly while a replay runs",
+                      r.stop_square, k_states[i].active);
+
+        /* Replay button tooltip. */
+        snap.pointer.mouse_x = replay_mx;
+        snap.pointer.mouse_y = my;
+        render_bar(&snap, stop_x0, stop_x1, &r);
+        snprintf(want, sizeof want, "%s %c %s", k_states[i].verb,
+                 0x19 /* MENUBAR_TOOLTIP_VRULE_GLYPH */,
+                 k_states[i].active ? key_space : key_start);
+        ASSERT_TRUE("Replay tooltip names the click action and its key",
+                    bar_text(&r, want) != NULL);
+
+        /* Stop cell tooltip: Stop + Escape while running; with no replay the
+         * cell is part of Replay, so it shows Replay's tooltip. */
+        snap.pointer.mouse_x = stop_mx;
+        snap.pointer.mouse_y = my;
+        render_bar(&snap, stop_x0, stop_x1, &r);
+        if (k_states[i].active)
+            snprintf(want, sizeof want, "Stop replay %c %s", 0x19, key_esc);
+        ASSERT_TRUE("Stop-cell tooltip matches the cell's role",
+                    bar_text(&r, want) != NULL);
+    }
+}
 #endif
 
 /* #52/#53: pin Config section labels (raw and display) so the
@@ -1588,6 +1801,14 @@ static void test_symbolic_targets_resolve_to_hits(void) {
                       hit.kind == UI_HIT_PIN_BUTTON ? hit.item_idx : -1,
                       UI_MENU_BAR_PIN_REPLAY);
 
+        ASSERT_TRUE("pin:replay_stop resolves",
+                    glr_pointer_script_resolve_target("pin:replay_stop",
+                                                      &mx, &my));
+        hit = ui_menu_bar_hit_test(mx, my);
+        ASSERT_INT_EQ("pin:replay_stop lands on the Stop cell",
+                      hit.kind == UI_HIT_PIN_BUTTON ? hit.item_idx : -1,
+                      UI_MENU_BAR_PIN_REPLAY_STOP);
+
         /* Row targets need their menu open. */
         ASSERT_TRUE("item: fails with no menu open",
                     !glr_pointer_script_resolve_target("item:new_scene",
@@ -1752,6 +1973,7 @@ int main(void) {
     test_open_close_state();
     test_top_level_hits();
     test_stepper_pins();
+    test_replay_transport_hits();
     test_dropdown_and_config_press();
     test_audio_menu_flyout_hits();
     test_config_submenu_right_press();
@@ -1776,6 +1998,7 @@ int main(void) {
     test_tutorial_submenu_with_stubs();
     test_render_does_not_mutate_hover();
     test_render_paths_with_stubs();
+    test_replay_transport_render();
 #endif
 
     printf("\n");

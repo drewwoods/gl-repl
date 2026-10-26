@@ -1746,8 +1746,8 @@ static int route_color_picker_control_hit(int x, int y) {
     return r.consumed;
 }
 
-/* UI_HIT_PIN_BUTTON: Search / Prev / Next / View-mode / Replay pinned
- * right-side button.
+/* UI_HIT_PIN_BUTTON: Search / Prev / Next / View-mode / Replay / Replay-stop
+ * pinned right-side button.
  *
  * The steppers are context-sensitive: while a tutorial is running, or after
  * a tutorial completes and retains its index, they walk the lesson catalog
@@ -1770,6 +1770,9 @@ static int route_pin_button_hit(const UiHit *hit) {
         break;
     case UI_MENU_BAR_PIN_REPLAY:
         replay_handle_pin_clicked();
+        break;
+    case UI_MENU_BAR_PIN_REPLAY_STOP:
+        replay_handle_stop_pin_clicked();
         break;
     case UI_MENU_BAR_PIN_VIEW_MODE:
         glr_action_toggle_view_mode();

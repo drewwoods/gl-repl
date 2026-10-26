@@ -96,7 +96,7 @@ Top to bottom:
 
 - **Menu bar** - *File*, *Scene*, *Tutorials*, *Tours*, *Config*, *Audio*
   dropdowns, a *search...* slot (same as Ctrl+F), and the *Replay* button at
-  the far right.
+  the far right (with a stop button at its right end while a replay runs).
 - **Scene tabs** - one tab per open scene (here *Spinning Torus* and *Ring
   Sketch*), behind the name of the managed workspace they came from (*Tour*).
   Click to switch.
@@ -1598,6 +1598,13 @@ loop-variable values substituted into the displayed text.
 
 The HUD at the bottom of the viewport shows play state, position, and speed.
 When a replay has finished, **Space** restarts it from the beginning.
+
+With the mouse, the **Replay** button at the top right of the menu bar does
+what **Space** does: it starts a replay, then pauses, resumes, or - once the
+replay is *Done* - restarts it. Its icon shows what a click will do and its
+label shows the state (*Playing*, *Paused*, *Done*). While a replay runs, a
+**■** stop button sits at the button's right end and ends the replay, like
+**Esc**. Hover either one to see its key.
 
 An open [assignment value plot](#plotting-an-assignments-values) follows the
 replay: it marks how far each plotted row has run this frame and prints the
